@@ -57,9 +57,13 @@ Now go away and do something more productive. Like scrolling through memes.
 - [Bani Baskara](https://github.com/icedeyes12/)
 
 ### Team
-- DeepSeek](https://www.deepseek.com/)
+- [DeepSeek](https://www.deepseek.com/)
 - [GPT](https://chatgpt.com/)
+- [Claude Sonnet 4.5](https://www.anthropic.com/)
+- [Kimi K2.5](https://www.moonshot.cn/)
 - [Qwen](https://github.com/QwenLM/Qwen3-Coder)
+- [GitHub Copilot](https://github.com/features/copilot)
+- [KiloCode](https://kilocode.ai/)
 - [Aihara](https://guthib.com/icedeyes12/yuzu-companion)
 
 ---
