@@ -1,0 +1,508 @@
+/* [FILE: multimodal.css] */
+/* [VERSION: 1.0.0.69.1] */
+/* [DATE: 2025-08-12] */
+/* [PROJECT: HKKM - Yuzu Companion] */
+/* [DESCRIPTION: Multimodal interface components for image and file handling] */
+/* [AUTHOR: Project Lead: Bani Baskara] */
+/* [TEAM: Deepseek, GPT, Qwen, Aihara] */
+/* [REPOSITORY: https://github.com/icedeyes12] */
+/* [LICENSE: MIT] */
+
+/* Toggle Button */
+.multimodal-toggle-container {
+  display: flex;
+  align-items: center;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.multimodal-toggle-btn {
+  width: 44px;
+  height: 36px;
+  border: 1.5px solid #94a3b8;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.multimodal-toggle-btn:hover {
+  border-color: #ec4899;
+}
+
+.multimodal-toggle-btn.active {
+  border-color: #ec4899;
+  background: rgba(236, 72, 153, 0.2);
+}
+
+.toggle-icon {
+  font-size: 1.2rem;
+}
+
+.mode-indicator {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ec4899;
+  color: white;
+  font-size: 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+/* Notification Badge */
+.image-count-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ef4444;
+  color: white;
+  font-size: 0.6rem;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #1e293b;
+  z-index: 10;
+}
+
+.image-count-badge.hidden {
+  display: none;
+}
+
+.image-count-badge.pulse {
+  animation: pulse 0.5s ease-in-out;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* Dropdown */
+.multimodal-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 8px;
+  background: #1e293b;
+  border: 1.5px solid #475569;
+  border-radius: 14px;
+  padding: 12px;
+  min-width: 200px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+}
+
+.multimodal-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 4px;
+}
+
+.multimodal-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.multimodal-option.active {
+  background: rgba(236, 72, 153, 0.15);
+  border-left: 3px solid #ec4899;
+}
+
+.option-icon {
+  font-size: 1.3rem;
+  width: 24px;
+  text-align: center;
+}
+
+.option-text {
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: #f1f5f9;
+}
+
+.option-description {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+/* Upload Area */
+.image-upload-area {
+  margin-top: 12px;
+  padding: 12px;
+  border: 2px dashed #475569;
+  border-radius: 10px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.upload-btn {
+  background: #ec4899;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.upload-btn:hover {
+  background: #db2777;
+  transform: translateY(-1px);
+}
+
+.image-preview {
+  max-width: 100%;
+  max-height: 150px;
+  border-radius: 8px;
+  margin-top: 8px;
+  border: 1px solid #475569;
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ef4444;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: bold;
+}
+
+/* Image Previews in Dropdown */
+.image-previews-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.clear-all-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+
+.clear-all-btn:hover {
+  background: #dc2626;
+}
+
+.image-previews-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.image-preview-container {
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.image-previews-grid .image-preview {
+  width: 100%;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #475569;
+}
+
+.image-previews-grid .remove-image-btn {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ef4444;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 0.6rem;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Uploaded Images Container */
+.uploaded-images-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px;
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: 12px;
+  border: 2px solid #6366f1;
+}
+
+.uploaded-image-item {
+  flex: 0 0 auto;
+}
+
+.uploaded-image-preview {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: 8px;
+  border: 2px solid #8b5cf6;
+}
+
+.uploaded-message-text {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border-left: 3px solid #ec4899;
+}
+
+/* Image Display in Chat */
+.generated-image-container {
+  margin: 12px 0;
+  text-align: center;
+}
+
+.generated-image {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: 12px;
+  border: 2px solid #8b5cf6;
+}
+
+.image-prompt {
+  margin-top: 8px;
+  font-style: italic;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.attachment-bubble {
+  max-width: 350px;
+  margin: 12px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid #6366f1;
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.attachment-image {
+  max-width: 100%;
+  max-height: 300px;
+  display: block;
+}
+
+.attachment-caption {
+  padding: 8px 12px;
+  background: rgba(99, 102, 241, 0.1);
+  font-size: 0.9rem;
+  color: #e2e8f0;
+}
+
+/* Uploaded Image Message Styles */
+.uploaded-image-message .message-content {
+  max-width: 100%;
+}
+
+.uploaded-image-container {
+  margin: 8px 0;
+  text-align: center;
+}
+
+.uploaded-image {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: 8px;
+  border: 2px solid #6366f1;
+}
+
+.image-caption {
+  margin-bottom: 8px;
+  font-style: italic;
+  color: #94a3b8;
+}
+
+/* Generated Image Message Styles */
+.generated-image-message .message-content {
+  max-width: 100%;
+}
+
+.image-prompt-text {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.image-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.image-action-btn {
+  background: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.image-action-btn:hover {
+  background: #4f46e5;
+}
+
+.image-error {
+  color: #ef4444;
+  text-align: center;
+  padding: 8px;
+  font-style: italic;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .multimodal-toggle-container {
+    margin-right: 6px;
+  }
+  
+  .multimodal-toggle-btn {
+    width: 40px;
+    height: 34px;
+    border-radius: 12px;
+  }
+  
+  .toggle-icon {
+    font-size: 1.1rem;
+  }
+  
+  .mode-indicator {
+    width: 14px;
+    height: 14px;
+    font-size: 0.55rem;
+    top: -4px;
+    right: -4px;
+  }
+
+  .image-count-badge {
+    width: 16px;
+    height: 16px;
+    font-size: 0.55rem;
+    top: -5px;
+    right: -5px;
+  }
+
+  .uploaded-images-container {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .uploaded-image-preview {
+    max-width: 150px;
+    max-height: 150px;
+  }
+
+  .multimodal-dropdown {
+    min-width: 180px;
+    padding: 10px;
+    left: -10px;
+  }
+
+  .image-previews-grid {
+    grid-template-columns: repeat(2, 1fr);
+    max-height: 100px;
+  }
+
+  .image-previews-grid .image-preview {
+    height: 50px;
+  }
+}
+
+@media (max-width: 480px) {
+  .multimodal-toggle-btn {
+    width: 36px;
+    height: 32px;
+  }
+
+  .image-count-badge {
+    width: 14px;
+    height: 14px;
+    font-size: 0.5rem;
+    top: -4px;
+    right: -4px;
+  }
+
+  .uploaded-images-container {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .uploaded-image-preview {
+    max-width: 120px;
+    max-height: 120px;
+  }
+
+  .multimodal-dropdown {
+    min-width: 160px;
+    left: -15px;
+  }
+
+  .image-previews-grid {
+    grid-template-columns: repeat(2, 1fr);
+    max-height: 80px;
+  }
+
+  .image-previews-grid .image-preview {
+    height: 40px;
+  }
+
+  .attachment-bubble {
+    max-width: 250px;
+  }
+
+  .generated-image {
+    max-height: 250px;
+  }
+
+  .uploaded-image {
+    max-height: 250px;
+  }
+
+  .image-actions {
+    flex-wrap: wrap;
+  }
+}

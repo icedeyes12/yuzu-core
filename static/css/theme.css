@@ -1,0 +1,411 @@
+/* [FILE: theme.css] */
+/* [VERSION: 1.0.0.69.2] */
+/* [DATE: 2025-08-12] */
+/* [PROJECT: HKKM - Yuzu Companion] */
+/* [DESCRIPTION: Theme system with multiple color schemes] */
+/* [AUTHOR: Project Lead: Bani Baskara] */
+/* [TEAM: Deepseek, GPT, Qwen, Aihara] */
+/* [REPOSITORY: https://github.com/icedeyes12] */
+/* [LICENSE: MIT] */
+
+/* Default Dark Theme */
+[data-theme="dark"] {
+  /* Core Colors - Soft blue base */
+  --bg-color: #1a1f2e;
+  --header-bg: #24283d;
+  --card-bg: #24283d;
+  --input-bg: #24283d;  
+  
+  /* Message Bubbles */
+  --user-bubble: #d46a7e;
+  --ai-bubble: #3a4568;
+  --message-user-bg: #d46a7e;
+  --message-ai-bg: #3a4568;
+  
+  /* Buttons & UI */
+  --button-bg: #e8b4bc;
+  --button-hover: #f5c6ce;
+  --button-text: #2a2438;
+  
+  /* Text Colors */
+  --text-color: #f0f4ff;
+  --timestamp-color: rgba(240, 244, 255, 0.8);  
+  --text-secondary: rgba(240, 244, 255, 0.7);
+  
+  /* Accent Colors - Pink & Soft Blue */
+  --accent-pink: #ffb8c6;
+  --accent-mint: #b8e1dd;
+  --accent-lavender: #a8c8ff;
+  --accent-color: #a8c8ff;
+  
+  /* Border Colors */
+  --border-lavender: rgba(168, 200, 255, 0.4);
+  --border-pink: rgba(212, 106, 126, 0.6);
+  --border-ai: rgba(168, 200, 255, 0.3);
+  --border-user: rgba(212, 106, 126, 0.6);
+  
+  /* Shadow Colors */
+  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.25);
+  --shadow-pink: rgba(212, 106, 126, 0.25);
+  --shadow-lavender: rgba(168, 200, 255, 0.25);
+  --shadow-dark: rgba(36, 40, 61, 0.4);
+  
+  /* Code Colors */
+  --code-bg: #1e2235;
+  --code-border: rgba(168, 200, 255, 0.15);
+  --copy-button-bg: rgba(168, 200, 255, 0.15);
+  --copy-button-hover: rgba(168, 200, 255, 0.25);
+}
+
+/* Soft Light Theme */
+[data-theme="light"] {
+  /* Core Colors - Soft white base */
+  --bg-color: #f8f9fa;
+  --header-bg: #ffffff;
+  --card-bg: #ffffff;
+  --input-bg: #ffffff;
+  
+  /* Message Bubbles */
+  --user-bubble: #ff9eb5;
+  --ai-bubble: #e9ecef;
+  --message-user-bg: #ff9eb5;
+  --message-ai-bg: #e9ecef;
+  
+  /* Buttons & UI */
+  --button-bg: #ffb3c8;
+  --button-hover: #ffc2d4;
+  --button-text: #2a2438;
+  
+  /* Text Colors */
+  --text-color: #2a2438;
+  --timestamp-color: rgba(42, 36, 56, 0.7);
+  --text-secondary: rgba(42, 36, 56, 0.8);
+  
+  /* Accent Colors - Soft Blue & Pink */
+  --accent-pink: #ff85a1;
+  --accent-mint: #8ac6b8;
+  --accent-lavender: #93a5ff;
+  --accent-color: #93a5ff;
+  
+  /* Border Colors */
+  --border-lavender: rgba(147, 165, 255, 0.3);
+  --border-pink: rgba(255, 133, 161, 0.4);
+  --border-ai: rgba(147, 165, 255, 0.2);
+  --border-user: rgba(255, 133, 161, 0.4);
+  
+  /* Shadow Colors */
+  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.1);
+  --shadow-pink: rgba(255, 133, 161, 0.2);
+  --shadow-lavender: rgba(147, 165, 255, 0.2);
+  --shadow-dark: rgba(0, 0, 0, 0.1);
+  
+  /* Code Colors */
+  --code-bg: #f1f3f5;
+  --code-border: rgba(147, 165, 255, 0.2);
+  --copy-button-bg: rgba(147, 165, 255, 0.1);
+  --copy-button-hover: rgba(147, 165, 255, 0.2);
+}
+
+/* Pastel Lavender Theme */
+[data-theme="lavender"] {
+  /* Core Colors - Soft purple base */
+  --bg-color: #f5f3ff;
+  --header-bg: #ffffff;
+  --card-bg: #ffffff;
+  --input-bg: #ffffff;
+  
+  /* Message Bubbles */
+  --user-bubble: #d8b4fe;
+  --ai-bubble: #f3f0ff;
+  --message-user-bg: #d8b4fe;
+  --message-ai-bg: #f3f0ff;
+  
+  /* Buttons & UI */
+  --button-bg: #e9d5ff;
+  --button-hover: #f0e6ff;
+  --button-text: #4c1d95;
+  
+  /* Text Colors */
+  --text-color: #4c1d95;
+  --timestamp-color: rgba(76, 29, 149, 0.7);
+  --text-secondary: rgba(76, 29, 149, 0.8);
+  
+  /* Accent Colors - Purple & Lavender */
+  --accent-pink: #c084fc;
+  --accent-mint: #a5b4fc;
+  --accent-lavender: #a78bfa;
+  --accent-color: #a78bfa;
+  
+  /* Border Colors */
+  --border-lavender: rgba(167, 139, 250, 0.4);
+  --border-pink: rgba(192, 132, 252, 0.4);
+  --border-ai: rgba(167, 139, 250, 0.3);
+  --border-user: rgba(192, 132, 252, 0.4);
+  
+  /* Shadow Colors */
+  --shadow-soft: 0 4px 20px rgba(167, 139, 250, 0.15);
+  --shadow-pink: rgba(192, 132, 252, 0.2);
+  --shadow-lavender: rgba(167, 139, 250, 0.2);
+  --shadow-dark: rgba(167, 139, 250, 0.1);
+  
+  /* Code Colors */
+  --code-bg: #faf5ff;
+  --code-border: rgba(167, 139, 250, 0.2);
+  --copy-button-bg: rgba(167, 139, 250, 0.1);
+  --copy-button-hover: rgba(167, 139, 250, 0.2);
+}
+
+/* Pastel Mint Theme */
+[data-theme="mint"] {
+  /* Core Colors - Soft green base */
+  --bg-color: #f0fdf9;
+  --header-bg: #ffffff;
+  --card-bg: #ffffff;
+  --input-bg: #ffffff;
+  
+  /* Message Bubbles */
+  --user-bubble: #99f6e4;
+  --ai-bubble: #ecfdf5;
+  --message-user-bg: #99f6e4;
+  --message-ai-bg: #ecfdf5;
+  
+  /* Buttons & UI */
+  --button-bg: #a7f3d0;
+  --button-hover: #bbf7d0;
+  --button-text: #065f46;
+  
+  /* Text Colors */
+  --text-color: #065f46;
+  --timestamp-color: rgba(6, 95, 70, 0.7);
+  --text-secondary: rgba(6, 95, 70, 0.8);
+  
+  /* Accent Colors - Teal & Mint */
+  --accent-pink: #5eead4;
+  --accent-mint: #2dd4bf;
+  --accent-lavender: #34d399;
+  --accent-color: #34d399;
+  
+  /* Border Colors */
+  --border-lavender: rgba(52, 211, 153, 0.4);
+  --border-pink: rgba(94, 234, 212, 0.4);
+  --border-ai: rgba(52, 211, 153, 0.3);
+  --border-user: rgba(94, 234, 212, 0.4);
+  
+  /* Shadow Colors */
+  --shadow-soft: 0 4px 20px rgba(52, 211, 153, 0.15);
+  --shadow-pink: rgba(94, 234, 212, 0.2);
+  --shadow-lavender: rgba(52, 211, 153, 0.2);
+  --shadow-dark: rgba(52, 211, 153, 0.1);
+  
+  /* Code Colors */
+  --code-bg: #f0fdfa;
+  --code-border: rgba(52, 211, 153, 0.2);
+  --copy-button-bg: rgba(52, 211, 153, 0.1);
+  --copy-button-hover: rgba(52, 211, 153, 0.2);
+}
+
+/* Pastel Peach Theme */
+[data-theme="peach"] {
+  /* Core Colors - Soft orange base */
+  --bg-color: #fff7ed;
+  --header-bg: #ffffff;
+  --card-bg: #ffffff;
+  --input-bg: #ffffff;
+  
+  /* Message Bubbles */
+  --user-bubble: #fdba74;
+  --ai-bubble: #fffbeb;
+  --message-user-bg: #fdba74;
+  --message-ai-bg: #fffbeb;
+  
+  /* Buttons & UI */
+  --button-bg: #fed7aa;
+  --button-hover: #ffedd5;
+  --button-text: #7c2d12;
+  
+  /* Text Colors */
+  --text-color: #7c2d12;
+  --timestamp-color: rgba(124, 45, 18, 0.7);
+  --text-secondary: rgba(124, 45, 18, 0.8);
+  
+  /* Accent Colors - Orange & Peach */
+  --accent-pink: #fb923c;
+  --accent-mint: #fbbf24;
+  --accent-lavender: #f97316;
+  --accent-color: #f97316;
+  
+  /* Border Colors */
+  --border-lavender: rgba(249, 115, 22, 0.4);
+  --border-pink: rgba(251, 146, 60, 0.4);
+  --border-ai: rgba(249, 115, 22, 0.3);
+  --border-user: rgba(251, 146, 60, 0.4);
+  
+  /* Shadow Colors */
+  --shadow-soft: 0 4px 20px rgba(249, 115, 22, 0.15);
+  --shadow-pink: rgba(251, 146, 60, 0.2);
+  --shadow-lavender: rgba(249, 115, 22, 0.2);
+  --shadow-dark: rgba(249, 115, 22, 0.1);
+  
+  /* Code Colors */
+  --code-bg: #fff7ed;
+  --code-border: rgba(249, 115, 22, 0.2);
+  --copy-button-bg: rgba(249, 115, 22, 0.1);
+  --copy-button-hover: rgba(249, 115, 22, 0.2);
+}
+
+/* Dark Lavender Theme */
+[data-theme="dark-lavender"] {
+  /* Core Colors - Dark purple base */
+  --bg-color: #1e1b2e;
+  --header-bg: #2d2640;
+  --card-bg: #2d2640;
+  --input-bg: #2d2640;
+  
+  /* Message Bubbles */
+  --user-bubble: #c4b5fd;
+  --ai-bubble: #3e3667;
+  --message-user-bg: #c4b5fd;
+  --message-ai-bg: #3e3667;
+  
+  /* Buttons & UI */
+  --button-bg: #ddd6fe;
+  --button-hover: #e5deff;
+  --button-text: #1e1b2e;
+  
+  /* Text Colors */
+  --text-color: #f5f3ff;
+  --timestamp-color: rgba(245, 243, 255, 0.8);
+  --text-secondary: rgba(245, 243, 255, 0.7);
+  
+  /* Accent Colors - Soft Purple */
+  --accent-pink: #a78bfa;
+  --accent-mint: #8b5cf6;
+  --accent-lavender: #c4b5fd;
+  --accent-color: #c4b5fd;
+  
+  /* Border Colors */
+  --border-lavender: rgba(196, 181, 253, 0.4);
+  --border-pink: rgba(167, 139, 250, 0.4);
+  --border-ai: rgba(196, 181, 253, 0.3);
+  --border-user: rgba(167, 139, 250, 0.4);
+  
+  /* Shadow Colors */
+  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.3);
+  --shadow-pink: rgba(167, 139, 250, 0.25);
+  --shadow-lavender: rgba(196, 181, 253, 0.25);
+  --shadow-dark: rgba(45, 38, 64, 0.4);
+  
+  /* Code Colors */
+  --code-bg: #2a2342;
+  --code-border: rgba(196, 181, 253, 0.15);
+  --copy-button-bg: rgba(196, 181, 253, 0.15);
+  --copy-button-hover: rgba(196, 181, 253, 0.25);
+}
+
+/* Vanilla Orange Theme */
+[data-theme="vanilla-orange"] {
+  /* Core Colors - Creamy vanilla base */
+  --bg-color: #fff9f0;
+  --header-bg: #fffdfa;
+  --card-bg: #fffdfa;
+  --input-bg: #fffdfa;
+  
+  /* Message Bubbles */
+  --user-bubble: #ffd8a8;
+  --ai-bubble: #fff5e8;
+  --message-user-bg: #ffd8a8;
+  --message-ai-bg: #fff5e8;
+  
+  /* Buttons & UI */
+  --button-bg: #ffe0b5;
+  --button-hover: #ffe8cc;
+  --button-text: #5c3d0d;
+  
+  /* Text Colors */
+  --text-color: #5c3d0d;
+  --timestamp-color: rgba(92, 61, 13, 0.7);
+  --text-secondary: rgba(92, 61, 13, 0.8);
+  
+  /* Accent Colors - Vanilla & Orange */
+  --accent-pink: #ffc285;
+  --accent-mint: #ffd8a8;
+  --accent-lavender: #ffb366;
+  --accent-color: #ffb366;
+  
+  /* Border Colors */
+  --border-lavender: rgba(255, 179, 102, 0.4);
+  --border-pink: rgba(255, 194, 133, 0.4);
+  --border-ai: rgba(255, 179, 102, 0.3);
+  --border-user: rgba(255, 194, 133, 0.4);
+  
+  /* Shadow Colors */
+  --shadow-soft: 0 4px 20px rgba(255, 179, 102, 0.15);
+  --shadow-pink: rgba(255, 194, 133, 0.2);
+  --shadow-lavender: rgba(255, 179, 102, 0.2);
+  --shadow-dark: rgba(255, 179, 102, 0.1);
+  
+  /* Code Colors */
+  --code-bg: #fffaf0;
+  --code-border: rgba(255, 179, 102, 0.2);
+  --copy-button-bg: rgba(255, 179, 102, 0.1);
+  --copy-button-hover: rgba(255, 179, 102, 0.2);
+}
+
+/* Theme Transitions */
+body {
+  transition: background-color 0.5s ease, color 0.5s ease;
+}
+
+* {
+  transition: 
+    background-color 0.3s ease,
+    border-color 0.3s ease, 
+    box-shadow 0.3s ease,
+    color 0.3s ease;
+}
+
+.code-block-container,
+.message,
+.card,
+.config-section {
+  transition: all 0.3s ease;
+}
+
+/* Theme Preview Styles */
+.theme-preview {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.3);
+  margin-right: 8px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+[data-theme="dark"] .theme-preview.dark-preview { 
+  background: linear-gradient(135deg, #1a1f2e, #24283d); 
+}
+
+[data-theme="light"] .theme-preview.light-preview { 
+  background: linear-gradient(135deg, #f8f9fa, #ffffff); 
+}
+
+[data-theme="lavender"] .theme-preview.lavender-preview { 
+  background: linear-gradient(135deg, #f5f3ff, #d8b4fe); 
+}
+
+[data-theme="mint"] .theme-preview.mint-preview { 
+  background: linear-gradient(135deg, #f0fdf9, #99f6e4); 
+}
+
+[data-theme="peach"] .theme-preview.peach-preview { 
+  background: linear-gradient(135deg, #fff7ed, #fdba74); 
+}
+
+[data-theme="dark-lavender"] .theme-preview.dark-lavender-preview { 
+  background: linear-gradient(135deg, #1e1b2e, #c4b5fd); 
+}
+
+[data-theme="vanilla-orange"] .theme-preview.vanilla-orange-preview { 
+  background: linear-gradient(135deg, #fff9f0, #ffd8a8); 
+}

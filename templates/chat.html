@@ -1,0 +1,175 @@
+<!-- [FILE: chat.html] -->
+<!-- [VERSION: 1.0.0.69.3] -->
+<!-- [DATE: 2025-08-12] -->
+<!-- [PROJECT: HKKM - Yuzu Companion] -->
+<!-- [DESCRIPTION: Chat interface for AI companion system] -->
+<!-- [AUTHOR: Project Lead: Bani Baskara] -->
+<!-- [TEAM: Deepseek, GPT, Qwen, Aihara] -->
+<!-- [REPOSITORY: https://guthib.com/icedeyes12] -->
+<!-- [LICENSE: MIT] -->
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat | Yuzu Companion</title>
+    
+    <!-- CSS Imports -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/multimodal.css') }}">
+    
+    <!-- Highlight.js CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+</head>
+<body>
+    <!-- Unified Sidebar -->
+    <div class="sidebar" id="mainSidebar">
+      <div class="sidebar-header">
+        <h2>Yuzu Companion</h2>
+        <button class="close-sidebar" onclick="toggleSidebar()">×</button>
+      </div>
+      
+      <div class="sidebar-content">
+        <!-- Navigation -->
+        <div class="sidebar-section">
+          <h3>Navigation</h3>
+          <a href="/" class="sidebar-link" onclick="toggleSidebar()">
+            <span class="sidebar-icon home-icon"></span> Home
+          </a>
+          <a href="/chat" class="sidebar-link active" onclick="toggleSidebar()">
+            <span class="sidebar-icon chat-icon"></span> Chat
+          </a>
+          <a href="/config" class="sidebar-link" onclick="toggleSidebar()">
+            <span class="sidebar-icon config-icon"></span> Config
+          </a>
+          <a href="/about" class="sidebar-link" onclick="toggleSidebar()">
+            <span class="sidebar-icon about-icon"></span> About
+          </a>
+        </div>
+        
+        <!-- Theme Selector -->
+        <div class="sidebar-section">
+          <h3>Theme</h3>
+          <div class="custom-dropdown" id="themeDropdown">
+            <div class="dropdown-selected">
+              <span class="selected-text">Dark Blue</span>
+              <span class="dropdown-arrow">▼</span>
+            </div>
+            <div class="dropdown-options">
+              <div class="dropdown-option" data-value="dark">
+                <span class="theme-preview dark-preview"></span>
+                Dark Blue
+              </div>
+              <div class="dropdown-option" data-value="light">
+                <span class="theme-preview light-preview"></span>
+                Soft Light
+              </div>
+              <div class="dropdown-option" data-value="lavender">
+                <span class="theme-preview lavender-preview"></span>
+                Pastel Lavender
+              </div>
+              <div class="dropdown-option" data-value="mint">
+                <span class="theme-preview mint-preview"></span>
+                Pastel Mint
+              </div>
+              <div class="dropdown-option" data-value="peach">
+                <span class="theme-preview peach-preview"></span>
+                Pastel Peach
+              </div>
+              <div class="dropdown-option" data-value="dark-lavender">
+                <span class="theme-preview dark-lavender-preview"></span>
+                Dark Lavender
+              </div>
+              <div class="dropdown-option" data-value="vanilla-orange">
+                <span class="theme-preview vanilla-orange-preview"></span>
+                Vanilla Orange
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Session Management -->
+        <div class="sidebar-section" id="sessionSection">
+          <h3>Sessions</h3>
+          <button class="sidebar-btn" onclick="createNewSession()">
+            <span class="sidebar-icon add-icon"></span> New Chat
+          </button>
+          <div class="sessions-list" id="sidebarSessionsList">
+            <div class="loading">Loading sessions...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hamburger Menu -->
+    <button class="hamburger-menu" id="hamburgerMenu" onclick="toggleSidebar()">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+    <!-- Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+    <!-- MAIN WRAPPER -->
+    <div class="chat-app">
+        <header class="chat-header">
+            <div class="header-left">
+                <h1 class="partner-name">{{ profile.partner_name }}</h1>
+                <div class="session-name" id="sessionName"></div>
+            </div>
+            <div class="affection-display">
+                <span class="affection-icon"></span>
+                <div class="affection-bar">
+                    <div class="affection-fill" style="width: {{ profile.affection }}%;"></div>
+                </div>
+            </div>
+        </header>
+
+        <main class="chat-container" id="chatContainer">
+            <!-- messages will appear here -->
+        </main>
+
+        <!-- TYPING INDICATOR -->
+        <div id="typingIndicator" class="typing-indicator hidden">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+
+        <!-- CLEAN INPUT AREA - WITH MULTIMODAL SUPPORT -->
+        <div class="input-area">
+            <!-- Multimodal toggle button will be inserted here by JavaScript -->
+            <textarea id="messageInput" placeholder="Type your message ..." rows="1"></textarea>
+            <button id="sendButton">Send</button>
+        </div>
+    </div>
+    
+    <!-- Load Highlight.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/html.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/java.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/rust.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/php.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/ruby.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/sql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/markdown.min.js"></script>
+
+    <!-- Our scripts -->
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+</body>
+</html>

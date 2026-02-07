@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yuzu Companion - Multimodal Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .multimodal-indicator {
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            padding: 2rem;
+            gap: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .chat-section {
+            flex: 2;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .tools-section {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .tools-header {
+            text-align: center;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .tools-header h2 {
+            color: #333;
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .tools-header p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .tool-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .tool-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.1);
+        }
+
+        .tool-card.active {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea20, #764ba220);
+        }
+
+        .tool-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .tool-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.5rem;
+            text-align: center;
+        }
+
+        .tool-description {
+            font-size: 0.85rem;
+            color: #666;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        .chat-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #e0e0e0;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .chat-header h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .chat-header p {
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .message {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 1rem 1.5rem;
+            border-radius: 18px;
+            background: #f0f2f5;
+            position: relative;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .message-text {
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+
+        .message-time {
+            font-size: 0.7rem;
+            opacity: 0.7;
+            margin-top: 0.5rem;
+        }
+
+        .chat-input-section {
+            padding: 2rem;
+            border-top: 1px solid #e0e0e0;
+            background: #fafafa;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+        }
+
+        .message-input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+
+        .message-input {
+            width: 100%;
+            padding: 1rem 1.5rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.3s ease;
+            resize: none;
+            min-height: 50px;
+            max-height: 120px;
+        }
+
+        .message-input:focus {
+            border-color: #667eea;
+        }
+
+        .input-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .action-button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .action-button:hover {
+            background: #5a6fd8;
+            transform: translateY(-1px);
+        }
+
+        .action-button.secondary {
+            background: #6c757d;
+        }
+
+        .action-button.secondary:hover {
+            background: #5a6268;
+        }
+
+        .send-button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .send-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .image-preview {
+            margin-top: 1rem;
+            display: none;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border: 2px dashed #667eea;
+        }
+
+        .image-preview img {
+            max-width: 100px;
+            max-height: 100px;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+
+        .image-preview-info {
+            flex: 1;
+        }
+
+        .image-preview-name {
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 0.25rem;
+        }
+
+        .image-preview-size {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .remove-image {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+            color: #667eea;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .analysis-result {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .analysis-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .analysis-content {
+            color: #666;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+                padding: 1rem;
+                gap: 1rem;
+            }
+            
+            .tools-section {
+                order: -1;
+                flex-direction: row;
+                overflow-x: auto;
+                padding: 1rem;
+                gap: 1rem;
+            }
+            
+            .tool-card {
+                min-width: 200px;
+                flex-shrink: 0;
+            }
+            
+            .tools-header {
+                display: none;
+            }
+            
+            .chat-messages {
+                padding: 1rem;
+            }
+            
+            .message-content {
+                max-width: 85%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1><i class="fas fa-robot"></i> Yuzu Companion</h1>
+        <div class="multimodal-indicator">
+            <i class="fas fa-eye"></i>
+            Multimodal Active
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="chat-section">
+            <div class="chat-header">
+                <h2><i class="fas fa-comments"></i> Multimodal Chat</h2>
+                <p>Chat with vision capabilities - upload images, generate art, and more!</p>
+            </div>
+            
+            <div class="chat-messages" id="chatMessages">
+                <!-- Messages will be loaded here -->
+            </div>
+            
+            <div class="chat-input-section">
+                <div class="input-container">
+                    <div class="message-input-wrapper">
+                        <textarea 
+                            class="message-input" 
+                            id="messageInput" 
+                            placeholder="Type your message or describe an image to generate..."
+                            rows="1"
+                        ></textarea>
+                        
+                        <div class="input-actions">
+                            <button class="action-button" onclick="document.getElementById('imageUpload').click()">
+                                <i class="fas fa-image"></i>
+                                Upload Image
+                            </button>
+                            <button class="action-button secondary" onclick="generateImage()">
+                                <i class="fas fa-palette"></i>
+                                Generate Image
+                            </button>
+                            <button class="action-button secondary" onclick="showPromptEnhancer()">
+                                <i class="fas fa-magic"></i>
+                                Enhance Prompt
+                            </button>
+                        </div>
+                        
+                        <div class="image-preview" id="imagePreview">
+                            <img id="previewImage" src="" alt="Preview">
+                            <div class="image-preview-info">
+                                <div class="image-preview-name" id="previewName"></div>
+                                <div class="image-preview-size" id="previewSize"></div>
+                            </div>
+                            <button class="remove-image" onclick="removeImage()">Remove</button>
+                        </div>
+                    </div>
+                    
+                    <button class="send-button" id="sendButton" onclick="sendMessage()">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="tools-section">
+            <div class="tools-header">
+                <h2><i class="fas fa-tools"></i> Multimodal Tools</h2>
+                <p>Enhanced AI capabilities</p>
+            </div>
+            
+            <div class="tool-card" onclick="selectTool('analyze')" id="analyzeTool">
+                <div class="tool-icon" style="color: #667eea;">
+                    <i class="fas fa-eye"></i>
+                </div>
+                <div class="tool-title">Image Analysis</div>
+                <div class="tool-description">
+                    Upload images for AI analysis, description, and insights
+                </div>
+            </div>
+            
+            <div class="tool-card" onclick="selectTool('generate')" id="generateTool">
+                <div class="tool-icon" style="color: #4ecdc4;">
+                    <i class="fas fa-palette"></i>
+                </div>
+                <div class="tool-title">Image Generation</div>
+                <div class="tool-description">
+                    Create images from text descriptions with various styles
+                </div>
+            </div>
+            
+            <div class="tool-card" onclick="selectTool('text')" id="textTool">
+                <div class="tool-icon" style="color: #ff6b6b;">
+                    <i class="fas fa-font"></i>
+                </div>
+                <div class="tool-title">Text Extraction</div>
+                <div class="tool-description">
+                    Extract and read text from images using OCR
+                </div>
+            </div>
+            
+            <div class="tool-card" onclick="selectTool('variation')" id="variationTool">
+                <div class="tool-icon" style="color: #f39c12;">
+                    <i class="fas fa-sliders-h"></i>
+                </div>
+                <div class="tool-title">Image Variation</div>
+                <div class="tool-description">
+                    Create modified versions of existing images
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Processing your request...</p>
+    </div>
+
+    <input type="file" id="imageUpload" class="file-input" accept="image/*" onchange="handleImageUpload(event)">
+
+    <script>
+        let selectedTool = null;
+        let uploadedImage = null;
+        let chatHistory = [];
+
+        // Initialize chat
+        document.addEventListener('DOMContentLoaded', function() {
+            loadChatHistory();
+            setupAutoResize();
+            setupKeyboardShortcuts();
+        });
+
+        function selectTool(tool) {
+            // Remove active class from all tools
+            document.querySelectorAll('.tool-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            
+            // Add active class to selected tool
+            document.getElementById(tool + 'Tool').classList.add('active');
+            selectedTool = tool;
+            
+            // Update placeholder text
+            const input = document.getElementById('messageInput');
+            switch(tool) {
+                case 'analyze':
+                    input.placeholder = "Upload an image and ask me to analyze it...";
+                    break;
+                case 'generate':
+                    input.placeholder = "Describe an image you want me to generate...";
+                    break;
+                case 'text':
+                    input.placeholder = "Upload an image containing text to extract...";
+                    break;
+                case 'variation':
+                    input.placeholder = "Upload an image and describe changes you want...";
+                    break;
+            }
+        }
+
+        function setupAutoResize() {
+            const textarea = document.getElementById('messageInput');
+            textarea.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+            });
+        }
+
+        function setupKeyboardShortcuts() {
+            document.getElementById('messageInput').addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        }
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                uploadedImage = file;
+                
+                // Show preview
+                const preview = document.getElementById('imagePreview');
+                const previewImage = document.getElementById('previewImage');
+                const previewName = document.getElementById('previewName');
+                const previewSize = document.getElementById('previewSize');
+                
+                preview.style.display = 'flex';
+                previewName.textContent = file.name;
+                previewSize.textContent = `${(file.size / 1024).toFixed(1)} KB`;
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImage.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function removeImage() {
+            uploadedImage = null;
+            document.getElementById('imagePreview').style.display = 'none';
+            document.getElementById('imageUpload').value = '';
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message && !uploadedImage) {
+                return;
+            }
+
+            // Add user message to chat
+            addMessage('user', message || '[Image with message]');
+            
+            // Clear input
+            input.value = '';
+            input.style.height = 'auto';
+            
+            // Show loading
+            showLoading(true);
+
+            try {
+                let response;
+                
+                if (uploadedImage) {
+                    // Handle image upload
+                    const formData = new FormData();
+                    formData.append('image', uploadedImage);
+                    formData.append('analysis_type', selectedTool || 'general');
+                    formData.append('message', message);
+                    
+                    const endpoint = selectedTool === 'text' ? '/api/extract_text' : '/api/analyze_image';
+                    response = await fetch(endpoint, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    removeImage();
+                } else if (selectedTool === 'generate' && message) {
+                    // Handle image generation
+                    response = await fetch('/api/generate_image', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            prompt: message,
+                            style: 'photorealistic'
+                        })
+                    });
+                } else {
+                    // Handle regular message
+                    response = await fetch('/api/send_message_multimodal', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ message })
+                    });
+                }
+
+                const result = await response.json();
+                
+                if (result.success !== false) {
+                    let reply = result.reply || result.analysis || result.description || 'Processing complete';
+                    addMessage('assistant', reply);
+                } else {
+                    addMessage('assistant', `❌ Error: ${result.error || 'Processing failed'}`);
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                addMessage('assistant', '❌ Sorry, I encountered an error processing your request.');
+            }
+            
+            showLoading(false);
+        }
+
+        function generateImage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message) {
+                alert('Please enter a description for the image you want to generate.');
+                return;
+            }
+            
+            selectTool('generate');
+            sendMessage();
+        }
+
+        function showPromptEnhancer() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message) {
+                alert('Please enter a basic prompt to enhance.');
+                return;
+            }
+            
+            // For now, just show a simple enhancement suggestion
+            const enhanced = `Professional, high-quality ${message}, with excellent lighting, composition, and detail`;
+            input.value = enhanced;
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+        }
+
+        function addMessage(role, content) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            
+            const avatar = document.createElement('div');
+            avatar.className = 'message-avatar';
+            avatar.textContent = role === 'user' ? 'U' : 'Y';
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            const textDiv = document.createElement('div');
+            textDiv.className = 'message-text';
+            textDiv.textContent = content;
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = new Date().toLocaleTimeString();
+            
+            contentDiv.appendChild(textDiv);
+            contentDiv.appendChild(timeDiv);
+            
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(contentDiv);
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            // Store in history
+            chatHistory.push({
+                role: role,
+                content: content,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        function showLoading(show) {
+            const loading = document.getElementById('loading');
+            if (show) {
+                loading.classList.add('active');
+            } else {
+                loading.classList.remove('active');
+            }
+        }
+
+        async function loadChatHistory() {
+            try {
+                const response = await fetch('/api/get_profile');
+                const profile = await response.json();
+                
+                if (profile.chat_history) {
+                    const messagesContainer = document.getElementById('chatMessages');
+                    messagesContainer.innerHTML = '';
+                    
+                    profile.chat_history.forEach(msg => {
+                        if (msg.role !== 'system') {
+                            addMessage(msg.role, msg.content);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading chat history:', error);
+            }
+        }
+
+        // Initialize default tool
+        selectTool('analyze');
+    </script>
+</body>
+</html>

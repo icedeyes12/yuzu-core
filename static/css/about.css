@@ -1,0 +1,362 @@
+/* [FILE: about.css] */
+/* [VERSION: 1.0.0.69.1] */
+/* [DATE: 2025-08-12] */
+/* [PROJECT: HKKM - Yuzu Companion] */
+/* [DESCRIPTION: About page styling with responsive layout] */
+/* [AUTHOR: Project Lead: Bani Baskara] */
+/* [TEAM: Deepseek, GPT, Qwen, Aihara] */
+/* [REPOSITORY: https://github.com/icedeyes12] */
+/* [LICENSE: MIT] */
+
+.about-body {  
+  background: var(--bg-color);
+  color: var(--text-color);  
+  font-family: var(--font-sans);  
+  margin: 0;  
+  min-height: 100vh;  
+  padding-top: 80px;
+  padding-bottom: 60px;
+  transition: all 0.3s ease;
+}  
+
+.about-header {  
+  position: fixed;  
+  top: 0;  
+  left: 0;  
+  right: 0;  
+  z-index: 90;
+  text-align: center;  
+  padding: 1.2rem 1rem;  
+  background: var(--header-bg);  
+  border-bottom: 2px solid var(--accent-color);
+  backdrop-filter: var(--backdrop-blur);
+  transition: all 0.3s ease;
+}  
+
+.about-header h1 {  
+  margin: 0;  
+  font-size: 1.8rem;  
+  font-weight: 700;  
+  background: linear-gradient(135deg, var(--accent-color), var(--accent-pink));  
+  -webkit-background-clip: text;  
+  -webkit-text-fill-color: transparent;  
+  background-clip: text;  
+  transition: all 0.3s ease;
+}  
+
+.subtitle {  
+  margin: 0.3rem 0 0 0;  
+  color: var(--accent-pink);
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+}  
+
+.about-main {  
+  max-width: 900px;  
+  margin: 0 auto;  
+  padding: 1.5rem;  
+  position: relative;  
+  z-index: 1;  
+}  
+
+.hero-section {  
+  text-align: center;  
+  margin-bottom: 2rem;  
+  padding: 2rem 1.5rem;  
+  background: var(--card-bg);  
+  border-radius: 1.5rem;  
+  border: 2px solid var(--border-lavender);  
+  box-shadow: var(--shadow-soft);  
+  transition: all 0.3s ease;
+}  
+
+.hero-content h2 {  
+  font-size: 2.2rem;  
+  margin: 0 0 0.8rem 0;  
+  background: linear-gradient(135deg, var(--accent-color), var(--accent-pink));  
+  -webkit-background-clip: text;  
+  -webkit-text-fill-color: transparent;  
+  background-clip: text;  
+  transition: all 0.3s ease;
+}  
+
+.hero-text {  
+  font-size: 1.1rem;  
+  opacity: 0.9;  
+  margin: 0;  
+  transition: all 0.3s ease;
+}  
+
+.content-section {  
+  background: var(--card-bg);  
+  border-radius: 1.2rem;  
+  padding: 1.8rem;  
+  margin-bottom: 1.5rem;  
+  border: 2px solid var(--border-lavender);  
+  box-shadow: var(--shadow-soft);  
+  transition: all 0.3s ease;  
+}  
+
+.content-section:hover {  
+  transform: translateY(-3px);  
+  border-color: var(--accent-pink);  
+  box-shadow: 0 10px 25px var(--shadow-pink);  
+}  
+
+.section-icon {  
+  font-size: 2rem;  
+  margin-bottom: 1rem;  
+  display: inline-block;  
+  transition: all 0.3s ease;
+}  
+
+.content-section h3 {  
+  margin: 0 0 1.5rem 0;  
+  font-size: 1.8rem;  
+  font-weight: 600;  
+  color: var(--accent-color);
+  transition: all 0.3s ease;
+}  
+
+.content-section p {  
+  line-height: 1.7;  
+  margin-bottom: 1rem;  
+  opacity: 0.9;  
+  transition: all 0.3s ease;
+}  
+
+.highlight-text {  
+  background: linear-gradient(135deg, 
+    rgba(var(--accent-lavender-rgb), 0.2), 
+    rgba(var(--accent-pink-rgb), 0.2)
+  );  
+  padding: 1rem 1.5rem;  
+  border-radius: 1rem;  
+  border-left: 4px solid var(--accent-color);  
+  font-style: italic;  
+  transition: all 0.3s ease;
+}  
+
+.tech-grid {  
+  display: grid;  
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));  
+  gap: 1.5rem;  
+  margin: 2rem 0;  
+}  
+
+.tech-card {  
+  background: var(--input-bg);  
+  padding: 1.5rem;  
+  border-radius: 1rem;  
+  display: flex;  
+  align-items: center;  
+  gap: 1rem;  
+  transition: all 0.3s ease;  
+  border: 1px solid var(--border-lavender);  
+}  
+
+.tech-card:hover {  
+  background: rgba(var(--accent-lavender-rgb), 0.1);  
+  transform: translateY(-3px);  
+  border-color: var(--accent-pink);
+}  
+
+.tech-icon {  
+  font-size: 2rem;  
+  flex-shrink: 0;  
+  transition: all 0.3s ease;
+}  
+
+.tech-info {  
+  display: flex;  
+  flex-direction: column;  
+}  
+
+.tech-info strong {  
+  font-size: 1.1rem;  
+  margin-bottom: 0.3rem;  
+  color: var(--accent-color);
+  transition: all 0.3s ease;
+}  
+
+.tech-info span {  
+  font-size: 0.9rem;  
+  opacity: 0.8;  
+  transition: all 0.3s ease;
+}  
+
+.tech-note {  
+  text-align: center;  
+  font-style: italic;  
+  opacity: 0.7;  
+  margin: 1rem 0 0 0;  
+  transition: all 0.3s ease;
+}  
+
+.acknowledgments-list {  
+  padding-left: 1.5rem;  
+  margin: 1.5rem 0;  
+}  
+
+.acknowledgments-list li {  
+  margin-bottom: 0.8rem;  
+  line-height: 1.6;  
+  opacity: 0.9;  
+  transition: all 0.3s ease;
+}  
+
+.philosophy-grid {  
+  display: grid;  
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));  
+  gap: 1rem;  
+  margin: 1.5rem 0;  
+}  
+
+.philosophy-item {  
+  background: var(--input-bg);  
+  padding: 1.2rem;  
+  border-radius: 0.8rem;  
+  text-align: center;  
+  border: 1px solid var(--border-lavender);  
+  transition: all 0.3s ease;
+}  
+
+.philosophy-item:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-pink);
+  box-shadow: 0 5px 15px var(--shadow-pink);
+}
+
+.philosophy-item strong {  
+  display: block;  
+  margin-bottom: 0.5rem;  
+  font-size: 1rem;  
+  color: var(--accent-color);
+  transition: all 0.3s ease;
+}  
+
+.philosophy-item span {  
+  font-size: 0.85rem;  
+  opacity: 0.8;  
+  transition: all 0.3s ease;
+}  
+
+.future-section {  
+  text-align: center;  
+}  
+
+.signature {  
+  font-style: italic;  
+  opacity: 0.8;  
+  margin: 2rem 0 0 0;  
+  padding-top: 1rem;  
+  border-top: 1px solid var(--border-lavender);  
+  transition: all 0.3s ease;
+}  
+
+.about-footer {  
+  position: fixed;  
+  bottom: 0;  
+  left: 0;  
+  right: 0;  
+  z-index: 90;  
+  text-align: center;  
+  padding: 1rem;  
+  background: var(--header-bg);  
+  border-top: 2px solid var(--accent-color);
+  backdrop-filter: var(--backdrop-blur);
+  transition: all 0.3s ease;
+}  
+
+.footer-link {  
+  cursor: pointer;  
+  transition: all 0.2s ease;  
+  text-decoration: underline;  
+  text-decoration-color: rgba(255, 255, 255, 0.4);  
+  text-underline-offset: 2px;  
+  color: var(--text-secondary);  
+  padding: 2px 6px;  
+  border-radius: 4px;  
+}  
+
+.footer-link:hover {  
+  background: rgba(255, 255, 255, 0.1);  
+  text-decoration-color: var(--accent-pink);  
+  color: var(--accent-pink);  
+}  
+
+.content-section {  
+  opacity: 0;  
+  transform: translateY(30px);  
+  animation: fadeInUp 0.6s ease forwards;  
+}  
+
+@keyframes fadeInUp {  
+  to {  
+    opacity: 1;  
+    transform: translateY(0);  
+  }  
+}  
+
+.content-section:nth-child(1) { animation-delay: 0.1s; }  
+.content-section:nth-child(2) { animation-delay: 0.2s; }  
+.content-section:nth-child(3) { animation-delay: 0.3s; }  
+.content-section:nth-child(4) { animation-delay: 0.4s; }  
+.content-section:nth-child(5) { animation-delay: 0.5s; }  
+.content-section:nth-child(6) { animation-delay: 0.6s; }
+
+html {  
+  scroll-behavior: smooth;  
+}  
+
+/* Mobile Responsive */
+@media (max-width: 768px) {  
+  .about-body {  
+    padding-top: 70px;  
+    padding-bottom: 50px;  
+  }  
+    
+  .about-main {  
+    padding: 1rem;  
+  }  
+    
+  .hero-content h2 {  
+    font-size: 1.8rem;  
+  }  
+    
+  .hero-text {  
+    font-size: 1rem;  
+  }  
+    
+  .content-section {  
+    padding: 1.2rem;  
+  }  
+    
+  .tech-grid {  
+    grid-template-columns: 1fr;  
+  }  
+    
+  .philosophy-grid {  
+    grid-template-columns: 1fr;  
+  }  
+    
+  .about-header h1 {  
+    font-size: 1.5rem;  
+  }  
+
+  .content-section h3 {
+    font-size: 1.5rem;
+  }
+}  
+
+/* Desktop Enhancements */
+@media (min-width: 1200px) {
+  .about-main {
+    max-width: 1000px;
+  }
+  
+  .tech-grid {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+}

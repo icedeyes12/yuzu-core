@@ -1,0 +1,514 @@
+/* [FILE: config.css] */
+/* [VERSION: 1.0.0.69.1] */
+/* [DATE: 2025-08-12] */
+/* [PROJECT: HKKM - Yuzu Companion] */
+/* [DESCRIPTION: Configuration page styling with theme support] */
+/* [AUTHOR: Project Lead: Bani Baskara] */
+/* [TEAM: Deepseek, GPT, Qwen, Aihara] */
+/* [REPOSITORY: https://github.com/icedeyes12] */
+/* [LICENSE: MIT] */
+
+.config-body {
+  padding-top: 80px;
+  padding-bottom: 50px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-color);
+  transition: all 0.3s ease;
+}
+
+/* Fixed Header - Mobile Optimized */
+.config-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 90;
+  text-align: center;
+  padding: 1rem;
+  background: var(--header-bg);
+  backdrop-filter: var(--backdrop-blur);
+  border-bottom: 1.5px solid var(--accent-lavender);
+  transition: all 0.3s ease;
+}
+
+.config-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent-lavender);
+  transition: all 0.3s ease;
+}
+
+.config-header p {
+  margin: 0.3rem 0 0 0;
+  color: var(--accent-pink);
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+}
+
+/* Config Content Area */
+.config-content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  padding: 1rem;
+  max-width: 600px;
+  margin: 0 auto;
+  width: 100%;
+  transition: all 0.3s ease;
+}
+
+/* Config Sections */
+.config-section {
+  background: var(--card-bg);
+  border-radius: 0.8rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  backdrop-filter: var(--backdrop-blur);
+  border: 1.5px solid var(--border-lavender);
+  box-shadow: var(--shadow-soft);
+  transition: all 0.3s ease;
+}
+
+.config-section:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-pink);
+  box-shadow: 0 8px 25px var(--shadow-pink);
+}
+
+.config-section h2 {
+  margin: 0 0 0.8rem 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--accent-lavender);
+  border-bottom: 1.5px solid var(--border-lavender);
+  padding-bottom: 0.5rem;
+  transition: all 0.3s ease;
+}
+
+/* Form Elements */
+.form-group {
+  margin-bottom: 0.8rem;
+  transition: all 0.3s ease;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-weight: 600;
+  color: var(--accent-pink);
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+}
+
+.form-group input,
+.form-select {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1.5px solid var(--border-lavender);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text-color);
+  font-size: 0.9rem;
+  backdrop-filter: var(--backdrop-blur);
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+.form-group input:focus,
+.form-select:focus {
+  border-color: var(--accent-pink);
+  background: var(--input-bg);
+  box-shadow: 0 0 0 3px var(--shadow-pink);
+  outline: none;
+}
+
+/* Select dropdown styling */
+.form-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  background-size: 1rem;
+  padding-right: 2.5rem;
+}
+
+/* Range input styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border-lavender);
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-pink);
+  cursor: pointer;
+  border: 2px solid var(--header-bg);
+  box-shadow: 0 2px 6px var(--shadow-pink);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-pink);
+  cursor: pointer;
+  border: 2px solid var(--header-bg);
+  box-shadow: 0 2px 6px var(--shadow-pink);
+}
+
+/* Textarea styling */
+textarea {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1.5px solid var(--border-lavender);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text-color);
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+  transition: all 0.3s ease;
+}
+
+textarea:focus {
+  border-color: var(--accent-pink);
+  background: var(--input-bg);
+  box-shadow: 0 0 0 3px var(--shadow-pink);
+  outline: none;
+}
+
+/* Button Styles */
+.btn {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  backdrop-filter: var(--backdrop-blur);
+  border: 1.5px solid transparent;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.btn-primary {
+  background: var(--button-bg);
+  color: var(--button-text);
+  border-color: var(--border-pink);
+  box-shadow: 0 3px 12px var(--shadow-pink);
+}
+
+.btn-primary:hover {
+  background: var(--button-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px var(--shadow-pink);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+/* Button variants */
+.btn-success {
+  background: #10b981;
+  color: white;
+  border-color: #059669;
+}
+
+.btn-warning {
+  background: #f59e0b;
+  color: white;
+  border-color: #d97706;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+  border-color: #dc2626;
+}
+
+.btn-info {
+  background: #8b5cf6;
+  color: white;
+  border-color: #7c3aed;
+}
+
+/* Provider Status */
+.provider-status {
+  padding: 0.8rem;
+  background: var(--input-bg);
+  border-radius: 8px;
+  margin: 0.8rem 0;
+  font-size: 0.9rem;
+  border: 1px solid var(--border-lavender);
+  transition: all 0.3s ease;
+}
+
+.provider-status p {
+  margin: 0.3rem 0;
+  transition: all 0.3s ease;
+}
+
+.status-connected {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.status-disconnected {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.status-checking {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+/* Memory & Global Knowledge */
+.memory-stats {
+  font-size: 0.9rem;
+  line-height: 1.4;
+  transition: all 0.3s ease;
+}
+
+.memory-stats p {
+  margin: 0.3rem 0;
+  transition: all 0.3s ease;
+}
+
+.memory-stats strong {
+  color: var(--accent-pink);
+}
+
+/* Global knowledge textarea */
+#global-knowledge {
+  font-size: 0.9rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  min-height: 80px;
+  max-height: 150px;
+  background: var(--input-bg);
+  border: 1.5px solid var(--border-lavender);
+  transition: all 0.3s ease;
+}
+
+#global-knowledge:focus {
+  border-color: var(--accent-pink);
+  box-shadow: 0 0 0 3px var(--shadow-pink);
+}
+
+/* API Keys Management */
+#keys-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#keys-list li {
+  padding: 0.4rem 0.6rem !important;
+  margin-bottom: 0.3rem !important;
+  font-size: 0.85rem;
+  background: var(--input-bg);
+  border-radius: 6px;
+  border: 1px solid var(--border-lavender);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.3s ease;
+}
+
+#keys-list li:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--accent-pink);
+}
+
+#keys-list .btn {
+  padding: 0.2rem 0.5rem !important;
+  font-size: 0.8rem !important;
+  background: #ef4444;
+  color: white;
+  border: none;
+}
+
+#keys-list .btn:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+/* Button Groups */
+.config-section > div:last-child {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.config-section > div:last-child .btn {
+  flex: 1;
+  min-width: 120px;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .config-body {
+    padding-top: 70px;
+    padding-bottom: 40px;
+  }
+  
+  .config-content {
+    padding: 0.8rem;
+  }
+  
+  .config-section {
+    padding: 0.8rem;
+    margin-bottom: 0.8rem;
+  }
+  
+  .config-section h2 {
+    font-size: 1.1rem;
+  }
+  
+  .btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+  }
+  
+  .config-section > div:last-child {
+    flex-direction: column;
+  }
+  
+  .config-section > div:last-child .btn {
+    min-width: auto;
+    width: 100%;
+  }
+  
+  .form-group input,
+  .form-select,
+  textarea {
+    padding: 0.5rem 0.7rem;
+    font-size: 0.85rem;
+  }
+}
+
+/* Desktop Enhancements */
+@media (min-width: 768px) {
+  .config-body {
+    padding-top: 90px;
+  }
+  
+  .config-header h1 {
+    font-size: 1.8rem;
+  }
+  
+  .config-content {
+    padding: 1.5rem;
+  }
+  
+  .config-section {
+    padding: 1.2rem;
+    margin-bottom: 1.2rem;
+  }
+}
+
+@media (min-width: 1200px) {
+  .config-content {
+    max-width: 700px;
+  }
+}
+
+/* Theme Transitions */
+.config-section,
+.form-group,
+.btn,
+.provider-status,
+.memory-stats,
+#keys-list li {
+  transition: 
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    color 0.3s ease,
+    transform 0.2s ease;
+}
+
+/* Focus states for accessibility */
+.form-group input:focus,
+.form-select:focus,
+textarea:focus,
+.btn:focus {
+  outline: 2px solid var(--accent-lavender);
+  outline-offset: 2px;
+}
+
+/* Loading states */
+.loading {
+  color: var(--text-secondary);
+  font-style: italic;
+  text-align: center;
+  padding: 1rem;
+}
+
+/* Error states */
+.error {
+  color: var(--accent-pink);
+  text-align: center;
+  padding: 1rem;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Success states */
+.success {
+  color: var(--accent-mint);
+  text-align: center;
+  padding: 1rem;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 6px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* Footer styling */
+.home-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 90;
+  text-align: center;
+  padding: 0.8rem;
+  background: var(--header-bg);
+  border-top: 1.5px solid var(--accent-lavender);
+  backdrop-filter: var(--backdrop-blur);
+  transition: all 0.3s ease;
+}
+
+.footer-link {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.4);
+  text-underline-offset: 2px;
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.footer-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+  text-decoration-color: var(--accent-pink);
+  color: var(--accent-pink);
+}

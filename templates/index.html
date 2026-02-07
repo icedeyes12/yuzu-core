@@ -1,0 +1,120 @@
+<!-- [FILE: index.html] -->
+<!-- [VERSION: 1.0.0.69.2] -->
+<!-- [DATE: 2025-08-12] -->
+<!-- [PROJECT: HKKM - Yuzu Companion] -->
+<!-- [DESCRIPTION: Home page for AI companion system] -->
+<!-- [AUTHOR: Project Lead: Bani Baskara] -->
+<!-- [TEAM: Deepseek, GPT, Qwen, Aihara] -->
+<!-- [REPOSITORY: https://github.com/icedeyes12] -->
+<!-- [LICENSE: MIT] -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home | Yuzu Companion</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
+</head>
+<body class="home-body">
+  <!-- Unified Sidebar -->
+  <div class="sidebar" id="mainSidebar">
+    <div class="sidebar-header">
+      <h2>Yuzu Companion</h2>
+      <button class="close-sidebar" onclick="toggleSidebar()">×</button>
+    </div>
+    
+    <div class="sidebar-content">
+      <!-- Navigation -->
+      <div class="sidebar-section">
+        <h3>Navigation</h3>
+        <a href="/" class="sidebar-link active" onclick="toggleSidebar()">
+          <span class="sidebar-icon home-icon"></span> Home
+        </a>
+        <a href="/chat" class="sidebar-link" onclick="toggleSidebar()">
+          <span class="sidebar-icon chat-icon"></span> Chat
+        </a>
+        <a href="/config" class="sidebar-link" onclick="toggleSidebar()">
+          <span class="sidebar-icon config-icon"></span> Config
+        </a>
+        <a href="/about" class="sidebar-link" onclick="toggleSidebar()">
+          <span class="sidebar-icon about-icon"></span> About
+        </a>
+      </div>
+      
+      <!-- Theme Selector -->
+      <div class="sidebar-section">
+        <h3>Theme</h3>
+        <div class="custom-dropdown" id="themeDropdown">
+          <div class="dropdown-selected">
+            <span class="selected-text">Dark Blue</span>
+            <span class="dropdown-arrow">▼</span>
+          </div>
+          <div class="dropdown-options">
+            <div class="dropdown-option" data-value="dark">
+              <span class="theme-preview dark-preview"></span>
+              Dark Blue
+            </div>
+            <div class="dropdown-option" data-value="light">
+              <span class="theme-preview light-preview"></span>
+              Soft Light
+            </div>
+            <div class="dropdown-option" data-value="lavender">
+              <span class="theme-preview lavender-preview"></span>
+              Pastel Lavender
+            </div>
+            <div class="dropdown-option" data-value="mint">
+              <span class="theme-preview mint-preview"></span>
+              Pastel Mint
+            </div>
+            <div class="dropdown-option" data-value="peach">
+              <span class="theme-preview peach-preview"></span>
+              Pastel Peach
+            </div>
+            <div class="dropdown-option" data-value="dark-lavender">
+              <span class="theme-preview dark-lavender-preview"></span>
+              Dark Lavender
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hamburger Menu -->
+  <button class="hamburger-menu" id="hamburgerMenu" onclick="toggleSidebar()">
+    <span></span>
+    <span></span>
+    <span></span>
+  </button>
+
+  <!-- Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+  
+  <header class="home-header">
+    <h1>Welcome, {{ profile.display_name|capitalize }}</h1>
+    <p>Partner: {{ profile.partner_name|capitalize }} | Affection: {{ profile.affection }}</p>
+  </header>
+
+  <div class="menu">
+    <a href="/chat" class="card">
+      <h2>Chat</h2>
+      <p>Talk with your partner</p>
+    </a>
+    <a href="/config" class="card">
+      <h2>Config</h2>
+      <p>Adjust settings</p>
+    </a>
+  </div>
+
+  <footer class="home-footer">
+    <span class="footer-link" onclick="window.location.href='/about'">©2025 hkkm project</span> | built with love
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/home.js') }}"></script>
+</body>
+</html>
