@@ -1253,6 +1253,59 @@ Relationship Dynamics: [Provide analysis of the relationship dynamics between Us
     return False
 
 
+def normalize_memory_item(text: str) -> str:
+    """Normalize a memory item for deduplication comparison.
+    
+    Rules:
+    - Convert to lowercase
+    - Strip leading/trailing whitespace
+    - Remove trailing punctuation (. , " ')
+    - Collapse multiple spaces into one
+    """
+    text = text.strip().lower()
+    text = re.sub(r'\s+', ' ', text)
+    text = text.rstrip('.,"\'')
+    return text
+
+
+def merge_and_clean_memory(existing_list: List[str], new_items: List[str], max_size: int) -> List[str]:
+    """Merge new items into an existing list with normalization-based deduplication and size limits.
+    
+    - Normalizes text for comparison only; preserves original text of the first occurrence.
+    - Skips items whose normalized form already exists.
+    - Enforces max_size by keeping the earliest items.
+    """
+    result = []
+    seen_normalized = set()
+
+    for item in existing_list:
+        if not item or not item.strip():
+            continue
+        norm = normalize_memory_item(item)
+        if norm and norm not in seen_normalized:
+            seen_normalized.add(norm)
+            result.append(item)
+
+    for item in new_items:
+        if not item or not item.strip():
+            continue
+        norm = normalize_memory_item(item)
+        if norm and norm not in seen_normalized:
+            seen_normalized.add(norm)
+            result.append(item)
+
+    return result[:max_size]
+
+
+# Maximum list sizes for each key_facts category
+_MEMORY_LIST_LIMITS = {
+    'likes': 30,
+    'dislikes': 30,
+    'personality_traits': 15,
+    'important_memories': 20,
+}
+
+
 def _merge_profile_data(existing_memory: Dict, new_data: Dict) -> Dict:
     """Smart merge of existing profile data with new analysis"""
     if not existing_memory:
@@ -1274,7 +1327,7 @@ def _merge_profile_data(existing_memory: Dict, new_data: Dict) -> Dict:
     if 'relationship_dynamics' in new_data and new_data['relationship_dynamics']:
         result['relationship_dynamics'] = new_data['relationship_dynamics']
     
-    # Merge key facts
+    # Merge key facts with normalization, deduplication, and size limits
     if 'key_facts' in new_data:
         if 'key_facts' not in result:
             result['key_facts'] = {
@@ -1285,14 +1338,15 @@ def _merge_profile_data(existing_memory: Dict, new_data: Dict) -> Dict:
             }
         
         for category in ['likes', 'dislikes', 'personality_traits', 'important_memories']:
-            existing_items = set(result['key_facts'].get(category, []))
-            new_items = set(new_data['key_facts'].get(category, []))
+            existing_items = result['key_facts'].get(category, [])
+            new_items = new_data['key_facts'].get(category, [])
+            max_size = _MEMORY_LIST_LIMITS[category]
             
-            # Gabungkan, prioritas item baru
-            combined = list(new_items.union(existing_items))
-            result['key_facts'][category] = combined
+            before_count = len(existing_items)
+            merged = merge_and_clean_memory(existing_items, new_items, max_size)
+            result['key_facts'][category] = merged
             
-            added = len(new_items - existing_items)
+            added = len(merged) - before_count
             if added > 0:
                 print(f"[INFO] Added {added} new items to {category}")
     
