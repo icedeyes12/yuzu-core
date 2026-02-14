@@ -64,7 +64,7 @@ Now go away and do something more productive. Like scrolling through memes.
 - [Qwen](https://github.com/QwenLM/Qwen3-Coder)
 - [GitHub Copilot](https://github.com/features/copilot)
 - [KiloCode](https://kilocode.ai/)
-- [Aihara](https://guthib.com/icedeyes12/yuzu-companion)
+- [Aihara](https://github.com/icedeyes12/yuzu-companion)
 
 ---
 

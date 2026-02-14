@@ -25,6 +25,8 @@ async function loadProfileData() {
         const response = await fetch('/api/get_profile');
         const data = await response.json();
         
+        console.log('Full profile data:', data);
+
         // Update SESSION CONTEXT display
         const sessionMemory = data.session_memory || {};
         document.getElementById('session-context').textContent = 
@@ -34,8 +36,10 @@ async function loadProfileData() {
         
         // Update GLOBAL PLAYER PROFILE display
         const profileMemory = data.memory || {};
+        console.log('Profile memory data:', profileMemory);
         
         const keyFacts = profileMemory.key_facts || {};
+        console.log('Key facts data:', keyFacts);
         
         // Update the display with actual data
         document.getElementById('player-summary').textContent = 
@@ -601,6 +605,8 @@ async function updateGlobalProfile() {
 
 // Direct update function for global profile display
 function updateGlobalProfileDisplay(profileMemory) {
+    console.log('Updating global profile display with:', profileMemory);
+    
     const keyFacts = profileMemory.key_facts || {};
     
     document.getElementById('player-summary').textContent = 

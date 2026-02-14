@@ -122,7 +122,7 @@ def api_get_profile():
         
         vision_capabilities = get_vision_capabilities()
         
-
+        print(f"Sending profile data - Active Session: {active_session['id']}, History: {len(chat_history)} messages")
         
         return jsonify({
             **profile, 
@@ -481,7 +481,7 @@ def api_update_global_profile():
         
         if success:
             profile = Database.get_profile()
-
+            print(f"Returning updated profile with memory: {profile.get('memory', {})}")
             
             return jsonify({
                 'status': 'success', 
@@ -741,4 +741,4 @@ def api_update_global_knowledge():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)

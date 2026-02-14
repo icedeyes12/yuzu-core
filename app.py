@@ -1197,6 +1197,23 @@ Relationship Dynamics: [Provide analysis of the relationship dynamics between Us
     if summary_text:
         print(f"[SUCCESS] Analysis received: {len(summary_text):,} chars")
         
+        # Save raw analysis for debugging
+        import os
+        os.makedirs("debug_logs", exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        debug_file = f"debug_logs/profile_summary_{timestamp}.txt"
+        
+        with open(debug_file, "w", encoding="utf-8") as f:
+            f.write("=== GLOBAL PROFILE ANALYSIS ===\n")
+            f.write(f"Date: {timestamp}\n")
+            f.write(f"Sessions: {len(all_conversations)}\n")
+            f.write(f"Messages: {total_messages_processed}\n")
+            f.write(f"Chars: {len(conversation_text)}\n")
+            f.write("\n=== RAW ANALYSIS ===\n")
+            f.write(summary_text)
+        
+        print(f"[DEBUG] Raw analysis saved to: {debug_file}")
+        
         # Parse and update profile
         profile_update = parse_global_profile_summary(summary_text)
         profile_update['last_global_summary'] = datetime.now().isoformat()
@@ -1330,7 +1347,9 @@ def global_profile_analysis(prompt: str, api_key: str) -> Optional[str]:
             "stream": False
         }
         
-
+        print(f"[DEBUG] Using model: {model}")
+        print(f"[DEBUG] Prompt tokens estimate: ~{len(prompt) // 4}")
+        print(f"[DEBUG] Max response tokens: {data['max_tokens']}")
         
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -1640,7 +1659,9 @@ def parse_global_profile_summary(summary_text: str) -> Dict:
                     unique_items.append(item)
             profile_data["key_facts"][key] = unique_items
     
-
+    print(f"[DEBUG] Parsed profile: player_summary={len(profile_data['player_summary'])} chars, "
+          f"likes={len(profile_data['key_facts']['likes'])}, "
+          f"personality_traits={len(profile_data['key_facts']['personality_traits'])}")
     
     return profile_data
 
@@ -1751,6 +1772,68 @@ def check_glm47_capabilities():
         except:
             print("\n[INFO] Could not fetch API key details")
 
+
+def test_glm47_profile():
+    """Test GLM-4.7 for profile analysis"""
+    print("=== Testing GLM-4.7 Profile Analysis ===")
+    
+    api_keys = Database.get_api_keys()
+    openrouter_key = api_keys.get('openrouter')
+    
+    if not openrouter_key:
+        print("[ERROR] No OpenRouter API key!")
+        return False
+    
+    # Test dengan prompt sederhana
+    test_prompt = """# PLAYER PROFILE ANALYSIS TASK
+
+## CONVERSATION HISTORY:
+Session 1 - User: Hello, I really enjoy programming in Python
+Session 1 - AI: That's great! Python is a wonderful language
+Session 1 - User: Yes, I especially like data analysis with pandas
+Session 2 - User: I love listening to jazz while working
+Session 2 - AI: Jazz is perfect for focus! Any favorite artists?
+Session 2 - User: Miles Davis and John Coltrane are my favorites
+
+## ANALYSIS INSTRUCTIONS:
+Analyze the conversation history and extract insights about the User.
+
+### OUTPUT FORMAT:
+Player Summary: [4-6 sentence summary]
+
+Likes: [comma-separated list]
+
+Dislikes: [comma-separated list]
+
+Personality Traits: [comma-separated list]
+
+Important Memories: [comma-separated list]
+
+Relationship Dynamics: [3-4 sentence analysis]"""
+    
+    print("[INFO] Testing with simple prompt...")
+    result = global_profile_analysis(test_prompt, openrouter_key)
+    
+    if result:
+        print(f"\n[SUCCESS] GLM-4.7 Test Response:\n{result}")
+        
+        parsed = parse_global_profile_summary(result)
+        print(f"\n[SUCCESS] Parsed Result:")
+        print(f"Player Summary: {parsed['player_summary'][:200]}...")
+        print(f"Likes: {parsed['key_facts']['likes']}")
+        print(f"Personality Traits: {parsed['key_facts']['personality_traits']}")
+        
+        # Simpan test result
+        with open("debug_logs/glm47_test_result.txt", "w", encoding="utf-8") as f:
+            f.write("=== GLM-4.7 Test Result ===\n")
+            f.write(result)
+            f.write("\n\n=== Parsed Data ===\n")
+            f.write(json.dumps(parsed, indent=2, ensure_ascii=False))
+        
+        return True
+    else:
+        print("[ERROR] No response from GLM-4.7")
+        return False
 
 
 def batch_global_analysis(max_sessions=50):
