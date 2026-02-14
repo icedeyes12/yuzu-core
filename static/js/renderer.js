@@ -134,27 +134,27 @@ class MessageRenderer {
         // These might appear on separate lines from backend output
         // Note: Backend sometimes adds space after ! like "! [text]" instead of "![text]"
         
-        // Pattern 1: Handle "! [alt]" with space after ! + newline + (url)
-        text = text.replace(/!\s*\[([^\]]*)\]\s*[\r\n]+\s*\(([^)]+)\)/g, (match, alt, src) => {
-            console.log('[Renderer] Preprocessing multi-line image (with space):', { alt, src: src.trim() });
-            return `![${alt}](${src.trim()})`;
-        });
+        console.log('[Renderer] Preprocessing images, input length:', text.length);
         
-        // Pattern 2: Handle "! [alt]" with space + multiple whitespace + (url)
-        text = text.replace(/!\s*\[([^\]]*)\]\s{2,}\(([^)]+)\)/g, (match, alt, src) => {
-            console.log('[Renderer] Preprocessing whitespace-separated image:', { alt, src: src.trim() });
-            return `![${alt}](${src.trim()})`;
-        });
+        // Single comprehensive pattern: Handle all variations
+        // Matches: ! [alt] or ![alt] followed by optional whitespace/newlines then (url)
+        const imagePattern = /!\s*\[([^\]]*)\]\s*\n?\s*\(([^)]+)\)/g;
         
-        // Pattern 3: Standard normalization for any "! [alt]" or "![alt]" format
-        text = text.replace(/!\s*\[([^\]]*)\]\s*\(([^)]+)\)/g, (match, alt, src) => {
+        let matchCount = 0;
+        text = text.replace(imagePattern, (match, alt, src) => {
+            matchCount++;
             const trimmedSrc = src.trim();
-            // Only log if we're actually changing something
-            if (match.includes('! [') || src !== trimmedSrc) {
-                console.log('[Renderer] Normalizing image:', { alt, src: trimmedSrc, original: match });
-            }
+            console.log(`[Renderer] Found image #${matchCount}:`, { 
+                alt: alt, 
+                src: trimmedSrc,
+                originalMatch: match.substring(0, 50) + (match.length > 50 ? '...' : '')
+            });
             return `![${alt}](${trimmedSrc})`;
         });
+        
+        if (matchCount > 0) {
+            console.log(`[Renderer] Preprocessed ${matchCount} images`);
+        }
         
         return text;
     }
