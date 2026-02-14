@@ -128,17 +128,23 @@ class MessageRenderer {
 
     preprocessGeneratedImages(text) {
         // Convert plain text image patterns like:
-        // ![Generated Image](static/generated_images/xxx.png)
-        // or ![alt text](path/to/image.png)
-        // These might appear as plain text if not properly formatted
+        // ![Generated Image]
+        // (static/generated_images/xxx.png)
+        // These might appear on separate lines from backend output
         
-        // Pattern to match markdown image syntax that might be on separate lines
-        const imagePattern = /!\[([^\]]*)\]\s*\(([^)]+)\)/g;
-        
-        return text.replace(imagePattern, (match, alt, src) => {
-            // Ensure proper markdown format
-            return `![${alt}](${src})`;
+        // First, handle images split across lines (newline between alt text and URL)
+        // Pattern: ![text]\n(url) or ![text]\r\n(url)
+        text = text.replace(/!\[([^\]]*)\]\s*[\r\n]+\s*\(([^)]+)\)/g, (match, alt, src) => {
+            return `![${alt}](${src.trim()})`;
         });
+        
+        // Also handle standard markdown images that might need normalization
+        text = text.replace(/!\[([^\]]*)\]\s*\(([^)]+)\)/g, (match, alt, src) => {
+            // Ensure proper markdown format
+            return `![${alt}](${src.trim()})`;
+        });
+        
+        return text;
     }
 
     postProcessHTML(html) {

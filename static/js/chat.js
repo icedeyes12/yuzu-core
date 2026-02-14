@@ -613,6 +613,18 @@ function createMessageElement(role, content, timestamp = null) {
         contentContainer.textContent = String(content);
     }
 
+    msg.appendChild(contentContainer);
+
+    // Create footer for timestamp and copy button
+    const footer = document.createElement("div");
+    footer.className = "message-footer";
+
+    // Timestamp
+    const timeDiv = document.createElement("div");
+    timeDiv.className = "timestamp";
+    timeDiv.textContent = displayTime;
+    footer.appendChild(timeDiv);
+
     // Add copy button for assistant messages
     if (role === "ai") {
         const copyBtn = document.createElement("button");
@@ -625,16 +637,10 @@ function createMessageElement(role, content, timestamp = null) {
             </svg>
         `;
         copyBtn.onclick = () => copyFullMessage(content);
-        msg.appendChild(copyBtn);
+        footer.appendChild(copyBtn);
     }
 
-    // Timestamp
-    const timeDiv = document.createElement("div");
-    timeDiv.className = "timestamp";
-    timeDiv.textContent = displayTime;
-
-    msg.appendChild(contentContainer);
-    msg.appendChild(timeDiv);
+    msg.appendChild(footer);
     
     return msg;
 }
@@ -830,13 +836,34 @@ function addScrollLoadListener(fullHistory) {
 // ==================== INPUT BEHAVIOR ====================
 function initializeInputBehavior() {
     const input = document.getElementById('messageInput');
+    const scrollBtn = document.getElementById('scrollToBottomBtn');
+    
     if (!input) return;
 
-    // Auto-resize textarea
+    // Function to update scroll button position based on input area height
+    function updateScrollButtonPosition() {
+        if (scrollBtn) {
+            const inputArea = input.closest('.input-area');
+            if (inputArea) {
+                const inputAreaHeight = inputArea.offsetHeight;
+                // Position scroll button 10px above the input area
+                scrollBtn.style.bottom = `${inputAreaHeight + 10}px`;
+            }
+        }
+    }
+
+    // Auto-resize textarea and update scroll button position
     input.oninput = () => {
         input.style.height = 'auto';
         input.style.height = Math.min(input.scrollHeight, 400) + 'px';
+        updateScrollButtonPosition();
     };
+    
+    // Initial position update
+    updateScrollButtonPosition();
+    
+    // Update on window resize
+    window.addEventListener('resize', updateScrollButtonPosition);
 }
 
 // ==================== INITIALIZATION ====================

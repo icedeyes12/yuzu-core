@@ -108,19 +108,19 @@
       </div>
     </div>
 
-    <!-- Hamburger Menu -->
-    <button class="hamburger-menu" id="hamburgerMenu" onclick="toggleSidebar()">
-      <span></span>
-      <span></span>
-      <span></span>
-    </button>
-
     <!-- Overlay -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
     <!-- MAIN WRAPPER -->
     <div class="chat-app">
         <header class="chat-header">
+            <!-- Hamburger Menu - now part of header -->
+            <button class="hamburger-menu" id="hamburgerMenu" onclick="toggleSidebar()">
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
+            
             <div class="header-left">
                 <h1 class="partner-name">{{ profile.partner_name }}</h1>
                 <div class="session-name" id="sessionName"></div>
