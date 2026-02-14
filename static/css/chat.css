@@ -48,7 +48,6 @@ html, body {
 }
 
 .hamburger-menu {
-  position: static; /* Ensure it stays in normal flow */
   display: flex;
   flex-direction: column;
   justify-content: space-around;
@@ -59,7 +58,6 @@ html, body {
   cursor: pointer;
   padding: 0;
   margin-right: 0.5rem; /* Add explicit margin for spacing */
-  flex-shrink: 0;
 }
 
 .hamburger {
@@ -79,8 +77,6 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  flex: 1;
-  min-width: 0;
 }
 
 .header-title {

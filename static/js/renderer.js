@@ -105,7 +105,7 @@ class MessageRenderer {
 
     normalizeImagePath(path) {
         if (!path) return path;
-        const cleaned = String(path).trim().replace(/\\/g, '/');
+        const cleaned = path.trim().replace(/\\/g, '/');
         if (/^(https?:)?\/\//i.test(cleaned) || cleaned.startsWith('data:') || cleaned.startsWith('/')) {
             return cleaned;
         }
