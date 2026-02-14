@@ -1,17 +1,16 @@
-// [FILE: chat.js] - OPTIMIZED VERSION
-// [VERSION: 1.0.0.69.6] - PERFORMANCE OPTIMIZED
-// [DATE: 2025-08-12]
+// [FILE: chat.js - Rebuilt Clean Version]
+// [VERSION: 2.0.0]
+// [DATE: 2026-02-14]
 // [PROJECT: HKKM - Yuzu Companion]
-// [DESCRIPTION: Optimized chat interface with performance improvements]
+// [DESCRIPTION: Clean chat interface rebuilt for stability]
 // [AUTHOR: Project Lead: Bani Baskara]
-// [TEAM: Deepseek, GPT, Qwen, Aihara]
-// [REPOSITORY: https://github.com/icedeyes12]
-// [LICENSE: MIT]
 
-console.log("Starting OPTIMIZED chat with performance improvements...");
+console.log("Starting clean chat rebuild...");
 
-// ==================== PERFORMANCE OPTIMIZATIONS ====================
-let isProcessingMessage = false; // Global flag to prevent double-send
+// ==================== GLOBAL STATE ====================
+let isProcessingMessage = false;
+let currentPage = 0;
+const MESSAGES_PER_PAGE = 30;
 
 // ==================== MULTIMODAL MANAGER ====================
 class MultimodalManager {
@@ -32,9 +31,7 @@ class MultimodalManager {
 
     createToggle() {
         const inputArea = document.querySelector('.input-area');
-        if (!inputArea) return;
-
-        if (inputArea.querySelector('.multimodal-toggle-container')) return;
+        if (!inputArea || inputArea.querySelector('.multimodal-toggle-container')) return;
 
         const toggleHTML = `
             <div class="multimodal-toggle-container">
@@ -75,7 +72,11 @@ class MultimodalManager {
                   </svg>`,
             upload: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
-                   </svg>`
+                   </svg>`,
+            copy: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                 </svg>`
         };
         return icons[mode] || icons.chat;
     }
@@ -106,7 +107,6 @@ class MultimodalManager {
     }
 
     handleSend() {
-        // PREVENTION: Check global flag to prevent double-send
         if (isProcessingMessage) {
             console.log("Message already being processed, please wait...");
             return;
@@ -120,7 +120,6 @@ class MultimodalManager {
             return;
         }
 
-        // SET GLOBAL FLAG
         isProcessingMessage = true;
 
         if (this.currentMode === 'generate') {
@@ -141,6 +140,7 @@ class MultimodalManager {
         addMessage("user", text);
         this.clearInput();
         
+        const typingIndicator = document.getElementById('typingIndicator');
         if (typingIndicator) typingIndicator.classList.remove("hidden");
 
         try {
@@ -164,7 +164,6 @@ class MultimodalManager {
             if (typingIndicator) typingIndicator.classList.add("hidden");
             addMessage("ai", "Connection error. Please try again.");
         } finally {
-            // RESET GLOBAL FLAG
             isProcessingMessage = false;
             this.isSending = false;
         }
@@ -251,7 +250,7 @@ class MultimodalManager {
                     this.switchMode('chat');
                 }
             } else {
-                throw new Error(data?.error || 'Image processing failed');
+                throw new Error(data.error || 'Failed to send message');
             }
             
         } catch (error) {
@@ -264,129 +263,49 @@ class MultimodalManager {
         }
     }
 
-    displayUploadedImage(imageUrl, caption = '') {
-        const chatContainer = document.getElementById('chatContainer');
-        if (!chatContainer) return;
-
-        const imageHTML = `
-            <div class="message user uploaded-image-message">
-                <div class="message-content">
-                    ${caption ? `<div class="image-caption">${this.escapeHtml(caption)}</div>` : ''}
-                    <div class="uploaded-image-container">
-                        <img src="${imageUrl}" alt="Uploaded image" class="uploaded-image">
-                    </div>
-                    <div class="timestamp">${this.getCurrentTime()}</div>
-                </div>
-            </div>
-        `;
-        
-        chatContainer.insertAdjacentHTML('beforeend', imageHTML);
-        scrollToBottom();
-    }
-
     displayGeneratedImage(imageUrl, prompt) {
         const chatContainer = document.getElementById('chatContainer');
         if (!chatContainer) return;
 
-        if (imageUrl.startsWith('generated_images/')) {
-            imageUrl = `/static/${imageUrl}`;
-        }
-
-        const imageHTML = `
-            <div class="message user generated-image-message">
-                <div class="message-content">
-                    <div class="image-prompt-text">${this.escapeHtml(prompt)}</div>
-                    <div class="generated-image-container">
-                        <img src="${imageUrl}" alt="${prompt}" class="generated-image">
-                        <div class="image-actions">
-                            <button class="image-action-btn" onclick="multimodal.downloadImage('${imageUrl}', '${prompt.replace(/[^a-z0-9]/gi, '_')}')">
-                                ${this.getSVGIcon('download')}
-                                <span>Download</span>
-                            </button>
-                            <button class="image-action-btn" onclick="multimodal.regenerateImage('${prompt}')">
-                                ${this.getSVGIcon('regenerate')}
-                                <span>Regenerate</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="timestamp">${this.getCurrentTime()}</div>
+        const imageDiv = document.createElement('div');
+        imageDiv.className = 'message ai generated-image-message';
+        imageDiv.innerHTML = `
+            <div class="generated-image-container">
+                <img src="${imageUrl}" alt="Generated: ${prompt}" class="generated-image">
+                <div class="image-actions">
+                    <button class="image-action-btn" onclick="multimodal.downloadImage('${imageUrl}', 'generated-${Date.now()}')">
+                        ${this.getSVGIcon('download')}
+                        Download
+                    </button>
+                    <button class="image-action-btn" onclick="multimodal.regenerateImage('${prompt.replace(/'/g, "\\'")}')">
+                        ${this.getSVGIcon('regenerate')}
+                        Regenerate
+                    </button>
                 </div>
             </div>
+            <div class="timestamp">${this.getCurrentTime()}</div>
         `;
         
-        chatContainer.insertAdjacentHTML('beforeend', imageHTML);
-        
-        const aiResponseHTML = `
-            <div class="message ai">
-                <div class="message-content">
-                    Image generated successfully! I've created your "${prompt}" 
-                    <div class="timestamp">${this.getCurrentTime()}</div>
-                </div>
-            </div>
-        `;
-        chatContainer.insertAdjacentHTML('beforeend', aiResponseHTML);
-        
+        chatContainer.appendChild(imageDiv);
         scrollToBottom();
     }
 
-    updateNotificationCount() {
-        if (!this.imageCountBadge) return;
-        
-        const count = this.selectedImages.length;
-        
-        if (count > 0) {
-            this.imageCountBadge.textContent = count;
-            this.imageCountBadge.classList.remove('hidden');
-            
-            this.imageCountBadge.classList.add('pulse');
-            setTimeout(() => {
-                this.imageCountBadge.classList.remove('pulse');
-            }, 1000);
-        } else {
-            this.imageCountBadge.classList.add('hidden');
-        }
-    }
+    displayUploadedImage(imageUrl, caption) {
+        const chatContainer = document.getElementById('chatContainer');
+        if (!chatContainer) return;
 
-    addImages(files) {
-        this.selectedImages = [...this.selectedImages, ...files];
-        this.updateNotificationCount();
+        const imageDiv = document.createElement('div');
+        imageDiv.className = 'message user uploaded-image-message';
+        imageDiv.innerHTML = `
+            <div class="uploaded-image-container">
+                <img src="${imageUrl}" alt="Uploaded image" class="uploaded-image">
+                ${caption ? `<div class="image-caption">${caption}</div>` : ''}
+            </div>
+            <div class="timestamp">${this.getCurrentTime()}</div>
+        `;
         
-        if (this.currentMode === 'image') {
-            this.updateInputPlaceholder();
-        }
-    }
-
-    removeImage(index) {
-        this.selectedImages.splice(index, 1);
-        this.updateNotificationCount();
-        
-        this.closeDropdown();
-        setTimeout(() => this.openDropdown(), 100);
-    }
-
-    clearImages() {
-        this.selectedImages = [];
-        this.updateNotificationCount();
-        
-        if (this.isDropdownOpen && this.currentMode === 'image') {
-            this.closeDropdown();
-            setTimeout(() => this.openDropdown(), 100);
-        }
-    }
-
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    clearInput() {
-        const input = document.getElementById('messageInput');
-        if (input) {
-            input.value = '';
-            input.style.height = 'auto';
-            this.updateInputPlaceholder();
-        }
+        chatContainer.appendChild(imageDiv);
+        scrollToBottom();
     }
 
     setSendButtonState(state) {
@@ -548,55 +467,68 @@ class MultimodalManager {
         if (mode === 'image' && this.selectedImages.length > 0) {
             this.imageCountBadge.classList.remove('hidden');
         } else if (mode !== 'image') {
-            this.imageCountBadge.classList.add('hidden');
+            this.clearImages();
         }
-        
-        this.updateInputPlaceholder();
     }
 
-    updateInputPlaceholder() {
+    addImages(files) {
+        this.selectedImages.push(...files);
+        this.updateNotificationCount();
+    }
+
+    removeImage(index) {
+        this.selectedImages.splice(index, 1);
+        this.updateNotificationCount();
+        this.closeDropdown();
+        if (this.currentMode === 'image') {
+            setTimeout(() => this.openDropdown(), 100);
+        }
+    }
+
+    clearImages() {
+        this.selectedImages = [];
+        this.updateNotificationCount();
+    }
+
+    updateNotificationCount() {
+        if (!this.imageCountBadge) return;
+        
+        if (this.selectedImages.length > 0) {
+            this.imageCountBadge.textContent = this.selectedImages.length;
+            this.imageCountBadge.classList.remove('hidden');
+        } else {
+            this.imageCountBadge.classList.add('hidden');
+        }
+    }
+
+    clearInput() {
         const input = document.getElementById('messageInput');
-        if (!input) return;
-        
-        const placeholders = {
-            chat: 'Type your message...',
-            generate: 'Describe the image to generate...',
-            image: this.selectedImages.length > 0 
-                ? `Ask about ${this.selectedImages.length} image(s)...`
-                : 'Upload images first...'
-        };
-        
-        input.placeholder = placeholders[this.currentMode];
+        if (input) {
+            input.value = '';
+            input.style.height = 'auto';
+        }
     }
 }
 
-// ==================== OPTIMIZED SCROLL SYSTEM ====================
-function createPermanentScrollButton() {
-    const existingBtn = document.getElementById("scrollToBottom");
-    if (existingBtn) existingBtn.remove();
-    
-    const btn = document.createElement("button");
-    btn.id = "scrollToBottom";
-    btn.title = "Scroll to bottom";
-    btn.innerHTML = "↓";
-    btn.classList.add("hidden");
-    btn.onclick = scrollToBottom;
-    
-    document.body.appendChild(btn);
-    console.log("Scroll button created");
-    return btn;
+// ==================== SCROLL BUTTON FUNCTIONS ====================
+function createScrollButton() {
+    const scrollBtn = document.getElementById('scrollToBottomBtn');
+    if (!scrollBtn) return;
+
+    scrollBtn.onclick = scrollToBottom;
+    initializeScrollButtonAutoHide();
 }
 
 function initializeScrollButtonAutoHide() {
     const chatContainer = document.getElementById("chatContainer");
-    const scrollBtn = document.getElementById("scrollToBottom");
+    const scrollBtn = document.getElementById("scrollToBottomBtn");
     
     if (!chatContainer || !scrollBtn) return;
-    
+
     function updateScrollButton() {
-        const scrollThreshold = 150;
-        const scrollPosition = chatContainer.scrollTop + chatContainer.clientHeight;
         const scrollHeight = chatContainer.scrollHeight;
+        const scrollPosition = chatContainer.scrollTop + chatContainer.clientHeight;
+        const scrollThreshold = 150;
         const distanceFromBottom = scrollHeight - scrollPosition;
         
         if (distanceFromBottom > scrollThreshold) {
@@ -621,25 +553,7 @@ function initializeScrollButtonAutoHide() {
     updateScrollButton();
 }
 
-function monitorScrollSystem() {
-    const chatContainer = document.getElementById("chatContainer");
-    const scrollBtn = document.getElementById("scrollToBottom");
-    
-    if (!chatContainer) {
-        console.error("Chat container not found!");
-        return false;
-    }
-    
-    if (!scrollBtn) {
-        createPermanentScrollButton();
-        initializeScrollButtonAutoHide();
-        return false;
-    }
-    
-    return true;
-}
-
-// ==================== OPTIMIZED CHAT FUNCTIONS ====================
+// ==================== CHAT FUNCTIONS ====================
 async function loadCurrentSessionName() {
     try {
         const response = await fetch('/api/get_profile');
@@ -656,18 +570,14 @@ async function loadCurrentSessionName() {
 
 function scrollToBottom() {
     const chatContainer = document.getElementById("chatContainer");
-    if (!chatContainer) {
-        console.error("Chat container not found!");
-        return;
-    }
+    if (!chatContainer) return;
     
-    // OPTIMIZED: Use smooth scroll with performance consideration
     chatContainer.scroll({
         top: chatContainer.scrollHeight,
         behavior: 'smooth'
     });
     
-    const scrollBtn = document.getElementById("scrollToBottom");
+    const scrollBtn = document.getElementById("scrollToBottomBtn");
     if (scrollBtn) {
         scrollBtn.classList.add("hidden");
     }
@@ -679,36 +589,49 @@ function createMessageElement(role, content, timestamp = null) {
     
     const displayTime = timestamp ? formatTimestamp(timestamp) : getCurrentTime24h();
 
+    // Message content container
     const contentContainer = document.createElement("div");
+    contentContainer.className = "message-content";
 
-    if (typeof renderMessageContent !== 'undefined') {
-        contentContainer.innerHTML = renderMessageContent(String(content));
-    } else if (typeof MarkdownParser !== 'undefined') {
-        contentContainer.innerHTML = MarkdownParser.parseWithEmojis(String(content));
+    // Render content using renderer
+    if (role === "ai" && typeof renderer !== 'undefined') {
+        contentContainer.innerHTML = renderer.renderMessage(String(content), false);
     } else {
         contentContainer.textContent = String(content);
     }
 
+    // Add copy button for assistant messages
+    if (role === "ai") {
+        const copyBtn = document.createElement("button");
+        copyBtn.className = "copy-message-btn";
+        copyBtn.title = "Copy full message";
+        copyBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+        `;
+        copyBtn.onclick = () => copyFullMessage(content);
+        msg.appendChild(copyBtn);
+    }
+
+    // Timestamp
     const timeDiv = document.createElement("div");
     timeDiv.className = "timestamp";
     timeDiv.textContent = displayTime;
-    contentContainer.appendChild(timeDiv);
 
     msg.appendChild(contentContainer);
+    msg.appendChild(timeDiv);
+    
     return msg;
 }
 
-// OPTIMIZED: New function to process only new elements
-function processNewMessageElement(element) {
-    if (!element) return;
-    
-    // Highlight code blocks only in this new element
-    if (typeof MarkdownParser !== 'undefined' && typeof MarkdownParser.highlightNewElement === 'function') {
-        MarkdownParser.highlightNewElement(element);
-    }
-    
-    // Initialize copy buttons only in this new element
-    initializeCopyButtons(element);
+function copyFullMessage(content) {
+    navigator.clipboard.writeText(content).then(() => {
+        console.log('Message copied to clipboard');
+    }).catch(err => {
+        console.error('Failed to copy message:', err);
+    });
 }
 
 function addMessage(role, content, timestamp = null, isHistory = false) {
@@ -721,10 +644,7 @@ function addMessage(role, content, timestamp = null, isHistory = false) {
     const msg = createMessageElement(role, content, timestamp);
     chatContainer.appendChild(msg);
     
-    // OPTIMIZED: Only process new elements for real-time messages, not history
     if (!isHistory) {
-        processNewMessageElement(msg);
-        
         setTimeout(() => {
             scrollToBottom();
         }, 50);
@@ -761,7 +681,7 @@ function getCurrentTime24h() {
     return `${hours}:${minutes}`;
 }
 
-// ==================== OPTIMIZED HISTORY FUNCTION ====================
+// ==================== CHAT HISTORY WITH PAGINATION ====================
 async function loadChatHistory() {
     const chatContainer = document.getElementById("chatContainer");
     if (!chatContainer) {
@@ -781,13 +701,12 @@ async function loadChatHistory() {
             chatContainer.innerHTML = '';
             console.log(`Processing ${history.length} messages from history`);
             
-            const immediateDisplayCount = Math.min(30, history.length);
-            const messagesToShowImmediately = history.slice(-immediateDisplayCount);
+            // Load last 30 messages initially
+            const messagesToShow = history.slice(-MESSAGES_PER_PAGE);
             
-            // OPTIMIZED: Use document fragment for batch DOM operations
             const fragment = document.createDocumentFragment();
             
-            messagesToShowImmediately.forEach(msg => {
+            messagesToShow.forEach(msg => {
                 if (msg.role === "user" || msg.role === "assistant") {
                     const msgElement = createMessageElement(
                         msg.role === "user" ? "user" : "ai", 
@@ -800,176 +719,102 @@ async function loadChatHistory() {
             
             chatContainer.appendChild(fragment);
             
-            // OPTIMIZED: Process all history messages at once after DOM insertion
             setTimeout(() => {
-                if (typeof MarkdownParser !== 'undefined') {
-                    MarkdownParser.highlightCodeBlocks(chatContainer);
-                }
-                initializeCopyButtons(chatContainer);
                 scrollToBottom();
-                
-                if (history.length > immediateDisplayCount) {
-                    setTimeout(() => loadOlderMessages(history, immediateDisplayCount), 500);
-                }
-            }, 300);
+            }, 100);
             
-            console.log(`Immediately displayed ${messagesToShowImmediately.length} recent messages`);
+            // Add scroll event for loading older messages
+            if (history.length > MESSAGES_PER_PAGE) {
+                addScrollLoadListener(history);
+            }
+            
+            console.log(`Displayed ${messagesToShow.length} recent messages`);
         } else {
             console.log("No chat history found");
+            chatContainer.innerHTML = '';
             addMessage("ai", "Hello! I'm your AI companion. Let's start a new conversation!");
             scrollToBottom();
         }
     } catch (err) {
         console.error("Failed to load chat history:", err);
+        chatContainer.innerHTML = '';
         addMessage("ai", "Hello! I'm your AI companion. Let's start a new conversation!");
         scrollToBottom();
     }
 }
 
-async function loadOlderMessages(fullHistory, alreadyLoadedCount) {
+function addScrollLoadListener(fullHistory) {
     const chatContainer = document.getElementById("chatContainer");
     if (!chatContainer) return;
-    
-    const olderMessages = fullHistory.slice(0, -alreadyLoadedCount);
-    const totalOlder = olderMessages.length;
-    
-    if (totalOlder === 0) return;
-    
-    console.log(`Loading ${totalOlder} older messages in background...`);
-    
-    const loadingIndicator = document.createElement('div');
-    loadingIndicator.className = 'loading-older';
-    loadingIndicator.innerHTML = `<div class="loading-spinner-small"></div> Loading ${totalOlder} older messages...`;
-    chatContainer.insertBefore(loadingIndicator, chatContainer.firstChild);
-    
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    const fragment = document.createDocumentFragment();
-    
-    olderMessages.forEach(msg => {
-        if (msg.role === "user" || msg.role === "assistant") {
-            const msgElement = createMessageElement(
-                msg.role === "user" ? "user" : "ai", 
-                msg.content, 
-                msg.timestamp
-            );
-            fragment.appendChild(msgElement);
-        }
-    });
-    
-    if (loadingIndicator.parentNode) {
-        loadingIndicator.parentNode.removeChild(loadingIndicator);
-    }
-    
-    if (chatContainer.firstChild) {
-        chatContainer.insertBefore(fragment, chatContainer.firstChild);
-    } else {
-        chatContainer.appendChild(fragment);
-    }
-    
-    // OPTIMIZED: Process older messages in a single batch
-    setTimeout(() => {
-        if (typeof MarkdownParser !== 'undefined') {
-            MarkdownParser.highlightCodeBlocks(chatContainer);
-        }
-        initializeCopyButtons(chatContainer);
-    }, 100);
-    
-    console.log(`Loaded ${totalOlder} older messages in background`);
-}
 
-// ==================== OPTIMIZED COPY FUNCTIONS ====================
-function initializeCopyButtons(parentElement = document) {
-    // OPTIMIZED: Only search within the specified parent element
-    const codeContainers = parentElement.querySelectorAll('.code-block-container');
-    
-    codeContainers.forEach(container => {
-        // Check if copy button already exists to avoid duplicates
-        const existingButton = container.querySelector('.copy-code-btn');
-        if (existingButton) {
-            return;
-        }
-        
-        const copyButton = document.createElement('button');
-        copyButton.className = 'copy-code-btn';
-        copyButton.innerHTML = '<span class="copy-text">Copy</span>';
-        
-        copyButton.onclick = function() { 
-            copyCodeToClipboard(this); 
-        };
-        
-        const codeHeader = container.querySelector('.code-header');
-        if (codeHeader) {
-            codeHeader.appendChild(copyButton);
-        }
-    });
-}
+    let isLoadingOlder = false;
+    let olderMessagesLoaded = 0;
 
-function copyCodeToClipboard(button) {
-    const codeBlock = button.closest('.code-block-container');
-    const codeElement = codeBlock.querySelector('code');
-    const textToCopy = codeElement.textContent;
-    
-    navigator.clipboard.writeText(textToCopy).then(() => {
-        const copyText = button.querySelector('.copy-text') || button;
-        const originalText = copyText.textContent;
-        
-        if (button.querySelector('.copy-text')) {
-            copyText.textContent = 'Copied!';
-        } else {
-            button.innerHTML = 'Copied!';
-        }
-        
-        button.classList.add('copied');
-        
-        setTimeout(() => {
-            if (button.querySelector('.copy-text')) {
-                copyText.textContent = originalText;
-            } else {
-                button.innerHTML = 'Copy';
+    chatContainer.addEventListener('scroll', async () => {
+        if (isLoadingOlder) return;
+
+        // Check if scrolled to top
+        if (chatContainer.scrollTop < 100) {
+            const remainingMessages = fullHistory.length - MESSAGES_PER_PAGE - olderMessagesLoaded;
+            
+            if (remainingMessages > 0) {
+                isLoadingOlder = true;
+                
+                const loadCount = Math.min(MESSAGES_PER_PAGE, remainingMessages);
+                const startIndex = fullHistory.length - MESSAGES_PER_PAGE - olderMessagesLoaded - loadCount;
+                const messagesToLoad = fullHistory.slice(startIndex, startIndex + loadCount);
+                
+                console.log(`Loading ${loadCount} older messages...`);
+                
+                // Save scroll position
+                const scrollHeightBefore = chatContainer.scrollHeight;
+                
+                const fragment = document.createDocumentFragment();
+                
+                messagesToLoad.forEach(msg => {
+                    if (msg.role === "user" || msg.role === "assistant") {
+                        const msgElement = createMessageElement(
+                            msg.role === "user" ? "user" : "ai", 
+                            msg.content, 
+                            msg.timestamp
+                        );
+                        fragment.appendChild(msgElement);
+                    }
+                });
+                
+                chatContainer.insertBefore(fragment, chatContainer.firstChild);
+                
+                // Restore scroll position
+                const scrollHeightAfter = chatContainer.scrollHeight;
+                chatContainer.scrollTop = scrollHeightAfter - scrollHeightBefore;
+                
+                olderMessagesLoaded += loadCount;
+                isLoadingOlder = false;
+                
+                console.log(`Loaded ${loadCount} older messages. Total loaded: ${MESSAGES_PER_PAGE + olderMessagesLoaded}`);
             }
-            button.classList.remove('copied');
-        }, 2000);
-    }).catch(err => {
-        console.error('Copy failed:', err);
+        }
     });
 }
 
-// ==================== OPTIMIZED HIGHLIGHT.JS INIT ====================
-function initializeHighlightJS(container = document) {
-    if (typeof hljs !== 'undefined') {
-        // OPTIMIZED: Only process elements within the specified container
-        const blocks = container.querySelectorAll('pre code');
-        blocks.forEach((block) => {
-            hljs.highlightElement(block);
-        });
-        console.log(`Highlight.js initialized on ${blocks.length} blocks`);
-    } else {
-        console.log("Highlight.js not loaded yet");
-    }
-}
-
-// ==================== OPTIMIZED INPUT BEHAVIOR ====================
+// ==================== INPUT BEHAVIOR ====================
 function initializeInputBehavior() {
     const input = document.getElementById('messageInput');
     if (!input) return;
 
-    // Hanya auto-resize - Enter = new line (natural mobile behavior)
+    // Auto-resize textarea
     input.oninput = () => {
         input.style.height = 'auto';
         input.style.height = Math.min(input.scrollHeight, 400) + 'px';
     };
-
-    // Mobile-friendly: Enter = new line, Send button = send");
 }
 
-// ==================== OPTIMIZED INITIALIZATION ====================
+// ==================== INITIALIZATION ====================
 function initializeChat() {
-    console.log("Initializing OPTIMIZED chat system...");
+    console.log("Initializing clean chat system...");
     
-    // Initialize scroll system
-    createPermanentScrollButton();
-    initializeScrollButtonAutoHide();
+    // Initialize scroll button
+    createScrollButton();
     
     // Initialize input behavior
     initializeInputBehavior();
@@ -984,10 +829,7 @@ function initializeChat() {
     window.multimodal = new MultimodalManager();
     window.multimodal.init();
     
-    // Monitor scroll system
-    setTimeout(() => monitorScrollSystem(), 1000);
-    
-    console.log("OPTIMIZED chat system ready!");
+    console.log("Clean chat system ready!");
 }
 
 // Start when page loads
@@ -998,9 +840,5 @@ window.onload = function() {
 // Global exports
 window.addMessage = addMessage;
 window.scrollToBottom = scrollToBottom;
-window.copyCodeToClipboard = copyCodeToClipboard;
-window.monitorScrollSystem = monitorScrollSystem;
+window.copyFullMessage = copyFullMessage;
 window.loadChatHistory = loadChatHistory;
-window.initializeHighlightJS = initializeHighlightJS;
-window.initializeCopyButtons = initializeCopyButtons;
-window.MultimodalManager = MultimodalManager;

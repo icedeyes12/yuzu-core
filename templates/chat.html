@@ -15,6 +15,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat | Yuzu Companion</title>
     
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
     <!-- CSS Imports -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
@@ -134,6 +137,13 @@
             <!-- messages will appear here -->
         </main>
 
+        <!-- Floating scroll-to-bottom button -->
+        <button id="scrollToBottomBtn" class="scroll-to-bottom-btn hidden">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M19 12l-7 7-7-7"/>
+            </svg>
+        </button>
+
         <!-- TYPING INDICATOR -->
         <div id="typingIndicator" class="typing-indicator hidden">
             <span></span>
@@ -148,6 +158,9 @@
             <button id="sendButton">Send</button>
         </div>
     </div>
+    
+    <!-- Load marked.js for markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
     
     <!-- Load Highlight.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -169,7 +182,7 @@
 
     <!-- Our scripts -->
     <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/renderer.js') }}"></script>
     <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 </body>
 </html>
