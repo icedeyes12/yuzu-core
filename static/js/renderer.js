@@ -170,12 +170,14 @@ class MessageRenderer {
         normalizedText = normalizedText.replace(imagePattern, (match, alt, src) => {
             matchCount++;
             const trimmedSrc = src.trim();
+            // Encode spaces in image paths so marked.js can parse them correctly
+            const encodedSrc = trimmedSrc.replace(/ /g, '%20');
             console.log(`[Renderer] Found image #${matchCount}:`, { 
                 alt: alt, 
-                src: trimmedSrc,
+                src: encodedSrc,
                 originalMatch: match.substring(0, 50) + (match.length > 50 ? '...' : '')
             });
-            return `![${alt}](${trimmedSrc})`;
+            return `![${alt}](${encodedSrc})`;
         });
         
         if (matchCount > 0) {
