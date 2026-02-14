@@ -78,7 +78,8 @@ class MessageRenderer {
         renderer.image = (href, title, text) => {
             const titleAttr = title ? ` title="${this.escapeHtml(title)}"` : '';
             const altAttr = text ? ` alt="${this.escapeHtml(text)}"` : '';
-            return `<img src="${this.escapeHtml(href)}"${altAttr}${titleAttr} class="markdown-image" loading="lazy" />`;
+            const errorHandler = `onerror="this.onerror=null; this.outerHTML='<div class=\\'image-error\\'>⚠️ Image not found: ${this.escapeHtml(text || 'Image')}</div>';"`;
+            return `<img src="${this.escapeHtml(href)}"${altAttr}${titleAttr} class="markdown-image" loading="lazy" ${errorHandler} />`;
         };
 
         // Configure marked with options
@@ -128,29 +129,29 @@ class MessageRenderer {
 
     preprocessGeneratedImages(text) {
         // Convert plain text image patterns like:
-        // ![Generated Image]
+        // ! [Generated Image]
         // (static/generated_images/xxx.png)
         // These might appear on separate lines from backend output
+        // Note: Backend sometimes adds space after ! like "! [text]" instead of "![text]"
         
-        // Handle various line break scenarios
-        // Pattern 1: Newline between ![alt] and (url) - most common
-        text = text.replace(/!\[([^\]]*)\]\s*[\r\n]+\s*\(([^)]+)\)/g, (match, alt, src) => {
-            console.log('[Renderer] Preprocessing multi-line image:', { alt, src: src.trim() });
+        // Pattern 1: Handle "! [alt]" with space after ! + newline + (url)
+        text = text.replace(/!\s*\[([^\]]*)\]\s*[\r\n]+\s*\(([^)]+)\)/g, (match, alt, src) => {
+            console.log('[Renderer] Preprocessing multi-line image (with space):', { alt, src: src.trim() });
             return `![${alt}](${src.trim()})`;
         });
         
-        // Pattern 2: Extra whitespace or multiple newlines
-        text = text.replace(/!\[([^\]]*)\]\s{2,}\(([^)]+)\)/g, (match, alt, src) => {
+        // Pattern 2: Handle "! [alt]" with space + multiple whitespace + (url)
+        text = text.replace(/!\s*\[([^\]]*)\]\s{2,}\(([^)]+)\)/g, (match, alt, src) => {
             console.log('[Renderer] Preprocessing whitespace-separated image:', { alt, src: src.trim() });
             return `![${alt}](${src.trim()})`;
         });
         
-        // Pattern 3: Standard markdown images (normalization)
-        text = text.replace(/!\[([^\]]*)\]\s*\(([^)]+)\)/g, (match, alt, src) => {
+        // Pattern 3: Standard normalization for any "! [alt]" or "![alt]" format
+        text = text.replace(/!\s*\[([^\]]*)\]\s*\(([^)]+)\)/g, (match, alt, src) => {
             const trimmedSrc = src.trim();
             // Only log if we're actually changing something
-            if (src !== trimmedSrc) {
-                console.log('[Renderer] Normalizing image:', { alt, src: trimmedSrc });
+            if (match.includes('! [') || src !== trimmedSrc) {
+                console.log('[Renderer] Normalizing image:', { alt, src: trimmedSrc, original: match });
             }
             return `![${alt}](${trimmedSrc})`;
         });

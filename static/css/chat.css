@@ -42,6 +42,7 @@ html, body {
 }
 
 .hamburger-menu {
+  position: static; /* Ensure it stays in normal flow */
   display: flex;
   flex-direction: column;
   justify-content: space-around;
@@ -51,7 +52,6 @@ html, body {
   border: none;
   cursor: pointer;
   padding: 0;
-  z-index: 110;
   flex-shrink: 0;
 }
 
@@ -340,6 +340,19 @@ html, body {
   border-radius: 8px;
   margin: 0.8rem 0;
   display: block;
+}
+
+.image-error {
+  padding: 1rem;
+  margin: 0.8rem 0;
+  border-radius: 8px;
+  background: rgba(255, 69, 58, 0.1);
+  border: 1px solid rgba(255, 69, 58, 0.3);
+  color: #ff453a;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 /* ==================== CODE BLOCKS ==================== */
