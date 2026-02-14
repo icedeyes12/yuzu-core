@@ -132,16 +132,27 @@ class MessageRenderer {
         // (static/generated_images/xxx.png)
         // These might appear on separate lines from backend output
         
-        // First, handle images split across lines (newline between alt text and URL)
-        // Pattern: ![text]\n(url) or ![text]\r\n(url)
+        // Handle various line break scenarios
+        // Pattern 1: Newline between ![alt] and (url) - most common
         text = text.replace(/!\[([^\]]*)\]\s*[\r\n]+\s*\(([^)]+)\)/g, (match, alt, src) => {
+            console.log('[Renderer] Preprocessing multi-line image:', { alt, src: src.trim() });
             return `![${alt}](${src.trim()})`;
         });
         
-        // Also handle standard markdown images that might need normalization
-        text = text.replace(/!\[([^\]]*)\]\s*\(([^)]+)\)/g, (match, alt, src) => {
-            // Ensure proper markdown format
+        // Pattern 2: Extra whitespace or multiple newlines
+        text = text.replace(/!\[([^\]]*)\]\s{2,}\(([^)]+)\)/g, (match, alt, src) => {
+            console.log('[Renderer] Preprocessing whitespace-separated image:', { alt, src: src.trim() });
             return `![${alt}](${src.trim()})`;
+        });
+        
+        // Pattern 3: Standard markdown images (normalization)
+        text = text.replace(/!\[([^\]]*)\]\s*\(([^)]+)\)/g, (match, alt, src) => {
+            const trimmedSrc = src.trim();
+            // Only log if we're actually changing something
+            if (src !== trimmedSrc) {
+                console.log('[Renderer] Normalizing image:', { alt, src: trimmedSrc });
+            }
+            return `![${alt}](${trimmedSrc})`;
         });
         
         return text;
