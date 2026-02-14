@@ -76,10 +76,11 @@ class MessageRenderer {
 
         // Custom image renderer to ensure images render as <img> elements
         renderer.image = (href, title, text) => {
+            const normalizedHref = this.normalizeImagePath(href);
             const titleAttr = title ? ` title="${this.escapeHtml(title)}"` : '';
             const altAttr = text ? ` alt="${this.escapeHtml(text)}"` : '';
             const errorHandler = `onerror="this.onerror=null; this.outerHTML='<div class=\\'image-error\\'>⚠️ Image not found: ${this.escapeHtml(text || 'Image')}</div>';"`;
-            return `<img src="${this.escapeHtml(href)}"${altAttr}${titleAttr} class="markdown-image" loading="lazy" ${errorHandler} />`;
+            return `<img src="${this.escapeHtml(normalizedHref)}"${altAttr}${titleAttr} class="markdown-image" loading="lazy" ${errorHandler} />`;
         };
 
         // Configure marked with options
@@ -100,6 +101,21 @@ class MessageRenderer {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    normalizeImagePath(path) {
+        if (!path) return path;
+        const cleaned = String(path).trim().replace(/\\/g, '/');
+        if (/^(https?:)?\/\//i.test(cleaned) || cleaned.startsWith('data:') || cleaned.startsWith('/')) {
+            return cleaned;
+        }
+        if (cleaned.startsWith('static/')) {
+            return `/${cleaned}`;
+        }
+        if (cleaned.startsWith('uploads/') || cleaned.startsWith('generated_images/')) {
+            return `/static/${cleaned}`;
+        }
+        return cleaned;
     }
 
     render(markdown) {

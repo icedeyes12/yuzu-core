@@ -411,10 +411,7 @@
 
 /* Hamburger Menu - Compact Size */
 .hamburger-menu {
-    position: fixed;
-    top: 0.6rem;
-    left: 0.8rem;
-    z-index: 9999;
+    position: static;
     background: var(--header-bg);
     border: 1.5px solid var(--accent-lavender);
     border-radius: 6px;
@@ -483,8 +480,6 @@
     }
     
     .hamburger-menu {
-        top: 0.5rem;
-        left: 0.7rem;
         width: 34px;
         height: 34px;
     }
@@ -569,8 +564,6 @@
     }
     
     .hamburger-menu {
-        top: 0.4rem;
-        left: 0.6rem;
         width: 32px;
         height: 32px;
     }
@@ -615,8 +608,6 @@
     }
     
     .hamburger-menu {
-        top: 0.35rem;
-        left: 0.5rem;
         width: 30px;
         height: 30px;
     }
