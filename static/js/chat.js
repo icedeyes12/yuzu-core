@@ -596,6 +596,19 @@ function createMessageElement(role, content, timestamp = null) {
     // Render content using renderer
     if (role === "ai" && typeof renderer !== 'undefined') {
         contentContainer.innerHTML = renderer.renderMessage(String(content), false);
+        
+        // Apply syntax highlighting to code blocks after rendering
+        setTimeout(() => {
+            if (typeof hljs !== 'undefined') {
+                const codeBlocks = contentContainer.querySelectorAll('pre code');
+                codeBlocks.forEach(block => {
+                    // Only highlight if not already highlighted
+                    if (!block.classList.contains('hljs')) {
+                        hljs.highlightElement(block);
+                    }
+                });
+            }
+        }, 0);
     } else {
         contentContainer.textContent = String(content);
     }
@@ -719,7 +732,14 @@ async function loadChatHistory() {
             
             chatContainer.appendChild(fragment);
             
+            // Apply syntax highlighting to all code blocks after rendering
             setTimeout(() => {
+                if (typeof hljs !== 'undefined') {
+                    const codeBlocks = chatContainer.querySelectorAll('pre code:not(.hljs)');
+                    codeBlocks.forEach(block => {
+                        hljs.highlightElement(block);
+                    });
+                }
                 scrollToBottom();
             }, 100);
             
@@ -783,6 +803,16 @@ function addScrollLoadListener(fullHistory) {
                 });
                 
                 chatContainer.insertBefore(fragment, chatContainer.firstChild);
+                
+                // Apply syntax highlighting to newly loaded messages
+                setTimeout(() => {
+                    if (typeof hljs !== 'undefined') {
+                        const newCodeBlocks = chatContainer.querySelectorAll('pre code:not(.hljs)');
+                        newCodeBlocks.forEach(block => {
+                            hljs.highlightElement(block);
+                        });
+                    }
+                }, 0);
                 
                 // Restore scroll position
                 const scrollHeightAfter = chatContainer.scrollHeight;

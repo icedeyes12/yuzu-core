@@ -110,12 +110,82 @@ class MessageRenderer {
         }
 
         try {
-            const html = marked.parse(markdown);
+            // Pre-process: Convert plain text image patterns to markdown
+            let processedMarkdown = this.preprocessGeneratedImages(markdown);
+            
+            // Parse markdown
+            let html = marked.parse(processedMarkdown);
+            
+            // Post-process: Add table containers and callout styles
+            html = this.postProcessHTML(html);
+            
             return html;
         } catch (error) {
             console.error('Error rendering markdown:', error);
             return this.escapeHtml(markdown);
         }
+    }
+
+    preprocessGeneratedImages(text) {
+        // Convert plain text image patterns like:
+        // ![Generated Image](static/generated_images/xxx.png)
+        // or ![alt text](path/to/image.png)
+        // These might appear as plain text if not properly formatted
+        
+        // Pattern to match markdown image syntax that might be on separate lines
+        const imagePattern = /!\[([^\]]*)\]\s*\(([^)]+)\)/g;
+        
+        return text.replace(imagePattern, (match, alt, src) => {
+            // Ensure proper markdown format
+            return `![${alt}](${src})`;
+        });
+    }
+
+    postProcessHTML(html) {
+        // Create a temporary container to manipulate HTML
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        
+        // 1. Wrap tables in scrollable containers
+        const tables = temp.querySelectorAll('table');
+        tables.forEach(table => {
+            if (!table.parentElement.classList.contains('table-container')) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'table-container';
+                table.parentNode.insertBefore(wrapper, table);
+                wrapper.appendChild(table);
+            }
+        });
+        
+        // 2. Process callout blocks (blockquotes starting with [!TYPE])
+        const blockquotes = temp.querySelectorAll('blockquote');
+        blockquotes.forEach(blockquote => {
+            const firstChild = blockquote.firstElementChild;
+            if (firstChild && firstChild.textContent) {
+                const text = firstChild.textContent.trim();
+                const calloutMatch = text.match(/^\[!(NOTE|WARNING|INFO|TIP|IMPORTANT|CAUTION)\]/i);
+                
+                if (calloutMatch) {
+                    const calloutType = calloutMatch[1].toLowerCase();
+                    blockquote.classList.add('callout', `callout-${calloutType}`);
+                    
+                    // Remove the [!TYPE] marker from content
+                    firstChild.textContent = text.replace(/^\[!(?:NOTE|WARNING|INFO|TIP|IMPORTANT|CAUTION)\]\s*/i, '');
+                }
+            }
+        });
+        
+        // 3. Apply highlight.js to any code blocks that weren't processed by marked
+        if (this.isHighlightReady) {
+            const codeBlocks = temp.querySelectorAll('pre code:not(.hljs)');
+            codeBlocks.forEach(block => {
+                if (block.className.includes('language-')) {
+                    hljs.highlightElement(block);
+                }
+            });
+        }
+        
+        return temp.innerHTML;
     }
 
     copyCode(button) {

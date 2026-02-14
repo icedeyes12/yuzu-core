@@ -211,12 +211,65 @@ html, body {
   font-style: italic;
 }
 
+/* Callout blocks */
+.message-content .callout {
+  border-left: 4px solid;
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  margin: 0.6rem 0;
+  font-style: normal;
+}
+
+.message-content .callout-note {
+  border-color: #6aa9ff;
+  background: rgba(106, 169, 255, 0.08);
+}
+
+.message-content .callout-info {
+  border-color: #6aa9ff;
+  background: rgba(106, 169, 255, 0.08);
+}
+
+.message-content .callout-tip {
+  border-color: #4caf50;
+  background: rgba(76, 175, 80, 0.08);
+}
+
+.message-content .callout-warning {
+  border-color: #ffb347;
+  background: rgba(255, 179, 71, 0.08);
+}
+
+.message-content .callout-caution {
+  border-color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.08);
+}
+
+.message-content .callout-important {
+  border-color: #9b59b6;
+  background: rgba(155, 89, 182, 0.08);
+}
+
+/* Table container for horizontal scroll */
+.message-content .table-container {
+  overflow-x: auto;
+  margin: 0.8rem 0;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.message-content .table-container table {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  width: 100%;
+  display: table;
+}
+
 .message-content table {
   border-collapse: collapse;
   width: 100%;
   margin: 1rem 0;
-  overflow-x: auto;
-  display: block;
 }
 
 .message-content th, .message-content td {
