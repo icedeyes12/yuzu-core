@@ -1342,11 +1342,12 @@ def _merge_profile_data(existing_memory: Dict, new_data: Dict) -> Dict:
             new_items = new_data['key_facts'].get(category, [])
             max_size = _MEMORY_LIST_LIMITS[category]
             
-            before_count = len(existing_items)
+            existing_normalized = {normalize_memory_item(i) for i in existing_items if i and i.strip()}
+            added = sum(1 for i in new_items if i and i.strip() and normalize_memory_item(i) not in existing_normalized)
+            
             merged = merge_and_clean_memory(existing_items, new_items, max_size)
             result['key_facts'][category] = merged
             
-            added = len(merged) - before_count
             if added > 0:
                 print(f"[INFO] Added {added} new items to {category}")
     
