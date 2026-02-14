@@ -33,6 +33,23 @@
   transition: all 0.3s ease;
 }  
 
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hamburger {
+  position: static;
+  flex-shrink: 0;
+}
+
+.header-title {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
 .about-header h1 {  
   margin: 0;  
   font-size: 1.8rem;  

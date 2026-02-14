@@ -84,19 +84,19 @@
     </div>
   </div>
 
-  <!-- Hamburger Menu -->
-  <button class="hamburger-menu" id="hamburgerMenu" onclick="toggleSidebar()">
-    <span></span>
-    <span></span>
-    <span></span>
-  </button>
-
   <!-- Overlay -->
   <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
   
-  <header class="home-header">
-    <h1>Welcome, {{ profile.display_name|capitalize }}</h1>
-    <p>Partner: {{ profile.partner_name|capitalize }} | Affection: {{ profile.affection }}</p>
+  <header class="home-header header-content">
+    <button class="hamburger-menu hamburger" id="hamburgerMenu" onclick="toggleSidebar()">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+    <div class="header-title">
+      <h1>Welcome, {{ profile.display_name|capitalize }}</h1>
+      <p>Partner: {{ profile.partner_name|capitalize }} | Affection: {{ profile.affection }}</p>
+    </div>
   </header>
 
   <div class="menu">

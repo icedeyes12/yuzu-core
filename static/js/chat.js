@@ -193,7 +193,7 @@ class MultimodalManager {
             const data = await response.json();
             
             if (data.status === 'success') {
-                this.displayGeneratedImage(data.image_url, prompt);
+                this.displayGeneratedImage(data.image_markdown || data.image_url, prompt);
                 this.clearInput();
             } else {
                 throw new Error(data.error || 'Image generation failed');
@@ -264,48 +264,17 @@ class MultimodalManager {
     }
 
     displayGeneratedImage(imageUrl, prompt) {
-        const chatContainer = document.getElementById('chatContainer');
-        if (!chatContainer) return;
-
-        const imageDiv = document.createElement('div');
-        imageDiv.className = 'message ai generated-image-message';
-        imageDiv.innerHTML = `
-            <div class="generated-image-container">
-                <img src="${imageUrl}" alt="Generated: ${prompt}" class="generated-image">
-                <div class="image-actions">
-                    <button class="image-action-btn" onclick="multimodal.downloadImage('${imageUrl}', 'generated-${Date.now()}')">
-                        ${this.getSVGIcon('download')}
-                        Download
-                    </button>
-                    <button class="image-action-btn" onclick="multimodal.regenerateImage('${prompt.replace(/'/g, "\\'")}')">
-                        ${this.getSVGIcon('regenerate')}
-                        Regenerate
-                    </button>
-                </div>
-            </div>
-            <div class="timestamp">${this.getCurrentTime()}</div>
-        `;
-        
-        chatContainer.appendChild(imageDiv);
-        scrollToBottom();
+        const generatedMarkdown = /!\s*\[[^\]]*\]\s*\n?\s*\([^)]+\)/.test(String(imageUrl))
+            ? String(imageUrl)
+            : `![Generated Image](${imageUrl})`;
+        addMessage("ai", generatedMarkdown);
     }
 
     displayUploadedImage(imageUrl, caption) {
-        const chatContainer = document.getElementById('chatContainer');
-        if (!chatContainer) return;
-
-        const imageDiv = document.createElement('div');
-        imageDiv.className = 'message user uploaded-image-message';
-        imageDiv.innerHTML = `
-            <div class="uploaded-image-container">
-                <img src="${imageUrl}" alt="Uploaded image" class="uploaded-image">
-                ${caption ? `<div class="image-caption">${caption}</div>` : ''}
-            </div>
-            <div class="timestamp">${this.getCurrentTime()}</div>
-        `;
-        
-        chatContainer.appendChild(imageDiv);
-        scrollToBottom();
+        const uploadedMarkdown = caption
+            ? `![Uploaded Image](${imageUrl})\n\n${caption}`
+            : `![Uploaded Image](${imageUrl})`;
+        addMessage("user", uploadedMarkdown);
     }
 
     setSendButtonState(state) {
@@ -593,9 +562,9 @@ function createMessageElement(role, content, timestamp = null) {
     const contentContainer = document.createElement("div");
     contentContainer.className = "message-content";
 
-    // Render content using renderer
-    if (role === "ai" && typeof renderer !== 'undefined') {
-        contentContainer.innerHTML = renderer.renderMessage(String(content), false);
+    // Render content through a single safe pipeline
+    if (typeof renderer !== 'undefined') {
+        contentContainer.innerHTML = renderMessageContent(String(content), role === "user");
         
         // Apply syntax highlighting to code blocks after rendering
         setTimeout(() => {
@@ -673,6 +642,31 @@ function addMessage(role, content, timestamp = null, isHistory = false) {
     return msg;
 }
 
+function renderMessageContent(rawText, isUser = false) {
+    const safeText = String(rawText ?? '');
+    const escapedText = escapeMessageHtml(safeText);
+    try {
+        let processed = safeText;
+        if (typeof renderer !== 'undefined' && typeof renderer.preprocessGeneratedImages === 'function') {
+            processed = renderer.preprocessGeneratedImages(processed);
+        }
+        if (typeof renderer !== 'undefined' && typeof renderer.renderMessage === 'function') {
+            return renderer.renderMessage(processed, isUser);
+        }
+        return escapedText;
+    } catch (e) {
+        console.error('Render error:', e, safeText);
+        return `<pre class="render-error">${escapedText}</pre>`;
+    }
+}
+
+function escapeMessageHtml(text) {
+    if (typeof renderer !== 'undefined' && typeof renderer.escapeHtml === 'function') {
+        return renderer.escapeHtml(text);
+    }
+    return String(text).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function formatTimestamp(timestamp) {
     if (!timestamp) return '';
     
@@ -727,6 +721,10 @@ async function loadChatHistory() {
             
             messagesToShow.forEach(msg => {
                 if (msg.role === "user" || msg.role === "assistant") {
+                    console.log("[History] Raw message before render:", {
+                        role: msg.role,
+                        preview: String(msg.content || '').slice(0, 200)
+                    });
                     const msgElement = createMessageElement(
                         msg.role === "user" ? "user" : "ai", 
                         msg.content, 
@@ -799,6 +797,10 @@ function addScrollLoadListener(fullHistory) {
                 
                 messagesToLoad.forEach(msg => {
                     if (msg.role === "user" || msg.role === "assistant") {
+                        console.log("[History] Raw lazy-loaded message before render:", {
+                            role: msg.role,
+                            preview: String(msg.content || '').slice(0, 200)
+                        });
                         const msgElement = createMessageElement(
                             msg.role === "user" ? "user" : "ai", 
                             msg.content, 

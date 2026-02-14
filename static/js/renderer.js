@@ -52,7 +52,8 @@ class MessageRenderer {
 
         // Custom code block renderer
         renderer.code = (code, language) => {
-            const validLanguage = language && hljs.getLanguage(language) ? language : 'plaintext';
+            const hasLanguage = this.isHighlightReady && typeof hljs !== 'undefined' && language && hljs.getLanguage(language);
+            const validLanguage = hasLanguage ? language : 'plaintext';
             const highlighted = this.isHighlightReady 
                 ? hljs.highlight(code, { language: validLanguage }).value 
                 : this.escapeHtml(code);
@@ -76,10 +77,11 @@ class MessageRenderer {
 
         // Custom image renderer to ensure images render as <img> elements
         renderer.image = (href, title, text) => {
-            const normalizedHref = this.normalizeImagePath(href);
-            const titleAttr = title ? ` title="${this.escapeHtml(title)}"` : '';
-            const altAttr = text ? ` alt="${this.escapeHtml(text)}"` : '';
-            const errorHandler = `onerror="this.onerror=null; this.outerHTML='<div class=\\'image-error\\'>⚠️ Image not found: ${this.escapeHtml(text || 'Image')}</div>';"`;
+            const { href: resolvedHref, title: resolvedTitle, text: resolvedText } = this.resolveImageToken(href, title, text);
+            const normalizedHref = this.normalizeImagePath(resolvedHref);
+            const titleAttr = resolvedTitle ? ` title="${this.escapeHtml(resolvedTitle)}"` : '';
+            const altAttr = resolvedText ? ` alt="${this.escapeHtml(resolvedText)}"` : '';
+            const errorHandler = `onerror="this.onerror=null; this.outerHTML='<div class=\\'image-error\\'>⚠️ Image not found: ${this.escapeHtml(resolvedText || 'Image')}</div>';"`;
             return `<img src="${this.escapeHtml(normalizedHref)}"${altAttr}${titleAttr} class="markdown-image" loading="lazy" ${errorHandler} />`;
         };
 
@@ -105,7 +107,12 @@ class MessageRenderer {
 
     normalizeImagePath(path) {
         if (!path) return path;
-        const cleaned = path.trim().replace(/\\/g, '/');
+        const { href: rawPathValue } = this.resolveImageToken(path);
+        let rawPath = rawPathValue;
+        if (typeof rawPath !== 'string') {
+            rawPath = String(rawPath);
+        }
+        const cleaned = rawPath.trim().replace(/\\/g, '/');
         if (/^(https?:)?\/\//i.test(cleaned) || cleaned.startsWith('data:') || cleaned.startsWith('/')) {
             return cleaned;
         }
@@ -119,16 +126,17 @@ class MessageRenderer {
     }
 
     render(markdown) {
-        if (!markdown) return '';
+        if (markdown === null || markdown === undefined) return '';
+        const safeMarkdown = typeof markdown === 'string' ? markdown : String(markdown);
 
         if (!this.isMarkedReady) {
             console.warn('marked.js not ready, returning plain text');
-            return this.escapeHtml(markdown);
+            return this.renderWithoutMarked(safeMarkdown);
         }
 
         try {
             // Pre-process: Convert plain text image patterns to markdown
-            let processedMarkdown = this.preprocessGeneratedImages(markdown);
+            let processedMarkdown = this.preprocessGeneratedImages(safeMarkdown);
             
             // Parse markdown
             let html = marked.parse(processedMarkdown);
@@ -138,8 +146,8 @@ class MessageRenderer {
             
             return html;
         } catch (error) {
-            console.error('Error rendering markdown:', error);
-            return this.escapeHtml(markdown);
+            console.error('Render error:', error, safeMarkdown);
+            return `<pre class="render-error">${this.escapeHtml(safeMarkdown)}</pre>`;
         }
     }
 
@@ -150,14 +158,16 @@ class MessageRenderer {
         // These might appear on separate lines from backend output
         // Note: Backend sometimes adds space after ! like "! [text]" instead of "![text]"
         
-        console.log('[Renderer] Preprocessing images, input length:', text.length);
+        const sourceText = typeof text === 'string' ? text : String(text || '');
+        console.log('[Renderer] Preprocessing images, input length:', sourceText.length);
         
         // Single comprehensive pattern: Handle all variations
         // Matches: ! [alt] or ![alt] followed by optional whitespace/newlines then (url)
         const imagePattern = /!\s*\[([^\]]*)\]\s*\n?\s*\(([^)]+)\)/g;
         
         let matchCount = 0;
-        text = text.replace(imagePattern, (match, alt, src) => {
+        let normalizedText = sourceText.replace(/\r\n/g, '\n');
+        normalizedText = normalizedText.replace(imagePattern, (match, alt, src) => {
             matchCount++;
             const trimmedSrc = src.trim();
             console.log(`[Renderer] Found image #${matchCount}:`, { 
@@ -172,7 +182,7 @@ class MessageRenderer {
             console.log(`[Renderer] Preprocessed ${matchCount} images`);
         }
         
-        return text;
+        return normalizedText;
     }
 
     postProcessHTML(html) {
@@ -222,6 +232,28 @@ class MessageRenderer {
         return temp.innerHTML;
     }
 
+    renderWithoutMarked(markdown) {
+        try {
+            const processed = this.preprocessGeneratedImages(markdown);
+            let html = this.escapeHtml(processed);
+
+            html = html.replace(/!\s*\[([^\]]*)\]\s*\(([^)]+)\)/g, (match, alt, src) => {
+                const normalizedHref = this.normalizeImagePath(src);
+                const safeAlt = this.escapeHtml(alt || 'Image');
+                const safeSrc = this.escapeHtml(normalizedHref);
+                return `<img src="${safeSrc}" alt="${safeAlt}" class="markdown-image" loading="lazy" />`;
+            });
+
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\n/g, '<br>');
+
+            return html;
+        } catch (error) {
+            console.error('Render error:', error, markdown);
+            return `<pre class="render-error">${this.escapeHtml(markdown)}</pre>`;
+        }
+    }
+
     copyCode(button) {
         const codeBlock = button.closest('.code-block-container');
         const code = codeBlock.querySelector('code').textContent;
@@ -246,13 +278,29 @@ class MessageRenderer {
     }
 
     renderMessage(content, isUser = false) {
-        if (isUser) {
+        if (isUser && !this.containsImageMarkdown(content)) {
             // User messages: simple, no markdown rendering
             return this.escapeHtml(content);
         } else {
             // Assistant messages: full markdown rendering
             return this.render(content);
         }
+    }
+
+    containsImageMarkdown(content) {
+        if (!content) return false;
+        return /!\s*\[[^\]]*\]\s*\n?\s*\([^)]+\)/.test(String(content));
+    }
+
+    resolveImageToken(href, title = '', text = '') {
+        if (href && typeof href === 'object') {
+            return {
+                href: href.href || href.url || '',
+                title: href.title || title || '',
+                text: href.text || text || ''
+            };
+        }
+        return { href, title, text };
     }
 }
 
