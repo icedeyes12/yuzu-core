@@ -1,0 +1,46 @@
+# ==========================================================
+# [FILE]        : recruitments.txt
+# [VERSION]     : 1.0.0
+# [DATE]        : 2026-02-14
+# [PROJECT]     : HKKM - Yuzu Companion
+# [DESCRIPTION] : Project dependencies and requirements
+# [AUTHOR]      : Project Lead: Bani Baskara
+# [TEAM]        : Deepseek, GPT, Qwen, Gemini, Aihara
+# [REPOSITORY]  : https://guthib.com/icedeyes12
+# [LICENSE]     : MIT
+# ==========================================================
+
+# CORE DEPENDENCIES
+# -----------------
+Python >= 3.9
+pip (latest version recommended)
+
+# DATABASE & ENCRYPTION
+# ---------------------
+SQLAlchemy>=2.0.0           # Database ORM and session management
+pycryptodome>=3.20.0        # ChaCha20-Poly1305 encryption for API keys
+
+# WEB INTERFACE
+# -------------
+Flask>=3.0.0                 # Web framework for dashboard/chat interface
+Werkzeug>=3.0.0              # WSGI web application library
+Jinja2>=3.1.0                # Template engine for Flask
+
+# TERMINAL UI & INTERACTION
+# -------------------------
+rich>=13.0.0                 # Beautiful terminal formatting (panels, tables, markdown)
+prompt-toolkit>=3.0.0        # Advanced terminal input with history and completion
+
+# NETWORKING & API
+# ----------------
+requests>=2.31.0              # HTTP requests for AI providers and image downloads
+
+# IMAGE PROCESSING (Optional)
+# ---------------------------
+Pillow>=10.0.0                # Image handling for future enhancements
+
+# DEVELOPMENT TOOLS (Optional)
+# ----------------------------
+black>=23.0.0                 # Code formatting
+pytest>=7.0.0                 # Testing framework
+mypy>=1.0.0                   # Type checking
