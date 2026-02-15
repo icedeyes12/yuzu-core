@@ -100,6 +100,7 @@ class MultimodalTools:
         for ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
             candidate = os.path.join(self.IMAGE_CACHE_DIR, f"{url_hash}{ext}")
             if os.path.isfile(candidate):
+                print(f"[Vision] Using cached image → {candidate}")
                 return candidate
 
         try:
@@ -120,6 +121,7 @@ class MultimodalTools:
             with open(filepath, 'wb') as f:
                 f.write(response.content)
 
+            print(f"[Vision] Downloaded image → {filepath}")
             return filepath
         except Exception as e:
             print(f"[WARNING] Failed to download image from {url}: {e}")
@@ -226,8 +228,8 @@ class MultimodalTools:
 
     def has_images(self, text: str) -> bool:
         if "![" in text and "](" in text and ")" in text:
-            image_urls = self._extract_image_urls_from_markdown(text)
-            if image_urls:
+            image_sources = self._extract_image_sources_from_markdown(text)
+            if image_sources:
                 return True
         
         if "UPLOADED_IMAGES:" in text and "IMAGE_UPLOAD:" in text:
@@ -293,43 +295,54 @@ class MultimodalTools:
             return None
     
     def format_vision_message(self, user_message: str, provider: str = None) -> List[Dict]:
-        image_urls = self._extract_image_urls_from_markdown(user_message)
+        image_sources = self._extract_image_sources_from_markdown(user_message)
         
-        if not image_urls:
+        if not image_sources:
             return [{"role": "user", "content": user_message}]
         
         clean_text = self._remove_image_markdown(user_message)
         
         content = [{"type": "text", "text": clean_text or "What's in this image?"}]
         
-        for image_url in image_urls[:3]:  # Limit to 3 images
-            image_content = self.download_and_encode_image(image_url)
-            if image_content:
-                content.append(image_content)
+        for source in image_sources[:3]:  # Limit to 3 images
+            if source.startswith(('http://', 'https://')):
+                # Remote URL — download to cache, then encode
+                cached_path = self.download_image_to_cache(source)
+                if cached_path:
+                    image_content = self.encode_image_to_base64(cached_path)
+                    if image_content:
+                        content.append(image_content)
+            else:
+                # Local file path — encode directly
+                image_content = self.encode_image_to_base64(source)
+                if image_content:
+                    print(f"[Vision] Encoded local image → {source}")
+                    content.append(image_content)
         
         return [{"role": "user", "content": content}]
 
-    def _extract_image_urls_from_markdown(self, text: str) -> List[str]:
+    def _extract_image_sources_from_markdown(self, text: str) -> List[str]:
+        """Extract image sources from markdown.  Returns local file paths for
+        on-disk images and URLs for remote images."""
         import re
         
         markdown_pattern = r'!\[([^\]]*)\]\(([^)]+)\)'
         matches = re.findall(markdown_pattern, text)
         
-        image_urls = []
+        image_sources = []
         for alt, url in matches:
             if 'onerror=' in url or 'onload=' in url or 'uploaded-image-container' in url:
                 continue
                 
             if url.startswith('static/uploads/') or url.startswith('static/generated_images/'):
-                web_url = f"http://localhost:5000/{url}"
-                image_urls.append(web_url)
+                # Local file — return path directly (don't convert to localhost URL)
+                image_sources.append(url)
             elif url.startswith('uploads/') or url.startswith('generated_images/'):
-                web_url = f"http://localhost:5000/static/{url}"
-                image_urls.append(web_url)
+                image_sources.append(f"static/{url}")
             else:
-                image_urls.append(url)
+                image_sources.append(url)
         
-        return image_urls
+        return image_sources
 
     def _remove_image_markdown(self, text: str) -> str:
         import re

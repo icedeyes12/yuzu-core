@@ -50,10 +50,17 @@ def _cache_images_from_message(user_message):
     # Markdown image URLs
     md_pattern = re.compile(r'!\[[^\]]*\]\(([^)]+)\)')
     for match in md_pattern.finditer(user_message):
-        url = match.group(1)
-        cached = multimodal_tools.download_image_to_cache(url)
-        if cached:
-            cached_paths.append(cached)
+        source = match.group(1)
+        # Handle local file paths directly
+        if source.startswith('static/') or source.startswith('uploads/') or source.startswith('generated_images/'):
+            local_path = source if source.startswith('static/') else f"static/{source}"
+            if os.path.isfile(local_path):
+                cached_paths.append(local_path)
+                print(f"[Vision] Local image found → {local_path}")
+        else:
+            cached = multimodal_tools.download_image_to_cache(source)
+            if cached:
+                cached_paths.append(cached)
 
     # Bare image URLs
     if not cached_paths:
