@@ -14,6 +14,7 @@ import base64
 import re
 import time
 import os
+import hashlib
 import shutil
 import subprocess
 from urllib.parse import unquote
@@ -22,6 +23,8 @@ from database import Database
 from typing import List, Dict, Optional, Tuple
 
 class MultimodalTools:
+    IMAGE_CACHE_DIR = os.path.join(os.path.dirname(__file__), 'static', 'image_cache')
+
     def __init__(self):
         # ONLY moonshotai/kimi-k2.5 for vision (OpenRouter only)
         self.vision_models = {
@@ -46,6 +49,9 @@ class MultimodalTools:
         # Image cache for base64 encoded images
         self.image_cache = {}
         self.cache_ttl = 3600  # 1 hour TTL
+        
+        # Ensure cache directory exists
+        os.makedirs(self.IMAGE_CACHE_DIR, exist_ok=True)
         
     def get_available_vision_models(self, provider: str) -> List[str]:
         return self.vision_models.get(provider, [])
@@ -73,6 +79,78 @@ class MultimodalTools:
         ]
         for key in expired_keys:
             del self.image_cache[key]
+
+    def download_image_to_cache(self, url: str) -> Optional[str]:
+        """Download an image from *url*, save it under ``IMAGE_CACHE_DIR`` and
+        return the local file path.  The filename is derived from a SHA-1 hash
+        of the URL so repeated downloads are avoided."""
+        # Validate URL scheme to prevent SSRF attacks
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        if parsed.scheme not in ('http', 'https'):
+            return None
+        # Block requests to localhost / private IPs
+        hostname = parsed.hostname or ''
+        if hostname in ('localhost', '127.0.0.1', '0.0.0.0', '::1', ''):
+            return None
+
+        url_hash = hashlib.sha1(url.encode('utf-8')).hexdigest()  # nosec - not used for security
+
+        # Check if already cached with any common extension
+        for ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
+            candidate = os.path.join(self.IMAGE_CACHE_DIR, f"{url_hash}{ext}")
+            if os.path.isfile(candidate):
+                print(f"[Vision] Using cached image → {candidate}")
+                return candidate
+
+        try:
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+
+            content_type = response.headers.get('content-type', '')
+            if 'png' in content_type:
+                ext = '.png'
+            elif 'gif' in content_type:
+                ext = '.gif'
+            elif 'webp' in content_type:
+                ext = '.webp'
+            else:
+                ext = '.jpg'
+
+            filepath = os.path.join(self.IMAGE_CACHE_DIR, f"{url_hash}{ext}")
+            with open(filepath, 'wb') as f:
+                f.write(response.content)
+
+            print(f"[Vision] Downloaded image → {filepath}")
+            return filepath
+        except Exception as e:
+            print(f"[WARNING] Failed to download image from {url}: {e}")
+            return None
+
+    @staticmethod
+    def encode_image_to_base64(filepath: str) -> Optional[Dict]:
+        """Read a local image file and return an OpenAI-compatible
+        ``image_url`` content block with a ``data:`` URI."""
+        if not os.path.isfile(filepath):
+            return None
+
+        lower = filepath.lower()
+        if lower.endswith('.png'):
+            mime = 'image/png'
+        elif lower.endswith('.gif'):
+            mime = 'image/gif'
+        elif lower.endswith('.webp'):
+            mime = 'image/webp'
+        else:
+            mime = 'image/jpeg'
+
+        with open(filepath, 'rb') as f:
+            data = base64.b64encode(f.read()).decode('utf-8')
+
+        return {
+            "type": "image_url",
+            "image_url": {"url": f"data:{mime};base64,{data}"}
+        }
 
     def extract_image_urls(self, text: str) -> List[str]:
         url_pattern = r'https?://[^\s<>"\'{}]+'
@@ -150,8 +228,8 @@ class MultimodalTools:
 
     def has_images(self, text: str) -> bool:
         if "![" in text and "](" in text and ")" in text:
-            image_urls = self._extract_image_urls_from_markdown(text)
-            if image_urls:
+            image_sources = self._extract_image_sources_from_markdown(text)
+            if image_sources:
                 return True
         
         if "UPLOADED_IMAGES:" in text and "IMAGE_UPLOAD:" in text:
@@ -217,43 +295,54 @@ class MultimodalTools:
             return None
     
     def format_vision_message(self, user_message: str, provider: str = None) -> List[Dict]:
-        image_urls = self._extract_image_urls_from_markdown(user_message)
+        image_sources = self._extract_image_sources_from_markdown(user_message)
         
-        if not image_urls:
+        if not image_sources:
             return [{"role": "user", "content": user_message}]
         
         clean_text = self._remove_image_markdown(user_message)
         
         content = [{"type": "text", "text": clean_text or "What's in this image?"}]
         
-        for image_url in image_urls[:3]:  # Limit to 3 images
-            image_content = self.download_and_encode_image(image_url)
-            if image_content:
-                content.append(image_content)
+        for source in image_sources[:3]:  # Limit to 3 images
+            if source.startswith(('http://', 'https://')):
+                # Remote URL — download to cache, then encode
+                cached_path = self.download_image_to_cache(source)
+                if cached_path:
+                    image_content = self.encode_image_to_base64(cached_path)
+                    if image_content:
+                        content.append(image_content)
+            else:
+                # Local file path — encode directly
+                image_content = self.encode_image_to_base64(source)
+                if image_content:
+                    print(f"[Vision] Encoded local image → {source}")
+                    content.append(image_content)
         
         return [{"role": "user", "content": content}]
 
-    def _extract_image_urls_from_markdown(self, text: str) -> List[str]:
+    def _extract_image_sources_from_markdown(self, text: str) -> List[str]:
+        """Extract image sources from markdown.  Returns local file paths for
+        on-disk images and URLs for remote images."""
         import re
         
         markdown_pattern = r'!\[([^\]]*)\]\(([^)]+)\)'
         matches = re.findall(markdown_pattern, text)
         
-        image_urls = []
+        image_sources = []
         for alt, url in matches:
             if 'onerror=' in url or 'onload=' in url or 'uploaded-image-container' in url:
                 continue
                 
             if url.startswith('static/uploads/') or url.startswith('static/generated_images/'):
-                web_url = f"http://localhost:5000/{url}"
-                image_urls.append(web_url)
+                # Local file — return path directly (don't convert to localhost URL)
+                image_sources.append(url)
             elif url.startswith('uploads/') or url.startswith('generated_images/'):
-                web_url = f"http://localhost:5000/static/{url}"
-                image_urls.append(web_url)
+                image_sources.append(f"static/{url}")
             else:
-                image_urls.append(url)
+                image_sources.append(url)
         
-        return image_urls
+        return image_sources
 
     def _remove_image_markdown(self, text: str) -> str:
         import re

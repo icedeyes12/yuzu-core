@@ -33,7 +33,8 @@ print(f"Templates folder: {app.template_folder}")
 def ensure_static_dirs():
     static_dirs = [
         'static/uploads',
-        'static/generated_images'
+        'static/generated_images',
+        'static/image_cache'
     ]
     
     for dir_path in static_dirs:
