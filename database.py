@@ -14,9 +14,9 @@ import hashlib
 from datetime import datetime
 from contextlib import contextmanager
 from encryption import encryptor
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, ForeignKey, Index
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, Index
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # SQLAlchemy setup
@@ -195,22 +195,6 @@ def verify_password(stored_password, provided_password):
     return stored_password == hashlib.sha256(provided_password.encode('utf-8')).hexdigest()
 
 class Database:
-    @staticmethod
-    def _encrypt_content(content):
-        """
-        DEPRECATED: Tidak lagi mengenkripsi pesan
-        Hanya untuk backward compatibility
-        """
-        return content  # Return as-is, no encryption
-
-    @staticmethod
-    def _decrypt_content(content, is_encrypted):
-        """
-        DEPRECATED: Tidak perlu dekripsi pesan
-        Hanya untuk backward compatibility
-        """
-        return content  # Return as-is, no decryption needed
-    
     @staticmethod
     def _encrypt_api_key(key_value):
         """Hanya API key yang tetap terenkripsi"""
