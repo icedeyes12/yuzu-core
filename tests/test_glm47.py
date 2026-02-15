@@ -60,7 +60,7 @@ def test_glm47_profile():
         print("[ERROR] No OpenRouter API key!")
         return False
     
-    # Test dengan prompt sederhana
+    # Test with simple prompt
     test_prompt = """# PLAYER PROFILE ANALYSIS TASK
 
 ## CONVERSATION HISTORY:
@@ -99,7 +99,7 @@ Relationship Dynamics: [3-4 sentence analysis]"""
         print(f"Likes: {parsed['key_facts']['likes']}")
         print(f"Personality Traits: {parsed['key_facts']['personality_traits']}")
         
-        # Simpan test result
+        # Save test result
         os.makedirs("debug_logs", exist_ok=True)
         with open("debug_logs/glm47_test_result.txt", "w", encoding="utf-8") as f:
             f.write("=== GLM-4.7 Test Result ===\n")

@@ -112,7 +112,6 @@ def extract_recent_images(session_id, limit=3):
 def build_visual_context(session_id):
     """Build context enriched with recent images for vision-capable models."""
     profile = Database.get_profile()
-    active_session = Database.get_active_session()
     interface = "web"
     base_messages = _build_generation_context(profile, session_id, interface)
     images = extract_recent_images(session_id, limit=3)

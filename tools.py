@@ -15,6 +15,7 @@ import re
 import time
 import os
 import shutil
+import subprocess
 from datetime import datetime
 from database import Database
 from typing import List, Dict, Optional, Tuple
@@ -495,7 +496,6 @@ def preview_image_in_terminal(image_path):
         return
     if not os.path.isfile(image_path):
         return
-    import subprocess
     subprocess.run(["timg", "-g", "80x40", image_path])
 
 
