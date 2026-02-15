@@ -1,5 +1,4 @@
 # [PROJECT: HKKM - Yuzu Companion]
-# [VERSION: 0.2.1.69.1]
 
 ---
 
