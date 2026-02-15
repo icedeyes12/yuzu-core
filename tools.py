@@ -16,6 +16,7 @@ import time
 import os
 import shutil
 import subprocess
+from urllib.parse import unquote
 from datetime import datetime
 from database import Database
 from typing import List, Dict, Optional, Tuple
@@ -494,7 +495,10 @@ def preview_image_in_terminal(image_path):
     """Preview an image in the terminal using timg."""
     if not shutil.which("timg"):
         return
+    image_path = unquote(image_path)
+    image_path = os.path.abspath(image_path)
     if not os.path.isfile(image_path):
+        print(f"[DEBUG] preview_image_in_terminal: file not found: {image_path}")
         return
     subprocess.run(["timg", "-g", "80x40", image_path])
 
