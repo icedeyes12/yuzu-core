@@ -280,13 +280,7 @@ class MessageRenderer {
     }
 
     renderMessage(content, isUser = false) {
-        if (isUser && !this.containsImageMarkdown(content)) {
-            // User messages: escape HTML and preserve newlines
-            return this.escapeHtml(content).replace(/\n/g, '<br>');
-        } else {
-            // Assistant messages: full markdown rendering
-            return this.render(content);
-        }
+        return this.render(content);
     }
 
     containsImageMarkdown(content) {
