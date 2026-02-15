@@ -435,6 +435,9 @@ class MultimodalTools:
                     with open(filepath, 'wb') as f:
                         f.write(response.content)
                     
+                    print(f"[DEBUG] timg preview: {filepath}")
+                    preview_image_in_terminal(filepath)
+                    
                     return filepath, None
                 else:
                     return None, f"API error {response.status_code}"
