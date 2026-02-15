@@ -11,7 +11,7 @@
 # ==========================================================
 
 from app import handle_user_message, handle_user_message_streaming, start_session, end_session_cleanup, summarize_memory, summarize_global_player_profile
-from app import get_available_providers, get_all_models, set_preferred_provider, get_vision_capabilities
+from app import get_available_providers, get_all_models, set_preferred_provider, get_provider_models, get_vision_capabilities
 from database import Database
 from providers import get_ai_manager
 from tools import multimodal_tools
@@ -29,10 +29,12 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.markdown import Markdown
+from rich.tree import Tree
 from rich.table import Table
 from rich.text import Text
 from rich.prompt import Prompt, Confirm, IntPrompt
 from rich.live import Live
+from rich import print as rprint
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
@@ -49,6 +51,9 @@ def success(msg: str):
 
 def error(msg: str):
     console.print(f"[bold red]ERR[/] {msg}")
+
+def warning(msg: str):
+    console.print(f"[bold yellow]WARN[/] {msg}")
 
 def welcome_banner():
     profile = Database.get_profile()
