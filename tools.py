@@ -488,4 +488,32 @@ class MultimodalTools:
         
         return found_images
 
+    def extract_recent_image_contents(self, chat_history: List[Dict], max_images: int = 3, lookback: int = 20) -> List[Dict]:
+        """Extract up to max_images image content objects from the last lookback messages.
+
+        Scans the most recent messages first and collects encoded image
+        objects until the limit is reached.  Returns them in chronological
+        order (oldest first) so they can be prepended before the current
+        user message.
+        """
+        recent = chat_history[-lookback:] if len(chat_history) > lookback else chat_history
+
+        collected: List[Dict] = []
+        for msg in reversed(recent):
+            if len(collected) >= max_images:
+                break
+            content = msg.get("content", "")
+            if not isinstance(content, str):
+                continue
+            image_urls = self._extract_image_urls_from_markdown(content)
+            for url in image_urls:
+                if len(collected) >= max_images:
+                    break
+                encoded = self.download_and_encode_image(url)
+                if encoded:
+                    collected.append(encoded)
+
+        collected.reverse()
+        return collected
+
 multimodal_tools = MultimodalTools()

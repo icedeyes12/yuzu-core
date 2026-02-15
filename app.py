@@ -573,6 +573,24 @@ def _handle_vision_processing(messages, user_message, current_provider, current_
             # Replace last user message with vision format
             if messages and messages[-1]['role'] == 'user':
                 messages = messages[:-1] + vision_messages
+
+    # Inject recent image context from history
+    recent_images = multimodal_tools.extract_recent_image_contents(messages[1:])
+    if recent_images:
+        vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
+        if vision_provider and vision_model:
+            current_provider = vision_provider
+            current_model = vision_model
+
+            # Find insertion point: just before the last user message
+            insert_idx = len(messages) - 1
+            while insert_idx > 0 and messages[insert_idx]['role'] == 'user':
+                insert_idx -= 1
+            insert_idx += 1
+
+            context_content = [{"type": "text", "text": "[Recent visual context]"}] + recent_images
+            context_msg = {"role": "user", "content": context_content}
+            messages = messages[:insert_idx] + [context_msg] + messages[insert_idx:]
     
     return messages, current_provider, current_model
 
