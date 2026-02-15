@@ -139,9 +139,14 @@ def extract_recent_images(session_id, limit=3):
     for msg in reversed(chat_history):  # Newest first to prioritize recent images
         # 1. Use stored image_paths if available
         stored = msg.get('image_paths', [])
+        if stored:
+            print(f"[Vision] DB image_paths: {stored}")
         for p in stored:
-            if p not in result_paths:
+            print(f"[Vision] Checking path: {p}")
+            print(f"[Vision] Exists: {os.path.exists(p)}")
+            if os.path.exists(p) and p not in result_paths:
                 result_paths.append(p)
+                print(f"[Vision] Using cached image → {p}")
             if len(result_paths) >= limit:
                 break
         if len(result_paths) >= limit:
@@ -172,6 +177,9 @@ def build_visual_context(session_id):
         encoded = multimodal_tools.encode_image_to_base64(fp)
         if encoded:
             image_contents.append(encoded)
+            print(f"[Vision] Encoded cached image → {fp}")
+        else:
+            print(f"[Vision] Failed to encode image: {fp}")
 
     return {"messages": base_messages, "images": image_file_paths, "image_contents": image_contents}
 
