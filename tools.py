@@ -84,7 +84,17 @@ class MultimodalTools:
         """Download an image from *url*, save it under ``IMAGE_CACHE_DIR`` and
         return the local file path.  The filename is derived from a SHA-1 hash
         of the URL so repeated downloads are avoided."""
-        url_hash = hashlib.sha1(url.encode('utf-8')).hexdigest()
+        # Validate URL scheme to prevent SSRF attacks
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        if parsed.scheme not in ('http', 'https'):
+            return None
+        # Block requests to localhost / private IPs
+        hostname = parsed.hostname or ''
+        if hostname in ('localhost', '127.0.0.1', '0.0.0.0', '::1', ''):
+            return None
+
+        url_hash = hashlib.sha1(url.encode('utf-8')).hexdigest()  # nosec - not used for security
 
         # Check if already cached with any common extension
         for ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
