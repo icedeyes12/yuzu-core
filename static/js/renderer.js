@@ -281,8 +281,8 @@ class MessageRenderer {
 
     renderMessage(content, isUser = false) {
         if (isUser && !this.containsImageMarkdown(content)) {
-            // User messages: simple, no markdown rendering
-            return this.escapeHtml(content);
+            // User messages: escape HTML and preserve newlines
+            return this.escapeHtml(content).replace(/\n/g, '<br>');
         } else {
             // Assistant messages: full markdown rendering
             return this.render(content);
