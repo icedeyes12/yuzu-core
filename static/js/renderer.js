@@ -44,6 +44,40 @@ class MessageRenderer {
         document.head.appendChild(script);
     }
 
+    normalizeLanguageAlias(lang) {
+        if (!lang) return lang;
+        const aliases = {
+            'py': 'python',
+            'js': 'javascript',
+            'ts': 'typescript',
+            'md': 'markdown',
+            'sh': 'bash',
+            'yml': 'yaml',
+            'rb': 'ruby',
+            'rs': 'rust',
+            'kt': 'kotlin',
+            'cs': 'csharp',
+            'bf': 'brainfuck',
+            'h': 'c',
+            'hpp': 'cpp',
+            'cc': 'cpp',
+            'cxx': 'cpp',
+            'tex': 'latex',
+            'bat': 'dos',
+            'ps1': 'powershell',
+            'psm1': 'powershell',
+            'asm': 'x86asm',
+            'docker': 'dockerfile',
+            'tf': 'hcl',
+            'gql': 'graphql',
+            'vb': 'vbnet',
+            'objc': 'objectivec',
+            'mm': 'objectivec',
+        };
+        const lower = lang.toLowerCase().trim();
+        return aliases[lower] || lower;
+    }
+
     configureMarked() {
         if (typeof marked === 'undefined') return;
 
@@ -52,8 +86,9 @@ class MessageRenderer {
 
         // Custom code block renderer
         renderer.code = (code, language) => {
-            const hasLanguage = this.isHighlightReady && typeof hljs !== 'undefined' && language && hljs.getLanguage(language);
-            const validLanguage = hasLanguage ? language : 'plaintext';
+            const normalizedLang = this.normalizeLanguageAlias(language);
+            const hasLanguage = this.isHighlightReady && typeof hljs !== 'undefined' && normalizedLang && hljs.getLanguage(normalizedLang);
+            const validLanguage = hasLanguage ? normalizedLang : 'plaintext';
             const highlighted = this.isHighlightReady 
                 ? hljs.highlight(code, { language: validLanguage }).value 
                 : this.escapeHtml(code);
