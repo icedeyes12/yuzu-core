@@ -156,7 +156,9 @@ def api_send_message():
         active_session = Database.get_active_session()
         session_id = active_session['id']
         
-        ai_reply = handle_user_message(user_message, interface="web")
+        visual_mode = data.get("visual_mode", False)
+        
+        ai_reply = handle_user_message(user_message, interface="web", visual_mode=visual_mode)
         
         print(f"AI reply: {ai_reply}")
         
