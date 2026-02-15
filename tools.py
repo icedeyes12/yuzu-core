@@ -435,7 +435,7 @@ class MultimodalTools:
                     with open(filepath, 'wb') as f:
                         f.write(response.content)
                     
-                    print(f"[DEBUG] timg preview: {filepath}")
+                    print(f"[Image] {filepath}")
                     preview_image_in_terminal(filepath)
                     
                     return filepath, None
