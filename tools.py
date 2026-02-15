@@ -488,4 +488,15 @@ class MultimodalTools:
         
         return found_images
 
+
+def preview_image_in_terminal(image_path):
+    """Preview an image in the terminal using timg."""
+    if not shutil.which("timg"):
+        return
+    if not os.path.isfile(image_path):
+        return
+    import subprocess
+    subprocess.run(["timg", "-g", "80x40", image_path])
+
+
 multimodal_tools = MultimodalTools()

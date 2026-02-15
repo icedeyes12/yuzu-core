@@ -34,7 +34,7 @@ class UserContext:
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
 
-def handle_user_message(user_message, interface="terminal"):
+def handle_user_message(user_message, interface="terminal", visual_mode=False):
     with UserContext() as context:
         profile = Database.get_profile()
         
@@ -46,7 +46,7 @@ def handle_user_message(user_message, interface="terminal"):
         
         Database.add_message('user', user_message, session_id=session_id)
         
-        ai_reply = generate_ai_response(profile, user_message, interface, session_id)
+        ai_reply = generate_ai_response(profile, user_message, interface, session_id, visual_mode=visual_mode)
         
         ai_reply_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', ai_reply).strip()
         
@@ -91,6 +91,33 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
         
         if should_summarize_memory(profile, user_message, session_id):
             summarize_memory(profile, user_message, full_response, session_id)
+
+def extract_recent_images(session_id, limit=3):
+    """Scan last 20 messages in a session and return up to ``limit`` image paths."""
+    chat_history = Database.get_chat_history(session_id=session_id, limit=20)
+    image_paths = []
+    md_pattern = re.compile(r'!\[[^\]]*\]\(([^)]+)\)')
+    for msg in chat_history:
+        for match in md_pattern.finditer(msg.get('content', '')):
+            path = match.group(1)
+            if path not in image_paths:
+                image_paths.append(path)
+            if len(image_paths) >= limit:
+                break
+        if len(image_paths) >= limit:
+            break
+    return image_paths
+
+
+def build_visual_context(session_id):
+    """Build context enriched with recent images for vision-capable models."""
+    profile = Database.get_profile()
+    active_session = Database.get_active_session()
+    interface = "web"
+    base_messages = _build_generation_context(profile, session_id, interface)
+    images = extract_recent_images(session_id, limit=3)
+    return {"messages": base_messages, "images": images}
+
 
 def _build_generation_context(profile, session_id, interface="terminal"):
     """Shared context building logic for both streaming and non-streaming responses"""
@@ -671,7 +698,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         print(f"[ERROR] Streaming response failed: {error_msg}")
         yield error_msg
 
-def generate_ai_response(profile, user_message, interface="terminal", session_id=None):
+def generate_ai_response(profile, user_message, interface="terminal", session_id=None, visual_mode=False):
     """Generate AI response (non-streaming)"""
     if session_id is None:
         active_session = Database.get_active_session()
@@ -681,19 +708,30 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
     if user_message.strip().startswith('/imagine'):
         return _handle_image_generation(user_message, session_id)
     
-    # Build context and messages
-    messages = _build_generation_context(profile, session_id, interface)
-    
     ai_manager = get_ai_manager()
     providers_config = profile.get('providers_config', {})
     
     preferred_provider = providers_config.get('preferred_provider', 'ollama')
     preferred_model = providers_config.get('preferred_model', 'glm-4.6:cloud')
     
-    # Handle vision processing
-    messages, preferred_provider, preferred_model = _handle_vision_processing(
-        messages, user_message, preferred_provider, preferred_model
-    )
+    if visual_mode:
+        # Use vision-capable model with visual context
+        visual_ctx = build_visual_context(session_id)
+        messages = visual_ctx["messages"]
+        vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
+        if vision_provider and vision_model:
+            preferred_provider = vision_provider
+            preferred_model = vision_model
+        messages, preferred_provider, preferred_model = _handle_vision_processing(
+            messages, user_message, preferred_provider, preferred_model
+        )
+    else:
+        # Build context and messages (normal text path)
+        messages = _build_generation_context(profile, session_id, interface)
+        # Handle vision processing
+        messages, preferred_provider, preferred_model = _handle_vision_processing(
+            messages, user_message, preferred_provider, preferred_model
+        )
     
     try:
         # Adjust max_tokens based on provider
@@ -1789,170 +1827,3 @@ def get_vision_capabilities():
         capabilities['image_generation_provider'] = 'openrouter'
     
     return capabilities
-
-
-def check_glm47_capabilities():
-    """Check GLM-4.7 capabilities and pricing"""
-    print("=== GLM-4.7 Capabilities ===")
-    print("Context window: 202,800 tokens")
-    print("Max output: 65,536 tokens")
-    print("\n=== OpenRouter Pricing ===")
-    print("z-ai/glm-4.7: ~$0.50 per 1M input tokens")
-    print("z-ai/glm-4.6: ~$0.20 per 1M input tokens")
-    print("\n=== Recommendations ===")
-    print("1. Use GLM-4.7 for comprehensive analysis")
-    print("2. Monitor token usage in OpenRouter dashboard")
-    print("3. Consider batch analysis for large histories")
-    print("4. Cache results to avoid repeated analysis")
-    
-    # Estimate cost
-    api_keys = Database.get_api_keys()
-    openrouter_key = api_keys.get('openrouter')
-    
-    if openrouter_key:
-        # Check usage via OpenRouter API
-        headers = {"Authorization": f"Bearer {openrouter_key}"}
-        try:
-            response = requests.get(
-                "https://openrouter.ai/api/v1/auth/key",
-                headers=headers,
-                timeout=30
-            )
-            if response.status_code == 200:
-                key_info = response.json()
-                print(f"\n=== API Key Info ===")
-                print(f"Label: {key_info.get('label', 'N/A')}")
-                print(f"Usage: {key_info.get('usage', 'N/A')}")
-                print(f"Limits: {key_info.get('limits', 'N/A')}")
-        except:
-            print("\n[INFO] Could not fetch API key details")
-
-
-def test_glm47_profile():
-    """Test GLM-4.7 for profile analysis"""
-    print("=== Testing GLM-4.7 Profile Analysis ===")
-    
-    api_keys = Database.get_api_keys()
-    openrouter_key = api_keys.get('openrouter')
-    
-    if not openrouter_key:
-        print("[ERROR] No OpenRouter API key!")
-        return False
-    
-    # Test dengan prompt sederhana
-    test_prompt = """# PLAYER PROFILE ANALYSIS TASK
-
-## CONVERSATION HISTORY:
-Session 1 - User: Hello, I really enjoy programming in Python
-Session 1 - AI: That's great! Python is a wonderful language
-Session 1 - User: Yes, I especially like data analysis with pandas
-Session 2 - User: I love listening to jazz while working
-Session 2 - AI: Jazz is perfect for focus! Any favorite artists?
-Session 2 - User: Miles Davis and John Coltrane are my favorites
-
-## ANALYSIS INSTRUCTIONS:
-Analyze the conversation history and extract insights about the User.
-
-### OUTPUT FORMAT:
-Player Summary: [4-6 sentence summary]
-
-Likes: [comma-separated list]
-
-Dislikes: [comma-separated list]
-
-Personality Traits: [comma-separated list]
-
-Important Memories: [comma-separated list]
-
-Relationship Dynamics: [3-4 sentence analysis]"""
-    
-    print("[INFO] Testing with simple prompt...")
-    result = global_profile_analysis(test_prompt, openrouter_key)
-    
-    if result:
-        print(f"\n[SUCCESS] GLM-4.7 Test Response:\n{result}")
-        
-        parsed = parse_global_profile_summary(result)
-        print(f"\n[SUCCESS] Parsed Result:")
-        print(f"Player Summary: {parsed['player_summary'][:200]}...")
-        print(f"Likes: {parsed['key_facts']['likes']}")
-        print(f"Personality Traits: {parsed['key_facts']['personality_traits']}")
-        
-        # Simpan test result
-        with open("debug_logs/glm47_test_result.txt", "w", encoding="utf-8") as f:
-            f.write("=== GLM-4.7 Test Result ===\n")
-            f.write(result)
-            f.write("\n\n=== Parsed Data ===\n")
-            f.write(json.dumps(parsed, indent=2, ensure_ascii=False))
-        
-        return True
-    else:
-        print("[ERROR] No response from GLM-4.7")
-        return False
-
-
-def batch_global_analysis(max_sessions=50):
-    """Run global analysis with batch processing"""
-    print(f"=== Batch Global Analysis (max {max_sessions} sessions) ===")
-    
-    # Get all sessions
-    all_sessions = Database.get_all_sessions()
-    
-    if len(all_sessions) > max_sessions:
-        print(f"[INFO] Too many sessions ({len(all_sessions)}), limiting to {max_sessions}")
-        all_sessions = all_sessions[:max_sessions]
-    
-    # Create a modified version that accepts session limit
-    # For now, just use the standard function
-    result = summarize_global_player_profile()
-    
-    if result:
-        print("[SUCCESS] Batch analysis completed")
-    else:
-        print("[ERROR] Batch analysis failed")
-    
-    return result
-
-
-def incremental_profile_update():
-    """Update profile incrementally - only analyze new sessions"""
-    profile = Database.get_profile()
-    memory = profile.get('memory', {})
-    
-    last_update = memory.get('last_global_summary')
-    if last_update:
-        try:
-            last_date = datetime.fromisoformat(last_update.replace('Z', '+00:00'))
-            print(f"Last profile update: {last_date}")
-            
-            # Get sessions after last update
-            all_sessions = Database.get_all_sessions()
-            new_sessions = []
-            
-            for session in all_sessions:
-                session_updated = session.get('updated_at')
-                if session_updated:
-                    try:
-                        session_date = datetime.fromisoformat(session_updated.replace('Z', '+00:00'))
-                        if session_date > last_date:
-                            new_sessions.append(session)
-                    except:
-                        continue
-            
-            print(f"Found {len(new_sessions)} new sessions since last update")
-            
-            if new_sessions:
-                # For now, run full analysis
-                print("[INFO] Running full analysis with new sessions...")
-                return summarize_global_player_profile()
-            else:
-                print("[INFO] No new sessions to analyze")
-                return False
-                
-        except Exception as e:
-            print(f"[ERROR] Error parsing dates: {str(e)}")
-            # Run full analysis as fallback
-            return summarize_global_player_profile()
-    else:
-        print("[INFO] No previous profile analysis found, running full analysis")
-        return summarize_global_player_profile()
