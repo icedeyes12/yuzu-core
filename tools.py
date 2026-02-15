@@ -9,12 +9,10 @@
 # [LICENSE: MIT]
 
 import requests
-import json
 import base64
 import re
 import time
 import os
-import shutil
 from datetime import datetime
 from database import Database
 from typing import List, Dict, Optional, Tuple
@@ -47,9 +45,6 @@ class MultimodalTools:
         
     def get_available_vision_models(self, provider: str) -> List[str]:
         return self.vision_models.get(provider, [])
-    
-    def get_provider_endpoint(self, provider: str) -> Optional[str]:
-        return self.provider_endpoints.get(provider)
     
     def is_vision_model(self, model_name: str, provider: str = None) -> bool:
         if provider:
@@ -232,8 +227,6 @@ class MultimodalTools:
         return [{"role": "user", "content": content}]
 
     def _extract_image_urls_from_markdown(self, text: str) -> List[str]:
-        import re
-        
         markdown_pattern = r'!\[([^\]]*)\]\(([^)]+)\)'
         matches = re.findall(markdown_pattern, text)
         
@@ -254,8 +247,6 @@ class MultimodalTools:
         return image_urls
 
     def _remove_image_markdown(self, text: str) -> str:
-        import re
-        
         def replace_markdown(match):
             alt_text = match.group(1)
             if alt_text and alt_text not in ['Uploaded Image', 'Generated Image']:
@@ -269,102 +260,6 @@ class MultimodalTools:
         
         return clean_text
 
-    def _format_uploaded_images_vision(self, user_message: str, provider: str = None) -> List[Dict]:
-        import base64
-        
-        parts = user_message.split("UPLOADED_IMAGES:")
-        if len(parts) < 2:
-            return [{"role": "user", "content": user_message}]
-            
-        images_part = parts[1]
-        
-        user_text = ""
-        image_paths = []
-        
-        for line in images_part.split('\n'):
-            if line.startswith("USER_MESSAGE:"):
-                user_text = line.replace("USER_MESSAGE:", "").strip()
-            elif line.startswith("IMAGE_UPLOAD:"):
-                path = line.replace("IMAGE_UPLOAD:", "").strip()
-                image_paths.append(path)
-        
-        content = [{"type": "text", "text": user_text or "Analyze these images"}]
-        
-        for i, image_path in enumerate(image_paths[:3]):
-            try:
-                with open(image_path, 'rb') as f:
-                    image_bytes = f.read()
-                    image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-                
-                if image_path.lower().endswith('.png'):
-                    mime_type = "image/png"
-                elif image_path.lower().endswith('.jpg') or image_path.lower().endswith('.jpeg'):
-                    mime_type = "image/jpeg"
-                elif image_path.lower().endswith('.gif'):
-                    mime_type = "image/gif"
-                else:
-                    mime_type = "image/jpeg"
-                
-                data_url = f"data:{mime_type};base64,{image_base64}"
-                
-                content.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": data_url
-                    }
-                })
-                
-            except Exception as e:
-                pass
-        
-        return [{"role": "user", "content": content}]
-    
-    def detect_image_generation_request(self, text: str, is_ai_response: bool = False) -> bool:
-        text_lower = text.lower().strip()
-        
-        if is_ai_response:
-            return text_lower.startswith('/imagine') or text_lower.startswith('imagine ')
-        else:
-            if '/imagine' in text_lower:
-                return True
-            
-            image_keywords = ['generate an image', 'create an image', 'make a picture', 
-                            'draw me', 'show me an image', 'generate image', 'create image']
-            return any(keyword in text_lower for keyword in image_keywords)
-    
-    def extract_imagine_prompt(self, text: str, is_ai_response: bool = False) -> str:
-        text_lower = text.lower()
-        
-        if is_ai_response:
-            if text_lower.startswith('/imagine'):
-                prompt = text[8:].strip()
-            elif text_lower.startswith('imagine '):
-                prompt = text[8:].strip()
-            else:
-                prompt = text.strip()
-        else:
-            if '/imagine' in text_lower:
-                parts = text_lower.split('/imagine', 1)
-                prompt = parts[1].strip() if len(parts) > 1 else text.strip()
-            else:
-                prompt = text.strip()
-                remove_phrases = [
-                    'can you', 'please', 'could you', 'would you', 
-                    'generate an image of', 'create an image of', 
-                    'make a picture of', 'draw me', 'show me an image of'
-                ]
-                for phrase in remove_phrases:
-                    if prompt.lower().startswith(phrase):
-                        prompt = prompt[len(phrase):].strip()
-                        break
-        
-        prompt = prompt.replace('"', '').replace("'", "").strip()
-        
-        if prompt.endswith('.') and not prompt.endswith('...'):
-            prompt = prompt[:-1]
-            
-        return prompt
-    
     def generate_image(self, prompt: str, provider: str = "chutes", 
                       model: str = None, size: str = "1024x1024") -> Tuple[Optional[str], Optional[str]]:
         try:
@@ -473,20 +368,6 @@ class MultimodalTools:
         # Check if we can switch to vision
         vision_provider, vision_model = self.get_best_vision_provider()
         return vision_provider is not None
-
-    def detect_uploaded_images(self, text: str) -> List[str]:
-        upload_patterns = [
-            r'static/uploads/\d{8}_\d{6}_\d+_[^\s\)]+',
-            r'static/generated_images/\d{8}_\d{6}_[^\s\)]+',
-            r'!\[Image \d+\]\([^)]+\)'
-        ]
-        
-        found_images = []
-        for pattern in upload_patterns:
-            matches = re.findall(pattern, text)
-            found_images.extend(matches)
-        
-        return found_images
 
     def extract_recent_image_contents(self, chat_history: List[Dict], max_images: int = 3, lookback: int = 20) -> List[Dict]:
         """Extract up to max_images image content objects from the last lookback messages.

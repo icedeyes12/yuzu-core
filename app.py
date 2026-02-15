@@ -13,8 +13,6 @@
 import requests
 import time
 import os
-import hashlib
-import secrets
 import re
 import json
 import traceback
@@ -1737,24 +1735,6 @@ def parse_global_profile_summary(summary_text: str) -> Dict:
     return profile_data
 
 
-def save_section_content(profile_data, section_key, content):
-    if section_key == 'player_summary':
-        if not profile_data["player_summary"]:
-            profile_data["player_summary"] = content
-        else:
-            profile_data["player_summary"] += " " + content
-            
-    elif section_key == 'relationship_dynamics':
-        if not profile_data["relationship_dynamics"]:
-            profile_data["relationship_dynamics"] = content
-        else:
-            profile_data["relationship_dynamics"] += " " + content
-            
-    elif section_key in ['likes', 'dislikes', 'personality_traits', 'important_memories']:
-        items = [item.strip() for item in content.split(',') if item.strip()]
-        profile_data["key_facts"][section_key].extend(items)
-
-
 def get_available_providers():
     ai_manager = get_ai_manager()
     return ai_manager.get_available_providers()
@@ -1775,11 +1755,6 @@ def set_preferred_provider(provider_name, model_name=None):
     
     Database.update_profile({'providers_config': providers_config})
     return f"Preferred provider set to: {provider_name}" + (f" with model: {model_name}" if model_name else "")
-
-
-def get_provider_models(provider_name):
-    ai_manager = get_ai_manager()
-    return ai_manager.get_provider_models(provider_name)
 
 
 def get_vision_capabilities():
@@ -1805,41 +1780,4 @@ def get_vision_capabilities():
         capabilities['image_generation_provider'] = 'openrouter'
     
     return capabilities
-
-
-def check_glm47_capabilities():
-    """Check GLM-4.7 capabilities and pricing"""
-    print("=== GLM-4.7 Capabilities ===")
-    print("Context window: 202,800 tokens")
-    print("Max output: 65,536 tokens")
-    print("\n=== OpenRouter Pricing ===")
-    print("z-ai/glm-4.7: ~$0.50 per 1M input tokens")
-    print("z-ai/glm-4.6: ~$0.20 per 1M input tokens")
-    print("\n=== Recommendations ===")
-    print("1. Use GLM-4.7 for comprehensive analysis")
-    print("2. Monitor token usage in OpenRouter dashboard")
-    print("3. Consider batch analysis for large histories")
-    print("4. Cache results to avoid repeated analysis")
-    
-    # Estimate cost
-    api_keys = Database.get_api_keys()
-    openrouter_key = api_keys.get('openrouter')
-    
-    if openrouter_key:
-        # Check usage via OpenRouter API
-        headers = {"Authorization": f"Bearer {openrouter_key}"}
-        try:
-            response = requests.get(
-                "https://openrouter.ai/api/v1/auth/key",
-                headers=headers,
-                timeout=30
-            )
-            if response.status_code == 200:
-                key_info = response.json()
-                print(f"\n=== API Key Info ===")
-                print(f"Label: {key_info.get('label', 'N/A')}")
-                print(f"Usage: {key_info.get('usage', 'N/A')}")
-                print(f"Limits: {key_info.get('limits', 'N/A')}")
-        except:
-            print("\n[INFO] Could not fetch API key details")
 

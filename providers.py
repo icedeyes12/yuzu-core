@@ -13,8 +13,7 @@
 import requests
 import json
 import time
-import os
-from typing import List, Dict, Optional, Any, Generator
+from typing import List, Dict, Optional, Generator
 from database import Database
 from tools import multimodal_tools
 
