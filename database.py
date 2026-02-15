@@ -138,8 +138,8 @@ def init_db():
     # Migrate existing databases: add image_paths column if missing
     try:
         _migrate_add_image_paths_column(engine)
-    except Exception:
-        pass  # Table may not exist yet on first run
+    except Exception as e:
+        print(f"[WARNING] image_paths migration skipped: {e}")
     
     with get_db_session() as session:
         # Create default profile and session if needed

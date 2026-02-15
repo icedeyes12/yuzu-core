@@ -136,7 +136,7 @@ def extract_recent_images(session_id, limit=3):
     chat_history = Database.get_chat_history(session_id=session_id, limit=20, recent=True)
     result_paths = []
     md_pattern = re.compile(r'!\[[^\]]*\]\(([^)]+)\)')
-    for msg in reversed(chat_history):
+    for msg in reversed(chat_history):  # Newest first to prioritize recent images
         # 1. Use stored image_paths if available
         stored = msg.get('image_paths', [])
         for p in stored:

@@ -111,7 +111,8 @@ class MultimodalTools:
                 f.write(response.content)
 
             return filepath
-        except Exception:
+        except Exception as e:
+            print(f"[WARNING] Failed to download image from {url}: {e}")
             return None
 
     @staticmethod

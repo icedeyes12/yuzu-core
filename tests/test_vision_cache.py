@@ -157,8 +157,7 @@ class TestDatabaseImagePaths(unittest.TestCase):
 
     def test_add_message_with_image_paths(self):
         paths = ['/cache/abc.png', '/cache/def.jpg']
-        active = Database.get_active_session()
-        sid = active['id']
+        sid = Database.create_session("test_img_paths")
         Database.add_message('user', 'test image', session_id=sid, image_paths=paths)
         history = Database.get_chat_history(session_id=sid, limit=1, recent=True)
         last = history[-1]
