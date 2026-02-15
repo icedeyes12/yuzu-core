@@ -662,6 +662,7 @@ function addMessage(role, content, timestamp = null, isHistory = false) {
 
 function renderMessageContent(rawText, isUser = false) {
     const safeText = String(rawText ?? '');
+    console.log("User raw message:", JSON.stringify(safeText));
     const escapedText = escapeMessageHtml(safeText);
     try {
         let processed = safeText;

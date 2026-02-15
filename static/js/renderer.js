@@ -44,6 +44,81 @@ class MessageRenderer {
         document.head.appendChild(script);
     }
 
+    normalizeLanguageAlias(lang) {
+        if (!lang) return null;
+        const lower = lang.toLowerCase().trim();
+        if (!lower || lower === 'text' || lower === 'plaintext') return null;
+
+        const familyMap = {
+            // Shell / CLI family → bash
+            'sh': 'bash', 'zsh': 'bash', 'fish': 'bash', 'shell': 'bash',
+            'docker': 'bash', 'dockerfile': 'bash', 'compose': 'bash',
+            'make': 'bash', 'makefile': 'bash', 'cmake': 'bash',
+            'powershell': 'bash', 'ps1': 'bash', 'pwsh': 'bash',
+            'bat': 'bash', 'cmd': 'bash',
+
+            // JavaScript family → javascript
+            'js': 'javascript', 'mjs': 'javascript', 'cjs': 'javascript', 'jsx': 'javascript',
+            'node': 'javascript', 'deno': 'javascript',
+
+            // TypeScript family → typescript
+            'ts': 'typescript', 'tsx': 'typescript',
+
+            // SQL family → sql
+            'mysql': 'sql', 'postgres': 'sql', 'postgresql': 'sql',
+            'sqlite': 'sql', 'tsql': 'sql', 'plsql': 'sql', 'mssql': 'sql',
+
+            // Config / data family → json
+            'yml': 'json', 'yaml': 'json', 'toml': 'json', 'ini': 'json',
+            'env': 'json', 'dotenv': 'json',
+            'terraform': 'json', 'hcl': 'json', 'tf': 'json',
+
+            // Markup family → xml
+            'html': 'xml', 'xhtml': 'xml', 'svg': 'xml', 'rss': 'xml', 'atom': 'xml',
+
+            // Python aliases → python
+            'py': 'python', 'python3': 'python',
+
+            // Markdown aliases → markdown
+            'md': 'markdown', 'mdx': 'markdown',
+
+            // Ruby aliases → ruby
+            'rb': 'ruby',
+
+            // Rust aliases → rust
+            'rs': 'rust',
+
+            // Kotlin aliases → kotlin
+            'kt': 'kotlin', 'kts': 'kotlin',
+
+            // C# aliases → csharp
+            'cs': 'csharp',
+
+            // C++ aliases → cpp
+            'hpp': 'cpp', 'cc': 'cpp', 'cxx': 'cpp', 'hxx': 'cpp',
+
+            // C aliases → c
+            'h': 'c',
+
+            // Objective-C aliases → objectivec
+            'objc': 'objectivec', 'mm': 'objectivec',
+
+            // VB aliases → vbnet
+            'vb': 'vbnet',
+
+            // GraphQL aliases → graphql
+            'gql': 'graphql',
+
+            // LaTeX aliases → latex
+            'tex': 'latex',
+
+            // Assembly aliases → x86asm
+            'asm': 'x86asm',
+        };
+
+        return familyMap[lower] || lower;
+    }
+
     configureMarked() {
         if (typeof marked === 'undefined') return;
 
@@ -52,16 +127,25 @@ class MessageRenderer {
 
         // Custom code block renderer
         renderer.code = (code, language) => {
-            const hasLanguage = this.isHighlightReady && typeof hljs !== 'undefined' && language && hljs.getLanguage(language);
-            const validLanguage = hasLanguage ? language : 'plaintext';
+            const originalLabel = language ? language.trim() : '';
+            const normalizedLang = this.normalizeLanguageAlias(language);
+            const fallbackLang = 'markdown';
+
+            let highlightLang = fallbackLang;
+            if (normalizedLang && this.isHighlightReady && typeof hljs !== 'undefined' && hljs.getLanguage(normalizedLang)) {
+                highlightLang = normalizedLang;
+            }
+
+            const displayLabel = originalLabel || fallbackLang;
+
             const highlighted = this.isHighlightReady 
-                ? hljs.highlight(code, { language: validLanguage }).value 
+                ? hljs.highlight(code, { language: highlightLang }).value 
                 : this.escapeHtml(code);
 
             return `
                 <div class="code-block-container">
                     <div class="code-block-header">
-                        <span class="code-language">${validLanguage}</span>
+                        <span class="code-language">${displayLabel}</span>
                         <button class="copy-code-btn" onclick="renderer.copyCode(this)">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -70,7 +154,7 @@ class MessageRenderer {
                             Copy
                         </button>
                     </div>
-                    <pre><code class="hljs language-${validLanguage}">${highlighted}</code></pre>
+                    <pre><code class="hljs language-${highlightLang}">${highlighted}</code></pre>
                 </div>
             `;
         };
@@ -280,13 +364,7 @@ class MessageRenderer {
     }
 
     renderMessage(content, isUser = false) {
-        if (isUser && !this.containsImageMarkdown(content)) {
-            // User messages: simple, no markdown rendering
-            return this.escapeHtml(content);
-        } else {
-            // Assistant messages: full markdown rendering
-            return this.render(content);
-        }
+        return this.render(content);
     }
 
     containsImageMarkdown(content) {
