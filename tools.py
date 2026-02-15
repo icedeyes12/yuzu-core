@@ -14,6 +14,7 @@ import base64
 import re
 import time
 import os
+import hashlib
 import shutil
 import subprocess
 from urllib.parse import unquote
@@ -22,6 +23,8 @@ from database import Database
 from typing import List, Dict, Optional, Tuple
 
 class MultimodalTools:
+    IMAGE_CACHE_DIR = os.path.join(os.path.dirname(__file__), 'static', 'image_cache')
+
     def __init__(self):
         # ONLY moonshotai/kimi-k2.5 for vision (OpenRouter only)
         self.vision_models = {
@@ -46,6 +49,9 @@ class MultimodalTools:
         # Image cache for base64 encoded images
         self.image_cache = {}
         self.cache_ttl = 3600  # 1 hour TTL
+        
+        # Ensure cache directory exists
+        os.makedirs(self.IMAGE_CACHE_DIR, exist_ok=True)
         
     def get_available_vision_models(self, provider: str) -> List[str]:
         return self.vision_models.get(provider, [])
@@ -73,6 +79,65 @@ class MultimodalTools:
         ]
         for key in expired_keys:
             del self.image_cache[key]
+
+    def download_image_to_cache(self, url: str) -> Optional[str]:
+        """Download an image from *url*, save it under ``IMAGE_CACHE_DIR`` and
+        return the local file path.  The filename is derived from a SHA-1 hash
+        of the URL so repeated downloads are avoided."""
+        url_hash = hashlib.sha1(url.encode('utf-8')).hexdigest()
+
+        # Check if already cached with any common extension
+        for ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
+            candidate = os.path.join(self.IMAGE_CACHE_DIR, f"{url_hash}{ext}")
+            if os.path.isfile(candidate):
+                return candidate
+
+        try:
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+
+            content_type = response.headers.get('content-type', '')
+            if 'png' in content_type:
+                ext = '.png'
+            elif 'gif' in content_type:
+                ext = '.gif'
+            elif 'webp' in content_type:
+                ext = '.webp'
+            else:
+                ext = '.jpg'
+
+            filepath = os.path.join(self.IMAGE_CACHE_DIR, f"{url_hash}{ext}")
+            with open(filepath, 'wb') as f:
+                f.write(response.content)
+
+            return filepath
+        except Exception:
+            return None
+
+    @staticmethod
+    def encode_image_to_base64(filepath: str) -> Optional[Dict]:
+        """Read a local image file and return an OpenAI-compatible
+        ``image_url`` content block with a ``data:`` URI."""
+        if not os.path.isfile(filepath):
+            return None
+
+        lower = filepath.lower()
+        if lower.endswith('.png'):
+            mime = 'image/png'
+        elif lower.endswith('.gif'):
+            mime = 'image/gif'
+        elif lower.endswith('.webp'):
+            mime = 'image/webp'
+        else:
+            mime = 'image/jpeg'
+
+        with open(filepath, 'rb') as f:
+            data = base64.b64encode(f.read()).decode('utf-8')
+
+        return {
+            "type": "image_url",
+            "image_url": {"url": f"data:{mime};base64,{data}"}
+        }
 
     def extract_image_urls(self, text: str) -> List[str]:
         url_pattern = r'https?://[^\s<>"\'{}]+'

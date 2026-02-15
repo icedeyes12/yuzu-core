@@ -34,6 +34,38 @@ class UserContext:
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
 
+def _cache_images_from_message(user_message):
+    """Extract image URLs from a user message, download them to the local
+    cache, and return the list of cached file paths."""
+    cached_paths = []
+    # Check for uploaded images first
+    if "UPLOADED_IMAGES:" in user_message and "IMAGE_UPLOAD:" in user_message:
+        for line in user_message.split('\n'):
+            if line.startswith("IMAGE_UPLOAD:"):
+                path = line.replace("IMAGE_UPLOAD:", "").strip()
+                if os.path.isfile(path):
+                    cached_paths.append(path)
+        return cached_paths
+
+    # Markdown image URLs
+    md_pattern = re.compile(r'!\[[^\]]*\]\(([^)]+)\)')
+    for match in md_pattern.finditer(user_message):
+        url = match.group(1)
+        cached = multimodal_tools.download_image_to_cache(url)
+        if cached:
+            cached_paths.append(cached)
+
+    # Bare image URLs
+    if not cached_paths:
+        urls = multimodal_tools.extract_image_urls(user_message)
+        for url in urls[:3]:
+            cached = multimodal_tools.download_image_to_cache(url)
+            if cached:
+                cached_paths.append(cached)
+
+    return cached_paths
+
+
 def handle_user_message(user_message, interface="terminal", visual_mode=False):
     with UserContext() as context:
         profile = Database.get_profile()
@@ -44,7 +76,11 @@ def handle_user_message(user_message, interface="terminal", visual_mode=False):
         active_session = Database.get_active_session()
         session_id = active_session['id']
         
-        Database.add_message('user', user_message, session_id=session_id)
+        # Cache any images present in the user message
+        cached_image_paths = _cache_images_from_message(user_message)
+        
+        Database.add_message('user', user_message, session_id=session_id,
+                             image_paths=cached_image_paths if cached_image_paths else None)
         
         ai_reply = generate_ai_response(profile, user_message, interface, session_id, visual_mode=visual_mode)
         
@@ -93,29 +129,51 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
             summarize_memory(profile, user_message, full_response, session_id)
 
 def extract_recent_images(session_id, limit=3):
-    """Scan last 20 messages in a session and return up to ``limit`` image paths."""
-    chat_history = Database.get_chat_history(session_id=session_id, limit=20)
-    image_paths = []
+    """Scan last 20 messages in a session and return up to ``limit`` cached
+    image file paths.  Prefers the ``image_paths`` column stored in the DB;
+    falls back to extracting markdown image URLs and downloading them to
+    the local cache via ``multimodal_tools.download_image_to_cache``."""
+    chat_history = Database.get_chat_history(session_id=session_id, limit=20, recent=True)
+    result_paths = []
     md_pattern = re.compile(r'!\[[^\]]*\]\(([^)]+)\)')
-    for msg in chat_history:
-        for match in md_pattern.finditer(msg.get('content', '')):
-            path = match.group(1)
-            if path not in image_paths:
-                image_paths.append(path)
-            if len(image_paths) >= limit:
+    for msg in reversed(chat_history):
+        # 1. Use stored image_paths if available
+        stored = msg.get('image_paths', [])
+        for p in stored:
+            if p not in result_paths:
+                result_paths.append(p)
+            if len(result_paths) >= limit:
                 break
-        if len(image_paths) >= limit:
+        if len(result_paths) >= limit:
             break
-    return image_paths
+        # 2. Fall back to markdown URLs in content
+        for match in md_pattern.finditer(msg.get('content', '')):
+            url = match.group(1)
+            cached = multimodal_tools.download_image_to_cache(url)
+            if cached and cached not in result_paths:
+                result_paths.append(cached)
+            if len(result_paths) >= limit:
+                break
+        if len(result_paths) >= limit:
+            break
+    return result_paths
 
 
 def build_visual_context(session_id):
-    """Build context enriched with recent images for vision-capable models."""
+    """Build context enriched with recent images for vision-capable models.
+    Uses base64-encoded cached images."""
     profile = Database.get_profile()
     interface = "web"
     base_messages = _build_generation_context(profile, session_id, interface)
-    images = extract_recent_images(session_id, limit=3)
-    return {"messages": base_messages, "images": images}
+    image_file_paths = extract_recent_images(session_id, limit=3)
+
+    image_contents = []
+    for fp in image_file_paths:
+        encoded = multimodal_tools.encode_image_to_base64(fp)
+        if encoded:
+            image_contents.append(encoded)
+
+    return {"messages": base_messages, "images": image_file_paths, "image_contents": image_contents}
 
 
 def _build_generation_context(profile, session_id, interface="terminal"):
@@ -720,18 +778,31 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
     preferred_model = providers_config.get('preferred_model', 'glm-4.6:cloud')
     
     if visual_mode:
-        # Use vision-capable model with visual context
+        # Vision mode ON — include visual context from history (last 20 msgs, up to 3 images)
         visual_ctx = build_visual_context(session_id)
         messages = visual_ctx["messages"]
         vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
         if vision_provider and vision_model:
             preferred_provider = vision_provider
             preferred_model = vision_model
+
+        # Inject cached base64 images from history into the last user message
+        image_contents = visual_ctx.get("image_contents", [])
+        if image_contents and messages and messages[-1]['role'] == 'user':
+            last_content = messages[-1]['content']
+            if isinstance(last_content, str):
+                content_parts = [{"type": "text", "text": last_content}]
+            else:
+                content_parts = list(last_content)
+            content_parts.extend(image_contents)
+            messages[-1] = {"role": "user", "content": content_parts}
+
         messages, preferred_provider, preferred_model = _handle_vision_processing(
             messages, user_message, preferred_provider, preferred_model
         )
     else:
-        # Build context and messages (normal text path)
+        # Normal mode (vision toggle OFF) — only use image from the current user
+        # message; do NOT load visual context from history
         messages = _build_generation_context(profile, session_id, interface)
         # Handle vision processing
         messages, preferred_provider, preferred_model = _handle_vision_processing(

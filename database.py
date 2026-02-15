@@ -57,6 +57,7 @@ class Message(Base):
     content = Column(Text, nullable=False)
     content_encrypted = Column(Boolean, nullable=False, default=False)  # Kept for compatibility
     timestamp = Column(String(255), nullable=False)
+    image_paths = Column(Text, nullable=True)  # JSON list of cached image paths
 
 class APIKey(Base):
     __tablename__ = 'api_keys'
@@ -120,9 +121,25 @@ def migrate_api_keys_from_files(session):
     
     return migrated_count
 
+def _migrate_add_image_paths_column(engine):
+    """Add image_paths column to messages table if it does not exist."""
+    from sqlalchemy import inspect as sa_inspect, text
+    inspector = sa_inspect(engine)
+    columns = [col['name'] for col in inspector.get_columns('messages')]
+    if 'image_paths' not in columns:
+        with engine.connect() as conn:
+            conn.execute(text('ALTER TABLE messages ADD COLUMN image_paths TEXT'))
+            conn.commit()
+
 def init_db():
     engine = get_engine()
     Base.metadata.create_all(engine)
+    
+    # Migrate existing databases: add image_paths column if missing
+    try:
+        _migrate_add_image_paths_column(engine)
+    except Exception:
+        pass  # Table may not exist yet on first run
     
     with get_db_session() as session:
         # Create default profile and session if needed
@@ -439,7 +456,7 @@ class Database:
                 session.commit()
 
     @staticmethod
-    def add_message(role, content, session_id=None):
+    def add_message(role, content, session_id=None, image_paths=None):
         if session_id is None:
             active_session = Database.get_active_session()
             session_id = active_session['id']
@@ -453,7 +470,8 @@ class Database:
                 role=role,
                 content=content,  # Langsung simpan tanpa enkripsi
                 content_encrypted=False,  # Selalu False untuk pesan baru
-                timestamp=local_time
+                timestamp=local_time,
+                image_paths=json.dumps(image_paths) if image_paths else None
             )
             session.add(message)
             
@@ -542,7 +560,8 @@ class Database:
                 result_messages.append({
                     'role': msg.role,
                     'content': content,
-                    'timestamp': msg.timestamp
+                    'timestamp': msg.timestamp,
+                    'image_paths': json.loads(msg.image_paths) if msg.image_paths else []
                 })
             
             return result_messages
