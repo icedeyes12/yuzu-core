@@ -14,7 +14,7 @@ import hashlib
 from datetime import datetime
 from contextlib import contextmanager
 from encryption import encryptor
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, ForeignKey, Index
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, Float, LargeBinary, ForeignKey, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.pool import StaticPool
@@ -68,6 +68,45 @@ class APIKey(Base):
     key_encrypted = Column(Boolean, nullable=False, default=True)  # API keys tetap terenkripsi
     created_at = Column(DateTime, default=datetime.now)
 
+class SemanticMemory(Base):
+    __tablename__ = 'semantic_memories'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(Integer, nullable=True)
+    entity = Column(Text, nullable=False)
+    relation = Column(Text, nullable=False)
+    target = Column(Text, nullable=False)
+    confidence = Column(Float, default=0.5)
+    importance = Column(Float, default=0.5)
+    last_accessed = Column(DateTime, nullable=True)
+    access_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.now)
+
+class EpisodicMemory(Base):
+    __tablename__ = 'episodic_memories'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(Integer, nullable=True)
+    summary = Column(Text, nullable=False)
+    embedding = Column(LargeBinary, nullable=True)
+    importance = Column(Float, default=0.5)
+    emotional_weight = Column(Float, default=0.0)
+    last_accessed = Column(DateTime, nullable=True)
+    access_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.now)
+
+class ConversationSegment(Base):
+    __tablename__ = 'conversation_segments'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(Integer, nullable=True)
+    start_message_id = Column(Integer, nullable=True)
+    end_message_id = Column(Integer, nullable=True)
+    summary = Column(Text, nullable=True)
+    embedding = Column(LargeBinary, nullable=True)
+    importance = Column(Float, default=0.5)
+    created_at = Column(DateTime, default=datetime.now)
+
 # Indexes for performance
 Index('idx_messages_session_id', Message.session_id)
 Index('idx_messages_timestamp', Message.timestamp)
@@ -75,6 +114,12 @@ Index('idx_messages_role', Message.role)
 Index('idx_chat_sessions_active', ChatSession.is_active)
 Index('idx_chat_sessions_updated', ChatSession.updated_at)
 Index('idx_api_keys_name', APIKey.key_name)
+Index('idx_semantic_session', SemanticMemory.session_id)
+Index('idx_semantic_entity', SemanticMemory.entity)
+Index('idx_semantic_confidence', SemanticMemory.confidence)
+Index('idx_episodic_session', EpisodicMemory.session_id)
+Index('idx_episodic_importance', EpisodicMemory.importance)
+Index('idx_segments_session', ConversationSegment.session_id)
 
 def get_db_path():
     return os.path.join(os.path.dirname(__file__), 'yuzu_core.db')

@@ -100,6 +100,14 @@ def handle_user_message(user_message, interface="terminal", visual_mode=False):
         if should_summarize_memory(profile, user_message, session_id):
             summarize_memory(profile, user_message, ai_reply, session_id)
         
+        # Extract structured memories from recent messages
+        try:
+            from memory.extractor import process_messages_for_memory
+            recent = Database.get_chat_history(session_id=session_id, limit=10, recent=True)
+            process_messages_for_memory(session_id, recent)
+        except Exception:
+            pass  # Memory extraction is non-critical
+        
         return ai_reply
 
 def handle_user_message_streaming(user_message, interface="terminal", provider=None, model=None):
@@ -134,6 +142,14 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
         
         if should_summarize_memory(profile, user_message, session_id):
             summarize_memory(profile, user_message, full_response, session_id)
+
+        # Extract structured memories from recent messages
+        try:
+            from memory.extractor import process_messages_for_memory
+            recent = Database.get_chat_history(session_id=session_id, limit=10, recent=True)
+            process_messages_for_memory(session_id, recent)
+        except Exception:
+            pass  # Memory extraction is non-critical
 
 def extract_recent_images(session_id, limit=3):
     """Scan last 20 messages in a session and return up to ``limit`` cached
@@ -214,6 +230,17 @@ def _build_generation_context(profile, session_id, interface="terminal"):
     # =========================
     memory_context = ""
 
+    # --- Structured memory retrieval (new system) ---
+    try:
+        from memory.retrieval import retrieve_memory, format_memory
+        memory_bundle = retrieve_memory(session_id)
+        structured_memory_text = format_memory(memory_bundle)
+        if structured_memory_text:
+            memory_context += f"\n\n{structured_memory_text}"
+    except Exception:
+        pass  # Fallback: structured memory not available
+
+    # --- Legacy memory sources (kept for backward compatibility) ---
     session_memory = Database.get_session_memory(session_id)
     if session_memory and session_memory.get('session_context'):
         memory_context += (
