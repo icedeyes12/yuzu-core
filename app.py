@@ -105,8 +105,8 @@ def handle_user_message(user_message, interface="terminal", visual_mode=False):
             from memory.extractor import process_messages_for_memory
             recent = Database.get_chat_history(session_id=session_id, limit=10, recent=True)
             process_messages_for_memory(session_id, recent)
-        except Exception:
-            pass  # Memory extraction is non-critical
+        except Exception as e:
+            print(f"[WARNING] Memory extraction failed: {e}")
         
         return ai_reply
 
@@ -148,8 +148,8 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
             from memory.extractor import process_messages_for_memory
             recent = Database.get_chat_history(session_id=session_id, limit=10, recent=True)
             process_messages_for_memory(session_id, recent)
-        except Exception:
-            pass  # Memory extraction is non-critical
+        except Exception as e:
+            print(f"[WARNING] Memory extraction failed: {e}")
 
 def extract_recent_images(session_id, limit=3):
     """Scan last 20 messages in a session and return up to ``limit`` cached
@@ -237,8 +237,8 @@ def _build_generation_context(profile, session_id, interface="terminal"):
         structured_memory_text = format_memory(memory_bundle)
         if structured_memory_text:
             memory_context += f"\n\n{structured_memory_text}"
-    except Exception:
-        pass  # Fallback: structured memory not available
+    except Exception as e:
+        print(f"[WARNING] Structured memory retrieval failed: {e}")
 
     # --- Legacy memory sources (kept for backward compatibility) ---
     session_memory = Database.get_session_memory(session_id)

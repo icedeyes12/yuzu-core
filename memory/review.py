@@ -93,9 +93,9 @@ def run_decay(session_id=None):
     """
     try:
         decay_semantic_memories(session_id)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[WARNING] Semantic decay failed: {e}")
     try:
         decay_episodic_memories(session_id)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[WARNING] Episodic decay failed: {e}")

@@ -124,7 +124,7 @@ def segment_session(session_id):
         try:
             _create_segment(session_id, group)
             count += 1
-        except Exception:
-            pass  # Don't crash on segmentation errors
+        except Exception as e:
+            print(f"[WARNING] Segmentation failed for group: {e}")
 
     return count

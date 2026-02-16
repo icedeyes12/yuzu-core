@@ -4,109 +4,158 @@ This document tracks the staged rollout of the memory subsystem.
 
 ---
 
-## Phase 1 — Episodic Memory (Foundation)
+## Phase 1 — Database Schema ✅
 
 Goal:
-Create structured episodic memory from message logs.
+Add new memory tables without modifying the existing messages table.
 
 Tasks:
 
-- [ ] Create `episodic_memory` table
-- [ ] Implement segmentation module
-- [ ] Fixed-window episode creation
-- [ ] Episode summarization
-- [ ] Importance scoring
-- [ ] Store episodes in database
+- [x] Create `semantic_memories` table
+- [x] Create `episodic_memories` table
+- [x] Create `conversation_segments` table
+- [x] Add indexes for performance
+- [x] Verify existing sessions and messages unaffected
 
 Files:
 
-- memory/segmentation.py
-- memory/episodic.py
+- database.py
 
 ---
 
-## Phase 2 — Semantic Memory
+## Phase 2 — Memory Extraction ✅
 
 Goal:
-Extract stable user facts.
+Extract semantic facts and episodic summaries from conversations.
 
 Tasks:
 
-- [ ] Create `semantic_memory` table
-- [ ] Extract semantic triples from episodes
-- [ ] Merge duplicate facts
-- [ ] Implement confidence scoring
+- [x] Create `memory/extractor.py`
+- [x] Implement semantic fact extraction (preferences, identity, patterns)
+- [x] Implement emotional weight calculation
+- [x] Implement episodic memory triggers
+- [x] Implement upsert logic for semantic triples
+- [x] Support Indonesian language patterns
 
 Files:
 
-- memory/semantic.py
+- memory/extractor.py
 
 ---
 
-## Phase 3 — Retrieval Integration
+## Phase 3 — Conversation Segmentation ✅
 
 Goal:
-Replace current context builder.
+Group messages into conversation segments.
 
 Tasks:
 
-- [ ] Implement retrieval logic
-- [ ] Semantic memory retrieval
-- [ ] Episodic memory ranking
-- [ ] Combine with recent messages
-- [ ] Replace `_build_generation_context()`
+- [x] Create `memory/segmenter.py`
+- [x] Fixed-window segmentation (max 20 messages)
+- [x] Time gap detection (15-minute threshold)
+- [x] Episode summarization
+- [x] Store segments in database
+
+Files:
+
+- memory/segmenter.py
+
+---
+
+## Phase 4 — Retrieval Pipeline ✅
+
+Goal:
+Score and select relevant memories for context building.
+
+Tasks:
+
+- [x] Create `memory/retrieval.py`
+- [x] Semantic memory retrieval (importance × confidence)
+- [x] Episodic memory ranking (importance + emotional_weight + recency)
+- [x] Segment retrieval
+- [x] Structured memory bundle format
+- [x] Memory formatting for system prompt injection
 
 Files:
 
 - memory/retrieval.py
-- memory/context_builder.py
 
 ---
 
-## Phase 4 — Retention Model
+## Phase 5 — Context Builder Integration ✅
 
 Goal:
-Enable memory decay and reinforcement.
+Replace history-only context with structured memory system.
 
 Tasks:
 
-- [ ] Add stability/difficulty fields
-- [ ] Implement retrievability updates
-- [ ] Reinforcement logic
-- [ ] Periodic decay process
+- [x] Modify `_build_generation_context()` in app.py
+- [x] Inject structured memory into system message
+- [x] Maintain backward compatibility with legacy memory sources
+- [x] Add memory extraction after each assistant response
+- [x] Fallback to raw history if memory retrieval fails
 
 Files:
 
-- memory/episodic.py
-- memory/scheduler.py
+- app.py
 
 ---
 
-## Phase 5 — Background Scheduler
+## Phase 6 — Review & Decay System ✅
 
 Goal:
-Automate memory maintenance.
+Enable memory decay and reinforcement over time.
 
 Tasks:
 
-- [ ] Scheduler loop
-- [ ] Periodic segmentation
-- [ ] Semantic extraction
-- [ ] Retention updates
+- [x] Create `memory/review.py`
+- [x] Implement FSRS-style decay (exponential)
+- [x] Stability based on access count
+- [x] Memory reinforcement on retrieval
+- [x] `run_decay()` function for periodic use
 
 Files:
 
-- memory/scheduler.py
+- memory/review.py
 
 ---
 
-## Phase 6 — Scaling (Optional)
+## Phase 7 — Migration & Fallback ✅
 
 Goal:
-Prepare for large-scale memory.
+Backward compatibility and migration tools.
 
 Tasks:
 
-- [ ] Migrate to PostgreSQL
-- [ ] Add indexes
-- [ ] Convert JSON fields to JSONB
+- [x] Create `memory/migrate_history.py`
+- [x] Batch extraction from old messages
+- [x] Segment creation for existing sessions
+- [x] Fallback to raw history on failure
+- [x] Non-crash guarantees (all extraction wrapped in try/except)
+
+Files:
+
+- memory/migrate_history.py
+
+---
+
+## New File Structure
+
+```
+memory/
+    __init__.py
+    models.py
+    extractor.py
+    segmenter.py
+    retrieval.py
+    review.py
+    migrate_history.py
+    README.md
+    TODO.md
+    docs/
+        architecture.md
+        semantic_memory.md
+        segmentation.md
+        retrieval.md
+        fsrs.md
+```

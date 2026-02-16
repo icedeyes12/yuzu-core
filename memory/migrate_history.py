@@ -51,14 +51,14 @@ def migrate_session(session_id, batch_size=20):
                     fact['target'],
                 )
                 semantic_count += 1
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[WARNING] Semantic upsert failed during migration: {e}")
 
     # Create segments
     try:
         segment_count = segment_session(session_id)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[WARNING] Segmentation failed during migration: {e}")
 
     return {
         'semantic_count': semantic_count,
@@ -84,8 +84,8 @@ def migrate_all_sessions():
             result = migrate_session(sid)
             total_semantic += result['semantic_count']
             total_segments += result['segment_count']
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARNING] Session {sid} migration failed: {e}")
 
     return {
         'total_semantic': total_semantic,

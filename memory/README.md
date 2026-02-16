@@ -92,17 +92,51 @@ High-level flow:
 
 Conversation History
         ↓
-Segmentation
+Segmentation (memory/segmenter.py)
         ↓
-Episodic Memory (summarized events)
+Episodic Memory (memory/extractor.py)
         ↓
-Semantic Extraction (facts & preferences)
+Semantic Extraction (memory/extractor.py)
         ↓
-Retention & Decay Model
+Retention & Decay (memory/review.py)
         ↓
-Context Retrieval
+Context Retrieval (memory/retrieval.py)
         ↓
-LLM Context Builder
+LLM Context Builder (app.py)
+
+
+---
+
+Module Structure
+
+```
+memory/
+    __init__.py          # Package init
+    models.py            # Re-exports ORM models
+    extractor.py         # Semantic + episodic extraction
+    segmenter.py         # Conversation segmentation
+    retrieval.py         # Memory retrieval pipeline
+    review.py            # FSRS-style decay & reinforcement
+    migrate_history.py   # Migration from old history
+    README.md            # This file
+    TODO.md              # Implementation tracker
+    docs/                # Design documentation
+```
+
+---
+
+Database Tables
+
+### semantic_memories
+Stores stable facts as (entity, relation, target) triples with confidence scoring.
+
+### episodic_memories
+Stores summarized interaction events with emotional weight and importance.
+
+### conversation_segments
+Stores chunked conversation groups with summaries.
+
+All tables are created automatically on startup. Existing `messages` table is unchanged.
 
 
 ---
@@ -208,53 +242,19 @@ fsrs.md
 
 ---
 
-Implementation Phases
+Implementation Status
 
-The memory system will be introduced in incremental phases.
+All phases are complete:
 
-Phase 1 — Episodic Foundation
+- ✅ Phase 1: Database schema
+- ✅ Phase 2: Memory extraction
+- ✅ Phase 3: Conversation segmentation
+- ✅ Phase 4: Retrieval pipeline
+- ✅ Phase 5: Context builder integration
+- ✅ Phase 6: Review & decay system
+- ✅ Phase 7: Migration & fallback
 
-Segment conversation history
-
-Generate episodic summaries
-
-Store importance and emotional scores
-
-
-Phase 2 — Semantic Extraction
-
-Derive stable facts from episodic memory
-
-Maintain confidence-based semantic triples
-
-
-Phase 3 — Retrieval Integration
-
-Build context retrieval pipeline
-
-Inject semantic and episodic memory into prompts
-
-
-Phase 4 — Retention Dynamics
-
-Apply FSRS-inspired stability model
-
-Implement natural memory decay
-
-
-Phase 5 — Background Maintenance
-
-Periodic memory review
-
-Semantic consolidation
-
-Cleanup and compaction
-
-
-For detailed implementation steps and task breakdown:
-
-memory/todo.md
-
+See TODO.md for detailed task tracking.
 
 
 ---
@@ -273,20 +273,6 @@ Provide stable user preferences
 
 Enable scalable memory beyond tens of thousands of messages
 
-
-
----
-
-Status
-
-This system is under active development.
-
-See:
-
-memory/todo.md
-
-
-for current implementation steps.
 
 
 ---
@@ -310,7 +296,7 @@ retrieval
 retention model
 
 
-3. Follow the implementation phases in todo.md.
+3. Follow the implementation phases in TODO.md.
 
 
 This ensures new changes remain consistent with the intended cognitive architecture.

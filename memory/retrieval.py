@@ -143,17 +143,20 @@ def retrieve_memory(session_id):
     """
     try:
         semantic = retrieve_semantic_memories(session_id, limit=15)
-    except Exception:
+    except Exception as e:
+        print(f"[WARNING] Semantic memory retrieval failed: {e}")
         semantic = []
 
     try:
         episodic = retrieve_episodic_memories(session_id, limit=5)
-    except Exception:
+    except Exception as e:
+        print(f"[WARNING] Episodic memory retrieval failed: {e}")
         episodic = []
 
     try:
         segments = retrieve_segments(session_id, limit=5)
-    except Exception:
+    except Exception as e:
+        print(f"[WARNING] Segment retrieval failed: {e}")
         segments = []
 
     return {

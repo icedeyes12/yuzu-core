@@ -187,8 +187,8 @@ def process_messages_for_memory(session_id, messages, affection_delta=0):
                 fact['relation'],
                 fact['target'],
             )
-        except Exception:
-            pass  # Don't crash on extraction errors
+        except Exception as e:
+            print(f"[WARNING] Semantic memory extraction failed: {e}")
 
     # 2. Check if episodic memory should be created
     if should_create_episodic(messages, affection_delta):
@@ -200,5 +200,5 @@ def process_messages_for_memory(session_id, messages, affection_delta=0):
                 create_episodic_memory(
                     session_id, summary, emotional_weight, importance
                 )
-            except Exception:
-                pass  # Don't crash on episodic creation errors
+            except Exception as e:
+                print(f"[WARNING] Episodic memory creation failed: {e}")
