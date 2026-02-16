@@ -497,6 +497,100 @@ def api_update_global_profile():
         print(f"Error updating global profile: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/rebuild_structured_memory', methods=['POST'])
+def api_rebuild_structured_memory():
+    """Rebuild structured memory from current session messages."""
+    try:
+        active_session = Database.get_active_session()
+        session_id = active_session['id']
+
+        from memory.extractor import process_messages_for_memory
+        from memory.segmenter import segment_session
+
+        # Extract semantic + episodic memories from recent messages
+        recent = Database.get_chat_history(session_id=session_id, limit=50, recent=True)
+        if len(recent) < 3:
+            return jsonify({'status': 'error', 'message': 'Need at least 3 conversation messages to extract memory. Continue chatting and try again.'})
+
+        process_messages_for_memory(session_id, recent)
+
+        # Create conversation segments
+        segment_count = segment_session(session_id)
+
+        # Get current memory stats
+        from database import get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
+        with get_db_session() as db_session:
+            semantic_count = db_session.query(SemanticMemory).filter_by(session_id=session_id).count()
+            episodic_count = db_session.query(EpisodicMemory).filter_by(session_id=session_id).count()
+            segment_total = db_session.query(ConversationSegment).filter_by(session_id=session_id).count()
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Structured memory rebuilt: {semantic_count} facts, {episodic_count} episodes, {segment_total} segments',
+            'stats': {
+                'semantic': semantic_count,
+                'episodic': episodic_count,
+                'segments': segment_total,
+            }
+        })
+    except Exception as e:
+        print(f"Error rebuilding structured memory: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/run_memory_decay', methods=['POST'])
+def api_run_memory_decay():
+    """Run FSRS-style decay on all memories for the current session."""
+    try:
+        active_session = Database.get_active_session()
+        session_id = active_session['id']
+
+        from memory.review import run_decay
+        run_decay(session_id)
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Memory decay applied. Old memories faded, recent ones preserved.'
+        })
+    except Exception as e:
+        print(f"Error running memory decay: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/memory_stats', methods=['GET'])
+def api_memory_stats():
+    """Get structured memory statistics for the current session."""
+    try:
+        active_session = Database.get_active_session()
+        session_id = active_session['id']
+
+        from database import get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
+        with get_db_session() as db_session:
+            semantic_count = db_session.query(SemanticMemory).filter_by(session_id=session_id).count()
+            episodic_count = db_session.query(EpisodicMemory).filter_by(session_id=session_id).count()
+            segment_count = db_session.query(ConversationSegment).filter_by(session_id=session_id).count()
+
+            # Get top semantic facts for display
+            top_facts = db_session.query(SemanticMemory).filter_by(
+                session_id=session_id
+            ).order_by(SemanticMemory.confidence.desc()).limit(10).all()
+
+            facts_list = [
+                f"{f.entity} {f.relation} {f.target}"
+                for f in top_facts
+            ]
+
+        return jsonify({
+            'status': 'success',
+            'stats': {
+                'semantic': semantic_count,
+                'episodic': episodic_count,
+                'segments': segment_count,
+                'top_facts': facts_list,
+            }
+        })
+    except Exception as e:
+        print(f"Error getting memory stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/providers/list', methods=['GET'])
 def api_list_providers():
     try:

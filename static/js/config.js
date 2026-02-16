@@ -27,13 +27,6 @@ async function loadProfileData() {
         
         console.log('Full profile data:', data);
 
-        // Update SESSION CONTEXT display
-        const sessionMemory = data.session_memory || {};
-        document.getElementById('session-context').textContent = 
-            sessionMemory.session_context || 'No session context yet. Start chatting to generate context!';
-        document.getElementById('session-last-updated').textContent = 
-            sessionMemory.last_summarized || 'Never';
-        
         // Update GLOBAL PLAYER PROFILE display
         const profileMemory = data.memory || {};
         console.log('Profile memory data:', profileMemory);
@@ -77,9 +70,11 @@ async function loadProfileData() {
         
         console.log('Profile data loaded successfully');
         
+        // Load structured memory stats
+        loadMemoryStats();
+        
     } catch (error) {
         console.error('Error loading profile data:', error);
-        document.getElementById('session-context').textContent = 'Error loading session context';
         document.getElementById('player-summary').textContent = 'Error loading global profile';
         showError('Failed to load profile data');
     }
@@ -231,12 +226,17 @@ function setupEventListeners() {
     }
     
     // Memory and data
-    const updateSessionContextBtn = document.getElementById('update-session-context');
+    const rebuildMemoryBtn = document.getElementById('rebuild-memory');
+    const runDecayBtn = document.getElementById('run-decay');
     const updateGlobalProfileBtn = document.getElementById('update-global-profile');
     const clearChatHistoryBtn = document.getElementById('clear-chat-history');
     
-    if (updateSessionContextBtn) {
-        updateSessionContextBtn.addEventListener('click', updateSessionContext);
+    if (rebuildMemoryBtn) {
+        rebuildMemoryBtn.addEventListener('click', rebuildStructuredMemory);
+    }
+    
+    if (runDecayBtn) {
+        runDecayBtn.addEventListener('click', runMemoryDecay);
     }
     
     if (updateGlobalProfileBtn) {
@@ -530,37 +530,91 @@ async function removeAPIKey(keyName) {
     }
 }
 
-async function updateSessionContext() {
-    if (!confirm('Update session context? This will analyze recent conversations in the current session and generate a context paragraph.')) {
-        return;
-    }
-    
-    // Show loading state
-    const updateBtn = document.getElementById('update-session-context');
-    const originalText = updateBtn.textContent;
-    updateBtn.textContent = 'Updating...';
-    updateBtn.disabled = true;
-    
+// Load structured memory statistics
+async function loadMemoryStats() {
     try {
-        const response = await fetch('/api/update_session_context', {
-            method: 'POST'
-        });
-        
-        const result = await response.json();
-        
-        if (result.status === 'success') {
-            showSuccess('Session context updated successfully!');
-            loadProfileData(); // Reload to show updated context
-        } else {
-            showError('Failed to update session context: ' + result.message);
+        const response = await fetch('/api/memory_stats');
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            const stats = data.stats;
+            document.getElementById('semantic-count').textContent = stats.semantic || 0;
+            document.getElementById('episodic-count').textContent = stats.episodic || 0;
+            document.getElementById('segment-count').textContent = stats.segments || 0;
+
+            const factsList = document.getElementById('top-facts-list');
+            if (stats.top_facts && stats.top_facts.length > 0) {
+                factsList.innerHTML = stats.top_facts.map(f => `<li>${f}</li>`).join('');
+            } else {
+                factsList.innerHTML = '<li>No facts extracted yet. Start chatting or click "Rebuild Structured Memory".</li>';
+            }
         }
     } catch (error) {
-        console.error('Error updating session context:', error);
-        showError('Error updating session context');
+        console.error('Error loading memory stats:', error);
+    }
+}
+
+async function rebuildStructuredMemory() {
+    if (!confirm('Rebuild structured memory? This will re-extract facts and segments from the last 50 messages in the current session.')) {
+        return;
+    }
+
+    const btn = document.getElementById('rebuild-memory');
+    const originalText = btn.textContent;
+    btn.textContent = 'Rebuilding...';
+    btn.disabled = true;
+
+    try {
+        const response = await fetch('/api/rebuild_structured_memory', {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            showSuccess(result.message);
+            loadMemoryStats();
+        } else {
+            showError('Failed to rebuild memory: ' + (result.message || result.error));
+        }
+    } catch (error) {
+        console.error('Error rebuilding structured memory:', error);
+        showError('Error rebuilding structured memory');
     } finally {
-        // Restore button state
-        updateBtn.textContent = originalText;
-        updateBtn.disabled = false;
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+}
+
+async function runMemoryDecay() {
+    if (!confirm('Run memory decay? This applies FSRS-style forgetting: old unused memories will fade, frequently used ones will be preserved.')) {
+        return;
+    }
+
+    const btn = document.getElementById('run-decay');
+    const originalText = btn.textContent;
+    btn.textContent = 'Running...';
+    btn.disabled = true;
+
+    try {
+        const response = await fetch('/api/run_memory_decay', {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            showSuccess(result.message);
+            loadMemoryStats();
+        } else {
+            showError('Failed to run decay: ' + (result.message || result.error));
+        }
+    } catch (error) {
+        console.error('Error running memory decay:', error);
+        showError('Error running memory decay');
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
     }
 }
 

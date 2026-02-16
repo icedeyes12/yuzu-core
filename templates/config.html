@@ -156,20 +156,28 @@
             </div>
         </div>
 
-        <!-- Session Context Section -->
+        <!-- Structured Memory Section -->
         <div class="config-section">
-            <h2>Session Context</h2>
+            <h2>Structured Memory</h2>
             
             <div class="memory-stats">
-                <p><strong>Current Session Context:</strong></p>
-                <div id="session-context" style="padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0.5rem 0; min-height: 60px;">
-                    Loading session context...
+                <p><strong>Memory statistics for current session:</strong></p>
+                <div id="memory-stats-display" style="padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0.5rem 0; min-height: 60px;">
+                    <p><strong>Semantic Facts:</strong> <span id="semantic-count">Loading...</span></p>
+                    <p><strong>Episodic Memories:</strong> <span id="episodic-count">Loading...</span></p>
+                    <p><strong>Conversation Segments:</strong> <span id="segment-count">Loading...</span></p>
                 </div>
-                <p><strong>Last Updated:</strong> <span id="session-last-updated">Loading...</span></p>
+                <div id="top-facts-display" style="padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0.5rem 0; min-height: 40px;">
+                    <p><strong>Top Known Facts:</strong></p>
+                    <ul id="top-facts-list" style="margin: 0.3rem 0; padding-left: 1.2rem;">
+                        <li>Loading...</li>
+                    </ul>
+                </div>
             </div>
 
-            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                <button id="update-session-context" class="btn" style="background: #f59e0b; color: white;">Update Session Context</button>
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;">
+                <button id="rebuild-memory" class="btn" style="background: #f59e0b; color: white;">Rebuild Structured Memory</button>
+                <button id="run-decay" class="btn" style="background: #8b5cf6; color: white;">Run Memory Decay</button>
                 <button id="clear-chat-history" class="btn" style="background: #ef4444; color: white;">Clear Chat History</button>
             </div>
         </div>

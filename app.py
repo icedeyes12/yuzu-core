@@ -675,10 +675,18 @@ Your speaking style and personality are defined above.
 '''.strip()
 
     # =========================
-    # Assemble messages
+    # Assemble messages (hybrid context)
+    # =========================
+    # Context order:
+    #   1. System message (includes structured memory + legacy memory)
+    #   2. Recent message history (25 messages for conversational continuity)
+    #
+    # Structured memory provides long-term identity and facts.
+    # Recent history provides active conversational continuity.
+    # Both are required — do not remove either.
     # =========================
     chat_history = Database.get_chat_history_for_ai(
-        session_id=session_id, limit=69, recent=True
+        session_id=session_id, limit=25, recent=True
     )
 
     messages = [{"role": "system", "content": system_message}]
