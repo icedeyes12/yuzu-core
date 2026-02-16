@@ -67,4 +67,4 @@ Now go away and do something more productive. Like scrolling through memes.
 
 ---
 
-©2025 [HKKM project](https://guthib.com/icedeyes12/yuzu-companion) | Built with love 💕
+©2025-2026 [HKKM project](https://guthib.com/icedeyes12/yuzu-companion) | Built with love 💕
