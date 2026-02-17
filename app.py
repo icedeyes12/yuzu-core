@@ -23,6 +23,7 @@ from typing import Dict, Optional, List
 from database import Database
 from providers import get_ai_manager
 from tools import multimodal_tools
+from tools.registry import get_tool_schemas, execute_tool
 
 class UserContext:
     def __init__(self):
@@ -73,7 +74,7 @@ def _cache_images_from_message(user_message):
     return cached_paths
 
 
-def handle_user_message(user_message, interface="terminal", visual_mode=False):
+def handle_user_message(user_message, interface="terminal"):
     with UserContext() as context:
         profile = Database.get_profile()
         
@@ -89,7 +90,7 @@ def handle_user_message(user_message, interface="terminal", visual_mode=False):
         Database.add_message('user', user_message, session_id=session_id,
                              image_paths=cached_image_paths if cached_image_paths else None)
         
-        ai_reply = generate_ai_response(profile, user_message, interface, session_id, visual_mode=visual_mode)
+        ai_reply = generate_ai_response(profile, user_message, interface, session_id)
         
         ai_reply_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', ai_reply).strip()
         
@@ -669,6 +670,51 @@ The following information is background context only.
 Do not imitate its tone or analytical style.
 Your speaking style and personality are defined above.
 
+---
+
+Tool awareness:
+
+You have access to external tools.
+Use them only when needed.
+
+General rule:
+- If you can answer naturally, answer directly.
+- If you need outside data, call a tool.
+
+Available tools:
+
+1. web_search
+   Use when:
+   - Current events
+   - Currency, prices, weather, news
+   - Anything time-sensitive
+
+2. memory_search
+   Use when:
+   - The user asks about past events
+   - Personal history
+   - Things not in recent messages
+   - Time-based recollection
+
+3. image_analyze
+   Use when:
+   - The user references an image
+   - Visual details are required
+
+4. weather
+   Use when:
+   - The user asks about weather
+
+5. image_generate
+   Use only when image generation protocol is activated.
+
+Tool usage rules:
+
+- Do not mention tools in conversation.
+- Do not explain tool mechanics.
+- Call tools silently when needed.
+- After receiving tool results, respond naturally.
+
 {memory_context}
 {interface_context}
 {session_context}
@@ -751,7 +797,7 @@ def _handle_ai_image_generation(ai_response, session_id):
     return ai_response
 
 def generate_ai_response_streaming(profile, user_message, interface="terminal", session_id=None, provider=None, model=None):
-    """Generate AI response with streaming support"""
+    """Generate AI response with streaming support and tool execution loop"""
     if session_id is None:
         active_session = Database.get_active_session()
         session_id = active_session['id']
@@ -776,43 +822,124 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
     )
     
     try:
-        # Adjust max_tokens based on provider
         kwargs = {"timeout": 180}
         
         if preferred_provider == 'chutes':
-            kwargs['max_tokens'] = 16384  # Streaming allows more tokens
+            kwargs['max_tokens'] = 16384
         elif preferred_provider == 'openrouter':
             if ':free' in preferred_model:
                 kwargs['max_tokens'] = 2048
             else:
                 kwargs['max_tokens'] = 4096
         
-        response_generator = ai_manager.send_message_streaming(
-            preferred_provider, 
-            preferred_model, 
-            messages,
-            **kwargs
-        )
+        # Tool schemas for supported providers
+        tools = get_tool_schemas()
+        if preferred_provider in ('openrouter',):
+            kwargs['tools'] = tools
         
-        full_response = ""
-        for chunk in response_generator:
-            if chunk:
-                full_response += chunk
-                yield chunk
+        weather_config = profile.get('weather_location', {})
         
-        # Handle AI-initiated image generation
-        if full_response and full_response.strip().startswith('/imagine'):
-            result = _handle_ai_image_generation(full_response, session_id)
-            if result != full_response:
-                yield result
+        # Tool execution loop (non-streaming for tool iterations)
+        loop_count = 0
+        prev_tool_calls = []
+        
+        while loop_count < 3:
+            # First try non-streaming to detect tool calls
+            ns_kwargs = dict(kwargs)
+            ns_kwargs.pop('max_tokens', None)
+            if preferred_provider == 'openrouter':
+                if ':free' in preferred_model:
+                    ns_kwargs['max_tokens'] = 2048
+                else:
+                    ns_kwargs['max_tokens'] = 4096
+            
+            ai_response = ai_manager.send_message(
+                preferred_provider,
+                preferred_model,
+                messages,
+                **ns_kwargs
+            )
+            
+            if isinstance(ai_response, dict) and ai_response.get('tool_calls'):
+                tool_calls = ai_response['tool_calls']
+                
+                current_call_sig = [(tc['function']['name'], tc['function'].get('arguments', '')) for tc in tool_calls]
+                if current_call_sig == prev_tool_calls:
+                    content = ai_response.get('content', '')
+                    if content:
+                        yield content
+                    return
+                prev_tool_calls = current_call_sig
+                
+                messages.append({
+                    "role": "assistant",
+                    "content": ai_response.get('content', None),
+                    "tool_calls": tool_calls
+                })
+                
+                for tc in tool_calls:
+                    func = tc.get('function', {})
+                    tool_name = func.get('name', '')
+                    try:
+                        args = json.loads(func.get('arguments', '{}'))
+                    except json.JSONDecodeError:
+                        args = {}
+                    
+                    if tool_name == 'weather':
+                        if 'lat' not in args or 'lon' not in args:
+                            args['lat'] = weather_config.get('lat', 0.0)
+                            args['lon'] = weather_config.get('lon', 0.0)
+                    
+                    print(f"[tool] {tool_name}({args})")
+                    
+                    try:
+                        result = execute_tool(tool_name, args, session_id=session_id)
+                    except Exception as e:
+                        result = json.dumps({"error": str(e)})
+                    
+                    if tool_name == 'image_generate':
+                        try:
+                            result_data = json.loads(result)
+                            if result_data.get('image_path'):
+                                Database.add_image_tools_message(
+                                    result_data['image_path'], session_id=session_id
+                                )
+                        except (json.JSONDecodeError, KeyError):
+                            pass
+                    
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get('id', ''),
+                        "content": result
+                    })
+                
+                loop_count += 1
+                continue
+            
+            # No tool calls — stream the final response
+            # If we already got a text response from non-streaming, just yield it
+            if isinstance(ai_response, str) and ai_response:
+                if ai_response.strip().startswith('/imagine'):
+                    result = _handle_ai_image_generation(ai_response, session_id)
+                    yield result
+                else:
+                    yield ai_response
+                return
+            
+            yield "AI service failed to generate a response."
+            return
+        
+        # Max loops — yield whatever we have
+        if isinstance(ai_response, str) and ai_response:
+            yield ai_response
         
     except Exception as e:
         error_msg = f"AI service error: {str(e)}"
         print(f"[ERROR] Streaming response failed: {error_msg}")
         yield error_msg
 
-def generate_ai_response(profile, user_message, interface="terminal", session_id=None, visual_mode=False):
-    """Generate AI response (non-streaming)"""
+def generate_ai_response(profile, user_message, interface="terminal", session_id=None):
+    """Generate AI response with tool execution loop (non-streaming)"""
     if session_id is None:
         active_session = Database.get_active_session()
         session_id = active_session['id']
@@ -827,71 +954,124 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
     preferred_provider = providers_config.get('preferred_provider', 'ollama')
     preferred_model = providers_config.get('preferred_model', 'glm-4.6:cloud')
     
-    if visual_mode:
-        # Vision mode ON — include visual context from history (last 20 msgs, up to 3 images)
-        visual_ctx = build_visual_context(session_id)
-        messages = visual_ctx["messages"]
-        vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
-        if vision_provider and vision_model:
-            preferred_provider = vision_provider
-            preferred_model = vision_model
-
-        # Inject cached base64 images from history into the last user message
-        image_contents = visual_ctx.get("image_contents", [])
-        if image_contents and messages and messages[-1]['role'] == 'user':
-            last_content = messages[-1]['content']
-            if isinstance(last_content, str):
-                content_parts = [{"type": "text", "text": last_content}]
-            else:
-                content_parts = list(last_content)
-            content_parts.extend(image_contents)
-            messages[-1] = {"role": "user", "content": content_parts}
-
-        messages, preferred_provider, preferred_model = _handle_vision_processing(
-            messages, user_message, preferred_provider, preferred_model
-        )
-    else:
-        # Normal mode (vision toggle OFF) — only use image from the current user
-        # message; do NOT load visual context from history
-        messages = _build_generation_context(profile, session_id, interface)
-        # Handle vision processing
-        messages, preferred_provider, preferred_model = _handle_vision_processing(
-            messages, user_message, preferred_provider, preferred_model
-        )
+    messages = _build_generation_context(profile, session_id, interface)
+    
+    # Handle vision processing for image-containing messages
+    messages, preferred_provider, preferred_model = _handle_vision_processing(
+        messages, user_message, preferred_provider, preferred_model
+    )
     
     try:
-        # Adjust max_tokens based on provider
         kwargs = {"timeout": 180}
         
         if preferred_provider == 'chutes':
-            kwargs['max_tokens'] = 4096  # Chutes non-streaming max is 8192
+            kwargs['max_tokens'] = 4096
         elif preferred_provider == 'openrouter':
             if ':free' in preferred_model:
-                kwargs['max_tokens'] = 1024  # Lower for free tier
+                kwargs['max_tokens'] = 1024
             else:
                 kwargs['max_tokens'] = 2048
         
-        ai_response = ai_manager.send_message(
-            preferred_provider, 
-            preferred_model, 
-            messages,
-            **kwargs
-        )
+        # Pass tool schemas for providers that support them
+        tools = get_tool_schemas()
+        if preferred_provider in ('openrouter',):
+            kwargs['tools'] = tools
         
-        # Handle AI-initiated image generation
-        if ai_response and ai_response.strip().startswith('/imagine'):
-            return _handle_ai_image_generation(ai_response, session_id)
+        # Get weather location from profile for tool calls
+        weather_config = profile.get('weather_location', {})
         
-        if ai_response:
-            return ai_response
-        else:
+        # Tool execution loop
+        loop_count = 0
+        prev_tool_calls = []
+        
+        while loop_count < 3:
+            ai_response = ai_manager.send_message(
+                preferred_provider,
+                preferred_model,
+                messages,
+                **kwargs
+            )
+            
+            # Check if response contains tool calls (dict with tool_calls)
+            if isinstance(ai_response, dict) and ai_response.get('tool_calls'):
+                tool_calls = ai_response['tool_calls']
+                
+                # Detect repeated tool calls
+                current_call_sig = [(tc['function']['name'], tc['function'].get('arguments', '')) for tc in tool_calls]
+                if current_call_sig == prev_tool_calls:
+                    # Same tool with same args — stop loop
+                    content = ai_response.get('content', '')
+                    return content if content else "I couldn't find the information you need."
+                prev_tool_calls = current_call_sig
+                
+                # Append assistant message with tool calls
+                messages.append({
+                    "role": "assistant",
+                    "content": ai_response.get('content', None),
+                    "tool_calls": tool_calls
+                })
+                
+                # Execute each tool call
+                for tc in tool_calls:
+                    func = tc.get('function', {})
+                    tool_name = func.get('name', '')
+                    try:
+                        args = json.loads(func.get('arguments', '{}'))
+                    except json.JSONDecodeError:
+                        args = {}
+                    
+                    # Inject weather location defaults
+                    if tool_name == 'weather':
+                        if 'lat' not in args or 'lon' not in args:
+                            args['lat'] = weather_config.get('lat', 0.0)
+                            args['lon'] = weather_config.get('lon', 0.0)
+                    
+                    print(f"[tool] {tool_name}({args})")
+                    
+                    try:
+                        result = execute_tool(tool_name, args, session_id=session_id)
+                    except Exception as e:
+                        print(f"[tool_error] {tool_name}: {e}")
+                        result = json.dumps({"error": str(e)})
+                    
+                    # Handle image_generate tool result
+                    if tool_name == 'image_generate':
+                        try:
+                            result_data = json.loads(result)
+                            if result_data.get('image_path'):
+                                Database.add_image_tools_message(
+                                    result_data['image_path'], session_id=session_id
+                                )
+                        except (json.JSONDecodeError, KeyError):
+                            pass
+                    
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get('id', ''),
+                        "content": result
+                    })
+                
+                loop_count += 1
+                continue
+            
+            # No tool calls — we have the final text response
+            if isinstance(ai_response, str):
+                # Handle AI-initiated image generation (/imagine)
+                if ai_response.strip().startswith('/imagine'):
+                    return _handle_ai_image_generation(ai_response, session_id)
+                if ai_response:
+                    return ai_response
+            
             print(f"[WARNING] AI service returned empty response")
             return "AI service failed to generate a response."
+        
+        # Max loops reached — return last content
+        return ai_response if isinstance(ai_response, str) and ai_response else "I couldn't complete the request."
             
     except Exception as e:
         error_msg = f"AI service error: {str(e)}"
         print(f"[ERROR] AI response generation failed: {error_msg}")
-        return f"Sorry, I couldn't process that image. Please try again with a different provider or check your API limits."
+        return f"Sorry, I couldn't process that. Please try again."
 
 def auto_name_session_if_needed(session_id, active_session):
     if active_session.get('name') != 'New Chat':

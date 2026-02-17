@@ -253,6 +253,12 @@ function setupEventListeners() {
         saveGlobalKnowledgeBtn.addEventListener('click', saveGlobalKnowledge);
     }
     
+    // Weather location
+    const saveWeatherBtn = document.getElementById('save-weather-location');
+    if (saveWeatherBtn) {
+        saveWeatherBtn.addEventListener('click', saveWeatherLocation);
+    }
+    
     // Provider settings
     const providerSelect = document.getElementById('ai-provider');
     const testProviderBtn = document.getElementById('test-provider');
@@ -850,4 +856,42 @@ function initializeConfigAnimations() {
 // Make functions globally available
 window.removeAPIKey = removeAPIKey;
 window.showSuccess = showSuccess;
+
+// Weather location functions
+async function loadWeatherLocation() {
+    try {
+        const response = await fetch('/api/get_profile');
+        const data = await response.json();
+        const loc = data.weather_location || {};
+        document.getElementById('weather-lat').value = loc.lat || 0.0;
+        document.getElementById('weather-lon').value = loc.lon || 0.0;
+    } catch (e) {
+        console.error('Failed to load weather location:', e);
+    }
+}
+
+async function saveWeatherLocation() {
+    const lat = parseFloat(document.getElementById('weather-lat').value) || 0.0;
+    const lon = parseFloat(document.getElementById('weather-lon').value) || 0.0;
+    
+    try {
+        const response = await fetch('/api/update_weather_location', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat, lon })
+        });
+        const data = await response.json();
+        if (data.status === 'success') {
+            showSuccess('Weather location saved!');
+        } else {
+            showError(data.message || 'Failed to save weather location');
+        }
+    } catch (e) {
+        console.error('Error saving weather location:', e);
+        showError('Failed to save weather location');
+    }
+}
+
+// Load weather location on page load
+document.addEventListener('DOMContentLoaded', loadWeatherLocation);
 window.showError = showError;

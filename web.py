@@ -157,9 +157,7 @@ def api_send_message():
         active_session = Database.get_active_session()
         session_id = active_session['id']
         
-        visual_mode = data.get("visual_mode", False)
-        
-        ai_reply = handle_user_message(user_message, interface="web", visual_mode=visual_mode)
+        ai_reply = handle_user_message(user_message, interface="web")
         
         print(f"AI reply: {ai_reply}")
         
@@ -821,6 +819,18 @@ def api_get_session_memory(session_id):
         })
     except Exception as e:
         print(f"Error getting session memory: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/update_weather_location', methods=['POST'])
+def api_update_weather_location():
+    try:
+        data = request.get_json()
+        lat = float(data.get('lat', 0.0))
+        lon = float(data.get('lon', 0.0))
+        Database.update_profile({'weather_location': {'lat': lat, 'lon': lon}})
+        return jsonify({'status': 'success', 'message': 'Weather location updated'})
+    except Exception as e:
+        print(f"Error updating weather location: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/global_knowledge/update', methods=['POST'])

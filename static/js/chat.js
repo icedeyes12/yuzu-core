@@ -148,7 +148,7 @@ class MultimodalManager {
             const response = await fetch("/api/send_message", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: text, visual_mode: this.visualMode }),
+                body: JSON.stringify({ message: text }),
             });
             
             const data = await response.json();
@@ -364,14 +364,6 @@ class MultimodalManager {
                     ${this.selectedImages.length > 0 ? this.renderImagePreviews() : ''}
                 </div>
                 ` : ''}
-                <div class="multimodal-option visual-toggle" data-action="toggle-visual">
-                    <div class="option-icon">${this.getSVGIcon('image')}</div>
-                    <div class="option-content">
-                        <div class="option-text">Visual Mode</div>
-                        <div class="option-description">${this.visualMode ? 'ON — vision model active' : 'OFF — text only'}</div>
-                    </div>
-                    <div class="visual-mode-indicator" style="margin-left:auto;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:bold;background:${this.visualMode ? '#4caf50' : '#666'};color:#fff;">${this.visualMode ? 'ON' : 'OFF'}</div>
-                </div>
             </div>
         `;
 
@@ -386,15 +378,6 @@ class MultimodalManager {
                 this.closeDropdown();
             });
         });
-
-        const visualToggle = dropdown.querySelector('.multimodal-option[data-action="toggle-visual"]');
-        if (visualToggle) {
-            visualToggle.addEventListener('click', () => {
-                this.visualMode = !this.visualMode;
-                this.closeDropdown();
-                this.openDropdown();
-            });
-        }
 
         if (this.currentMode === 'image') {
             const fileInput = document.getElementById('imageUpload');
