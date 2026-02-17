@@ -945,11 +945,12 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         weather_location = weather_context.get('location', {})
         
         # Tool execution loop (non-streaming for tool iterations)
+        max_tool_iterations = 3
         loop_count = 0
         prev_tool_calls = []
         last_tool_results = []
         
-        while loop_count < 3:
+        while loop_count < max_tool_iterations:
             # First try non-streaming to detect tool calls
             ns_kwargs = dict(kwargs)
             ns_kwargs.pop('max_tokens', None)
@@ -977,12 +978,10 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
             if isinstance(ai_response, dict) and ai_response.get('tool_calls'):
                 tool_calls = ai_response['tool_calls']
                 
+                # Detect repeated identical tool calls — break immediately
                 current_call_sig = [(tc['function']['name'], tc['function'].get('arguments', '')) for tc in tool_calls]
                 if current_call_sig == prev_tool_calls:
-                    content = ai_response.get('content', '')
-                    if content:
-                        yield content
-                        return
+                    print("[WARNING] Repeated tool calls detected, forcing final response")
                     break
                 prev_tool_calls = current_call_sig
                 
@@ -1070,15 +1069,10 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                     yield ai_response
                 return
             
-            # Empty response after tool execution — synthesize from tool results
+            # Empty response after tool execution — force final answer without tools
             if loop_count > 0 and last_tool_results:
-                print("[WARNING] Empty response after tool call, requesting summary...")
-                messages.append({
-                    "role": "user",
-                    "content": "Please summarize the tool results above and respond to the user."
-                })
-                loop_count += 1
-                continue
+                print("[WARNING] Empty response after tool call, forcing final answer...")
+                break
             
             # True empty on first call — retry once without tools
             if loop_count == 0:
@@ -1094,11 +1088,30 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
             yield "AI service failed to generate a response."
             return
         
-        # Max loops — try to get final response or yield last content
-        if isinstance(ai_response, str) and ai_response.strip():
-            yield ai_response
-        else:
-            yield "I couldn't complete the request."
+        # Loop exhausted or broke out — force one final LLM call WITHOUT tools
+        # to convert tool results into a natural assistant response
+        if last_tool_results:
+            print("[tool_loop] Forcing final response from tool results...")
+            final_kwargs = {k: v for k, v in kwargs.items() if k != 'tools'}
+            if 'max_tokens' not in final_kwargs:
+                final_kwargs['max_tokens'] = 4096
+            
+            final_response = ai_manager.send_message(
+                preferred_provider, preferred_model, messages, **final_kwargs
+            )
+            
+            # Extract text from whatever the model returns
+            if isinstance(final_response, dict):
+                content = final_response.get('content', '')
+                if content and content.strip():
+                    yield content.strip()
+                    return
+            elif isinstance(final_response, str) and final_response.strip():
+                yield final_response
+                return
+        
+        # Absolute fallback
+        yield "I couldn't complete the request."
         
     except Exception as e:
         error_msg = f"AI service error: {str(e)}"
@@ -1162,11 +1175,12 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
         weather_location = weather_context.get('location', {})
         
         # Tool execution loop
+        max_tool_iterations = 3
         loop_count = 0
         prev_tool_calls = []
         last_tool_results = []
         
-        while loop_count < 3:
+        while loop_count < max_tool_iterations:
             ai_response = ai_manager.send_message(
                 preferred_provider,
                 preferred_model,
@@ -1186,11 +1200,11 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
             if isinstance(ai_response, dict) and ai_response.get('tool_calls'):
                 tool_calls = ai_response['tool_calls']
                 
-                # Detect repeated tool calls
+                # Detect repeated identical tool calls — break immediately
                 current_call_sig = [(tc['function']['name'], tc['function'].get('arguments', '')) for tc in tool_calls]
                 if current_call_sig == prev_tool_calls:
-                    content = ai_response.get('content', '')
-                    return content if content else "I couldn't find the information you need."
+                    print("[WARNING] Repeated tool calls detected, forcing final response")
+                    break
                 prev_tool_calls = current_call_sig
                 
                 # Append assistant message with tool calls
@@ -1278,15 +1292,10 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                     return _handle_ai_image_generation(ai_response, session_id)
                 return ai_response
             
-            # Empty response after tool execution — ask model to summarize
+            # Empty response after tool execution — force final answer without tools
             if loop_count > 0 and last_tool_results:
-                print("[WARNING] Empty response after tool call, requesting summary...")
-                messages.append({
-                    "role": "user",
-                    "content": "Please summarize the tool results above and respond to the user."
-                })
-                loop_count += 1
-                continue
+                print("[WARNING] Empty response after tool call, forcing final answer...")
+                break
             
             # True empty on first call — retry once without tools
             if loop_count == 0:
@@ -1301,9 +1310,27 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
             print(f"[WARNING] AI service returned empty response")
             return "AI service failed to generate a response."
         
-        # Max loops reached — return last content
-        if isinstance(ai_response, str) and ai_response.strip():
-            return ai_response
+        # Loop exhausted or broke out — force one final LLM call WITHOUT tools
+        # to convert tool results into a natural assistant response
+        if last_tool_results:
+            print("[tool_loop] Forcing final response from tool results...")
+            final_kwargs = {k: v for k, v in kwargs.items() if k != 'tools'}
+            if 'max_tokens' not in final_kwargs:
+                final_kwargs['max_tokens'] = 4096
+            
+            final_response = ai_manager.send_message(
+                preferred_provider, preferred_model, messages, **final_kwargs
+            )
+            
+            # Extract text from whatever the model returns
+            if isinstance(final_response, dict):
+                content = final_response.get('content', '')
+                if content and content.strip():
+                    return content.strip()
+            elif isinstance(final_response, str) and final_response.strip():
+                return final_response
+        
+        # Absolute fallback
         return "I couldn't complete the request."
             
     except Exception as e:

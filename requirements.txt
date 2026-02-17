@@ -34,6 +34,7 @@ prompt-toolkit>=3.0.0        # Advanced terminal input with history and completi
 # NETWORKING & API
 # ----------------
 requests>=2.31.0              # HTTP requests for AI providers and image downloads
+beautifulsoup4>=4.12.0        # HTML parsing for DuckDuckGo web search
 
 # IMAGE PROCESSING (Optional)
 # ---------------------------

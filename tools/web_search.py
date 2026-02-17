@@ -1,14 +1,19 @@
 import requests
-import re
 import json
 from html import unescape
+from urllib.parse import unquote
+
+try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    BeautifulSoup = None
 
 
 SCHEMA = {
     "type": "function",
     "function": {
         "name": "web_search",
-        "description": "Search the web for current information, news, prices, events, or anything time-sensitive. Returns 20-30 snippet results.",
+        "description": "Search the web for current information, news, prices, events, or anything time-sensitive. Returns 15-20 snippet results.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -30,10 +35,23 @@ _HEADERS = {
 }
 
 _DDG_URL = "https://html.duckduckgo.com/html/"
+_MAX_RESULTS = 20
+
+
+def _extract_ddg_url(raw_href):
+    """Extract real URL from DuckDuckGo redirect wrapper."""
+    if not raw_href:
+        return ""
+    raw_href = unescape(raw_href)
+    if "uddg=" in raw_href:
+        for part in raw_href.split("&"):
+            if part.startswith("uddg=") or part.startswith("?uddg="):
+                return unquote(part.split("=", 1)[1])
+    return raw_href
 
 
 def _ddg_search(query):
-    """Query DuckDuckGo HTML endpoint and extract snippet results."""
+    """Query DuckDuckGo HTML endpoint and extract results with BeautifulSoup."""
     resp = requests.post(
         _DDG_URL,
         data={"q": query},
@@ -41,56 +59,36 @@ def _ddg_search(query):
         timeout=15,
     )
     resp.raise_for_status()
-    html = resp.text
 
+    if BeautifulSoup is None:
+        return []
+
+    soup = BeautifulSoup(resp.text, "html.parser")
     results = []
-    # Each result block is a <div class="result ...">
-    blocks = re.findall(
-        r'<div[^>]*class="[^"]*result\b[^"]*"[^>]*>(.*?)</div>\s*(?=<div[^>]*class="[^"]*result\b|$)',
-        html, re.DOTALL
-    )
 
-    # Fallback: try splitting by result__body if block regex didn't work
-    if not blocks:
-        blocks = re.findall(
-            r'<div[^>]*class="[^"]*result__body[^"]*"[^>]*>(.*?)</div>',
-            html, re.DOTALL
-        )
+    for div in soup.select("div.result, div.results_links"):
+        # Title + URL from the main result link
+        link_tag = div.select_one("a.result__a")
+        if not link_tag:
+            continue
 
-    for block in blocks:
-        # Title
-        title_m = re.search(r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*>(.*?)</a>', block, re.DOTALL)
-        title = re.sub(r'<[^>]+>', '', title_m.group(1)).strip() if title_m else ""
+        title = link_tag.get_text(strip=True)
+        url = _extract_ddg_url(link_tag.get("href", ""))
 
-        # URL
-        url_m = re.search(r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"', block)
-        url = ""
-        if url_m:
-            raw_url = unescape(url_m.group(1))
-            # DuckDuckGo wraps URLs in a redirect; extract the actual URL
-            uddg_m = re.search(r'[?&]uddg=([^&]+)', raw_url)
-            if uddg_m:
-                url = requests.utils.unquote(uddg_m.group(1))
-            else:
-                url = raw_url
+        if not title or not url:
+            continue
 
         # Snippet
-        snippet_m = re.search(r'<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</a>', block, re.DOTALL)
-        if not snippet_m:
-            snippet_m = re.search(r'<div[^>]*class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</div>', block, re.DOTALL)
-        snippet = ""
-        if snippet_m:
-            snippet = re.sub(r'<[^>]+>', '', snippet_m.group(1))
-            snippet = unescape(snippet).strip()
+        snippet_tag = div.select_one("a.result__snippet") or div.select_one("div.result__snippet")
+        snippet = snippet_tag.get_text(strip=True) if snippet_tag else ""
 
-        if title and url:
-            results.append({
-                "title": unescape(title),
-                "url": url,
-                "snippet": snippet,
-            })
+        results.append({
+            "title": title,
+            "url": url,
+            "snippet": snippet,
+        })
 
-        if len(results) >= 30:
+        if len(results) >= _MAX_RESULTS:
             break
 
     return results
