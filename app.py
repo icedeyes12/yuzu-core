@@ -271,14 +271,14 @@ def _build_generation_context(profile, session_id, interface="terminal"):
     memory_context = ""
 
     # --- Structured memory retrieval (new system) ---
-    try:
-        from memory.retrieval import retrieve_memory, format_memory
-        memory_bundle = retrieve_memory(session_id)
-        structured_memory_text = format_memory(memory_bundle)
-        if structured_memory_text:
-            memory_context += f"\n\n{structured_memory_text}"
-    except Exception as e:
-        print(f"[WARNING] Structured memory retrieval failed: {e}")
+    #try:
+    #    from memory.retrieval import retrieve_memory, format_memory
+    #    memory_bundle = retrieve_memory(session_id)
+    #    structured_memory_text = format_memory(memory_bundle)
+    #    if structured_memory_text:
+    #        memory_context += f"\n\n{structured_memory_text}"
+    #except Exception as e:
+    #    print(f"[WARNING] Structured memory retrieval failed: {e}")
 
     # --- Legacy memory sources (kept for backward compatibility) ---
     session_memory = Database.get_session_memory(session_id)
