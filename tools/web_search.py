@@ -28,7 +28,7 @@ SCHEMA = {
 }
 
 
-def _fetch_page_content(url, max_chars=1500):
+def _fetch_page_content(url, max_chars=3000):
     """Fetch and extract main text content from a URL."""
     try:
         headers = {
@@ -97,11 +97,11 @@ def execute(arguments, **kwargs):
         if not results:
             return json.dumps({"results": [], "note": "No results found"})
 
-        # Fetch page content from the top result for concrete data
-        if results:
-            page_content = _fetch_page_content(results[0]["url"])
-            if page_content:
-                results[0]["page_excerpt"] = page_content
+        # Fetch page content from top 3 results for concrete data
+        for r in results[:3]:
+            page_text = _fetch_page_content(r["url"])
+            if page_text:
+                r["page_text"] = page_text
 
         return json.dumps({"results": results})
 

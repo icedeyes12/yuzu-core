@@ -693,9 +693,16 @@ Tool awareness:
 You have access to external tools.
 Use them only when needed.
 
-General rule:
-- If you can answer naturally, answer directly.
-- If you need outside data, call a tool.
+Tool usage principles:
+- Use memory_search for past events, personal history, or time-based questions.
+- Use web_search for external, factual, or time-sensitive data (prices, news, events).
+- Prefer memory_search over web_search when the question is about personal conversations.
+- Always analyze images through image_analyze before answering visual questions.
+- Do not guess visual details without image analysis.
+
+Execution behavior:
+- If a tool is clearly required, call it immediately.
+- Do not answer from assumptions when a tool can provide concrete data.
 
 Available tools:
 
@@ -704,13 +711,14 @@ Available tools:
    - Current events
    - Currency, prices, weather, news
    - Anything time-sensitive
+   - Practical queries requiring concrete numbers or data
 
 2. memory_search
    Use when:
    - The user asks about past events
    - Personal history
    - Things not in recent messages
-   - Time-based recollection
+   - Time-based recollection (e.g. "bulan Desember", "minggu lalu")
 
 3. image_analyze
    Use when:
@@ -926,6 +934,11 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                     except Exception as e:
                         result = json.dumps({"error": str(e)})
                     
+                    # Validate tool result
+                    if not result or not result.strip():
+                        print(f"[tool_error] {tool_name}: empty result")
+                        result = json.dumps({"error": f"Tool {tool_name} returned empty result"})
+                    
                     if tool_name == 'image_generate':
                         try:
                             result_data = json.loads(result)
@@ -1103,6 +1116,11 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                     except Exception as e:
                         print(f"[tool_error] {tool_name}: {e}")
                         result = json.dumps({"error": str(e)})
+                    
+                    # Validate tool result
+                    if not result or not result.strip():
+                        print(f"[tool_error] {tool_name}: empty result")
+                        result = json.dumps({"error": f"Tool {tool_name} returned empty result"})
                     
                     # Handle image_generate tool result — persist for both interfaces
                     if tool_name == 'image_generate':
