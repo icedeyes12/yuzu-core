@@ -686,7 +686,7 @@ Your speaking style and personality are defined above.
     # Both are required — do not remove either.
     # =========================
     chat_history = Database.get_chat_history_for_ai(
-        session_id=session_id, limit=25, recent=True
+        session_id=session_id, limit=50, recent=True
     )
 
     messages = [{"role": "system", "content": system_message}]
