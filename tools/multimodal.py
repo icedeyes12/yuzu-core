@@ -23,7 +23,7 @@ from database import Database
 from typing import List, Dict, Optional, Tuple
 
 class MultimodalTools:
-    IMAGE_CACHE_DIR = os.path.join(os.path.dirname(__file__), 'static', 'image_cache')
+    IMAGE_CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'image_cache')
 
     def __init__(self):
         # ONLY moonshotai/kimi-k2.5 for vision (OpenRouter only)
