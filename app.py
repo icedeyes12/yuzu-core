@@ -280,6 +280,22 @@ def _build_generation_context(profile, session_id, interface="terminal"):
                 memory_context += f"\nDislikes: {', '.join(key_facts['dislikes'])}"
 
     # =========================
+    # Location context
+    # =========================
+    location_context = ""
+    try:
+        profile_context = Database.get_context()
+        loc = profile_context.get("location", {})
+        if loc.get("lat") and loc.get("lon"):
+            location_context = (
+                f"\n\nCurrent location:"
+                f"\nLatitude: {loc['lat']}"
+                f"\nLongitude: {loc['lon']}"
+            )
+    except Exception:
+        pass
+
+    # =========================
     # Interface context
     # =========================
     interface_context = f"\n\nCURRENT INTERFACE: {interface.upper()}"
@@ -716,6 +732,7 @@ Tool usage rules:
 - After receiving tool results, respond naturally.
 
 {memory_context}
+{location_context}
 {interface_context}
 {session_context}
 '''.strip()
@@ -837,7 +854,8 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         if preferred_provider in ('openrouter',):
             kwargs['tools'] = tools
         
-        weather_config = profile.get('weather_location', {})
+        weather_context = Database.get_context()
+        weather_location = weather_context.get('location', {})
         
         # Tool execution loop (non-streaming for tool iterations)
         loop_count = 0
@@ -887,8 +905,8 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                     
                     if tool_name == 'weather':
                         if 'lat' not in args or 'lon' not in args:
-                            args['lat'] = weather_config.get('lat', 0.0)
-                            args['lon'] = weather_config.get('lon', 0.0)
+                            args['lat'] = weather_location.get('lat', 0.0)
+                            args['lon'] = weather_location.get('lon', 0.0)
                     
                     print(f"[tool] {tool_name}({args})")
                     
@@ -977,8 +995,9 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
         if preferred_provider in ('openrouter',):
             kwargs['tools'] = tools
         
-        # Get weather location from profile for tool calls
-        weather_config = profile.get('weather_location', {})
+        # Get weather location from context for tool calls
+        weather_context = Database.get_context()
+        weather_location = weather_context.get('location', {})
         
         # Tool execution loop
         loop_count = 0
@@ -1023,8 +1042,8 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                     # Inject weather location defaults
                     if tool_name == 'weather':
                         if 'lat' not in args or 'lon' not in args:
-                            args['lat'] = weather_config.get('lat', 0.0)
-                            args['lon'] = weather_config.get('lon', 0.0)
+                            args['lat'] = weather_location.get('lat', 0.0)
+                            args['lon'] = weather_location.get('lon', 0.0)
                     
                     print(f"[tool] {tool_name}({args})")
                     

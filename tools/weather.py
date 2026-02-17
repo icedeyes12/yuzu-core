@@ -37,10 +37,19 @@ WMO_CODES = {
 
 
 def execute(arguments, **kwargs):
+    from database import Database
+
     lat = arguments.get("lat", 0)
     lon = arguments.get("lon", 0)
 
+    # Fall back to context-based location if not provided
     if lat == 0 and lon == 0:
+        context = Database.get_context()
+        location = context.get("location", {})
+        lat = location.get("lat", 0)
+        lon = location.get("lon", 0)
+
+    if lat == 0 or lon == 0:
         return json.dumps({"error": "location_not_set"})
 
     try:

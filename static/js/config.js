@@ -253,10 +253,15 @@ function setupEventListeners() {
         saveGlobalKnowledgeBtn.addEventListener('click', saveGlobalKnowledge);
     }
     
-    // Weather location
-    const saveWeatherBtn = document.getElementById('save-weather-location');
-    if (saveWeatherBtn) {
-        saveWeatherBtn.addEventListener('click', saveWeatherLocation);
+    // Location
+    const saveLocationBtn = document.getElementById('save-location');
+    if (saveLocationBtn) {
+        saveLocationBtn.addEventListener('click', saveLocation);
+    }
+
+    const useCurrentLocationBtn = document.getElementById('use-current-location');
+    if (useCurrentLocationBtn) {
+        useCurrentLocationBtn.addEventListener('click', useCurrentLocation);
     }
     
     // Provider settings
@@ -857,41 +862,62 @@ function initializeConfigAnimations() {
 window.removeAPIKey = removeAPIKey;
 window.showSuccess = showSuccess;
 
-// Weather location functions
-async function loadWeatherLocation() {
+// Location functions
+async function loadLocation() {
     try {
         const response = await fetch('/api/get_profile');
         const data = await response.json();
-        const loc = data.weather_location || {};
-        document.getElementById('weather-lat').value = loc.lat || 0.0;
-        document.getElementById('weather-lon').value = loc.lon || 0.0;
+        const ctx = data.context || {};
+        const loc = ctx.location || {};
+        document.getElementById('location-lat').value = loc.lat || 0.0;
+        document.getElementById('location-lon').value = loc.lon || 0.0;
     } catch (e) {
-        console.error('Failed to load weather location:', e);
+        console.error('Failed to load location:', e);
     }
 }
 
-async function saveWeatherLocation() {
-    const lat = parseFloat(document.getElementById('weather-lat').value) || 0.0;
-    const lon = parseFloat(document.getElementById('weather-lon').value) || 0.0;
+async function saveLocation() {
+    const lat = parseFloat(document.getElementById('location-lat').value) || 0.0;
+    const lon = parseFloat(document.getElementById('location-lon').value) || 0.0;
     
     try {
-        const response = await fetch('/api/update_weather_location', {
+        const response = await fetch('/api/update_location', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lat, lon })
         });
         const data = await response.json();
-        if (data.status === 'success') {
-            showSuccess('Weather location saved!');
+        if (data.status === 'ok') {
+            showSuccess('Location saved!');
         } else {
-            showError(data.message || 'Failed to save weather location');
+            showError(data.message || 'Failed to save location');
         }
     } catch (e) {
-        console.error('Error saving weather location:', e);
-        showError('Failed to save weather location');
+        console.error('Error saving location:', e);
+        showError('Failed to save location');
     }
 }
 
-// Load weather location on page load
-document.addEventListener('DOMContentLoaded', loadWeatherLocation);
+function useCurrentLocation() {
+    if (!navigator.geolocation) {
+        alert("Geolocation not supported.");
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+        pos => {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+
+            document.getElementById("location-lat").value = lat;
+            document.getElementById("location-lon").value = lon;
+        },
+        err => {
+            alert("Location permission denied or unavailable.");
+        }
+    );
+}
+
+// Load location on page load
+document.addEventListener('DOMContentLoaded', loadLocation);
 window.showError = showError;

@@ -34,6 +34,7 @@ class Profile(Base):
     session_history_json = Column(Text, nullable=False, default='{}')
     global_knowledge_json = Column(Text, nullable=False, default='{}')
     providers_config_json = Column(Text, nullable=False, default='{}')
+    context = Column(Text, nullable=False, default='{}')
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
@@ -166,6 +167,16 @@ def migrate_api_keys_from_files(session):
     
     return migrated_count
 
+def _migrate_add_context_column(engine):
+    """Add context column to profiles table if it does not exist."""
+    from sqlalchemy import inspect as sa_inspect, text
+    inspector = sa_inspect(engine)
+    columns = [col['name'] for col in inspector.get_columns('profiles')]
+    if 'context' not in columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE profiles ADD COLUMN context TEXT DEFAULT '{}'"))
+            conn.commit()
+
 def _migrate_add_image_paths_column(engine):
     """Add image_paths column to messages table if it does not exist."""
     from sqlalchemy import inspect as sa_inspect, text
@@ -185,6 +196,12 @@ def init_db():
         _migrate_add_image_paths_column(engine)
     except Exception as e:
         print(f"[WARNING] image_paths migration skipped: {e}")
+    
+    # Migrate existing databases: add context column if missing
+    try:
+        _migrate_add_context_column(engine)
+    except Exception as e:
+        print(f"[WARNING] context migration skipped: {e}")
     
     with get_db_session() as session:
         # Create default profile and session if needed
@@ -309,6 +326,7 @@ class Database:
                     'session_history': json.loads(profile.session_history_json),
                     'global_knowledge': json.loads(profile.global_knowledge_json),
                     'providers_config': json.loads(profile.providers_config_json),
+                    'context': json.loads(profile.context or '{}'),
                     'created_at': profile.created_at,
                     'updated_at': profile.updated_at
                 }
@@ -324,9 +342,32 @@ class Database:
             for key, value in updates.items():
                 if key in ['memory', 'session_history', 'global_knowledge', 'providers_config']:
                     setattr(profile, f"{key}_json", json.dumps(value))
+                elif key == 'context':
+                    setattr(profile, 'context', json.dumps(value))
                 else:
                     setattr(profile, key, value)
             
+            profile.updated_at = datetime.now()
+            session.commit()
+
+    @staticmethod
+    def get_context():
+        with get_db_session() as session:
+            profile = session.query(Profile).first()
+            if profile:
+                try:
+                    return json.loads(profile.context or '{}')
+                except (json.JSONDecodeError, TypeError):
+                    return {}
+            return {}
+
+    @staticmethod
+    def update_context(context_dict):
+        with get_db_session() as session:
+            profile = session.query(Profile).first()
+            if not profile:
+                return
+            profile.context = json.dumps(context_dict)
             profile.updated_at = datetime.now()
             session.commit()
 

@@ -821,13 +821,29 @@ def api_get_session_memory(session_id):
         print(f"Error getting session memory: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/update_location', methods=['POST'])
+def api_update_location():
+    try:
+        data = request.get_json()
+        lat = float(data.get('lat', 0.0))
+        lon = float(data.get('lon', 0.0))
+        context = Database.get_context()
+        context['location'] = {'lat': lat, 'lon': lon}
+        Database.update_context(context)
+        return jsonify({'status': 'ok'})
+    except Exception as e:
+        print(f"Error updating location: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/update_weather_location', methods=['POST'])
 def api_update_weather_location():
     try:
         data = request.get_json()
         lat = float(data.get('lat', 0.0))
         lon = float(data.get('lon', 0.0))
-        Database.update_profile({'weather_location': {'lat': lat, 'lon': lon}})
+        context = Database.get_context()
+        context['location'] = {'lat': lat, 'lon': lon}
+        Database.update_context(context)
         return jsonify({'status': 'success', 'message': 'Weather location updated'})
     except Exception as e:
         print(f"Error updating weather location: {e}")
