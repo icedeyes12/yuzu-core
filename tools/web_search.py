@@ -8,18 +8,13 @@ SCHEMA = {
     "type": "function",
     "function": {
         "name": "web_search",
-        "description": "Search the web for current information, news, prices, events, or anything time-sensitive.",
+        "description": "Search the web for current information, news, prices, events, or anything time-sensitive. Returns 20-30 snippet results.",
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
                     "description": "The search query"
-                },
-                "freshness": {
-                    "type": "string",
-                    "enum": ["day", "week", "month"],
-                    "description": "Limit results to recent content. 'day' = last 24h, 'week' = last 7 days, 'month' = last 30 days. Omit for no time filter."
                 }
             },
             "required": ["query"]
@@ -27,123 +22,92 @@ SCHEMA = {
     }
 }
 
-SEARXNG_INSTANCES = [
-    "https://searx.be",
-    "https://search.mdosch.de",
-    "https://searx.tiekoetter.com",
-]
-
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-    "Accept": "application/json",
+    "Accept": "text/html,application/xhtml+xml",
+    "Accept-Language": "en-US,en;q=0.9",
 }
 
-
-def _fetch_page_content(url, max_chars=4000):
-    """Fetch and extract visible text from a URL."""
-    try:
-        resp = requests.get(url, headers={"User-Agent": _HEADERS["User-Agent"]}, timeout=10)
-        resp.raise_for_status()
-        html = resp.text
-
-        html = re.sub(r'<(script|style|nav|footer|header)[^>]*>.*?</\1>', '', html,
-                       flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'<[^>]+>', ' ', html)
-        text = unescape(text)
-        text = re.sub(r'\s+', ' ', text).strip()
-        return text[:max_chars] if text else ""
-    except Exception:
-        return ""
+_DDG_URL = "https://html.duckduckgo.com/html/"
 
 
-def _extract_numbers(text):
-    """Extract price-like and numeric patterns from text."""
-    patterns = [
-        r'(?:Rp\.?\s*[\d.,]+)',
-        r'(?:IDR\s*[\d.,]+)',
-        r'(?:\$\s*[\d.,]+)',
-        r'(?:USD\s*[\d.,]+)',
-        r'(?:[\d.,]+\s*(?:ribu|juta|rb|jt))',
-    ]
-    numbers = []
-    for pat in patterns:
-        numbers.extend(re.findall(pat, text, re.IGNORECASE))
-    return numbers[:10]
+def _ddg_search(query):
+    """Query DuckDuckGo HTML endpoint and extract snippet results."""
+    resp = requests.post(
+        _DDG_URL,
+        data={"q": query},
+        headers=_HEADERS,
+        timeout=15,
+    )
+    resp.raise_for_status()
+    html = resp.text
 
+    results = []
+    # Each result block is a <div class="result ...">
+    blocks = re.findall(
+        r'<div[^>]*class="[^"]*result\b[^"]*"[^>]*>(.*?)</div>\s*(?=<div[^>]*class="[^"]*result\b|$)',
+        html, re.DOTALL
+    )
 
-def _searxng_query(query, freshness=""):
-    """Query SearXNG JSON API, trying multiple instances."""
-    params = {
-        "q": query,
-        "format": "json",
-        "language": "id-ID",
-        "categories": "general",
-    }
-    if freshness == "day":
-        params["time_range"] = "day"
-    elif freshness == "week":
-        params["time_range"] = "week"
-    elif freshness == "month":
-        params["time_range"] = "month"
+    # Fallback: try splitting by result__body if block regex didn't work
+    if not blocks:
+        blocks = re.findall(
+            r'<div[^>]*class="[^"]*result__body[^"]*"[^>]*>(.*?)</div>',
+            html, re.DOTALL
+        )
 
-    last_err = None
-    for instance in SEARXNG_INSTANCES:
-        try:
-            resp = requests.get(
-                f"{instance}/search",
-                params=params,
-                headers=_HEADERS,
-                timeout=12,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            raw_results = data.get("results", [])
-            if raw_results:
-                return raw_results
-        except Exception as e:
-            last_err = e
-            continue
+    for block in blocks:
+        # Title
+        title_m = re.search(r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*>(.*?)</a>', block, re.DOTALL)
+        title = re.sub(r'<[^>]+>', '', title_m.group(1)).strip() if title_m else ""
 
-    raise last_err or RuntimeError("All SearXNG instances failed")
+        # URL
+        url_m = re.search(r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"', block)
+        url = ""
+        if url_m:
+            raw_url = unescape(url_m.group(1))
+            # DuckDuckGo wraps URLs in a redirect; extract the actual URL
+            uddg_m = re.search(r'[?&]uddg=([^&]+)', raw_url)
+            if uddg_m:
+                url = requests.utils.unquote(uddg_m.group(1))
+            else:
+                url = raw_url
+
+        # Snippet
+        snippet_m = re.search(r'<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</a>', block, re.DOTALL)
+        if not snippet_m:
+            snippet_m = re.search(r'<div[^>]*class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</div>', block, re.DOTALL)
+        snippet = ""
+        if snippet_m:
+            snippet = re.sub(r'<[^>]+>', '', snippet_m.group(1))
+            snippet = unescape(snippet).strip()
+
+        if title and url:
+            results.append({
+                "title": unescape(title),
+                "url": url,
+                "snippet": snippet,
+            })
+
+        if len(results) >= 30:
+            break
+
+    return results
 
 
 def execute(arguments, **kwargs):
     query = arguments.get("query", "")
-    freshness = arguments.get("freshness", "")
     if not query:
         return json.dumps({"error": "No query provided"})
 
     try:
-        raw_results = _searxng_query(query, freshness)
-
-        results = []
-        for item in raw_results[:5]:
-            title = item.get("title", "").strip()
-            content = item.get("content", "").strip()
-            url = item.get("url", "").strip()
-            if title and url:
-                results.append({
-                    "title": title,
-                    "content": content,
-                    "url": url,
-                })
+        results = _ddg_search(query)
 
         if not results:
             return json.dumps({"results": [], "note": "No results found"})
 
-        # Deep fetch top 3 pages for concrete data
-        pages = []
-        for r in results[:3]:
-            page_text = _fetch_page_content(r["url"])
-            if page_text:
-                nums = _extract_numbers(page_text)
-                page_entry = {"url": r["url"], "text": page_text}
-                if nums:
-                    page_entry["extracted_numbers"] = nums
-                pages.append(page_entry)
-
-        return json.dumps({"results": results, "pages": pages})
+        return json.dumps({"results": results})
 
     except Exception as e:
         return json.dumps({"error": f"Search failed: {str(e)}"})
