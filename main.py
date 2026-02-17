@@ -455,6 +455,8 @@ class YuzuCompanionAgent:
             session_id = active_session['id']
             Database.add_message('user', f"/imagine {prompt}", session_id)
             Database.add_image_tools_message(image_url, session_id)
+            image_markdown = f"![Generated Image]({image_url})"
+            Database.add_message('assistant', f"Image generated!\n\n{image_markdown}", session_id)
         else:
             error(f"Image generation failed: {error_msg}")
     

@@ -15,6 +15,11 @@ SCHEMA = {
                 "query": {
                     "type": "string",
                     "description": "The search query"
+                },
+                "freshness": {
+                    "type": "string",
+                    "enum": ["day", "week", "month"],
+                    "description": "Limit results to recent content. 'day' = last 24h, 'week' = last 7 days, 'month' = last 30 days. Omit for no time filter."
                 }
             },
             "required": ["query"]
@@ -23,8 +28,31 @@ SCHEMA = {
 }
 
 
+def _fetch_page_content(url, max_chars=1500):
+    """Fetch and extract main text content from a URL."""
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        }
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        html = resp.text
+
+        # Strip script/style tags
+        html = re.sub(r'<(script|style)[^>]*>.*?</\1>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        # Strip all HTML tags
+        text = re.sub(r'<[^>]+>', ' ', html)
+        text = unescape(text)
+        # Collapse whitespace
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text[:max_chars] if text else ""
+    except Exception:
+        return ""
+
+
 def execute(arguments, **kwargs):
     query = arguments.get("query", "")
+    freshness = arguments.get("freshness", "")
     if not query:
         return json.dumps({"error": "No query provided"})
 
@@ -32,9 +60,16 @@ def execute(arguments, **kwargs):
         headers = {
             "User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         }
+
+        params = {"q": query}
+        # DuckDuckGo time filter: d = day, w = week, m = month
+        freshness_map = {"day": "d", "week": "w", "month": "m"}
+        if freshness in freshness_map:
+            params["df"] = freshness_map[freshness]
+
         resp = requests.get(
             "https://duckduckgo.com/html/",
-            params={"q": query},
+            params=params,
             headers=headers,
             timeout=15
         )
@@ -61,6 +96,12 @@ def execute(arguments, **kwargs):
 
         if not results:
             return json.dumps({"results": [], "note": "No results found"})
+
+        # Fetch page content from the top result for concrete data
+        if results:
+            page_content = _fetch_page_content(results[0]["url"])
+            if page_content:
+                results[0]["page_excerpt"] = page_content
 
         return json.dumps({"results": results})
 

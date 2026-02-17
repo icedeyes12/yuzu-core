@@ -860,6 +860,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         # Tool execution loop (non-streaming for tool iterations)
         loop_count = 0
         prev_tool_calls = []
+        last_tool_results = []
         
         while loop_count < 3:
             # First try non-streaming to detect tool calls
@@ -878,6 +879,14 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                 **ns_kwargs
             )
             
+            # Handle None — retry once before giving up
+            if ai_response is None:
+                print("[WARNING] AI returned None, retrying...")
+                import time as _time; _time.sleep(1)
+                ai_response = ai_manager.send_message(
+                    preferred_provider, preferred_model, messages, **ns_kwargs
+                )
+            
             if isinstance(ai_response, dict) and ai_response.get('tool_calls'):
                 tool_calls = ai_response['tool_calls']
                 
@@ -886,7 +895,8 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                     content = ai_response.get('content', '')
                     if content:
                         yield content
-                    return
+                        return
+                    break
                 prev_tool_calls = current_call_sig
                 
                 messages.append({
@@ -895,6 +905,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                     "tool_calls": tool_calls
                 })
                 
+                last_tool_results = []
                 for tc in tool_calls:
                     func = tc.get('function', {})
                     tool_name = func.get('name', '')
@@ -919,12 +930,14 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                         try:
                             result_data = json.loads(result)
                             if result_data.get('image_path'):
-                                Database.add_image_tools_message(
-                                    result_data['image_path'], session_id=session_id
-                                )
+                                img_path = result_data['image_path']
+                                img_md = result_data.get('image_markdown', f'![Generated Image]({img_path})')
+                                Database.add_image_tools_message(img_path, session_id=session_id)
+                                Database.add_message('assistant', f"Image generated!\n\n{img_md}", session_id=session_id)
                         except (json.JSONDecodeError, KeyError):
                             pass
                     
+                    last_tool_results.append({"tool": tool_name, "result": result})
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.get('id', ''),
@@ -934,9 +947,15 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                 loop_count += 1
                 continue
             
-            # No tool calls — stream the final response
-            # If we already got a text response from non-streaming, just yield it
-            if isinstance(ai_response, str) and ai_response:
+            # Handle dict without tool_calls (e.g. content-only dict)
+            if isinstance(ai_response, dict):
+                content = ai_response.get('content', '')
+                if content and content.strip():
+                    yield content.strip()
+                    return
+            
+            # No tool calls — yield text response
+            if isinstance(ai_response, str) and ai_response.strip():
                 if ai_response.strip().startswith('/imagine'):
                     result = _handle_ai_image_generation(ai_response, session_id)
                     yield result
@@ -944,12 +963,35 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                     yield ai_response
                 return
             
+            # Empty response after tool execution — synthesize from tool results
+            if loop_count > 0 and last_tool_results:
+                print("[WARNING] Empty response after tool call, requesting summary...")
+                messages.append({
+                    "role": "user",
+                    "content": "Please summarize the tool results above and respond to the user."
+                })
+                loop_count += 1
+                continue
+            
+            # True empty on first call — retry once without tools
+            if loop_count == 0:
+                print("[WARNING] Empty response, retrying without tools...")
+                retry_kwargs = {k: v for k, v in ns_kwargs.items() if k != 'tools'}
+                ai_response = ai_manager.send_message(
+                    preferred_provider, preferred_model, messages, **retry_kwargs
+                )
+                if isinstance(ai_response, str) and ai_response.strip():
+                    yield ai_response
+                    return
+            
             yield "AI service failed to generate a response."
             return
         
-        # Max loops — yield whatever we have
-        if isinstance(ai_response, str) and ai_response:
+        # Max loops — try to get final response or yield last content
+        if isinstance(ai_response, str) and ai_response.strip():
             yield ai_response
+        else:
+            yield "I couldn't complete the request."
         
     except Exception as e:
         error_msg = f"AI service error: {str(e)}"
@@ -1002,6 +1044,7 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
         # Tool execution loop
         loop_count = 0
         prev_tool_calls = []
+        last_tool_results = []
         
         while loop_count < 3:
             ai_response = ai_manager.send_message(
@@ -1011,6 +1054,14 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                 **kwargs
             )
             
+            # Handle None — retry once before giving up
+            if ai_response is None:
+                print("[WARNING] AI returned None, retrying...")
+                import time as _time; _time.sleep(1)
+                ai_response = ai_manager.send_message(
+                    preferred_provider, preferred_model, messages, **kwargs
+                )
+            
             # Check if response contains tool calls (dict with tool_calls)
             if isinstance(ai_response, dict) and ai_response.get('tool_calls'):
                 tool_calls = ai_response['tool_calls']
@@ -1018,7 +1069,6 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                 # Detect repeated tool calls
                 current_call_sig = [(tc['function']['name'], tc['function'].get('arguments', '')) for tc in tool_calls]
                 if current_call_sig == prev_tool_calls:
-                    # Same tool with same args — stop loop
                     content = ai_response.get('content', '')
                     return content if content else "I couldn't find the information you need."
                 prev_tool_calls = current_call_sig
@@ -1031,6 +1081,7 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                 })
                 
                 # Execute each tool call
+                last_tool_results = []
                 for tc in tool_calls:
                     func = tc.get('function', {})
                     tool_name = func.get('name', '')
@@ -1053,17 +1104,19 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                         print(f"[tool_error] {tool_name}: {e}")
                         result = json.dumps({"error": str(e)})
                     
-                    # Handle image_generate tool result
+                    # Handle image_generate tool result — persist for both interfaces
                     if tool_name == 'image_generate':
                         try:
                             result_data = json.loads(result)
                             if result_data.get('image_path'):
-                                Database.add_image_tools_message(
-                                    result_data['image_path'], session_id=session_id
-                                )
+                                img_path = result_data['image_path']
+                                img_md = result_data.get('image_markdown', f'![Generated Image]({img_path})')
+                                Database.add_image_tools_message(img_path, session_id=session_id)
+                                Database.add_message('assistant', f"Image generated!\n\n{img_md}", session_id=session_id)
                         except (json.JSONDecodeError, KeyError):
                             pass
                     
+                    last_tool_results.append({"tool": tool_name, "result": result})
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.get('id', ''),
@@ -1073,19 +1126,45 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                 loop_count += 1
                 continue
             
+            # Handle dict without tool_calls (e.g. content-only dict)
+            if isinstance(ai_response, dict):
+                content = ai_response.get('content', '')
+                if content and content.strip():
+                    return content.strip()
+            
             # No tool calls — we have the final text response
-            if isinstance(ai_response, str):
-                # Handle AI-initiated image generation (/imagine)
+            if isinstance(ai_response, str) and ai_response.strip():
                 if ai_response.strip().startswith('/imagine'):
                     return _handle_ai_image_generation(ai_response, session_id)
-                if ai_response:
+                return ai_response
+            
+            # Empty response after tool execution — ask model to summarize
+            if loop_count > 0 and last_tool_results:
+                print("[WARNING] Empty response after tool call, requesting summary...")
+                messages.append({
+                    "role": "user",
+                    "content": "Please summarize the tool results above and respond to the user."
+                })
+                loop_count += 1
+                continue
+            
+            # True empty on first call — retry once without tools
+            if loop_count == 0:
+                print("[WARNING] Empty response, retrying without tools...")
+                retry_kwargs = {k: v for k, v in kwargs.items() if k != 'tools'}
+                ai_response = ai_manager.send_message(
+                    preferred_provider, preferred_model, messages, **retry_kwargs
+                )
+                if isinstance(ai_response, str) and ai_response.strip():
                     return ai_response
             
             print(f"[WARNING] AI service returned empty response")
             return "AI service failed to generate a response."
         
         # Max loops reached — return last content
-        return ai_response if isinstance(ai_response, str) and ai_response else "I couldn't complete the request."
+        if isinstance(ai_response, str) and ai_response.strip():
+            return ai_response
+        return "I couldn't complete the request."
             
     except Exception as e:
         error_msg = f"AI service error: {str(e)}"

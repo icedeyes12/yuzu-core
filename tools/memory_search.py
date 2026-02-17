@@ -89,17 +89,10 @@ def execute(arguments, **kwargs):
     except Exception as e:
         print(f"[memory_search] Structured retrieval failed: {e}")
 
-    # Step 2: Raw message search (if structured insufficient or temporal cues present)
-    structured_count = (
-        len(result["structured"]["semantic"])
-        + len(result["structured"]["episodic"])
-        + len(result["structured"]["segments"])
-    )
-    
-    if structured_count < 3 or _has_temporal_cues(query):
-        try:
-            result["raw_messages"] = _search_raw_messages(session_id, query)
-        except Exception as e:
-            print(f"[memory_search] Raw message search failed: {e}")
+    # Step 2: Always search raw messages for completeness
+    try:
+        result["raw_messages"] = _search_raw_messages(session_id, query)
+    except Exception as e:
+        print(f"[memory_search] Raw message search failed: {e}")
 
     return json.dumps(result, default=str)

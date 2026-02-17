@@ -6,7 +6,7 @@ SCHEMA = {
     "type": "function",
     "function": {
         "name": "weather",
-        "description": "Get current weather for a location using latitude and longitude.",
+        "description": "Get current weather or daily forecast for a location using latitude and longitude.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -17,6 +17,11 @@ SCHEMA = {
                 "lon": {
                     "type": "number",
                     "description": "Longitude of the location"
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["current", "forecast"],
+                    "description": "Weather mode: 'current' for now, 'forecast' for 7-day daily forecast. Default: current"
                 }
             },
             "required": ["lat", "lon"]
@@ -41,6 +46,7 @@ def execute(arguments, **kwargs):
 
     lat = arguments.get("lat", 0)
     lon = arguments.get("lon", 0)
+    mode = arguments.get("mode", "current")
 
     # Fall back to context-based location if not provided
     if lat == 0 and lon == 0:
@@ -53,26 +59,53 @@ def execute(arguments, **kwargs):
         return json.dumps({"error": "location_not_set"})
 
     try:
-        resp = requests.get(
-            "https://api.open-meteo.com/v1/forecast",
-            params={
-                "latitude": lat,
-                "longitude": lon,
-                "current_weather": True
-            },
-            timeout=10
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        current = data.get("current_weather", {})
-        weather_code = current.get("weathercode", 0)
-
-        return json.dumps({
-            "temperature": current.get("temperature"),
-            "weather": WMO_CODES.get(weather_code, f"Code {weather_code}"),
-            "wind_speed": current.get("windspeed")
-        })
+        if mode == "forecast":
+            resp = requests.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "daily": "weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max",
+                    "timezone": "auto",
+                    "forecast_days": 7
+                },
+                timeout=10
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            daily = data.get("daily", {})
+            dates = daily.get("time", [])
+            forecast = []
+            for i, date in enumerate(dates):
+                code = daily.get("weathercode", [0])[i] if i < len(daily.get("weathercode", [])) else 0
+                forecast.append({
+                    "date": date,
+                    "weather": WMO_CODES.get(code, f"Code {code}"),
+                    "temp_max": daily.get("temperature_2m_max", [None])[i] if i < len(daily.get("temperature_2m_max", [])) else None,
+                    "temp_min": daily.get("temperature_2m_min", [None])[i] if i < len(daily.get("temperature_2m_min", [])) else None,
+                    "precipitation_mm": daily.get("precipitation_sum", [0])[i] if i < len(daily.get("precipitation_sum", [])) else 0,
+                    "wind_max": daily.get("windspeed_10m_max", [None])[i] if i < len(daily.get("windspeed_10m_max", [])) else None,
+                })
+            return json.dumps({"forecast": forecast})
+        else:
+            resp = requests.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "current_weather": True
+                },
+                timeout=10
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            current = data.get("current_weather", {})
+            weather_code = current.get("weathercode", 0)
+            return json.dumps({
+                "temperature": current.get("temperature"),
+                "weather": WMO_CODES.get(weather_code, f"Code {weather_code}"),
+                "wind_speed": current.get("windspeed")
+            })
 
     except Exception as e:
         return json.dumps({"error": f"Weather fetch failed: {str(e)}"})
