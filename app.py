@@ -25,6 +25,45 @@ from providers import get_ai_manager
 from tools import multimodal_tools
 from tools.registry import get_tool_schemas, execute_tool
 
+# ---------------------------------------------------------------------------
+# Persistent visual context buffer (per-session, runtime-only)
+# Stores the last processed image as base64 for N follow-up turns so the
+# model can compare or reference it without a new tool call.
+# ---------------------------------------------------------------------------
+_visual_context_buffer = {}  # session_id -> {"base64": str, "mime": str, "turns_left": int}
+_VISUAL_CONTEXT_TURNS = 3
+
+def _store_visual_context(session_id, image_base64, mime):
+    """Store a visual context snapshot for follow-up turns."""
+    _visual_context_buffer[session_id] = {
+        "base64": image_base64,
+        "mime": mime,
+        "turns_left": _VISUAL_CONTEXT_TURNS,
+    }
+
+def _consume_visual_context(session_id):
+    """Return stored visual context if available and decrement turn counter.
+    Returns (base64, mime) or (None, None)."""
+    ctx = _visual_context_buffer.get(session_id)
+    if not ctx or ctx["turns_left"] <= 0:
+        _visual_context_buffer.pop(session_id, None)
+        return None, None
+    ctx["turns_left"] -= 1
+    if ctx["turns_left"] <= 0:
+        _visual_context_buffer.pop(session_id, None)
+    return ctx["base64"], ctx["mime"]
+
+_VISUAL_REF_PATTERNS = re.compile(
+    r'(?:yang tadi|yang sebelumnya|tadi|bedanya|beda apa|compare|'
+    r'bandingin|foto tadi|gambar tadi|image before|the previous|earlier image|'
+    r'dari tadi|yang barusan)',
+    re.IGNORECASE,
+)
+
+def _has_visual_reference(text):
+    """Detect if the user message references a previous image."""
+    return bool(_VISUAL_REF_PATTERNS.search(text))
+
 class UserContext:
     def __init__(self):
         pass
@@ -691,39 +730,45 @@ Your speaking style and personality are defined above.
 Tool awareness:
 
 You have access to external tools.
-Use them only when needed.
+Use them only when needed — tools are invisible to the user.
 
 Tool usage principles:
-- Use memory_search for past events, personal history, or time-based questions.
+- Tools serve conversation. Never mention them, explain them, or expose their mechanics.
+- Use memory_search for past events, personal history, time-based questions, or comparisons over time.
+  Even if structured memory exists, always use memory_search for temporal or date-specific queries.
 - Use web_search for external, factual, or time-sensitive data (prices, news, events).
-- Prefer memory_search over web_search when the question is about personal conversations.
-- Always analyze images through image_analyze before answering visual questions.
+  Prefer concrete numbers and data over generic explanations.
+- Use image_analyze when the user explicitly asks about an image or visual details are needed.
+  Treat received images as conversational visual context, not analysis tasks.
+  Only analyze when the user asks about the image.
 - Do not guess visual details without image analysis.
 
 Execution behavior:
-- If a tool is clearly required, call it immediately.
+- If a tool is clearly required, call it immediately without preamble.
 - Do not answer from assumptions when a tool can provide concrete data.
+- After receiving tool results, always continue reasoning and produce a final natural answer.
+- Never stop after a tool output — always respond to the user.
+- If a tool fails or returns empty, fall back to your own knowledge gracefully.
 
 Available tools:
 
 1. web_search
    Use when:
-   - Current events
-   - Currency, prices, weather, news
-   - Anything time-sensitive
-   - Practical queries requiring concrete numbers or data
+   - Current events, currency, prices, weather, news
+   - Anything time-sensitive or requiring concrete numbers
+   - Practical queries requiring real-world data
 
 2. memory_search
    Use when:
-   - The user asks about past events
-   - Personal history
-   - Things not in recent messages
+   - The user asks about past events or memories
+   - Personal history or specific dates
    - Time-based recollection (e.g. "bulan Desember", "minggu lalu")
+   - Comparisons over time
 
 3. image_analyze
    Use when:
-   - The user references an image
-   - Visual details are required
+   - The user explicitly asks about an image
+   - Visual details are required for the response
 
 4. weather
    Use when:
@@ -732,12 +777,12 @@ Available tools:
 5. image_generate
    Use only when image generation protocol is activated.
 
-Tool usage rules:
-
+Tool flow rules:
+- Call tool → receive result → reason about it → respond naturally.
 - Do not mention tools in conversation.
 - Do not explain tool mechanics.
 - Call tools silently when needed.
-- After receiving tool results, respond naturally.
+- After receiving tool results, respond naturally — never expose raw data.
 
 {memory_context}
 {location_context}
@@ -846,6 +891,19 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         messages, user_message, preferred_provider, preferred_model
     )
     
+    # Inject persistent visual context if user references a previous image
+    if _has_visual_reference(user_message) and session_id:
+        prev_b64, prev_mime = _consume_visual_context(session_id)
+        if prev_b64 and prev_mime:
+            messages.append({
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "[Previous image context re-attached for comparison]"},
+                    {"type": "image_url", "image_url": {"url": f"data:{prev_mime};base64,{prev_b64}"}},
+                ]
+            })
+            print("[Vision] Re-injected persistent visual context")
+    
     try:
         kwargs = {"timeout": 180}
         
@@ -934,9 +992,15 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                     except Exception as e:
                         result = json.dumps({"error": str(e)})
                     
-                    # Validate tool result
+                    # Validate tool result — retry once on empty/invalid
                     if not result or not result.strip():
-                        print(f"[tool_error] {tool_name}: empty result")
+                        print(f"[tool_retry] {tool_name}: empty result, retrying...")
+                        try:
+                            result = execute_tool(tool_name, args, session_id=session_id)
+                        except Exception as e:
+                            result = json.dumps({"error": str(e)})
+                    if not result or not result.strip():
+                        print(f"[tool_error] {tool_name}: empty result after retry")
                         result = json.dumps({"error": f"Tool {tool_name} returned empty result"})
                     
                     if tool_name == 'image_generate':
@@ -947,6 +1011,15 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                                 img_md = result_data.get('image_markdown', f'![Generated Image]({img_path})')
                                 Database.add_image_tools_message(img_path, session_id=session_id)
                                 Database.add_message('assistant', f"Image generated!\n\n{img_md}", session_id=session_id)
+                        except (json.JSONDecodeError, KeyError):
+                            pass
+                    
+                    # Store visual context from image_analyze for follow-up turns
+                    if tool_name == 'image_analyze':
+                        try:
+                            result_data = json.loads(result)
+                            if result_data.get('image_base64') and result_data.get('mime'):
+                                _store_visual_context(session_id, result_data['image_base64'], result_data['mime'])
                         except (json.JSONDecodeError, KeyError):
                             pass
                     
@@ -1034,6 +1107,19 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
         messages, user_message, preferred_provider, preferred_model
     )
     
+    # Inject persistent visual context if user references a previous image
+    if _has_visual_reference(user_message) and session_id:
+        prev_b64, prev_mime = _consume_visual_context(session_id)
+        if prev_b64 and prev_mime:
+            messages.append({
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "[Previous image context re-attached for comparison]"},
+                    {"type": "image_url", "image_url": {"url": f"data:{prev_mime};base64,{prev_b64}"}},
+                ]
+            })
+            print("[Vision] Re-injected persistent visual context")
+    
     try:
         kwargs = {"timeout": 180}
         
@@ -1117,9 +1203,15 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                         print(f"[tool_error] {tool_name}: {e}")
                         result = json.dumps({"error": str(e)})
                     
-                    # Validate tool result
+                    # Validate tool result — retry once on empty/invalid
                     if not result or not result.strip():
-                        print(f"[tool_error] {tool_name}: empty result")
+                        print(f"[tool_retry] {tool_name}: empty result, retrying...")
+                        try:
+                            result = execute_tool(tool_name, args, session_id=session_id)
+                        except Exception as e:
+                            result = json.dumps({"error": str(e)})
+                    if not result or not result.strip():
+                        print(f"[tool_error] {tool_name}: empty result after retry")
                         result = json.dumps({"error": f"Tool {tool_name} returned empty result"})
                     
                     # Handle image_generate tool result — persist for both interfaces
@@ -1131,6 +1223,15 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                                 img_md = result_data.get('image_markdown', f'![Generated Image]({img_path})')
                                 Database.add_image_tools_message(img_path, session_id=session_id)
                                 Database.add_message('assistant', f"Image generated!\n\n{img_md}", session_id=session_id)
+                        except (json.JSONDecodeError, KeyError):
+                            pass
+                    
+                    # Store visual context from image_analyze for follow-up turns
+                    if tool_name == 'image_analyze':
+                        try:
+                            result_data = json.loads(result)
+                            if result_data.get('image_base64') and result_data.get('mime'):
+                                _store_visual_context(session_id, result_data['image_base64'], result_data['mime'])
                         except (json.JSONDecodeError, KeyError):
                             pass
                     

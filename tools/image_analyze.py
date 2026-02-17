@@ -95,22 +95,30 @@ def _encode_to_base64(filepath):
 
 
 def _resolve_source(source):
-    """Resolve an image source (URL, local path, markdown) to a local file path."""
-    # Extract from markdown
+    """Resolve an image source (URL, local path, markdown) to a local cached file path.
+
+    All input types follow the same pipeline:
+      source → extract URL/path → download if remote → cache → return local path
+    """
+    # Extract URL from markdown syntax
     md_match = re.match(r'!\[[^\]]*\]\(([^)]+)\)', source)
     if md_match:
         source = md_match.group(1)
 
-    # Local file
+    # Strip whitespace
+    source = source.strip()
+
+    # Remote URL — always download to cache for uniform processing
+    if source.startswith(('http://', 'https://')):
+        _ensure_cache_dir()
+        cached = _download_to_cache(source)
+        return cached
+
+    # Local file references
     if source.startswith('static/') or source.startswith('uploads/') or source.startswith('generated_images/'):
         local_path = source if source.startswith('static/') else f"static/{source}"
         if os.path.isfile(local_path):
             return local_path
-
-    # Remote URL
-    if source.startswith(('http://', 'https://')):
-        _ensure_cache_dir()
-        return _download_to_cache(source)
 
     # Try as direct path
     if os.path.isfile(source):
