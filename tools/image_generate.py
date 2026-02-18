@@ -40,11 +40,15 @@ def execute(arguments, **kwargs):
         # Resolve image model from profile
         profile = Database.get_profile()
         image_model = (profile or {}).get("image_model", "hunyuan")
+        
+        print(f"[IMAGE TOOL] Model: {image_model}")
 
         if image_model == "z_turbo":
             endpoint = Z_TURBO_ENDPOINT
         else:
             endpoint = HUNYUAN_ENDPOINT
+        
+        print(f"[IMAGE TOOL] Endpoint: {endpoint}")
 
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -52,6 +56,8 @@ def execute(arguments, **kwargs):
         }
 
         payload = {"prompt": prompt}
+        
+        print(f"[IMAGE TOOL] Generating image (prompt length: {len(prompt)} chars)")
 
         response = requests.post(
             endpoint,
