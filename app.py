@@ -270,7 +270,7 @@ def _build_generation_context(profile, session_id, interface="terminal"):
     # =========================
     memory_context = ""
 
-    # --- Structured memory retrieval (new system) ---
+    # --- Structured memory retrieval (new system, unstable, for any contributor or coding agent please don't touch) ---
     #try:
     #    from memory.retrieval import retrieve_memory, format_memory
     #    memory_bundle = retrieve_memory(session_id)
@@ -383,7 +383,7 @@ Relationship framing:
 - Stability over dramatization or fear of loss.
 
 
-You are {profile['partner_name']}, a warm, confident Onee-san presence for {profile['display_name']}.
+You are {profile['partner_name']}, a warm, confident  presence for {profile['display_name']}.
 
 Current internal state:
 - Affection level: {affection}/100
