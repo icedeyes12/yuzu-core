@@ -199,7 +199,43 @@ def _migrate_add_image_model_column(engine):
             conn.commit()
 
 def init_db():
+    """
+    Initialize database with safety guards.
+    
+    SAFETY RULES:
+    - NEVER drops tables
+    - NEVER recreates database
+    - Only runs safe migrations
+    - Aborts if database corruption detected
+    """
+    db_path = get_db_path()
+    db_existed_before = os.path.exists(db_path)
+    db_size_before = os.path.getsize(db_path) if db_existed_before else 0
+    
+    print(f"[DB INIT] Database path: {os.path.abspath(db_path)}")
+    print(f"[DB INIT] File existed before: {db_existed_before}")
+    print(f"[DB INIT] File size before: {db_size_before} bytes")
+    
+    # SAFETY CHECK: Abort if database file exists but is empty
+    if db_existed_before and db_size_before == 0:
+        print("[DB ERROR] Database file exists but is empty (0 bytes)")
+        print("[DB ERROR] This indicates corruption. Aborting to prevent data loss.")
+        raise RuntimeError("Database file corrupted (0 bytes). Manual intervention required.")
+    
     engine = get_engine()
+    
+    # Check table count before operations
+    from sqlalchemy import inspect as sa_inspect
+    inspector = sa_inspect(engine)
+    tables_before = inspector.get_table_names()
+    table_count_before = len(tables_before)
+    
+    print(f"[DB INIT] Tables before: {table_count_before}")
+    if db_existed_before and table_count_before == 0:
+        print("[DB CRITICAL] Database file existed but contains no tables")
+        print("[DB CRITICAL] This may indicate data loss or corruption")
+    
+    # SAFE OPERATION: Only creates tables that don't exist
     Base.metadata.create_all(engine)
     
     # Migrate existing databases: add image_paths column if missing
@@ -250,6 +286,22 @@ def init_db():
             migrate_api_keys_from_files(session)
             
             session.commit()
+    
+    # AUDIT LOG: Report final state
+    with get_db_session() as session:
+        profile_count = session.query(Profile).count()
+        session_count = session.query(ChatSession).count()
+        message_count = session.query(Message).count()
+        apikey_count = session.query(APIKey).count()
+        
+        print(f"[DB AUDIT] Database initialization complete")
+        print(f"[DB AUDIT] Profiles: {profile_count}")
+        print(f"[DB AUDIT] Chat Sessions: {session_count}")
+        print(f"[DB AUDIT] Messages: {message_count}")
+        print(f"[DB AUDIT] API Keys: {apikey_count}")
+        
+        db_size_after = os.path.getsize(db_path)
+        print(f"[DB AUDIT] File size after: {db_size_after} bytes")
 
 # Database engine and session management
 _engine = None
