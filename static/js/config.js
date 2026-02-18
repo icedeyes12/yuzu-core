@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadAPIKeys();
     loadGlobalKnowledge();
     loadProviderSettings();
+    loadImageModel();
     setupEventListeners();
     initializeConfigAnimations();
 });
@@ -259,6 +260,12 @@ function setupEventListeners() {
         saveLocationBtn.addEventListener('click', saveLocation);
     }
 
+    // Image model
+    const saveImageModelBtn = document.getElementById('save-image-model');
+    if (saveImageModelBtn) {
+        saveImageModelBtn.addEventListener('click', saveImageModel);
+    }
+
     const useCurrentLocationBtn = document.getElementById('use-current-location');
     if (useCurrentLocationBtn) {
         useCurrentLocationBtn.addEventListener('click', useCurrentLocation);
@@ -322,6 +329,49 @@ function setupEventListeners() {
     });
     
     console.log('Event listeners setup complete');
+}
+
+// Load image model setting
+async function loadImageModel() {
+    try {
+        const response = await fetch('/api/get_profile');
+        const data = await response.json();
+        const imageModel = data.image_model || 'hunyuan';
+        const select = document.getElementById('image-model');
+        if (select) select.value = imageModel;
+    } catch (error) {
+        console.error('Error loading image model:', error);
+    }
+}
+
+// Save image model setting
+async function saveImageModel() {
+    const select = document.getElementById('image-model');
+    if (!select) return;
+
+    const btn = document.getElementById('save-image-model');
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+
+    try {
+        const response = await fetch('/api/update_profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image_model: select.value })
+        });
+        if (response.ok) {
+            showSuccess('Image model saved successfully!');
+        } else {
+            showError('Error saving image model');
+        }
+    } catch (error) {
+        console.error('Error saving image model:', error);
+        showError('Error saving image model');
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
 }
 
 // Save provider settings

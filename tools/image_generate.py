@@ -4,6 +4,8 @@ import requests
 from datetime import datetime
 from database import Database
 
+HUNYUAN_ENDPOINT = "https://chutes-hunyuan-image-3.chutes.ai/generate"
+Z_TURBO_ENDPOINT = "https://chutes-z-image-turbo.chutes.ai/generate"
 
 SCHEMA = {
     "type": "function",
@@ -35,12 +37,20 @@ def execute(arguments, **kwargs):
         if not api_key:
             return json.dumps({"error": "No Chutes API key available"})
 
+        # Resolve image model from profile
+        profile = Database.get_profile()
+        image_model = (profile or {}).get("image_model", "hunyuan")
+
+        if image_model == "z_turbo":
+            endpoint = Z_TURBO_ENDPOINT
+        else:
+            endpoint = HUNYUAN_ENDPOINT
+
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
 
-        endpoint = "https://chutes-hunyuan-image-3.chutes.ai/generate"
         payload = {"prompt": prompt}
 
         response = requests.post(
@@ -62,7 +72,7 @@ def execute(arguments, **kwargs):
             with open(filepath, 'wb') as f:
                 f.write(response.content)
 
-            print(f"[Image] {filepath}")
+            print(f"[Image] {filepath} (model={image_model})")
 
             return json.dumps({
                 "image_path": filepath,

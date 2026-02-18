@@ -35,6 +35,7 @@ class Profile(Base):
     global_knowledge_json = Column(Text, nullable=False, default='{}')
     providers_config_json = Column(Text, nullable=False, default='{}')
     context = Column(Text, nullable=False, default='{}')
+    image_model = Column(String(50), nullable=False, default='hunyuan')
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
@@ -187,6 +188,16 @@ def _migrate_add_image_paths_column(engine):
             conn.execute(text('ALTER TABLE messages ADD COLUMN image_paths TEXT'))
             conn.commit()
 
+def _migrate_add_image_model_column(engine):
+    """Add image_model column to profiles table if it does not exist."""
+    from sqlalchemy import inspect as sa_inspect, text
+    inspector = sa_inspect(engine)
+    columns = [col['name'] for col in inspector.get_columns('profiles')]
+    if 'image_model' not in columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE profiles ADD COLUMN image_model TEXT DEFAULT 'hunyuan'"))
+            conn.commit()
+
 def init_db():
     engine = get_engine()
     Base.metadata.create_all(engine)
@@ -202,6 +213,12 @@ def init_db():
         _migrate_add_context_column(engine)
     except Exception as e:
         print(f"[WARNING] context migration skipped: {e}")
+    
+    # Migrate existing databases: add image_model column if missing
+    try:
+        _migrate_add_image_model_column(engine)
+    except Exception as e:
+        print(f"[WARNING] image_model migration skipped: {e}")
     
     with get_db_session() as session:
         # Create default profile and session if needed
@@ -327,6 +344,7 @@ class Database:
                     'global_knowledge': json.loads(profile.global_knowledge_json),
                     'providers_config': json.loads(profile.providers_config_json),
                     'context': json.loads(profile.context or '{}'),
+                    'image_model': profile.image_model or 'hunyuan',
                     'created_at': profile.created_at,
                     'updated_at': profile.updated_at
                 }

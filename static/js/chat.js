@@ -221,12 +221,16 @@ class MultimodalManager {
         this.setSendButtonState('sending');
 
         try {
-            addMessage("user", text || "Analyze these images");
-            
+            // Build a single unified message containing text + images
+            let combinedMarkdown = "";
+            if (text && text.trim()) {
+                combinedMarkdown += text.trim() + "\n\n";
+            }
             this.selectedImages.forEach((image) => {
                 const imageUrl = URL.createObjectURL(image);
-                this.displayUploadedImage(imageUrl, text);
+                combinedMarkdown += `![Uploaded Image](${imageUrl})\n\n`;
             });
+            addMessage("user", combinedMarkdown.trim());
 
             const formData = new FormData();
             if (text) formData.append('message', text);
