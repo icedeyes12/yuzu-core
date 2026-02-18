@@ -64,6 +64,41 @@ def _has_visual_reference(text):
     """Detect if the user message references a previous image."""
     return bool(_VISUAL_REF_PATTERNS.search(text))
 
+def _load_and_attach_generated_image(img_path, messages, session_id):
+    """
+    Load a generated image file, encode as base64, and attach to messages.
+    Also stores visual context for potential follow-up questions.
+    
+    Returns: True if successful, False otherwise
+    """
+    try:
+        import base64
+        if not os.path.exists(img_path):
+            print(f"[IMAGE TOOL] Image file not found: {img_path}")
+            return False
+            
+        with open(img_path, 'rb') as f:
+            img_data = f.read()
+        img_b64 = base64.b64encode(img_data).decode('utf-8')
+        mime_type = 'image/png' if img_path.endswith('.png') else 'image/jpeg'
+        
+        # Store visual context for potential follow-up questions
+        _store_visual_context(session_id, img_b64, mime_type)
+        
+        # Append image to messages for vision model
+        messages.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "[Generated image attached for your natural response]"},
+                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}}
+            ]
+        })
+        print("[IMAGE TOOL] Generated image attached to conversation for vision model")
+        return True
+    except Exception as e:
+        print(f"[IMAGE TOOL] Failed to load generated image: {e}")
+        return False
+
 class UserContext:
     def __init__(self):
         pass
@@ -1078,28 +1113,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                                 Database.add_message('assistant', f"Image generated!\n\n{img_md}", session_id=session_id)
                                 
                                 # Load generated image and inject as visual context for continuation
-                                try:
-                                    import base64
-                                    if os.path.exists(img_path):
-                                        with open(img_path, 'rb') as f:
-                                            img_data = f.read()
-                                        img_b64 = base64.b64encode(img_data).decode('utf-8')
-                                        mime_type = 'image/png' if img_path.endswith('.png') else 'image/jpeg'
-                                        
-                                        # Store visual context for potential follow-up questions
-                                        _store_visual_context(session_id, img_b64, mime_type)
-                                        
-                                        # Append image to messages for vision model
-                                        messages.append({
-                                            "role": "user",
-                                            "content": [
-                                                {"type": "text", "text": "[Generated image attached for your natural response]"},
-                                                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}}
-                                            ]
-                                        })
-                                        print("[IMAGE TOOL] Generated image attached to conversation for vision model")
-                                except Exception as e:
-                                    print(f"[IMAGE TOOL] Failed to load generated image: {e}")
+                                _load_and_attach_generated_image(img_path, messages, session_id)
                         except (json.JSONDecodeError, KeyError):
                             pass
                     
@@ -1344,28 +1358,7 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                                 Database.add_message('assistant', f"Image generated!\n\n{img_md}", session_id=session_id)
                                 
                                 # Load generated image and inject as visual context for continuation
-                                try:
-                                    import base64
-                                    if os.path.exists(img_path):
-                                        with open(img_path, 'rb') as f:
-                                            img_data = f.read()
-                                        img_b64 = base64.b64encode(img_data).decode('utf-8')
-                                        mime_type = 'image/png' if img_path.endswith('.png') else 'image/jpeg'
-                                        
-                                        # Store visual context for potential follow-up questions
-                                        _store_visual_context(session_id, img_b64, mime_type)
-                                        
-                                        # Append image to messages for vision model
-                                        messages.append({
-                                            "role": "user",
-                                            "content": [
-                                                {"type": "text", "text": "[Generated image attached for your natural response]"},
-                                                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}}
-                                            ]
-                                        })
-                                        print("[IMAGE TOOL] Generated image attached to conversation for vision model")
-                                except Exception as e:
-                                    print(f"[IMAGE TOOL] Failed to load generated image: {e}")
+                                _load_and_attach_generated_image(img_path, messages, session_id)
                         except (json.JSONDecodeError, KeyError):
                             pass
                     

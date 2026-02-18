@@ -220,6 +220,11 @@ def init_db():
     if db_existed_before and db_size_before == 0:
         print("[DB ERROR] Database file exists but is empty (0 bytes)")
         print("[DB ERROR] This indicates corruption. Aborting to prevent data loss.")
+        print("[DB ERROR] To recover:")
+        print("[DB ERROR]   1. Check for backup files (*.db.backup)")
+        print(f"[DB ERROR]   2. Remove corrupted file: rm {db_path}")
+        print("[DB ERROR]   3. Restore from backup if available")
+        print("[DB ERROR]   4. Or restart with fresh database")
         raise RuntimeError("Database file corrupted (0 bytes). Manual intervention required.")
     
     engine = get_engine()

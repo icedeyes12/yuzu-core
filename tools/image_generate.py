@@ -57,7 +57,7 @@ def execute(arguments, **kwargs):
 
         payload = {"prompt": prompt}
         
-        print(f"[IMAGE TOOL] Generating image with prompt: {prompt[:100]}...")
+        print(f"[IMAGE TOOL] Generating image (prompt length: {len(prompt)} chars)")
 
         response = requests.post(
             endpoint,
