@@ -729,6 +729,10 @@ Your speaking style and personality are defined above.
 
 Tool awareness:
 
+Tools are not thinking entities. Tools are only hands of the LLM.
+You are the single entity that reads context, decides tool usage,
+issues commands, continues reasoning, and produces the final response.
+
 You have access to external tools.
 Use them only when needed — tools are invisible to the user.
 
@@ -736,6 +740,8 @@ Tool usage principles:
 - Tools serve conversation. Never mention them, explain them, or expose their mechanics.
 - Use memory_search for past events, personal history, time-based questions, or comparisons over time.
   Even if structured memory exists, always use memory_search for temporal or date-specific queries.
+- Use memory_sql for precise database queries when you need specific rows, filtering, or structured recall.
+  Only SELECT and UPDATE are allowed. Destructive operations are blocked.
 - Use web_search for external, factual, or time-sensitive data (prices, news, events).
   Prefer concrete numbers and data over generic explanations.
 - Use image_analyze when the user explicitly asks about an image or visual details are needed.
@@ -786,16 +792,22 @@ Available tools:
    - Time-based recollection (e.g. "bulan Desember", "minggu lalu")
    - Comparisons over time
 
-3. image_analyze
+3. memory_sql
+   Use when:
+   - Precise database queries are needed for structured recall
+   - Filtering by specific fields, dates, or content patterns
+   - Only SELECT and UPDATE allowed
+
+4. image_analyze
    Use when:
    - The user explicitly asks about an image
    - Visual details are required for the response
 
-4. weather
+5. weather
    Use when:
    - The user asks about weather
 
-5. image_generate
+6. image_generate
    Use only when image generation protocol is activated.
 
 Tool flow rules:
@@ -949,6 +961,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         loop_count = 0
         prev_tool_calls = []
         last_tool_results = []
+        last_tool_was_image = False
         
         while loop_count < max_tool_iterations:
             # First try non-streaming to detect tool calls
@@ -1050,6 +1063,9 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                         "content": result
                     })
                 
+                # Track if last tool batch included image_generate for vision model switching
+                last_tool_was_image = any(tr["tool"] == "image_generate" for tr in last_tool_results)
+                
                 loop_count += 1
                 continue
             
@@ -1091,13 +1107,23 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         # Loop exhausted or broke out — force one final LLM call WITHOUT tools
         # to convert tool results into a natural assistant response
         if last_tool_results:
+            # Vision model switching: use vision model after image generation
+            final_provider = preferred_provider
+            final_model = preferred_model
+            if last_tool_was_image:
+                vision_model = profile.get('vision_model', 'moonshotai/kimi-k2.5')
+                if vision_model:
+                    final_provider = 'openrouter'
+                    final_model = vision_model
+                    print(f"[tool_loop] Switching to vision model: {final_model}")
+            
             print("[tool_loop] Forcing final response from tool results...")
             final_kwargs = {k: v for k, v in kwargs.items() if k != 'tools'}
             if 'max_tokens' not in final_kwargs:
                 final_kwargs['max_tokens'] = 4096
             
             final_response = ai_manager.send_message(
-                preferred_provider, preferred_model, messages, **final_kwargs
+                final_provider, final_model, messages, **final_kwargs
             )
             
             # Extract text from whatever the model returns
@@ -1179,6 +1205,7 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
         loop_count = 0
         prev_tool_calls = []
         last_tool_results = []
+        last_tool_was_image = False
         
         while loop_count < max_tool_iterations:
             ai_response = ai_manager.send_message(
@@ -1277,6 +1304,9 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                         "content": result
                     })
                 
+                # Track if last tool batch included image_generate for vision model switching
+                last_tool_was_image = any(tr["tool"] == "image_generate" for tr in last_tool_results)
+                
                 loop_count += 1
                 continue
             
@@ -1313,13 +1343,23 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
         # Loop exhausted or broke out — force one final LLM call WITHOUT tools
         # to convert tool results into a natural assistant response
         if last_tool_results:
+            # Vision model switching: use vision model after image generation
+            final_provider = preferred_provider
+            final_model = preferred_model
+            if last_tool_was_image:
+                vision_model = profile.get('vision_model', 'moonshotai/kimi-k2.5')
+                if vision_model:
+                    final_provider = 'openrouter'
+                    final_model = vision_model
+                    print(f"[tool_loop] Switching to vision model: {final_model}")
+            
             print("[tool_loop] Forcing final response from tool results...")
             final_kwargs = {k: v for k, v in kwargs.items() if k != 'tools'}
             if 'max_tokens' not in final_kwargs:
                 final_kwargs['max_tokens'] = 4096
             
             final_response = ai_manager.send_message(
-                preferred_provider, preferred_model, messages, **final_kwargs
+                final_provider, final_model, messages, **final_kwargs
             )
             
             # Extract text from whatever the model returns

@@ -1,11 +1,13 @@
 import json
 from tools import web_search, weather, memory_search, image_generate, image_analyze
+from tools import memory_sql
 
 
 _TOOLS = {
     "web_search": web_search,
     "weather": weather,
     "memory_search": memory_search,
+    "memory_sql": memory_sql,
     "image_generate": image_generate,
     "image_analyze": image_analyze,
 }

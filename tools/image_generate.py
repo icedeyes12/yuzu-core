@@ -37,7 +37,7 @@ def execute(arguments, **kwargs):
         if not api_key:
             return json.dumps({"error": "No Chutes API key available"})
 
-        # Resolve image model from profile
+        # Resolve image model from profile — no silent fallback
         profile = Database.get_profile()
         image_model = (profile or {}).get("image_model", "hunyuan")
 
@@ -45,6 +45,11 @@ def execute(arguments, **kwargs):
             endpoint = Z_TURBO_ENDPOINT
         else:
             endpoint = HUNYUAN_ENDPOINT
+
+        # Runtime model logging (mandatory per spec)
+        print(f"[IMAGE TOOL]")
+        print(f"Selected model: {image_model}")
+        print(f"Endpoint: {endpoint}")
 
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -72,14 +77,16 @@ def execute(arguments, **kwargs):
             with open(filepath, 'wb') as f:
                 f.write(response.content)
 
-            print(f"[Image] {filepath} (model={image_model})")
+            print(f"[IMAGE TOOL] Saved: {filepath}")
 
             return json.dumps({
                 "image_path": filepath,
                 "image_markdown": f"![Generated Image]({filepath})"
             })
         else:
+            print(f"[IMAGE TOOL] API error {response.status_code}")
             return json.dumps({"error": f"API error {response.status_code}"})
 
     except Exception as e:
+        print(f"[IMAGE TOOL] Exception: {str(e)}")
         return json.dumps({"error": f"Image generation failed: {str(e)}"})

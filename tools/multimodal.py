@@ -39,12 +39,9 @@ class MultimodalTools:
             'chutes_image': "https://image.chutes.ai/generate"
         }
         
-        # Image generation models
-        self.image_generation_models = {
-            'chutes': [
-                ("hunyuan-image-3", "https://chutes-hunyuan-image-3.chutes.ai/generate"),
-            ]
-        }
+        # Image generation logic moved to tools/image_generate.py
+        # This module is now only for multimodal input processing.
+        self.image_generation_models = {}
         
         # Image cache for base64 encoded images
         self.image_cache = {}
@@ -458,84 +455,18 @@ class MultimodalTools:
     
     def generate_image(self, prompt: str, provider: str = "chutes", 
                       model: str = None, size: str = "1024x1024") -> Tuple[Optional[str], Optional[str]]:
+        # Image generation logic moved to tools/image_generate.py
+        # This method delegates to the single source of truth.
+        from tools.image_generate import execute as _img_execute
+        import json as _json
+        result_str = _img_execute({"prompt": prompt})
         try:
-            api_keys = Database.get_api_keys()
-            
-            if provider == "chutes":
-                api_key = api_keys.get('chutes')
-                if not api_key:
-                    return None, "No Chutes API key available"
-                
-                if not model:
-                    model = self.image_generation_models['chutes'][0]
-                
-                headers = {
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                }
-                
-                width, height = map(int, size.split('x'))
-                
-                if isinstance(model, tuple):
-                    model_name, endpoint = model
-                else:
-                    model_name = model
-                    endpoint = self.provider_endpoints['chutes_image']
-                
-                if "hunyuan-image-3" in endpoint:
-                    payload = {
-                        "prompt": prompt
-                    }
-                elif "hidream" in endpoint:
-                    payload = {
-                        "seed": None,
-                        "prompt": prompt,
-                        "resolution": f"{width}x{height}",
-                        "guidance_scale": 7.5,
-                        "num_inference_steps": 30
-                    }
-                else:
-                    payload = {
-                        "model": model_name,
-                        "prompt": prompt,
-                        "negative_prompt": "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, child, loli, kid, teenager, big chest, big boobs, huge boobs, fat, weird proportions, bad head, bad body, low quality",
-                        "guidance_scale": 7.5,
-                        "width": width,
-                        "height": height,
-                        "num_inference_steps": 30
-                    }
-                
-                response = requests.post(
-                    endpoint,
-                    headers=headers,
-                    json=payload,
-                    timeout=120
-                )
-                
-                if response.status_code == 200:
-                    images_dir = "static/generated_images"
-                    os.makedirs(images_dir, exist_ok=True)
-                    
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    safe_prompt = "".join(c for c in prompt[:30] if c.isalnum() or c in (' ', '-', '_')).rstrip()
-                    filename = f"{timestamp}_{safe_prompt}.png"
-                    filepath = os.path.join(images_dir, filename)
-                    
-                    with open(filepath, 'wb') as f:
-                        f.write(response.content)
-                    
-                    print(f"[Image] {filepath}")
-                    preview_image_in_terminal(filepath)
-                    
-                    return filepath, None
-                else:
-                    return None, f"API error {response.status_code}"
-            
-            else:
-                return None, f"Image generation not supported for provider: {provider}"
-                
+            result = _json.loads(result_str)
+            if result.get("image_path"):
+                return result["image_path"], None
+            return None, result.get("error", "Unknown error")
         except Exception as e:
-            return None, f"Image generation failed: {str(e)}"
+            return None, str(e)
     
     def get_best_vision_provider(self) -> Tuple[Optional[str], Optional[str]]:
         api_keys = Database.get_api_keys()
