@@ -764,6 +764,49 @@ Analysis-style responses are ONLY appropriate when:
 
 Default mode: React naturally, don't analyze.
 
+---
+
+TOOL PROTOCOL (STRICT):
+
+Tool invocation format:
+When calling a tool, the model MUST return a structured tool_calls response.
+This is handled automatically by the provider API.
+
+Tool execution flow:
+1. User message received
+2. Model decides if tool is needed
+3. Model returns tool_call in provider format
+4. System executes tool
+5. Tool result added to conversation
+6. NEW MESSAGE REQUEST sent automatically with tool result
+7. Model produces natural response based on tool result
+
+IMPORTANT:
+- After tool execution, the model MUST continue reasoning and respond naturally
+- Tool results are context, not final answers
+- Never stop after tool output — always respond to the user
+- If a tool fails, fall back gracefully
+
+Legacy tool command formats (for reference only):
+These formats are NOT used in the current architecture.
+Tool calls are handled via provider API tool_calls mechanism.
+
+/memory_sql
+SELECT query
+
+/memory_search query text
+/web_search query text  
+/weather location
+/image_analyze
+/imagine prompt
+
+Memory SQL restrictions:
+- Allowed: SELECT, UPDATE
+- Blocked: INSERT, DELETE, DROP, TRUNCATE, ALTER, CREATE, PRAGMA, VACUUM
+- Auto-filter: AND role != 'tool' is injected automatically
+
+---
+
 Execution behavior:
 - If a tool is clearly required, call it immediately without preamble.
 - Do not answer from assumptions when a tool can provide concrete data.
@@ -949,6 +992,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         loop_count = 0
         prev_tool_calls = []
         last_tool_results = []
+        image_was_generated = False  # Track if image_generate was called
         
         while loop_count < max_tool_iterations:
             # First try non-streaming to detect tool calls
@@ -1024,6 +1068,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                         result = json.dumps({"error": f"Tool {tool_name} returned empty result"})
                     
                     if tool_name == 'image_generate':
+                        image_was_generated = True  # Mark that we need vision model for continuation
                         try:
                             result_data = json.loads(result)
                             if result_data.get('image_path'):
@@ -1031,6 +1076,30 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                                 img_md = result_data.get('image_markdown', f'![Generated Image]({img_path})')
                                 Database.add_image_tools_message(img_path, session_id=session_id)
                                 Database.add_message('assistant', f"Image generated!\n\n{img_md}", session_id=session_id)
+                                
+                                # Load generated image and inject as visual context for continuation
+                                try:
+                                    import base64
+                                    if os.path.exists(img_path):
+                                        with open(img_path, 'rb') as f:
+                                            img_data = f.read()
+                                        img_b64 = base64.b64encode(img_data).decode('utf-8')
+                                        mime_type = 'image/png' if img_path.endswith('.png') else 'image/jpeg'
+                                        
+                                        # Store visual context for potential follow-up questions
+                                        _store_visual_context(session_id, img_b64, mime_type)
+                                        
+                                        # Append image to messages for vision model
+                                        messages.append({
+                                            "role": "user",
+                                            "content": [
+                                                {"type": "text", "text": "[Generated image attached for your natural response]"},
+                                                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}}
+                                            ]
+                                        })
+                                        print("[IMAGE TOOL] Generated image attached to conversation for vision model")
+                                except Exception as e:
+                                    print(f"[IMAGE TOOL] Failed to load generated image: {e}")
                         except (json.JSONDecodeError, KeyError):
                             pass
                     
@@ -1096,8 +1165,21 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
             if 'max_tokens' not in final_kwargs:
                 final_kwargs['max_tokens'] = 4096
             
+            # Switch to vision model if image was generated
+            final_provider = preferred_provider
+            final_model = preferred_model
+            if image_was_generated:
+                print("[IMAGE TOOL] Switching to vision model for continuation...")
+                vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
+                if vision_provider and vision_model:
+                    final_provider = vision_provider
+                    final_model = vision_model
+                    print(f"[IMAGE TOOL] Using vision model: {vision_provider}/{vision_model}")
+                else:
+                    print("[IMAGE TOOL] No vision provider available, using default model")
+            
             final_response = ai_manager.send_message(
-                preferred_provider, preferred_model, messages, **final_kwargs
+                final_provider, final_model, messages, **final_kwargs
             )
             
             # Extract text from whatever the model returns
@@ -1179,6 +1261,7 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
         loop_count = 0
         prev_tool_calls = []
         last_tool_results = []
+        image_was_generated = False  # Track if image_generate was called
         
         while loop_count < max_tool_iterations:
             ai_response = ai_manager.send_message(
@@ -1251,6 +1334,7 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                     
                     # Handle image_generate tool result — persist for both interfaces
                     if tool_name == 'image_generate':
+                        image_was_generated = True  # Mark that we need vision model for continuation
                         try:
                             result_data = json.loads(result)
                             if result_data.get('image_path'):
@@ -1258,6 +1342,30 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                                 img_md = result_data.get('image_markdown', f'![Generated Image]({img_path})')
                                 Database.add_image_tools_message(img_path, session_id=session_id)
                                 Database.add_message('assistant', f"Image generated!\n\n{img_md}", session_id=session_id)
+                                
+                                # Load generated image and inject as visual context for continuation
+                                try:
+                                    import base64
+                                    if os.path.exists(img_path):
+                                        with open(img_path, 'rb') as f:
+                                            img_data = f.read()
+                                        img_b64 = base64.b64encode(img_data).decode('utf-8')
+                                        mime_type = 'image/png' if img_path.endswith('.png') else 'image/jpeg'
+                                        
+                                        # Store visual context for potential follow-up questions
+                                        _store_visual_context(session_id, img_b64, mime_type)
+                                        
+                                        # Append image to messages for vision model
+                                        messages.append({
+                                            "role": "user",
+                                            "content": [
+                                                {"type": "text", "text": "[Generated image attached for your natural response]"},
+                                                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}}
+                                            ]
+                                        })
+                                        print("[IMAGE TOOL] Generated image attached to conversation for vision model")
+                                except Exception as e:
+                                    print(f"[IMAGE TOOL] Failed to load generated image: {e}")
                         except (json.JSONDecodeError, KeyError):
                             pass
                     
@@ -1318,8 +1426,21 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
             if 'max_tokens' not in final_kwargs:
                 final_kwargs['max_tokens'] = 4096
             
+            # Switch to vision model if image was generated
+            final_provider = preferred_provider
+            final_model = preferred_model
+            if image_was_generated:
+                print("[IMAGE TOOL] Switching to vision model for continuation...")
+                vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
+                if vision_provider and vision_model:
+                    final_provider = vision_provider
+                    final_model = vision_model
+                    print(f"[IMAGE TOOL] Using vision model: {vision_provider}/{vision_model}")
+                else:
+                    print("[IMAGE TOOL] No vision provider available, using default model")
+            
             final_response = ai_manager.send_message(
-                preferred_provider, preferred_model, messages, **final_kwargs
+                final_provider, final_model, messages, **final_kwargs
             )
             
             # Extract text from whatever the model returns
