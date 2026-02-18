@@ -40,11 +40,15 @@ def execute(arguments, **kwargs):
         # Resolve image model from profile — no silent fallback
         profile = Database.get_profile()
         image_model = (profile or {}).get("image_model", "hunyuan")
+        
+        print(f"[IMAGE TOOL] Model: {image_model}")
 
         if image_model == "z_turbo":
             endpoint = Z_TURBO_ENDPOINT
         else:
             endpoint = HUNYUAN_ENDPOINT
+        
+        print(f"[IMAGE TOOL] Endpoint: {endpoint}")
 
         # Runtime model logging (mandatory per spec)
         print(f"[IMAGE TOOL]")
@@ -57,6 +61,8 @@ def execute(arguments, **kwargs):
         }
 
         payload = {"prompt": prompt}
+        
+        print(f"[IMAGE TOOL] Generating image (prompt length: {len(prompt)} chars)")
 
         response = requests.post(
             endpoint,
