@@ -458,6 +458,12 @@ class MultimodalTools:
     
     def generate_image(self, prompt: str, provider: str = "chutes", 
                       model: str = None, size: str = "1024x1024") -> Tuple[Optional[str], Optional[str]]:
+        """
+        Legacy image generation function.
+        
+        NOTE: Tool-based image generation is now centralized in tools/image_generate.py
+        This function is kept for backward compatibility with direct /imagine commands.
+        """
         try:
             api_keys = Database.get_api_keys()
             
