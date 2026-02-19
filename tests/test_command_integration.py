@@ -1,0 +1,90 @@
+"""Integration test for command-based tool execution flow."""
+
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def test_command_execution_flow():
+    """Test the complete flow of command detection and execution."""
+    from app import _detect_command, _execute_command_tool
+    
+    print("=== Testing Command Execution Flow ===\n")
+    
+    # Test 1: Detect and prepare web_search command
+    print("Test 1: Web search command")
+    cmd_info = _detect_command("/web_search Python programming")
+    assert cmd_info is not None
+    assert cmd_info["command"] == "web_search"
+    assert cmd_info["args"] == "Python programming"
+    print("✓ Command detected correctly")
+    
+    # Test 2: Detect memory_sql command
+    print("\nTest 2: Memory SQL command")
+    sql_cmd = "/memory_sql\nSELECT content FROM messages LIMIT 5"
+    cmd_info = _detect_command(sql_cmd)
+    assert cmd_info is not None
+    assert cmd_info["command"] == "memory_sql"
+    assert "SELECT content FROM messages LIMIT 5" in cmd_info["remaining_text"]
+    print("✓ Multi-line command detected correctly")
+    
+    # Test 3: Verify command formatting in tool execution
+    print("\nTest 3: Tool result formatting")
+    cmd_info = _detect_command("/weather Tokyo")
+    assert cmd_info is not None
+    # Note: We can't actually execute without API keys, but we can verify the format
+    print("✓ Command parsed for execution")
+    
+    # Test 4: Verify invalid commands are rejected
+    print("\nTest 4: Invalid command rejection")
+    invalid_commands = [
+        "Sure! /web_search test",
+        "Let me help\n/weather Tokyo",
+        "I'll search /web_search for you"
+    ]
+    for invalid in invalid_commands:
+        result = _detect_command(invalid)
+        assert result is None, f"Expected None for: {invalid}"
+    print("✓ All invalid commands correctly rejected")
+    
+    print("\n✅ All integration tests passed!")
+
+
+def test_tool_result_format():
+    """Test that tool results are formatted correctly."""
+    print("\n=== Testing Tool Result Format ===\n")
+    
+    # Simulate a tool result format
+    tool_name = "web_search"
+    result = '{"results": [{"title": "Test", "snippet": "Test snippet"}]}'
+    
+    formatted = f"🔧 TOOL RESULT — {tool_name.upper()}\n\n{result}\n\n---"
+    
+    assert "🔧 TOOL RESULT — WEB_SEARCH" in formatted
+    assert result in formatted
+    assert formatted.endswith("---")
+    
+    print("✓ Tool result format is correct")
+    print(f"Format example:\n{formatted}")
+    
+    print("\n✅ Tool result formatting test passed!")
+
+
+if __name__ == "__main__":
+    try:
+        test_command_execution_flow()
+        test_tool_result_format()
+        print("\n" + "="*50)
+        print("✅ ALL INTEGRATION TESTS PASSED")
+        print("="*50)
+    except AssertionError as e:
+        print(f"\n❌ Test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

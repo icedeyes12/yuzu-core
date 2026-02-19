@@ -682,6 +682,29 @@ class Database:
             session.commit()
 
     @staticmethod
+    def add_tool_result(tool_name, result_content, session_id=None):
+        """Store formatted tool result in database."""
+        if session_id is None:
+            active_session = Database.get_active_session()
+            session_id = active_session['id']
+        
+        with get_db_session() as session:
+            local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Format tool result
+            formatted_content = f"🔧 TOOL RESULT — {tool_name.upper()}\n\n{result_content}\n\n---"
+            
+            message = Message(
+                session_id=session_id,
+                role='tool',
+                content=formatted_content,
+                content_encrypted=False,
+                timestamp=local_time
+            )
+            session.add(message)
+            session.commit()
+
+    @staticmethod
     def add_system_note(content, session_id=None):
         if session_id is None:
             active_session = Database.get_active_session()

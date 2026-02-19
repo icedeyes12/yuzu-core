@@ -158,30 +158,111 @@ Use when user asks about weather.
 
 ---
 
+## Implementation Status
+
+### ✅ Completed
+
+1. **Command Detection Function (`_detect_command`)**
+   - Extracts first line from LLM response
+   - Checks if it starts with `/`
+   - Parses command and arguments
+   - Returns command info or None if invalid
+   - Location: `app.py` lines 67-102
+
+2. **Command Execution Function (`_execute_command_tool`)**
+   - Executes tool based on command info
+   - Formats result with header: `🔧 TOOL RESULT — [TOOL_NAME]`
+   - Handles all tool types: web_search, memory_search, memory_sql, weather, image_analyze, imagine
+   - Location: `app.py` lines 104-162
+
+3. **Integration into Response Generators**
+   - Streaming generator: `generate_ai_response_streaming()` lines 1324-1387
+   - Non-streaming generator: `generate_ai_response()` lines 1624-1684
+   - Both check for commands and execute them within existing async tool loop
+   - Commands are treated the same as API-based tool_calls
+
+4. **System Prompt Update**
+   - Added TOOL COMMAND PROTOCOL section after "Tool awareness"
+   - Explains strict format requirements
+   - Lists all available commands with usage examples
+   - Location: `app.py` lines 802-900 (approximately)
+
+5. **Test Coverage**
+   - Created `tests/test_command_detection.py`
+   - Tests valid command detection
+   - Tests invalid command rejection
+   - Tests command parsing for all tool types
+   - All tests pass ✅
+
+### Async Tool Pipeline
+
+The async tool pipeline is already implemented in the existing codebase:
+
+```python
+max_tool_iterations = 3
+loop_count = 0
+while loop_count < max_tool_iterations:
+    ai_response = ai_manager.send_message(...)
+    
+    # Check for API-based tool_calls
+    if ai_response.get('tool_calls'):
+        execute_tools()
+        loop_count += 1
+        continue
+    
+    # Check for command-based tools (NEW)
+    cmd_info = _detect_command(ai_response)
+    if cmd_info:
+        tool_result = _execute_command_tool(cmd_info)
+        messages.append(tool_result)
+        loop_count += 1
+        continue
+    
+    # No tools — return response
+    return ai_response
+```
+
+Flow:
+1. User message received
+2. LLM responds (may contain command or tool_call)
+3. If command detected on first line → execute tool
+4. Tool result added to messages
+5. NEW LLM request sent with tool result
+6. LLM produces natural response
+7. Response returned to user
+
+This ensures:
+- No blocking
+- Async execution
+- Single reasoning entity (LLM)
+- Tools are hands, not thinkers
+
+---
+
 ## Implementation Requirements
 
 ### Backend Changes (app.py)
 
-1. **Command Detection Function**
+1. **Command Detection Function** ✅
    - Extract first line from LLM response
    - Check if it starts with `/`
    - Parse command and arguments
    - Return command info or None
 
-2. **Command Execution Logic**
+2. **Command Execution Logic** ✅
    - If command detected on first line:
      - Execute tool
      - Store tool result as new message
      - Remove command from displayed response
      - Continue conversation with tool result in context
 
-3. **Validation Rules**
+3. **Validation Rules** ✅
    - Must be first line
    - Must start with `/`
    - Only one command per message
    - Any text before command = invalid
 
-### System Prompt Changes
+### System Prompt Changes ✅
 
 Add TOOL COMMAND PROTOCOL section after "Tool awareness" section.
 
