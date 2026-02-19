@@ -1355,7 +1355,6 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                         "tool_call_id": tc.get('id', ''),
                         "content": result
                     })
-                
                     
                     # Save tool result to database with tool-specific role
                     # (image_generate already saved via add_image_tools_message above)
@@ -1664,7 +1663,6 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                         "tool_call_id": tc.get('id', ''),
                         "content": result
                     })
-                
                     
                     # Save tool result to database with tool-specific role
                     # (image_generate already saved via add_image_tools_message above)

@@ -759,7 +759,7 @@ class Database:
         with get_db_session() as session:
             query = session.query(Message).filter(
                 Message.session_id == session_id,
-                Message.role.in_(['user', 'assistant', 'image_tools'] + ALL_TOOL_ROLES)
+                Message.role.in_(['user', 'assistant'] + ALL_TOOL_ROLES)
             )
             
             if recent and limit:
