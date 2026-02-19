@@ -64,6 +64,103 @@ def _has_visual_reference(text):
     """Detect if the user message references a previous image."""
     return bool(_VISUAL_REF_PATTERNS.search(text))
 
+def _detect_command(response_text):
+    """
+    Detect if the response starts with a tool command on the first line.
+    
+    Returns:
+        dict: {"command": str, "args": str, "full_command": str} if command detected
+        None: if no command on first line or invalid format
+    """
+    if not response_text or not response_text.strip():
+        return None
+    
+    # Split into lines
+    lines = response_text.split('\n')
+    first_line = lines[0].strip()
+    
+    # Check if first line starts with /
+    if not first_line.startswith('/'):
+        return None
+    
+    # Parse command
+    parts = first_line.split(None, 1)  # Split on first whitespace
+    command = parts[0]  # e.g., "/web_search"
+    args = parts[1] if len(parts) > 1 else ""
+    
+    # Extract tool name (remove /)
+    tool_name = command[1:]  # Remove leading /
+    
+    # Handle multi-line commands (like /memory_sql)
+    remaining_text = '\n'.join(lines[1:]).strip() if len(lines) > 1 else ""
+    
+    return {
+        "command": tool_name,
+        "args": args,
+        "remaining_text": remaining_text,
+        "full_command": first_line
+    }
+
+def _execute_command_tool(command_info, session_id=None):
+    """
+    Execute a tool based on command detection.
+    
+    Args:
+        command_info: dict from _detect_command()
+        session_id: current session ID
+    
+    Returns:
+        str: formatted tool result
+    """
+    tool_name = command_info["command"]
+    args_str = command_info["args"]
+    remaining_text = command_info["remaining_text"]
+    
+    print(f"[COMMAND] Detected command: /{tool_name} {args_str}")
+    
+    # Prepare arguments based on tool type
+    try:
+        if tool_name == "memory_sql":
+            # SQL query is in remaining_text
+            args = {"query": remaining_text}
+        elif tool_name in ("web_search", "memory_search"):
+            # Query is in args_str
+            args = {"query": args_str}
+        elif tool_name == "weather":
+            # Location in args_str, or use stored location
+            if args_str:
+                args = {"location": args_str}
+            else:
+                weather_context = Database.get_context()
+                weather_location = weather_context.get('location', {})
+                args = {
+                    "lat": weather_location.get('lat', 0.0),
+                    "lon": weather_location.get('lon', 0.0)
+                }
+        elif tool_name == "image_analyze":
+            # No args needed
+            args = {}
+        elif tool_name == "imagine":
+            # Map to image_generate tool
+            tool_name = "image_generate"
+            args = {"prompt": args_str}
+        else:
+            # Generic argument handling
+            args = {"query": args_str} if args_str else {}
+        
+        # Execute the tool
+        result = execute_tool(tool_name, args, session_id=session_id)
+        
+        # Format result with header
+        formatted_result = f"🔧 TOOL RESULT — {tool_name.upper()}\n\n{result}\n\n---"
+        
+        return formatted_result
+        
+    except Exception as e:
+        error_msg = f"🔧 TOOL ERROR — {tool_name.upper()}\n\nError: {str(e)}\n\n---"
+        print(f"[COMMAND ERROR] {tool_name}: {e}")
+        return error_msg
+
 def _load_and_attach_generated_image(img_path, messages, session_id):
     """
     Load a generated image file, encode as base64, and attach to messages.
@@ -801,16 +898,111 @@ Default mode: React naturally, don't analyze.
 
 ---
 
-TOOL PROTOCOL (STRICT):
+TOOL COMMAND PROTOCOL (STRICT FORMAT):
 
-Tool invocation format:
-When calling a tool, the model MUST return a structured tool_calls response.
-This is handled automatically by the provider API.
+You can execute tools in two ways:
+1. Structured tool_calls (handled automatically by the provider API)
+2. Direct command syntax (STRICT first-line requirement)
 
-Tool execution flow:
+Command format rules (MANDATORY):
+- A tool command must be the VERY FIRST LINE of the message
+- No text, no whitespace, no punctuation before the command
+- The command must start with /
+- Only one command per message
+- If any text appears before the command, the tool will NOT execute
+
+Correct example:
+```
+/imagine a cinematic portrait of a woman under neon rain
+```
+
+Incorrect example (will NOT execute):
+```
+Okay I'll generate the image for you.
+/imagine neon cyberpunk girl
+```
+
+Incorrect example (will NOT execute):
+```
+Sure! /imagine neon cyberpunk girl
+```
+
+The system only detects commands when they are the first line.
+
+---
+
+Available Tool Commands:
+
+1️⃣ Image Generation
+/imagine [visual prompt]
+- Used only when image generation protocol is activated
+- Must follow strict execution rules described above
+
+2️⃣ Web Search
+/web_search [query]
+Use when:
+- Real-time data
+- Prices
+- News
+- Time-sensitive facts
+- Concrete numbers required
+
+3️⃣ Memory Search (semantic)
+/memory_search [query]
+Use when:
+- Recalling past conversation topics
+- Time-based memory
+- Personal history recall
+- Non-structured recall
+
+4️⃣ Memory SQL (structured recall)
+/memory_sql
+SELECT ...
+
+Rules:
+- First line must be /memory_sql
+- SQL starts on next line
+- Only SELECT and UPDATE allowed
+- INSERT / DELETE / DROP / TRUNCATE / ALTER / CREATE / PRAGMA / VACUUM are blocked
+- Never query rows where role = 'memory_tool'
+
+Example:
+```
+/memory_sql
+SELECT id, content
+FROM messages
+WHERE content LIKE '%parameter%'
+AND role != 'memory_tool'
+ORDER BY id DESC
+LIMIT 5;
+```
+
+5️⃣ Image Analysis
+/image_analyze
+- Use only when the user explicitly asks to analyze or describe an image
+
+6️⃣ Weather
+/weather [location]
+- Use when user asks about weather
+
+---
+
+Tool Execution Model:
+- Tools do not think
+- Tools only execute
+- You are the single reasoning entity
+- After issuing a tool command, your turn ends
+- Tool result will appear as a new message
+- You will then respond naturally
+
+Never explain tool mechanics. Never mention tools in conversation.
+
+---
+
+Tool execution flow (automatic):
 1. User message received
 2. Model decides if tool is needed
-3. Model returns tool_call in provider format
+3. Model returns tool_call in provider format OR command on first line
 4. System executes tool
 5. Tool result added to conversation
 6. NEW MESSAGE REQUEST sent automatically with tool result
@@ -821,19 +1013,6 @@ IMPORTANT:
 - Tool results are context, not final answers
 - Never stop after tool output — always respond to the user
 - If a tool fails, fall back gracefully
-
-Legacy tool command formats (for reference only):
-These formats are NOT used in the current architecture.
-Tool calls are handled via provider API tool_calls mechanism.
-
-/memory_sql
-SELECT query
-
-/memory_search query text
-/web_search query text  
-/weather location
-/image_analyze
-/imagine prompt
 
 Memory SQL restrictions:
 - Allowed: SELECT, UPDATE
@@ -1146,16 +1325,65 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
             if isinstance(ai_response, dict):
                 content = ai_response.get('content', '')
                 if content and content.strip():
+                    # Check for command on first line
+                    cmd_info = _detect_command(content)
+                    if cmd_info:
+                        # Execute command-based tool
+                        tool_result = _execute_command_tool(cmd_info, session_id=session_id)
+                        
+                        # Add tool result to messages for next iteration
+                        messages.append({
+                            "role": "assistant",
+                            "content": cmd_info["full_command"]
+                        })
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": f"cmd_{cmd_info['command']}_{loop_count}",
+                            "content": tool_result
+                        })
+                        
+                        last_tool_results.append({"tool": cmd_info["command"], "result": tool_result})
+                        loop_count += 1
+                        continue
+                    
                     yield content.strip()
                     return
             
             # No tool calls — yield text response
             if isinstance(ai_response, str) and ai_response.strip():
-                if ai_response.strip().startswith('/imagine'):
-                    result = _handle_ai_image_generation(ai_response, session_id)
-                    yield result
-                else:
-                    yield ai_response
+                # Check for command on first line
+                cmd_info = _detect_command(ai_response)
+                if cmd_info:
+                    # Execute command-based tool
+                    tool_result = _execute_command_tool(cmd_info, session_id=session_id)
+                    
+                    # Add tool result to messages for next iteration
+                    messages.append({
+                        "role": "assistant",
+                        "content": cmd_info["full_command"]
+                    })
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": f"cmd_{cmd_info['command']}_{loop_count}",
+                        "content": tool_result
+                    })
+                    
+                    # Handle image generation specially
+                    if cmd_info["command"] == "imagine" or cmd_info["command"] == "image_generate":
+                        image_was_generated = True
+                        try:
+                            result_data = json.loads(tool_result.split('\n\n')[1] if '\n\n' in tool_result else tool_result)
+                            if result_data.get('image_path'):
+                                img_path = result_data['image_path']
+                                _load_and_attach_generated_image(img_path, messages, session_id)
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            pass
+                    
+                    last_tool_results.append({"tool": cmd_info["command"], "result": tool_result})
+                    loop_count += 1
+                    continue
+                    
+                yield ai_response
                 return
             
             # Empty response after tool execution — force final answer without tools
@@ -1397,12 +1625,74 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
             if isinstance(ai_response, dict):
                 content = ai_response.get('content', '')
                 if content and content.strip():
+                    # Check for command on first line
+                    cmd_info = _detect_command(content)
+                    if cmd_info:
+                        # Execute command-based tool
+                        tool_result = _execute_command_tool(cmd_info, session_id=session_id)
+                        
+                        # Add tool result to messages for next iteration
+                        messages.append({
+                            "role": "assistant",
+                            "content": cmd_info["full_command"]
+                        })
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": f"cmd_{cmd_info['command']}_{loop_count}",
+                            "content": tool_result
+                        })
+                        
+                        # Handle image generation specially
+                        if cmd_info["command"] == "imagine" or cmd_info["command"] == "image_generate":
+                            image_was_generated = True
+                            try:
+                                result_data = json.loads(tool_result.split('\n\n')[1] if '\n\n' in tool_result else tool_result)
+                                if result_data.get('image_path'):
+                                    img_path = result_data['image_path']
+                                    _load_and_attach_generated_image(img_path, messages, session_id)
+                            except (json.JSONDecodeError, KeyError, IndexError):
+                                pass
+                        
+                        last_tool_results.append({"tool": cmd_info["command"], "result": tool_result})
+                        loop_count += 1
+                        continue
+                    
                     return content.strip()
             
             # No tool calls — we have the final text response
             if isinstance(ai_response, str) and ai_response.strip():
-                if ai_response.strip().startswith('/imagine'):
-                    return _handle_ai_image_generation(ai_response, session_id)
+                # Check for command on first line
+                cmd_info = _detect_command(ai_response)
+                if cmd_info:
+                    # Execute command-based tool
+                    tool_result = _execute_command_tool(cmd_info, session_id=session_id)
+                    
+                    # Add tool result to messages for next iteration
+                    messages.append({
+                        "role": "assistant",
+                        "content": cmd_info["full_command"]
+                    })
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": f"cmd_{cmd_info['command']}_{loop_count}",
+                        "content": tool_result
+                    })
+                    
+                    # Handle image generation specially
+                    if cmd_info["command"] == "imagine" or cmd_info["command"] == "image_generate":
+                        image_was_generated = True
+                        try:
+                            result_data = json.loads(tool_result.split('\n\n')[1] if '\n\n' in tool_result else tool_result)
+                            if result_data.get('image_path'):
+                                img_path = result_data['image_path']
+                                _load_and_attach_generated_image(img_path, messages, session_id)
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            pass
+                    
+                    last_tool_results.append({"tool": cmd_info["command"], "result": tool_result})
+                    loop_count += 1
+                    continue
+                
                 return ai_response
             
             # Empty response after tool execution — force final answer without tools
