@@ -22,6 +22,19 @@ from sqlalchemy.pool import StaticPool
 # SQLAlchemy setup
 Base = declarative_base()
 
+# Tool-specific role mapping: each tool gets its own dedicated message role
+TOOL_ROLES = {
+    'image_generate': 'image_tools',
+    'web_search': 'web_search_tools',
+    'memory_sql': 'memory_sql_tools',
+    'memory_search': 'memory_search_tools',
+    'weather': 'weather_tools',
+    'image_analyze': 'image_analyze_tools',
+}
+
+# All tool roles for use in queries
+ALL_TOOL_ROLES = list(TOOL_ROLES.values())
+
 class Profile(Base):
     __tablename__ = 'profiles'
     
@@ -684,7 +697,7 @@ class Database:
     @staticmethod
     def add_tool_result(tool_name, result_content, session_id=None):
         """
-        Store formatted tool result in database.
+        Store formatted tool result in database with tool-specific role.
         
         Args:
             tool_name (str): Name of the tool that was executed
@@ -695,6 +708,9 @@ class Database:
             active_session = Database.get_active_session()
             session_id = active_session['id']
         
+        # Use tool-specific role from TOOL_ROLES mapping
+        role = TOOL_ROLES.get(tool_name, f'{tool_name}_tools')
+        
         with get_db_session() as session:
             local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             
@@ -703,7 +719,7 @@ class Database:
             
             message = Message(
                 session_id=session_id,
-                role='tool',
+                role=role,
                 content=formatted_content,
                 content_encrypted=False,
                 timestamp=local_time
@@ -743,7 +759,7 @@ class Database:
         with get_db_session() as session:
             query = session.query(Message).filter(
                 Message.session_id == session_id,
-                Message.role.in_(['user', 'assistant', 'image_tools'])
+                Message.role.in_(['user', 'assistant', 'image_tools'] + ALL_TOOL_ROLES)
             )
             
             if recent and limit:
@@ -784,7 +800,7 @@ class Database:
         with get_db_session() as session:
             query = session.query(Message).filter(
                 Message.session_id == session_id,
-                Message.role.in_(['user', 'assistant', 'system'])
+                Message.role.in_(['user', 'assistant', 'system'] + ALL_TOOL_ROLES)
             )
             
             if recent and limit:

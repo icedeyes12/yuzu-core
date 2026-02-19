@@ -20,7 +20,7 @@ import json
 import traceback
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List
-from database import Database
+from database import Database, ALL_TOOL_ROLES
 from providers import get_ai_manager
 from tools import multimodal_tools
 from tools.registry import get_tool_schemas, execute_tool
@@ -1124,8 +1124,14 @@ Tool flow rules:
     messages = [{"role": "system", "content": system_message}]
 
     for msg in chat_history:
+        role = msg["role"]
+        # Map tool-specific roles to 'assistant' for LLM API compatibility
+        # Tool results are stored with dedicated roles (e.g., web_search_tools)
+        # but LLMs only understand system/user/assistant/tool roles
+        if role in ALL_TOOL_ROLES:
+            role = "assistant"
         messages.append({
-            "role": msg["role"],
+            "role": role,
             "content": msg["content"]
         })
 
@@ -1350,6 +1356,11 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                         "content": result
                     })
                 
+                    
+                    # Save tool result to database with tool-specific role
+                    # (image_generate already saved via add_image_tools_message above)
+                    if tool_name != 'image_generate':
+                        Database.add_tool_result(tool_name, result, session_id=session_id)
                 loop_count += 1
                 continue
             
@@ -1376,6 +1387,10 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                         
                         last_tool_results.append({"tool": cmd_info["command"], "result": tool_result})
                         loop_count += 1
+                        
+                        # Save assistant command and tool result to database
+                        Database.add_message('assistant', cmd_info["full_command"], session_id=session_id)
+                        Database.add_tool_result(cmd_info["command"], tool_result, session_id=session_id)
                         continue
                     
                     yield content.strip()
@@ -1409,6 +1424,10 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                     
                     last_tool_results.append({"tool": cmd_info["command"], "result": tool_result})
                     loop_count += 1
+                    
+                    # Save assistant command and tool result to database
+                    Database.add_message('assistant', cmd_info["full_command"], session_id=session_id)
+                    Database.add_tool_result(cmd_info["command"], tool_result, session_id=session_id)
                     continue
                     
                 yield ai_response
@@ -1646,6 +1665,11 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                         "content": result
                     })
                 
+                    
+                    # Save tool result to database with tool-specific role
+                    # (image_generate already saved via add_image_tools_message above)
+                    if tool_name != 'image_generate':
+                        Database.add_tool_result(tool_name, result, session_id=session_id)
                 loop_count += 1
                 continue
             
@@ -1679,6 +1703,10 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                         
                         last_tool_results.append({"tool": cmd_info["command"], "result": tool_result})
                         loop_count += 1
+                        
+                        # Save assistant command and tool result to database
+                        Database.add_message('assistant', cmd_info["full_command"], session_id=session_id)
+                        Database.add_tool_result(cmd_info["command"], tool_result, session_id=session_id)
                         continue
                     
                     return content.strip()
@@ -1711,6 +1739,10 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                     
                     last_tool_results.append({"tool": cmd_info["command"], "result": tool_result})
                     loop_count += 1
+                    
+                    # Save assistant command and tool result to database
+                    Database.add_message('assistant', cmd_info["full_command"], session_id=session_id)
+                    Database.add_tool_result(cmd_info["command"], tool_result, session_id=session_id)
                     continue
                 
                 return ai_response
