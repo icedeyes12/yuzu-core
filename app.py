@@ -64,6 +64,33 @@ def _has_visual_reference(text):
     """Detect if the user message references a previous image."""
     return bool(_VISUAL_REF_PATTERNS.search(text))
 
+def _generate_tool_call_id(tool_name, loop_count):
+    """Generate a unique tool call ID for command-based tool execution."""
+    return f"cmd_{tool_name}_{loop_count}"
+
+def _parse_image_result_from_formatted(formatted_result):
+    """
+    Parse image path from formatted tool result.
+    
+    Args:
+        formatted_result: Formatted tool result string with header
+    
+    Returns:
+        str: Image path if found, None otherwise
+    """
+    try:
+        # Extract JSON from formatted result (after header, before footer)
+        result_parts = formatted_result.split('\n\n')
+        if len(result_parts) >= 2:
+            result_json = result_parts[1]
+        else:
+            result_json = formatted_result
+        
+        result_data = json.loads(result_json)
+        return result_data.get('image_path')
+    except (json.JSONDecodeError, KeyError, IndexError):
+        return None
+
 def _detect_command(response_text):
     """
     Detect if the response starts with a tool command on the first line.
@@ -1338,7 +1365,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                         })
                         messages.append({
                             "role": "tool",
-                            "tool_call_id": f"cmd_{cmd_info['command']}_{loop_count}",
+                            "tool_call_id": _generate_tool_call_id(cmd_info['command'], loop_count),
                             "content": tool_result
                         })
                         
@@ -1364,20 +1391,16 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                     })
                     messages.append({
                         "role": "tool",
-                        "tool_call_id": f"cmd_{cmd_info['command']}_{loop_count}",
+                        "tool_call_id": _generate_tool_call_id(cmd_info['command'], loop_count),
                         "content": tool_result
                     })
                     
                     # Handle image generation specially
                     if cmd_info["command"] == "imagine" or cmd_info["command"] == "image_generate":
                         image_was_generated = True
-                        try:
-                            result_data = json.loads(tool_result.split('\n\n')[1] if '\n\n' in tool_result else tool_result)
-                            if result_data.get('image_path'):
-                                img_path = result_data['image_path']
-                                _load_and_attach_generated_image(img_path, messages, session_id)
-                        except (json.JSONDecodeError, KeyError, IndexError):
-                            pass
+                        img_path = _parse_image_result_from_formatted(tool_result)
+                        if img_path:
+                            _load_and_attach_generated_image(img_path, messages, session_id)
                     
                     last_tool_results.append({"tool": cmd_info["command"], "result": tool_result})
                     loop_count += 1
@@ -1638,20 +1661,16 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                         })
                         messages.append({
                             "role": "tool",
-                            "tool_call_id": f"cmd_{cmd_info['command']}_{loop_count}",
+                            "tool_call_id": _generate_tool_call_id(cmd_info['command'], loop_count),
                             "content": tool_result
                         })
                         
                         # Handle image generation specially
                         if cmd_info["command"] == "imagine" or cmd_info["command"] == "image_generate":
                             image_was_generated = True
-                            try:
-                                result_data = json.loads(tool_result.split('\n\n')[1] if '\n\n' in tool_result else tool_result)
-                                if result_data.get('image_path'):
-                                    img_path = result_data['image_path']
-                                    _load_and_attach_generated_image(img_path, messages, session_id)
-                            except (json.JSONDecodeError, KeyError, IndexError):
-                                pass
+                            img_path = _parse_image_result_from_formatted(tool_result)
+                            if img_path:
+                                _load_and_attach_generated_image(img_path, messages, session_id)
                         
                         last_tool_results.append({"tool": cmd_info["command"], "result": tool_result})
                         loop_count += 1
@@ -1674,20 +1693,16 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                     })
                     messages.append({
                         "role": "tool",
-                        "tool_call_id": f"cmd_{cmd_info['command']}_{loop_count}",
+                        "tool_call_id": _generate_tool_call_id(cmd_info['command'], loop_count),
                         "content": tool_result
                     })
                     
                     # Handle image generation specially
                     if cmd_info["command"] == "imagine" or cmd_info["command"] == "image_generate":
                         image_was_generated = True
-                        try:
-                            result_data = json.loads(tool_result.split('\n\n')[1] if '\n\n' in tool_result else tool_result)
-                            if result_data.get('image_path'):
-                                img_path = result_data['image_path']
-                                _load_and_attach_generated_image(img_path, messages, session_id)
-                        except (json.JSONDecodeError, KeyError, IndexError):
-                            pass
+                        img_path = _parse_image_result_from_formatted(tool_result)
+                        if img_path:
+                            _load_and_attach_generated_image(img_path, messages, session_id)
                     
                     last_tool_results.append({"tool": cmd_info["command"], "result": tool_result})
                     loop_count += 1

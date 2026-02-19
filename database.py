@@ -683,7 +683,14 @@ class Database:
 
     @staticmethod
     def add_tool_result(tool_name, result_content, session_id=None):
-        """Store formatted tool result in database."""
+        """
+        Store formatted tool result in database.
+        
+        Args:
+            tool_name (str): Name of the tool that was executed
+            result_content (str): Raw result content from tool execution
+            session_id (int, optional): Session ID. Defaults to active session if None.
+        """
         if session_id is None:
             active_session = Database.get_active_session()
             session_id = active_session['id']
