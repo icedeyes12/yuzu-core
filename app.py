@@ -132,6 +132,13 @@ def _detect_command(response_text):
         "full_command": first_line
     }
 
+def _is_rendered_tool_output(response_text):
+    """True when response is a rendered tool output block."""
+    if not response_text:
+        return False
+    stripped = response_text.strip()
+    return stripped.startswith("🔧 TOOL RESULT —") or stripped.startswith("🔧 TOOL ERROR —")
+
 def _execute_command_tool(command_info, session_id=None):
     """
     Execute a tool based on command detection.
@@ -297,7 +304,8 @@ def handle_user_message(user_message, interface="terminal"):
         
         ai_reply_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', ai_reply).strip()
         
-        Database.add_message('assistant', ai_reply_clean, session_id=session_id)
+        if not _is_rendered_tool_output(ai_reply_clean):
+            Database.add_message('assistant', ai_reply_clean, session_id=session_id)
         
         auto_name_session_if_needed(session_id, active_session)
         
@@ -340,7 +348,8 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
         
         if full_response.strip():
             full_response_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', full_response).strip()
-            Database.add_message('assistant', full_response_clean, session_id=session_id)
+            if not _is_rendered_tool_output(full_response_clean):
+                Database.add_message('assistant', full_response_clean, session_id=session_id)
         
         auto_name_session_if_needed(session_id, active_session)
         
@@ -1370,27 +1379,11 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                     # Check for command on first line
                     cmd_info = _detect_command(content)
                     if cmd_info:
-                        # Execute command-based tool
+                        # Execute command-based tool, save tool result, and stop.
                         tool_result = _execute_command_tool(cmd_info, session_id=session_id)
-                        
-                        # Add tool result to messages for next iteration
-                        messages.append({
-                            "role": "assistant",
-                            "content": cmd_info["full_command"]
-                        })
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": _generate_tool_call_id(cmd_info['command'], loop_count),
-                            "content": tool_result
-                        })
-                        
-                        last_tool_results.append({"tool": cmd_info["command"], "result": tool_result})
-                        loop_count += 1
-                        
-                        # Save assistant command and tool result to database
-                        Database.add_message('assistant', cmd_info["full_command"], session_id=session_id)
                         Database.add_tool_result(cmd_info["command"], tool_result, session_id=session_id)
-                        continue
+                        yield tool_result
+                        return
                     
                     yield content.strip()
                     return
@@ -1400,34 +1393,11 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                 # Check for command on first line
                 cmd_info = _detect_command(ai_response)
                 if cmd_info:
-                    # Execute command-based tool
+                    # Execute command-based tool, save tool result, and stop.
                     tool_result = _execute_command_tool(cmd_info, session_id=session_id)
-                    
-                    # Add tool result to messages for next iteration
-                    messages.append({
-                        "role": "assistant",
-                        "content": cmd_info["full_command"]
-                    })
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": _generate_tool_call_id(cmd_info['command'], loop_count),
-                        "content": tool_result
-                    })
-                    
-                    # Handle image generation specially
-                    if _is_image_generation_tool(cmd_info["command"]):
-                        image_was_generated = True
-                        img_path = _parse_image_result_from_formatted(tool_result)
-                        if img_path:
-                            _load_and_attach_generated_image(img_path, messages, session_id)
-                    
-                    last_tool_results.append({"tool": cmd_info["command"], "result": tool_result})
-                    loop_count += 1
-                    
-                    # Save assistant command and tool result to database
-                    Database.add_message('assistant', cmd_info["full_command"], session_id=session_id)
                     Database.add_tool_result(cmd_info["command"], tool_result, session_id=session_id)
-                    continue
+                    yield tool_result
+                    return
                     
                 yield ai_response
                 return
@@ -1678,34 +1648,10 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                     # Check for command on first line
                     cmd_info = _detect_command(content)
                     if cmd_info:
-                        # Execute command-based tool
+                        # Execute command-based tool, save tool result, and stop.
                         tool_result = _execute_command_tool(cmd_info, session_id=session_id)
-                        
-                        # Add tool result to messages for next iteration
-                        messages.append({
-                            "role": "assistant",
-                            "content": cmd_info["full_command"]
-                        })
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": _generate_tool_call_id(cmd_info['command'], loop_count),
-                            "content": tool_result
-                        })
-                        
-                        # Handle image generation specially
-                        if _is_image_generation_tool(cmd_info["command"]):
-                            image_was_generated = True
-                            img_path = _parse_image_result_from_formatted(tool_result)
-                            if img_path:
-                                _load_and_attach_generated_image(img_path, messages, session_id)
-                        
-                        last_tool_results.append({"tool": cmd_info["command"], "result": tool_result})
-                        loop_count += 1
-                        
-                        # Save assistant command and tool result to database
-                        Database.add_message('assistant', cmd_info["full_command"], session_id=session_id)
                         Database.add_tool_result(cmd_info["command"], tool_result, session_id=session_id)
-                        continue
+                        return tool_result
                     
                     return content.strip()
             
@@ -1714,34 +1660,10 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                 # Check for command on first line
                 cmd_info = _detect_command(ai_response)
                 if cmd_info:
-                    # Execute command-based tool
+                    # Execute command-based tool, save tool result, and stop.
                     tool_result = _execute_command_tool(cmd_info, session_id=session_id)
-                    
-                    # Add tool result to messages for next iteration
-                    messages.append({
-                        "role": "assistant",
-                        "content": cmd_info["full_command"]
-                    })
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": _generate_tool_call_id(cmd_info['command'], loop_count),
-                        "content": tool_result
-                    })
-                    
-                    # Handle image generation specially
-                    if _is_image_generation_tool(cmd_info["command"]):
-                        image_was_generated = True
-                        img_path = _parse_image_result_from_formatted(tool_result)
-                        if img_path:
-                            _load_and_attach_generated_image(img_path, messages, session_id)
-                    
-                    last_tool_results.append({"tool": cmd_info["command"], "result": tool_result})
-                    loop_count += 1
-                    
-                    # Save assistant command and tool result to database
-                    Database.add_message('assistant', cmd_info["full_command"], session_id=session_id)
                     Database.add_tool_result(cmd_info["command"], tool_result, session_id=session_id)
-                    continue
+                    return tool_result
                 
                 return ai_response
             

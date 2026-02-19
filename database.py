@@ -25,6 +25,7 @@ Base = declarative_base()
 # Tool-specific role mapping: each tool gets its own dedicated message role
 TOOL_ROLES = {
     'image_generate': 'image_tools',
+    'imagine': 'image_tools',
     'web_search': 'web_search_tools',
     'memory_sql': 'memory_sql_tools',
     'memory_search': 'memory_search_tools',
