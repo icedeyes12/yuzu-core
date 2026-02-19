@@ -68,6 +68,10 @@ def _generate_tool_call_id(tool_name, loop_count):
     """Generate a unique tool call ID for command-based tool execution."""
     return f"cmd_{tool_name}_{loop_count}"
 
+def _is_image_generation_tool(command_name):
+    """Check if the command is for image generation."""
+    return command_name in ("imagine", "image_generate")
+
 def _parse_image_result_from_formatted(formatted_result):
     """
     Parse image path from formatted tool result.
@@ -139,6 +143,7 @@ def _execute_command_tool(command_info, session_id=None):
     Returns:
         str: formatted tool result
     """
+    original_command = command_info["command"]  # Store original for display
     tool_name = command_info["command"]
     args_str = command_info["args"]
     remaining_text = command_info["remaining_text"]
@@ -168,7 +173,7 @@ def _execute_command_tool(command_info, session_id=None):
             # No args needed
             args = {}
         elif tool_name == "imagine":
-            # Map to image_generate tool
+            # Map to image_generate tool for execution, but keep original name for display
             tool_name = "image_generate"
             args = {"prompt": args_str}
         else:
@@ -178,13 +183,13 @@ def _execute_command_tool(command_info, session_id=None):
         # Execute the tool
         result = execute_tool(tool_name, args, session_id=session_id)
         
-        # Format result with header
-        formatted_result = f"🔧 TOOL RESULT — {tool_name.upper()}\n\n{result}\n\n---"
+        # Format result with original command name for display consistency
+        formatted_result = f"🔧 TOOL RESULT — {original_command.upper()}\n\n{result}\n\n---"
         
         return formatted_result
         
     except Exception as e:
-        error_msg = f"🔧 TOOL ERROR — {tool_name.upper()}\n\nError: {str(e)}\n\n---"
+        error_msg = f"🔧 TOOL ERROR — {original_command.upper()}\n\nError: {str(e)}\n\n---"
         print(f"[COMMAND ERROR] {tool_name}: {e}")
         return error_msg
 
@@ -1396,7 +1401,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                     })
                     
                     # Handle image generation specially
-                    if cmd_info["command"] == "imagine" or cmd_info["command"] == "image_generate":
+                    if _is_image_generation_tool(cmd_info["command"]):
                         image_was_generated = True
                         img_path = _parse_image_result_from_formatted(tool_result)
                         if img_path:
@@ -1666,7 +1671,7 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                         })
                         
                         # Handle image generation specially
-                        if cmd_info["command"] == "imagine" or cmd_info["command"] == "image_generate":
+                        if _is_image_generation_tool(cmd_info["command"]):
                             image_was_generated = True
                             img_path = _parse_image_result_from_formatted(tool_result)
                             if img_path:
@@ -1698,7 +1703,7 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                     })
                     
                     # Handle image generation specially
-                    if cmd_info["command"] == "imagine" or cmd_info["command"] == "image_generate":
+                    if _is_image_generation_tool(cmd_info["command"]):
                         image_was_generated = True
                         img_path = _parse_image_result_from_formatted(tool_result)
                         if img_path:
