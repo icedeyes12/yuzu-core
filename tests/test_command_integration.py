@@ -74,9 +74,10 @@ def test_tool_result_format():
 def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
     """Command control signal should not be saved/rendered as assistant content.
 
-    After tool execution, the result is persisted to DB and the conversational
-    pipeline is re-entered (context rebuilt from DB → LLM call) so the model
-    can produce a natural response that incorporates the tool output.
+    After tool execution, the raw result is persisted to DB via
+    Database.add_tool_result (which handles formatting).  Context is rebuilt
+    from DB within the same loop, and the next LLM iteration produces a
+    natural conversational response.
     """
     import app
     from database import Database, get_db_session, Message
@@ -95,25 +96,26 @@ def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
             if self.calls == 1:
                 # LLM emits a command control signal
                 return "/web_search python testing"
-            # Pipeline re-entry: LLM sees tool result in context and
+            # Next loop iteration: LLM sees tool result in context and
             # generates a natural conversational response.
             return "Here are the latest Python testing resources I found."
 
     fake_manager = FakeManager()
     monkeypatch.setattr(app, "get_ai_manager", lambda: fake_manager)
+    # _execute_command_tool now returns raw JSON (no formatting)
     monkeypatch.setattr(
         app,
         "_execute_command_tool",
-        lambda cmd_info, session_id=None: "🔧 TOOL RESULT — WEB_SEARCH\n\n{\"results\":[]}\n\n---",
+        lambda cmd_info, session_id=None: '{"results":[]}',
     )
 
     reply = app.handle_user_message("please check latest python testing links", interface="terminal")
 
-    # Reply should be the natural response from the pipeline re-entry,
+    # Reply should be the natural response from the next loop iteration,
     # NOT the raw tool result.
     assert reply == "Here are the latest Python testing resources I found."
-    # Pipeline re-entry means two LLM calls: initial + re-entry after tool
-    assert fake_manager.calls == 2, "LLM should be called twice: initial + pipeline re-entry"
+    # Two LLM calls: initial (returns command) + next iteration (returns natural response)
+    assert fake_manager.calls == 2, "LLM should be called twice: initial + loop continuation"
 
     with get_db_session() as session:
         rows = session.query(Message).filter(Message.session_id == session_id).order_by(Message.id.asc()).all()
@@ -122,15 +124,15 @@ def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
     # No assistant /command control signal persisted
     assert not any(role == "assistant" and isinstance(content, str) and content.strip().startswith("/")
                    for role, content in roles_and_content), roles_and_content
-    # Tool result persisted with dedicated role
+    # Tool result persisted with dedicated role (formatted by Database.add_tool_result)
     assert any(role == "web_search_tools" and "🔧 TOOL RESULT — WEB_SEARCH" in (content or "")
                for role, content in roles_and_content), roles_and_content
 
 
 def test_tool_calls_reenter_pipeline_after_execution(monkeypatch):
-    """After tool_calls execution the pipeline re-enters via context rebuild.
+    """After tool_calls execution, context is rebuilt from DB within the loop.
 
-    The final LLM call must use _build_generation_context (reading from DB),
+    The next LLM call uses _build_generation_context (reading from DB),
     NOT the accumulated in-memory messages list from the tool loop.
     """
     import app
@@ -165,11 +167,7 @@ def test_tool_calls_reenter_pipeline_after_execution(monkeypatch):
                         }
                     }]
                 }
-            if self.calls == 2:
-                # Inside the loop: after tool result appended, LLM gives
-                # empty content (no more tool calls) which triggers break.
-                return ""
-            # Pipeline re-entry call: natural response after context rebuild
+            # Next loop iteration: LLM sees tool result in rebuilt context
             return "Based on the search results, here's what I found about Python testing."
 
     fake_manager = FakeManager()
@@ -185,9 +183,9 @@ def test_tool_calls_reenter_pipeline_after_execution(monkeypatch):
     assert "python testing" in reply.lower()
     # Context should have been rebuilt at least twice:
     #   1. Initial pipeline entry in generate_ai_response
-    #   2. Pipeline re-entry after tool execution via _reenter_pipeline_after_tool
+    #   2. After tool execution within the loop (rebuild from DB)
     assert context_rebuilt["count"] >= 2, (
-        f"Context should be rebuilt at least twice (initial + re-entry), "
+        f"Context should be rebuilt at least twice (initial + after tool), "
         f"got {context_rebuilt['count']}"
     )
 
