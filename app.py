@@ -321,9 +321,8 @@ def handle_user_message(user_message, interface="terminal"):
                 Database.add_message('assistant', ai_reply_clean, session_id=session_id)
             
             # image_tools success → no second LLM pass
-            if tool_role == "image_tools" and "Error:" not in ai_reply_clean:
-                pass  # stop here
-            else:
+            needs_second_pass = tool_role != "image_tools" or "Error:" in ai_reply_clean
+            if needs_second_pass:
                 # Second LLM pass — same pipeline
                 second_reply = generate_ai_response(profile, "", interface, session_id)
                 if second_reply and second_reply.strip():
@@ -383,7 +382,8 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
                     Database.add_message('assistant', full_response_clean, session_id=session_id)
                 
                 # image_tools success → no second LLM pass
-                if not (tool_role == "image_tools" and "Error:" not in full_response_clean):
+                needs_second_pass = tool_role != "image_tools" or "Error:" in full_response_clean
+                if needs_second_pass:
                     second_reply = generate_ai_response(profile, "", interface, session_id)
                     if second_reply and second_reply.strip():
                         second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
@@ -1074,8 +1074,8 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                             [f"Error: Tool {tool_name} returned empty result"], "Yuzu"
                         )
                     
-                    # Return formatted markdown — handle_user_message_streaming
-                    # will persist and trigger second LLM pass if needed
+                    # Return formatted markdown to caller
+                    # (caller saves as tool message and handles second LLM pass)
                     yield result
                     return
             
@@ -1262,8 +1262,8 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                             [f"Error: Tool {tool_name} returned empty result"], "Yuzu"
                         )
                     
-                    # Return formatted markdown — handle_user_message
-                    # will persist and trigger second LLM pass if needed
+                    # Return formatted markdown to caller
+                    # (caller saves as tool message and handles second LLM pass)
                     return result
             
             # Handle dict without tool_calls (e.g. content-only dict)

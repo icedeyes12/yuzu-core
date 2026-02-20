@@ -99,7 +99,7 @@ def execute(arguments, **kwargs):
             full_command = f"/imagine {prompt}"
             return build_markdown_contract(
                 "image_tools", full_command,
-                [f'<img src="static/generated_images/{filename}">'],
+                [f'<img src="static/generated_images/{filename}" alt="Generated Image">'],
                 partner_name,
             )
         else:
