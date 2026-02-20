@@ -182,7 +182,7 @@ def test_tool_calls_reenter_pipeline_after_execution(monkeypatch):
 
     reply = app.handle_user_message("search for python testing frameworks", interface="terminal")
 
-    assert "Python testing" in reply or "python testing" in reply.lower()
+    assert "python testing" in reply.lower()
     # Context should have been rebuilt at least twice:
     #   1. Initial pipeline entry in generate_ai_response
     #   2. Pipeline re-entry after tool execution via _reenter_pipeline_after_tool
