@@ -647,6 +647,12 @@ function addMessage(role, content, timestamp = null, isHistory = false) {
     return msg;
 }
 
+function isRenderableHistoryRole(role) {
+    return role === "user" ||
+           role === "assistant" ||
+           (typeof role === "string" && role.endsWith("_tools"));
+}
+
 function renderMessageContent(rawText, isUser = false) {
     const safeText = String(rawText ?? '');
     console.log("User raw message:", JSON.stringify(safeText));
@@ -726,7 +732,7 @@ async function loadChatHistory() {
             const fragment = document.createDocumentFragment();
             
             messagesToShow.forEach(msg => {
-                if (msg.role === "user" || msg.role === "assistant") {
+                if (isRenderableHistoryRole(msg.role)) {
                     console.log("[History] Raw message before render:", {
                         role: msg.role,
                         preview: String(msg.content || '').slice(0, 200)
@@ -802,7 +808,7 @@ function addScrollLoadListener(fullHistory) {
                 const fragment = document.createDocumentFragment();
                 
                 messagesToLoad.forEach(msg => {
-                    if (msg.role === "user" || msg.role === "assistant") {
+                    if (isRenderableHistoryRole(msg.role)) {
                         console.log("[History] Raw lazy-loaded message before render:", {
                             role: msg.role,
                             preview: String(msg.content || '').slice(0, 200)
