@@ -332,6 +332,8 @@ class OpenRouterProvider(AIProvider):
             "openai/gpt-oss-120b",
             "qwen/qwen3-235b-a22b-2507",
             "qwen/qwen3-coder",
+            "qwen/qwen3.5-397b-a17b"
+            "qwen/qwen3.5-plus-02-15"
             "tngtech/deepseek-r1t2-chimera",
             "z-ai/glm-4.6",
             "z-ai/glm-4.7"
