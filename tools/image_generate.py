@@ -27,19 +27,30 @@ SCHEMA = {
 
 
 def execute(arguments, **kwargs):
+    from tools.registry import build_markdown_contract
+
     prompt = arguments.get("prompt", "")
     if not prompt:
-        return json.dumps({"error": "No prompt provided"})
+        return build_markdown_contract(
+            "image_tools", "/imagine", ["Error: No prompt provided"], "Yuzu"
+        )
 
     try:
         api_keys = Database.get_api_keys()
         api_key = api_keys.get('chutes')
         if not api_key:
-            return json.dumps({"error": "No Chutes API key available"})
+            profile = Database.get_profile() or {}
+            partner_name = profile.get("partner_name", "Yuzu")
+            return build_markdown_contract(
+                "image_tools", f"/imagine {prompt}",
+                ["Error: No Chutes API key available"],
+                partner_name,
+            )
 
         # Resolve image model from profile — no silent fallback
-        profile = Database.get_profile()
-        image_model = (profile or {}).get("image_model", "hunyuan")
+        profile = Database.get_profile() or {}
+        partner_name = profile.get("partner_name", "Yuzu")
+        image_model = profile.get("image_model", "hunyuan")
         
         print(f"[IMAGE TOOL] Model: {image_model}")
 
@@ -85,14 +96,26 @@ def execute(arguments, **kwargs):
 
             print(f"[IMAGE TOOL] Saved: {filepath}")
 
-            return json.dumps({
-                "image_path": filepath,
-                "image_markdown": f"![Generated Image]({filepath})"
-            })
+            full_command = f"/imagine {prompt}"
+            return build_markdown_contract(
+                "image_tools", full_command,
+                [f'<img src="static/generated_images/{filename}">'],
+                partner_name,
+            )
         else:
             print(f"[IMAGE TOOL] API error {response.status_code}")
-            return json.dumps({"error": f"API error {response.status_code}"})
+            return build_markdown_contract(
+                "image_tools", f"/imagine {prompt}",
+                [f"Error: API error {response.status_code}"],
+                partner_name,
+            )
 
     except Exception as e:
         print(f"[IMAGE TOOL] Exception: {str(e)}")
-        return json.dumps({"error": f"Image generation failed: {str(e)}"})
+        profile = Database.get_profile() or {}
+        partner_name = profile.get("partner_name", "Yuzu")
+        return build_markdown_contract(
+            "image_tools", f"/imagine {prompt}",
+            [f"Error: Image generation failed: {str(e)}"],
+            partner_name,
+        )

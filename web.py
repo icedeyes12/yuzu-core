@@ -270,59 +270,18 @@ def api_send_message_with_images():
 
 @app.route('/api/generate_image', methods=['POST'])
 def api_generate_image():
+    """Image generation now uses /api/send_message. Redirect for backwards compat."""
     try:
         data = request.get_json()
         prompt = data.get('prompt', '').strip()
-        
         if not prompt:
             return jsonify({'error': 'Prompt required'}), 400
         
-        print(f"Generating image with prompt: {prompt}")
-        
-        active_session = Database.get_active_session()
-        session_id = active_session['id']
-        
-        Database.add_message('user', prompt, session_id=session_id)
-        print(f"User image prompt saved to database")
-        
-        image_path, error = multimodal_tools.generate_image(prompt)
-        
-        if image_path:
-            if image_path.startswith('static/generated_images/'):
-                filename = os.path.basename(image_path)
-                web_url = f"/static/generated_images/{filename}"
-                image_markdown = f"![Generated Image](static/generated_images/{filename})"
-            else:
-                import shutil
-                os.makedirs('static/generated_images', exist_ok=True)
-                filename = os.path.basename(image_path)
-                static_path = f"static/generated_images/{filename}"
-                shutil.copy2(image_path, static_path)
-                print(f"Copied {image_path} to {static_path}")
-                
-                web_url = f"/static/generated_images/{filename}"
-                image_markdown = f"![Generated Image](static/generated_images/{filename})"
-            
-            ai_response = f"Image generated successfully! I've created your \"{prompt}\"\n\n{image_markdown}"
-            
-            Database.add_message('assistant', ai_response, session_id=session_id)
-            print(f"AI image response with static path saved to database")
-            
-            return jsonify({
-                'status': 'success',
-                'image_url': web_url,
-                'image_markdown': image_markdown,
-                'prompt': prompt
-            })
-        else:
-            error_msg = f"Image generation failed: {error}"
-            Database.add_message('assistant', error_msg, session_id=session_id)
-            return jsonify({'error': error}), 500
-            
+        # Route through the unified send_message pipeline
+        ai_reply = handle_user_message(f"/imagine {prompt}", interface="web")
+        return jsonify({'reply': ai_reply, 'status': 'success'})
     except Exception as e:
         print(f"Error generating image: {e}")
-        active_session = Database.get_active_session()
-        Database.add_message('assistant', f"Error: {str(e)}", session_id=active_session['id'])
         return jsonify({'error': str(e)}), 500
 
 @app.route('/static/generated_images/<filename>')
