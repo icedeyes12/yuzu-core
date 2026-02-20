@@ -72,7 +72,12 @@ def test_tool_result_format():
 
 
 def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
-    """Command control signal should not be saved/rendered as assistant content."""
+    """Command control signal should not be saved/rendered as assistant content.
+
+    After tool execution, the result is persisted to DB and the conversational
+    pipeline is re-entered (context rebuilt from DB → LLM call) so the model
+    can produce a natural response that incorporates the tool output.
+    """
     import app
     from database import Database, get_db_session, Message
 
@@ -88,8 +93,11 @@ def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
         def send_message(self, *args, **kwargs):
             self.calls += 1
             if self.calls == 1:
+                # LLM emits a command control signal
                 return "/web_search python testing"
-            return "SHOULD_NOT_BE_CALLED"
+            # Pipeline re-entry: LLM sees tool result in context and
+            # generates a natural conversational response.
+            return "Here are the latest Python testing resources I found."
 
     fake_manager = FakeManager()
     monkeypatch.setattr(app, "get_ai_manager", lambda: fake_manager)
@@ -100,8 +108,12 @@ def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
     )
 
     reply = app.handle_user_message("please check latest python testing links", interface="terminal")
-    assert reply.startswith("🔧 TOOL RESULT — WEB_SEARCH")
-    assert fake_manager.calls == 1, "LLM should stop after command tool execution in this turn"
+
+    # Reply should be the natural response from the pipeline re-entry,
+    # NOT the raw tool result.
+    assert reply == "Here are the latest Python testing resources I found."
+    # Pipeline re-entry means two LLM calls: initial + re-entry after tool
+    assert fake_manager.calls == 2, "LLM should be called twice: initial + pipeline re-entry"
 
     with get_db_session() as session:
         rows = session.query(Message).filter(Message.session_id == session_id).order_by(Message.id.asc()).all()
@@ -113,6 +125,71 @@ def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
     # Tool result persisted with dedicated role
     assert any(role == "web_search_tools" and "🔧 TOOL RESULT — WEB_SEARCH" in (content or "")
                for role, content in roles_and_content), roles_and_content
+
+
+def test_tool_calls_reenter_pipeline_after_execution(monkeypatch):
+    """After tool_calls execution the pipeline re-enters via context rebuild.
+
+    The final LLM call must use _build_generation_context (reading from DB),
+    NOT the accumulated in-memory messages list from the tool loop.
+    """
+    import app
+    from database import Database, get_db_session, Message
+
+    new_session_id = Database.create_session("test-tool-calls-pipeline")
+    Database.switch_session(new_session_id)
+    session_id = Database.get_active_session()['id']
+
+    context_rebuilt = {"count": 0}
+    original_build = app._build_generation_context
+
+    def tracking_build(profile, sid, interface="terminal"):
+        context_rebuilt["count"] += 1
+        return original_build(profile, sid, interface)
+
+    class FakeManager:
+        def __init__(self):
+            self.calls = 0
+        def send_message(self, *args, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                # Simulate LLM returning a tool_call
+                return {
+                    "content": None,
+                    "tool_calls": [{
+                        "id": "call_001",
+                        "type": "function",
+                        "function": {
+                            "name": "web_search",
+                            "arguments": '{"query": "python unit testing"}'
+                        }
+                    }]
+                }
+            if self.calls == 2:
+                # Inside the loop: after tool result appended, LLM gives
+                # empty content (no more tool calls) which triggers break.
+                return ""
+            # Pipeline re-entry call: natural response after context rebuild
+            return "Based on the search results, here's what I found about Python testing."
+
+    fake_manager = FakeManager()
+    monkeypatch.setattr(app, "get_ai_manager", lambda: fake_manager)
+    monkeypatch.setattr(app, "_build_generation_context", tracking_build)
+    monkeypatch.setattr(
+        "tools.registry.execute_tool",
+        lambda tool_name, args, session_id=None: '{"results": [{"title": "pytest docs"}]}',
+    )
+
+    reply = app.handle_user_message("search for python testing frameworks", interface="terminal")
+
+    assert "Python testing" in reply or "python testing" in reply.lower()
+    # Context should have been rebuilt at least twice:
+    #   1. Initial pipeline entry in generate_ai_response
+    #   2. Pipeline re-entry after tool execution via _reenter_pipeline_after_tool
+    assert context_rebuilt["count"] >= 2, (
+        f"Context should be rebuilt at least twice (initial + re-entry), "
+        f"got {context_rebuilt['count']}"
+    )
 
 
 if __name__ == "__main__":

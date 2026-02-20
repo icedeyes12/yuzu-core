@@ -200,6 +200,55 @@ def _execute_command_tool(command_info, session_id=None):
         print(f"[COMMAND ERROR] {tool_name}: {e}")
         return error_msg
 
+def _reenter_pipeline_after_tool(profile, session_id, interface, ai_manager,
+                                 preferred_provider, preferred_model, kwargs,
+                                 image_was_generated=False):
+    """Re-enter the main conversational pipeline after tool execution.
+
+    Rebuilds context from DB via ``_build_generation_context`` (the same
+    context builder used for user messages) and triggers a standard LLM
+    request.  This ensures tool results flow through the *existing* pipeline
+    rather than a separate, manually-constructed LLM call.
+    """
+    print("[pipeline] Re-entering conversational pipeline after tool execution...")
+    messages = _build_generation_context(profile, session_id, interface)
+
+    final_provider = preferred_provider
+    final_model = preferred_model
+    if image_was_generated:
+        print("[IMAGE TOOL] Switching to vision model for continuation...")
+        profile_vision = profile.get('vision_model')
+        if profile_vision:
+            final_provider = 'openrouter'
+            final_model = profile_vision
+            print(f"[IMAGE TOOL] Using profile vision model: {final_provider}/{final_model}")
+        else:
+            vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
+            if vision_provider and vision_model:
+                final_provider = vision_provider
+                final_model = vision_model
+                print(f"[IMAGE TOOL] Using vision model: {final_provider}/{final_model}")
+            else:
+                print("[IMAGE TOOL] No vision provider available, using default model")
+
+    pipeline_kwargs = {k: v for k, v in kwargs.items() if k != 'tools'}
+    if 'max_tokens' not in pipeline_kwargs:
+        pipeline_kwargs['max_tokens'] = 4096
+
+    response = ai_manager.send_message(
+        final_provider, final_model, messages, **pipeline_kwargs
+    )
+
+    if isinstance(response, dict):
+        content = response.get('content', '')
+        if content and content.strip():
+            return content.strip()
+    elif isinstance(response, str) and response.strip():
+        return response.strip()
+
+    return None
+
+
 def _load_and_attach_generated_image(img_path, messages, session_id):
     """
     Load a generated image file, encode as base64, and attach to messages.
@@ -1076,10 +1125,16 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                     # Check for command on first line
                     cmd_info = _detect_command(content)
                     if cmd_info:
-                        # Execute command-based tool, save tool result, and stop.
+                        # Execute command-based tool and save result to DB.
+                        # Command itself is a control signal — not saved/rendered.
                         tool_result = _execute_command_tool(cmd_info, session_id=session_id)
                         Database.add_tool_result(cmd_info["command"], tool_result, session_id=session_id)
-                        yield tool_result
+                        # Re-enter the conversational pipeline so the LLM
+                        # generates a natural response from the tool result.
+                        natural = _reenter_pipeline_after_tool(
+                            profile, session_id, interface, ai_manager,
+                            preferred_provider, preferred_model, kwargs)
+                        yield natural or tool_result
                         return
                     
                     yield content.strip()
@@ -1090,10 +1145,16 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                 # Check for command on first line
                 cmd_info = _detect_command(ai_response)
                 if cmd_info:
-                    # Execute command-based tool, save tool result, and stop.
+                    # Execute command-based tool and save result to DB.
+                    # Command itself is a control signal — not saved/rendered.
                     tool_result = _execute_command_tool(cmd_info, session_id=session_id)
                     Database.add_tool_result(cmd_info["command"], tool_result, session_id=session_id)
-                    yield tool_result
+                    # Re-enter the conversational pipeline so the LLM
+                    # generates a natural response from the tool result.
+                    natural = _reenter_pipeline_after_tool(
+                        profile, session_id, interface, ai_manager,
+                        preferred_provider, preferred_model, kwargs)
+                    yield natural or tool_result
                     return
                     
                 yield ai_response
@@ -1118,45 +1179,16 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
             yield "AI service failed to generate a response."
             return
         
-        # Loop exhausted or broke out — force one final LLM call WITHOUT tools
-        # to convert tool results into a natural assistant response
+        # Loop exhausted or broke out — re-enter the conversational pipeline
+        # so tool results (now persisted in DB) flow through the same context
+        # builder used for user messages.
         if last_tool_results:
-            print("[tool_loop] Forcing final response from tool results...")
-            final_kwargs = {k: v for k, v in kwargs.items() if k != 'tools'}
-            if 'max_tokens' not in final_kwargs:
-                final_kwargs['max_tokens'] = 4096
-            
-            # Switch to vision model if image was generated
-            final_provider = preferred_provider
-            final_model = preferred_model
-            if image_was_generated:
-                print("[IMAGE TOOL] Switching to vision model for continuation...")
-                profile_vision = profile.get('vision_model')
-                if profile_vision:
-                    final_provider = 'openrouter'
-                    final_model = profile_vision
-                    print(f"[IMAGE TOOL] Using profile vision model: {final_provider}/{final_model}")
-                else:
-                    vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
-                    if vision_provider and vision_model:
-                        final_provider = vision_provider
-                        final_model = vision_model
-                        print(f"[IMAGE TOOL] Using vision model: {final_provider}/{final_model}")
-                    else:
-                        print("[IMAGE TOOL] No vision provider available, using default model")
-            
-            final_response = ai_manager.send_message(
-                final_provider, final_model, messages, **final_kwargs
-            )
-            
-            # Extract text from whatever the model returns
-            if isinstance(final_response, dict):
-                content = final_response.get('content', '')
-                if content and content.strip():
-                    yield content.strip()
-                    return
-            elif isinstance(final_response, str) and final_response.strip():
-                yield final_response
+            natural = _reenter_pipeline_after_tool(
+                profile, session_id, interface, ai_manager,
+                preferred_provider, preferred_model, kwargs,
+                image_was_generated=image_was_generated)
+            if natural:
+                yield natural
                 return
         
         # Absolute fallback
@@ -1345,10 +1377,16 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                     # Check for command on first line
                     cmd_info = _detect_command(content)
                     if cmd_info:
-                        # Execute command-based tool, save tool result, and stop.
+                        # Execute command-based tool and save result to DB.
+                        # Command itself is a control signal — not saved/rendered.
                         tool_result = _execute_command_tool(cmd_info, session_id=session_id)
                         Database.add_tool_result(cmd_info["command"], tool_result, session_id=session_id)
-                        return tool_result
+                        # Re-enter the conversational pipeline so the LLM
+                        # generates a natural response from the tool result.
+                        natural = _reenter_pipeline_after_tool(
+                            profile, session_id, interface, ai_manager,
+                            preferred_provider, preferred_model, kwargs)
+                        return natural or tool_result
                     
                     return content.strip()
             
@@ -1357,10 +1395,16 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                 # Check for command on first line
                 cmd_info = _detect_command(ai_response)
                 if cmd_info:
-                    # Execute command-based tool, save tool result, and stop.
+                    # Execute command-based tool and save result to DB.
+                    # Command itself is a control signal — not saved/rendered.
                     tool_result = _execute_command_tool(cmd_info, session_id=session_id)
                     Database.add_tool_result(cmd_info["command"], tool_result, session_id=session_id)
-                    return tool_result
+                    # Re-enter the conversational pipeline so the LLM
+                    # generates a natural response from the tool result.
+                    natural = _reenter_pipeline_after_tool(
+                        profile, session_id, interface, ai_manager,
+                        preferred_provider, preferred_model, kwargs)
+                    return natural or tool_result
                 
                 return ai_response
             
@@ -1382,44 +1426,16 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
             print(f"[WARNING] AI service returned empty response")
             return "AI service failed to generate a response."
         
-        # Loop exhausted or broke out — force one final LLM call WITHOUT tools
-        # to convert tool results into a natural assistant response
+        # Loop exhausted or broke out — re-enter the conversational pipeline
+        # so tool results (now persisted in DB) flow through the same context
+        # builder used for user messages.
         if last_tool_results:
-            print("[tool_loop] Forcing final response from tool results...")
-            final_kwargs = {k: v for k, v in kwargs.items() if k != 'tools'}
-            if 'max_tokens' not in final_kwargs:
-                final_kwargs['max_tokens'] = 4096
-            
-            # Switch to vision model if image was generated
-            final_provider = preferred_provider
-            final_model = preferred_model
-            if image_was_generated:
-                print("[IMAGE TOOL] Switching to vision model for continuation...")
-                profile_vision = profile.get('vision_model')
-                if profile_vision:
-                    final_provider = 'openrouter'
-                    final_model = profile_vision
-                    print(f"[IMAGE TOOL] Using profile vision model: {final_provider}/{final_model}")
-                else:
-                    vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
-                    if vision_provider and vision_model:
-                        final_provider = vision_provider
-                        final_model = vision_model
-                        print(f"[IMAGE TOOL] Using vision model: {final_provider}/{final_model}")
-                    else:
-                        print("[IMAGE TOOL] No vision provider available, using default model")
-            
-            final_response = ai_manager.send_message(
-                final_provider, final_model, messages, **final_kwargs
-            )
-            
-            # Extract text from whatever the model returns
-            if isinstance(final_response, dict):
-                content = final_response.get('content', '')
-                if content and content.strip():
-                    return content.strip()
-            elif isinstance(final_response, str) and final_response.strip():
-                return final_response
+            natural = _reenter_pipeline_after_tool(
+                profile, session_id, interface, ai_manager,
+                preferred_provider, preferred_model, kwargs,
+                image_was_generated=image_was_generated)
+            if natural:
+                return natural
         
         # Absolute fallback
         return "I couldn't complete the request."
