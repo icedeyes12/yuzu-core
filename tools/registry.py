@@ -3,6 +3,18 @@ from tools import web_search, weather, memory_search, image_generate, image_anal
 from tools import memory_sql
 
 
+# Tool name → tool role used for DB storage
+TOOL_ROLE_MAP = {
+    "weather": "weather_tools",
+    "web_search": "web_search_tools",
+    "memory_sql": "memory_sql_tools",
+    "memory_search": "memory_search_tools",
+    "image_generate": "image_tools",
+    "imagine": "image_tools",
+    "image_analyze": "image_analyze_tools",
+}
+
+
 _TOOLS = {
     "web_search": web_search,
     "weather": weather,
@@ -11,6 +23,29 @@ _TOOLS = {
     "image_generate": image_generate,
     "image_analyze": image_analyze,
 }
+
+
+def build_markdown_contract(tool_role, full_command, output_lines, partner_name):
+    """Build the unified markdown contract for tool output.
+
+    Returns a ``<details>`` block that is the *only* format stored in DB
+    and rendered by the frontend.
+    """
+    executor = partner_name or "Yuzu"
+    formatted_output = "\n".join(f"> {line}" for line in output_lines)
+
+    return (
+        f"<details>\n"
+        f"<summary>🔧 {tool_role}</summary>\n"
+        f"\n"
+        f"```bash\n"
+        f"{executor}$ {full_command}\n"
+        f"```\n"
+        f"\n"
+        f"{formatted_output}\n"
+        f"\n"
+        f"</details>"
+    )
 
 
 def get_tool_schemas():

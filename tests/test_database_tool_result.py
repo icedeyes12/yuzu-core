@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def test_add_tool_result():
     """Test Database.add_tool_result() functionality with tool-specific roles."""
     from database import Database, Message, get_db_session, TOOL_ROLES
+    from tools.registry import build_markdown_contract
     
     print("=== Testing Database Tool Result Storage ===\n")
     
@@ -19,7 +20,11 @@ def test_add_tool_result():
     # Test 1: Add a web_search tool result — should use 'web_search_tools' role
     print("Test 1: Add web_search tool result")
     tool_name = "web_search"
-    result_content = '{"results": [{"title": "Test", "snippet": "Sample"}]}'
+    result_content = build_markdown_contract(
+        "web_search_tools", "/web_search test",
+        ["[Test](http://example.com)", "  Sample snippet"],
+        "Yuzu",
+    )
     
     Database.add_tool_result(tool_name, result_content, session_id=session_id)
     
@@ -33,14 +38,18 @@ def test_add_tool_result():
         assert len(messages) > 0, "No web_search_tools messages found in database"
         last_msg = messages[-1]
         assert last_msg.role == 'web_search_tools'
-        assert "🔧 TOOL RESULT — WEB_SEARCH" in last_msg.content
-        assert result_content in last_msg.content
+        assert "<details>" in last_msg.content
+        assert "🔧 web_search_tools" in last_msg.content
         print("✓ Web search result stored with role 'web_search_tools'")
     
     # Test 2: Add a memory_sql tool result — should use 'memory_sql_tools' role
     print("\nTest 2: Add memory_sql tool result")
     tool_name = "memory_sql"
-    result_content = '{"rows": [{"id": 1, "content": "Test message"}]}'
+    result_content = build_markdown_contract(
+        "memory_sql_tools", "/memory_sql SELECT 1",
+        ["Rows returned: 1", "{'1': 1}"],
+        "Yuzu",
+    )
     
     Database.add_tool_result(tool_name, result_content, session_id=session_id)
     
@@ -54,11 +63,11 @@ def test_add_tool_result():
         assert len(messages) > 0, "No memory_sql_tools messages found"
         last_msg = messages[-1]
         assert last_msg.role == 'memory_sql_tools'
-        assert "🔧 TOOL RESULT — MEMORY_SQL" in last_msg.content
-        assert result_content in last_msg.content
+        assert "<details>" in last_msg.content
+        assert "🔧 memory_sql_tools" in last_msg.content
         print("✓ Memory SQL result stored with role 'memory_sql_tools'")
     
-    # Test 3: Verify formatting
+    # Test 3: Verify formatting — all tool messages start with <details>
     print("\nTest 3: Verify result formatting")
     with get_db_session() as session:
         tool_messages = session.query(Message).filter(
@@ -69,16 +78,20 @@ def test_add_tool_result():
         assert len(tool_messages) >= 2, "Expected at least 2 tool messages"
         
         for msg in tool_messages:
-            assert msg.content.startswith('🔧 TOOL RESULT —'), f"Wrong header: {msg.content[:30]}"
-            assert msg.content.endswith('---'), f"Wrong footer: {msg.content[-10:]}"
+            assert msg.content.strip().startswith('<details>'), f"Wrong format: {msg.content[:30]}"
+            assert msg.content.strip().endswith('</details>'), f"Wrong end: {msg.content[-20:]}"
             print(f"✓ Tool result formatted correctly: {msg.content[:50]}...")
     
     # Test 4: Verify session_id defaults to active session
     print("\nTest 4: Test default session_id behavior")
-    Database.add_tool_result("test_tool", '{"test": "data"}')
+    fallback_content = build_markdown_contract(
+        "test_tool_tools", "/test_tool data",
+        ["test data"],
+        "Yuzu",
+    )
+    Database.add_tool_result("test_tool", fallback_content)
     
     with get_db_session() as session:
-        # test_tool is not in TOOL_ROLES so it gets 'test_tool_tools' role
         all_tool_msgs = session.query(Message).filter(
             Message.role == 'test_tool_tools'
         ).all()
@@ -120,6 +133,7 @@ def test_tool_role_mapping():
 def test_tool_results_in_chat_history():
     """Test that tool results are included in chat history for rendering."""
     from database import Database, Message, get_db_session, TOOL_ROLES
+    from tools.registry import build_markdown_contract
     
     print("=== Testing Tool Results in Chat History ===\n")
     
@@ -127,7 +141,12 @@ def test_tool_results_in_chat_history():
     session_id = active_session['id']
     
     # Add a tool result
-    Database.add_tool_result("weather", '{"temp": 25}', session_id=session_id)
+    content = build_markdown_contract(
+        "weather_tools", "/weather 0 0",
+        ["Temperature: 25°C"],
+        "Yuzu",
+    )
+    Database.add_tool_result("weather", content, session_id=session_id)
     
     # Verify it appears in get_chat_history (used for rendering)
     history = Database.get_chat_history(session_id=session_id)
@@ -147,6 +166,7 @@ def test_tool_results_in_chat_history():
 def test_context_builder_maps_tool_roles():
     """Test that _build_generation_context maps tool roles to 'assistant' for LLM API."""
     from database import Database, ALL_TOOL_ROLES
+    from tools.registry import build_markdown_contract
     
     print("=== Testing Context Builder Tool Role Mapping ===\n")
     
@@ -154,7 +174,12 @@ def test_context_builder_maps_tool_roles():
     session_id = active_session['id']
     
     # Add a tool result so it's in the DB
-    Database.add_tool_result("web_search", '{"results": []}', session_id=session_id)
+    content = build_markdown_contract(
+        "web_search_tools", "/web_search test",
+        ["No results"],
+        "Yuzu",
+    )
+    Database.add_tool_result("web_search", content, session_id=session_id)
     
     # Import and call the context builder
     from app import _build_generation_context
@@ -166,10 +191,10 @@ def test_context_builder_maps_tool_roles():
         assert msg['role'] not in ALL_TOOL_ROLES, \
             f"Tool-specific role '{msg['role']}' leaked into LLM messages"
     
-    # Verify tool results are present as 'assistant' role
+    # Verify tool results are present as 'assistant' role with <details> content
     tool_content_found = False
     for msg in messages:
-        if '🔧 TOOL RESULT' in msg.get('content', ''):
+        if '<details>' in msg.get('content', ''):
             assert msg['role'] == 'assistant', \
                 f"Tool result should have role 'assistant' for LLM, got '{msg['role']}'"
             tool_content_found = True

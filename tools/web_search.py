@@ -95,17 +95,38 @@ def _ddg_search(query):
 
 
 def execute(arguments, **kwargs):
+    from database import Database
+    from tools.registry import build_markdown_contract
+
     query = arguments.get("query", "")
     if not query:
-        return json.dumps({"error": "No query provided"})
+        return build_markdown_contract(
+            "web_search_tools", "/web_search", ["Error: No query provided"], "Yuzu"
+        )
+
+    profile = Database.get_profile() or {}
+    partner_name = profile.get("partner_name", "Yuzu")
+    full_command = f"/web_search {query}"
 
     try:
         results = _ddg_search(query)
 
         if not results:
-            return json.dumps({"results": [], "note": "No results found"})
+            return build_markdown_contract(
+                "web_search_tools", full_command, ["No results found"], partner_name
+            )
 
-        return json.dumps({"results": results})
+        lines = []
+        for r in results:
+            lines.append(f"[{r['title']}]({r['url']})")
+            if r.get("snippet"):
+                lines.append(f"  {r['snippet']}")
+            lines.append("")
+        return build_markdown_contract("web_search_tools", full_command, lines, partner_name)
 
     except Exception as e:
-        return json.dumps({"error": f"Search failed: {str(e)}"})
+        return build_markdown_contract(
+            "web_search_tools", full_command,
+            [f"Error: Search failed: {str(e)}"],
+            partner_name,
+        )
