@@ -52,21 +52,26 @@ def test_command_execution_flow():
 
 
 def test_tool_result_format():
-    """Test that tool results are formatted correctly."""
+    """Test that tool results use the markdown contract format."""
+    from tools.registry import build_markdown_contract
+
     print("\n=== Testing Tool Result Format ===\n")
     
-    # Simulate a tool result format
-    tool_name = "web_search"
-    result = '{"results": [{"title": "Test", "snippet": "Test snippet"}]}'
+    result = build_markdown_contract(
+        "web_search_tools",
+        "/web_search test",
+        ["Result 1", "Result 2"],
+        "Yuzu",
+    )
     
-    formatted = f"🔧 TOOL RESULT — {tool_name.upper()}\n\n{result}\n\n---"
+    assert result.startswith("<details>")
+    assert "🔧 web_search_tools" in result
+    assert "> Result 1" in result
+    assert "> Result 2" in result
+    assert result.strip().endswith("</details>")
     
-    assert "🔧 TOOL RESULT — WEB_SEARCH" in formatted
-    assert result in formatted
-    assert formatted.endswith("---")
-    
-    print("✓ Tool result format is correct")
-    print(f"Format example:\n{formatted}")
+    print("✓ Tool result markdown contract format is correct")
+    print(f"Format example:\n{result}")
     
     print("\n✅ Tool result formatting test passed!")
 
@@ -74,10 +79,9 @@ def test_tool_result_format():
 def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
     """Command control signal should not be saved/rendered as assistant content.
 
-    After tool execution, the raw result is persisted to DB via
-    Database.add_tool_result (which handles formatting).  Context is rebuilt
-    from DB within the same loop, and the next LLM iteration produces a
-    natural conversational response.
+    After tool execution, the formatted markdown contract is returned.
+    handle_user_message detects <details> and saves as tool message,
+    then triggers a second LLM pass for the natural response.
     """
     import app
     from database import Database, get_db_session, Message
@@ -88,6 +92,14 @@ def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
     session_id = Database.get_active_session()['id']
     assert session_id == new_session_id
 
+    tool_markdown = (
+        "<details>\n"
+        "<summary>🔧 web_search_tools</summary>\n"
+        "\n```bash\nYuzu$ /web_search python testing\n```\n\n"
+        "> No results found\n\n"
+        "</details>"
+    )
+
     class FakeManager:
         def __init__(self):
             self.calls = 0
@@ -96,26 +108,24 @@ def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
             if self.calls == 1:
                 # LLM emits a command control signal
                 return "/web_search python testing"
-            # Next loop iteration: LLM sees tool result in context and
-            # generates a natural conversational response.
+            # Second LLM pass sees tool result in context
             return "Here are the latest Python testing resources I found."
 
     fake_manager = FakeManager()
     monkeypatch.setattr(app, "get_ai_manager", lambda: fake_manager)
-    # _execute_command_tool now returns raw JSON (no formatting)
+    # _execute_command_tool now returns formatted markdown contract
     monkeypatch.setattr(
         app,
         "_execute_command_tool",
-        lambda cmd_info, session_id=None: '{"results":[]}',
+        lambda cmd_info, session_id=None: tool_markdown,
     )
 
     reply = app.handle_user_message("please check latest python testing links", interface="terminal")
 
-    # Reply should be the natural response from the next loop iteration,
-    # NOT the raw tool result.
-    assert reply == "Here are the latest Python testing resources I found."
-    # Two LLM calls: initial (returns command) + next iteration (returns natural response)
-    assert fake_manager.calls == 2, "LLM should be called twice: initial + loop continuation"
+    # Reply should contain both the tool markdown and the natural response
+    assert "Here are the latest Python testing resources I found." in reply
+    # Two LLM calls: initial (returns command) + second pass (returns natural response)
+    assert fake_manager.calls == 2, f"LLM should be called twice, got {fake_manager.calls}"
 
     with get_db_session() as session:
         rows = session.query(Message).filter(Message.session_id == session_id).order_by(Message.id.asc()).all()
@@ -124,16 +134,16 @@ def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
     # No assistant /command control signal persisted
     assert not any(role == "assistant" and isinstance(content, str) and content.strip().startswith("/")
                    for role, content in roles_and_content), roles_and_content
-    # Tool result persisted with dedicated role (formatted by Database.add_tool_result)
-    assert any(role == "web_search_tools" and "🔧 TOOL RESULT — WEB_SEARCH" in (content or "")
+    # Tool result persisted with dedicated role as <details> markdown contract
+    assert any(role == "web_search_tools" and "<details>" in (content or "")
                for role, content in roles_and_content), roles_and_content
 
 
 def test_tool_calls_reenter_pipeline_after_execution(monkeypatch):
-    """After tool_calls execution, context is rebuilt from DB within the loop.
+    """After tool_calls execution, the formatted markdown is returned.
 
-    The next LLM call uses _build_generation_context (reading from DB),
-    NOT the accumulated in-memory messages list from the tool loop.
+    handle_user_message detects <details> and saves as tool message,
+    then triggers a second LLM pass through the same pipeline.
     """
     import app
     from database import Database, get_db_session, Message
@@ -142,12 +152,13 @@ def test_tool_calls_reenter_pipeline_after_execution(monkeypatch):
     Database.switch_session(new_session_id)
     session_id = Database.get_active_session()['id']
 
-    context_rebuilt = {"count": 0}
-    original_build = app._build_generation_context
-
-    def tracking_build(profile, sid, interface="terminal"):
-        context_rebuilt["count"] += 1
-        return original_build(profile, sid, interface)
+    tool_markdown = (
+        "<details>\n"
+        "<summary>🔧 web_search_tools</summary>\n"
+        "\n```bash\nYuzu$ /web_search python unit testing\n```\n\n"
+        "> [pytest docs](http://example.com)\n\n"
+        "</details>"
+    )
 
     class FakeManager:
         def __init__(self):
@@ -167,27 +178,79 @@ def test_tool_calls_reenter_pipeline_after_execution(monkeypatch):
                         }
                     }]
                 }
-            # Next loop iteration: LLM sees tool result in rebuilt context
+            # Second LLM pass after tool message saved
             return "Based on the search results, here's what I found about Python testing."
 
     fake_manager = FakeManager()
     monkeypatch.setattr(app, "get_ai_manager", lambda: fake_manager)
-    monkeypatch.setattr(app, "_build_generation_context", tracking_build)
     monkeypatch.setattr(
         "tools.registry.execute_tool",
-        lambda tool_name, args, session_id=None: '{"results": [{"title": "pytest docs"}]}',
+        lambda tool_name, args, session_id=None: tool_markdown,
     )
 
     reply = app.handle_user_message("search for python testing frameworks", interface="terminal")
 
     assert "python testing" in reply.lower()
-    # Context should have been rebuilt at least twice:
-    #   1. Initial pipeline entry in generate_ai_response
-    #   2. After tool execution within the loop (rebuild from DB)
-    assert context_rebuilt["count"] >= 2, (
-        f"Context should be rebuilt at least twice (initial + after tool), "
-        f"got {context_rebuilt['count']}"
+    # Two LLM calls: initial (tool_calls) + second pass (natural response)
+    assert fake_manager.calls == 2, (
+        f"Expected 2 LLM calls (initial + second pass), got {fake_manager.calls}"
     )
+
+
+def test_image_tools_no_second_pass(monkeypatch):
+    """image_tools success should NOT trigger second LLM pass."""
+    import app
+    from database import Database, get_db_session, Message
+
+    new_session_id = Database.create_session("test-image-no-second-pass")
+    Database.switch_session(new_session_id)
+    session_id = Database.get_active_session()['id']
+
+    image_markdown = (
+        "<details>\n"
+        '<summary>🔧 image_tools</summary>\n'
+        "\n```bash\nYuzu$ /imagine sunset\n```\n\n"
+        '> <img src="static/generated_images/test.png">\n\n'
+        "</details>"
+    )
+
+    class FakeManager:
+        def __init__(self):
+            self.calls = 0
+        def send_message(self, *args, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return "/imagine sunset"
+            # Should NOT be called for image_tools success
+            return "This should not appear"
+
+    fake_manager = FakeManager()
+    monkeypatch.setattr(app, "get_ai_manager", lambda: fake_manager)
+    monkeypatch.setattr(
+        app,
+        "_execute_command_tool",
+        lambda cmd_info, session_id=None: image_markdown,
+    )
+
+    reply = app.handle_user_message("generate a sunset image", interface="terminal")
+
+    # Only one LLM call — no second pass for image_tools success
+    assert fake_manager.calls == 1, f"Expected 1 LLM call, got {fake_manager.calls}"
+    assert "<details>" in reply
+
+
+def test_no_json_in_db(monkeypatch):
+    """No raw JSON should be stored in the database for tool messages."""
+    from tools.registry import build_markdown_contract
+
+    result = build_markdown_contract(
+        "weather_tools", "/weather 0 0",
+        ["Temperature: 25°C", "Weather: Clear"],
+        "Yuzu",
+    )
+    assert "{" not in result, "Markdown contract should not contain JSON"
+    assert "}" not in result, "Markdown contract should not contain JSON"
+    assert "<details>" in result
 
 
 if __name__ == "__main__":
@@ -195,6 +258,7 @@ if __name__ == "__main__":
         test_command_execution_flow()
         test_tool_result_format()
         test_command_control_signal_not_saved_and_stops_after_tool()
+        test_no_json_in_db()
         print("\n" + "="*50)
         print("✅ ALL INTEGRATION TESTS PASSED")
         print("="*50)

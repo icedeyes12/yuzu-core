@@ -156,7 +156,13 @@ class MultimodalManager {
             if (typingIndicator) typingIndicator.classList.add("hidden");
             
             if (data.reply) {
-                addMessage("ai", data.reply);
+                // Detect tool markdown contract — render as tool message
+                const reply = String(data.reply);
+                if (reply.trimStart().startsWith("<details>")) {
+                    addMessage("tool", reply);
+                } else {
+                    addMessage("ai", reply);
+                }
             } else {
                 addMessage("ai", "No response from server");
             }
@@ -185,16 +191,26 @@ class MultimodalManager {
             
             addMessage("user", prompt);
             
-            const response = await fetch("/api/generate_image", {
+            const typingIndicator = document.getElementById('typingIndicator');
+            if (typingIndicator) typingIndicator.classList.remove("hidden");
+            
+            // Route through unified send_message pipeline
+            const response = await fetch("/api/send_message", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt })
+                body: JSON.stringify({ message: `/imagine ${prompt}` })
             });
             
             const data = await response.json();
+            if (typingIndicator) typingIndicator.classList.add("hidden");
             
-            if (data.status === 'success') {
-                this.displayGeneratedImage(data.image_markdown || data.image_url, prompt);
+            if (data.reply) {
+                const reply = String(data.reply);
+                if (reply.trimStart().startsWith("<details>")) {
+                    addMessage("tool", reply);
+                } else {
+                    addMessage("ai", reply);
+                }
                 this.clearInput();
             } else {
                 throw new Error(data.error || 'Image generation failed');

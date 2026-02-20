@@ -132,12 +132,20 @@ def _detect_command(response_text):
         "full_command": first_line
     }
 
-def _is_rendered_tool_output(response_text):
-    """True when response is a rendered tool output block."""
+def _is_tool_markdown(response_text):
+    """True when response is a formatted tool markdown contract."""
     if not response_text:
         return False
     stripped = response_text.strip()
-    return stripped.startswith("🔧 TOOL RESULT —") or stripped.startswith("🔧 TOOL ERROR —")
+    return stripped.startswith("<details>")
+
+def _extract_tool_role(response_text):
+    """Extract tool role from <summary>🔧 role</summary> in a markdown contract."""
+    if not response_text:
+        return None
+    import re
+    m = re.search(r'<summary>🔧\s*(\S+)</summary>', response_text)
+    return m.group(1) if m else None
 
 def _execute_command_tool(command_info, session_id=None):
     """
@@ -148,7 +156,7 @@ def _execute_command_tool(command_info, session_id=None):
         session_id: current session ID
     
     Returns:
-        str: raw tool result (JSON string from tool execution)
+        str: formatted markdown contract from tool execution
     """
     tool_name = command_info["command"]
     args_str = command_info["args"]
@@ -186,13 +194,19 @@ def _execute_command_tool(command_info, session_id=None):
             # Generic argument handling
             args = {"query": args_str} if args_str else {}
         
-        # Execute the tool — returns pure JSON
+        # Execute the tool — returns formatted markdown contract
         result = execute_tool(tool_name, args, session_id=session_id)
         return result
         
     except Exception as e:
         print(f"[COMMAND ERROR] {tool_name}: {e}")
-        return json.dumps({"error": str(e)})
+        from tools.registry import build_markdown_contract
+        return build_markdown_contract(
+            f"{tool_name}_tools",
+            command_info.get("full_command", f"/{tool_name}"),
+            [f"Error: {str(e)}"],
+            "Yuzu",
+        )
 
 def _load_and_attach_generated_image(img_path, messages, session_id):
     """
@@ -298,7 +312,24 @@ def handle_user_message(user_message, interface="terminal"):
         
         ai_reply_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', ai_reply).strip()
         
-        if not _is_rendered_tool_output(ai_reply_clean):
+        # Tool markdown contract — save as tool message, then trigger second LLM pass
+        if _is_tool_markdown(ai_reply_clean):
+            tool_role = _extract_tool_role(ai_reply_clean)
+            if tool_role:
+                Database.add_message(tool_role, ai_reply_clean, session_id=session_id)
+            else:
+                Database.add_message('assistant', ai_reply_clean, session_id=session_id)
+            
+            # image_tools success → no second LLM pass
+            needs_second_pass = tool_role != "image_tools" or "Error:" in ai_reply_clean
+            if needs_second_pass:
+                # Second LLM pass — same pipeline
+                second_reply = generate_ai_response(profile, "", interface, session_id)
+                if second_reply and second_reply.strip():
+                    second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
+                    Database.add_message('assistant', second_clean, session_id=session_id)
+                    ai_reply = ai_reply_clean + "\n\n" + second_clean
+        else:
             Database.add_message('assistant', ai_reply_clean, session_id=session_id)
         
         auto_name_session_if_needed(session_id, active_session)
@@ -342,7 +373,23 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
         
         if full_response.strip():
             full_response_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', full_response).strip()
-            if not _is_rendered_tool_output(full_response_clean):
+            
+            if _is_tool_markdown(full_response_clean):
+                tool_role = _extract_tool_role(full_response_clean)
+                if tool_role:
+                    Database.add_message(tool_role, full_response_clean, session_id=session_id)
+                else:
+                    Database.add_message('assistant', full_response_clean, session_id=session_id)
+                
+                # image_tools success → no second LLM pass
+                needs_second_pass = tool_role != "image_tools" or "Error:" in full_response_clean
+                if needs_second_pass:
+                    second_reply = generate_ai_response(profile, "", interface, session_id)
+                    if second_reply and second_reply.strip():
+                        second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
+                        Database.add_message('assistant', second_clean, session_id=session_id)
+                        yield "\n\n" + second_clean
+            else:
                 Database.add_message('assistant', full_response_clean, session_id=session_id)
         
         auto_name_session_if_needed(session_id, active_session)
@@ -949,8 +996,6 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         max_tool_iterations = 3
         loop_count = 0
         prev_tool_calls = []
-        last_tool_results = []
-        image_was_generated = False  # Track if image_generate was called
         
         while loop_count < max_tool_iterations:
             # First try non-streaming to detect tool calls
@@ -987,7 +1032,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                     break
                 prev_tool_calls = current_call_sig
                 
-                last_tool_results = []
+                # Execute each tool call — tools now return formatted markdown
                 for tc in tool_calls:
                     func = tc.get('function', {})
                     tool_name = func.get('name', '')
@@ -1006,106 +1051,58 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                     try:
                         result = execute_tool(tool_name, args, session_id=session_id)
                     except Exception as e:
-                        result = json.dumps({"error": str(e)})
+                        from tools.registry import build_markdown_contract
+                        result = build_markdown_contract(
+                            f"{tool_name}_tools", f"/{tool_name}",
+                            [f"Error: {str(e)}"], "Yuzu"
+                        )
                     
-                    # Validate tool result — retry once on empty/invalid
                     if not result or not result.strip():
                         print(f"[tool_retry] {tool_name}: empty result, retrying...")
                         try:
                             result = execute_tool(tool_name, args, session_id=session_id)
                         except Exception as e:
-                            result = json.dumps({"error": str(e)})
+                            from tools.registry import build_markdown_contract
+                            result = build_markdown_contract(
+                                f"{tool_name}_tools", f"/{tool_name}",
+                                [f"Error: {str(e)}"], "Yuzu"
+                            )
                     if not result or not result.strip():
-                        print(f"[tool_error] {tool_name}: empty result after retry")
-                        result = json.dumps({"error": f"Tool {tool_name} returned empty result"})
+                        from tools.registry import build_markdown_contract
+                        result = build_markdown_contract(
+                            f"{tool_name}_tools", f"/{tool_name}",
+                            [f"Error: Tool {tool_name} returned empty result"], "Yuzu"
+                        )
                     
-                    if tool_name == 'image_generate':
-                        image_was_generated = True
-                        try:
-                            result_data = json.loads(result)
-                            if result_data.get('image_path'):
-                                img_path = result_data['image_path']
-                                img_md = result_data.get('image_markdown', f'![Generated Image]({img_path})')
-                                Database.add_image_tools_message(img_path, session_id=session_id)
-                                Database.add_message('assistant', f"Image generated!\n\n{img_md}", session_id=session_id)
-                        except (json.JSONDecodeError, KeyError):
-                            pass
-                    
-                    # Store visual context from image_analyze for follow-up turns
-                    if tool_name == 'image_analyze':
-                        try:
-                            result_data = json.loads(result)
-                            if result_data.get('image_base64') and result_data.get('mime'):
-                                _store_visual_context(session_id, result_data['image_base64'], result_data['mime'])
-                        except (json.JSONDecodeError, KeyError):
-                            pass
-                    
-                    last_tool_results.append({"tool": tool_name, "result": result})
-                    
-                    # Save tool result to DB (formatting handled by add_tool_result)
-                    # image_generate already saved via add_image_tools_message above
-                    if tool_name != 'image_generate':
-                        Database.add_tool_result(tool_name, result, session_id=session_id)
-                
-                # Rebuild context from DB — tool results now included
-                # via the same context builder used for user messages
-                messages = _build_generation_context(profile, session_id, interface)
-                
-                # Re-attach generated image for vision model if needed
-                if image_was_generated:
-                    for tr in last_tool_results:
-                        if tr["tool"] == 'image_generate':
-                            try:
-                                rd = json.loads(tr["result"])
-                                if rd.get('image_path'):
-                                    _load_and_attach_generated_image(
-                                        rd['image_path'], messages, session_id)
-                            except (json.JSONDecodeError, KeyError):
-                                pass
-                
-                loop_count += 1
-                continue
+                    # Return formatted markdown to caller
+                    # (caller saves as tool message and handles second LLM pass)
+                    yield result
+                    return
             
             # Handle dict without tool_calls (e.g. content-only dict)
             if isinstance(ai_response, dict):
                 content = ai_response.get('content', '')
                 if content and content.strip():
-                    # Check for command on first line
                     cmd_info = _detect_command(content)
                     if cmd_info:
-                        # Execute command tool — returns raw JSON
-                        raw_result = _execute_command_tool(cmd_info, session_id=session_id)
-                        # Save formatted result to DB
-                        Database.add_tool_result(cmd_info["command"], raw_result, session_id=session_id)
-                        # Rebuild context from DB (now includes tool result)
-                        messages = _build_generation_context(profile, session_id, interface)
-                        last_tool_results.append({"tool": cmd_info["command"], "result": raw_result})
-                        loop_count += 1
-                        continue
+                        yield _execute_command_tool(cmd_info, session_id=session_id)
+                        return
                     
                     yield content.strip()
                     return
             
             # No tool calls — yield text response
             if isinstance(ai_response, str) and ai_response.strip():
-                # Check for command on first line
                 cmd_info = _detect_command(ai_response)
                 if cmd_info:
-                    # Execute command tool — returns raw JSON
-                    raw_result = _execute_command_tool(cmd_info, session_id=session_id)
-                    # Save formatted result to DB
-                    Database.add_tool_result(cmd_info["command"], raw_result, session_id=session_id)
-                    # Rebuild context from DB (now includes tool result)
-                    messages = _build_generation_context(profile, session_id, interface)
-                    last_tool_results.append({"tool": cmd_info["command"], "result": raw_result})
-                    loop_count += 1
-                    continue
+                    yield _execute_command_tool(cmd_info, session_id=session_id)
+                    return
                     
                 yield ai_response
                 return
             
-            # Empty response after tool execution — force final answer without tools
-            if loop_count > 0 and last_tool_results:
+            # Empty response after tool execution
+            if loop_count > 0:
                 print("[WARNING] Empty response after tool call, forcing final answer...")
                 break
             
@@ -1122,53 +1119,6 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
             
             yield "AI service failed to generate a response."
             return
-        
-        # Loop exhausted or broke out — tool results are already in DB.
-        # Rebuild context and make one final attempt without tool schemas
-        # so the LLM produces a natural response from the tool results.
-        if last_tool_results:
-            print("[tool_loop] Final attempt: rebuilding context for natural response...")
-            messages = _build_generation_context(profile, session_id, interface)
-            
-            # Switch to vision model if image was generated
-            final_provider = preferred_provider
-            final_model = preferred_model
-            if image_was_generated:
-                print("[IMAGE TOOL] Switching to vision model for continuation...")
-                profile_vision = profile.get('vision_model')
-                if profile_vision:
-                    final_provider = 'openrouter'
-                    final_model = profile_vision
-                else:
-                    vp, vm = multimodal_tools.get_best_vision_provider()
-                    if vp and vm:
-                        final_provider, final_model = vp, vm
-                
-                # Re-attach generated image for vision context
-                for tr in last_tool_results:
-                    if tr["tool"] == 'image_generate':
-                        try:
-                            rd = json.loads(tr["result"])
-                            if rd.get('image_path'):
-                                _load_and_attach_generated_image(
-                                    rd['image_path'], messages, session_id)
-                        except (json.JSONDecodeError, KeyError):
-                            pass
-            
-            final_kwargs = {k: v for k, v in kwargs.items() if k != 'tools'}
-            if 'max_tokens' not in final_kwargs:
-                final_kwargs['max_tokens'] = 4096
-            final_response = ai_manager.send_message(
-                final_provider, final_model, messages, **final_kwargs
-            )
-            if isinstance(final_response, dict):
-                content = final_response.get('content', '')
-                if content and content.strip():
-                    yield content.strip()
-                    return
-            elif isinstance(final_response, str) and final_response.strip():
-                yield final_response
-                return
         
         # Absolute fallback
         yield "I couldn't complete the request."
@@ -1238,8 +1188,6 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
         max_tool_iterations = 3
         loop_count = 0
         prev_tool_calls = []
-        last_tool_results = []
-        image_was_generated = False  # Track if image_generate was called
         
         while loop_count < max_tool_iterations:
             ai_response = ai_manager.send_message(
@@ -1268,8 +1216,7 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                     break
                 prev_tool_calls = current_call_sig
                 
-                # Execute each tool call
-                last_tool_results = []
+                # Execute each tool call — tools now return formatted markdown
                 for tc in tool_calls:
                     func = tc.get('function', {})
                     tool_name = func.get('name', '')
@@ -1290,7 +1237,11 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                         result = execute_tool(tool_name, args, session_id=session_id)
                     except Exception as e:
                         print(f"[tool_error] {tool_name}: {e}")
-                        result = json.dumps({"error": str(e)})
+                        from tools.registry import build_markdown_contract
+                        result = build_markdown_contract(
+                            f"{tool_name}_tools", f"/{tool_name}",
+                            [f"Error: {str(e)}"], "Yuzu"
+                        )
                     
                     # Validate tool result — retry once on empty/invalid
                     if not result or not result.strip():
@@ -1298,58 +1249,22 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                         try:
                             result = execute_tool(tool_name, args, session_id=session_id)
                         except Exception as e:
-                            result = json.dumps({"error": str(e)})
+                            from tools.registry import build_markdown_contract
+                            result = build_markdown_contract(
+                                f"{tool_name}_tools", f"/{tool_name}",
+                                [f"Error: {str(e)}"], "Yuzu"
+                            )
                     if not result or not result.strip():
                         print(f"[tool_error] {tool_name}: empty result after retry")
-                        result = json.dumps({"error": f"Tool {tool_name} returned empty result"})
+                        from tools.registry import build_markdown_contract
+                        result = build_markdown_contract(
+                            f"{tool_name}_tools", f"/{tool_name}",
+                            [f"Error: Tool {tool_name} returned empty result"], "Yuzu"
+                        )
                     
-                    # Handle image_generate tool result — persist for both interfaces
-                    if tool_name == 'image_generate':
-                        image_was_generated = True
-                        try:
-                            result_data = json.loads(result)
-                            if result_data.get('image_path'):
-                                img_path = result_data['image_path']
-                                img_md = result_data.get('image_markdown', f'![Generated Image]({img_path})')
-                                Database.add_image_tools_message(img_path, session_id=session_id)
-                                Database.add_message('assistant', f"Image generated!\n\n{img_md}", session_id=session_id)
-                        except (json.JSONDecodeError, KeyError):
-                            pass
-                    
-                    # Store visual context from image_analyze for follow-up turns
-                    if tool_name == 'image_analyze':
-                        try:
-                            result_data = json.loads(result)
-                            if result_data.get('image_base64') and result_data.get('mime'):
-                                _store_visual_context(session_id, result_data['image_base64'], result_data['mime'])
-                        except (json.JSONDecodeError, KeyError):
-                            pass
-                    
-                    last_tool_results.append({"tool": tool_name, "result": result})
-                    
-                    # Save tool result to DB (formatting handled by add_tool_result)
-                    # image_generate already saved via add_image_tools_message above
-                    if tool_name != 'image_generate':
-                        Database.add_tool_result(tool_name, result, session_id=session_id)
-                
-                # Rebuild context from DB — tool results now included
-                # via the same context builder used for user messages
-                messages = _build_generation_context(profile, session_id, interface)
-                
-                # Re-attach generated image for vision model if needed
-                if image_was_generated:
-                    for tr in last_tool_results:
-                        if tr["tool"] == 'image_generate':
-                            try:
-                                rd = json.loads(tr["result"])
-                                if rd.get('image_path'):
-                                    _load_and_attach_generated_image(
-                                        rd['image_path'], messages, session_id)
-                            except (json.JSONDecodeError, KeyError):
-                                pass
-                
-                loop_count += 1
-                continue
+                    # Return formatted markdown to caller
+                    # (caller saves as tool message and handles second LLM pass)
+                    return result
             
             # Handle dict without tool_calls (e.g. content-only dict)
             if isinstance(ai_response, dict):
@@ -1358,15 +1273,8 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                     # Check for command on first line
                     cmd_info = _detect_command(content)
                     if cmd_info:
-                        # Execute command tool — returns raw JSON
-                        raw_result = _execute_command_tool(cmd_info, session_id=session_id)
-                        # Save formatted result to DB
-                        Database.add_tool_result(cmd_info["command"], raw_result, session_id=session_id)
-                        # Rebuild context from DB (now includes tool result)
-                        messages = _build_generation_context(profile, session_id, interface)
-                        last_tool_results.append({"tool": cmd_info["command"], "result": raw_result})
-                        loop_count += 1
-                        continue
+                        # Execute command tool — returns formatted markdown
+                        return _execute_command_tool(cmd_info, session_id=session_id)
                     
                     return content.strip()
             
@@ -1375,20 +1283,13 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                 # Check for command on first line
                 cmd_info = _detect_command(ai_response)
                 if cmd_info:
-                    # Execute command tool — returns raw JSON
-                    raw_result = _execute_command_tool(cmd_info, session_id=session_id)
-                    # Save formatted result to DB
-                    Database.add_tool_result(cmd_info["command"], raw_result, session_id=session_id)
-                    # Rebuild context from DB (now includes tool result)
-                    messages = _build_generation_context(profile, session_id, interface)
-                    last_tool_results.append({"tool": cmd_info["command"], "result": raw_result})
-                    loop_count += 1
-                    continue
+                    # Execute command tool — returns formatted markdown
+                    return _execute_command_tool(cmd_info, session_id=session_id)
                 
                 return ai_response
             
             # Empty response after tool execution — force final answer without tools
-            if loop_count > 0 and last_tool_results:
+            if loop_count > 0:
                 print("[WARNING] Empty response after tool call, forcing final answer...")
                 break
             
@@ -1404,51 +1305,6 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
             
             print(f"[WARNING] AI service returned empty response")
             return "AI service failed to generate a response."
-        
-        # Loop exhausted or broke out — tool results are already in DB.
-        # Rebuild context and make one final attempt without tool schemas
-        # so the LLM produces a natural response from the tool results.
-        if last_tool_results:
-            print("[tool_loop] Final attempt: rebuilding context for natural response...")
-            messages = _build_generation_context(profile, session_id, interface)
-            
-            # Switch to vision model if image was generated
-            final_provider = preferred_provider
-            final_model = preferred_model
-            if image_was_generated:
-                print("[IMAGE TOOL] Switching to vision model for continuation...")
-                profile_vision = profile.get('vision_model')
-                if profile_vision:
-                    final_provider = 'openrouter'
-                    final_model = profile_vision
-                else:
-                    vp, vm = multimodal_tools.get_best_vision_provider()
-                    if vp and vm:
-                        final_provider, final_model = vp, vm
-                
-                # Re-attach generated image for vision context
-                for tr in last_tool_results:
-                    if tr["tool"] == 'image_generate':
-                        try:
-                            rd = json.loads(tr["result"])
-                            if rd.get('image_path'):
-                                _load_and_attach_generated_image(
-                                    rd['image_path'], messages, session_id)
-                        except (json.JSONDecodeError, KeyError):
-                            pass
-            
-            final_kwargs = {k: v for k, v in kwargs.items() if k != 'tools'}
-            if 'max_tokens' not in final_kwargs:
-                final_kwargs['max_tokens'] = 4096
-            final_response = ai_manager.send_message(
-                final_provider, final_model, messages, **final_kwargs
-            )
-            if isinstance(final_response, dict):
-                content = final_response.get('content', '')
-                if content and content.strip():
-                    return content.strip()
-            elif isinstance(final_response, str) and final_response.strip():
-                return final_response
         
         # Absolute fallback
         return "I couldn't complete the request."
