@@ -2088,7 +2088,7 @@ def _merge_profile_data(existing_memory: Dict, new_data: Dict) -> Dict:
 
 
 def global_profile_analysis(prompt: str, api_key: str) -> Optional[str]:
-    """Analyze conversation history using GLM-4.7 with optimal settings"""
+    """Analyze conversation history using qwen with optimal settings"""
     headers = {
         "Content-Type": "application/json",
         "HTTP-Referer": "https://github.com/icedeyes12/yuzu-companion", 
@@ -2306,7 +2306,7 @@ def _try_free_model(prompt: str, api_key: str) -> Optional[str]:
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=120
+                timeout=300
             )
             
             if response.status_code == 200:
