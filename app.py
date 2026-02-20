@@ -307,7 +307,13 @@ def handle_user_message(user_message, interface="terminal"):
         
         # Phase 1: LLM request — user message is NOT yet in DB.
         # generate_ai_response appends it to the context messages in-memory.
-        ai_reply = generate_ai_response(profile, user_message, interface, session_id)
+        try:
+            ai_reply = generate_ai_response(profile, user_message, interface, session_id)
+        except Exception as e:
+            # Persist user message even on LLM failure to avoid conversation loss
+            Database.add_message('user', user_message, session_id=session_id,
+                                 image_paths=cached_image_paths if cached_image_paths else None)
+            raise
         
         # After successful LLM response: persist user message to DB
         Database.add_message('user', user_message, session_id=session_id,
@@ -369,10 +375,15 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
         )
         
         full_response = ""
-        for chunk in response_generator:
-            yield chunk
-            if chunk:
-                full_response += chunk
+        try:
+            for chunk in response_generator:
+                yield chunk
+                if chunk:
+                    full_response += chunk
+        except Exception:
+            # Persist user message even on streaming failure
+            Database.add_message('user', user_message, session_id=session_id)
+            raise
         
         # After successful LLM response: persist user message to DB
         Database.add_message('user', user_message, session_id=session_id)
@@ -1027,6 +1038,8 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
             tool_calls = ai_response['tool_calls']
             
             # Execute first tool call — deterministic, no loop
+            if len(tool_calls) > 1:
+                print(f"[WARNING] LLM returned {len(tool_calls)} tool calls; only the first will be executed")
             tc = tool_calls[0]
             func = tc.get('function', {})
             tool_name = func.get('name', '')
@@ -1204,6 +1217,8 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
             tool_calls = ai_response['tool_calls']
             
             # Execute first tool call — deterministic, no loop
+            if len(tool_calls) > 1:
+                print(f"[WARNING] LLM returned {len(tool_calls)} tool calls; only the first will be executed")
             tc = tool_calls[0]
             func = tc.get('function', {})
             tool_name = func.get('name', '')

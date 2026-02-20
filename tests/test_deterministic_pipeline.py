@@ -56,8 +56,8 @@ def test_user_message_saved_after_llm_response(monkeypatch):
 
     reply = app.handle_user_message("hi there", interface="terminal")
 
-    # User message should be saved AFTER assistant message's LLM call
-    # The order should be: user (after LLM), then assistant
+    # DB saves happen only after the LLM responds.
+    # First save: user message (persisted after LLM call), then assistant reply.
     assert save_order[0] == 'user', f"First save should be 'user', got {save_order}"
     assert save_order[1] == 'assistant', f"Second save should be 'assistant', got {save_order}"
 
@@ -233,6 +233,14 @@ def test_llm_context_only_system_user_assistant(monkeypatch):
             f"Tool role '{msg['role']}' leaked into LLM context"
         assert msg['role'] in ('system', 'user', 'assistant'), \
             f"Unexpected role '{msg['role']}' in LLM context"
+
+    # Positive check: tool content must appear as 'assistant' role
+    tool_as_assistant = [
+        m for m in captured_messages
+        if m['role'] == 'assistant' and '<details>' in m.get('content', '')
+    ]
+    assert len(tool_as_assistant) > 0, \
+        "Tool result should appear as 'assistant' role in LLM context"
 
 
 def test_second_pass_for_non_image_tools(monkeypatch):
