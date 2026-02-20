@@ -302,13 +302,16 @@ def handle_user_message(user_message, interface="terminal"):
         active_session = Database.get_active_session()
         session_id = active_session['id']
         
-        # Cache any images present in the user message
+        # Cache any images present in the user message (needed for vision)
         cached_image_paths = _cache_images_from_message(user_message)
         
+        # Phase 1: LLM request — user message is NOT yet in DB.
+        # generate_ai_response appends it to the context messages in-memory.
+        ai_reply = generate_ai_response(profile, user_message, interface, session_id)
+        
+        # After successful LLM response: persist user message to DB
         Database.add_message('user', user_message, session_id=session_id,
                              image_paths=cached_image_paths if cached_image_paths else None)
-        
-        ai_reply = generate_ai_response(profile, user_message, interface, session_id)
         
         ai_reply_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', ai_reply).strip()
         
@@ -320,10 +323,10 @@ def handle_user_message(user_message, interface="terminal"):
             else:
                 Database.add_message('assistant', ai_reply_clean, session_id=session_id)
             
-            # image_tools success → no second LLM pass
+            # image_tools is TERMINAL — no second LLM pass on success
             needs_second_pass = tool_role != "image_tools" or "Error:" in ai_reply_clean
             if needs_second_pass:
-                # Second LLM pass — same pipeline
+                # Second LLM pass — same pipeline (user + tool result now in DB)
                 second_reply = generate_ai_response(profile, "", interface, session_id)
                 if second_reply and second_reply.strip():
                     second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
@@ -359,8 +362,8 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
         active_session = Database.get_active_session()
         session_id = active_session['id']
         
-        Database.add_message('user', user_message, session_id=session_id)
-        
+        # Phase 1: LLM request — user message is NOT yet in DB.
+        # generate_ai_response_streaming appends it to context in-memory.
         response_generator = generate_ai_response_streaming(
             profile, user_message, interface, session_id, provider, model
         )
@@ -370,6 +373,9 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
             yield chunk
             if chunk:
                 full_response += chunk
+        
+        # After successful LLM response: persist user message to DB
+        Database.add_message('user', user_message, session_id=session_id)
         
         if full_response.strip():
             full_response_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', full_response).strip()
@@ -381,9 +387,10 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
                 else:
                     Database.add_message('assistant', full_response_clean, session_id=session_id)
                 
-                # image_tools success → no second LLM pass
+                # image_tools is TERMINAL — no second LLM pass on success
                 needs_second_pass = tool_role != "image_tools" or "Error:" in full_response_clean
                 if needs_second_pass:
+                    # Second LLM pass — same pipeline (user + tool result now in DB)
                     second_reply = generate_ai_response(profile, "", interface, session_id)
                     if second_reply and second_reply.strip():
                         second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
@@ -728,15 +735,11 @@ When issuing a tool command:
 
 After issuing a tool command, your turn ends.
 
-Tool results arrive as new messages with role:
-- memory_sql_tools
-- memory_search_tools
-- web_search_tools
-- weather_tools
-- image_tools
+Tool results appear as assistant messages in the conversation.
+They are part of normal conversational flow.
 
-Tool results are treated as conversational input.
-You respond naturally in the next turn.
+You respond naturally after receiving tool results.
+Do not reference internal formatting or execution structure.
 
 
 ────────────────────────────────────────
@@ -936,7 +939,14 @@ def _handle_ai_image_generation(ai_response, session_id):
     return ai_response
 
 def generate_ai_response_streaming(profile, user_message, interface="terminal", session_id=None, provider=None, model=None):
-    """Generate AI response with streaming support and tool execution loop"""
+    """Generate a single AI response (streaming variant) — no agentic looping.
+
+    Same deterministic model as generate_ai_response:
+      1. Build context + append pending user_message.
+      2. Single LLM call.
+      3. If tool command → execute → yield result.
+      4. Otherwise yield natural reply.
+    """
     if session_id is None:
         active_session = Database.get_active_session()
         session_id = active_session['id']
@@ -948,6 +958,10 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
     
     # Build context and messages
     messages = _build_generation_context(profile, session_id, interface)
+    
+    # Append pending user message (not yet in DB) to context
+    if user_message and user_message.strip():
+        messages.append({"role": "user", "content": user_message})
     
     ai_manager = get_ai_manager()
     providers_config = profile.get('providers_config', {})
@@ -992,136 +1006,105 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         weather_context = Database.get_context()
         weather_location = weather_context.get('location', {})
         
-        # Tool execution loop (non-streaming for tool iterations)
-        max_tool_iterations = 3
-        loop_count = 0
-        prev_tool_calls = []
+        # --- Single LLM call (no agentic loop) ---
+        ai_response = ai_manager.send_message(
+            preferred_provider,
+            preferred_model,
+            messages,
+            **kwargs
+        )
         
-        while loop_count < max_tool_iterations:
-            # First try non-streaming to detect tool calls
-            ns_kwargs = dict(kwargs)
-            ns_kwargs.pop('max_tokens', None)
-            if preferred_provider == 'openrouter':
-                if ':free' in preferred_model:
-                    ns_kwargs['max_tokens'] = 2048
-                else:
-                    ns_kwargs['max_tokens'] = 4096
-            
+        # Handle None — retry once before giving up
+        if ai_response is None:
+            print("[WARNING] AI returned None, retrying...")
+            import time as _time; _time.sleep(1)
             ai_response = ai_manager.send_message(
-                preferred_provider,
-                preferred_model,
-                messages,
-                **ns_kwargs
+                preferred_provider, preferred_model, messages, **kwargs
             )
+        
+        # Case: tool_calls in response dict
+        if isinstance(ai_response, dict) and ai_response.get('tool_calls'):
+            tool_calls = ai_response['tool_calls']
             
-            # Handle None — retry once before giving up
-            if ai_response is None:
-                print("[WARNING] AI returned None, retrying...")
-                import time as _time; _time.sleep(1)
-                ai_response = ai_manager.send_message(
-                    preferred_provider, preferred_model, messages, **ns_kwargs
+            # Execute first tool call — deterministic, no loop
+            tc = tool_calls[0]
+            func = tc.get('function', {})
+            tool_name = func.get('name', '')
+            try:
+                args = json.loads(func.get('arguments', '{}'))
+            except json.JSONDecodeError:
+                args = {}
+            
+            if tool_name == 'weather':
+                if 'lat' not in args or 'lon' not in args:
+                    args['lat'] = weather_location.get('lat', 0.0)
+                    args['lon'] = weather_location.get('lon', 0.0)
+            
+            print(f"[tool] {tool_name}({args})")
+            
+            try:
+                result = execute_tool(tool_name, args, session_id=session_id)
+            except Exception as e:
+                from tools.registry import build_markdown_contract
+                result = build_markdown_contract(
+                    f"{tool_name}_tools", f"/{tool_name}",
+                    [f"Error: {str(e)}"], "Yuzu"
                 )
             
-            if isinstance(ai_response, dict) and ai_response.get('tool_calls'):
-                tool_calls = ai_response['tool_calls']
-                
-                # Detect repeated identical tool calls — break immediately
-                current_call_sig = [(tc['function']['name'], tc['function'].get('arguments', '')) for tc in tool_calls]
-                if current_call_sig == prev_tool_calls:
-                    print("[WARNING] Repeated tool calls detected, forcing final response")
-                    break
-                prev_tool_calls = current_call_sig
-                
-                # Execute each tool call — tools now return formatted markdown
-                for tc in tool_calls:
-                    func = tc.get('function', {})
-                    tool_name = func.get('name', '')
-                    try:
-                        args = json.loads(func.get('arguments', '{}'))
-                    except json.JSONDecodeError:
-                        args = {}
-                    
-                    if tool_name == 'weather':
-                        if 'lat' not in args or 'lon' not in args:
-                            args['lat'] = weather_location.get('lat', 0.0)
-                            args['lon'] = weather_location.get('lon', 0.0)
-                    
-                    print(f"[tool] {tool_name}({args})")
-                    
-                    try:
-                        result = execute_tool(tool_name, args, session_id=session_id)
-                    except Exception as e:
-                        from tools.registry import build_markdown_contract
-                        result = build_markdown_contract(
-                            f"{tool_name}_tools", f"/{tool_name}",
-                            [f"Error: {str(e)}"], "Yuzu"
-                        )
-                    
-                    if not result or not result.strip():
-                        print(f"[tool_retry] {tool_name}: empty result, retrying...")
-                        try:
-                            result = execute_tool(tool_name, args, session_id=session_id)
-                        except Exception as e:
-                            from tools.registry import build_markdown_contract
-                            result = build_markdown_contract(
-                                f"{tool_name}_tools", f"/{tool_name}",
-                                [f"Error: {str(e)}"], "Yuzu"
-                            )
-                    if not result or not result.strip():
-                        from tools.registry import build_markdown_contract
-                        result = build_markdown_contract(
-                            f"{tool_name}_tools", f"/{tool_name}",
-                            [f"Error: Tool {tool_name} returned empty result"], "Yuzu"
-                        )
-                    
-                    # Return formatted markdown to caller
-                    # (caller saves as tool message and handles second LLM pass)
-                    yield result
-                    return
+            if not result or not result.strip():
+                print(f"[tool_retry] {tool_name}: empty result, retrying...")
+                try:
+                    result = execute_tool(tool_name, args, session_id=session_id)
+                except Exception as e:
+                    from tools.registry import build_markdown_contract
+                    result = build_markdown_contract(
+                        f"{tool_name}_tools", f"/{tool_name}",
+                        [f"Error: {str(e)}"], "Yuzu"
+                    )
+            if not result or not result.strip():
+                from tools.registry import build_markdown_contract
+                result = build_markdown_contract(
+                    f"{tool_name}_tools", f"/{tool_name}",
+                    [f"Error: Tool {tool_name} returned empty result"], "Yuzu"
+                )
             
-            # Handle dict without tool_calls (e.g. content-only dict)
-            if isinstance(ai_response, dict):
-                content = ai_response.get('content', '')
-                if content and content.strip():
-                    cmd_info = _detect_command(content)
-                    if cmd_info:
-                        yield _execute_command_tool(cmd_info, session_id=session_id)
-                        return
-                    
-                    yield content.strip()
-                    return
-            
-            # No tool calls — yield text response
-            if isinstance(ai_response, str) and ai_response.strip():
-                cmd_info = _detect_command(ai_response)
+            # Return formatted markdown to caller
+            # (caller saves as tool message and handles second LLM pass)
+            yield result
+            return
+        
+        # Case: dict without tool_calls (content-only dict)
+        if isinstance(ai_response, dict):
+            content = ai_response.get('content', '')
+            if content and content.strip():
+                cmd_info = _detect_command(content)
                 if cmd_info:
                     yield _execute_command_tool(cmd_info, session_id=session_id)
                     return
-                    
-                yield ai_response
+                yield content.strip()
                 return
-            
-            # Empty response after tool execution
-            if loop_count > 0:
-                print("[WARNING] Empty response after tool call, forcing final answer...")
-                break
-            
-            # True empty on first call — retry once without tools
-            if loop_count == 0:
-                print("[WARNING] Empty response, retrying without tools...")
-                retry_kwargs = {k: v for k, v in ns_kwargs.items() if k != 'tools'}
-                ai_response = ai_manager.send_message(
-                    preferred_provider, preferred_model, messages, **retry_kwargs
-                )
-                if isinstance(ai_response, str) and ai_response.strip():
-                    yield ai_response
-                    return
-            
-            yield "AI service failed to generate a response."
+        
+        # Case: plain text response
+        if isinstance(ai_response, str) and ai_response.strip():
+            cmd_info = _detect_command(ai_response)
+            if cmd_info:
+                yield _execute_command_tool(cmd_info, session_id=session_id)
+                return
+            yield ai_response
             return
         
-        # Absolute fallback
-        yield "I couldn't complete the request."
+        # Empty response — retry once without tools
+        print("[WARNING] Empty response, retrying without tools...")
+        retry_kwargs = {k: v for k, v in kwargs.items() if k != 'tools'}
+        ai_response = ai_manager.send_message(
+            preferred_provider, preferred_model, messages, **retry_kwargs
+        )
+        if isinstance(ai_response, str) and ai_response.strip():
+            yield ai_response
+            return
+        
+        yield "AI service failed to generate a response."
+        return
         
     except Exception as e:
         error_msg = f"AI service error: {str(e)}"
@@ -1129,7 +1112,19 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         yield error_msg
 
 def generate_ai_response(profile, user_message, interface="terminal", session_id=None):
-    """Generate AI response with tool execution loop (non-streaming)"""
+    """Generate a single AI response — no agentic looping.
+
+    Execution model:
+      1. Build context from DB history.
+      2. Append pending user_message (not yet persisted).
+      3. Single LLM call.
+      4. If LLM returns a tool command → execute deterministically → return result.
+      5. Otherwise return the natural reply.
+
+    The caller (handle_user_message) is responsible for:
+      - Persisting user / tool / assistant messages to DB.
+      - Triggering one second-pass call when appropriate.
+    """
     if session_id is None:
         active_session = Database.get_active_session()
         session_id = active_session['id']
@@ -1145,6 +1140,10 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
     preferred_model = providers_config.get('preferred_model', 'glm-4.6:cloud')
     
     messages = _build_generation_context(profile, session_id, interface)
+    
+    # Append pending user message (not yet in DB) to context
+    if user_message and user_message.strip():
+        messages.append({"role": "user", "content": user_message})
     
     # Handle vision processing for image-containing messages
     messages, preferred_provider, preferred_model = _handle_vision_processing(
@@ -1184,130 +1183,103 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
         weather_context = Database.get_context()
         weather_location = weather_context.get('location', {})
         
-        # Tool execution loop
-        max_tool_iterations = 3
-        loop_count = 0
-        prev_tool_calls = []
+        # --- Single LLM call (no agentic loop) ---
+        ai_response = ai_manager.send_message(
+            preferred_provider,
+            preferred_model,
+            messages,
+            **kwargs
+        )
         
-        while loop_count < max_tool_iterations:
+        # Handle None — retry once before giving up
+        if ai_response is None:
+            print("[WARNING] AI returned None, retrying...")
+            import time as _time; _time.sleep(1)
             ai_response = ai_manager.send_message(
-                preferred_provider,
-                preferred_model,
-                messages,
-                **kwargs
+                preferred_provider, preferred_model, messages, **kwargs
             )
-            
-            # Handle None — retry once before giving up
-            if ai_response is None:
-                print("[WARNING] AI returned None, retrying...")
-                import time as _time; _time.sleep(1)
-                ai_response = ai_manager.send_message(
-                    preferred_provider, preferred_model, messages, **kwargs
-                )
-            
-            # Check if response contains tool calls (dict with tool_calls)
-            if isinstance(ai_response, dict) and ai_response.get('tool_calls'):
-                tool_calls = ai_response['tool_calls']
-                
-                # Detect repeated identical tool calls — break immediately
-                current_call_sig = [(tc['function']['name'], tc['function'].get('arguments', '')) for tc in tool_calls]
-                if current_call_sig == prev_tool_calls:
-                    print("[WARNING] Repeated tool calls detected, forcing final response")
-                    break
-                prev_tool_calls = current_call_sig
-                
-                # Execute each tool call — tools now return formatted markdown
-                for tc in tool_calls:
-                    func = tc.get('function', {})
-                    tool_name = func.get('name', '')
-                    try:
-                        args = json.loads(func.get('arguments', '{}'))
-                    except json.JSONDecodeError:
-                        args = {}
-                    
-                    # Inject weather location defaults
-                    if tool_name == 'weather':
-                        if 'lat' not in args or 'lon' not in args:
-                            args['lat'] = weather_location.get('lat', 0.0)
-                            args['lon'] = weather_location.get('lon', 0.0)
-                    
-                    print(f"[tool] {tool_name}({args})")
-                    
-                    try:
-                        result = execute_tool(tool_name, args, session_id=session_id)
-                    except Exception as e:
-                        print(f"[tool_error] {tool_name}: {e}")
-                        from tools.registry import build_markdown_contract
-                        result = build_markdown_contract(
-                            f"{tool_name}_tools", f"/{tool_name}",
-                            [f"Error: {str(e)}"], "Yuzu"
-                        )
-                    
-                    # Validate tool result — retry once on empty/invalid
-                    if not result or not result.strip():
-                        print(f"[tool_retry] {tool_name}: empty result, retrying...")
-                        try:
-                            result = execute_tool(tool_name, args, session_id=session_id)
-                        except Exception as e:
-                            from tools.registry import build_markdown_contract
-                            result = build_markdown_contract(
-                                f"{tool_name}_tools", f"/{tool_name}",
-                                [f"Error: {str(e)}"], "Yuzu"
-                            )
-                    if not result or not result.strip():
-                        print(f"[tool_error] {tool_name}: empty result after retry")
-                        from tools.registry import build_markdown_contract
-                        result = build_markdown_contract(
-                            f"{tool_name}_tools", f"/{tool_name}",
-                            [f"Error: Tool {tool_name} returned empty result"], "Yuzu"
-                        )
-                    
-                    # Return formatted markdown to caller
-                    # (caller saves as tool message and handles second LLM pass)
-                    return result
-            
-            # Handle dict without tool_calls (e.g. content-only dict)
-            if isinstance(ai_response, dict):
-                content = ai_response.get('content', '')
-                if content and content.strip():
-                    # Check for command on first line
-                    cmd_info = _detect_command(content)
-                    if cmd_info:
-                        # Execute command tool — returns formatted markdown
-                        return _execute_command_tool(cmd_info, session_id=session_id)
-                    
-                    return content.strip()
-            
-            # No tool calls — we have the final text response
-            if isinstance(ai_response, str) and ai_response.strip():
-                # Check for command on first line
-                cmd_info = _detect_command(ai_response)
-                if cmd_info:
-                    # Execute command tool — returns formatted markdown
-                    return _execute_command_tool(cmd_info, session_id=session_id)
-                
-                return ai_response
-            
-            # Empty response after tool execution — force final answer without tools
-            if loop_count > 0:
-                print("[WARNING] Empty response after tool call, forcing final answer...")
-                break
-            
-            # True empty on first call — retry once without tools
-            if loop_count == 0:
-                print("[WARNING] Empty response, retrying without tools...")
-                retry_kwargs = {k: v for k, v in kwargs.items() if k != 'tools'}
-                ai_response = ai_manager.send_message(
-                    preferred_provider, preferred_model, messages, **retry_kwargs
-                )
-                if isinstance(ai_response, str) and ai_response.strip():
-                    return ai_response
-            
-            print(f"[WARNING] AI service returned empty response")
-            return "AI service failed to generate a response."
         
-        # Absolute fallback
-        return "I couldn't complete the request."
+        # Case: tool_calls in response dict
+        if isinstance(ai_response, dict) and ai_response.get('tool_calls'):
+            tool_calls = ai_response['tool_calls']
+            
+            # Execute first tool call — deterministic, no loop
+            tc = tool_calls[0]
+            func = tc.get('function', {})
+            tool_name = func.get('name', '')
+            try:
+                args = json.loads(func.get('arguments', '{}'))
+            except json.JSONDecodeError:
+                args = {}
+            
+            # Inject weather location defaults
+            if tool_name == 'weather':
+                if 'lat' not in args or 'lon' not in args:
+                    args['lat'] = weather_location.get('lat', 0.0)
+                    args['lon'] = weather_location.get('lon', 0.0)
+            
+            print(f"[tool] {tool_name}({args})")
+            
+            try:
+                result = execute_tool(tool_name, args, session_id=session_id)
+            except Exception as e:
+                print(f"[tool_error] {tool_name}: {e}")
+                from tools.registry import build_markdown_contract
+                result = build_markdown_contract(
+                    f"{tool_name}_tools", f"/{tool_name}",
+                    [f"Error: {str(e)}"], "Yuzu"
+                )
+            
+            # Validate tool result — retry once on empty/invalid
+            if not result or not result.strip():
+                print(f"[tool_retry] {tool_name}: empty result, retrying...")
+                try:
+                    result = execute_tool(tool_name, args, session_id=session_id)
+                except Exception as e:
+                    from tools.registry import build_markdown_contract
+                    result = build_markdown_contract(
+                        f"{tool_name}_tools", f"/{tool_name}",
+                        [f"Error: {str(e)}"], "Yuzu"
+                    )
+            if not result or not result.strip():
+                print(f"[tool_error] {tool_name}: empty result after retry")
+                from tools.registry import build_markdown_contract
+                result = build_markdown_contract(
+                    f"{tool_name}_tools", f"/{tool_name}",
+                    [f"Error: Tool {tool_name} returned empty result"], "Yuzu"
+                )
+            
+            # Return formatted markdown to caller
+            # (caller saves as tool message and handles second LLM pass)
+            return result
+        
+        # Case: dict without tool_calls (content-only dict)
+        if isinstance(ai_response, dict):
+            content = ai_response.get('content', '')
+            if content and content.strip():
+                cmd_info = _detect_command(content)
+                if cmd_info:
+                    return _execute_command_tool(cmd_info, session_id=session_id)
+                return content.strip()
+        
+        # Case: plain text response
+        if isinstance(ai_response, str) and ai_response.strip():
+            cmd_info = _detect_command(ai_response)
+            if cmd_info:
+                return _execute_command_tool(cmd_info, session_id=session_id)
+            return ai_response
+        
+        # Empty response — retry once without tools
+        print("[WARNING] Empty response, retrying without tools...")
+        retry_kwargs = {k: v for k, v in kwargs.items() if k != 'tools'}
+        ai_response = ai_manager.send_message(
+            preferred_provider, preferred_model, messages, **retry_kwargs
+        )
+        if isinstance(ai_response, str) and ai_response.strip():
+            return ai_response
+        
+        print("[WARNING] AI service returned empty response")
+        return "AI service failed to generate a response."
             
     except Exception as e:
         error_msg = f"AI service error: {str(e)}"
