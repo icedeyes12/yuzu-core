@@ -225,13 +225,18 @@ def test_llm_context_only_system_user_assistant(monkeypatch):
         assert msg['role'] in ('system', 'user', 'assistant'), \
             f"Unexpected role '{msg['role']}' in LLM context"
 
-    # Positive check: tool content must appear as 'assistant' role
+    # Verify no <details> markup leaked into LLM context
+    for msg in captured_messages:
+        assert '<details>' not in (msg.get('content') or ''), \
+            f"Markdown contract leaked into LLM context: {msg['content'][:80]}"
+
+    # Positive check: tool command must appear as 'assistant' with clean /command
     tool_as_assistant = [
         m for m in captured_messages
-        if m['role'] == 'assistant' and '<details>' in m.get('content', '')
+        if m['role'] == 'assistant' and '/web_search' in m.get('content', '')
     ]
     assert len(tool_as_assistant) > 0, \
-        "Tool result should appear as 'assistant' role in LLM context"
+        "Tool command should appear as 'assistant' role in LLM context"
 
 
 def test_second_pass_for_non_image_tools(monkeypatch):

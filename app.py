@@ -146,6 +146,24 @@ def _extract_tool_role(response_text):
     m = re.search(r'<summary>🔧\s*(\S+)</summary>', response_text)
     return m.group(1) if m else None
 
+def _extract_command_from_markdown(content):
+    """Extract the original /command line from a tool markdown contract.
+
+    The contract format stores the command inside a bash code block:
+        ```bash
+        Yuzu$ /command args
+        ```
+
+    Returns the command string (e.g. "/web_search python") or the
+    original content unchanged when extraction fails.
+    """
+    if not content:
+        return content
+    m = re.search(r'```bash\n\S+\$\s*(/\S+.*?)\n```', content, re.DOTALL)
+    if m:
+        return m.group(1).strip()
+    return content
+
 def _execute_command_tool(command_info, session_id=None):
     """
     Execute a tool based on command detection.
@@ -858,14 +876,16 @@ You are continuous.
 
     for msg in chat_history:
         role = msg["role"]
-        # Map tool-specific roles to 'assistant' for LLM API compatibility
-        # Tool results are stored with dedicated roles (e.g., web_search_tools)
-        # but LLMs only understand system/user/assistant/tool roles
+        content = msg["content"]
+        # Map tool-specific roles to 'assistant' for LLM API compatibility.
+        # Strip markdown contracts — only project the original /command line
+        # so the LLM never sees execution markup (prevents pattern contamination).
         if role in ALL_TOOL_ROLES:
             role = "assistant"
+            content = _extract_command_from_markdown(content)
         messages.append({
             "role": role,
-            "content": msg["content"]
+            "content": content
         })
 
     return messages

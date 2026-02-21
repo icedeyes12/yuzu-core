@@ -191,16 +191,21 @@ def test_context_builder_maps_tool_roles():
         assert msg['role'] not in ALL_TOOL_ROLES, \
             f"Tool-specific role '{msg['role']}' leaked into LLM messages"
     
-    # Verify tool results are present as 'assistant' role with <details> content
-    tool_content_found = False
+    # Verify tool results are present as 'assistant' role with clean /command (no <details> markup)
+    tool_command_found = False
     for msg in messages:
-        if '<details>' in msg.get('content', ''):
+        content = msg.get('content', '')
+        # No <details> markup should leak into LLM context
+        assert '<details>' not in content, \
+            f"Markdown contract leaked into LLM context: {content[:80]}"
+        # The original /command should appear as 'assistant'
+        if '/web_search test' in content:
             assert msg['role'] == 'assistant', \
-                f"Tool result should have role 'assistant' for LLM, got '{msg['role']}'"
-            tool_content_found = True
+                f"Tool command should have role 'assistant' for LLM, got '{msg['role']}'"
+            tool_command_found = True
     
-    assert tool_content_found, "Tool result content not found in context builder output"
-    print("✓ Tool roles correctly mapped to 'assistant' in context builder")
+    assert tool_command_found, "Tool command not found in context builder output"
+    print("✓ Tool roles correctly mapped to 'assistant' with clean /command in context builder")
     
     print("\n✅ Context builder tool role mapping test passed!")
 
