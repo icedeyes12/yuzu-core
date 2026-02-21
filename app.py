@@ -23,7 +23,7 @@ from typing import Dict, Optional, List
 from database import Database, ALL_TOOL_ROLES
 from providers import get_ai_manager
 from tools import multimodal_tools
-from tools.registry import get_tool_schemas, execute_tool
+from tools.registry import execute_tool
 # ---------------------------------------------------------------------------
 # Persistent visual context buffer (per-session, runtime-only)
 # Stores the last processed image as base64 for N follow-up turns so the
@@ -981,14 +981,6 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
             else:
                 kwargs['max_tokens'] = 4096
         
-        # Tool schemas for supported providers
-        tools = get_tool_schemas()
-        if preferred_provider in ('openrouter',):
-            kwargs['tools'] = tools
-        
-        weather_context = Database.get_context()
-        weather_location = weather_context.get('location', {})
-        
         # --- Single LLM call (no agentic loop) ---
         ai_response = ai_manager.send_message(
             preferred_provider,
@@ -1005,70 +997,6 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
                 preferred_provider, preferred_model, messages, **kwargs
             )
         
-        # Case: tool_calls in response dict
-        if isinstance(ai_response, dict) and ai_response.get('tool_calls'):
-            tool_calls = ai_response['tool_calls']
-            
-            # Execute first tool call — deterministic, no loop
-            if len(tool_calls) > 1:
-                print(f"[WARNING] LLM returned {len(tool_calls)} tool calls; only the first will be executed")
-            tc = tool_calls[0]
-            func = tc.get('function', {})
-            tool_name = func.get('name', '')
-            try:
-                args = json.loads(func.get('arguments', '{}'))
-            except json.JSONDecodeError:
-                args = {}
-            
-            if tool_name == 'weather':
-                if 'lat' not in args or 'lon' not in args:
-                    args['lat'] = weather_location.get('lat', 0.0)
-                    args['lon'] = weather_location.get('lon', 0.0)
-            
-            print(f"[tool] {tool_name}({args})")
-            
-            try:
-                result = execute_tool(tool_name, args, session_id=session_id)
-            except Exception as e:
-                from tools.registry import build_markdown_contract
-                result = build_markdown_contract(
-                    f"{tool_name}_tools", f"/{tool_name}",
-                    [f"Error: {str(e)}"], "Yuzu"
-                )
-            
-            if not result or not result.strip():
-                print(f"[tool_retry] {tool_name}: empty result, retrying...")
-                try:
-                    result = execute_tool(tool_name, args, session_id=session_id)
-                except Exception as e:
-                    from tools.registry import build_markdown_contract
-                    result = build_markdown_contract(
-                        f"{tool_name}_tools", f"/{tool_name}",
-                        [f"Error: {str(e)}"], "Yuzu"
-                    )
-            if not result or not result.strip():
-                from tools.registry import build_markdown_contract
-                result = build_markdown_contract(
-                    f"{tool_name}_tools", f"/{tool_name}",
-                    [f"Error: Tool {tool_name} returned empty result"], "Yuzu"
-                )
-            
-            # Return formatted markdown to caller
-            # (caller saves as tool message and handles second LLM pass)
-            yield result
-            return
-        
-        # Case: dict without tool_calls (content-only dict)
-        if isinstance(ai_response, dict):
-            content = ai_response.get('content', '')
-            if content and content.strip():
-                cmd_info = _detect_command(content)
-                if cmd_info:
-                    yield _execute_command_tool(cmd_info, session_id=session_id)
-                    return
-                yield content.strip()
-                return
-        
         # Case: plain text response
         if isinstance(ai_response, str) and ai_response.strip():
             cmd_info = _detect_command(ai_response)
@@ -1078,11 +1006,10 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
             yield ai_response
             return
         
-        # Empty response — retry once without tools
-        print("[WARNING] Empty response, retrying without tools...")
-        retry_kwargs = {k: v for k, v in kwargs.items() if k != 'tools'}
+        # Empty response — retry once
+        print("[WARNING] Empty response, retrying...")
         ai_response = ai_manager.send_message(
-            preferred_provider, preferred_model, messages, **retry_kwargs
+            preferred_provider, preferred_model, messages, **kwargs
         )
         if isinstance(ai_response, str) and ai_response.strip():
             yield ai_response
@@ -1159,15 +1086,6 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
             else:
                 kwargs['max_tokens'] = 2048
         
-        # Pass tool schemas for providers that support them
-        tools = get_tool_schemas()
-        if preferred_provider in ('openrouter',):
-            kwargs['tools'] = tools
-        
-        # Get weather location from context for tool calls
-        weather_context = Database.get_context()
-        weather_location = weather_context.get('location', {})
-        
         # --- Single LLM call (no agentic loop) ---
         ai_response = ai_manager.send_message(
             preferred_provider,
@@ -1184,71 +1102,6 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                 preferred_provider, preferred_model, messages, **kwargs
             )
         
-        # Case: tool_calls in response dict
-        if isinstance(ai_response, dict) and ai_response.get('tool_calls'):
-            tool_calls = ai_response['tool_calls']
-            
-            # Execute first tool call — deterministic, no loop
-            if len(tool_calls) > 1:
-                print(f"[WARNING] LLM returned {len(tool_calls)} tool calls; only the first will be executed")
-            tc = tool_calls[0]
-            func = tc.get('function', {})
-            tool_name = func.get('name', '')
-            try:
-                args = json.loads(func.get('arguments', '{}'))
-            except json.JSONDecodeError:
-                args = {}
-            
-            # Inject weather location defaults
-            if tool_name == 'weather':
-                if 'lat' not in args or 'lon' not in args:
-                    args['lat'] = weather_location.get('lat', 0.0)
-                    args['lon'] = weather_location.get('lon', 0.0)
-            
-            print(f"[tool] {tool_name}({args})")
-            
-            try:
-                result = execute_tool(tool_name, args, session_id=session_id)
-            except Exception as e:
-                print(f"[tool_error] {tool_name}: {e}")
-                from tools.registry import build_markdown_contract
-                result = build_markdown_contract(
-                    f"{tool_name}_tools", f"/{tool_name}",
-                    [f"Error: {str(e)}"], "Yuzu"
-                )
-            
-            # Validate tool result — retry once on empty/invalid
-            if not result or not result.strip():
-                print(f"[tool_retry] {tool_name}: empty result, retrying...")
-                try:
-                    result = execute_tool(tool_name, args, session_id=session_id)
-                except Exception as e:
-                    from tools.registry import build_markdown_contract
-                    result = build_markdown_contract(
-                        f"{tool_name}_tools", f"/{tool_name}",
-                        [f"Error: {str(e)}"], "Yuzu"
-                    )
-            if not result or not result.strip():
-                print(f"[tool_error] {tool_name}: empty result after retry")
-                from tools.registry import build_markdown_contract
-                result = build_markdown_contract(
-                    f"{tool_name}_tools", f"/{tool_name}",
-                    [f"Error: Tool {tool_name} returned empty result"], "Yuzu"
-                )
-            
-            # Return formatted markdown to caller
-            # (caller saves as tool message and handles second LLM pass)
-            return result
-        
-        # Case: dict without tool_calls (content-only dict)
-        if isinstance(ai_response, dict):
-            content = ai_response.get('content', '')
-            if content and content.strip():
-                cmd_info = _detect_command(content)
-                if cmd_info:
-                    return _execute_command_tool(cmd_info, session_id=session_id)
-                return content.strip()
-        
         # Case: plain text response
         if isinstance(ai_response, str) and ai_response.strip():
             cmd_info = _detect_command(ai_response)
@@ -1256,11 +1109,10 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                 return _execute_command_tool(cmd_info, session_id=session_id)
             return ai_response
         
-        # Empty response — retry once without tools
-        print("[WARNING] Empty response, retrying without tools...")
-        retry_kwargs = {k: v for k, v in kwargs.items() if k != 'tools'}
+        # Empty response — retry once
+        print("[WARNING] Empty response, retrying...")
         ai_response = ai_manager.send_message(
-            preferred_provider, preferred_model, messages, **retry_kwargs
+            preferred_provider, preferred_model, messages, **kwargs
         )
         if isinstance(ai_response, str) and ai_response.strip():
             return ai_response

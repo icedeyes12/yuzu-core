@@ -140,7 +140,7 @@ def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
 
 
 def test_tool_calls_reenter_pipeline_after_execution(monkeypatch):
-    """After tool_calls execution, the formatted markdown is returned.
+    """After /command execution, the formatted markdown is returned.
 
     handle_user_message detects <details> and saves as tool message,
     then triggers a second LLM pass through the same pipeline.
@@ -166,32 +166,23 @@ def test_tool_calls_reenter_pipeline_after_execution(monkeypatch):
         def send_message(self, *args, **kwargs):
             self.calls += 1
             if self.calls == 1:
-                # Simulate LLM returning a tool_call
-                return {
-                    "content": None,
-                    "tool_calls": [{
-                        "id": "call_001",
-                        "type": "function",
-                        "function": {
-                            "name": "web_search",
-                            "arguments": '{"query": "python unit testing"}'
-                        }
-                    }]
-                }
+                # LLM returns a /command for deterministic tool execution
+                return "/web_search python unit testing"
             # Second LLM pass after tool message saved
             return "Based on the search results, here's what I found about Python testing."
 
     fake_manager = FakeManager()
     monkeypatch.setattr(app, "get_ai_manager", lambda: fake_manager)
     monkeypatch.setattr(
-        "tools.registry.execute_tool",
-        lambda tool_name, args, session_id=None: tool_markdown,
+        app,
+        "_execute_command_tool",
+        lambda cmd_info, session_id=None: tool_markdown,
     )
 
     reply = app.handle_user_message("search for python testing frameworks", interface="terminal")
 
     assert "python testing" in reply.lower()
-    # Two LLM calls: initial (tool_calls) + second pass (natural response)
+    # Two LLM calls: initial (/command) + second pass (natural response)
     assert fake_manager.calls == 2, (
         f"Expected 2 LLM calls (initial + second pass), got {fake_manager.calls}"
     )

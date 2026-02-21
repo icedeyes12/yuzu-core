@@ -100,7 +100,7 @@ def test_no_agentic_loop_single_llm_call(monkeypatch):
 
 
 def test_no_agentic_loop_with_tool_call(monkeypatch):
-    """When LLM returns a tool call, execute it and return — no second LLM call inside generate_ai_response."""
+    """When LLM returns a /command, execute it and return — no second LLM call inside generate_ai_response."""
     import app
     from database import Database
 
@@ -121,24 +121,15 @@ def test_no_agentic_loop_with_tool_call(monkeypatch):
 
         def send_message(self, *args, **kwargs):
             self.calls += 1
-            # Should only be called once — returns tool_calls
-            return {
-                "content": None,
-                "tool_calls": [{
-                    "id": "call_001",
-                    "type": "function",
-                    "function": {
-                        "name": "web_search",
-                        "arguments": '{"query": "test"}'
-                    }
-                }]
-            }
+            # LLM returns a /command — deterministic tool execution
+            return "/web_search test"
 
     fake_manager = FakeManager()
     monkeypatch.setattr(app, "get_ai_manager", lambda: fake_manager)
     monkeypatch.setattr(
-        "tools.registry.execute_tool",
-        lambda tool_name, args, session_id=None: tool_markdown,
+        app,
+        "_execute_command_tool",
+        lambda cmd_info, session_id=None: tool_markdown,
     )
 
     profile = Database.get_profile()
@@ -366,3 +357,52 @@ def test_pending_user_message_in_context(monkeypatch):
     user_msgs = [m for m in captured_messages if m['role'] == 'user']
     assert any('hello world' in m.get('content', '') for m in user_msgs), \
         f"User message 'hello world' not found in LLM context: {user_msgs}"
+
+
+def test_no_tools_kwarg_passed_to_provider(monkeypatch):
+    """Provider must never receive a 'tools' kwarg — tool schemas are not injected."""
+    import app
+    from database import Database
+
+    new_session_id = Database.create_session("test-no-tools-kwarg")
+    Database.switch_session(new_session_id)
+
+    captured_kwargs = []
+
+    class FakeManager:
+        def send_message(self, *args, **kwargs):
+            captured_kwargs.append(dict(kwargs))
+            return "Normal response"
+
+    monkeypatch.setattr(app, "get_ai_manager", lambda: FakeManager())
+
+    profile = Database.get_profile()
+    session_id = Database.get_active_session()['id']
+
+    app.generate_ai_response(profile, "test message", "terminal", session_id)
+
+    for kw in captured_kwargs:
+        assert 'tools' not in kw, f"'tools' kwarg should not be passed to provider, got: {kw}"
+
+
+def test_provider_always_returns_string(monkeypatch):
+    """Provider responses are always strings — no dict/tool_calls handling needed."""
+    import app
+    from database import Database
+
+    new_session_id = Database.create_session("test-string-response")
+    Database.switch_session(new_session_id)
+
+    class FakeManager:
+        def send_message(self, *args, **kwargs):
+            return "Just a plain string response"
+
+    monkeypatch.setattr(app, "get_ai_manager", lambda: FakeManager())
+
+    profile = Database.get_profile()
+    session_id = Database.get_active_session()['id']
+
+    result = app.generate_ai_response(profile, "hello", "terminal", session_id)
+
+    assert isinstance(result, str), f"Expected string response, got {type(result)}"
+    assert result == "Just a plain string response"

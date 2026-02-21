@@ -388,10 +388,6 @@ class OpenRouterProvider(AIProvider):
                 "stream": False
             }
             
-            tools = kwargs.get('tools')
-            if tools:
-                payload["tools"] = tools
-            
             response = requests.post(
                 self.base_url,
                 headers=headers,
@@ -402,10 +398,6 @@ class OpenRouterProvider(AIProvider):
             if response.status_code == 200:
                 result = response.json()
                 message = result['choices'][0]['message']
-                # Return full message dict when tool_calls present
-                tool_calls = message.get('tool_calls')
-                if tool_calls:
-                    return message
                 content = message.get('content', '')
                 return content.strip() if content else ''
             else:
@@ -458,10 +450,6 @@ class OpenRouterProvider(AIProvider):
                 "typical_p": typical_p,
                 "stream": True
             }
-            
-            tools = kwargs.get('tools')
-            if tools:
-                payload["tools"] = tools
             
             response = requests.post(
                 self.base_url,
