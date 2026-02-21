@@ -197,7 +197,7 @@ def test_context_builder_maps_tool_roles():
         content = msg.get('content', '')
         # No <details> markup should leak into LLM context
         assert '<details>' not in content, \
-            f"Markdown contract leaked into LLM context: {content[:80]}"
+            f"Markdown contract leaked into LLM context: {(content or '')[:80]}"
         # The original /command should appear as 'assistant'
         if '/web_search test' in content:
             assert msg['role'] == 'assistant', \

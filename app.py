@@ -149,17 +149,20 @@ def _extract_tool_role(response_text):
 def _extract_command_from_markdown(content):
     """Extract the original /command line from a tool markdown contract.
 
-    The contract format stores the command inside a bash code block:
+    The contract format (from build_markdown_contract) stores the command
+    inside a bash code block with the executor prompt:
         ```bash
         Yuzu$ /command args
         ```
 
-    Returns the command string (e.g. "/web_search python") or the
-    original content unchanged when extraction fails.
+    The regex matches ``<prompt>$ /command ...`` up to the closing
+    code fence.  Returns the command string (e.g. "/web_search python")
+    or the original content unchanged when extraction fails.
     """
     if not content:
         return content
-    m = re.search(r'```bash\n\S+\$\s*(/\S+.*?)\n```', content, re.DOTALL)
+    # Match: ```bash\n<executor>$ /<command line>\n``` — single-line command
+    m = re.search(r'```bash\n\S+\$\s*(/[^\n]+)\n```', content)
     if m:
         return m.group(1).strip()
     return content

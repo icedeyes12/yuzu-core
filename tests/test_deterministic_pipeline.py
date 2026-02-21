@@ -228,7 +228,7 @@ def test_llm_context_only_system_user_assistant(monkeypatch):
     # Verify no <details> markup leaked into LLM context
     for msg in captured_messages:
         assert '<details>' not in (msg.get('content') or ''), \
-            f"Markdown contract leaked into LLM context: {msg['content'][:80]}"
+            f"Markdown contract leaked into LLM context: {(msg.get('content') or '')[:80]}"
 
     # Positive check: tool command must appear as 'assistant' with clean /command
     tool_as_assistant = [
