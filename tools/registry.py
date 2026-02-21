@@ -1,7 +1,5 @@
-import json
-from tools import web_search, weather, memory_search, image_generate, image_analyze
+from tools import web_search, weather, memory_search, image_generate, image_analyze, http_request
 from tools import memory_sql
-
 
 # Tool name → tool role used for DB storage
 TOOL_ROLE_MAP = {
@@ -12,8 +10,8 @@ TOOL_ROLE_MAP = {
     "image_generate": "image_tools",
     "imagine": "image_tools",
     "image_analyze": "image_analyze_tools",
+    "request": "request_tools",
 }
-
 
 _TOOLS = {
     "web_search": web_search,
@@ -22,8 +20,8 @@ _TOOLS = {
     "memory_sql": memory_sql,
     "image_generate": image_generate,
     "image_analyze": image_analyze,
+    "request": http_request,
 }
-
 
 def build_markdown_contract(tool_role, full_command, output_lines, partner_name):
     """Build the unified markdown contract for tool output.
