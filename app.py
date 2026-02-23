@@ -115,13 +115,13 @@ def _detect_command(response_text):
     
     # Parse command
     parts = first_line.split(None, 1)  # Split on first whitespace
-    command = parts[0]  # e.g., "/web_search"
+    command = parts[0]  # e.g., "/request"
     args = parts[1] if len(parts) > 1 else ""
     
     # Extract tool name (remove /)
     tool_name = command[1:]  # Remove leading /
     
-    # Handle multi-line commands (like /memory_sql)
+    # Handle multi-line commands
     remaining_text = '\n'.join(lines[1:]).strip() if len(lines) > 1 else ""
     
     return {
@@ -156,7 +156,7 @@ def _extract_command_from_markdown(content):
         ```
 
     The regex matches ``<prompt>$ /command ...`` up to the closing
-    code fence.  Returns the command string (e.g. "/web_search python")
+    code fence.  Returns the command string (e.g. "/request https://example.com")
     or the original content unchanged when extraction fails.
     """
     if not content:
@@ -186,30 +186,12 @@ def _execute_command_tool(command_info, session_id=None):
     
     # Prepare arguments based on tool type
     try:
-        if tool_name == "memory_sql":
-            # SQL query is in remaining_text
-            args = {"query": remaining_text}
-        elif tool_name in ("web_search", "memory_search"):
-            # Query is in args_str
-            args = {"query": args_str}
-        elif tool_name == "weather":
-            # Location in args_str, or use stored location
-            if args_str:
-                args = {"location": args_str}
-            else:
-                weather_context = Database.get_context()
-                weather_location = weather_context.get('location', {})
-                args = {
-                    "lat": weather_location.get('lat', 0.0),
-                    "lon": weather_location.get('lon', 0.0)
-                }
-        elif tool_name == "image_analyze":
-            # No args needed
-            args = {}
-        elif tool_name == "imagine":
+        if tool_name == "imagine":
             # Map to image_generate tool for execution, but keep original name for display
             tool_name = "image_generate"
             args = {"prompt": args_str}
+        elif tool_name == "request":
+            args = {"url": args_str}
         else:
             # Generic argument handling
             args = {"query": args_str} if args_str else {}
@@ -735,41 +717,6 @@ AVAILABLE TOOL COMMANDS
 /imagine [visual prompt]  
 Used only when image generation protocol is activated.
 
-/web_search [query]  
-Used for real-time or external factual data.
-
-/memory_search [query]  
-Used for semantic recall of past interactions.
-
-/memory_sql  
-SELECT ...  
-Used for structured database queries.  
-Only SELECT and UPDATE allowed.  
-Destructive operations are blocked at execution layer.
-
-/image_analyze  
-Used only when the user explicitly asks for visual analysis.
-
-/weather [request format]  
-Used for weather-related data.
-
-You must send a full Open-Meteo request URL.
-
-Format:
-
-/weather https://api.open-meteo.com/v1/forecast?latitude=-6.49&longitude=108.45&current=temperature_2m,uv_index&timezone=Asia/Jakarta
-
-Rules:
-- Must start with https://api.open-meteo.com
-- Must be a valid Open-Meteo endpoint
-- No commentary before or after
-- Only one command per message
-
-The tool returns raw JSON.  
-You interpret and summarize naturally.  
-Do not fabricate weather data.
-
-
 /request [full https URL]  
 Used for general public HTTP GET requests.
 
@@ -811,26 +758,12 @@ After issuing /imagine, your turn ends.
 
 You never reference file paths.  
 You never validate the image visually.  
-You never say “here is the image”.
+You never say "here is the image".
 
 NSFW remains context-bound.  
 Private context + explicit command = immediate execution.  
 No reconfirmation.  
 No dramatization.
-
-Format:
-
-/weather https://api.open-meteo.com/v1/forecast?latitude=-6.49&longitude=108.45&current=temperature_2m,uv_index&timezone=Asia/Jakarta
-
-Rules:
-- Must start with https://api.open-meteo.com
-- Must be a valid Open-Meteo endpoint
-- No commentary before or after
-- Only one command per message
-
-The tool returns raw JSON.
-You interpret and summarize naturally.
-Do not fabricate weather data.
 
 NARRATIVE ALIGNMENT
 
@@ -1835,14 +1768,6 @@ def global_profile_analysis(prompt: str, api_key: str) -> Optional[str]:
         if response.status_code == 200:
             result = response.json()
             content = result['choices'][0]['message']['content'].strip()
-            
-            # Periksa apakah response terpotong
-            if 'finish_reason' in result['choices'][0]:
-                finish_reason = result['choices'][0]['finish_reason']
-                if finish_reason == 'length':
-                    print("[WARNING] Response may have been truncated due to token limit")
-                elif finish_reason == 'stop':
-                    print("[INFO] Response completed normally")
             
             print(f"[SUCCESS] Analysis complete: {len(content):,} characters")
             return content

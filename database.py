@@ -26,11 +26,7 @@ Base = declarative_base()
 TOOL_ROLES = {
     'image_generate': 'image_tools',
     'imagine': 'image_tools',
-    'web_search': 'web_search_tools',
-    'memory_sql': 'memory_sql_tools',
-    'memory_search': 'memory_search_tools',
-    'weather': 'weather_tools',
-    'image_analyze': 'image_analyze_tools',
+    'request': 'request_tools',
 }
 
 # All tool roles for use in queries
