@@ -3,24 +3,6 @@ import re
 from datetime import datetime, timedelta
 
 
-SCHEMA = {
-    "type": "function",
-    "function": {
-        "name": "memory_search",
-        "description": "Search past memories and conversation history. Use when the user asks about past events, personal history, specific dates, time-based recollection, or things not in recent messages.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "What to search for in memory"
-                }
-            },
-            "required": ["query"]
-        }
-    }
-}
-
 TEMPORAL_CUES = [
     "kemarin", "minggu lalu", "waktu itu", "terakhir", "pas aku",
     "last time", "yesterday", "last week", "before", "remember when",

@@ -2,28 +2,6 @@ import requests
 import json
 
 
-SCHEMA = {
-    "type": "function",
-    "function": {
-        "name": "weather",
-        "description": "Call any Open-Meteo endpoint with arbitrary parameters.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "endpoint": {
-                    "type": "string",
-                    "description": "API path like /v1/forecast, /v1/air-quality, /v1/marine, /v1/archive"
-                },
-                "params": {
-                    "type": "object",
-                    "description": "Query parameters for the endpoint"
-                }
-            },
-            "required": ["endpoint", "params"]
-        }
-    }
-}
-
 def execute(arguments, **kwargs):
     from database import Database
     from tools.registry import build_markdown_contract

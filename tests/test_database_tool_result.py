@@ -17,11 +17,11 @@ def test_add_tool_result():
     active_session = Database.get_active_session()
     session_id = active_session['id']
     
-    # Test 1: Add a web_search tool result — should use 'web_search_tools' role
-    print("Test 1: Add web_search tool result")
-    tool_name = "web_search"
+    # Test 1: Add a request tool result — should use 'request_tools' role
+    print("Test 1: Add request tool result")
+    tool_name = "request"
     result_content = build_markdown_contract(
-        "web_search_tools", "/web_search test",
+        "request_tools", "/request https://example.com",
         ["[Test](http://example.com)", "  Sample snippet"],
         "Yuzu",
     )
@@ -32,22 +32,22 @@ def test_add_tool_result():
     with get_db_session() as session:
         messages = session.query(Message).filter(
             Message.session_id == session_id,
-            Message.role == 'web_search_tools'
+            Message.role == 'request_tools'
         ).all()
         
-        assert len(messages) > 0, "No web_search_tools messages found in database"
+        assert len(messages) > 0, "No request_tools messages found in database"
         last_msg = messages[-1]
-        assert last_msg.role == 'web_search_tools'
+        assert last_msg.role == 'request_tools'
         assert "<details>" in last_msg.content
-        assert "🔧 web_search_tools" in last_msg.content
-        print("✓ Web search result stored with role 'web_search_tools'")
+        assert "🔧 request_tools" in last_msg.content
+        print("✓ Request result stored with role 'request_tools'")
     
-    # Test 2: Add a memory_sql tool result — should use 'memory_sql_tools' role
-    print("\nTest 2: Add memory_sql tool result")
-    tool_name = "memory_sql"
+    # Test 2: Add an image_generate tool result — should use 'image_tools' role
+    print("\nTest 2: Add image_generate tool result")
+    tool_name = "image_generate"
     result_content = build_markdown_contract(
-        "memory_sql_tools", "/memory_sql SELECT 1",
-        ["Rows returned: 1", "{'1': 1}"],
+        "image_tools", "/imagine sunset",
+        ['<img src="static/generated_images/sunset.png">'],
         "Yuzu",
     )
     
@@ -57,15 +57,15 @@ def test_add_tool_result():
     with get_db_session() as session:
         messages = session.query(Message).filter(
             Message.session_id == session_id,
-            Message.role == 'memory_sql_tools'
+            Message.role == 'image_tools'
         ).all()
         
-        assert len(messages) > 0, "No memory_sql_tools messages found"
+        assert len(messages) > 0, "No image_tools messages found"
         last_msg = messages[-1]
-        assert last_msg.role == 'memory_sql_tools'
+        assert last_msg.role == 'image_tools'
         assert "<details>" in last_msg.content
-        assert "🔧 memory_sql_tools" in last_msg.content
-        print("✓ Memory SQL result stored with role 'memory_sql_tools'")
+        assert "🔧 image_tools" in last_msg.content
+        print("✓ Image generate result stored with role 'image_tools'")
     
     # Test 3: Verify formatting — all tool messages start with <details>
     print("\nTest 3: Verify result formatting")
@@ -108,8 +108,7 @@ def test_tool_role_mapping():
     print("=== Testing Tool Role Mapping ===\n")
     
     # Verify all required tools have roles
-    required_tools = ['image_generate', 'web_search', 'memory_sql', 
-                      'memory_search', 'weather', 'image_analyze']
+    required_tools = ['image_generate', 'imagine', 'request']
     
     for tool in required_tools:
         assert tool in TOOL_ROLES, f"Tool '{tool}' missing from TOOL_ROLES"
@@ -117,11 +116,15 @@ def test_tool_role_mapping():
     
     # Verify expected role names
     assert TOOL_ROLES['image_generate'] == 'image_tools'
-    assert TOOL_ROLES['web_search'] == 'web_search_tools'
-    assert TOOL_ROLES['memory_sql'] == 'memory_sql_tools'
-    assert TOOL_ROLES['memory_search'] == 'memory_search_tools'
-    assert TOOL_ROLES['weather'] == 'weather_tools'
-    assert TOOL_ROLES['image_analyze'] == 'image_analyze_tools'
+    assert TOOL_ROLES['imagine'] == 'image_tools'
+    assert TOOL_ROLES['request'] == 'request_tools'
+    
+    # Verify removed tools are not present
+    assert 'web_search' not in TOOL_ROLES
+    assert 'weather' not in TOOL_ROLES
+    assert 'image_analyze' not in TOOL_ROLES
+    assert 'memory_sql' not in TOOL_ROLES
+    assert 'memory_search' not in TOOL_ROLES
     
     # Verify ALL_TOOL_ROLES contains all values
     assert set(ALL_TOOL_ROLES) == set(TOOL_ROLES.values())
@@ -142,22 +145,22 @@ def test_tool_results_in_chat_history():
     
     # Add a tool result
     content = build_markdown_contract(
-        "weather_tools", "/weather 0 0",
-        ["Temperature: 25°C"],
+        "request_tools", "/request https://example.com",
+        ["Response: OK"],
         "Yuzu",
     )
-    Database.add_tool_result("weather", content, session_id=session_id)
+    Database.add_tool_result("request", content, session_id=session_id)
     
     # Verify it appears in get_chat_history (used for rendering)
     history = Database.get_chat_history(session_id=session_id)
-    tool_msgs = [m for m in history if m['role'] == 'weather_tools']
-    assert len(tool_msgs) > 0, "Weather tool result not in get_chat_history"
+    tool_msgs = [m for m in history if m['role'] == 'request_tools']
+    assert len(tool_msgs) > 0, "Request tool result not in get_chat_history"
     print("✓ Tool results included in get_chat_history (rendering)")
     
     # Verify it appears in get_chat_history_for_ai (used for context builder)
     ai_history = Database.get_chat_history_for_ai(session_id=session_id)
-    ai_tool_msgs = [m for m in ai_history if m['role'] == 'weather_tools']
-    assert len(ai_tool_msgs) > 0, "Weather tool result not in get_chat_history_for_ai"
+    ai_tool_msgs = [m for m in ai_history if m['role'] == 'request_tools']
+    assert len(ai_tool_msgs) > 0, "Request tool result not in get_chat_history_for_ai"
     print("✓ Tool results included in get_chat_history_for_ai (context builder)")
     
     print("\n✅ Tool results in chat history test passed!")
@@ -175,11 +178,11 @@ def test_context_builder_maps_tool_roles():
     
     # Add a tool result so it's in the DB
     content = build_markdown_contract(
-        "web_search_tools", "/web_search test",
+        "request_tools", "/request https://test-unique-url.example.org/data",
         ["No results"],
         "Yuzu",
     )
-    Database.add_tool_result("web_search", content, session_id=session_id)
+    Database.add_tool_result("request", content, session_id=session_id)
     
     # Import and call the context builder
     from app import _build_generation_context
@@ -199,7 +202,7 @@ def test_context_builder_maps_tool_roles():
         assert '<details>' not in content, \
             f"Markdown contract leaked into LLM context: {(content or '')[:80]}"
         # The original /command should appear as 'assistant'
-        if '/web_search test' in content:
+        if '/request https://test-unique-url.example.org/data' in content:
             assert msg['role'] == 'assistant', \
                 f"Tool command should have role 'assistant' for LLM, got '{msg['role']}'"
             tool_command_found = True

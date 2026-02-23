@@ -7,25 +7,6 @@ from database import Database
 HUNYUAN_ENDPOINT = "https://chutes-hunyuan-image-3.chutes.ai/generate"
 Z_TURBO_ENDPOINT = "https://chutes-z-image-turbo.chutes.ai/generate"
 
-SCHEMA = {
-    "type": "function",
-    "function": {
-        "name": "image_generate",
-        "description": "Generate an image from a text prompt. Only use when image generation protocol is activated.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "prompt": {
-                    "type": "string",
-                    "description": "The image generation prompt describing what to create"
-                }
-            },
-            "required": ["prompt"]
-        }
-    }
-}
-
-
 def execute(arguments, **kwargs):
     from tools.registry import build_markdown_contract
 

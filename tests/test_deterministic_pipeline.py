@@ -109,8 +109,8 @@ def test_no_agentic_loop_with_tool_call(monkeypatch):
 
     tool_markdown = (
         "<details>\n"
-        "<summary>🔧 web_search_tools</summary>\n"
-        "\n```bash\nYuzu$ /web_search test\n```\n\n"
+        "<summary>🔧 request_tools</summary>\n"
+        "\n```bash\nYuzu$ /request https://example.com\n```\n\n"
         "> Result found\n\n"
         "</details>"
     )
@@ -122,7 +122,7 @@ def test_no_agentic_loop_with_tool_call(monkeypatch):
         def send_message(self, *args, **kwargs):
             self.calls += 1
             # LLM returns a /command — deterministic tool execution
-            return "/web_search test"
+            return "/request https://example.com"
 
     fake_manager = FakeManager()
     monkeypatch.setattr(app, "get_ai_manager", lambda: fake_manager)
@@ -152,8 +152,8 @@ def test_no_agentic_loop_with_command_detection(monkeypatch):
 
     tool_markdown = (
         "<details>\n"
-        "<summary>🔧 weather_tools</summary>\n"
-        "\n```bash\nYuzu$ /weather Tokyo\n```\n\n"
+        "<summary>🔧 request_tools</summary>\n"
+        "\n```bash\nYuzu$ /request https://api.example.com/data\n```\n\n"
         "> Temperature: 20°C\n\n"
         "</details>"
     )
@@ -164,7 +164,7 @@ def test_no_agentic_loop_with_command_detection(monkeypatch):
 
         def send_message(self, *args, **kwargs):
             self.calls += 1
-            return "/weather Tokyo"
+            return "/request https://api.example.com/data"
 
     fake_manager = FakeManager()
     monkeypatch.setattr(app, "get_ai_manager", lambda: fake_manager)
@@ -177,7 +177,7 @@ def test_no_agentic_loop_with_command_detection(monkeypatch):
     profile = Database.get_profile()
     session_id = Database.get_active_session()['id']
 
-    result = app.generate_ai_response(profile, "what's the weather?", "terminal", session_id)
+    result = app.generate_ai_response(profile, "fetch some data", "terminal", session_id)
 
     assert fake_manager.calls == 1, f"Expected 1 LLM call, got {fake_manager.calls}"
     assert "<details>" in result
@@ -194,13 +194,13 @@ def test_llm_context_only_system_user_assistant(monkeypatch):
     session_id = Database.get_active_session()['id']
 
     # Add messages with tool-specific roles to the DB
-    Database.add_message('user', 'search for python', session_id=session_id)
+    Database.add_message('user', 'fetch data from API', session_id=session_id)
     tool_content = build_markdown_contract(
-        "web_search_tools", "/web_search python",
-        ["Python docs"], "Yuzu",
+        "request_tools", "/request https://example.com",
+        ["Example docs"], "Yuzu",
     )
-    Database.add_message('web_search_tools', tool_content, session_id=session_id)
-    Database.add_message('assistant', 'Here is what I found about Python.', session_id=session_id)
+    Database.add_message('request_tools', tool_content, session_id=session_id)
+    Database.add_message('assistant', 'Here is what I found from the API.', session_id=session_id)
 
     captured_messages = []
 
@@ -233,7 +233,7 @@ def test_llm_context_only_system_user_assistant(monkeypatch):
     # Positive check: tool command must appear as 'assistant' with clean /command
     tool_as_assistant = [
         m for m in captured_messages
-        if m['role'] == 'assistant' and '/web_search' in m.get('content', '')
+        if m['role'] == 'assistant' and '/request' in m.get('content', '')
     ]
     assert len(tool_as_assistant) > 0, \
         "Tool command should appear as 'assistant' role in LLM context"
@@ -250,9 +250,9 @@ def test_second_pass_for_non_image_tools(monkeypatch):
 
     tool_markdown = (
         "<details>\n"
-        "<summary>🔧 web_search_tools</summary>\n"
-        "\n```bash\nYuzu$ /web_search python\n```\n\n"
-        "> Python docs\n\n"
+        "<summary>🔧 request_tools</summary>\n"
+        "\n```bash\nYuzu$ /request https://example.com\n```\n\n"
+        "> Example docs\n\n"
         "</details>"
     )
 
@@ -263,8 +263,8 @@ def test_second_pass_for_non_image_tools(monkeypatch):
         def send_message(self, *args, **kwargs):
             self.calls += 1
             if self.calls == 1:
-                return "/web_search python"
-            return "Here's what I found about Python."
+                return "/request https://example.com"
+            return "Here's what I found from the API."
 
     fake_manager = FakeManager()
     monkeypatch.setattr(app, "get_ai_manager", lambda: fake_manager)
@@ -274,11 +274,11 @@ def test_second_pass_for_non_image_tools(monkeypatch):
         lambda cmd_info, session_id=None: tool_markdown,
     )
 
-    reply = app.handle_user_message("search python", interface="terminal")
+    reply = app.handle_user_message("fetch data", interface="terminal")
 
     # Two LLM calls total: initial (returns command) + second pass (natural response)
     assert fake_manager.calls == 2, f"Expected 2 LLM calls, got {fake_manager.calls}"
-    assert "Here's what I found about Python." in reply
+    assert "Here's what I found from the API." in reply
 
     # Verify DB state: user, tool, assistant (in order)
     with get_db_session() as session:
@@ -287,7 +287,7 @@ def test_second_pass_for_non_image_tools(monkeypatch):
         ).order_by(Message.id.asc()).all()
         roles = [m.role for m in rows]
 
-    assert roles == ['user', 'web_search_tools', 'assistant'], f"Got roles: {roles}"
+    assert roles == ['user', 'request_tools', 'assistant'], f"Got roles: {roles}"
 
 
 def test_image_tools_terminal_no_second_pass(monkeypatch):

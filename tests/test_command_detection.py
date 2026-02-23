@@ -12,26 +12,26 @@ def test_detect_command_valid():
     from app import _detect_command
     
     # Test simple command
-    result = _detect_command("/web_search latest news")
+    result = _detect_command("/request https://example.com/api")
     assert result is not None
-    assert result["command"] == "web_search"
-    assert result["args"] == "latest news"
-    assert result["full_command"] == "/web_search latest news"
+    assert result["command"] == "request"
+    assert result["args"] == "https://example.com/api"
+    assert result["full_command"] == "/request https://example.com/api"
     print("✓ Simple command detection works")
     
     # Test command with no args
-    result = _detect_command("/image_analyze")
+    result = _detect_command("/imagine")
     assert result is not None
-    assert result["command"] == "image_analyze"
+    assert result["command"] == "imagine"
     assert result["args"] == ""
     print("✓ Command without args detection works")
     
-    # Test multi-line command (memory_sql)
-    sql_text = "/memory_sql\nSELECT * FROM messages"
-    result = _detect_command(sql_text)
+    # Test multi-line command
+    multi_text = "/request https://example.com\nsome extra text"
+    result = _detect_command(multi_text)
     assert result is not None
-    assert result["command"] == "memory_sql"
-    assert "SELECT * FROM messages" in result["remaining_text"]
+    assert result["command"] == "request"
+    assert "some extra text" in result["remaining_text"]
     print("✓ Multi-line command detection works")
 
 
@@ -40,12 +40,12 @@ def test_detect_command_invalid():
     from app import _detect_command
     
     # Test command not on first line
-    result = _detect_command("Let me search.\n/web_search news")
+    result = _detect_command("Let me search.\n/request https://example.com")
     assert result is None
     print("✓ Command not on first line correctly rejected")
     
     # Test command with text before it
-    result = _detect_command("Sure! /web_search news")
+    result = _detect_command("Sure! /request https://example.com")
     assert result is None
     print("✓ Command with text before correctly rejected")
     
@@ -75,17 +75,11 @@ def test_command_parsing():
     assert result["args"] == "a beautiful sunset"
     print("✓ /imagine command parsing works")
     
-    # /weather command
-    result = _detect_command("/weather Tokyo")
-    assert result["command"] == "weather"
-    assert result["args"] == "Tokyo"
-    print("✓ /weather command parsing works")
-    
-    # /memory_search command
-    result = _detect_command("/memory_search last week conversation")
-    assert result["command"] == "memory_search"
-    assert result["args"] == "last week conversation"
-    print("✓ /memory_search command parsing works")
+    # /request command
+    result = _detect_command("/request https://api.example.com/data")
+    assert result["command"] == "request"
+    assert result["args"] == "https://api.example.com/data"
+    print("✓ /request command parsing works")
 
 
 if __name__ == "__main__":

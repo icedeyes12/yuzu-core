@@ -9,24 +9,6 @@ except ImportError:
     BeautifulSoup = None
 
 
-SCHEMA = {
-    "type": "function",
-    "function": {
-        "name": "web_search",
-        "description": "Search the web for current information, news, prices, events, or anything time-sensitive. Returns 15-20 snippet results.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query"
-                }
-            },
-            "required": ["query"]
-        }
-    }
-}
-
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",

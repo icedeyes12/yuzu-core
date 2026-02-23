@@ -1,24 +1,6 @@
 import json
 import re
 
-SCHEMA = {
-    "type": "function",
-    "function": {
-        "name": "memory_sql",
-        "description": "Execute a SQL query against the conversation database to recall past messages, events, or facts. Only SELECT and UPDATE are allowed.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The SQL query to execute (SELECT or UPDATE only)"
-                }
-            },
-            "required": ["query"]
-        }
-    }
-}
-
 # Destructive operations that are always blocked
 _BLOCKED_KEYWORDS = [
     "INSERT",

@@ -7,24 +7,6 @@ import hashlib
 import time
 
 
-SCHEMA = {
-    "type": "function",
-    "function": {
-        "name": "image_analyze",
-        "description": "Analyze an image referenced in the conversation. Use when the user references an image or visual details are required.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "image_source": {
-                    "type": "string",
-                    "description": "The image URL, local path, or markdown image reference to analyze"
-                }
-            },
-            "required": ["image_source"]
-        }
-    }
-}
-
 IMAGE_CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'image_cache')
 _memory_cache = {}
 _cache_ttl = 3600

@@ -12,26 +12,25 @@ def test_command_execution_flow():
     
     print("=== Testing Command Execution Flow ===\n")
     
-    # Test 1: Detect and prepare web_search command
-    print("Test 1: Web search command")
-    cmd_info = _detect_command("/web_search Python programming")
+    # Test 1: Detect and prepare request command
+    print("Test 1: Request command")
+    cmd_info = _detect_command("/request https://example.com/api")
     assert cmd_info is not None
-    assert cmd_info["command"] == "web_search"
-    assert cmd_info["args"] == "Python programming"
+    assert cmd_info["command"] == "request"
+    assert cmd_info["args"] == "https://example.com/api"
     print("✓ Command detected correctly")
     
-    # Test 2: Detect memory_sql command
-    print("\nTest 2: Memory SQL command")
-    sql_cmd = "/memory_sql\nSELECT content FROM messages LIMIT 5"
-    cmd_info = _detect_command(sql_cmd)
+    # Test 2: Detect imagine command
+    print("\nTest 2: Imagine command")
+    cmd_info = _detect_command("/imagine a beautiful sunset over the ocean")
     assert cmd_info is not None
-    assert cmd_info["command"] == "memory_sql"
-    assert "SELECT content FROM messages LIMIT 5" in cmd_info["remaining_text"]
-    print("✓ Multi-line command detected correctly")
+    assert cmd_info["command"] == "imagine"
+    assert "beautiful sunset" in cmd_info["args"]
+    print("✓ Imagine command detected correctly")
     
     # Test 3: Verify command formatting in tool execution
     print("\nTest 3: Tool result formatting")
-    cmd_info = _detect_command("/weather Tokyo")
+    cmd_info = _detect_command("/request https://api.example.com/data")
     assert cmd_info is not None
     # Note: We can't actually execute without API keys, but we can verify the format
     print("✓ Command parsed for execution")
@@ -39,9 +38,9 @@ def test_command_execution_flow():
     # Test 4: Verify invalid commands are rejected
     print("\nTest 4: Invalid command rejection")
     invalid_commands = [
-        "Sure! /web_search test",
-        "Let me help\n/weather Tokyo",
-        "I'll search /web_search for you"
+        "Sure! /request https://example.com",
+        "Let me help\n/request https://example.com",
+        "I'll fetch /request for you"
     ]
     for invalid in invalid_commands:
         result = _detect_command(invalid)
@@ -58,14 +57,14 @@ def test_tool_result_format():
     print("\n=== Testing Tool Result Format ===\n")
     
     result = build_markdown_contract(
-        "web_search_tools",
-        "/web_search test",
+        "request_tools",
+        "/request https://example.com",
         ["Result 1", "Result 2"],
         "Yuzu",
     )
     
     assert result.startswith("<details>")
-    assert "🔧 web_search_tools" in result
+    assert "🔧 request_tools" in result
     assert "> Result 1" in result
     assert "> Result 2" in result
     assert result.strip().endswith("</details>")
@@ -94,8 +93,8 @@ def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
 
     tool_markdown = (
         "<details>\n"
-        "<summary>🔧 web_search_tools</summary>\n"
-        "\n```bash\nYuzu$ /web_search python testing\n```\n\n"
+        "<summary>🔧 request_tools</summary>\n"
+        "\n```bash\nYuzu$ /request https://example.com/api\n```\n\n"
         "> No results found\n\n"
         "</details>"
     )
@@ -107,9 +106,9 @@ def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
             self.calls += 1
             if self.calls == 1:
                 # LLM emits a command control signal
-                return "/web_search python testing"
+                return "/request https://example.com/api"
             # Second LLM pass sees tool result in context
-            return "Here are the latest Python testing resources I found."
+            return "Here are the latest results I found."
 
     fake_manager = FakeManager()
     monkeypatch.setattr(app, "get_ai_manager", lambda: fake_manager)
@@ -120,10 +119,10 @@ def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
         lambda cmd_info, session_id=None: tool_markdown,
     )
 
-    reply = app.handle_user_message("please check latest python testing links", interface="terminal")
+    reply = app.handle_user_message("please check latest links", interface="terminal")
 
     # Reply should contain both the tool markdown and the natural response
-    assert "Here are the latest Python testing resources I found." in reply
+    assert "Here are the latest results I found." in reply
     # Two LLM calls: initial (returns command) + second pass (returns natural response)
     assert fake_manager.calls == 2, f"LLM should be called twice, got {fake_manager.calls}"
 
@@ -135,7 +134,7 @@ def test_command_control_signal_not_saved_and_stops_after_tool(monkeypatch):
     assert not any(role == "assistant" and isinstance(content, str) and content.strip().startswith("/")
                    for role, content in roles_and_content), roles_and_content
     # Tool result persisted with dedicated role as <details> markdown contract
-    assert any(role == "web_search_tools" and "<details>" in (content or "")
+    assert any(role == "request_tools" and "<details>" in (content or "")
                for role, content in roles_and_content), roles_and_content
 
 
@@ -154,9 +153,9 @@ def test_tool_calls_reenter_pipeline_after_execution(monkeypatch):
 
     tool_markdown = (
         "<details>\n"
-        "<summary>🔧 web_search_tools</summary>\n"
-        "\n```bash\nYuzu$ /web_search python unit testing\n```\n\n"
-        "> [pytest docs](http://example.com)\n\n"
+        "<summary>🔧 request_tools</summary>\n"
+        "\n```bash\nYuzu$ /request https://example.com/api\n```\n\n"
+        "> [example docs](http://example.com)\n\n"
         "</details>"
     )
 
@@ -167,9 +166,9 @@ def test_tool_calls_reenter_pipeline_after_execution(monkeypatch):
             self.calls += 1
             if self.calls == 1:
                 # LLM returns a /command for deterministic tool execution
-                return "/web_search python unit testing"
+                return "/request https://example.com/api"
             # Second LLM pass after tool message saved
-            return "Based on the search results, here's what I found about Python testing."
+            return "Based on the results, here's what I found."
 
     fake_manager = FakeManager()
     monkeypatch.setattr(app, "get_ai_manager", lambda: fake_manager)
@@ -179,9 +178,9 @@ def test_tool_calls_reenter_pipeline_after_execution(monkeypatch):
         lambda cmd_info, session_id=None: tool_markdown,
     )
 
-    reply = app.handle_user_message("search for python testing frameworks", interface="terminal")
+    reply = app.handle_user_message("fetch data from the API", interface="terminal")
 
-    assert "python testing" in reply.lower()
+    assert "results" in reply.lower()
     # Two LLM calls: initial (/command) + second pass (natural response)
     assert fake_manager.calls == 2, (
         f"Expected 2 LLM calls (initial + second pass), got {fake_manager.calls}"
@@ -235,7 +234,7 @@ def test_no_json_in_db(monkeypatch):
     from tools.registry import build_markdown_contract
 
     result = build_markdown_contract(
-        "weather_tools", "/weather 0 0",
+        "request_tools", "/request https://example.com",
         ["Temperature: 25°C", "Weather: Clear"],
         "Yuzu",
     )

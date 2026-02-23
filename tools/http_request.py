@@ -12,25 +12,6 @@ from database import Database
 MAX_BYTES = 2 * 1024 * 1024
 TIMEOUT = 90
 
-SCHEMA = {
-    "type": "function",
-    "function": {
-        "name": "request",
-        "description": "Perform a public HTTPS GET request and return the response.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "Full HTTPS URL to fetch"
-                }
-            },
-            "required": ["url"]
-        }
-    }
-}
-
-
 # validate public https url
 def is_safe_public_url(url: str) -> bool:
     parsed = urlparse(url)
