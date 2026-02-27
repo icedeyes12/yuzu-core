@@ -60,7 +60,7 @@ def execute(arguments, **kwargs):
             endpoint,
             headers=headers,
             json=payload,
-            timeout=120
+            timeout=300
         )
 
         if response.status_code == 200:
