@@ -1160,15 +1160,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
             print("[Vision] Re-injected persistent visual context")
     
     try:
-        kwargs = {"timeout": 180}
-        
-        if preferred_provider == 'chutes':
-            kwargs['max_tokens'] = 16384
-        elif preferred_provider == 'openrouter':
-            if ':free' in preferred_model:
-                kwargs['max_tokens'] = 2048
-            else:
-                kwargs['max_tokens'] = 4096
+        kwargs = {"timeout": 180, "max_tokens": 4096}
         
         # --- Single LLM call (no agentic loop) ---
         ai_response = ai_manager.send_message(
@@ -1272,15 +1264,7 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
             print("[Vision] Re-injected persistent visual context")
     
     try:
-        kwargs = {"timeout": 180}
-        
-        if preferred_provider == 'chutes':
-            kwargs['max_tokens'] = 4096
-        elif preferred_provider == 'openrouter':
-            if ':free' in preferred_model:
-                kwargs['max_tokens'] = 1024
-            else:
-                kwargs['max_tokens'] = 2048
+        kwargs = {"timeout": 180, "max_tokens": 4096}
         
         # --- Single LLM call (no agentic loop) ---
         ai_response = ai_manager.send_message(
