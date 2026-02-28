@@ -354,9 +354,6 @@ class OpenRouterProvider(AIProvider):
             return None
         
         try:
-            # Normalize messages for Chutes API (system message must be first)
-            messages = self._normalize_messages_for_chutes(messages)
-            
             if self.supports_vision(model) and messages:
                 last_user_message = self._get_last_user_message(messages)
                 if last_user_message and multimodal_tools.has_images(last_user_message):
@@ -416,9 +413,6 @@ class OpenRouterProvider(AIProvider):
             return
         
         try:
-            # Normalize messages for Chutes API (system message must be first)
-            messages = self._normalize_messages_for_chutes(messages)
-            
             if self.supports_vision(model) and messages:
                 last_user_message = self._get_last_user_message(messages)
                 if last_user_message and multimodal_tools.has_images(last_user_message):
@@ -525,31 +519,6 @@ class ChutesProvider(AIProvider):
         else:
             return other_messages
     
-    def __init__(self, config: Dict = None):
-        super().__init__("chutes", config)
-        self.base_url = "https://llm.chutes.ai/v1/chat/completions"
-        self.api_key = self._load_api_key()
-        self.is_available = bool(self.api_key)
-        self.available_models = [
-            "Qwen/Qwen3-VL-235B-A22B-Instruct",
-            "Qwen/Qwen3.5-397B-A17B-TEE",
-            "deepseek-ai/DeepSeek-V3-0324",
-            "deepseek-ai/DeepSeek-V3.1",
-            "deepseek-ai/DeepSeek-V3.1-Terminus",
-            "deepseek-ai/DeepSeek-V3.2-Exp",
-            "moonshotai/Kimi-K2-Instruct-0905",
-            "moonshotai/Kimi-K2.5-TEE",
-            "tngtech/DeepSeek-TNG-R1T-Chimera",
-            "tngtech/DeepSeek-TNG-R1T2-Chimera",
-            "Qwen/Qwen3-235B-A22B-Instruct-2507",
-            "Qwen/Qwen3-235B-A22B-Thinking-2507",
-            "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8-TEE",
-            "zai-org/GLM-4.5-TEE",
-            "zai-org/GLM-4.6-TEE",
-            "zai-org/GLM-4.7-TEE",
-            "deepseek-ai/DeepSeek-R1"
-        ]
-    
     def _load_api_key(self):
         try:
             api_key = Database.get_api_key('chutes')
@@ -565,6 +534,9 @@ class ChutesProvider(AIProvider):
             return None
         
         try:
+            # Normalize messages for Chutes API (system message must be first)
+            messages = self._normalize_messages_for_chutes(messages)
+            
             if self.supports_vision(model) and messages:
                 last_user_message = self._get_last_user_message(messages)
                 if last_user_message and multimodal_tools.has_images(last_user_message):
@@ -618,6 +590,9 @@ class ChutesProvider(AIProvider):
             return
         
         try:
+            # Normalize messages for Chutes API (system message must be first)
+            messages = self._normalize_messages_for_chutes(messages)
+            
             if self.supports_vision(model) and messages:
                 last_user_message = self._get_last_user_message(messages)
                 if last_user_message and multimodal_tools.has_images(last_user_message):
