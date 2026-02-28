@@ -205,7 +205,7 @@ class CerebrasProvider(AIProvider):
         
         try:
             temperature = kwargs.get('temperature', 0.69)
-            max_tokens = kwargs.get('max_tokens', 2048)
+            max_tokens = kwargs.get('max_tokens', 4096)
             top_p = kwargs.get('top_p', 0.7)
             top_k = kwargs.get('top_k', 40)
             typical_p = kwargs.get('typical_p', 0.8)
@@ -249,7 +249,7 @@ class CerebrasProvider(AIProvider):
         
         try:
             temperature = kwargs.get('temperature', 0.69)
-            max_tokens = kwargs.get('max_tokens', 2048)
+            max_tokens = kwargs.get('max_tokens', 4096)
             top_p = kwargs.get('top_p', 0.7)
             top_k = kwargs.get('top_k', 40)
             typical_p = kwargs.get('typical_p', 0.8)
@@ -361,14 +361,10 @@ class OpenRouterProvider(AIProvider):
                     messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
             
             temperature = kwargs.get('temperature', 0.73)
-            max_tokens = kwargs.get('max_tokens', 8000)
+            max_tokens = kwargs.get('max_tokens', 4096)
             top_p = kwargs.get('top_p', 0.9)
             top_k = kwargs.get('top_k', 40)
             typical_p = kwargs.get('typical_p', 0.8)
-            
-            if model.endswith(':free'):
-                max_tokens = min(max_tokens, 2048)
-                temperature = min(temperature, 0.8)
             
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -424,14 +420,10 @@ class OpenRouterProvider(AIProvider):
                     messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
             
             temperature = kwargs.get('temperature', 0.73)
-            max_tokens = kwargs.get('max_tokens', 4000)
+            max_tokens = kwargs.get('max_tokens', 4096)
             top_p = kwargs.get('top_p', 0.9)
             top_k = kwargs.get('top_k', 40)
             typical_p = kwargs.get('typical_p', 0.8)
-            
-            if model.endswith(':free'):
-                max_tokens = min(max_tokens, 2048)
-                temperature = min(temperature, 0.8)
             
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -524,15 +516,11 @@ class ChutesProvider(AIProvider):
                     messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
             
             temperature = kwargs.get('temperature', 0.73)
-            max_tokens = kwargs.get('max_tokens', 4096)  # FIXED: Reduced from 32768 to 4096 for non-streaming
+            max_tokens = kwargs.get('max_tokens', 4096)
             top_p = kwargs.get('top_p', 0.9)
             top_k = kwargs.get('top_k', 45)
             typical_p = kwargs.get('typical_p', 0.85)
             stream = kwargs.get('stream', False)
-            
-            # FIX: Ensure max_tokens doesn't exceed Chutes limits for non-streaming
-            if not stream and max_tokens > 8192:
-                max_tokens = 8192  # Chutes limit for non-streaming
             
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -581,14 +569,10 @@ class ChutesProvider(AIProvider):
                     messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
             
             temperature = kwargs.get('temperature', 0.73)
-            max_tokens = kwargs.get('max_tokens', 16384)  # FIXED: Streaming allows more, but keep reasonable
+            max_tokens = kwargs.get('max_tokens', 4096)
             top_p = kwargs.get('top_p', 0.9)
             top_k = kwargs.get('top_k', 45)
             typical_p = kwargs.get('typical_p', 0.85)
-            
-            # FIX: Streaming can go up to 65536, but keep it reasonable
-            if max_tokens > 65536:
-                max_tokens = 65536
             
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
