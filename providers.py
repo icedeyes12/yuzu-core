@@ -474,15 +474,18 @@ class OpenRouterProvider(AIProvider):
 class ChutesProvider(AIProvider):
     def __init__(self, config: Dict = None):
         super().__init__("chutes", config)
+        self.base_url = "https://llm.chutes.ai/v1/chat/completions"
         self.api_key = self._load_api_key()
         self.is_available = bool(self.api_key)
         self.available_models = [
             "Qwen/Qwen3-VL-235B-A22B-Instruct",
+            "Qwen/Qwen3.5-397B-A17B-TEE",
             "deepseek-ai/DeepSeek-V3-0324",
             "deepseek-ai/DeepSeek-V3.1",
             "deepseek-ai/DeepSeek-V3.1-Terminus",
             "deepseek-ai/DeepSeek-V3.2-Exp",
-            "moonshotai/Kimi-K2-Instruct-0905", 
+            "moonshotai/Kimi-K2-Instruct-0905",
+            "moonshotai/Kimi-K2.5-TEE",
             "tngtech/DeepSeek-TNG-R1T-Chimera",
             "tngtech/DeepSeek-TNG-R1T2-Chimera",
             "Qwen/Qwen3-235B-A22B-Instruct-2507",
@@ -539,7 +542,7 @@ class ChutesProvider(AIProvider):
             }
             
             response = requests.post(
-                "https://llm.chutes.ai/v1/chat/completions",
+                self.base_url,
                 headers=headers,
                 json=payload,
                 timeout=kwargs.get('timeout', 120)
@@ -591,7 +594,7 @@ class ChutesProvider(AIProvider):
             }
             
             response = requests.post(
-                "https://llm.chutes.ai/v1/chat/completions",
+                self.base_url,
                 headers=headers,
                 json=payload,
                 timeout=kwargs.get('timeout', 120),
