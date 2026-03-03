@@ -21,9 +21,9 @@ import traceback
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List
 from database import Database, ALL_TOOL_ROLES
-from providers import get_ai_manager
+from providers import get_ai_manager, reload_ai_manager
 from tools import multimodal_tools
-from tools.registry import execute_tool, get_tool_role, is_terminal_tool
+from tools.registry import execute_tool, get_tool_role, is_terminal_tool, TOOL_ROLE_MAP
 # ---------------------------------------------------------------------------
 # Persistent visual context buffer (per-session, runtime-only)
 # Stores the last processed image as base64 for N follow-up turns so the
@@ -358,21 +358,21 @@ def handle_user_message(user_message, interface="terminal"):
             # Save tool output as tool message
             Database.add_message(tool_role, tool_output, session_id=session_id)
             
-            # PHASE 3: Check if terminal tool (no synthesis pass)
-            # Image tools are TERMINAL — no second LLM pass on success
-            is_terminal = is_terminal_tool(tool_role)
-            has_error = "Error:" in tool_output
+            # PHASE 3: ALL tools trigger second pass (deterministic two-pass architecture)
+            # Section IV: If last tool role == image_tools, prepare base64 for second pass
+            # Section IV: If last tool role == image_tools, prepare base64 for second pass
+            image_base64_for_context = None
+            if tool_role == "image_tools":
+                image_path = _parse_image_result_from_formatted(tool_output)
+                if image_path and os.path.exists(image_path):
+                    import base64
+                    with open(image_path, 'rb') as f:
+                        img_data = f.read()
+                    img_b64 = base64.b64encode(img_data).decode('utf-8')
+                    mime_type = 'image/png' if image_path.endswith('.png') else 'image/jpeg'
+                    image_base64_for_context = f"image_tools: data:{mime_type};base64,{img_b64}"
             
-            if is_terminal and not has_error:
-                # Terminal tool success — return immediately, no synthesis
-                auto_name_session_if_needed(session_id, active_session)
-                if should_summarize_memory(profile, user_message, session_id):
-                    summarize_memory(profile, user_message, tool_output, session_id)
-                _trigger_memory_extraction(session_id)
-                return tool_output
-            
-            # Non-terminal tool or error — trigger ONE synthesis pass
-            second_reply = generate_ai_response(profile, "", interface, session_id)
+            second_reply = generate_ai_response(profile, "", interface, session_id, image_base64_for_context=image_base64_for_context)
             if second_reply and second_reply.strip():
                 second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
                 Database.add_message('assistant', second_clean, session_id=session_id)
@@ -465,20 +465,32 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
                 yield "\n\n" + tool_output
                 
                 # PHASE 3: Check if terminal tool (no synthesis pass)
-                is_terminal = is_terminal_tool(tool_role)
-                has_error = "Error:" in tool_output
+                # Section IV: If last tool role == image_tools, prepare base64 for second pass
+                image_base64_for_context = None
+                if tool_role == "image_tools":
+                    image_path = _parse_image_result_from_formatted(tool_output)
+                    if image_path and os.path.exists(image_path):
+                        import base64
+                        with open(image_path, 'rb') as f:
+                            img_data = f.read()
+                        img_b64 = base64.b64encode(img_data).decode('utf-8')
+                        mime_type = 'image/png' if image_path.endswith('.png') else 'image/jpeg'
+                        image_base64_for_context = f"image_tools: data:{mime_type};base64,{img_b64}"
                 
-                if not (is_terminal and not has_error):
-                    # Non-terminal tool or error — trigger ONE synthesis pass
-                    second_reply = generate_ai_response(profile, "", interface, session_id)
-                    if second_reply and second_reply.strip():
-                        second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
-                        Database.add_message('assistant', second_clean, session_id=session_id)
-                        yield "\n\n" + second_clean
-                
+                # ALL tools trigger second pass (deterministic two-pass architecture)
+                final_response = tool_output
+
+                # Trigger synthesis pass
+                second_reply = generate_ai_response(profile, "", interface, session_id, image_base64_for_context=image_base64_for_context)
+                if second_reply and second_reply.strip():
+                    second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
+                    Database.add_message('assistant', second_clean, session_id=session_id)
+                    yield "\n\n" + second_clean
+                    final_response = tool_output + "\n\n" + second_clean
+
                 auto_name_session_if_needed(session_id, active_session)
                 if should_summarize_memory(profile, user_message, session_id):
-                    summarize_memory(profile, user_message, full_response, session_id)
+                    summarize_memory(profile, user_message, final_response, session_id)
                 _trigger_memory_extraction(session_id)
                 return
             
@@ -656,6 +668,13 @@ def _build_generation_context(profile, session_id, interface="terminal"):
     session_context = "\n\nCURRENT SESSION EVENTS:"
     for event in recent_session_events:
         session_context += f"\n- {event['content']} at {event['timestamp']}"
+
+    # =========================
+    # Available tools list
+    # =========================
+    available_tools = "\n".join(
+        [f"- /{cmd} -> maps to role '{role}'" for cmd, role in TOOL_ROLE_MAP.items()]
+    )
 
     # =========================
     # System message
@@ -897,10 +916,41 @@ Transition rule:
 
 ---
 
+AVAILABLE TOOLS & COMMANDS:
+
+The following tools are available for execution via command syntax:
+{available_tools}
+
+When tool execution is needed, output the command as the FIRST line.
+Do not add explanations or acknowledgments before the command.
+
+---
+
+HTTP REQUEST TOOL (/request):
+
+The /request tool fetches data from public HTTPS endpoints. Use it for:
+- Web search: Query DuckDuckGo API or similar search endpoints
+- Weather data: Query Open-Meteo API for forecasts
+- General API calls: Any public HTTPS JSON/data endpoint
+
+Command format:
+  /request <URL>
+  /request GET <URL>
+  /request POST <URL> (for endpoints requiring POST)
+
+Examples:
+  /request https://api.open-meteo.com/v1/forecast?latitude=-6.2&longitude=106.8&current_weather=true
+  /request https://html.duckduckgo.com/html/?q=search+query
+
+Response format: Tool output is rendered as a markdown contract with raw response content.
+The assistant should interpret and summarize the results for the user.
+
+---
+
 ENTITY SEPARATION & TOOL AUTHORITY:
 
 Assistant behavior:
-- The assistant’s responsibility ends at issuing the /imagine command.
+- The assistant's responsibility ends at issuing the /imagine command.
 - After /imagine, the assistant may ONLY:
   - remain silent, OR
   - continue unrelated conversation text
@@ -1024,6 +1074,7 @@ Your speaking style and personality are defined above.
 {memory_context}
 {interface_context}
 {session_context}
+{location_context}
 '''.strip()
 
     # =========================
@@ -1046,12 +1097,6 @@ Your speaking style and personality are defined above.
     for msg in chat_history:
         role = msg["role"]
         content = msg["content"]
-        # Map tool-specific roles to 'assistant' for LLM API compatibility.
-        # Strip markdown contracts — only project the original /command line
-        # so the LLM never sees execution markup (prevents pattern contamination).
-        if role in ALL_TOOL_ROLES:
-            role = "assistant"
-            content = _extract_command_from_markdown(content)
         messages.append({
             "role": role,
             "content": content
@@ -1110,7 +1155,7 @@ def _handle_ai_image_generation(ai_response, session_id):
     
     return ai_response
 
-def generate_ai_response_streaming(profile, user_message, interface="terminal", session_id=None, provider=None, model=None):
+def generate_ai_response_streaming(profile, user_message, interface="terminal", session_id=None, provider=None, model=None, image_base64_for_context=None):
     """Generate a single AI response (streaming variant) — no agentic looping.
 
     Same deterministic model as generate_ai_response:
@@ -1159,6 +1204,14 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
             })
             print("[Vision] Re-injected persistent visual context")
     
+    # Section IV: Inject image base64 for second pass after image_tools
+    if image_base64_for_context:
+        messages.append({
+            "role": "user",
+            "content": image_base64_for_context
+        })
+        print("[IMAGE TOOL] Injected base64 image context for second pass")
+    
     try:
         kwargs = {"timeout": 180, "max_tokens": 4096}
         
@@ -1204,7 +1257,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         print(f"[ERROR] Streaming response failed: {error_msg}")
         yield error_msg
 
-def generate_ai_response(profile, user_message, interface="terminal", session_id=None):
+def generate_ai_response(profile, user_message, interface="terminal", session_id=None, image_base64_for_context=None):
     """Generate a single AI response — no agentic looping.
 
     Execution model (STRICT):
@@ -1262,6 +1315,14 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                 ]
             })
             print("[Vision] Re-injected persistent visual context")
+    
+    # Section IV: Inject image base64 for second pass after image_tools
+    if image_base64_for_context:
+        messages.append({
+            "role": "user",
+            "content": image_base64_for_context
+        })
+        print("[IMAGE TOOL] Injected base64 image context for second pass")
     
     try:
         kwargs = {"timeout": 180, "max_tokens": 4096}
@@ -2319,12 +2380,16 @@ def get_all_models():
 def set_preferred_provider(provider_name, model_name=None):
     profile = Database.get_profile()
     providers_config = profile.get('providers_config', {})
-    
+
     providers_config['preferred_provider'] = provider_name
     if model_name:
         providers_config['preferred_model'] = model_name
-    
+
     Database.update_profile({'providers_config': providers_config})
+
+    # Reload AI manager to detect newly available providers (e.g., after adding API keys)
+    reload_ai_manager()
+
     return f"Preferred provider set to: {provider_name}" + (f" with model: {model_name}" if model_name else "")
 
 
