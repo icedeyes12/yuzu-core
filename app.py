@@ -21,9 +21,9 @@ import traceback
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List
 from database import Database, ALL_TOOL_ROLES
-from providers import get_ai_manager
+from providers import get_ai_manager, reload_ai_manager
 from tools import multimodal_tools
-from tools.registry import execute_tool
+from tools.registry import execute_tool, get_tool_role, is_terminal_tool, TOOL_ROLE_MAP
 # ---------------------------------------------------------------------------
 # Persistent visual context buffer (per-session, runtime-only)
 # Stores the last processed image as base64 for N follow-up turns so the
@@ -121,13 +121,9 @@ def _detect_command(response_text):
     # Extract tool name (remove /)
     tool_name = command[1:]  # Remove leading /
     
-    # Handle multi-line commands
-    remaining_text = '\n'.join(lines[1:]).strip() if len(lines) > 1 else ""
-    
     return {
         "command": tool_name,
         "args": args,
-        "remaining_text": remaining_text,
         "full_command": first_line
     }
 
@@ -176,39 +172,37 @@ def _execute_command_tool(command_info, session_id=None):
         session_id: current session ID
     
     Returns:
-        str: formatted markdown contract from tool execution
+        tuple: (tool_name, formatted_markdown_contract)
     """
     tool_name = command_info["command"]
     args_str = command_info["args"]
-    remaining_text = command_info["remaining_text"]
     
     print(f"[COMMAND] Detected command: /{tool_name} {args_str}")
     
     # Prepare arguments based on tool type
-    try:
-        if tool_name == "imagine":
-            # Map to image_generate tool for execution, but keep original name for display
-            tool_name = "image_generate"
-            args = {"prompt": args_str}
-        elif tool_name == "request":
-            args = {"url": args_str}
-        else:
-            # Generic argument handling
+    if tool_name == "imagine":
+        # Map to image_generate tool for execution
+        exec_tool_name = "image_generate"
+        args = {"prompt": args_str}
+    elif tool_name == "request":
+        exec_tool_name = "request"
+        args = {"url": args_str}
+    elif tool_name in ("memory_search", "memory_sql", "web_search", "weather", "image_analyze"):
+        exec_tool_name = tool_name
+        # Parse arguments as JSON if possible, otherwise use as query
+        try:
+            args = json.loads(args_str) if args_str else {}
+        except json.JSONDecodeError:
             args = {"query": args_str} if args_str else {}
-        
-        # Execute the tool — returns formatted markdown contract
-        result = execute_tool(tool_name, args, session_id=session_id)
-        return result
-        
-    except Exception as e:
-        print(f"[COMMAND ERROR] {tool_name}: {e}")
-        from tools.registry import build_markdown_contract
-        return build_markdown_contract(
-            f"{tool_name}_tools",
-            command_info.get("full_command", f"/{tool_name}"),
-            [f"Error: {str(e)}"],
-            "Yuzu",
-        )
+    else:
+        # Generic argument handling
+        exec_tool_name = tool_name
+        args = {"query": args_str} if args_str else {}
+    
+    # Execute the tool via registry — returns formatted markdown contract
+    result = execute_tool(exec_tool_name, args, session_id=session_id)
+    
+    return exec_tool_name, result
 
 def _load_and_attach_generated_image(img_path, messages, session_id):
     """
@@ -295,6 +289,31 @@ def _cache_images_from_message(user_message):
 
 
 def handle_user_message(user_message, interface="terminal"):
+    """
+    ORCHESTRATION ENTRY POINT — Single entry for all user messages.
+    
+    Execution Flow (STRICT):
+      1. Cache images from user message
+      2. Call generate_ai_response (EXACTLY ONE LLM call)
+      3. Persist user message to DB
+      4. Detect tool command in raw LLM response
+      5. If tool detected:
+         a. Execute via registry (SINGLE tool execution)
+         b. Save tool output as tool message
+         c. If NOT terminal tool: trigger ONE synthesis pass
+         d. Return tool output (+ synthesis if applicable)
+      6. If no tool:
+         a. Save as assistant message
+         b. Return response
+      
+    Guarantees:
+      - Exactly ONE LLM call per user turn (plus optional synthesis pass)
+      - At most ONE tool execution per user turn
+      - At most ONE synthesis pass
+      - No recursive loops
+      - Final response is NEVER empty
+      - Image tools are TERMINAL (no synthesis pass on success)
+    """
     with UserContext() as context:
         profile = Database.get_profile()
         
@@ -307,59 +326,94 @@ def handle_user_message(user_message, interface="terminal"):
         # Cache any images present in the user message (needed for vision)
         cached_image_paths = _cache_images_from_message(user_message)
         
-        # Phase 1: LLM request — user message is NOT yet in DB.
-        # generate_ai_response appends it to the context messages in-memory.
+        # PHASE 1: Single LLM call — user message NOT yet in DB
+        # generate_ai_response appends it to context in-memory only
         try:
-            ai_reply = generate_ai_response(profile, user_message, interface, session_id)
+            raw_ai_response = generate_ai_response(profile, user_message, interface, session_id)
         except Exception as e:
             # Persist user message even on LLM failure to avoid conversation loss
             Database.add_message('user', user_message, session_id=session_id,
                                  image_paths=cached_image_paths if cached_image_paths else None)
             raise
         
-        # After successful LLM response: persist user message to DB
+        # Persist user message to DB after successful LLM response
         Database.add_message('user', user_message, session_id=session_id,
                              image_paths=cached_image_paths if cached_image_paths else None)
         
-        ai_reply_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', ai_reply).strip()
+        # Clean timestamp suffix from response
+        raw_ai_response = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', raw_ai_response).strip()
         
-        # Tool markdown contract — save as tool message, then trigger second LLM pass
-        if _is_tool_markdown(ai_reply_clean):
-            tool_role = _extract_tool_role(ai_reply_clean)
-            if tool_role:
-                Database.add_message(tool_role, ai_reply_clean, session_id=session_id)
-            else:
-                Database.add_message('assistant', ai_reply_clean, session_id=session_id)
+        # SAFEGUARD: Ensure response is never empty
+        if not raw_ai_response:
+            raw_ai_response = "I'm having trouble responding right now. Please try again."
+        
+        # PHASE 2: Tool detection — ONLY in handle_user_message
+        cmd_info = _detect_command(raw_ai_response)
+        
+        if cmd_info:
+            # TOOL DETECTED: Execute via registry
+            exec_tool_name, tool_output = _execute_command_tool(cmd_info, session_id=session_id)
+            tool_role = get_tool_role(exec_tool_name)
             
-            # image_tools is TERMINAL — no second LLM pass on success
-            needs_second_pass = tool_role != "image_tools" or "Error:" in ai_reply_clean
-            if needs_second_pass:
-                # Second LLM pass — same pipeline (user + tool result now in DB)
-                second_reply = generate_ai_response(profile, "", interface, session_id)
-                if second_reply and second_reply.strip():
-                    second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
-                    Database.add_message('assistant', second_clean, session_id=session_id)
-                    ai_reply = ai_reply_clean + "\n\n" + second_clean
+            # Save tool output as tool message
+            Database.add_message(tool_role, tool_output, session_id=session_id)
+            
+            # PHASE 3: ALL tools trigger second pass (deterministic two-pass architecture)
+            # Section IV: If last tool role == image_tools, prepare base64 for second pass
+            # Section IV: If last tool role == image_tools, prepare base64 for second pass
+            image_base64_for_context = None
+            if tool_role == "image_tools":
+                image_path = _parse_image_result_from_formatted(tool_output)
+                if image_path and os.path.exists(image_path):
+                    import base64
+                    with open(image_path, 'rb') as f:
+                        img_data = f.read()
+                    img_b64 = base64.b64encode(img_data).decode('utf-8')
+                    mime_type = 'image/png' if image_path.endswith('.png') else 'image/jpeg'
+                    image_base64_for_context = f"image_tools: data:{mime_type};base64,{img_b64}"
+            
+            second_reply = generate_ai_response(profile, "", interface, session_id, image_base64_for_context=image_base64_for_context)
+            if second_reply and second_reply.strip():
+                second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
+                Database.add_message('assistant', second_clean, session_id=session_id)
+                final_response = tool_output + "\n\n" + second_clean
+            else:
+                # Synthesis failed — return tool output alone
+                final_response = tool_output
+            
+            auto_name_session_if_needed(session_id, active_session)
+            if should_summarize_memory(profile, user_message, session_id):
+                summarize_memory(profile, user_message, final_response, session_id)
+            _trigger_memory_extraction(session_id)
+            return final_response
+        
         else:
-            Database.add_message('assistant', ai_reply_clean, session_id=session_id)
-        
-        auto_name_session_if_needed(session_id, active_session)
-        
-        if should_summarize_memory(profile, user_message, session_id):
-            summarize_memory(profile, user_message, ai_reply, session_id)
-        
-        # Extract structured memories from recent messages
-        try:
-            from memory.extractor import process_messages_for_memory
-            recent = Database.get_chat_history(session_id=session_id, limit=10, recent=True)
-            process_messages_for_memory(session_id, recent)
-        except Exception as e:
-            print(f"[WARNING] Memory extraction failed: {e}")
-        
-        return ai_reply
+            # NO TOOL: Save as assistant message and return
+            Database.add_message('assistant', raw_ai_response, session_id=session_id)
+            
+            auto_name_session_if_needed(session_id, active_session)
+            if should_summarize_memory(profile, user_message, session_id):
+                summarize_memory(profile, user_message, raw_ai_response, session_id)
+            _trigger_memory_extraction(session_id)
+            return raw_ai_response
+
+
+def _trigger_memory_extraction(session_id):
+    """Extract structured memories from recent messages."""
+    try:
+        from memory.extractor import process_messages_for_memory
+        recent = Database.get_chat_history(session_id=session_id, limit=10, recent=True)
+        process_messages_for_memory(session_id, recent)
+    except Exception as e:
+        print(f"[WARNING] Memory extraction failed: {e}")
 
 def handle_user_message_streaming(user_message, interface="terminal", provider=None, model=None):
-    """Handle user message with streaming response"""
+    """
+    Handle user message with streaming response.
+    
+    Same architecture as handle_user_message but yields chunks incrementally.
+    Tool detection and synthesis pass logic is identical.
+    """
     with UserContext() as context:
         profile = Database.get_profile()
         
@@ -370,8 +424,7 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
         active_session = Database.get_active_session()
         session_id = active_session['id']
         
-        # Phase 1: LLM request — user message is NOT yet in DB.
-        # generate_ai_response_streaming appends it to context in-memory.
+        # PHASE 1: Single LLM call (streaming) — user message NOT yet in DB
         response_generator = generate_ai_response_streaming(
             profile, user_message, interface, session_id, provider, model
         )
@@ -387,29 +440,62 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
             Database.add_message('user', user_message, session_id=session_id)
             raise
         
-        # After successful LLM response: persist user message to DB
+        # Persist user message to DB after successful LLM response
         Database.add_message('user', user_message, session_id=session_id)
         
         if full_response.strip():
             full_response_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', full_response).strip()
             
-            if _is_tool_markdown(full_response_clean):
-                tool_role = _extract_tool_role(full_response_clean)
-                if tool_role:
-                    Database.add_message(tool_role, full_response_clean, session_id=session_id)
-                else:
-                    Database.add_message('assistant', full_response_clean, session_id=session_id)
+            # SAFEGUARD: Ensure response is never empty
+            if not full_response_clean:
+                full_response_clean = "I'm having trouble responding right now. Please try again."
+            
+            # PHASE 2: Tool detection — ONLY in handle_user_message
+            cmd_info = _detect_command(full_response_clean)
+            
+            if cmd_info:
+                # TOOL DETECTED: Execute via registry
+                exec_tool_name, tool_output = _execute_command_tool(cmd_info, session_id=session_id)
+                tool_role = get_tool_role(exec_tool_name)
                 
-                # image_tools is TERMINAL — no second LLM pass on success
-                needs_second_pass = tool_role != "image_tools" or "Error:" in full_response_clean
-                if needs_second_pass:
-                    # Second LLM pass — same pipeline (user + tool result now in DB)
-                    second_reply = generate_ai_response(profile, "", interface, session_id)
-                    if second_reply and second_reply.strip():
-                        second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
-                        Database.add_message('assistant', second_clean, session_id=session_id)
-                        yield "\n\n" + second_clean
+                # Save tool output as tool message
+                Database.add_message(tool_role, tool_output, session_id=session_id)
+                
+                # Yield tool output
+                yield "\n\n" + tool_output
+                
+                # PHASE 3: Check if terminal tool (no synthesis pass)
+                # Section IV: If last tool role == image_tools, prepare base64 for second pass
+                image_base64_for_context = None
+                if tool_role == "image_tools":
+                    image_path = _parse_image_result_from_formatted(tool_output)
+                    if image_path and os.path.exists(image_path):
+                        import base64
+                        with open(image_path, 'rb') as f:
+                            img_data = f.read()
+                        img_b64 = base64.b64encode(img_data).decode('utf-8')
+                        mime_type = 'image/png' if image_path.endswith('.png') else 'image/jpeg'
+                        image_base64_for_context = f"image_tools: data:{mime_type};base64,{img_b64}"
+                
+                # ALL tools trigger second pass (deterministic two-pass architecture)
+                final_response = tool_output
+
+                # Trigger synthesis pass
+                second_reply = generate_ai_response(profile, "", interface, session_id, image_base64_for_context=image_base64_for_context)
+                if second_reply and second_reply.strip():
+                    second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
+                    Database.add_message('assistant', second_clean, session_id=session_id)
+                    yield "\n\n" + second_clean
+                    final_response = tool_output + "\n\n" + second_clean
+
+                auto_name_session_if_needed(session_id, active_session)
+                if should_summarize_memory(profile, user_message, session_id):
+                    summarize_memory(profile, user_message, final_response, session_id)
+                _trigger_memory_extraction(session_id)
+                return
+            
             else:
+                # NO TOOL: Save as assistant message
                 Database.add_message('assistant', full_response_clean, session_id=session_id)
         
         auto_name_session_if_needed(session_id, active_session)
@@ -417,13 +503,7 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
         if should_summarize_memory(profile, user_message, session_id):
             summarize_memory(profile, user_message, full_response, session_id)
 
-        # Extract structured memories from recent messages
-        try:
-            from memory.extractor import process_messages_for_memory
-            recent = Database.get_chat_history(session_id=session_id, limit=10, recent=True)
-            process_messages_for_memory(session_id, recent)
-        except Exception as e:
-            print(f"[WARNING] Memory extraction failed: {e}")
+        _trigger_memory_extraction(session_id)
 
 def extract_recent_images(session_id, limit=3):
     """Scan last 20 messages in a session and return up to ``limit`` cached
@@ -588,6 +668,13 @@ def _build_generation_context(profile, session_id, interface="terminal"):
     session_context = "\n\nCURRENT SESSION EVENTS:"
     for event in recent_session_events:
         session_context += f"\n- {event['content']} at {event['timestamp']}"
+
+    # =========================
+    # Available tools list
+    # =========================
+    available_tools = "\n".join(
+        [f"- /{cmd} -> maps to role '{role}'" for cmd, role in TOOL_ROLE_MAP.items()]
+    )
 
     # =========================
     # System message
@@ -829,10 +916,41 @@ Transition rule:
 
 ---
 
+AVAILABLE TOOLS & COMMANDS:
+
+The following tools are available for execution via command syntax:
+{available_tools}
+
+When tool execution is needed, output the command as the FIRST line.
+Do not add explanations or acknowledgments before the command.
+
+---
+
+HTTP REQUEST TOOL (/request):
+
+The /request tool fetches data from public HTTPS endpoints. Use it for:
+- Web search: Query DuckDuckGo API or similar search endpoints
+- Weather data: Query Open-Meteo API for forecasts
+- General API calls: Any public HTTPS JSON/data endpoint
+
+Command format:
+  /request <URL>
+  /request GET <URL>
+  /request POST <URL> (for endpoints requiring POST)
+
+Examples:
+  /request https://api.open-meteo.com/v1/forecast?latitude=-6.2&longitude=106.8&current_weather=true
+  /request https://html.duckduckgo.com/html/?q=search+query
+
+Response format: Tool output is rendered as a markdown contract with raw response content.
+The assistant should interpret and summarize the results for the user.
+
+---
+
 ENTITY SEPARATION & TOOL AUTHORITY:
 
 Assistant behavior:
-- The assistant’s responsibility ends at issuing the /imagine command.
+- The assistant's responsibility ends at issuing the /imagine command.
 - After /imagine, the assistant may ONLY:
   - remain silent, OR
   - continue unrelated conversation text
@@ -956,6 +1074,7 @@ Your speaking style and personality are defined above.
 {memory_context}
 {interface_context}
 {session_context}
+{location_context}
 '''.strip()
 
     # =========================
@@ -978,12 +1097,6 @@ Your speaking style and personality are defined above.
     for msg in chat_history:
         role = msg["role"]
         content = msg["content"]
-        # Map tool-specific roles to 'assistant' for LLM API compatibility.
-        # Strip markdown contracts — only project the original /command line
-        # so the LLM never sees execution markup (prevents pattern contamination).
-        if role in ALL_TOOL_ROLES:
-            role = "assistant"
-            content = _extract_command_from_markdown(content)
         messages.append({
             "role": role,
             "content": content
@@ -1042,7 +1155,7 @@ def _handle_ai_image_generation(ai_response, session_id):
     
     return ai_response
 
-def generate_ai_response_streaming(profile, user_message, interface="terminal", session_id=None, provider=None, model=None):
+def generate_ai_response_streaming(profile, user_message, interface="terminal", session_id=None, provider=None, model=None, image_base64_for_context=None):
     """Generate a single AI response (streaming variant) — no agentic looping.
 
     Same deterministic model as generate_ai_response:
@@ -1091,16 +1204,16 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
             })
             print("[Vision] Re-injected persistent visual context")
     
+    # Section IV: Inject image base64 for second pass after image_tools
+    if image_base64_for_context:
+        messages.append({
+            "role": "user",
+            "content": image_base64_for_context
+        })
+        print("[IMAGE TOOL] Injected base64 image context for second pass")
+    
     try:
-        kwargs = {"timeout": 180}
-        
-        if preferred_provider == 'chutes':
-            kwargs['max_tokens'] = 16384
-        elif preferred_provider == 'openrouter':
-            if ':free' in preferred_model:
-                kwargs['max_tokens'] = 2048
-            else:
-                kwargs['max_tokens'] = 4096
+        kwargs = {"timeout": 180, "max_tokens": 4096}
         
         # --- Single LLM call (no agentic loop) ---
         ai_response = ai_manager.send_message(
@@ -1144,25 +1257,32 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         print(f"[ERROR] Streaming response failed: {error_msg}")
         yield error_msg
 
-def generate_ai_response(profile, user_message, interface="terminal", session_id=None):
+def generate_ai_response(profile, user_message, interface="terminal", session_id=None, image_base64_for_context=None):
     """Generate a single AI response — no agentic looping.
 
-    Execution model:
+    Execution model (STRICT):
       1. Build context from DB history.
       2. Append pending user_message (not yet persisted).
       3. Single LLM call.
-      4. If LLM returns a tool command → execute deterministically → return result.
-      5. Otherwise return the natural reply.
+      4. Return raw LLM response ONLY.
+
+    Tool detection and execution are handled by handle_user_message.
+    This function MUST NOT:
+      - Detect tool commands
+      - Execute tools
+      - Return tool output
 
     The caller (handle_user_message) is responsible for:
       - Persisting user / tool / assistant messages to DB.
+      - Detecting tool commands in the response.
+      - Executing tools via registry.
       - Triggering one second-pass call when appropriate.
     """
     if session_id is None:
         active_session = Database.get_active_session()
         session_id = active_session['id']
     
-    # Handle direct image generation
+    # Handle direct image generation command from user
     if user_message.strip().startswith('/imagine'):
         return _handle_image_generation(user_message, session_id)
     
@@ -1196,16 +1316,16 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
             })
             print("[Vision] Re-injected persistent visual context")
     
+    # Section IV: Inject image base64 for second pass after image_tools
+    if image_base64_for_context:
+        messages.append({
+            "role": "user",
+            "content": image_base64_for_context
+        })
+        print("[IMAGE TOOL] Injected base64 image context for second pass")
+    
     try:
-        kwargs = {"timeout": 180}
-        
-        if preferred_provider == 'chutes':
-            kwargs['max_tokens'] = 4096
-        elif preferred_provider == 'openrouter':
-            if ':free' in preferred_model:
-                kwargs['max_tokens'] = 1024
-            else:
-                kwargs['max_tokens'] = 2048
+        kwargs = {"timeout": 180, "max_tokens": 4096}
         
         # --- Single LLM call (no agentic loop) ---
         ai_response = ai_manager.send_message(
@@ -1223,11 +1343,8 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
                 preferred_provider, preferred_model, messages, **kwargs
             )
         
-        # Case: plain text response
+        # SAFEGUARD: Non-empty response guarantee
         if isinstance(ai_response, str) and ai_response.strip():
-            cmd_info = _detect_command(ai_response)
-            if cmd_info:
-                return _execute_command_tool(cmd_info, session_id=session_id)
             return ai_response
         
         # Empty response — retry once
@@ -1238,13 +1355,15 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
         if isinstance(ai_response, str) and ai_response.strip():
             return ai_response
         
-        print("[WARNING] AI service returned empty response")
-        return "AI service failed to generate a response."
+        # FINAL SAFEGUARD: Never return empty
+        print("[WARNING] AI service returned empty response after retry")
+        return "I'm having trouble responding right now. Please try again."
             
     except Exception as e:
         error_msg = f"AI service error: {str(e)}"
         print(f"[ERROR] AI response generation failed: {error_msg}")
-        return f"Sorry, I couldn't process that. Please try again."
+        # SAFEGUARD: Never raise, always return safe fallback
+        return "Sorry, I couldn't process that. Please try again."
 
 def auto_name_session_if_needed(session_id, active_session):
     if active_session.get('name') != 'New Chat':
@@ -2261,12 +2380,16 @@ def get_all_models():
 def set_preferred_provider(provider_name, model_name=None):
     profile = Database.get_profile()
     providers_config = profile.get('providers_config', {})
-    
+
     providers_config['preferred_provider'] = provider_name
     if model_name:
         providers_config['preferred_model'] = model_name
-    
+
     Database.update_profile({'providers_config': providers_config})
+
+    # Reload AI manager to detect newly available providers (e.g., after adding API keys)
+    reload_ai_manager()
+
     return f"Preferred provider set to: {provider_name}" + (f" with model: {model_name}" if model_name else "")
 
 

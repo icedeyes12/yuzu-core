@@ -195,26 +195,52 @@ class CerebrasProvider(AIProvider):
             return api_key
         except Exception as e:
             return None
-    
+
+    def _normalize_messages(self, messages: List[Dict]) -> List[Dict]:
+        """Normalize messages: convert custom tool roles to standard 'assistant' role."""
+        if not messages:
+            return messages
+
+        standard_roles = {'system', 'user', 'assistant', 'tool'}
+        normalized = []
+
+        for msg in messages:
+            role = msg.get('role', '')
+            if role not in standard_roles:
+                # Custom tool role - convert to assistant
+                content = msg.get('content', '')
+                normalized_content = f"[{role}]\n{content}"
+                normalized.append({
+                    'role': 'assistant',
+                    'content': normalized_content
+                })
+            else:
+                normalized.append(msg)
+
+        return normalized
+
     def get_models(self) -> List[str]:
         return self.available_models
-    
+
     def send_message(self, messages: List[Dict], model: str, **kwargs) -> Optional[str]:
         if not self.api_key or model not in self.available_models:
             return None
-        
+
         try:
+            # Normalize messages (convert custom tool roles to assistant)
+            messages = self._normalize_messages(messages)
+
             temperature = kwargs.get('temperature', 0.69)
-            max_tokens = kwargs.get('max_tokens', 2048)
+            max_tokens = kwargs.get('max_tokens', 4096)
             top_p = kwargs.get('top_p', 0.7)
             top_k = kwargs.get('top_k', 40)
             typical_p = kwargs.get('typical_p', 0.8)
-            
+
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
-            
+
             payload = {
                 "model": model,
                 "messages": messages,
@@ -225,14 +251,25 @@ class CerebrasProvider(AIProvider):
                 "typical_p": typical_p,
                 "stream": False
             }
-            
+
+            # Debug: Log summary (not full payload)
+            # Count only new messages (not historical context from DB)
+            new_msgs = sum(1 for m in messages if m.get('role') == 'user' and m == messages[-1])
+            print(f"[Cerebras] {model} | new_msg=1 | max_tokens={max_tokens}")
+
             response = requests.post(
                 self.base_url,
                 headers=headers,
                 json=payload,
                 timeout=kwargs.get('timeout', 120)
             )
-            
+
+            # Debug: Log response
+            if response.status_code != 200:
+                print(f"[Cerebras] Error {response.status_code}: {response.text[:200]}")
+            else:
+                print(f"[Cerebras] OK {response.status_code}")
+
             if response.status_code == 200:
                 result = response.json()
                 return result['choices'][0]['message']['content'].strip()
@@ -246,19 +283,22 @@ class CerebrasProvider(AIProvider):
         if not self.api_key or model not in self.available_models:
             yield ""
             return
-        
+
         try:
+            # Normalize messages (convert custom tool roles to assistant)
+            messages = self._normalize_messages(messages)
+
             temperature = kwargs.get('temperature', 0.69)
-            max_tokens = kwargs.get('max_tokens', 2048)
+            max_tokens = kwargs.get('max_tokens', 4096)
             top_p = kwargs.get('top_p', 0.7)
             top_k = kwargs.get('top_k', 40)
             typical_p = kwargs.get('typical_p', 0.8)
-            
+
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
-            
+
             payload = {
                 "model": model,
                 "messages": messages,
@@ -269,7 +309,7 @@ class CerebrasProvider(AIProvider):
                 "typical_p": typical_p,
                 "stream": True
             }
-            
+
             response = requests.post(
                 self.base_url,
                 headers=headers,
@@ -345,15 +385,41 @@ class OpenRouterProvider(AIProvider):
             return api_key
         except Exception as e:
             return None
-    
+
+    def _normalize_messages(self, messages: List[Dict]) -> List[Dict]:
+        """Normalize messages: convert custom tool roles to standard 'assistant' role."""
+        if not messages:
+            return messages
+
+        standard_roles = {'system', 'user', 'assistant', 'tool'}
+        normalized = []
+
+        for msg in messages:
+            role = msg.get('role', '')
+            if role not in standard_roles:
+                # Custom tool role - convert to assistant
+                content = msg.get('content', '')
+                normalized_content = f"[{role}]\n{content}"
+                normalized.append({
+                    'role': 'assistant',
+                    'content': normalized_content
+                })
+            else:
+                normalized.append(msg)
+
+        return normalized
+
     def get_models(self) -> List[str]:
         return self.available_models
-    
+
     def send_message(self, messages: List[Dict], model: str, **kwargs) -> Optional[str]:
         if not self.api_key or model not in self.available_models:
             return None
-        
+
         try:
+            # Normalize messages (convert custom tool roles to assistant)
+            messages = self._normalize_messages(messages)
+
             if self.supports_vision(model) and messages:
                 last_user_message = self._get_last_user_message(messages)
                 if last_user_message and multimodal_tools.has_images(last_user_message):
@@ -361,11 +427,12 @@ class OpenRouterProvider(AIProvider):
                     messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
             
             temperature = kwargs.get('temperature', 0.73)
-            max_tokens = kwargs.get('max_tokens', 8000)
+            max_tokens = kwargs.get('max_tokens', 4096)
             top_p = kwargs.get('top_p', 0.9)
             top_k = kwargs.get('top_k', 40)
             typical_p = kwargs.get('typical_p', 0.8)
             
+            # Free tier rate limiting
             if model.endswith(':free'):
                 max_tokens = min(max_tokens, 2048)
                 temperature = min(temperature, 0.8)
@@ -387,14 +454,23 @@ class OpenRouterProvider(AIProvider):
                 "typical_p": typical_p,
                 "stream": False
             }
-            
+
+            # Debug: Log summary (not full payload)
+            print(f"[OpenRouter] {model} | max_tokens={max_tokens}")
+
             response = requests.post(
                 self.base_url,
                 headers=headers,
                 json=payload,
                 timeout=kwargs.get('timeout', 180)
             )
-            
+
+            # Debug: Log response
+            if response.status_code != 200:
+                print(f"[OpenRouter] Error {response.status_code}: {response.text[:200]}")
+            else:
+                print(f"[OpenRouter] OK {response.status_code}")
+
             if response.status_code == 200:
                 result = response.json()
                 message = result['choices'][0]['message']
@@ -424,11 +500,12 @@ class OpenRouterProvider(AIProvider):
                     messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
             
             temperature = kwargs.get('temperature', 0.73)
-            max_tokens = kwargs.get('max_tokens', 4000)
+            max_tokens = kwargs.get('max_tokens', 4096)
             top_p = kwargs.get('top_p', 0.9)
             top_k = kwargs.get('top_k', 40)
             typical_p = kwargs.get('typical_p', 0.8)
             
+            # Free tier rate limiting
             if model.endswith(':free'):
                 max_tokens = min(max_tokens, 2048)
                 temperature = min(temperature, 0.8)
@@ -482,15 +559,18 @@ class OpenRouterProvider(AIProvider):
 class ChutesProvider(AIProvider):
     def __init__(self, config: Dict = None):
         super().__init__("chutes", config)
+        self.base_url = "https://llm.chutes.ai/v1/chat/completions"
         self.api_key = self._load_api_key()
         self.is_available = bool(self.api_key)
         self.available_models = [
             "Qwen/Qwen3-VL-235B-A22B-Instruct",
+            "Qwen/Qwen3.5-397B-A17B-TEE",
             "deepseek-ai/DeepSeek-V3-0324",
             "deepseek-ai/DeepSeek-V3.1",
             "deepseek-ai/DeepSeek-V3.1-Terminus",
             "deepseek-ai/DeepSeek-V3.2-Exp",
-            "moonshotai/Kimi-K2-Instruct-0905", 
+            "moonshotai/Kimi-K2-Instruct-0905",
+            "moonshotai/Kimi-K2.5-TEE",
             "tngtech/DeepSeek-TNG-R1T-Chimera",
             "tngtech/DeepSeek-TNG-R1T2-Chimera",
             "Qwen/Qwen3-235B-A22B-Instruct-2507",
@@ -501,6 +581,43 @@ class ChutesProvider(AIProvider):
             "zai-org/GLM-4.7-TEE",
             "deepseek-ai/DeepSeek-R1"
         ]
+    
+    def _normalize_messages_for_chutes(self, messages: List[Dict]) -> List[Dict]:
+        """Normalize messages for Chutes API: ensure single system message at the beginning
+        and convert custom tool roles to standard 'assistant' role."""
+        if not messages:
+            return messages
+
+        # Standard OpenAI-compatible roles
+        standard_roles = {'system', 'user', 'assistant', 'tool'}
+
+        # Collect all system messages and normalize other messages
+        system_contents = []
+        normalized_messages = []
+
+        for msg in messages:
+            role = msg.get('role', '')
+
+            if role == 'system':
+                system_contents.append(msg.get('content', ''))
+            elif role not in standard_roles:
+                # Custom tool role (e.g., image_tools, request_tools) - convert to assistant
+                content = msg.get('content', '')
+                normalized_content = f"[{role}]\n{content}"
+                normalized_messages.append({
+                    'role': 'assistant',
+                    'content': normalized_content
+                })
+            else:
+                # Standard role - keep as-is
+                normalized_messages.append(msg)
+
+        # Merge all system messages into one
+        if system_contents:
+            merged_system = '\n\n'.join(system_contents)
+            return [{'role': 'system', 'content': merged_system}] + normalized_messages
+        else:
+            return normalized_messages
     
     def _load_api_key(self):
         try:
@@ -517,6 +634,9 @@ class ChutesProvider(AIProvider):
             return None
         
         try:
+            # Normalize messages for Chutes API (system message must be first)
+            messages = self._normalize_messages_for_chutes(messages)
+            
             if self.supports_vision(model) and messages:
                 last_user_message = self._get_last_user_message(messages)
                 if last_user_message and multimodal_tools.has_images(last_user_message):
@@ -524,15 +644,11 @@ class ChutesProvider(AIProvider):
                     messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
             
             temperature = kwargs.get('temperature', 0.73)
-            max_tokens = kwargs.get('max_tokens', 4096)  # FIXED: Reduced from 32768 to 4096 for non-streaming
+            max_tokens = kwargs.get('max_tokens', 4096)
             top_p = kwargs.get('top_p', 0.9)
             top_k = kwargs.get('top_k', 45)
             typical_p = kwargs.get('typical_p', 0.85)
             stream = kwargs.get('stream', False)
-            
-            # FIX: Ensure max_tokens doesn't exceed Chutes limits for non-streaming
-            if not stream and max_tokens > 8192:
-                max_tokens = 8192  # Chutes limit for non-streaming
             
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -546,16 +662,24 @@ class ChutesProvider(AIProvider):
                 "max_tokens": max_tokens,
                 "top_p": top_p,
                 "top_k": top_k,
-                "typical_p": typical_p,
                 "stream": stream
             }
-            
+
+            # Debug: Log summary (not full payload)
+            print(f"[Chutes] {model} | max_tokens={max_tokens}")
+
             response = requests.post(
-                "https://llm.chutes.ai/v1/chat/completions",
+                self.base_url,
                 headers=headers,
                 json=payload,
                 timeout=kwargs.get('timeout', 120)
             )
+
+            # Debug: Log response
+            if response.status_code != 200:
+                print(f"[Chutes] Error {response.status_code}: {response.text[:200]}")
+            else:
+                print(f"[Chutes] OK {response.status_code}")
             
             if response.status_code == 200:
                 result = response.json()
@@ -574,6 +698,9 @@ class ChutesProvider(AIProvider):
             return
         
         try:
+            # Normalize messages for Chutes API (system message must be first)
+            messages = self._normalize_messages_for_chutes(messages)
+            
             if self.supports_vision(model) and messages:
                 last_user_message = self._get_last_user_message(messages)
                 if last_user_message and multimodal_tools.has_images(last_user_message):
@@ -581,14 +708,10 @@ class ChutesProvider(AIProvider):
                     messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
             
             temperature = kwargs.get('temperature', 0.73)
-            max_tokens = kwargs.get('max_tokens', 16384)  # FIXED: Streaming allows more, but keep reasonable
+            max_tokens = kwargs.get('max_tokens', 4096)
             top_p = kwargs.get('top_p', 0.9)
             top_k = kwargs.get('top_k', 45)
             typical_p = kwargs.get('typical_p', 0.85)
-            
-            # FIX: Streaming can go up to 65536, but keep it reasonable
-            if max_tokens > 65536:
-                max_tokens = 65536
             
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -607,7 +730,7 @@ class ChutesProvider(AIProvider):
             }
             
             response = requests.post(
-                "https://llm.chutes.ai/v1/chat/completions",
+                self.base_url,
                 headers=headers,
                 json=payload,
                 timeout=kwargs.get('timeout', 120),

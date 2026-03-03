@@ -14,7 +14,6 @@ from datetime import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from database import Database
-from app import _build_generation_context
 
 # Create debug_logs folder if it doesn't exist
 DEBUG_LOGS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'debug_logs'))
@@ -41,9 +40,17 @@ def dump_complete_payload(user_message: str, session_id: str = None, interface: 
     print(f"📋 Session: {active_session.get('name', 'Unnamed')} ({session_id})")
     print(f"📋 Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # Build messages
-    print("🔄 Building message context...")
-    messages = _build_generation_context(profile, session_id, interface)
+    # Build messages using get_chat_history_for_ai
+    print("🔄 Building message context using get_chat_history_for_ai...")
+    chat_history = Database.get_chat_history_for_ai(session_id=session_id, limit=50, recent=True)
+    
+    # Build system message
+    from app import _build_generation_context
+    base_messages = _build_generation_context(profile, session_id, interface)
+    system_message = base_messages[0]  # First message is system
+    
+    messages = [system_message]
+    messages.extend(chat_history)
     
     # Append user message
     if user_message and user_message.strip():
@@ -178,6 +185,7 @@ def generate_markdown_dump(data):
 
 def quick_verify_truncation():
     """Check if system message might be truncated by terminal"""
+    from app import _build_generation_context
     profile = Database.get_profile()
     session = Database.get_active_session()
     messages = _build_generation_context(profile, session['id'], "web")

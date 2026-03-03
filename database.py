@@ -29,8 +29,8 @@ TOOL_ROLES = {
     'request': 'request_tools',
 }
 
-# All tool roles for use in queries
-ALL_TOOL_ROLES = list(TOOL_ROLES.values())
+# All tool roles for use in queries (unique values only)
+ALL_TOOL_ROLES = list(set(TOOL_ROLES.values()))
 
 class Profile(Base):
     __tablename__ = 'profiles'
@@ -791,16 +791,23 @@ class Database:
 
     @staticmethod
     def get_chat_history_for_ai(session_id=None, limit=None, recent=False):
+        """
+        Build message context for AI provider.
+
+        Returns chronologically ordered messages with tool results parsed into
+        separate assistant command + tool role entries. No markdown contracts,
+        no HTML, no <details> blocks reach the LLM.
+        """
         if session_id is None:
             active_session = Database.get_active_session()
             session_id = active_session['id']
-        
+
         with get_db_session() as session:
             query = session.query(Message).filter(
                 Message.session_id == session_id,
                 Message.role.in_(['user', 'assistant', 'system'] + ALL_TOOL_ROLES)
             )
-            
+
             if recent and limit:
                 messages = query.order_by(Message.timestamp.desc()).limit(limit).all()
                 messages = list(reversed(messages))
@@ -808,39 +815,99 @@ class Database:
                 messages = query.order_by(Message.timestamp.asc()).limit(limit).all()
             else:
                 messages = query.order_by(Message.timestamp.asc()).all()
-            
+
             formatted_messages = []
             for msg in messages:
-                # Ambil content tanpa enkripsi
                 content = msg.content
                 if msg.content_encrypted:
-                    # Legacy: coba dekripsi jika masih terenkripsi
                     try:
                         content = encryptor.decrypt(content)
                     except:
                         content = "[ENCRYPTED_LEGACY_DATA]"
-                
-                # Format timestamp
-                try:
-                    dt = datetime.strptime(msg.timestamp, '%Y-%m-%d %H:%M:%S')
-                    formatted_timestamp = dt.strftime('[%Y-%m-%d %H:%M:%S]')
-                except:
-                    formatted_timestamp = f"[{msg.timestamp}]"
-                
-                # Format untuk AI (tambahkan timestamp untuk pesan user)
+
+                # Skip event_log roles
+                if msg.role == 'event_log':
+                    continue
+
                 if msg.role == 'user':
+                    try:
+                        dt = datetime.strptime(msg.timestamp, '%Y-%m-%d %H:%M:%S')
+                        formatted_timestamp = dt.strftime('[%Y-%m-%d %H:%M:%S]')
+                    except:
+                        formatted_timestamp = f"[{msg.timestamp}]"
                     ai_formatted_content = f"{content} {formatted_timestamp}"
-                else:
-                    ai_formatted_content = content
-                
-                formatted_messages.append({
-                    'role': msg.role,
-                    'content': ai_formatted_content,
-                    'original_content': content,
-                    'timestamp': msg.timestamp
-                })
-            
+                    formatted_messages.append({
+                        'role': msg.role,
+                        'content': ai_formatted_content
+                    })
+                elif msg.role == 'assistant':
+                    formatted_messages.append({
+                        'role': msg.role,
+                        'content': content
+                    })
+                elif msg.role == 'system':
+                    formatted_messages.append({
+                        'role': msg.role,
+                        'content': content
+                    })
+                elif msg.role in ALL_TOOL_ROLES:
+                    # Parse canonical markdown contract
+                    command_line = Database._extract_command_from_markdown_contract(content)
+                    raw_result = Database._extract_raw_result_from_markdown_contract(content)
+                    # Append TWO entries: assistant command + tool result
+                    formatted_messages.append({
+                        'role': 'assistant',
+                        'content': command_line
+                    })
+                    formatted_messages.append({
+                        'role': msg.role,
+                        'content': raw_result
+                    })
+
             return formatted_messages
+    
+    @staticmethod
+    def _extract_command_from_markdown_contract(content):
+        import re
+        if not content:
+            return content
+        m = re.search(r'```bash\n\S+\$\s*(/[^\n]+)\n```', content)
+        if m:
+            return m.group(1).strip()
+        return content
+    
+    @staticmethod
+    def _extract_raw_result_from_markdown_contract(content):
+        """Extract raw result from markdown contract, stripping all formatting."""
+        import re
+        if not content:
+            return content
+
+        result = content
+
+        # Remove <details> block wrapper entirely
+        result = re.sub(r'<details>\s*<summary>.*?</summary>', '', result, flags=re.DOTALL)
+        result = re.sub(r'</details>', '', result, flags=re.DOTALL)
+
+        # Remove bash code block (contains the command)
+        result = re.sub(r'```bash\n.*?\n```', '', result, flags=re.DOTALL)
+
+        # Remove any other code fences
+        result = re.sub(r'```[\w]*\n?', '', result)
+        result = re.sub(r'```', '', result)
+
+        # Remove blockquote markers (> )
+        result = re.sub(r'^>\s*', '', result, flags=re.MULTILINE)
+
+        # Remove HTML tags
+        result = re.sub(r'<[^>]+>', '', result)
+
+        # Clean up whitespace
+        result = re.sub(r'^\n+', '', result)
+        result = re.sub(r'\n+$', '', result)
+        result = result.strip()
+
+        return result
 
     @staticmethod
     def clear_chat_history(session_id=None):
