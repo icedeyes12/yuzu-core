@@ -78,6 +78,7 @@ class OllamaProvider(AIProvider):
             "qwen3-vl:235b-cloud",
             "qwen3-coder:480b-cloud",
             "kimi-k2:1t-cloud",
+	    "kimi-k2.5:cloud",
             "gpt-oss:120b-cloud",
             "gpt-oss:20b-cloud",
             "deepseek-v3.1:671b-cloud"
