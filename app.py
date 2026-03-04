@@ -29,28 +29,32 @@ from tools.registry import execute_tool, get_tool_role, is_terminal_tool, TOOL_R
 # Stores the last processed image as base64 for N follow-up turns so the
 # model can compare or reference it without a new tool call.
 # ---------------------------------------------------------------------------
+import threading
 _visual_context_buffer = {}  # session_id -> {"base64": str, "mime": str, "turns_left": int}
+_visual_context_lock = threading.Lock()
 _VISUAL_CONTEXT_TURNS = 3
 
 def _store_visual_context(session_id, image_base64, mime):
-    """Store a visual context snapshot for follow-up turns."""
-    _visual_context_buffer[session_id] = {
-        "base64": image_base64,
-        "mime": mime,
-        "turns_left": _VISUAL_CONTEXT_TURNS,
-    }
+    """Store a visual context snapshot for follow-up turns. Thread-safe."""
+    with _visual_context_lock:
+        _visual_context_buffer[session_id] = {
+            "base64": image_base64,
+            "mime": mime,
+            "turns_left": _VISUAL_CONTEXT_TURNS,
+        }
 
 def _consume_visual_context(session_id):
     """Return stored visual context if available and decrement turn counter.
-    Returns (base64, mime) or (None, None)."""
-    ctx = _visual_context_buffer.get(session_id)
-    if not ctx or ctx["turns_left"] <= 0:
-        _visual_context_buffer.pop(session_id, None)
-        return None, None
-    ctx["turns_left"] -= 1
-    if ctx["turns_left"] <= 0:
-        _visual_context_buffer.pop(session_id, None)
-    return ctx["base64"], ctx["mime"]
+    Returns (base64, mime) or (None, None). Thread-safe."""
+    with _visual_context_lock:
+        ctx = _visual_context_buffer.get(session_id)
+        if not ctx or ctx["turns_left"] <= 0:
+            _visual_context_buffer.pop(session_id, None)
+            return None, None
+        ctx["turns_left"] -= 1
+        if ctx["turns_left"] <= 0:
+            _visual_context_buffer.pop(session_id, None)
+        return ctx["base64"], ctx["mime"]
 
 _VISUAL_REF_PATTERNS = re.compile(
     r'(?:yang tadi|yang sebelumnya|tadi|bedanya|beda apa|compare|'
@@ -441,9 +445,10 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
             raise
         
         # Persist user message to DB after successful LLM response
-        Database.add_message('user', user_message, session_id=session_id)
+        if user_message and user_message.strip():
+            Database.add_message('user', user_message.strip(), session_id=session_id)
         
-        if full_response.strip():
+        if full_response and full_response.strip():
             full_response_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', full_response).strip()
             
             # SAFEGUARD: Ensure response is never empty
@@ -504,6 +509,7 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
             summarize_memory(profile, user_message, full_response, session_id)
 
         _trigger_memory_extraction(session_id)
+    return
 
 def extract_recent_images(session_id, limit=3):
     """Scan last 20 messages in a session and return up to ``limit`` cached
@@ -1226,7 +1232,6 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         # Handle None — retry once before giving up
         if ai_response is None:
             print("[WARNING] AI returned None, retrying...")
-            import time as _time; _time.sleep(1)
             ai_response = ai_manager.send_message(
                 preferred_provider, preferred_model, messages, **kwargs
             )
@@ -1235,7 +1240,8 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         if isinstance(ai_response, str) and ai_response.strip():
             cmd_info = _detect_command(ai_response)
             if cmd_info:
-                yield _execute_command_tool(cmd_info, session_id=session_id)
+                exec_tool_name, tool_result = _execute_command_tool(cmd_info, session_id=session_id)
+                yield tool_result
                 return
             yield ai_response
             return
@@ -1338,7 +1344,6 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
         # Handle None — retry once before giving up
         if ai_response is None:
             print("[WARNING] AI returned None, retrying...")
-            import time as _time; _time.sleep(1)
             ai_response = ai_manager.send_message(
                 preferred_provider, preferred_model, messages, **kwargs
             )
