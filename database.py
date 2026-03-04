@@ -777,7 +777,9 @@ class Database:
                     # Coba dekripsi jika masih terenkripsi (legacy data)
                     try:
                         content = encryptor.decrypt(content)
-                    except:
+                    except Exception as e:
+                        import logging
+                        logging.error(f"Failed to decrypt message {msg.id}: {e}")
                         content = "[ENCRYPTED_LEGACY_DATA]"
                 
                 result_messages.append({
@@ -822,7 +824,9 @@ class Database:
                 if msg.content_encrypted:
                     try:
                         content = encryptor.decrypt(content)
-                    except:
+                    except Exception as e:
+                        import logging
+                        logging.error(f"Failed to decrypt message {msg.id}: {e}")
                         content = "[ENCRYPTED_LEGACY_DATA]"
 
                 # Skip event_log roles
@@ -947,7 +951,9 @@ class Database:
                 if msg.content_encrypted:
                     try:
                         content = encryptor.decrypt(content)
-                    except:
+                    except Exception as e:
+                        import logging
+                        logging.error(f"Failed to decrypt message {msg.id}: {e}")
                         content = "[ENCRYPTED_LEGACY_DATA]"
                 
                 events.append({
@@ -972,7 +978,9 @@ class Database:
                 if msg.content_encrypted:
                     try:
                         content = encryptor.decrypt(content)
-                    except:
+                    except Exception as e:
+                        import logging
+                        logging.error(f"Failed to decrypt message {msg.id}: {e}")
                         content = "[ENCRYPTED_LEGACY_DATA]"
                 
                 events.append({
@@ -1008,7 +1016,9 @@ class Database:
                 if msg.content_encrypted:
                     try:
                         content = encryptor.decrypt(content)
-                    except:
+                    except Exception as e:
+                        import logging
+                        logging.error(f"Failed to decrypt message {msg.id}: {e}")
                         content = "[ENCRYPTED_DATA]"
                 
                 # Truncate if too long
