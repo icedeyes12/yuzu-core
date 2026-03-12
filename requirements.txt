@@ -12,8 +12,8 @@
 
 # CORE DEPENDENCIES
 # -----------------
-Python >= 3.9
-pip (latest version recommended)
+# Python >= 3.9
+# pip (latest version recommended)
 
 # DATABASE & ENCRYPTION
 # ---------------------
@@ -38,7 +38,7 @@ beautifulsoup4>=4.12.0        # HTML parsing for DuckDuckGo web search
 
 # IMAGE PROCESSING (Optional)
 # ---------------------------
-Pillow>=10.0.0                # Image handling for future enhancements
+# Pillow>=10.0.0                # Image handling for future enhancements
 
 # DEVELOPMENT TOOLS (Optional)
 # ----------------------------
