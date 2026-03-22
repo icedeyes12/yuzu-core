@@ -567,7 +567,7 @@ def build_visual_context(session_id):
     return {"messages": base_messages, "images": image_file_paths, "image_contents": image_contents}
 
 
-def _build_generation_context(profile, session_id, interface="terminal"):
+def _build_generation_context(profile, session_id, interface="terminal", user_message=None):
     """Shared context building logic for both streaming and non-streaming responses"""
     from datetime import datetime
 
@@ -789,7 +789,7 @@ Language restraint:
 - Avoid poetic or novel-like prose.
 - Prefer casual spoken Indonesian over descriptive narration.
 - Express intimacy through short dialogue and simple actions, not metaphors.
-- No internal monologues or cinematic descriptions unless explicitly requested.
+- No internal monologues or environmental narration.
 
 Language grounding:
 - Think and respond natively in Indonesian, not by translating from English.
@@ -1048,7 +1048,6 @@ Temporal ambience alignment:
 - Night or evening lighting may still be casual, public, and non-intimate.
 - If time context is unclear, choose a neutral lighting
   appropriate to the selected visual mode.
-
 Situational intimacy awareness:
 - A request for a personal photo does NOT imply intimacy by default.
 - “pap” means “post a picture” and is context-neutral.
@@ -1180,7 +1179,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         return
     
     # Build context and messages
-    messages = _build_generation_context(profile, session_id, interface)
+    messages = _build_generation_context(profile, session_id, interface, user_message)
     
     # Append pending user message (not yet in DB) to context
     if user_message and user_message.strip():
@@ -1298,7 +1297,7 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
     preferred_provider = providers_config.get('preferred_provider', 'ollama')
     preferred_model = providers_config.get('preferred_model', 'glm-4.6:cloud')
     
-    messages = _build_generation_context(profile, session_id, interface)
+    messages = _build_generation_context(profile, session_id, interface, user_message)
     
     # Append pending user message (not yet in DB) to context
     if user_message and user_message.strip():
