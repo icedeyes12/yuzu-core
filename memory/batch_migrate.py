@@ -64,48 +64,50 @@ def migrate_semantic_memories():
         print(f"  [{_ts()}] Skipped (already complete)")
         return 0
 
+    # Load ALL data inside one session — extract plain values immediately
     with get_db_session() as session:
-        total = session.query(SemanticMemory).count()
         records = session.query(SemanticMemory).order_by(SemanticMemory.id.asc()).all()
+        total = len(records)
+        # Extract plain Python values while session is open
+        items = [
+            {'id': r.id, 'text': f"{r.entity} {r.relation} {r.target}"}
+            for r in records
+        ]
 
-    # Extract data while session is still open (prevents DetachedInstanceError)
-    texts_to_embed = []
-    records_by_idx = []
-
-    for i, rec in enumerate(records):
-        if i < cp['semantic_done']:
-            continue
-        # Build composite text for embedding
-        text = f"{rec.entity} {rec.relation} {rec.target}"
-        texts_to_embed.append(text)
-        records_by_idx.append(rec.id)
-
-    if not texts_to_embed:
-        print(f"  [{_ts()}] Nothing to migrate ({total} records, checkpoint at {cp['semantic_done']})")
+    if not items:
+        print(f"  [{_ts()}] Nothing to migrate (0 records)")
         return 0
 
-    print(f"  [{_ts()}] Embedding {len(texts_to_embed)} records... (batch_size=64)")
-    migrated = cp['semantic_done']
+    # Skip already-done by checkpoint position
+    items_to_process = items[cp['semantic_done']:]
+    print(f"  [{_ts()}] Embedding {len(items_to_process)}/{total} records... (batch_size=64)")
 
-    for batch_start in range(0, len(texts_to_embed), 64):
-        batch_texts = texts_to_embed[batch_start:batch_start + 64]
+    migrated = 0
+    done_id = None
+
+    for batch_start in range(0, len(items_to_process), 64):
+        batch = items_to_process[batch_start:batch_start + 64]
+        batch_texts = [item['text'] for item in batch]
         vecs = _embed_batch(batch_texts)
 
         with get_db_session() as session:
-            for j, rec_id in enumerate(records_by_idx[batch_start:batch_start + 64]):
+            for j, item in enumerate(batch):
                 vec = vecs[j]
-                rec = session.query(SemanticMemory).filter_by(id=rec_id).first()
+                rec = session.query(SemanticMemory).filter_by(id=item['id']).first()
                 if rec and vec is not None:
                     rec.embedding_vector = _vec_to_blob(vec)
                     session.commit()
-                    migrated += 1
-                    if migrated % 200 == 0:
-                        elapsed = time.time() - _start_time
-                        rate = migrated / max(elapsed, 0.1)
-                        eta = (len(texts_to_embed) - migrated) / max(rate, 0.1)
-                        print(f"  [{_ts()}] {migrated}/{len(texts_to_embed)} | {rate:.1f}/s | ETA {eta:.0f}s")
-                        cp['semantic_done'] = records_by_idx[min(batch_start + j, len(records_by_idx) - 1)]
-                        _save_checkpoint(cp)
+                done_id = item['id']
+
+        migrated += len(batch)
+        if migrated % 200 == 0 or migrated == len(items_to_process):
+            elapsed = time.time() - _start_time
+            rate = migrated / max(elapsed, 0.1)
+            remaining = len(items_to_process) - migrated
+            eta = remaining / max(rate, 0.1)
+            print(f"  [{_ts()}] {migrated}/{len(items_to_process)} | {rate:.1f}/s | ETA {eta:.0f}s")
+            cp['semantic_done'] = items.index(items_to_process[batch_start]) + 1
+            _save_checkpoint(cp)
 
     cp['semantic_done'] = -1
     _save_checkpoint(cp)
@@ -123,40 +125,38 @@ def migrate_episodic_memories():
 
     with get_db_session() as session:
         records = session.query(EpisodicMemory).order_by(EpisodicMemory.id.asc()).all()
+        items = [{'id': r.id, 'text': r.summary} for r in records]
 
-    # Extract data while session is still open (prevents DetachedInstanceError)
-    texts_to_embed = []
-    records_by_id = []
-
-    for rec in records:
-        if cp.get('episodic_done', 0) > 0 and rec.id <= cp['episodic_done']:
-            continue
-        texts_to_embed.append(rec.summary)
-        records_by_id.append(rec.id)
-
-    if not texts_to_embed:
+    if not items:
         print(f"  [{_ts()}] Nothing to migrate")
         return 0
 
-    print(f"  [{_ts()}] Embedding {len(texts_to_embed)} episodic records...")
-    migrated = 0
+    items_to_process = items[cp.get('episodic_done', 0):]
+    print(f"  [{_ts()}] Embedding {len(items_to_process)} episodic records...")
 
-    for batch_start in range(0, len(texts_to_embed), 64):
-        batch_texts = texts_to_embed[batch_start:batch_start + 64]
+    migrated = 0
+    done_id = None
+
+    for batch_start in range(0, len(items_to_process), 64):
+        batch = items_to_process[batch_start:batch_start + 64]
+        batch_texts = [item['text'] for item in batch]
         vecs = _embed_batch(batch_texts)
 
         with get_db_session() as session:
-            for j, rec_id in enumerate(records_by_id[batch_start:batch_start + 64]):
+            for j, item in enumerate(batch):
                 vec = vecs[j]
-                rec = session.query(EpisodicMemory).filter_by(id=rec_id).first()
+                rec = session.query(EpisodicMemory).filter_by(id=item['id']).first()
                 if rec and vec is not None:
                     rec.embedding_vector = _vec_to_blob(vec)
                     session.commit()
-                    migrated += 1
-                    if migrated % 200 == 0:
-                        print(f"  [{_ts()}] {migrated}/{len(texts_to_embed)}")
-                        cp['episodic_done'] = rec_id
-                        _save_checkpoint(cp)
+                done_id = item['id']
+
+        migrated += len(batch)
+        if migrated % 200 == 0 or migrated == len(items_to_process):
+            print(f"  [{_ts()}] {migrated}/{len(items_to_process)}")
+            idx = items.index(items_to_process[batch_start])
+            cp['episodic_done'] = idx + 1
+            _save_checkpoint(cp)
 
     cp['episodic_done'] = -1
     _save_checkpoint(cp)
@@ -174,40 +174,36 @@ def migrate_segments():
 
     with get_db_session() as session:
         records = session.query(ConversationSegment).order_by(ConversationSegment.id.asc()).all()
+        items = [{'id': r.id, 'text': r.summary or ""} for r in records]
 
-    # Extract data while session is still open (prevents DetachedInstanceError)
-    texts_to_embed = []
-    records_by_id = []
-
-    for rec in records:
-        if cp.get('segments_done', 0) > 0 and rec.id <= cp['segments_done']:
-            continue
-        texts_to_embed.append(rec.summary or "")
-        records_by_id.append(rec.id)
-
-    if not texts_to_embed:
+    if not items:
         print(f"  [{_ts()}] Nothing to migrate")
         return 0
 
-    print(f"  [{_ts()}] Embedding {len(texts_to_embed)} segments...")
+    items_to_process = items[cp.get('segments_done', 0):]
+    print(f"  [{_ts()}] Embedding {len(items_to_process)} segments...")
+
     migrated = 0
 
-    for batch_start in range(0, len(texts_to_embed), 64):
-        batch_texts = texts_to_embed[batch_start:batch_start + 64]
+    for batch_start in range(0, len(items_to_process), 64):
+        batch = items_to_process[batch_start:batch_start + 64]
+        batch_texts = [item['text'] for item in batch]
         vecs = _embed_batch(batch_texts)
 
         with get_db_session() as session:
-            for j, rec_id in enumerate(records_by_id[batch_start:batch_start + 64]):
+            for j, item in enumerate(batch):
                 vec = vecs[j]
-                rec = session.query(ConversationSegment).filter_by(id=rec_id).first()
+                rec = session.query(ConversationSegment).filter_by(id=item['id']).first()
                 if rec and vec is not None:
                     rec.embedding_vector = _vec_to_blob(vec)
                     session.commit()
-                    migrated += 1
-                    if migrated % 200 == 0:
-                        print(f"  [{_ts()}] {migrated}/{len(texts_to_embed)}")
-                        cp['segments_done'] = rec_id
-                        _save_checkpoint(cp)
+
+        migrated += len(batch)
+        if migrated % 200 == 0 or migrated == len(items_to_process):
+            print(f"  [{_ts()}] {migrated}/{len(items_to_process)}")
+            idx = items.index(items_to_process[batch_start])
+            cp['segments_done'] = idx + 1
+            _save_checkpoint(cp)
 
     cp['segments_done'] = -1
     _save_checkpoint(cp)
@@ -219,7 +215,6 @@ def process_unprocessed_messages():
     """
     Find sessions with messages that were never processed through the extractor.
     Process them in rolling windows to extract + embed new semantic facts.
-    Skips sessions already covered by existing semantic/episodic records.
     """
     print(f"\n[{_ts()}] === Processing unprocessed raw messages ===")
     cp = _load_checkpoint()
@@ -239,11 +234,6 @@ def process_unprocessed_messages():
         if si < sessions_done:
             continue
 
-        # Check how many semantic records already exist for this session
-        with get_db_session() as session:
-            existing_sem = session.query(SemanticMemory).filter_by(session_id=session_id).count()
-            existing_epi = session.query(EpisodicMemory).filter_by(session_id=session_id).count()
-
         # Get all messages for this session
         with get_db_session() as session:
             messages = session.query(Message).filter(
@@ -256,7 +246,7 @@ def process_unprocessed_messages():
             for m in messages
         ]
 
-        # Process in windows of 20 messages (matching extractor logic)
+        # Process in windows of 20 messages
         WINDOW = 20
         for i in range(0, len(msg_list), WINDOW):
             window = msg_list[i:i + WINDOW]
@@ -267,14 +257,14 @@ def process_unprocessed_messages():
             except Exception as e:
                 print(f"  [{_ts()}][WARN] Session {session_id} window {i}: {e}")
 
-        # Checkpoint every session
-        cp['messages_processed'] = si
+        cp['messages_processed'] = si + 1
         _save_checkpoint(cp)
 
-        if (si + 1) % 10 == 0:
+        if (si + 1) % 10 == 0 or (si + 1) == total_sessions:
             elapsed = time.time() - _start_time
             rate = (si + 1) / max(elapsed, 0.1)
-            eta = (total_sessions - si - 1) / max(rate, 1)
+            remaining = total_sessions - si - 1
+            eta = remaining / max(rate, 0.1)
             print(f"  [{_ts()}] Sessions {si+1}/{total_sessions} | windows={extracted} | {rate:.1f}/s | ETA {eta:.0f}s")
 
     cp['messages_processed'] = -1
@@ -285,16 +275,17 @@ def process_unprocessed_messages():
 
 _start_time = time.time()
 
+
 def run_migration():
     """
     Run the full migration pipeline.
-    
+
     Order:
         1. Embed existing semantic memories
         2. Embed existing episodic memories
         3. Embed existing conversation segments
         4. Process raw messages that weren't through the extractor
-    
+
     Safe to re-run — checkpoint file tracks progress.
     """
     global _start_time
