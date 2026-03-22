@@ -29,11 +29,11 @@ CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-8b.chutes.ai/v1/emb
 CHUTES_CHAT_ENDPOINT = "https://llm.chutes.ai/v1/chat/completions"
 
 # Cost control: smaller model = cheaper + faster for extraction
-EXTRACTION_MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507"
-# Qwen3.5-397B-A17B-TEE is also available but more expensive
-
-EMBED_BATCH_SIZE = 64
-EXTRACT_BATCH_SIZE = 10       # episodes per LLM extraction call
+EXTRACTION_MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE"  # 262k context window
+BATCH_SIZE = 50            # episodes per LLM call (fits ~262k context)
+EMBED_BATCH_SIZE = 32      # embed calls
+LLM_TIMEOUT = 180           # seconds (was timing out at 120)
+WAIT_BETWEEN_BATCHES = 5    # seconds (avoid rate limit)
 MAX_RETRIES = 5
 CHECKPOINT_FILE = os.path.join(os.path.dirname(__file__), 'quality_migrate_checkpoint.json')
 
@@ -190,7 +190,7 @@ Respond with JSON only."""
                     "temperature": 0.3,
                     "max_tokens": 2048,
                 },
-                timeout=120,
+                timeout=LLM_TIMEOUT,
             )
             if resp.status_code == 429:
                 wait = 2 ** attempt * 15
@@ -333,14 +333,14 @@ def phase3_extract_facts(cp):
         _save_cp(cp)
         return 0
 
-    _log(f"Processing {len(episodic_data)} episodic records (batch_size={EXTRACT_BATCH_SIZE})...")
+    _log(f"Processing {len(episodic_data)} episodic records (batch_size={BATCH_SIZE})...")
 
     start_offset = cp.get("episodic_extracted", 0)
     episodic_data = episodic_data[start_offset:]
     extracted_facts = []  # list of {"fact": ..., "category": ...}
 
-    for batch_start in range(0, len(episodic_data), EXTRACT_BATCH_SIZE):
-        batch = episodic_data[batch_start:batch_start + EXTRACT_BATCH_SIZE]
+    for batch_start in range(0, len(episodic_data), BATCH_SIZE):
+        batch = episodic_data[batch_start:batch_start + BATCH_SIZE]
         facts = _extract_facts_via_llm(batch)
 
         for f in facts:
