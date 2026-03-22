@@ -222,6 +222,7 @@ def process_unprocessed_messages():
         print(f"  [{_ts()}] Skipped (already complete)")
         return 0
 
+    # Get session IDs inside session
     with get_db_session() as session:
         sessions = session.query(ChatSession).order_by(ChatSession.id.asc()).all()
         session_ids = [s.id for s in sessions]
@@ -234,17 +235,16 @@ def process_unprocessed_messages():
         if si < sessions_done:
             continue
 
-        # Get all messages for this session
+        # Get messages inside session and extract dicts immediately
         with get_db_session() as session:
             messages = session.query(Message).filter(
                 Message.session_id == session_id,
                 Message.role.in_(['user', 'assistant'])
             ).order_by(Message.id.asc()).all()
-
-        msg_list = [
-            {'role': m.role, 'content': m.content, 'timestamp': m.timestamp}
-            for m in messages
-        ]
+            msg_list = [
+                {'role': m.role, 'content': m.content, 'timestamp': m.timestamp}
+                for m in messages
+            ]
 
         # Process in windows of 20 messages
         WINDOW = 20
