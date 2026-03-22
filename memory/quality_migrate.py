@@ -186,11 +186,9 @@ Respond with JSON only."""
     for attempt in range(retries):
         try:
             resp = requests.post(
-                OPENROUTER_ENDPOINT,
+                CHUTES_CHAT_ENDPOINT,
                 headers={
                     "Authorization": f"Bearer {_get_llm_key()}",
-                    "HTTP-Referer": "https://github.com/icedeyes12/yuzu-companion",
-                    "X-Title": "Yuzu-Migration",
                     "Content-Type": "application/json",
                 },
                 json={
