@@ -68,8 +68,8 @@ def migrate_semantic_memories():
         total = session.query(SemanticMemory).count()
         records = session.query(SemanticMemory).order_by(SemanticMemory.id.asc()).all()
 
+    # Extract data while session is still open (prevents DetachedInstanceError)
     texts_to_embed = []
-    indices = []
     records_by_idx = []
 
     for i, rec in enumerate(records):
@@ -78,8 +78,7 @@ def migrate_semantic_memories():
         # Build composite text for embedding
         text = f"{rec.entity} {rec.relation} {rec.target}"
         texts_to_embed.append(text)
-        indices.append(i)
-        records_by_idx.append(rec)
+        records_by_idx.append(rec.id)
 
     if not texts_to_embed:
         print(f"  [{_ts()}] Nothing to migrate ({total} records, checkpoint at {cp['semantic_done']})")
@@ -93,7 +92,7 @@ def migrate_semantic_memories():
         vecs = _embed_batch(batch_texts)
 
         with get_db_session() as session:
-            for j, (rec_id) in enumerate(records_by_idx[batch_start:batch_start + 64]):
+            for j, rec_id in enumerate(records_by_idx[batch_start:batch_start + 64]):
                 vec = vecs[j]
                 rec = session.query(SemanticMemory).filter_by(id=rec_id).first()
                 if rec and vec is not None:
@@ -103,12 +102,12 @@ def migrate_semantic_memories():
                     if migrated % 200 == 0:
                         elapsed = time.time() - _start_time
                         rate = migrated / max(elapsed, 0.1)
-                        eta = (len(texts_to_embed) - migrated) / max(rate, 1)
+                        eta = (len(texts_to_embed) - migrated) / max(rate, 0.1)
                         print(f"  [{_ts()}] {migrated}/{len(texts_to_embed)} | {rate:.1f}/s | ETA {eta:.0f}s")
-                        cp['semantic_done'] = indices[batch_start + j]
+                        cp['semantic_done'] = records_by_idx[min(batch_start + j, len(records_by_idx) - 1)]
                         _save_checkpoint(cp)
 
-    cp['semantic_done'] = -1  # mark complete
+    cp['semantic_done'] = -1
     _save_checkpoint(cp)
     print(f"  [{_ts()}] Done: {migrated} semantic memories embedded")
     return migrated
@@ -125,6 +124,7 @@ def migrate_episodic_memories():
     with get_db_session() as session:
         records = session.query(EpisodicMemory).order_by(EpisodicMemory.id.asc()).all()
 
+    # Extract data while session is still open (prevents DetachedInstanceError)
     texts_to_embed = []
     records_by_id = []
 
@@ -175,6 +175,7 @@ def migrate_segments():
     with get_db_session() as session:
         records = session.query(ConversationSegment).order_by(ConversationSegment.id.asc()).all()
 
+    # Extract data while session is still open (prevents DetachedInstanceError)
     texts_to_embed = []
     records_by_id = []
 
