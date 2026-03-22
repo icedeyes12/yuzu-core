@@ -18,6 +18,7 @@ import struct
 import requests
 from datetime import datetime
 from database import Database, get_db_session, SemanticMemory, EpisodicMemory
+from sqlalchemy import text
 
 
 # ─────────────────────────────────────────────────────────────
@@ -303,7 +304,7 @@ def phase2_delete_old_semantic(cp):
         count = session.query(SemanticMemory).delete()
         session.commit()
         _log(f"Deleted {count} semantic records")
-        session.execute("VACUUM")
+        session.execute(text("VACUUM"))
 
     cp["phase"] = 2
     _save_cp(cp)
