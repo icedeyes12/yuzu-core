@@ -29,7 +29,7 @@ CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-8b.chutes.ai/v1/emb
 CHUTES_CHAT_ENDPOINT = "https://llm.chutes.ai/v1/chat/completions"
 
 # Cost control: smaller model = cheaper + faster for extraction
-EXTRACTION_MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507"  # 262k context window
+EXTRACTION_MODEL = "Qwen/Qwen3-235B-A22B-2507"  # 262k context window
 BATCH_SIZE = 50            # episodes per LLM call (fits ~262k context)
 EMBED_BATCH_SIZE = 32      # embed calls
 LLM_TIMEOUT = 180           # seconds (was timing out at 120)
@@ -129,7 +129,7 @@ def _vec_to_blob(vec):
 # ─────────────────────────────────────────────────────────────
 
 OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
-EXTRACTION_MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507"  # cheap + fast for extraction
+EXTRACTION_MODEL = "Qwen/Qwen3-235B-A22B-2507"  # cheap + fast for extraction
 OR_KEY = None  # lazy-loaded
 
 def _get_or_key():
