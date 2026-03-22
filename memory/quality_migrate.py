@@ -89,7 +89,11 @@ def _embed_batch(texts, retries=MAX_RETRIES):
         return []
     for attempt in range(retries):
         try:
-            resp = requests.post(
+            
+            print(f"[DEBUG] URL: {CHUTES_CHAT_ENDPOINT}")
+            print(f"[DEBUG] Model: {EXTRACTION_MODEL}")
+            print(f"[DEBUG] Key prefix: {_get_llm_key()[:10]}...")
+                        resp = requests.post(
                 CHUTES_EMBED_ENDPOINT,
                 headers={
                     "Authorization": f"Bearer {_get_llm_key()}",
