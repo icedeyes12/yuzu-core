@@ -129,7 +129,7 @@ def _vec_to_blob(vec):
 # ─────────────────────────────────────────────────────────────
 
 OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
-EXTRACTION_MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507"  # cheap + fast for extraction
+EXTRACTION_MODEL = "qwen/qwen3-235b-a22b-2507"  # cheap + fast for extraction
 OR_KEY = None  # lazy-loaded
 
 def _get_or_key():
