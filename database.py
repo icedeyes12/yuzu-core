@@ -91,6 +91,7 @@ class SemanticMemory(Base):
     target = Column(Text, nullable=False)
     confidence = Column(Float, default=0.5)
     importance = Column(Float, default=0.5)
+    embedding_vector = Column(LargeBinary, nullable=True)  # NEW: stored embedding
     last_accessed = Column(DateTime, nullable=True)
     access_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.now)
@@ -130,6 +131,7 @@ Index('idx_api_keys_name', APIKey.key_name)
 Index('idx_semantic_session', SemanticMemory.session_id)
 Index('idx_semantic_entity', SemanticMemory.entity)
 Index('idx_semantic_confidence', SemanticMemory.confidence)
+Index('idx_semantic_importance', SemanticMemory.importance)  # NEW: for retrieval scoring
 Index('idx_episodic_session', EpisodicMemory.session_id)
 Index('idx_episodic_importance', EpisodicMemory.importance)
 Index('idx_segments_session', ConversationSegment.session_id)
@@ -219,6 +221,16 @@ def _migrate_add_vision_model_column(engine):
             conn.execute(text("ALTER TABLE profiles ADD COLUMN vision_model TEXT DEFAULT 'moonshotai/kimi-k2.5'"))
             conn.commit()
 
+def _migrate_add_semantic_embedding_vector(engine):
+    """Add embedding_vector column to semantic_memories if it does not exist."""
+    from sqlalchemy import inspect as sa_inspect, text
+    inspector = sa_inspect(engine)
+    columns = [col['name'] for col in inspector.get_columns('semantic_memories')]
+    if 'embedding_vector' not in columns:
+        with engine.connect() as conn:
+            conn.execute(text('ALTER TABLE semantic_memories ADD COLUMN embedding_vector BLOB'))
+            conn.commit()
+
 def init_db():
     """
     Initialize database with safety guards.
@@ -287,6 +299,12 @@ def init_db():
         _migrate_add_vision_model_column(engine)
     except Exception as e:
         print(f"[WARNING] vision_model migration skipped: {e}")
+    
+    # Migrate existing databases: add embedding_vector column if missing
+    try:
+        _migrate_add_semantic_embedding_vector(engine)
+    except Exception as e:
+        print(f"[WARNING] semantic_embedding_vector migration skipped: {e}")
     
     with get_db_session() as session:
         # Create default profile and session if needed

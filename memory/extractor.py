@@ -1,10 +1,11 @@
 # [FILE: memory/extractor.py]
-# [DESCRIPTION: Memory extraction layer - semantic + episodic writers]
+# [DESCRIPTION: Memory extraction layer - semantic + episodic writers with embeddings]
 
 import re
+import struct
 from datetime import datetime
 from database import (
-    Database, get_db_session, SemanticMemory, EpisodicMemory, Message
+    get_db_session, SemanticMemory, EpisodicMemory, Message
 )
 
 
@@ -20,7 +21,6 @@ _PREFERENCE_PATTERNS = [
     (r'\b(?:aku pakai|aku pake)\b(.+)', 'Uses'),
 ]
 
-# Emotional intensity keywords
 _EMOTIONAL_KEYWORDS = [
     'angry', 'frustrated', 'sad', 'happy', 'excited', 'love',
     'hate', 'cry', 'laugh', 'upset', 'worried', 'scared',
@@ -29,15 +29,19 @@ _EMOTIONAL_KEYWORDS = [
 ]
 
 
+def _vec_to_blob(vec: list[float]) -> bytes:
+    """Serialize a float list to bytes for SQLite BLOB storage."""
+    return struct.pack(f'{len(vec)}f', *vec)
+
+
+def _blob_to_vec(blob: bytes) -> list[float]:
+    """Deserialize bytes back to float list."""
+    count = len(blob) // 4
+    return list(struct.unpack(f'{count}f', blob))
+
+
 def extract_semantic_facts(messages):
-    """Extract semantic triples from a list of messages.
-
-    Args:
-        messages: list of dicts with 'role' and 'content' keys.
-
-    Returns:
-        list of dicts with 'entity', 'relation', 'target' keys.
-    """
+    """Extract semantic triples from a list of messages."""
     facts = []
     for msg in messages:
         if msg.get('role') != 'user':
@@ -47,7 +51,6 @@ def extract_semantic_facts(messages):
             match = re.search(pattern, content, re.IGNORECASE)
             if match:
                 target = match.group(1).strip()
-                # Clean target: remove trailing punctuation, limit length
                 target = re.sub(r'[.,!?;:]+$', '', target).strip()
                 if target and len(target) < 200:
                     facts.append({
@@ -59,10 +62,7 @@ def extract_semantic_facts(messages):
 
 
 def calculate_emotional_weight(messages):
-    """Calculate emotional intensity from a list of messages.
-
-    Returns a float between 0.0 and 1.0.
-    """
+    """Calculate emotional intensity from a list of messages. Returns 0.0–1.0."""
     if not messages:
         return 0.0
     total_hits = 0
@@ -71,18 +71,11 @@ def calculate_emotional_weight(messages):
         for keyword in _EMOTIONAL_KEYWORDS:
             if keyword in content:
                 total_hits += 1
-    # Normalize: cap at 1.0
     return min(total_hits / max(len(messages), 1) * 0.3, 1.0)
 
 
 def should_create_episodic(messages, affection_delta=0):
-    """Determine if an episodic memory should be created.
-
-    Triggers:
-    - Emotional spike (high emotional weight)
-    - Long conversation segment (>= 10 messages)
-    - Affection shift beyond threshold (>= 20)
-    """
+    """Determine if an episodic memory should be created."""
     if not messages:
         return False
     emotional_weight = calculate_emotional_weight(messages)
@@ -96,24 +89,18 @@ def should_create_episodic(messages, affection_delta=0):
 
 
 def generate_episodic_summary(messages):
-    """Generate a simple text summary from a list of messages.
-
-    This is a lightweight local summarizer (no LLM call).
-    It extracts key user and assistant messages.
-    """
+    """Generate a simple text summary from a list of messages (no LLM)."""
     if not messages:
         return ""
     parts = []
     for msg in messages:
         role = msg.get('role', 'unknown')
         content = msg.get('content', '')
-        # Truncate long messages
         if len(content) > 150:
             content = content[:150] + '...'
         if role in ('user', 'assistant'):
             label = 'User' if role == 'user' else 'AI'
             parts.append(f"{label}: {content}")
-    # Take first and last few entries for summary
     if len(parts) > 6:
         summary_parts = parts[:3] + ['...'] + parts[-3:]
     else:
@@ -121,12 +108,26 @@ def generate_episodic_summary(messages):
     return '\n'.join(summary_parts)
 
 
-def upsert_semantic_memory(session_id, entity, relation, target):
-    """Insert or update a semantic memory triple.
+def _embed_text(text: str) -> list[float] | None:
+    """Embed a single text via Chutes API. Returns None on failure."""
+    try:
+        from memory.embedder import embed_text
+        return embed_text(text)
+    except Exception as e:
+        print(f"[WARNING] Embedding failed: {e}")
+        return None
 
-    If the same triple already exists, increase confidence and update access.
-    Otherwise, insert a new row.
-    """
+
+def _build_semantic_text(entity, relation, target):
+    """Build a searchable text from a semantic triple."""
+    return f"{entity} {relation} {target}"
+
+
+def upsert_semantic_memory(session_id, entity, relation, target):
+    """Insert or update a semantic memory triple with embedding."""
+    text = _build_semantic_text(entity, relation, target)
+    vector = _embed_text(text)
+
     with get_db_session() as session:
         existing = session.query(SemanticMemory).filter(
             SemanticMemory.session_id == session_id,
@@ -139,6 +140,9 @@ def upsert_semantic_memory(session_id, entity, relation, target):
             existing.confidence = min(existing.confidence + 0.1, 1.0)
             existing.access_count += 1
             existing.last_accessed = datetime.now()
+            # Re-embed on reinforcement
+            if vector:
+                existing.embedding_vector = _vec_to_blob(vector)
         else:
             new_mem = SemanticMemory(
                 session_id=session_id,
@@ -147,6 +151,7 @@ def upsert_semantic_memory(session_id, entity, relation, target):
                 target=target,
                 confidence=0.5,
                 importance=0.5,
+                embedding_vector=_vec_to_blob(vector) if vector else None,
                 last_accessed=datetime.now(),
                 access_count=1,
             )
@@ -155,11 +160,14 @@ def upsert_semantic_memory(session_id, entity, relation, target):
 
 
 def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance=0.5):
-    """Create a new episodic memory record."""
+    """Create a new episodic memory record with embedding."""
+    vector = _embed_text(summary)
+
     with get_db_session() as session:
         mem = EpisodicMemory(
             session_id=session_id,
             summary=summary,
+            embedding=_vec_to_blob(vector) if vector else None,
             importance=importance,
             emotional_weight=emotional_weight,
             last_accessed=datetime.now(),
@@ -170,10 +178,7 @@ def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance
 
 
 def process_messages_for_memory(session_id, messages, affection_delta=0):
-    """Main entry point: analyze messages and extract memories.
-
-    Called after each assistant response with the last N messages.
-    """
+    """Main entry point: analyze messages and extract memories."""
     if not messages:
         return
 

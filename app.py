@@ -590,17 +590,17 @@ def _build_generation_context(profile, session_id, interface="terminal"):
     # =========================
     memory_context = ""
 
-    # --- Structured memory retrieval (new system, unstable, for any contributor or coding agent please don't touch) ---
-    #try:
-    #    from memory.retrieval import retrieve_memory, format_memory
-    #    memory_bundle = retrieve_memory(session_id)
-    #    structured_memory_text = format_memory(memory_bundle)
-    #    if structured_memory_text:
-    #        memory_context += f"\n\n{structured_memory_text}"
-    #except Exception as e:
-    #    print(f"[WARNING] Structured memory retrieval failed: {e}")
+    # --- Structured memory retrieval (embedding-based, replaces legacy) ---
+    try:
+        from memory.retrieval import retrieve_memory, format_memory
+        memory_bundle = retrieve_memory(session_id, query=user_message)
+        structured_memory_text = format_memory(memory_bundle)
+        if structured_memory_text:
+            memory_context += f"\n\n{structured_memory_text}"
+    except Exception as e:
+        print(f"[WARNING] Structured memory retrieval failed: {e}")
 
-    # --- Legacy memory sources (kept for backward compatibility) ---
+    # --- Legacy memory sources (backward compatibility fallback) ---
     session_memory = Database.get_session_memory(session_id)
     if session_memory and session_memory.get('session_context'):
         memory_context += (
@@ -744,7 +744,7 @@ Mode behaviors:
 
 - reserved and observant:
   - Keep tone neutral and supportive.
-  - Minimal warmth, no flirtation.
+  - Minimal warmth, no flirting.
   - Use gestures sparingly or not at all.
 
 - comfortable and open:
@@ -1054,7 +1054,7 @@ Situational intimacy awareness:
 - “pap” means “post a picture” and is context-neutral.
 - Casual slang does NOT imply private or sensual intent.
 - Darkness or night-time alone does NOT imply intimacy.
-- Default to PUBLIC / casual visuals unless intimacy is explicit.
+- Default to PUBLIC visual mode unless intimacy is explicit.
 - Work or stress contexts override intimacy assumptions.
 
 When unsure:
@@ -2116,13 +2116,9 @@ def _try_alternative_models(prompt: str, api_key: str) -> Optional[str]:
         print(f"[INFO] Trying alternative model: {model}")
         
         try:
-            # Kurangi prompt untuk model dengan context lebih kecil
-            if model.endswith(":free") or "flash" in model.lower():
-                # Model free/light perlu prompt lebih pendek
-                shortened_prompt = prompt[:20000] + "\n\n...[prompt truncated for lighter model]"
-                actual_prompt = shortened_prompt
-            else:
-                actual_prompt = prompt
+            # Potong prompt secara signifikan untuk model free
+            shortened_prompt = prompt[:20000] + "\n\n...[prompt truncated for lighter model]"
+            actual_prompt = shortened_prompt
             
             data = {
                 "model": model,
@@ -2289,11 +2285,7 @@ def parse_global_profile_summary(summary_text: str) -> Dict:
                 profile_data["relationship_dynamics"] = content
             elif current_section in ['likes', 'dislikes', 'personality_traits', 'important_memories']:
                 # Parse comma-separated lists
-                items = []
-                for item in content.split(','):
-                    item_clean = item.strip()
-                    if item_clean:
-                        items.append(item_clean)
+                items = [item.strip() for item in content.split(',') if item.strip()]
                 profile_data["key_facts"][current_section] = items
     
     for line in lines:
@@ -2369,7 +2361,7 @@ def save_section_content(profile_data, section_key, content):
             
     elif section_key in ['likes', 'dislikes', 'personality_traits', 'important_memories']:
         items = [item.strip() for item in content.split(',') if item.strip()]
-        profile_data["key_facts"][section_key].extend(items)
+        profile_data["key_facts"][section_key] = items
 
 
 def get_available_providers():
