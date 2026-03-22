@@ -403,11 +403,26 @@ def handle_user_message(user_message, interface="terminal"):
 
 
 def _trigger_memory_extraction(session_id):
-    """Extract structured memories from recent messages."""
+    """Extract structured memories from recent messages.
+
+    NOTE: Semantic fact extraction (regex-based) is DISABLED.
+    High-quality semantic facts are created via LLM extraction in memory/quality_migrate.py (batch).
+    Only episodic memory creation remains active here (triggered by emotion/length).
+    """
     try:
-        from memory.extractor import process_messages_for_memory
-        recent = Database.get_chat_history(session_id=session_id, limit=10, recent=True)
-        process_messages_for_memory(session_id, recent)
+        from memory.extractor import should_create_episodic, calculate_emotional_weight
+        from memory.extractor import generate_episodic_summary, create_episodic_memory
+        recent = Database.get_chat_history(session_id=session_id, limit=20, recent=True)
+
+        if should_create_episodic(recent):
+            emotional_weight = calculate_emotional_weight(recent)
+            summary = generate_episodic_summary(recent)
+            if summary:
+                importance = 0.5 + emotional_weight * 0.3
+                try:
+                    create_episodic_memory(session_id, summary, emotional_weight, importance)
+                except Exception as e:
+                    print(f"[WARNING] Episodic memory creation failed: {e}")
     except Exception as e:
         print(f"[WARNING] Memory extraction failed: {e}")
 
@@ -1799,8 +1814,7 @@ You are an expert psychologist and data analyst. Your task is to analyze the con
 1. **Personality Analysis**: Identify core personality traits, communication style, emotional patterns
 2. **Interests & Preferences**: What does the user like/dislike? Topics they frequently discuss
 3. **Behavioral Patterns**: How do they interact? Response patterns, engagement style
-4. **Relationship Dynamics**: How is their relationship with the AI? Emotional connection, trust level
-5. **Significant Content**: Important memories, experiences, or topics that are emotionally charged
+4. **Relationship Dynamics**: How is their relationship with the AI? Emotional tone, trust level, interaction patterns, and development over time.
 
 ### OUTPUT FORMAT REQUIREMENTS:
 You MUST use this exact format. Do not add any commentary, explanations, or additional text.

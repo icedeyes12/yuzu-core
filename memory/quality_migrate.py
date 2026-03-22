@@ -323,7 +323,7 @@ def phase3_extract_facts(cp):
         ).all()
         # Load inside session to avoid detach
         episodic_data = [
-            {"id": r.id, "title": r.title or "", "summary": r.summary or ""}
+            {"id": r.id, "summary": r.summary or ""}
             for r in episodic_records
         ]
 
