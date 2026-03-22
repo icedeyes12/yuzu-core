@@ -90,10 +90,7 @@ def _embed_batch(texts, retries=MAX_RETRIES):
     for attempt in range(retries):
         try:
             
-            print(f"[DEBUG] URL: {CHUTES_CHAT_ENDPOINT}")
-            print(f"[DEBUG] Model: {EXTRACTION_MODEL}")
-            print(f"[DEBUG] Key prefix: {_get_llm_key()[:10]}...")
-                        resp = requests.post(
+            resp = requests.post(
                 CHUTES_EMBED_ENDPOINT,
                 headers={
                     "Authorization": f"Bearer {_get_llm_key()}",
@@ -189,6 +186,12 @@ Respond with JSON only."""
 
     for attempt in range(retries):
         try:
+            print("[DEBUG] LLM URL: " + CHUTES_CHAT_ENDPOINT)
+            print("[DEBUG] LLM Model: " + EXTRACTION_MODEL)
+            llm_key = _get_llm_key()
+            print("[DEBUG] LLM Key prefix: " + (llm_key[:10] if llm_key else "None"))
+            print("[DEBUG] Episode count: " + str(len(episodes)))
+
             resp = requests.post(
                 CHUTES_CHAT_ENDPOINT,
                 headers={
