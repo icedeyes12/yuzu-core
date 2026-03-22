@@ -29,8 +29,8 @@ CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-8b.chutes.ai/v1/emb
 CHUTES_CHAT_ENDPOINT = "https://llm.chutes.ai/v1/chat/completions"
 
 # Cost control: smaller model = cheaper + faster for extraction
-EXTRACTION_MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507"  # 262k context window
-BATCH_SIZE = 50            # episodes per LLM call (fits ~262k context)
+EXTRACTION_MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507-TTE"  # 262k context window
+BATCH_SIZE = 200            # episodes per LLM call (fits ~262k context)
 EMBED_BATCH_SIZE = 32      # embed calls
 LLM_TIMEOUT = 180           # seconds (was timing out at 120)
 WAIT_BETWEEN_BATCHES = 5    # seconds (avoid rate limit)
@@ -79,12 +79,9 @@ def _save_cp(cp):
 # Chutes API helpers
 # ─────────────────────────────────────────────────────────────
 
-def _get_chutes_key():
-    return Database.get_api_key("chutes")
-
 def _get_llm_key():
-    """Get OpenRouter key for LLM extraction calls."""
-    return Database.get_api_key("openrouter")
+    """Get Chutes key for LLM extraction calls."""
+    return Database.get_api_key("chutes")
 
 def _embed_batch(texts, retries=MAX_RETRIES):
     """Embed texts via Chutes embedding API."""
@@ -129,14 +126,7 @@ def _vec_to_blob(vec):
 # ─────────────────────────────────────────────────────────────
 
 OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
-EXTRACTION_MODEL = "qwen/qwen3-235b-a22b-2507"  # cheap + fast for extraction
 OR_KEY = None  # lazy-loaded
-
-def _get_or_key():
-    global OR_KEY
-    if OR_KEY is None:
-        OR_KEY = Database.get_api_key("openrouter")
-    return OR_KEY
 
 def _extract_facts_via_llm(episodes, retries=MAX_RETRIES):
     """
