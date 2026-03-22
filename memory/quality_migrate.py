@@ -121,12 +121,12 @@ def _vec_to_blob(vec):
 def _extract_facts_via_llm(episodes, retries=MAX_RETRIES):
     """
     Call Chutes chat API to extract high-value semantic facts from episode summaries.
-    episodes: list of dicts with 'title' and 'summary'
+    episodes: list of dicts with 'id' and 'summary' only
     Returns: list of dicts with 'fact', 'category'
     """
-    # Build the prompt
+    # Build the prompt — only use 'summary' (no 'title' field exists)
     episodes_text = "\n\n".join([
-        f"Episode {i+1}: [{e['title']}]\n{e['summary']}"
+        f"Episode {i+1}:\n{e['summary']}"
         for i, e in enumerate(episodes)
     ])
 
