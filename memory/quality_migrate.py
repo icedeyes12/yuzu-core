@@ -352,8 +352,8 @@ def phase3_extract_facts(cp):
 
     _log(f"Processing {len(episodic_data)} episodic records (batch_size={BATCH_SIZE})...")
 
-    start_offset = cp.get("episodic_extracted", 0)
-    episodic_data = episodic_data[start_offset:]
+    batch_offset = cp.get("episodic_batch", 0) * BATCH_SIZE
+    episodic_data = episodic_data[batch_offset:]
     extracted_facts = []  # list of {"fact": ..., "category": ...}
 
     for batch_start in range(0, len(episodic_data), BATCH_SIZE):
@@ -364,15 +364,15 @@ def phase3_extract_facts(cp):
             f["source_episode_id"] = batch[0]["id"]  # associate with first episode in batch
 
         extracted_facts.extend(facts)
-        cp["episodic_extracted"] = start_offset + batch_start + len(batch)
+        cp["episodic_batch"] = batch_offset // BATCH_SIZE + 1
         _save_cp(cp)
 
         # Progress log
-        total_done = cp["episodic_extracted"]
+        total_done = batch_offset + batch_start + len(batch)
         _log(f"  {total_done}/{len(episodic_data) + start_offset} episodes | {len(extracted_facts)} facts extracted so far")
 
-    cp["phase"] = 3
-    cp["extracted_facts"] = extracted_facts  # Store in checkpoint for resumability
+    cp["phase"] = 3  # Mark done
+    cp["extracted_facts"] = extracted_facts
     _save_cp(cp)
     _log(f"Done: {len(extracted_facts)} facts extracted from episodic memories")
     return len(extracted_facts)
