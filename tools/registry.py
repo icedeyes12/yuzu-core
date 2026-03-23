@@ -1,4 +1,4 @@
-from tools import image_generate, http_request, memory_search, memory_sql, image_analyze
+from tools import image_generate, http_request, memory_search, memory_sql, image_analyze, memory_store, memory_store
 import json
 
 # Tool name → tool role used for DB storage
@@ -10,6 +10,8 @@ TOOL_ROLE_MAP = {
     "request": "request_tools",
     "memory_search": "memory_search_tools",
     "memory_sql": "memory_sql_tools",
+    "memory_store": "memory_store_tools",
+    "memory_store": "memory_store_tools",
     "image_analyze": "image_analyze_tools",
 }
 
@@ -22,6 +24,8 @@ _TOOLS = {
     "request": http_request,
     "memory_search": memory_search,
     "memory_sql": memory_sql,
+    "memory_store": memory_store,
+    "memory_store": memory_store,
     "image_analyze": image_analyze,
 }
 
