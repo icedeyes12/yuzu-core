@@ -687,6 +687,13 @@ class Database:
             if chat_session and role in ['user', 'assistant']:
                 chat_session.message_count += 1
                 chat_session.updated_at = datetime.now()
+                # Update last_message_time for idle detection
+                try:
+                    mem = json.loads(chat_session.memory_json) if chat_session.memory_json else {}
+                    mem['last_message_time'] = datetime.now().isoformat()
+                    chat_session.memory_json = json.dumps(mem)
+                except Exception:
+                    pass
             
             session.commit()
 

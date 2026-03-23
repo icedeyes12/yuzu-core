@@ -1600,16 +1600,30 @@ def should_summarize_memory(profile, user_message, session_id):
     conversation_messages = [msg for msg in chat_history if msg['role'] in ['user', 'assistant']]
     total_conversation_count = len(conversation_messages)
     
-    if total_conversation_count >= 50 and total_conversation_count % 50 == 0:
+    # Per-100 messages AND idle detection (≥1 hour since last message)
+    IDLE_THRESHOLD_HOURS = 1
+
+    if total_conversation_count >= 100 and total_conversation_count % 100 == 0:
         session_memory = Database.get_session_memory(session_id)
         last_summary_count = session_memory.get('last_summary_count', 0)
-        
         if total_conversation_count > last_summary_count:
+            # Check idle time
+            try:
+                from datetime import datetime, timedelta
+                last_msg_time = session_memory.get('last_message_time')
+                if last_msg_time:
+                    last_dt = datetime.fromisoformat(last_msg_time)
+                    idle = (datetime.now() - last_dt).total_seconds() / 3600.0
+                    if idle < IDLE_THRESHOLD_HOURS:
+                        print(f"[memory] Skipping summary: only {idle:.1f}h idle, need {IDLE_THRESHOLD_HOURS}h")
+                        return False
+            except Exception:
+                pass
             return True
-    
+
     if detect_important_content(user_message):
         return True
-    
+
     return False
 
 def summarize_memory(profile, user_message, ai_reply, session_id):
