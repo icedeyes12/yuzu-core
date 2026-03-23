@@ -83,17 +83,14 @@ def _parse_image_result_from_formatted(formatted_result):
         str: Image path if found, None otherwise
     """
     try:
-        # Extract JSON from formatted result (after header, before footer)
-        result_parts = formatted_result.split('\n\n')
-        if len(result_parts) >= 2:
-            result_json = result_parts[1]
-        else:
-            result_json = formatted_result
-        
-        result_data = json.loads(result_json)
-        return result_data.get('image_path')
-    except (json.JSONDecodeError, KeyError, IndexError):
-        return None
+        # Extract image src from markdown contract
+        import re
+        m = re.search(r'src="(static/generated_images/[^"]+)"', formatted_result)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return None
 
 def _detect_command(response_text):
     """
