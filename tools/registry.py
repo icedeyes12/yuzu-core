@@ -1,9 +1,6 @@
-from tools import image_generate, http_request, memory_search, memory_sql, image_analyze, memory_store
 import json
 
 # Tool name → tool role used for DB storage
-# Terminal tools (like image_tools) do NOT trigger a second LLM pass on success
-# NOTE: web_search and weather are handled via /request (DuckDuckGo/Open-Meteo APIs)
 TOOL_ROLE_MAP = {
     "image_generate": "image_tools",
     "imagine": "image_tools",
@@ -14,18 +11,8 @@ TOOL_ROLE_MAP = {
     "image_analyze": "image_analyze_tools",
 }
 
-# Tools that are TERMINAL — no second LLM pass after successful execution
-# NOTE: All tools now trigger second pass for deterministic two-pass architecture
 TERMINAL_TOOL_ROLES = set()
 
-_TOOLS = {
-    "image_generate": image_generate,
-    "request": http_request,
-    "memory_search": memory_search,
-    "memory_sql": memory_sql,
-    "memory_store": memory_store,
-    "image_analyze": image_analyze,
-}
 
 def build_markdown_contract(tool_role, full_command, output_lines, partner_name):
     """Build the unified markdown contract for tool output.
@@ -52,20 +39,37 @@ def build_markdown_contract(tool_role, full_command, output_lines, partner_name)
 
 def execute_tool(tool_name, arguments, session_id=None):
     """Dispatch a tool call and return the result string.
-    
+
     This is the SINGLE source of truth for tool dispatch.
     All tool execution MUST go through this function.
     """
-    if tool_name not in _TOOLS:
+    # Lazy import to avoid circular dependency
+    if tool_name == "image_generate":
+        from tools import image_generate
+        module = image_generate
+    elif tool_name == "request":
+        from tools import http_request
+        module = http_request
+    elif tool_name == "memory_search":
+        from tools import memory_search
+        module = memory_search
+    elif tool_name == "memory_sql":
+        from tools import memory_sql
+        module = memory_sql
+    elif tool_name == "memory_store":
+        from tools import memory_store
+        module = memory_store
+    elif tool_name == "image_analyze":
+        from tools import image_analyze
+        module = image_analyze
+    else:
         return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
-    module = _TOOLS[tool_name]
     try:
         result = module.execute(arguments, session_id=session_id)
         return result
     except Exception as e:
         print(f"[tool_error] {tool_name}: {e}")
-        # Return structured tool output, not raw exception
         profile = {}
         try:
             from database import Database
