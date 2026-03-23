@@ -456,13 +456,13 @@ class MultimodalTools:
         # Image generation logic moved to tools/image_generate.py
         # This method delegates to the single source of truth.
         from tools.image_generate import execute as _img_execute
-        import json as _json
+        import re as _re
         result_str = _img_execute({"prompt": prompt})
         try:
-            result = _json.loads(result_str)
-            if result.get("image_path"):
-                return result["image_path"], None
-            return None, result.get("error", "Unknown error")
+            m = _re.search(r'src="(static/generated_images/[^"]+)"', result_str)
+            if m:
+                return m.group(1), None
+            return None, "No image in result"
         except Exception as e:
             return None, str(e)
     
