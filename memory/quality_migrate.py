@@ -47,7 +47,7 @@ def _ts():
     return datetime.now().strftime('%H:%M:%S')
 
 def _log(msg):
-    elapsed = time.time() - (_start_time or time.time())
+    time.time() - (_start_time or time.time())
     print(f"  [{_ts()}] {msg}")
 
 def _log_phase(phase_num, title):
@@ -215,7 +215,7 @@ Respond with JSON only."""
                 time.sleep(wait)
                 continue
             if resp.status_code == 402:
-                _log(f"[RATE LIMIT] Payment required - budget exhausted. Will retry later.")
+                _log("[RATE LIMIT] Payment required - budget exhausted. Will retry later.")
                 wait = 2 ** attempt * 60
                 time.sleep(wait)
                 continue
@@ -265,9 +265,9 @@ def phase1_embed_episodic(cp):
     _log_phase(1, "Embedding unvectored episodic memories")
 
     with get_db_session() as session:
-        total = session.query(EpisodicMemory).count()
+        session.query(EpisodicMemory).count()
         unembedded = session.query(EpisodicMemory).filter(
-            EpisodicMemory.embedding == None
+            EpisodicMemory.embedding is None
         ).order_by(EpisodicMemory.id.asc()).all()
 
     if not unembedded:
@@ -369,7 +369,7 @@ def phase3_extract_facts(cp):
 
         # Progress log
         total_done = batch_offset + batch_start + len(batch)
-        _log(f"  {total_done}/{len(episodic_data) + start_offset} episodes | {len(extracted_facts)} facts extracted so far")
+        _log(f"  {total_done}/{len(episodic_data) + batch_offset} episodes | {len(extracted_facts)} facts extracted so far")
 
     cp["phase"] = 3  # Mark done
     cp["extracted_facts"] = extracted_facts

@@ -2,6 +2,7 @@
 # [DESCRIPTION: Chutes API embedding client for memory vectors]
 
 import math
+import struct
 from database import Database
 
 
@@ -58,3 +59,14 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     if norm_a == 0 or norm_b == 0:
         return 0.0
     return dot / (norm_a * norm_b)
+
+
+def vec_to_blob(vec: list[float]) -> bytes:
+    """Serialize a float list to bytes for SQLite BLOB storage."""
+    return struct.pack(f"{len(vec)}f", *vec)
+
+
+def blob_to_vec(blob: bytes) -> list[float]:
+    """Deserialize bytes back to float list."""
+    count = len(blob) // 4
+    return list(struct.unpack(f"{count}f", blob))

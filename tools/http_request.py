@@ -1,7 +1,6 @@
 # tools/http_request.py
 
 import os
-import json
 import requests
 import socket
 import ipaddress

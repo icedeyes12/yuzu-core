@@ -2,29 +2,11 @@
 # [DESCRIPTION: Memory retrieval pipeline - cosine similarity + hybrid scoring]
 
 import math
-import struct
 from datetime import datetime
 from database import (
     get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
 )
-
-
-def _vec_to_blob(vec: list[float]) -> bytes:
-    return struct.pack(f'{len(vec)}f', *vec)
-
-
-def _blob_to_vec(blob: bytes) -> list[float]:
-    count = len(blob) // 4
-    return list(struct.unpack(f'{count}f', blob))
-
-
-def _cosine_similarity(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(x * x for x in b))
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return dot / (norm_a * norm_b)
+from memory.embedder import cosine_similarity, blob_to_vec
 
 
 def _recency_factor(last_accessed) -> float:
@@ -72,8 +54,8 @@ def retrieve_semantic_memories(session_id, query=None, limit=15):
         for mem in memories:
             if query_vec and mem.embedding_vector:
                 try:
-                    mem_vec = _blob_to_vec(mem.embedding_vector)
-                    sim = _cosine_similarity(query_vec, mem_vec)
+                    mem_vec = blob_to_vec(mem.embedding_vector)
+                    sim = cosine_similarity(query_vec, mem_vec)
                     score = sim * 0.6 + (mem.importance or 0.5) * 0.2 + (mem.confidence or 0.5) * 0.2
                 except Exception:
                     score = (mem.importance or 0.5) * (mem.confidence or 0.5)
@@ -127,8 +109,8 @@ def retrieve_episodic_memories(session_id, query=None, limit=5):
 
             if query_vec and mem.embedding:
                 try:
-                    mem_vec = _blob_to_vec(mem.embedding)
-                    sim = _cosine_similarity(query_vec, mem_vec)
+                    mem_vec = blob_to_vec(mem.embedding)
+                    sim = cosine_similarity(query_vec, mem_vec)
                     score = sim * 0.5 + (mem.importance or 0.5) * 0.25 + recency * 0.25
                 except Exception:
                     score = ((mem.importance or 0.5) + (mem.emotional_weight or 0.0) * 0.5 + recency)
@@ -170,8 +152,8 @@ def retrieve_segments(session_id, query=None, limit=5):
         for seg in segments:
             if query_vec and seg.embedding:
                 try:
-                    mem_vec = _blob_to_vec(seg.embedding)
-                    sim = _cosine_similarity(query_vec, mem_vec)
+                    mem_vec = blob_to_vec(seg.embedding)
+                    sim = cosine_similarity(query_vec, mem_vec)
                     score = sim * 0.5 + (seg.importance or 0.5) * 0.5
                 except Exception:
                     score = seg.importance or 0.5

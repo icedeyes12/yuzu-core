@@ -7,10 +7,14 @@
 #   - summary: 2-3 sentence third-person narrative summary
 #
 # Then re-embeds with new summary text.
-import os, json, time, struct, requests
+import os
+import json
+import time
+import struct
+import requests
 from datetime import datetime
-from database import Database, get_db_session, EpisodicMemory
-from sqlalchemy import text
+from database import Database
+from database import get_db_session, EpisodicMemory
 
 CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-8b.chutes.ai/v1/embeddings"
 CHUTES_CHAT_ENDPOINT = "https://llm.chutes.ai/v1/chat/completions"
@@ -111,7 +115,7 @@ Quality over quantity. If an episode is just noise, still generate a basic title
                 time.sleep(wait)
                 continue
             if resp.status_code == 402:
-                _log(f"[BUDGET] Payment required - stopping.")
+                _log("[BUDGET] Payment required - stopping.")
                 return []
             resp.raise_for_status()
             data = resp.json()
@@ -195,7 +199,7 @@ def _update_episodic_batch(results):
                 if rec.metadata:
                     try:
                         existing_meta = json.loads(rec.metadata) if isinstance(rec.metadata, str) else (rec.metadata or {})
-                    except:
+                    except Exception:
                         existing_meta = {}
                 existing_meta["title"] = r["title"]
                 rec.metadata = json.dumps(existing_meta)
@@ -242,7 +246,6 @@ def run():
 
     if cp["phase"] >= 2:
         _log("Phase 2 (LLM summarization) already complete. Skipping.")
-        phase2_done = total
     else:
         # Phase 1: LLM summarization
         _log_phase("Phase 1: LLM Narrative Summarization")
@@ -271,7 +274,7 @@ def run():
                 break
 
             # Update DB with new summaries + titles
-            updated = _update_episodic_batch(results)
+            _update_episodic_batch(results)
             summarized += len(batch_models)
             cp["episodic_summarized"] = summarized
             _save_cp(cp)

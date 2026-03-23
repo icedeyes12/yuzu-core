@@ -10,7 +10,6 @@
 
 #!/usr/bin/env python3
 import argparse
-import os
 import sys
 from encryption import encryptor
 from backup import BackupManager

@@ -2,11 +2,11 @@
 # [DESCRIPTION: Memory extraction layer - semantic + episodic writers with embeddings]
 
 import re
-import struct
 from datetime import datetime
 from database import (
-    get_db_session, SemanticMemory, EpisodicMemory, Message
+    get_db_session, SemanticMemory, EpisodicMemory
 )
+from memory.embedder import embed_text, vec_to_blob
 
 
 # Keywords that indicate preference or identity facts
@@ -27,17 +27,6 @@ _EMOTIONAL_KEYWORDS = [
     'marah', 'kesal', 'sedih', 'senang', 'sayang', 'benci',
     'takut', 'khawatir', 'kecewa',
 ]
-
-
-def _vec_to_blob(vec: list[float]) -> bytes:
-    """Serialize a float list to bytes for SQLite BLOB storage."""
-    return struct.pack(f'{len(vec)}f', *vec)
-
-
-def _blob_to_vec(blob: bytes) -> list[float]:
-    """Deserialize bytes back to float list."""
-    count = len(blob) // 4
-    return list(struct.unpack(f'{count}f', blob))
 
 
 def extract_semantic_facts(messages):
@@ -111,7 +100,6 @@ def generate_episodic_summary(messages):
 def _embed_text(text: str) -> list[float] | None:
     """Embed a single text via Chutes API. Returns None on failure."""
     try:
-        from memory.embedder import embed_text
         return embed_text(text)
     except Exception as e:
         print(f"[WARNING] Embedding failed: {e}")
@@ -140,9 +128,8 @@ def upsert_semantic_memory(session_id, entity, relation, target):
             existing.confidence = min(existing.confidence + 0.1, 1.0)
             existing.access_count += 1
             existing.last_accessed = datetime.now()
-            # Re-embed on reinforcement
             if vector:
-                existing.embedding_vector = _vec_to_blob(vector)
+                existing.embedding_vector = vec_to_blob(vector)
         else:
             new_mem = SemanticMemory(
                 session_id=session_id,
@@ -151,7 +138,7 @@ def upsert_semantic_memory(session_id, entity, relation, target):
                 target=target,
                 confidence=0.5,
                 importance=0.5,
-                embedding_vector=_vec_to_blob(vector) if vector else None,
+                embedding_vector=vec_to_blob(vector) if vector else None,
                 last_accessed=datetime.now(),
                 access_count=1,
             )
@@ -167,7 +154,7 @@ def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance
         mem = EpisodicMemory(
             session_id=session_id,
             summary=summary,
-            embedding=_vec_to_blob(vector) if vector else None,
+            embedding=vec_to_blob(vector) if vector else None,
             importance=importance,
             emotional_weight=emotional_weight,
             last_accessed=datetime.now(),

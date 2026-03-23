@@ -1,4 +1,3 @@
-import json
 import os
 import requests
 from datetime import datetime
@@ -43,7 +42,7 @@ def execute(arguments, **kwargs):
         print(f"[IMAGE TOOL] Endpoint: {endpoint}")
 
         # Runtime model logging (mandatory per spec)
-        print(f"[IMAGE TOOL]")
+        print("[IMAGE TOOL]")
         print(f"Selected model: {image_model}")
         print(f"Endpoint: {endpoint}")
 

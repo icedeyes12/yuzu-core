@@ -9,7 +9,6 @@
 # [LICENSE: MIT]
 
 import requests
-import json
 import base64
 import re
 import time
@@ -18,7 +17,6 @@ import hashlib
 import shutil
 import subprocess
 from urllib.parse import unquote
-from datetime import datetime
 from database import Database
 from typing import List, Dict, Optional, Tuple
 
@@ -288,7 +286,7 @@ class MultimodalTools:
             self.image_cache[image_url] = (time.time(), result)
             return result
             
-        except Exception as e:
+        except Exception:
             return None
     
     def format_vision_message(self, user_message: str, provider: str = None) -> List[Dict]:
@@ -402,7 +400,7 @@ class MultimodalTools:
                     }
                 })
                 
-            except Exception as e:
+            except Exception:
                 pass
         
         return [{"role": "user", "content": content}]

@@ -11,7 +11,6 @@ from Crypto.Cipher import ChaCha20_Poly1305
 from Crypto.Random import get_random_bytes
 import base64
 import os
-import json
 import sys
 
 class ModernEncryptor:
@@ -87,7 +86,7 @@ class ModernEncryptor:
             # This happens if the key is wrong or data is corrupted/tampered
             print("Integrity Check Failed: Data corrupted or wrong key.")
             return encrypted_text
-        except Exception as e:
+        except Exception:
             # print(f"Decryption error: {e}") # Debug only
             return encrypted_text
 

@@ -8,14 +8,14 @@
 # [REPOSITORY: https://guthib.com/icedeyes12]
 # [LICENSE: MIT]
 
-from flask import Flask, render_template, request, jsonify, send_from_directory, session
+from flask import Flask, render_template, request, jsonify, send_from_directory, session, Response
+import json
 import os
 from datetime import datetime
-from app import handle_user_message, start_session, end_session_cleanup, summarize_memory, summarize_global_player_profile
-from app import get_available_providers, get_all_models, set_preferred_provider, get_vision_capabilities
+from app import handle_user_message, handle_user_message_streaming, start_session, end_session_cleanup, summarize_memory, summarize_global_player_profile
+from app import set_preferred_provider, get_vision_capabilities
 from database import Database
 from providers import get_ai_manager
-from tools import multimodal_tools
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -82,7 +82,7 @@ def about():
 def serve_sidebar():
     try:
         return send_from_directory('templates', 'sidebar.html')
-    except:
+    except Exception:
         return """
         <div class="sidebar" id="mainSidebar">
             <div class="sidebar-header">
@@ -155,7 +155,7 @@ def api_send_message():
         print(f"Web message: {user_message[:200]}...")
         
         active_session = Database.get_active_session()
-        session_id = active_session['id']
+        active_session['id']
         
         ai_reply = handle_user_message(user_message, interface="web")
         
@@ -219,7 +219,7 @@ def api_send_message_with_images():
         print(f"Processing message with {len(image_files)} images")
         
         active_session = Database.get_active_session()
-        session_id = active_session['id']
+        active_session['id']
         
         saved_images = []
         image_markdowns = []
@@ -344,7 +344,7 @@ def api_end_session():
         try:
             start = datetime.fromisoformat(start_time)
             duration = (datetime.now() - start).total_seconds() / 60
-        except:
+        except Exception:
             pass
     
     disconnect_msg = (
@@ -472,7 +472,7 @@ def api_rebuild_structured_memory():
         process_messages_for_memory(session_id, recent)
 
         # Create conversation segments
-        segment_count = segment_session(session_id)
+        segment_session(session_id)
 
         # Get current memory stats
         from database import get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
@@ -636,7 +636,7 @@ def api_browser_unload():
         try:
             start = datetime.fromisoformat(start_time)
             duration = (datetime.now() - start).total_seconds() / 60
-        except:
+        except Exception:
             pass
     
     disconnect_msg = (

@@ -14,9 +14,9 @@ import hashlib
 from datetime import datetime
 from contextlib import contextmanager
 from encryption import encryptor
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, Float, LargeBinary, ForeignKey, Index
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, Float, LargeBinary, Index
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # SQLAlchemy setup
@@ -176,7 +176,7 @@ def migrate_api_keys_from_files(session):
                         
                         migrated_count += 1
                         
-            except Exception as e:
+            except Exception:
                 pass
     
     return migrated_count
@@ -344,7 +344,7 @@ def init_db():
         message_count = session.query(Message).count()
         apikey_count = session.query(APIKey).count()
         
-        print(f"[DB AUDIT] Database initialization complete")
+        print("[DB AUDIT] Database initialization complete")
         print(f"[DB AUDIT] Profiles: {profile_count}")
         print(f"[DB AUDIT] Chat Sessions: {session_count}")
         print(f"[DB AUDIT] Messages: {message_count}")
@@ -855,7 +855,7 @@ class Database:
                     try:
                         dt = datetime.strptime(msg.timestamp, '%Y-%m-%d %H:%M:%S')
                         formatted_timestamp = dt.strftime('[%Y-%m-%d %H:%M:%S]')
-                    except:
+                    except Exception:
                         formatted_timestamp = f"[{msg.timestamp}]"
                     ai_formatted_content = f"{content} {formatted_timestamp}"
                     formatted_messages.append({
@@ -1052,10 +1052,10 @@ class Database:
     def get_encryption_status():
         with get_db_session() as session:
             total_messages = session.query(Message).count()
-            encrypted_messages = session.query(Message).filter(Message.content_encrypted == True).count()
+            encrypted_messages = session.query(Message).filter(Message.content_encrypted).count()
             
             total_keys = session.query(APIKey).count()
-            encrypted_keys = session.query(APIKey).filter(APIKey.key_encrypted == True).count()
+            encrypted_keys = session.query(APIKey).filter(APIKey.key_encrypted).count()
             
             return {
                 'messages': {
@@ -1079,7 +1079,7 @@ class Database:
     def get_all_encrypted_messages():
         """Get all messages that are still encrypted (for migration purposes)"""
         with get_db_session() as session:
-            messages = session.query(Message).filter(Message.content_encrypted == True).all()
+            messages = session.query(Message).filter(Message.content_encrypted).all()
             
             result = []
             for msg in messages:

@@ -11,19 +11,16 @@
 # ==========================================================
 
 import requests
-import time
 import os
-import hashlib
-import secrets
 import re
 import json
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Optional, List
-from database import Database, ALL_TOOL_ROLES
+from database import Database
 from providers import get_ai_manager, reload_ai_manager
 from tools import multimodal_tools
-from tools.registry import execute_tool, get_tool_role, is_terminal_tool, TOOL_ROLE_MAP
+from tools.registry import execute_tool, get_tool_role, TOOL_ROLE_MAP
 # ---------------------------------------------------------------------------
 # Persistent visual context buffer (per-session, runtime-only)
 # Stores the last processed image as base64 for N follow-up turns so the
@@ -318,7 +315,7 @@ def handle_user_message(user_message, interface="terminal"):
       - Final response is NEVER empty
       - Image tools are TERMINAL (no synthesis pass on success)
     """
-    with UserContext() as context:
+    with UserContext():
         profile = Database.get_profile()
         
         if not user_message.strip():
@@ -334,7 +331,7 @@ def handle_user_message(user_message, interface="terminal"):
         # generate_ai_response appends it to context in-memory only
         try:
             raw_ai_response = generate_ai_response(profile, user_message, interface, session_id)
-        except Exception as e:
+        except Exception:
             # Persist user message even on LLM failure to avoid conversation loss
             Database.add_message('user', user_message, session_id=session_id,
                                  image_paths=cached_image_paths if cached_image_paths else None)
@@ -433,7 +430,7 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
     Same architecture as handle_user_message but yields chunks incrementally.
     Tool detection and synthesis pass logic is identical.
     """
-    with UserContext() as context:
+    with UserContext():
         profile = Database.get_profile()
         
         if not user_message.strip():
@@ -586,7 +583,7 @@ def _build_generation_context(profile, session_id, interface="terminal", user_me
     """Shared context building logic for both streaming and non-streaming responses"""
     from datetime import datetime
 
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    datetime.now().strftime("%Y-%m-%d %H:%M")
     affection = profile.get('affection', 50)
 
     if affection < 25:
@@ -1489,11 +1486,11 @@ Reply with ONLY the title, nothing else."""
         else:
             return None
             
-    except Exception as e:
+    except Exception:
         return None
 
 def end_session_cleanup(profile, interface="terminal", unexpected_exit=False):
-    with UserContext() as context:
+    with UserContext():
         active_session = Database.get_active_session()
         session_id = active_session['id']
         
@@ -1508,7 +1505,7 @@ def end_session_cleanup(profile, interface="terminal", unexpected_exit=False):
             try:
                 start = datetime.fromisoformat(start_time)
                 duration = (datetime.now() - start).total_seconds() / 60
-            except:
+            except Exception:
                 pass
         
         if unexpected_exit:
@@ -1548,19 +1545,19 @@ def end_session_cleanup(profile, interface="terminal", unexpected_exit=False):
         
         if interface == "terminal":
             if unexpected_exit:
-                farewell = f"Connection lost at {end_time}... system logs corrupted"
+                pass
             else:
                 if duration < 1:
-                    farewell = f"Quick session ended at {end_time}... Come back soon!"
+                    pass
                 elif duration < 5:
-                    farewell = f"Short session ended at {end_time}... See you next time!"
+                    pass
                 else:
-                    farewell = f"Closing connection at {end_time} after {duration:.1f} minutes together... Goodbye!"
+                    pass
         
         return disconnect_msg
 
 def start_session(interface="terminal"):
-    with UserContext() as context:
+    with UserContext():
         profile = Database.get_profile()
         active_session = Database.get_active_session()
         session_id = active_session['id']
@@ -1707,13 +1704,13 @@ def session_context_analysis(prompt, api_key):
         else:
             return None
             
-    except Exception as e:
+    except Exception:
         return None
 
 def summarize_global_player_profile():
     """Analyze ALL conversation history across ALL sessions with optimized sampling"""
     all_sessions = Database.get_all_sessions()
-    profile = Database.get_profile()
+    Database.get_profile()
     
     # CONFIGURABLE SETTINGS
     MAX_MSGS_PER_SESSION = 2000           # Messages per session limit
@@ -1819,11 +1816,11 @@ def summarize_global_player_profile():
         # Try to keep complete sessions by removing oldest sessions first
         while len(conversation_text) > MAX_CONTEXT_CHARS and len(all_conversations) > 1:
             # Remove oldest session (first in list after reverse sort)
-            removed_session = all_conversations.pop(0)
+            all_conversations.pop(0)
             conversation_text = "".join(all_conversations)
             print(f"[INFO] Removed oldest session, now {len(conversation_text):,} chars")
     
-    print(f"[INFO] Analysis Summary:")
+    print("[INFO] Analysis Summary:")
     print(f"  - Sessions total: {len(all_sessions)}")
     print(f"  - Sessions with data: {total_sessions_with_data}")
     print(f"  - Sessions analyzed: {len(all_conversations)}")
@@ -1876,7 +1873,7 @@ Relationship Dynamics: [Provide analysis of the relationship dynamics between Us
         print("[ERROR] No OpenRouter API key found")
         return False
     
-    print(f"[INFO] Sending to Server...")
+    print("[INFO] Sending to Server...")
     
     summary_text = global_profile_analysis(analysis_prompt, openrouter_key)
     
@@ -1917,7 +1914,7 @@ Relationship Dynamics: [Provide analysis of the relationship dynamics between Us
             
             # Success report
             print(f"\n{'='*50}")
-            print(f"GLOBAL PROFILE UPDATE COMPLETE!")
+            print("GLOBAL PROFILE UPDATE COMPLETE!")
             print(f"{'='*50}")
             print(f"✅ Sessions analyzed: {len(all_conversations)}")
             print(f"✅ Messages processed: {total_messages_processed}")
@@ -1925,7 +1922,7 @@ Relationship Dynamics: [Provide analysis of the relationship dynamics between Us
             print(f"✅ Player summary: {len(current_memory.get('player_summary', '')):,} chars")
             print(f"✅ Likes identified: {len(current_memory.get('key_facts', {}).get('likes', []))}")
             print(f"✅ Personality traits: {len(current_memory.get('key_facts', {}).get('personality_traits', []))}")
-            print(f"✅ Relationship analysis saved")
+            print("✅ Relationship analysis saved")
             print(f"{'='*50}")
             
             return True
@@ -2124,7 +2121,7 @@ def global_profile_analysis(prompt: str, api_key: str) -> Optional[str]:
                     print("[WARNING] GLM-4.7 not available, trying alternatives...")
                     return _try_alternative_models(prompt, api_key)
                     
-            except:
+            except Exception:
                 error_msg += f" - {response.text[:200]}"
                 print(f"[ERROR] {error_msg}")
             
