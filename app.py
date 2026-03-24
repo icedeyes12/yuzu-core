@@ -1467,7 +1467,7 @@ Reply with ONLY the title, nothing else."""
         }
         
         response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            "https://llm.chutes.ai/v1/chat/completions",
             headers=headers,
             json=data,
             timeout=30
@@ -1686,7 +1686,7 @@ def session_context_analysis(prompt, api_key):
         headers["Authorization"] = f"Bearer {api_key}"
         
         data = {
-            "model": "qwen/qwen3-235b-a22b-2507",
+            "model": "Qwen/Qwen3-Next-80B-A3B-Instruct",
             "messages": [
                 {
                     "role": "system", 
@@ -1703,7 +1703,7 @@ def session_context_analysis(prompt, api_key):
         }
         
         response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            "https://llm.chutes.ai/v1/chat/completions",
             headers=headers,
             json=data,
             timeout=60
@@ -2063,7 +2063,7 @@ def global_profile_analysis(prompt: str, api_key: str) -> Optional[str]:
     
     try:
         
-        model = "qwen/qwen3-235b-a22b-2507"
+        model = "Qwen/Qwen3-Next-80B-A3B-Instruct"
         
         # Optimize for long context analysis
         data = {
@@ -2101,7 +2101,7 @@ def global_profile_analysis(prompt: str, api_key: str) -> Optional[str]:
         print(f"[DEBUG] Max response tokens: {data['max_tokens']}")
         
         response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            "https://llm.chutes.ai/v1/chat/completions",
             headers=headers,
             json=data,
             timeout=300  # 5 minute timeout for large analysis
@@ -2192,7 +2192,7 @@ def _try_alternative_models(prompt: str, api_key: str) -> Optional[str]:
             }
             
             response = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
+                "https://llm.chutes.ai/v1/chat/completions",
                 headers=headers,
                 json=data,
                 timeout=180
@@ -2256,7 +2256,7 @@ def _try_free_model(prompt: str, api_key: str) -> Optional[str]:
             }
             
             response = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
+                "https://llm.chutes.ai/v1/chat/completions",
                 headers=headers,
                 json=data,
                 timeout=300
