@@ -1090,14 +1090,15 @@ html, body {
 
 /* === CONSOLE PANEL === */
 .console-panel {
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid #30363d;
   background: #0d1117;
-  max-height: 120px;
+  max-height: 100px;
   overflow-y: auto;
   font-family: 'Hack', 'Fira Code', 'Consolas', monospace;
   font-size: 11px;
   line-height: 1.5;
   display: none;
+  flex-shrink: 0;
 }
 .console-panel.visible { display: block; }
 .console-header {
