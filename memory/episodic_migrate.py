@@ -18,9 +18,9 @@ from database import get_db_session, EpisodicMemory
 
 CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-8b.chutes.ai/v1/embeddings"
 CHUTES_CHAT_ENDPOINT = "https://llm.chutes.ai/v1/chat/completions"
-EXTRACTION_MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE"
+EXTRACTION_MODEL = "Qwen/Qwen3-Next-80B-A3B-Instruct"
 BATCH_SIZE = 30  # episodes per LLM call
-LLM_TIMEOUT = 120
+LLM_TIMEOUT = 90
 CHECKPOINT_FILE = os.path.join(os.path.dirname(__file__), 'episodic_migrate_checkpoint.json')
 
 OR_KEY = None
@@ -195,14 +195,8 @@ def _update_episodic_batch(results):
             rec = session.query(EpisodicMemory).filter_by(id=r["id"]).first()
             if rec:
                 # Store title in metadata
-                existing_meta = {}
-                if rec.metadata:
-                    try:
-                        existing_meta = json.loads(rec.metadata) if isinstance(rec.metadata, str) else (rec.metadata or {})
-                    except Exception:
-                        existing_meta = {}
-                existing_meta["title"] = r["title"]
-                rec.metadata = json.dumps(existing_meta)
+                # Store title as prefix in summary (no metadata column needed)
+                rec.summary = f"[{r["title"]}] {r["summary"]}"
                 # Update summary with narrative
                 rec.summary = r["summary"]
                 updated += 1
