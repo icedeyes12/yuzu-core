@@ -259,7 +259,7 @@ def run():
             batch = remaining[batch_start:batch_start + BATCH_SIZE]
             _log(f"Batch {batch_start // BATCH_SIZE + 1}: episodes {batch_start + 1}–{batch_start + len(batch)}")
 
-            batch_dicts = [{"id": r.id, "raw_snippets": r.summary} for r in batch]
+            batch_dicts = [{"id": r["id"], "raw_snippets": r["summary"]} for r in batch]
             results = _summarize_episodes_batch(batch_dicts)
             if not results:
                 _log("No results or budget exhausted. Saving checkpoint and stopping.")
