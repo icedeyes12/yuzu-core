@@ -456,12 +456,7 @@ class MessageRenderer {
             .replace(/&gt;/g, '>')
             .replace(/&amp;/g, '&')
             .replace(/&quot;/g, '"');
-        const css = this._extractInlineStyles(rawHtml);
-        const body = this._stripHtmlOuter(rawHtml);
-        const doc = iframe.contentDocument || iframe.contentWindow.document;
-        doc.open();
-        doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' + css + '</style></head><body>' + body + '</body></html>');
-        doc.close();
+        iframe.srcdoc = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' + this._extractInlineStyles(rawHtml) + '</style></head><body>' + this._stripHtmlOuter(rawHtml) + '</body></html>';
     }
 
     closeHtmlModal() {
