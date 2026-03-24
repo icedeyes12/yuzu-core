@@ -206,7 +206,8 @@ class MessageRenderer {
         btn.classList.add('active');
         btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>Hide`;
         const sanitized = this._sanitizeHtml(code);
-        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${this._extractInlineStyles(sanitized)}</style></head><body>${this._stripHtmlOuter(sanitized)}</body></html>`;
+        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${this._extractInlineStyles(sanitized)}</style></head><body>${this._stripHtmlOuter(sanitized)}<script>try { (function(){var _s=function(t,a){try{return typeof a==='object'?JSON.stringify(a,null,2):String(a)}catch(e){return String(a)}};var _send=function(t,n){try{var s=Array.from(n).map(_s).join(" ");window.parent.postMessage({__yuzuConsole:true,type:t,text:s},'*')}catch(e){}};
+console.log=function(){_send("log",arguments)};console.warn=function(){_send("warn",arguments)};console.error=function(){_send("error",arguments)};console.info=function(){_send("info",arguments)};window.onerror=function(m){_send("error",[m]);return false};}())}catch(e){}</script></body></html>`;
         let iframe = previewWrap.querySelector('iframe');
         if (!iframe) {
             iframe = document.createElement('iframe');
@@ -217,7 +218,7 @@ class MessageRenderer {
         iframe.style.display = 'block';
         // Use srcdoc to bypass Android WebView cross-origin restrictions
         try {
-            iframe.srcdoc = html;
+iframe.srcdoc = html;
         } catch(e) {
             iframe.style.display = 'none';
             let err = previewWrap.querySelector('.preview-error');
@@ -461,7 +462,6 @@ class MessageRenderer {
         // srcdoc handles HTML natively - just pass the unescaped code
         iframe.srcdoc = code;
     }
-
     closeHtmlModal() {
         const modal = document.getElementById('html-preview-modal');
         if (modal) modal.classList.remove('active', 'fullscreen');
@@ -490,3 +490,49 @@ class MessageRenderer {
 
 // Create global renderer instance
 const renderer = new MessageRenderer();
+
+// === CONSOLE INTERCEPTOR (injected into iframe) ===
+window._consoleInterceptor = `
+(function() {
+  var _send = function(type, args) {
+    try {
+      var str = Array.from(args).map(function(a) {
+        try { return typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a); } catch(e) { return String(a); }
+      }).join(' ');
+      window.parent.postMessage({__yuzuConsole: true, type: type, text: str}, '*');
+    } catch(e) {}
+  };
+  console.log   = function() { _send('log', arguments); };
+  console.warn  = function() { _send('warn', arguments); };
+  console.error = function() { _send('error', arguments); };
+  console.info  = function() { _send('info', arguments); };
+  window.onerror = function(msg, src, line) {
+    _send('error', [msg + ' (line ' + line + ')']); return false;
+  };
+})();
+`;
+
+// === CONSOLE PANEL GLOBAL HANDLERS ===
+window.addEventListener('message', function(e) {
+    if (!e.data || !e.data.__yuzuConsole) return;
+    var type = e.data.type || 'log';
+    var text = e.data.text || '';
+    var panel = document.getElementById('console-panel');
+    var output = document.getElementById('console-output');
+    if (!panel || !output) return;
+    panel.classList.add('visible');
+    var line = document.createElement('div');
+    line.className = 'console-line ' + type;
+    line.textContent = (type === 'error' ? '\u274C ' : type === 'warn' ? '\u26A0 ' : '') + text;
+    var empty = output.querySelector('.console-empty');
+    if (empty) empty.remove();
+    output.appendChild(line);
+    panel.scrollTop = panel.scrollHeight;
+});
+
+window._clearConsole = function() {
+    var output = document.getElementById('console-output');
+    if (output) { output.innerHTML = '<div class="console-empty">(console output will appear here)</div>'; }
+    var panel = document.getElementById('console-panel');
+    if (panel) panel.classList.remove('visible');
+};
