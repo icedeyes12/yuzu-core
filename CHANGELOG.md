@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Embedding model for semantic memory search
 - Preview button for HTML codeblocks
+- Docker installation support (Dockerfile, docker-compose.yml)
 
 ### Fixed
 - Various bug fixes
