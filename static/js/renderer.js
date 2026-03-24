@@ -444,6 +444,31 @@ class MessageRenderer {
         }
         return { href, title, text };
     }
+
+    showHtmlPreviewModal(btn) {
+        const code = decodeURIComponent(btn.dataset.code || '');
+        const modal = document.getElementById('html-preview-modal');
+        const iframe = document.getElementById('preview-iframe');
+        if (!modal || !iframe || !code) return;
+        modal.classList.add('active');
+        const rawHtml = code
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&')
+            .replace(/&quot;/g, '"');
+        const css = this._extractInlineStyles(rawHtml);
+        const body = this._stripHtmlOuter(rawHtml);
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        doc.open();
+        doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' + css + '</style></head><body>' + body + '</body></html>');
+        doc.close();
+    }
+
+    closeHtmlModal() {
+        const modal = document.getElementById('html-preview-modal');
+        if (modal) modal.classList.remove('active');
+    }
+
 }
 
 // Create global renderer instance
