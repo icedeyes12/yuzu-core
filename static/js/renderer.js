@@ -182,75 +182,71 @@ class MessageRenderer {
                trimmed.includes('<html') && trimmed.includes('<body');
     }
 
-    _sanitizeHtml(html) {
-        // Parse and re-serialize to strip external resources
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        // Remove external scripts
-        doc.querySelectorAll('script[src]').forEach(el => el.remove());
-        // Remove external stylesheets
-        doc.querySelectorAll('link[rel="stylesheet"][href]').forEach(el => el.remove());
-        // Remove external images (keep data URI)
-        doc.querySelectorAll('img[src]').forEach(el => {
-            const src = el.getAttribute('src') || '';
-            if (!src.startsWith('data:') && !src.startsWith('/')) {
-                el.remove();
-            }
-        });
-        // Remove external links (keep internal/data)
-        doc.querySelectorAll('a[href]').forEach(el => {
-            const href = el.getAttribute('href') || '';
-            if (!href.startsWith('#') && !href.startsWith('/') && !href.startsWith('data:')) {
-                el.remove();
-            }
-        });
-        return doc.documentElement.outerHTML;
-    }
-
     toggleHtmlPreview(btn, encodedCode) {
         const code = decodeURIComponent(encodedCode);
         const container = btn.closest('.code-block-container');
-        this._renderHtmlPreview(container, code);
-    }
-
-    _renderHtmlPreview(container, code) {
-        // Find or create preview elements
-        let previewContainer = container.querySelector('.html-preview-container');
-        const previewBtn = container.querySelector('.preview-html-btn');
-        if (!previewContainer) return;
-
-        const iframe = previewContainer.querySelector('.preview-iframe');
-        const placeholder = previewContainer.querySelector('.preview-placeholder');
-        const errorEl = previewContainer.querySelector('.preview-error');
-
-        if (previewBtn.classList.contains('active')) {
-            // Hide preview
-            previewContainer.classList.add('hidden');
-            previewBtn.classList.remove('active');
-            previewBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8z"/><circle cx="12" cy="12" r="3"/></svg>Preview`;
+        if (!container) return;
+        let previewWrap = container.querySelector('.html-preview-wrap');
+        if (!previewWrap) {
+            previewWrap = document.createElement('div');
+            previewWrap.className = 'html-preview-wrap hidden';
+            container.appendChild(previewWrap);
+        }
+        if (!previewWrap.classList.contains('hidden')) {
+            previewWrap.classList.add('hidden');
+            btn.classList.remove('active');
+            btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8z"/><circle cx="12" cy="12" r="3"/></svg>Preview`;
             return;
         }
-
-        // Show preview
-        previewContainer.classList.remove('hidden');
-        previewBtn.classList.add('active');
-        previewBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>Hide`;
-
-        if (placeholder) placeholder.remove();
-        if (errorEl) errorEl.remove();
-
+        previewWrap.classList.remove('hidden');
+        btn.classList.add('active');
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>Hide`;
+        const sanitized = this._sanitizeHtml(code);
+        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${this._extractInlineStyles(sanitized)}</style></head><body>${this._stripHtmlOuter(sanitized)}</body></html>`;
+        let iframe = previewWrap.querySelector('iframe');
+        if (!iframe) {
+            iframe = document.createElement('iframe');
+            iframe.className = 'preview-iframe';
+            iframe.setAttribute('sandbox', 'allow-scripts');
+            previewWrap.appendChild(iframe);
+        }
+        iframe.style.display = 'block';
         try {
-            const sanitized = this._sanitizeHtml(code);
-            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-            iframeDoc.open();
-            iframeDoc.write(sanitized);
-            iframeDoc.close();
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            doc.open();
+            doc.write(html);
+            doc.close();
         } catch(e) {
             iframe.style.display = 'none';
-            const err = document.createElement('div');
-            err.className = 'preview-error';
-            err.textContent = 'Preview error: ' + e.message;
-            previewContainer.appendChild(err);
+            let err = previewWrap.querySelector('.preview-error');
+            if (!err) {
+                err = document.createElement('div');
+                err.className = 'preview-error';
+                previewWrap.appendChild(err);
+            }
+            err.textContent = 'Error: ' + e.message;
         }
+    }
+    _extractInlineStyles(html) {
+        const match = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+        return match ? match[1] : '';
+    }
+    _stripHtmlOuter(html) {
+        return html
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+            .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
+            .replace(/<!DOCTYPE[^>]*>/gi, '')
+            .replace(/<html[^>]*>/gi, '')
+            .replace(/<\/html>/gi, '')
+            .replace(/<body[^>]*>/gi, '')
+            .replace(/<\/body>/gi, '')
+            .trim();
+    }
+    _sanitizeHtml(html) {
+        return html
+            .replace(/<script[\s\S]*?<\/script>/gi, '')
+            .replace(/on\w+\s*=/gi, 'data-disabled-')
+            .replace(/javascript:/gi, '');
     }
 
     normalizeImagePath(path) {
