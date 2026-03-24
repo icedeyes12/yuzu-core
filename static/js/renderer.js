@@ -446,22 +446,44 @@ class MessageRenderer {
     }
 
     showHtmlPreviewModal(btn) {
-        const code = decodeURIComponent(btn.dataset.code || '');
+        const rawCode = decodeURIComponent(btn.dataset.code || '');
         const modal = document.getElementById('html-preview-modal');
         const iframe = document.getElementById('preview-iframe');
-        if (!modal || !iframe || !code) return;
+        if (!modal || !iframe || !rawCode) return;
+        // Unescape HTML entities (code may be double-encoded from marked.js escaping)
+        let code = rawCode
+            .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'").replace(/&#x27;/g, "'");
+        // Allow srcdoc to handle the rest (don't over-unescape)
         modal.classList.add('active');
-        const rawHtml = code
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&amp;/g, '&')
-            .replace(/&quot;/g, '"');
-        iframe.srcdoc = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' + this._extractInlineStyles(rawHtml) + '</style></head><body>' + this._stripHtmlOuter(rawHtml) + '</body></html>';
+        document.body.style.overflow = 'hidden';
+        // srcdoc handles HTML natively - just pass the unescaped code
+        iframe.srcdoc = code;
     }
 
     closeHtmlModal() {
         const modal = document.getElementById('html-preview-modal');
-        if (modal) modal.classList.remove('active');
+        if (modal) modal.classList.remove('active', 'fullscreen');
+        document.body.style.overflow = '';
+    }
+    togglePreviewTheme() {
+        const body = document.getElementById('preview-body');
+        const btn = document.getElementById('theme-toggle-btn');
+        if (!body || !btn) return;
+        const isLight = body.classList.toggle('preview-body-light');
+        btn.classList.toggle('active', isLight);
+        const iframe = document.getElementById('preview-iframe');
+        if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage(isLight ? 'light' : 'dark', '*');
+        }
+    }
+    togglePreviewFullscreen() {
+        const modal = document.getElementById('html-preview-modal');
+        const btn = document.getElementById('fullscreen-toggle-btn');
+        if (!modal || !btn) return;
+        const isFull = modal.classList.toggle('fullscreen');
+        btn.classList.toggle('active', isFull);
     }
 
 }
