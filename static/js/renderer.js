@@ -207,15 +207,13 @@ class MessageRenderer {
         if (!iframe) {
             iframe = document.createElement('iframe');
             iframe.className = 'preview-iframe';
-            iframe.setAttribute('sandbox', 'allow-scripts');
+            iframe.setAttribute('sandbox', 'allow-scripts allow-modals');
             previewWrap.appendChild(iframe);
         }
         iframe.style.display = 'block';
+        // Use srcdoc to bypass Android WebView cross-origin restrictions
         try {
-            const doc = iframe.contentDocument || iframe.contentWindow.document;
-            doc.open();
-            doc.write(html);
-            doc.close();
+            iframe.srcdoc = html;
         } catch(e) {
             iframe.style.display = 'none';
             let err = previewWrap.querySelector('.preview-error');
