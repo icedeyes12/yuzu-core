@@ -74,7 +74,7 @@ class MessageRenderer {
             'terraform': 'json', 'hcl': 'json', 'tf': 'json',
 
             // Markup family → xml
-            'html': 'xml', 'xhtml': 'xml', 'svg': 'xml', 'rss': 'xml', 'atom': 'xml',
+            'html': 'html', 'xhtml': 'html', 'svg': 'xml', 'rss': 'xml', 'atom': 'xml',
 
             // Python aliases → python
             'py': 'python', 'python3': 'python',
@@ -187,6 +187,85 @@ class MessageRenderer {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    _isHtmlCode(code) {
+        const trimmed = (code || '').trim();
+        return trimmed.startsWith('<!DOCTYPE') ||
+               trimmed.startsWith('<html') ||
+               (trimmed.startsWith('<head') && trimmed.includes('<body')) ||
+               trimmed.includes('<html') && trimmed.includes('<body');
+    }
+
+    _sanitizeHtml(html) {
+        // Parse and re-serialize to strip external resources
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        // Remove external scripts
+        doc.querySelectorAll('script[src]').forEach(el => el.remove());
+        // Remove external stylesheets
+        doc.querySelectorAll('link[rel="stylesheet"][href]').forEach(el => el.remove());
+        // Remove external images (keep data URI)
+        doc.querySelectorAll('img[src]').forEach(el => {
+            const src = el.getAttribute('src') || '';
+            if (!src.startsWith('data:') && !src.startsWith('/')) {
+                el.remove();
+            }
+        });
+        // Remove external links (keep internal/data)
+        doc.querySelectorAll('a[href]').forEach(el => {
+            const href = el.getAttribute('href') || '';
+            if (!href.startsWith('#') && !href.startsWith('/') && !href.startsWith('data:')) {
+                el.remove();
+            }
+        });
+        return doc.documentElement.outerHTML;
+    }
+
+    toggleHtmlPreview(btn, encodedCode) {
+        const code = decodeURIComponent(encodedCode);
+        const container = btn.closest('.code-block-container');
+        this._renderHtmlPreview(container, code);
+    }
+
+    _renderHtmlPreview(container, code) {
+        // Find or create preview elements
+        let previewContainer = container.querySelector('.html-preview-container');
+        const previewBtn = container.querySelector('.preview-html-btn');
+        if (!previewContainer) return;
+
+        const iframe = previewContainer.querySelector('.preview-iframe');
+        const placeholder = previewContainer.querySelector('.preview-placeholder');
+        const errorEl = previewContainer.querySelector('.preview-error');
+
+        if (previewBtn.classList.contains('active')) {
+            // Hide preview
+            previewContainer.classList.add('hidden');
+            previewBtn.classList.remove('active');
+            previewBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8z"/><circle cx="12" cy="12" r="3"/></svg>Preview`;
+            return;
+        }
+
+        // Show preview
+        previewContainer.classList.remove('hidden');
+        previewBtn.classList.add('active');
+        previewBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>Hide`;
+
+        if (placeholder) placeholder.remove();
+        if (errorEl) errorEl.remove();
+
+        try {
+            const sanitized = this._sanitizeHtml(code);
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            iframeDoc.open();
+            iframeDoc.write(sanitized);
+            iframeDoc.close();
+        } catch(e) {
+            iframe.style.display = 'none';
+            const err = document.createElement('div');
+            err.className = 'preview-error';
+            err.textContent = 'Preview error: ' + e.message;
+            previewContainer.appendChild(err);
+        }
     }
 
     normalizeImagePath(path) {
