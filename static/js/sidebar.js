@@ -1,6 +1,6 @@
 // [FILE: sidebar.js]
-// [VERSION: 1.0.0.69.3]
-// [DATE: 2025-08-12]
+// // [VERSION: 1.0.69.28v4]
+// [DATE: 2026-03-24]
 // [PROJECT: HKKM - Yuzu Companion]
 // [DESCRIPTION: Unified sidebar management functionality with session actions - Markdown Safe]
 // [AUTHOR: Project Lead: Bani Baskara]
