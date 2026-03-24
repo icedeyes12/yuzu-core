@@ -185,7 +185,7 @@ class MessageRenderer {
     }
 
     toggleHtmlPreview(btn, encodedCode) {
-        const code = decodeURIComponent(encodedCode);
+        const code = encodedCode.includes('%') ? decodeURIComponent(encodedCode) : encodedCode;
         const container = btn.closest('.code-block-container');
         if (!container) return;
         let previewWrap = container.querySelector('.html-preview-wrap');
