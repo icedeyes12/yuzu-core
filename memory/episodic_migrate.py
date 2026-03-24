@@ -70,7 +70,7 @@ def _summarize_episodes_batch(episodes, retries=5):
     Returns: list of dicts with 'id', 'title', 'summary'
     """
     episodes_text = "\n\n".join([
-        f"Episode {i+1}:\n{e['raw_text']}"
+        f"Episode {i+1}:\n{e['raw_snippets']}"
         for i, e in enumerate(episodes)
     ])
 
