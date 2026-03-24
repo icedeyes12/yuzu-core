@@ -131,11 +131,13 @@ class MessageRenderer {
             const normalizedLang = this.normalizeLanguageAlias(language);
             const fallbackLang = 'markdown';
             let highlightLang = fallbackLang;
+            // Also keep xml for html content so preview button shows
+            const isHtmlContent = normalizedLang === 'xml';
             if (normalizedLang && this.isHighlightReady && typeof hljs !== 'undefined' && hljs.getLanguage(normalizedLang)) {
                 highlightLang = normalizedLang;
             }
             const encodedCode = encodeURIComponent(code);
-            const isHtml = (normalizedLang === 'html' || normalizedLang === 'xml') && this._isHtmlCode(code);
+            const isHtml = this._isHtmlCode(code);
             const highlighted = this.isHighlightReady
                 ? hljs.highlight(code, { language: highlightLang }).value
                 : this.escapeHtml(code);
@@ -241,8 +243,8 @@ class MessageRenderer {
             .trim();
     }
     _sanitizeHtml(html) {
+        // Only strip dangerous attributes, preserve scripts (iframe is sandboxed)
         return html
-            .replace(/<script[\s\S]*?<\/script>/gi, '')
             .replace(/on\w+\s*=/gi, 'data-disabled-')
             .replace(/javascript:/gi, '');
     }
