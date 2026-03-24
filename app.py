@@ -1886,7 +1886,7 @@ Relationship Dynamics: [Provide analysis of the relationship dynamics between Us
     
     print("[INFO] Sending to Server...")
     
-    summary_text = global_profile_analysis(analysis_prompt, openrouter_key)
+    summary_text = global_profile_analysis(analysis_prompt)
     
     if summary_text:
         print(f"[SUCCESS] Analysis received: {len(summary_text):,} chars")
@@ -2052,8 +2052,9 @@ def _merge_profile_data(existing_memory: Dict, new_data: Dict) -> Dict:
     return result
 
 
-def global_profile_analysis(prompt: str, api_key: str) -> Optional[str]:
+def global_profile_analysis(prompt: str) -> Optional[str]:
     """Analyze conversation history using qwen with optimal settings"""
+    api_key = Database.get_api_key("chutes")
     headers = {
         "Content-Type": "application/json",
         "HTTP-Referer": "https://github.com/icedeyes12/yuzu-companion", 
@@ -2115,7 +2116,7 @@ def global_profile_analysis(prompt: str, api_key: str) -> Optional[str]:
             return content
             
         else:
-            error_msg = f"OpenRouter API error: {response.status_code}"
+            error_msg = f"Chutes API error: {response.status_code}"
             
             try:
                 error_data = response.json()
