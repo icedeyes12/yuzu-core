@@ -17,7 +17,7 @@ import json
 import traceback
 from datetime import datetime
 from typing import Dict, Optional, List
-from database import Database
+from .database import Database
 from providers import get_ai_manager, reload_ai_manager
 from tools import multimodal_tools
 from tools.registry import execute_tool, get_tool_role, TOOL_ROLE_MAP
@@ -408,7 +408,7 @@ def _trigger_memory_pipeline(session_id):
     Called after each user/assistant exchange.
     - Episodic: emotion-threshold gated (every emotional turn).
     - Semantic: lightweight regex, gated by message-count cooldown.
-    - Decay: time-gated (runs at most once per _DECAY_INTERVAL_HOURS).
+    - Decay: time-gated (once per _DECAY_INTERVAL_HOURS).
     """
     try:
         from memory.extractor import should_create_episodic, calculate_emotional_weight
