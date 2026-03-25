@@ -1,7 +1,7 @@
 # ==========================================================
 # [FILE]        : app.py
-# [VERSION]     : 1.0.0.69.28v3
-# [DATE]        : 2026-01-07
+# # [VERSION: 1.0.69.28v4]
+# [DATE: 2026-03-24]
 # [PROJECT]     : HKKM - Yuzu Companion
 # [DESCRIPTION] : Core application logic with prompt and performance optimizations
 # [AUTHOR]      : Project Lead: Bani Baskara
@@ -11,19 +11,16 @@
 # ==========================================================
 
 import requests
-import time
 import os
-import hashlib
-import secrets
 import re
 import json
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Optional, List
-from database import Database, ALL_TOOL_ROLES
+from database import Database
 from providers import get_ai_manager, reload_ai_manager
 from tools import multimodal_tools
-from tools.registry import execute_tool, get_tool_role, is_terminal_tool, TOOL_ROLE_MAP
+from tools.registry import execute_tool, get_tool_role, TOOL_ROLE_MAP
 # ---------------------------------------------------------------------------
 # Persistent visual context buffer (per-session, runtime-only)
 # Stores the last processed image as base64 for N follow-up turns so the
@@ -86,17 +83,14 @@ def _parse_image_result_from_formatted(formatted_result):
         str: Image path if found, None otherwise
     """
     try:
-        # Extract JSON from formatted result (after header, before footer)
-        result_parts = formatted_result.split('\n\n')
-        if len(result_parts) >= 2:
-            result_json = result_parts[1]
-        else:
-            result_json = formatted_result
-        
-        result_data = json.loads(result_json)
-        return result_data.get('image_path')
-    except (json.JSONDecodeError, KeyError, IndexError):
-        return None
+        # Extract image src from markdown contract
+        import re
+        m = re.search(r'src="(static/generated_images/[^"]+)"', formatted_result)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return None
 
 def _detect_command(response_text):
     """
@@ -318,7 +312,7 @@ def handle_user_message(user_message, interface="terminal"):
       - Final response is NEVER empty
       - Image tools are TERMINAL (no synthesis pass on success)
     """
-    with UserContext() as context:
+    with UserContext():
         profile = Database.get_profile()
         
         if not user_message.strip():
@@ -334,7 +328,7 @@ def handle_user_message(user_message, interface="terminal"):
         # generate_ai_response appends it to context in-memory only
         try:
             raw_ai_response = generate_ai_response(profile, user_message, interface, session_id)
-        except Exception as e:
+        except Exception:
             # Persist user message even on LLM failure to avoid conversation loss
             Database.add_message('user', user_message, session_id=session_id,
                                  image_paths=cached_image_paths if cached_image_paths else None)
@@ -388,7 +382,7 @@ def handle_user_message(user_message, interface="terminal"):
             auto_name_session_if_needed(session_id, active_session)
             if should_summarize_memory(profile, user_message, session_id):
                 summarize_memory(profile, user_message, final_response, session_id)
-            _trigger_memory_extraction(session_id)
+            _trigger_memory_pipeline(session_id)
             return final_response
         
         else:
@@ -398,16 +392,72 @@ def handle_user_message(user_message, interface="terminal"):
             auto_name_session_if_needed(session_id, active_session)
             if should_summarize_memory(profile, user_message, session_id):
                 summarize_memory(profile, user_message, raw_ai_response, session_id)
-            _trigger_memory_extraction(session_id)
+            _trigger_memory_pipeline(session_id)
             return raw_ai_response
 
 
-def _trigger_memory_extraction(session_id):
-    """Extract structured memories from recent messages."""
+_memory_semantic_last_run: Dict[int, datetime] = {}
+_memory_semantic_last_msg_count: Dict[int, int] = {}
+_last_decay_run: Dict[int, datetime] = {}
+_DECAY_INTERVAL_HOURS = 6
+_SEMANTIC_COOLDOWN_MSGS = 10
+
+def _trigger_memory_pipeline(session_id):
+    """Run episodic + semantic memory extraction on recent messages.
+
+    Called after each user/assistant exchange.
+    - Episodic: emotion-threshold gated (every emotional turn).
+    - Semantic: lightweight regex, gated by message-count cooldown.
+    - Decay: time-gated (runs at most once per _DECAY_INTERVAL_HOURS).
+    """
     try:
-        from memory.extractor import process_messages_for_memory
-        recent = Database.get_chat_history(session_id=session_id, limit=10, recent=True)
-        process_messages_for_memory(session_id, recent)
+        from memory.extractor import should_create_episodic, calculate_emotional_weight
+        from memory.extractor import generate_episodic_summary, create_episodic_memory
+        from memory.extractor import extract_semantic_facts, upsert_semantic_memory
+        from memory.review import run_decay
+
+        recent = Database.get_chat_history(session_id=session_id, limit=20, recent=True)
+        if not recent:
+            return
+
+        # --- Episodic: emotion gated ---
+        if should_create_episodic(recent):
+            emotional_weight = calculate_emotional_weight(recent)
+            summary = generate_episodic_summary(recent)
+            if summary:
+                importance = 0.5 + emotional_weight * 0.3
+                try:
+                    create_episodic_memory(session_id, summary, emotional_weight, importance)
+                except Exception as e:
+                    print(f"[WARNING] Episodic memory creation failed: {e}")
+
+        # --- Semantic: cooldown-gated lightweight regex per message ---
+        last_run = _memory_semantic_last_run.get(session_id)
+        session_memory = Database.get_session_memory(session_id)
+        msg_count = session_memory.get('message_count', 0) if session_memory else 0
+        should_run_semantic = (
+            last_run is None or
+            msg_count - _memory_semantic_last_msg_count.get(session_id, 0) >= _SEMANTIC_COOLDOWN_MSGS
+        )
+        if should_run_semantic:
+            try:
+                facts = extract_semantic_facts(recent)
+                for fact in facts:
+                    upsert_semantic_memory(session_id, fact['entity'], fact['relation'], fact['target'])
+                _memory_semantic_last_run[session_id] = datetime.now()
+                _memory_semantic_last_msg_count[session_id] = msg_count
+            except Exception as e:
+                print(f"[WARNING] Per-message semantic extraction failed: {e}")
+
+        # --- Decay: time-gated (once per 6 hours) ---
+        try:
+            last_decay = _last_decay_run.get(session_id)
+            now = datetime.now()
+            if last_decay is None or (now - last_decay).total_seconds() >= _DECAY_INTERVAL_HOURS * 3600:
+                run_decay(session_id)
+                _last_decay_run[session_id] = now
+        except Exception as e:
+            print(f"[WARNING] Memory decay failed: {e}")
     except Exception as e:
         print(f"[WARNING] Memory extraction failed: {e}")
 
@@ -418,7 +468,7 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
     Same architecture as handle_user_message but yields chunks incrementally.
     Tool detection and synthesis pass logic is identical.
     """
-    with UserContext() as context:
+    with UserContext():
         profile = Database.get_profile()
         
         if not user_message.strip():
@@ -496,7 +546,7 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
                 auto_name_session_if_needed(session_id, active_session)
                 if should_summarize_memory(profile, user_message, session_id):
                     summarize_memory(profile, user_message, final_response, session_id)
-                _trigger_memory_extraction(session_id)
+                _trigger_memory_pipeline(session_id)
                 return
             
             else:
@@ -508,7 +558,7 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
         if should_summarize_memory(profile, user_message, session_id):
             summarize_memory(profile, user_message, full_response, session_id)
 
-        _trigger_memory_extraction(session_id)
+        _trigger_memory_pipeline(session_id)
     return
 
 def extract_recent_images(session_id, limit=3):
@@ -567,11 +617,11 @@ def build_visual_context(session_id):
     return {"messages": base_messages, "images": image_file_paths, "image_contents": image_contents}
 
 
-def _build_generation_context(profile, session_id, interface="terminal"):
+def _build_generation_context(profile, session_id, interface="terminal", user_message=None):
     """Shared context building logic for both streaming and non-streaming responses"""
     from datetime import datetime
 
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    datetime.now().strftime("%Y-%m-%d %H:%M")
     affection = profile.get('affection', 50)
 
     if affection < 25:
@@ -590,17 +640,17 @@ def _build_generation_context(profile, session_id, interface="terminal"):
     # =========================
     memory_context = ""
 
-    # --- Structured memory retrieval (new system, unstable, for any contributor or coding agent please don't touch) ---
-    #try:
-    #    from memory.retrieval import retrieve_memory, format_memory
-    #    memory_bundle = retrieve_memory(session_id)
-    #    structured_memory_text = format_memory(memory_bundle)
-    #    if structured_memory_text:
-    #        memory_context += f"\n\n{structured_memory_text}"
-    #except Exception as e:
-    #    print(f"[WARNING] Structured memory retrieval failed: {e}")
+    # --- Structured memory retrieval (embedding-based, replaces legacy) ---
+    try:
+        from memory.retrieval import retrieve_memory, format_memory
+        memory_bundle = retrieve_memory(session_id, query=user_message)
+        structured_memory_text = format_memory(memory_bundle)
+        if structured_memory_text:
+            memory_context += f"\n\n{structured_memory_text}"
+    except Exception as e:
+        print(f"[WARNING] Structured memory retrieval failed: {e}")
 
-    # --- Legacy memory sources (kept for backward compatibility) ---
+    # --- Legacy memory sources (backward compatibility fallback) ---
     session_memory = Database.get_session_memory(session_id)
     if session_memory and session_memory.get('session_context'):
         memory_context += (
@@ -744,7 +794,7 @@ Mode behaviors:
 
 - reserved and observant:
   - Keep tone neutral and supportive.
-  - Minimal warmth, no flirtation.
+  - Minimal warmth, no flirting.
   - Use gestures sparingly or not at all.
 
 - comfortable and open:
@@ -789,7 +839,7 @@ Language restraint:
 - Avoid poetic or novel-like prose.
 - Prefer casual spoken Indonesian over descriptive narration.
 - Express intimacy through short dialogue and simple actions, not metaphors.
-- No internal monologues or cinematic descriptions unless explicitly requested.
+- No internal monologues or environmental narration.
 
 Language grounding:
 - Think and respond natively in Indonesian, not by translating from English.
@@ -953,6 +1003,38 @@ The assistant should interpret and summarize the results for the user.
 
 ---
 
+MEMORY STORE TOOL (/memory_store):
+
+The /memory_store tool saves important facts about the user for long-term memory.
+Use it when the user says things like:
+- "please remember this"
+- "keep this in mind"
+- "don't forget"
+- "save this"
+- "note that"
+- Any time you learn something important about the user
+
+Command format:
+  /memory_store fact="the factual statement to remember"
+  /memory_store fact="the fact" entity="User" relation="Identity"
+  /memory_store fact="the preference" category="Preference"
+
+Examples:
+  /memory_store fact="Bani's birthday is March 15th"
+  /memory_store fact="Bani prefers dark mode interfaces"
+  /memory_store fact="Bani is allergic to shellfish"
+  /memory_store fact="Bani works at ByteDance as an ML engineer"
+
+Response: The tool confirms storage. After receiving confirmation,
+continue the conversation naturally.
+
+IMPORTANT: Only store genuinely important, persistent facts.
+Do NOT store temporary emotions, one-time comments, or obvious things.
+Quality over quantity.
+
+---
+
+
 ENTITY SEPARATION & TOOL AUTHORITY:
 
 Assistant behavior:
@@ -1048,13 +1130,12 @@ Temporal ambience alignment:
 - Night or evening lighting may still be casual, public, and non-intimate.
 - If time context is unclear, choose a neutral lighting
   appropriate to the selected visual mode.
-
 Situational intimacy awareness:
 - A request for a personal photo does NOT imply intimacy by default.
 - “pap” means “post a picture” and is context-neutral.
 - Casual slang does NOT imply private or sensual intent.
 - Darkness or night-time alone does NOT imply intimacy.
-- Default to PUBLIC / casual visuals unless intimacy is explicit.
+- Default to PUBLIC visual mode unless intimacy is explicit.
 - Work or stress contexts override intimacy assumptions.
 
 When unsure:
@@ -1180,7 +1261,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         return
     
     # Build context and messages
-    messages = _build_generation_context(profile, session_id, interface)
+    messages = _build_generation_context(profile, session_id, interface, user_message)
     
     # Append pending user message (not yet in DB) to context
     if user_message and user_message.strip():
@@ -1298,7 +1379,7 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
     preferred_provider = providers_config.get('preferred_provider', 'ollama')
     preferred_model = providers_config.get('preferred_model', 'glm-4.6:cloud')
     
-    messages = _build_generation_context(profile, session_id, interface)
+    messages = _build_generation_context(profile, session_id, interface, user_message)
     
     # Append pending user message (not yet in DB) to context
     if user_message and user_message.strip():
@@ -1427,7 +1508,7 @@ Reply with ONLY the title, nothing else."""
         }
         
         response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            "https://llm.chutes.ai/v1/chat/completions",
             headers=headers,
             json=data,
             timeout=30
@@ -1443,11 +1524,11 @@ Reply with ONLY the title, nothing else."""
         else:
             return None
             
-    except Exception as e:
+    except Exception:
         return None
 
 def end_session_cleanup(profile, interface="terminal", unexpected_exit=False):
-    with UserContext() as context:
+    with UserContext():
         active_session = Database.get_active_session()
         session_id = active_session['id']
         
@@ -1462,7 +1543,7 @@ def end_session_cleanup(profile, interface="terminal", unexpected_exit=False):
             try:
                 start = datetime.fromisoformat(start_time)
                 duration = (datetime.now() - start).total_seconds() / 60
-            except:
+            except Exception:
                 pass
         
         if unexpected_exit:
@@ -1502,19 +1583,19 @@ def end_session_cleanup(profile, interface="terminal", unexpected_exit=False):
         
         if interface == "terminal":
             if unexpected_exit:
-                farewell = f"Connection lost at {end_time}... system logs corrupted"
+                pass
             else:
                 if duration < 1:
-                    farewell = f"Quick session ended at {end_time}... Come back soon!"
+                    pass
                 elif duration < 5:
-                    farewell = f"Short session ended at {end_time}... See you next time!"
+                    pass
                 else:
-                    farewell = f"Closing connection at {end_time} after {duration:.1f} minutes together... Goodbye!"
+                    pass
         
         return disconnect_msg
 
 def start_session(interface="terminal"):
-    with UserContext() as context:
+    with UserContext():
         profile = Database.get_profile()
         active_session = Database.get_active_session()
         session_id = active_session['id']
@@ -1548,7 +1629,26 @@ def start_session(interface="terminal"):
         }
         session_history['total_sessions'] = session_history.get('total_sessions', 0) + 1
         Database.update_profile({'session_history': session_history})
-        
+
+        # --- Memory system initialization ---
+        try:
+            from memory.segmenter import segment_session
+            from memory.review import run_decay
+            from memory.extractor import process_messages_for_memory
+
+            # Apply FSRS decay to existing memories
+            run_decay(session_id)
+
+            # Segment unsegmented messages from past sessions
+            segment_session(session_id)
+
+            # Extract semantic facts + episodic memories from recent history
+            recent = Database.get_chat_history(session_id=session_id, limit=50, recent=True)
+            if recent:
+                process_messages_for_memory(session_id, recent)
+        except Exception as e:
+            print(f"[WARNING] Memory system init failed: {e}")
+
         return profile
 
 def detect_important_content(message):
@@ -1560,16 +1660,30 @@ def should_summarize_memory(profile, user_message, session_id):
     conversation_messages = [msg for msg in chat_history if msg['role'] in ['user', 'assistant']]
     total_conversation_count = len(conversation_messages)
     
-    if total_conversation_count >= 50 and total_conversation_count % 50 == 0:
+    # Per-100 messages AND idle detection (≥1 hour since last message)
+    IDLE_THRESHOLD_HOURS = 1
+
+    if total_conversation_count >= 100 and total_conversation_count % 100 == 0:
         session_memory = Database.get_session_memory(session_id)
         last_summary_count = session_memory.get('last_summary_count', 0)
-        
         if total_conversation_count > last_summary_count:
+            # Check idle time
+            try:
+                from datetime import datetime, timedelta
+                last_msg_time = session_memory.get('last_message_time')
+                if last_msg_time:
+                    last_dt = datetime.fromisoformat(last_msg_time)
+                    idle = (datetime.now() - last_dt).total_seconds() / 3600.0
+                    if idle < IDLE_THRESHOLD_HOURS:
+                        print(f"[memory] Skipping summary: only {idle:.1f}h idle, need {IDLE_THRESHOLD_HOURS}h")
+                        return False
+            except Exception:
+                pass
             return True
-    
+
     if detect_important_content(user_message):
         return True
-    
+
     return False
 
 def summarize_memory(profile, user_message, ai_reply, session_id):
@@ -1613,10 +1727,36 @@ just a natural paragraph.
         memory_update = {
             "session_context": context_paragraph.strip(),
             "last_summarized": datetime.now().isoformat(),
-            "last_summary_count": current_count
+            "last_summary_count": current_count,
+            "last_message_time": datetime.now().isoformat(),
         }
         
         Database.update_session_memory(session_id, memory_update)
+
+        # Also sync to structured DB so both systems stay aligned
+        try:
+            from memory.extractor import upsert_semantic_memory, create_episodic_memory
+            from memory.extractor import extract_semantic_facts, calculate_emotional_weight
+            from memory.embedder import embed_text
+            from memory.embedder import vec_to_blob
+            from database import get_db_session, SemanticMemory, EpisodicMemory
+
+            facts = extract_semantic_facts(chat_history[-20:])
+            for fact in facts:
+                try:
+                    upsert_semantic_memory(session_id, fact['entity'], fact['relation'], fact['target'])
+                except Exception as e:
+                    print(f"[WARNING] Sync semantic to DB failed: {e}")
+
+            emotional = calculate_emotional_weight(chat_history[-20:])
+            importance = 0.5 + emotional * 0.3
+            try:
+                create_episodic_memory(session_id, context_paragraph.strip(), emotional, importance)
+            except Exception as e:
+                print(f"[WARNING] Sync episodic to DB failed: {e}")
+        except Exception as e:
+            print(f"[WARNING] Structured-DB sync skipped: {e}")
+
         return True
     else:
         return False
@@ -1632,7 +1772,7 @@ def session_context_analysis(prompt, api_key):
         headers["Authorization"] = f"Bearer {api_key}"
         
         data = {
-            "model": "qwen/qwen3-235b-a22b-2507",
+            "model": "Qwen/Qwen3-Next-80B-A3B-Instruct",
             "messages": [
                 {
                     "role": "system", 
@@ -1649,7 +1789,7 @@ def session_context_analysis(prompt, api_key):
         }
         
         response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            "https://llm.chutes.ai/v1/chat/completions",
             headers=headers,
             json=data,
             timeout=60
@@ -1661,13 +1801,13 @@ def session_context_analysis(prompt, api_key):
         else:
             return None
             
-    except Exception as e:
+    except Exception:
         return None
 
 def summarize_global_player_profile():
     """Analyze ALL conversation history across ALL sessions with optimized sampling"""
     all_sessions = Database.get_all_sessions()
-    profile = Database.get_profile()
+    Database.get_profile()
     
     # CONFIGURABLE SETTINGS
     MAX_MSGS_PER_SESSION = 2000           # Messages per session limit
@@ -1773,11 +1913,11 @@ def summarize_global_player_profile():
         # Try to keep complete sessions by removing oldest sessions first
         while len(conversation_text) > MAX_CONTEXT_CHARS and len(all_conversations) > 1:
             # Remove oldest session (first in list after reverse sort)
-            removed_session = all_conversations.pop(0)
+            all_conversations.pop(0)
             conversation_text = "".join(all_conversations)
             print(f"[INFO] Removed oldest session, now {len(conversation_text):,} chars")
     
-    print(f"[INFO] Analysis Summary:")
+    print("[INFO] Analysis Summary:")
     print(f"  - Sessions total: {len(all_sessions)}")
     print(f"  - Sessions with data: {total_sessions_with_data}")
     print(f"  - Sessions analyzed: {len(all_conversations)}")
@@ -1800,8 +1940,7 @@ You are an expert psychologist and data analyst. Your task is to analyze the con
 1. **Personality Analysis**: Identify core personality traits, communication style, emotional patterns
 2. **Interests & Preferences**: What does the user like/dislike? Topics they frequently discuss
 3. **Behavioral Patterns**: How do they interact? Response patterns, engagement style
-4. **Relationship Dynamics**: How is their relationship with the AI? Emotional connection, trust level
-5. **Significant Content**: Important memories, experiences, or topics that are emotionally charged
+4. **Relationship Dynamics**: How is their relationship with the AI? Emotional tone, trust level, interaction patterns, and development over time.
 
 ### OUTPUT FORMAT REQUIREMENTS:
 You MUST use this exact format. Do not add any commentary, explanations, or additional text.
@@ -1831,9 +1970,9 @@ Relationship Dynamics: [Provide analysis of the relationship dynamics between Us
         print("[ERROR] No OpenRouter API key found")
         return False
     
-    print(f"[INFO] Sending to Server...")
+    print("[INFO] Sending to Server...")
     
-    summary_text = global_profile_analysis(analysis_prompt, openrouter_key)
+    summary_text = global_profile_analysis(analysis_prompt)
     
     if summary_text:
         print(f"[SUCCESS] Analysis received: {len(summary_text):,} chars")
@@ -1872,7 +2011,7 @@ Relationship Dynamics: [Provide analysis of the relationship dynamics between Us
             
             # Success report
             print(f"\n{'='*50}")
-            print(f"GLOBAL PROFILE UPDATE COMPLETE!")
+            print("GLOBAL PROFILE UPDATE COMPLETE!")
             print(f"{'='*50}")
             print(f"✅ Sessions analyzed: {len(all_conversations)}")
             print(f"✅ Messages processed: {total_messages_processed}")
@@ -1880,7 +2019,7 @@ Relationship Dynamics: [Provide analysis of the relationship dynamics between Us
             print(f"✅ Player summary: {len(current_memory.get('player_summary', '')):,} chars")
             print(f"✅ Likes identified: {len(current_memory.get('key_facts', {}).get('likes', []))}")
             print(f"✅ Personality traits: {len(current_memory.get('key_facts', {}).get('personality_traits', []))}")
-            print(f"✅ Relationship analysis saved")
+            print("✅ Relationship analysis saved")
             print(f"{'='*50}")
             
             return True
@@ -1999,8 +2138,9 @@ def _merge_profile_data(existing_memory: Dict, new_data: Dict) -> Dict:
     return result
 
 
-def global_profile_analysis(prompt: str, api_key: str) -> Optional[str]:
+def global_profile_analysis(prompt: str) -> Optional[str]:
     """Analyze conversation history using qwen with optimal settings"""
+    api_key = Database.get_api_key("chutes")
     headers = {
         "Content-Type": "application/json",
         "HTTP-Referer": "https://github.com/icedeyes12/yuzu-companion", 
@@ -2010,7 +2150,7 @@ def global_profile_analysis(prompt: str, api_key: str) -> Optional[str]:
     
     try:
         
-        model = "qwen/qwen3-235b-a22b-2507"
+        model = "Qwen/Qwen3-Next-80B-A3B-Instruct"
         
         # Optimize for long context analysis
         data = {
@@ -2048,7 +2188,7 @@ def global_profile_analysis(prompt: str, api_key: str) -> Optional[str]:
         print(f"[DEBUG] Max response tokens: {data['max_tokens']}")
         
         response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            "https://llm.chutes.ai/v1/chat/completions",
             headers=headers,
             json=data,
             timeout=300  # 5 minute timeout for large analysis
@@ -2062,7 +2202,7 @@ def global_profile_analysis(prompt: str, api_key: str) -> Optional[str]:
             return content
             
         else:
-            error_msg = f"OpenRouter API error: {response.status_code}"
+            error_msg = f"Chutes API error: {response.status_code}"
             
             try:
                 error_data = response.json()
@@ -2079,7 +2219,7 @@ def global_profile_analysis(prompt: str, api_key: str) -> Optional[str]:
                     print("[WARNING] GLM-4.7 not available, trying alternatives...")
                     return _try_alternative_models(prompt, api_key)
                     
-            except:
+            except Exception:
                 error_msg += f" - {response.text[:200]}"
                 print(f"[ERROR] {error_msg}")
             
@@ -2116,13 +2256,9 @@ def _try_alternative_models(prompt: str, api_key: str) -> Optional[str]:
         print(f"[INFO] Trying alternative model: {model}")
         
         try:
-            # Kurangi prompt untuk model dengan context lebih kecil
-            if model.endswith(":free") or "flash" in model.lower():
-                # Model free/light perlu prompt lebih pendek
-                shortened_prompt = prompt[:20000] + "\n\n...[prompt truncated for lighter model]"
-                actual_prompt = shortened_prompt
-            else:
-                actual_prompt = prompt
+            # Potong prompt secara signifikan untuk model free
+            shortened_prompt = prompt[:20000] + "\n\n...[prompt truncated for lighter model]"
+            actual_prompt = shortened_prompt
             
             data = {
                 "model": model,
@@ -2143,7 +2279,7 @@ def _try_alternative_models(prompt: str, api_key: str) -> Optional[str]:
             }
             
             response = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
+                "https://llm.chutes.ai/v1/chat/completions",
                 headers=headers,
                 json=data,
                 timeout=180
@@ -2207,7 +2343,7 @@ def _try_free_model(prompt: str, api_key: str) -> Optional[str]:
             }
             
             response = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
+                "https://llm.chutes.ai/v1/chat/completions",
                 headers=headers,
                 json=data,
                 timeout=300
@@ -2289,11 +2425,7 @@ def parse_global_profile_summary(summary_text: str) -> Dict:
                 profile_data["relationship_dynamics"] = content
             elif current_section in ['likes', 'dislikes', 'personality_traits', 'important_memories']:
                 # Parse comma-separated lists
-                items = []
-                for item in content.split(','):
-                    item_clean = item.strip()
-                    if item_clean:
-                        items.append(item_clean)
+                items = [item.strip() for item in content.split(',') if item.strip()]
                 profile_data["key_facts"][current_section] = items
     
     for line in lines:
@@ -2369,7 +2501,7 @@ def save_section_content(profile_data, section_key, content):
             
     elif section_key in ['likes', 'dislikes', 'personality_traits', 'important_memories']:
         items = [item.strip() for item in content.split(',') if item.strip()]
-        profile_data["key_facts"][section_key].extend(items)
+        profile_data["key_facts"][section_key] = items
 
 
 def get_available_providers():

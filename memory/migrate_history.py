@@ -1,10 +1,9 @@
 # [FILE: memory/migrate_history.py]
 # [DESCRIPTION: Migration script to extract memories from old message history]
 
-from database import Database, get_db_session, Message, ChatSession
+from database import get_db_session, Message, ChatSession
 from memory.extractor import (
-    extract_semantic_facts, upsert_semantic_memory, generate_episodic_summary,
-    create_episodic_memory, calculate_emotional_weight,
+    extract_semantic_facts, upsert_semantic_memory,
 )
 from memory.segmenter import segment_session
 

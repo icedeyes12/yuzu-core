@@ -1,4 +1,3 @@
-import json
 import re
 
 # Destructive operations that are always blocked

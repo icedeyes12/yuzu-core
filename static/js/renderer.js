@@ -1,6 +1,6 @@
 // [FILE: renderer.js]
-// [VERSION: 1.0.0]
-// [DATE: 2026-02-14]
+// // [VERSION: 1.0.69.28v4]
+// [DATE: 2026-03-24]
 // [PROJECT: HKKM - Yuzu Companion]
 // [DESCRIPTION: Markdown renderer using marked.js with syntax highlighting]
 // [AUTHOR: Project Lead: Bani Baskara]
@@ -74,7 +74,7 @@ class MessageRenderer {
             'terraform': 'json', 'hcl': 'json', 'tf': 'json',
 
             // Markup family → xml
-            'html': 'xml', 'xhtml': 'xml', 'svg': 'xml', 'rss': 'xml', 'atom': 'xml',
+            'html': 'html', 'xhtml': 'html', 'svg': 'xml', 'rss': 'xml', 'atom': 'xml',
 
             // Python aliases → python
             'py': 'python', 'python3': 'python',
@@ -130,33 +130,21 @@ class MessageRenderer {
             const originalLabel = language ? language.trim() : '';
             const normalizedLang = this.normalizeLanguageAlias(language);
             const fallbackLang = 'markdown';
-
             let highlightLang = fallbackLang;
+            // Also keep xml for html content so preview button shows
+            const isHtmlContent = normalizedLang === 'xml';
             if (normalizedLang && this.isHighlightReady && typeof hljs !== 'undefined' && hljs.getLanguage(normalizedLang)) {
                 highlightLang = normalizedLang;
             }
-
-            const displayLabel = originalLabel || fallbackLang;
-
-            const highlighted = this.isHighlightReady 
-                ? hljs.highlight(code, { language: highlightLang }).value 
+            const encodedCode = encodeURIComponent(code);
+        const btnRawCode = decodeURIComponent(encodedCode);
+            const isHtml = isHtmlContent || this._isHtmlCode(code);
+            const highlighted = this.isHighlightReady
+                ? hljs.highlight(code, { language: highlightLang }).value
                 : this.escapeHtml(code);
-
-            return `
-                <div class="code-block-container">
-                    <div class="code-block-header">
-                        <span class="code-language">${displayLabel}</span>
-                        <button class="copy-code-btn" onclick="renderer.copyCode(this)">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                            </svg>
-                            Copy
-                        </button>
-                    </div>
-                    <pre><code class="hljs language-${highlightLang}">${highlighted}</code></pre>
-                </div>
-            `;
+            const displayLabel = originalLabel || fallbackLang;
+            const previewBtn = isHtml ? `<button class="preview-code-btn" data-code="${encodeURIComponent(btnRawCode)}" onclick="renderer.showHtmlPreviewModal(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8z"/><circle cx="12" cy="12" r="3"/></svg>Preview</button>` : '';
+            return `<div class="code-block-container"><div class="code-block-header"><span class="code-language">${displayLabel}</span>${previewBtn}<button class="copy-code-btn" onclick="renderer.copyCode(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>Copy</button></div><pre><code class="hljs language-${highlightLang}">${highlighted}</code></pre></div>`;
         };
 
         // Custom image renderer to ensure images render as <img> elements
@@ -187,6 +175,80 @@ class MessageRenderer {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    _isHtmlCode(code) {
+        const trimmed = (code || '').trim();
+        return trimmed.startsWith('<!DOCTYPE') ||
+               trimmed.startsWith('<html') ||
+               (trimmed.startsWith('<head') && trimmed.includes('<body')) ||
+               trimmed.includes('<html') && trimmed.includes('<body');
+    }
+
+    toggleHtmlPreview(btn) {
+        const rawCode = btn.getAttribute('data-code') || '';
+        const code = decodeURIComponent(rawCode);
+        const container = btn.closest('.code-block-container');
+        if (!container) return;
+        let previewWrap = container.querySelector('.html-preview-wrap');
+        if (!previewWrap) {
+            previewWrap = document.createElement('div');
+            previewWrap.className = 'html-preview-wrap hidden';
+            container.appendChild(previewWrap);
+        }
+        if (!previewWrap.classList.contains('hidden')) {
+            previewWrap.classList.add('hidden');
+            btn.classList.remove('active');
+            btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8z"/><circle cx="12" cy="12" r="3"/></svg>Preview`;
+            return;
+        }
+        previewWrap.classList.remove('hidden');
+        btn.classList.add('active');
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>Hide`;
+        const sanitized = this._sanitizeHtml(code);
+        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${this._extractInlineStyles(sanitized)}</style></head><body>${this._stripHtmlOuter(sanitized)}</body></html>`;
+        let iframe = previewWrap.querySelector('iframe');
+        if (!iframe) {
+            iframe = document.createElement('iframe');
+            iframe.className = 'preview-iframe';
+            iframe.setAttribute('sandbox', 'allow-scripts allow-modals');
+            previewWrap.appendChild(iframe);
+        }
+        iframe.style.display = 'block';
+        // Use srcdoc to bypass Android WebView cross-origin restrictions
+        try {
+            iframe.srcdoc = html;
+        } catch(e) {
+            iframe.style.display = 'none';
+            let err = previewWrap.querySelector('.preview-error');
+            if (!err) {
+                err = document.createElement('div');
+                err.className = 'preview-error';
+                previewWrap.appendChild(err);
+            }
+            err.textContent = 'Error: ' + e.message;
+        }
+    }
+    _extractInlineStyles(html) {
+        const match = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+        return match ? match[1] : '';
+    }
+    _stripHtmlOuter(html) {
+        return html
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+            .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
+            .replace(/<!DOCTYPE[^>]*>/gi, '')
+            .replace(/<html[^>]*>/gi, '')
+            .replace(/<\/html>/gi, '')
+            .replace(/<body[^>]*>/gi, '')
+            .replace(/<\/body>/gi, '')
+            .trim();
+    }
+    _sanitizeHtml(html) {
+        // Only strip dangerous attributes, preserve scripts (iframe is sandboxed)
+        return html
+            .replace(/on\w+\s*=/gi, 'data-disabled-')
+            .replace(/javascript:/gi, '');
     }
 
     normalizeImagePath(path) {
@@ -382,7 +444,59 @@ class MessageRenderer {
         }
         return { href, title, text };
     }
+
+    showHtmlPreviewModal(btn) {
+        const rawCode = decodeURIComponent(btn.dataset.code || '');
+        const modal = document.getElementById('html-preview-modal');
+        const iframe = document.getElementById('preview-iframe');
+        if (!modal || !iframe || !rawCode) return;
+        // Unescape HTML entities (code may be double-encoded from marked.js escaping)
+        let code = rawCode
+            .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'").replace(/&#x27;/g, "'");
+        // Allow srcdoc to handle the rest (don't over-unescape)
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        // srcdoc handles HTML natively - just pass the unescaped code
+        iframe.srcdoc = code;
+    }
+
+    closeHtmlModal() {
+        const modal = document.getElementById('html-preview-modal');
+        if (modal) modal.classList.remove('active', 'fullscreen');
+        document.body.style.overflow = '';
+    }
+    togglePreviewTheme() {
+        const body = document.getElementById('preview-body');
+        const btn = document.getElementById('theme-toggle-btn');
+        if (!body || !btn) return;
+        const isLight = body.classList.toggle('preview-body-light');
+        btn.classList.toggle('active', isLight);
+        const iframe = document.getElementById('preview-iframe');
+        if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage(isLight ? 'light' : 'dark', '*');
+        }
+    }
+    togglePreviewFullscreen() {
+        const modal = document.getElementById('html-preview-modal');
+        const btn = document.getElementById('fullscreen-toggle-btn');
+        if (!modal || !btn) return;
+        const isFull = modal.classList.toggle('fullscreen');
+        btn.classList.toggle('active', isFull);
+    }
+
 }
 
 // Create global renderer instance
 const renderer = new MessageRenderer();
+
+// === HTML Preview Modal ===
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.preview-code-btn');
+    if (!btn) return;
+    var rawCode = btn.getAttribute('data-code') || '';
+    try { rawCode = decodeURIComponent(rawCode); } catch(err) {}
+    if (rawCode) renderer.showHtmlPreviewModal(rawCode);
+});
+

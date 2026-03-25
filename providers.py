@@ -1,7 +1,7 @@
 # ==========================================================
 # [FILE]        : providers.py
-# [VERSION]     : 1.0.0.69.3l5
-# [DATE]        : 2026-01-05
+# # [VERSION: 1.0.69.28v4]
+# [DATE: 2026-03-24]
 # [PROJECT]     : HKKM - Yuzu Companion
 # [DESCRIPTION] : AI provider management
 # [AUTHOR]      : Project Lead: Bani Baskara
@@ -13,8 +13,7 @@
 import requests
 import json
 import time
-import os
-from typing import List, Dict, Optional, Any, Generator
+from typing import List, Dict, Optional, Generator
 from database import Database
 from tools import multimodal_tools
 
@@ -37,7 +36,7 @@ class AIProvider:
         try:
             models = self.get_models()
             return len(models) > 0
-        except:
+        except Exception:
             return False
     
     def supports_vision(self, model: str) -> bool:
@@ -123,7 +122,7 @@ class OllamaProvider(AIProvider):
             else:
                 return None
                 
-        except Exception as e:
+        except Exception:
             return None
     
     def send_message_streaming(self, messages: List[Dict], model: str, **kwargs) -> Generator[str, None, None]:
@@ -194,7 +193,7 @@ class CerebrasProvider(AIProvider):
         try:
             api_key = Database.get_api_key('cerebras')
             return api_key
-        except Exception as e:
+        except Exception:
             return None
 
     def _normalize_messages(self, messages: List[Dict]) -> List[Dict]:
@@ -255,7 +254,7 @@ class CerebrasProvider(AIProvider):
 
             # Debug: Log summary (not full payload)
             # Count only new messages (not historical context from DB)
-            new_msgs = sum(1 for m in messages if m.get('role') == 'user' and m == messages[-1])
+            sum(1 for m in messages if m.get('role') == 'user' and m == messages[-1])
             print(f"[Cerebras] {model} | new_msg=1 | max_tokens={max_tokens}")
 
             response = requests.post(
@@ -277,7 +276,7 @@ class CerebrasProvider(AIProvider):
             else:
                 return None
                 
-        except Exception as e:
+        except Exception:
             return None
     
     def send_message_streaming(self, messages: List[Dict], model: str, **kwargs) -> Generator[str, None, None]:
@@ -384,7 +383,7 @@ class OpenRouterProvider(AIProvider):
         try:
             api_key = Database.get_api_key('openrouter')
             return api_key
-        except Exception as e:
+        except Exception:
             return None
 
     def _normalize_messages(self, messages: List[Dict]) -> List[Dict]:
@@ -485,7 +484,7 @@ class OpenRouterProvider(AIProvider):
                 else:
                     return None
                 
-        except Exception as e:
+        except Exception:
             return None
     
     def send_message_streaming(self, messages: List[Dict], model: str, **kwargs) -> Generator[str, None, None]:
@@ -624,7 +623,7 @@ class ChutesProvider(AIProvider):
         try:
             api_key = Database.get_api_key('chutes')
             return api_key
-        except Exception as e:
+        except Exception:
             return None
     
     def get_models(self) -> List[str]:
@@ -648,7 +647,7 @@ class ChutesProvider(AIProvider):
             max_tokens = kwargs.get('max_tokens', 4096)
             top_p = kwargs.get('top_p', 0.9)
             top_k = kwargs.get('top_k', 45)
-            typical_p = kwargs.get('typical_p', 0.85)
+            kwargs.get('typical_p', 0.85)
             stream = kwargs.get('stream', False)
             
             headers = {
@@ -824,7 +823,7 @@ class AIProviderManager:
             for chunk in provider.send_message_streaming(messages, model, **kwargs):
                 yield chunk
             
-            response_time = time.time() - start_time
+            time.time() - start_time
             # REMOVED: No print statement to avoid timing duplication
             
         except Exception as e:

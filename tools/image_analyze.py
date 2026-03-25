@@ -4,7 +4,6 @@ import os
 import base64
 import requests
 import hashlib
-import time
 
 
 IMAGE_CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'image_cache')

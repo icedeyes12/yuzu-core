@@ -1,7 +1,7 @@
 # ==========================================================
 # [FILE]        : main.py  
-# [VERSION]     : 2.1.2 - Complete Working Version
-# [DATE]        : 2025-10-29
+# # [VERSION: 1.0.69.28v4] - Complete Working Version
+# [DATE: 2026-03-24]
 # [PROJECT]     : HKKM - Yuzu Companion
 # [DESCRIPTION] : Complete CLI with all menu methods implemented
 # [AUTHOR]      : Project Lead: Bani Baskara
@@ -11,7 +11,7 @@
 # ==========================================================
 
 from app import handle_user_message, handle_user_message_streaming, start_session, end_session_cleanup, summarize_memory, summarize_global_player_profile
-from app import get_available_providers, get_all_models, set_preferred_provider, get_provider_models, get_vision_capabilities
+from app import get_available_providers, get_all_models, set_preferred_provider, get_vision_capabilities
 from database import Database
 from providers import get_ai_manager
 from tools import multimodal_tools
@@ -23,23 +23,19 @@ import re
 import os
 import json
 from pathlib import Path
-from typing import List, Tuple, Optional, Dict, Any
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.markdown import Markdown
-from rich.tree import Tree
 from rich.table import Table
 from rich.text import Text
 from rich.prompt import Prompt, Confirm, IntPrompt
 from rich.live import Live
-from rich import print as rprint
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.completion import WordCompleter
-from prompt_toolkit.patch_stdout import patch_stdout
 
 console = Console()
 
@@ -141,7 +137,7 @@ class YuzuCompanionAgent:
         try:
             with open(config_path, "r") as f:
                 return json.load(f)
-        except:
+        except Exception:
             return default_config
     
     def save_config(self):
@@ -658,7 +654,7 @@ class YuzuCompanionAgent:
                 provider=self.session_state['current_provider'],
                 model=self.session_state['current_model']
             )
-            full_response = self.display_streaming_response_panel(response_generator)
+            self.display_streaming_response_panel(response_generator)
         else:
             start_time = time.time()
             response = handle_user_message(user_input, interface="terminal")

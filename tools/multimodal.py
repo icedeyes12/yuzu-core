@@ -1,6 +1,6 @@
 # [FILE: tools.py]
-# [VERSION: 1.0.0.69.4v2]
-# [DATE: 2025-08-12]
+# # [VERSION: 1.0.69.28v4]
+# [DATE: 2026-03-24]
 # [PROJECT: HKKM - Yuzu Companion]
 # [DESCRIPTION: Multimodal tools with image caching]
 # [AUTHOR: Project Lead: Bani Baskara]
@@ -9,7 +9,6 @@
 # [LICENSE: MIT]
 
 import requests
-import json
 import base64
 import re
 import time
@@ -18,7 +17,6 @@ import hashlib
 import shutil
 import subprocess
 from urllib.parse import unquote
-from datetime import datetime
 from database import Database
 from typing import List, Dict, Optional, Tuple
 
@@ -288,7 +286,7 @@ class MultimodalTools:
             self.image_cache[image_url] = (time.time(), result)
             return result
             
-        except Exception as e:
+        except Exception:
             return None
     
     def format_vision_message(self, user_message: str, provider: str = None) -> List[Dict]:
@@ -402,7 +400,7 @@ class MultimodalTools:
                     }
                 })
                 
-            except Exception as e:
+            except Exception:
                 pass
         
         return [{"role": "user", "content": content}]
@@ -458,13 +456,13 @@ class MultimodalTools:
         # Image generation logic moved to tools/image_generate.py
         # This method delegates to the single source of truth.
         from tools.image_generate import execute as _img_execute
-        import json as _json
+        import re as _re
         result_str = _img_execute({"prompt": prompt})
         try:
-            result = _json.loads(result_str)
-            if result.get("image_path"):
-                return result["image_path"], None
-            return None, result.get("error", "Unknown error")
+            m = _re.search(r'src="(static/generated_images/[^"]+)"', result_str)
+            if m:
+                return m.group(1), None
+            return None, "No image in result"
         except Exception as e:
             return None, str(e)
     

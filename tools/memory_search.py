@@ -1,5 +1,3 @@
-import json
-import re
 from datetime import datetime, timedelta
 
 
@@ -32,7 +30,6 @@ RELATIVE_CUES = {
 
 
 def _detect_month(query):
-    """Detect month reference in query, return month number or None."""
     query_lower = query.lower()
     for name, num in MONTH_NAMES.items():
         if name in query_lower:
@@ -46,14 +43,11 @@ def _has_temporal_cues(query):
 
 
 def _detect_time_window(query):
-    """Detect a time window from the query. Returns (start, end) or None."""
     now = datetime.now()
     query_lower = query.lower()
 
-    # Check specific month reference first
     month = _detect_month(query)
     if month is not None:
-        # Determine the year: if month is in the future, use last year
         year = now.year
         if month > now.month:
             year -= 1
@@ -64,7 +58,6 @@ def _detect_time_window(query):
             end = datetime(year, month + 1, 1)
         return start, end
 
-    # Check relative cues
     for cue, calc in RELATIVE_CUES.items():
         if cue in query_lower:
             return calc(now)
@@ -73,7 +66,6 @@ def _detect_time_window(query):
 
 
 def _parse_timestamp(ts):
-    """Parse timestamp string to datetime, return None on failure."""
     if not ts:
         return None
     if isinstance(ts, datetime):
@@ -87,8 +79,7 @@ def _parse_timestamp(ts):
 
 
 def _search_temporal_messages(session_id, start, end, limit=200):
-    """Query messages table directly for a specific time window."""
-    from database import Database, get_db_session, Message
+    from database import get_db_session, Message
 
     results = []
     try:
@@ -127,49 +118,6 @@ def _search_temporal_messages(session_id, start, end, limit=200):
     return results
 
 
-def _search_raw_messages(session_id, query, limit=20):
-    """Search raw messages for contextual/keyword queries."""
-    from database import Database
-    
-    chat_history = Database.get_chat_history(session_id=session_id, limit=2000, recent=True)
-    
-    if not chat_history:
-        return []
-
-    query_lower = query.lower()
-    all_cue_words = set(TEMPORAL_CUES) | set(MONTH_NAMES.keys())
-    keywords = [w for w in query_lower.split() if len(w) > 2 and w not in all_cue_words]
-    
-    target_month = _detect_month(query)
-    
-    scored_messages = []
-    for msg in chat_history:
-        content = msg.get('content', '')
-        if not content:
-            continue
-        content_lower = content.lower()
-        
-        score = 0
-        for kw in keywords:
-            if kw in content_lower:
-                score += 1
-        
-        if target_month:
-            ts = _parse_timestamp(msg.get('timestamp'))
-            if ts and ts.month == target_month:
-                score += 2
-        
-        if score > 0:
-            scored_messages.append({
-                "timestamp": msg.get('timestamp', ''),
-                "content": content[:300],
-                "score": score
-            })
-
-    scored_messages.sort(key=lambda x: x['score'], reverse=True)
-    return scored_messages[:limit]
-
-
 def execute(arguments, **kwargs):
     from database import Database
     from tools.registry import build_markdown_contract
@@ -181,36 +129,41 @@ def execute(arguments, **kwargs):
     partner_name = profile.get("partner_name", "Yuzu")
     full_command = f"/memory_search {query}"
 
-    if not query or not session_id:
+    if not session_id:
         return build_markdown_contract(
             "memory_search_tools", full_command,
-            ["Error: query and session_id required"],
+            ["Error: session_id required"],
             partner_name,
         )
 
     lines = []
 
-    # Step 1: Structured memory retrieval
+    # Step 1: Embedding-based semantic retrieval (pass query for similarity search)
     try:
         from memory.retrieval import retrieve_memory
-        memory_bundle = retrieve_memory(session_id)
+        memory_bundle = retrieve_memory(session_id, query=query)
         semantic = memory_bundle.get("semantic", [])
         episodic = memory_bundle.get("episodic", [])
         segments = memory_bundle.get("segments", [])
+
         if semantic:
-            lines.append("--- Semantic Memories ---")
+            lines.append("--- Semantic Memories (by relevance) ---")
             for item in semantic:
-                lines.append(str(item))
+                lines.append(
+                    f"- [{item['score']:.2f}] {item['entity']} {item['relation']} {item['target']}"
+                )
         if episodic:
             lines.append("--- Episodic Memories ---")
             for item in episodic:
-                lines.append(str(item))
+                summary = item.get('summary', '')[:150]
+                lines.append(f"- [{item['score']:.2f}] {summary}")
         if segments:
             lines.append("--- Conversation Segments ---")
             for item in segments:
-                lines.append(str(item))
+                summary = item.get('summary', '')[:150]
+                lines.append(f"- [{item['score']:.2f}] {summary}")
     except Exception as e:
-        print(f"[memory_search] Structured retrieval failed: {e}")
+        print(f"[memory_search] Embedding retrieval failed: {e}")
 
     # Step 2: Temporal window query — direct DB scan
     time_window = _detect_time_window(query)
@@ -222,21 +175,10 @@ def execute(arguments, **kwargs):
                 lines.append(f"--- Messages ({start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}) ---")
                 for msg in temporal_msgs:
                     lines.append(f"[{msg['timestamp']}] {msg['role']}: {msg['content']}")
-                return build_markdown_contract("memory_search_tools", full_command, lines, partner_name)
         except Exception as e:
             print(f"[memory_search] Temporal scan failed: {e}")
 
-    # Step 3: Keyword-based raw message search
-    try:
-        raw_results = _search_raw_messages(session_id, query)
-        if raw_results:
-            lines.append("--- Keyword Matches ---")
-            for msg in raw_results:
-                lines.append(f"[{msg.get('timestamp', '')}] {msg['content']}")
-    except Exception as e:
-        print(f"[memory_search] Raw message search failed: {e}")
-
     if not lines:
-        lines.append("No results found")
+        lines.append("No memory results found")
 
     return build_markdown_contract("memory_search_tools", full_command, lines, partner_name)

@@ -1,4 +1,3 @@
-import json
 import os
 import requests
 from datetime import datetime
@@ -6,6 +5,7 @@ from database import Database
 
 HUNYUAN_ENDPOINT = "https://chutes-hunyuan-image-3.chutes.ai/generate"
 Z_TURBO_ENDPOINT = "https://chutes-z-image-turbo.chutes.ai/generate"
+QWEN_IMAGE_ENDPOINT = "https://image.chutes.ai/generate"
 
 def execute(arguments, **kwargs):
     from tools.registry import build_markdown_contract
@@ -35,24 +35,31 @@ def execute(arguments, **kwargs):
         
         print(f"[IMAGE TOOL] Model: {image_model}")
 
-        if image_model == "z_turbo":
+        if image_model == "qwen_image":
+            endpoint = QWEN_IMAGE_ENDPOINT
+            payload = {
+                "model": "Qwen-Image-2512",
+                "prompt": prompt,
+                "negative_prompt": "cartoon, anime, bad anatomy, blurry, distorted, low quality, watermark, text",
+                "guidance_scale": 7.5,
+                "width": 1024,
+                "height": 1024,
+                "num_inference_steps": 20,
+            }
+        elif image_model == "z_turbo":
             endpoint = Z_TURBO_ENDPOINT
+            payload = {"prompt": prompt}
         else:
             endpoint = HUNYUAN_ENDPOINT
+            payload = {"prompt": prompt}
         
         print(f"[IMAGE TOOL] Endpoint: {endpoint}")
-
-        # Runtime model logging (mandatory per spec)
-        print(f"[IMAGE TOOL]")
-        print(f"Selected model: {image_model}")
-        print(f"Endpoint: {endpoint}")
 
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
 
-        payload = {"prompt": prompt}
         
         print(f"[IMAGE TOOL] Generating image (prompt length: {len(prompt)} chars)")
 
@@ -69,7 +76,8 @@ def execute(arguments, **kwargs):
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             safe_prompt = "".join(c for c in prompt[:30] if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            filename = f"{timestamp}_{safe_prompt}.png"
+            ext = "jpg" if image_model == "qwen_image" else "png"
+            filename = f"{timestamp}_{safe_prompt}.{ext}"
             filepath = os.path.join(images_dir, filename)
 
             with open(filepath, 'wb') as f:

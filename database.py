@@ -1,6 +1,6 @@
 # [FILE: database.py]
-# [VERSION: 2.1]
-# [DATE: 2026-01-06]
+# # [VERSION: 1.0.69.28v4]
+# [DATE: 2026-03-24]
 # [PROJECT: HKKM - Yuzu Companion]
 # [DESCRIPTION: SQLAlchemy database]
 # [AUTHOR: Project Lead: Bani Baskara]
@@ -14,9 +14,9 @@ import hashlib
 from datetime import datetime
 from contextlib import contextmanager
 from encryption import encryptor
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, Float, LargeBinary, ForeignKey, Index
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, Float, LargeBinary, Index
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # SQLAlchemy setup
@@ -91,6 +91,7 @@ class SemanticMemory(Base):
     target = Column(Text, nullable=False)
     confidence = Column(Float, default=0.5)
     importance = Column(Float, default=0.5)
+    embedding_vector = Column(LargeBinary, nullable=True)  # NEW: stored embedding
     last_accessed = Column(DateTime, nullable=True)
     access_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.now)
@@ -130,6 +131,7 @@ Index('idx_api_keys_name', APIKey.key_name)
 Index('idx_semantic_session', SemanticMemory.session_id)
 Index('idx_semantic_entity', SemanticMemory.entity)
 Index('idx_semantic_confidence', SemanticMemory.confidence)
+Index('idx_semantic_importance', SemanticMemory.importance)  # NEW: for retrieval scoring
 Index('idx_episodic_session', EpisodicMemory.session_id)
 Index('idx_episodic_importance', EpisodicMemory.importance)
 Index('idx_segments_session', ConversationSegment.session_id)
@@ -174,7 +176,7 @@ def migrate_api_keys_from_files(session):
                         
                         migrated_count += 1
                         
-            except Exception as e:
+            except Exception:
                 pass
     
     return migrated_count
@@ -217,6 +219,16 @@ def _migrate_add_vision_model_column(engine):
     if 'vision_model' not in columns:
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE profiles ADD COLUMN vision_model TEXT DEFAULT 'moonshotai/kimi-k2.5'"))
+            conn.commit()
+
+def _migrate_add_semantic_embedding_vector(engine):
+    """Add embedding_vector column to semantic_memories if it does not exist."""
+    from sqlalchemy import inspect as sa_inspect, text
+    inspector = sa_inspect(engine)
+    columns = [col['name'] for col in inspector.get_columns('semantic_memories')]
+    if 'embedding_vector' not in columns:
+        with engine.connect() as conn:
+            conn.execute(text('ALTER TABLE semantic_memories ADD COLUMN embedding_vector BLOB'))
             conn.commit()
 
 def init_db():
@@ -288,6 +300,12 @@ def init_db():
     except Exception as e:
         print(f"[WARNING] vision_model migration skipped: {e}")
     
+    # Migrate existing databases: add embedding_vector column if missing
+    try:
+        _migrate_add_semantic_embedding_vector(engine)
+    except Exception as e:
+        print(f"[WARNING] semantic_embedding_vector migration skipped: {e}")
+    
     with get_db_session() as session:
         # Create default profile and session if needed
         if session.query(Profile).count() == 0:
@@ -326,7 +344,7 @@ def init_db():
         message_count = session.query(Message).count()
         apikey_count = session.query(APIKey).count()
         
-        print(f"[DB AUDIT] Database initialization complete")
+        print("[DB AUDIT] Database initialization complete")
         print(f"[DB AUDIT] Profiles: {profile_count}")
         print(f"[DB AUDIT] Chat Sessions: {session_count}")
         print(f"[DB AUDIT] Messages: {message_count}")
@@ -669,6 +687,13 @@ class Database:
             if chat_session and role in ['user', 'assistant']:
                 chat_session.message_count += 1
                 chat_session.updated_at = datetime.now()
+                # Update last_message_time for idle detection
+                try:
+                    mem = json.loads(chat_session.memory_json) if chat_session.memory_json else {}
+                    mem['last_message_time'] = datetime.now().isoformat()
+                    chat_session.memory_json = json.dumps(mem)
+                except Exception:
+                    pass
             
             session.commit()
 
@@ -837,7 +862,7 @@ class Database:
                     try:
                         dt = datetime.strptime(msg.timestamp, '%Y-%m-%d %H:%M:%S')
                         formatted_timestamp = dt.strftime('[%Y-%m-%d %H:%M:%S]')
-                    except:
+                    except Exception:
                         formatted_timestamp = f"[{msg.timestamp}]"
                     ai_formatted_content = f"{content} {formatted_timestamp}"
                     formatted_messages.append({
@@ -1034,10 +1059,10 @@ class Database:
     def get_encryption_status():
         with get_db_session() as session:
             total_messages = session.query(Message).count()
-            encrypted_messages = session.query(Message).filter(Message.content_encrypted == True).count()
+            encrypted_messages = session.query(Message).filter(Message.content_encrypted).count()
             
             total_keys = session.query(APIKey).count()
-            encrypted_keys = session.query(APIKey).filter(APIKey.key_encrypted == True).count()
+            encrypted_keys = session.query(APIKey).filter(APIKey.key_encrypted).count()
             
             return {
                 'messages': {
@@ -1061,7 +1086,7 @@ class Database:
     def get_all_encrypted_messages():
         """Get all messages that are still encrypted (for migration purposes)"""
         with get_db_session() as session:
-            messages = session.query(Message).filter(Message.content_encrypted == True).all()
+            messages = session.query(Message).filter(Message.content_encrypted).all()
             
             result = []
             for msg in messages:

@@ -1,6 +1,6 @@
 # [FILE: encryption.py]
-# [VERSION: 2.0.0.PQ.1]
-# [DATE: 2026-01-06]
+# # [VERSION: 1.0.69.28v4]
+# [DATE: 2026-03-24]
 # [PROJECT: HKKM - Yuzu Companion]
 # [DESCRIPTION: High Perf & Quantum Resistant Key Size]
 # [AUTHOR: Project Lead: Bani Baskara]
@@ -11,7 +11,6 @@ from Crypto.Cipher import ChaCha20_Poly1305
 from Crypto.Random import get_random_bytes
 import base64
 import os
-import json
 import sys
 
 class ModernEncryptor:
@@ -87,7 +86,7 @@ class ModernEncryptor:
             # This happens if the key is wrong or data is corrupted/tampered
             print("Integrity Check Failed: Data corrupted or wrong key.")
             return encrypted_text
-        except Exception as e:
+        except Exception:
             # print(f"Decryption error: {e}") # Debug only
             return encrypted_text
 
