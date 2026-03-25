@@ -72,7 +72,7 @@ def get_media_dir():
 
 # execute request tool
 def execute(arguments, session_id=None):
-    from tools.registry import build_markdown_contract
+    from app.tools.registry import build_markdown_contract
 
     profile = Database.get_profile() or {}
     partner_name = profile.get("partner_name", "Yuzu")
