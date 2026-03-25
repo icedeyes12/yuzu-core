@@ -62,7 +62,7 @@ def execute(arguments, **kwargs):
     embed_text = f"[{category}] {fact}"
     try:
         vecs = embed_texts([embed_text])
-        vector = vecs[0]
+        vector = vecs[0]  # extract single vector from list
     except Exception as e:
         print(f"[memory_store] Embed failed: {e}")
         return build_markdown_contract(
@@ -72,8 +72,8 @@ def execute(arguments, **kwargs):
             partner_name,
         )
 
-    # Check for duplicate using text similarity
-    from app.memory.embedder import cosine_similarity, blob_to_vec
+    # Check for duplicate using cosine similarity
+    from app.memory.embedder import cosine_similarity, blob_to_vec, vec_to_blob
 
     with get_db_session() as session:
         existing = session.query(SemanticMemory).filter(
@@ -106,7 +106,7 @@ def execute(arguments, **kwargs):
                 partner_name,
             )
 
-        # Insert new fact
+        # Insert new fact — store as blob bytes, not raw list
         new_mem = SemanticMemory(
             session_id=session_id,
             entity="User",
@@ -114,7 +114,7 @@ def execute(arguments, **kwargs):
             target=fact,
             confidence=0.7,
             importance=0.6,
-            embedding_vector=vector,
+            embedding_vector=vec_to_blob(vector),
             last_accessed=datetime.now(),
             access_count=1,
         )

@@ -1,7 +1,6 @@
-# [FILE: memory/extractor.py]
-# [DESCRIPTION: Memory extraction layer - semantic + episodic writers with embeddings]
+# [FILE: app/memory/extractor.py]
+# [DESCRIPTION: LLM-only semantic fact extraction — no regex rules]
 
-import re
 from datetime import datetime
 from app.database import (
     get_db_session, SemanticMemory, EpisodicMemory
@@ -10,121 +9,138 @@ from app.memory.embedder import embed_text, vec_to_blob
 
 
 def _get_ai_manager():
-    """Lazy-import ai_manager to avoid circular imports."""
+    """Lazy-import to avoid circular imports."""
     from app import get_ai_manager
     return get_ai_manager()
 
 
-# Keywords that indicate preference or identity facts
-_PREFERENCE_PATTERNS = [
-    (r'\b(?:i prefer|i like|i love|i enjoy|i want|i need)\b(.+)', 'Prefers'),
-    (r'\b(?:i hate|i dislike|i don\'t like|i can\'t stand)\b(.+)', 'Dislikes'),
-    (r'\b(?:i am|i\'m|my name is)\b(.+)', 'Is'),
-    (r'\b(?:i use|i work with|i code in|i develop in)\b(.+)', 'Uses'),
-    (r'\b(?:i always|i usually|i often|i tend to)\b(.+)', 'Often'),
-    (r'\b(?:aku suka|aku lebih suka|gue suka)\b(.+)', 'Prefers'),
-    (r'\b(?:aku benci|aku nggak suka|gue nggak suka)\b(.+)', 'Dislikes'),
-    (r'\b(?:aku pakai|aku pake)\b(.+)', 'Uses'),
-]
+# ── Semantic extraction (LLM-only) ──────────────────────────────────────────────
 
-_EMOTIONAL_KEYWORDS = [
-    'angry', 'frustrated', 'sad', 'happy', 'excited', 'love',
-    'hate', 'cry', 'laugh', 'upset', 'worried', 'scared',
-    'marah', 'kesal', 'sedih', 'senang', 'sayang', 'benci',
-    'takut', 'khawatir', 'kecewa',
-]
+def extract_semantic_facts(messages) -> list[dict]:
+    """Extract semantic facts from messages using LLM only.
 
-
-def _llm_extract_facts(messages) -> list[dict]:
-    """Use the LLM to extract semantic facts from user messages.
-
-    Called as fallback when regex finds nothing.
-    Returns a list of dicts: {entity, relation, target}
+    Returns list of dicts: {entity, relation, target}
     """
+    if not messages:
+        return []
+
     try:
         ai_manager = _get_ai_manager()
-        conversation = '\n'.join(
-            f"{'User' if m.get('role') == 'user' else 'AI'}: {m.get('content', '')}"
-            for m in messages if m.get('role') in ('user', 'assistant')
-        )
-        prompt = (
-            "Extract factual preferences or identity statements from the user's messages above. "
-            "Return a JSON list of facts, each with fields: entity (always 'User'), relation (one of: "
-            "Prefers, Dislikes, Is, Uses, Often), and target (the specific fact, max 200 chars). "
-            "Return an empty list if nothing meaningful can be extracted. "
-            "Example: [{\"entity\": \"User\", \"relation\": \"Prefers\", \"target\": \"working after 10pm\"}]"
-        )
+    except Exception as e:
+        print(f"[WARNING] AI manager unavailable: {e}")
+        return []
+
+    # Build conversation text
+    conversation = "\n".join(
+        f"{'User' if m.get('role') == 'user' else 'AI'}: {m.get('content', '')}"
+        for m in messages
+        if m.get("role") in ("user", "assistant")
+    )
+
+    if not conversation.strip():
+        return []
+
+    system_prompt = """You are a HIGH-QUALITY knowledge extraction specialist.
+
+Extract ONLY persistent, high-value facts from the user's messages.
+
+## CRITICAL: Extract ONLY facts that pass ALL FOUR tests:
+1. Persistence Test — Will this still be true in 6 months?
+2. Specificity Test — Does it contain concrete, searchable information?
+3. Utility Test — Can this help predict future user needs or preferences?
+4. Independence Test — Can this be understood WITHOUT the conversation context?
+
+## CATEGORIES (use as relation):
+- identity: name, profession, location, company, education
+- preference: likes, dislikes, favorites, stylistic choices
+- interest: topics, hobbies, domains they engage with
+- personality: communication style, emotional tendencies
+- relationship: how they treat you, shared routines, inside jokes
+- experience: skills, past events, professional background
+- goal: plans, aspirations, things they're working toward
+- guideline: how you (assistant) should behave around them
+
+## SKIP:
+- single-emotion reactions (happy, sad, frustrated in one moment)
+- acknowledgments or greetings
+- vague statements without specifics
+- context-dependent information
+
+## OUTPUT: JSON array only, no markdown, no explanation.
+[{"entity": "User", "relation": "preference", "target": "..."}]"""
+
+    user_prompt = f"Extract facts from this conversation:\n\n{conversation}\n\nRespond with a JSON array of facts."
+
+    try:
         response = ai_manager.send_message(
             provider=None,
             model=None,
             messages=[
-                {"role": "system", "content": "You extract structured preference facts from conversation."},
-                {"role": "user", "content": conversation + "\n\n" + prompt},
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
             ],
             timeout=30,
-            max_tokens=300,
+            max_tokens=500,
         )
         if not response:
             return []
-        import json as _json
-        facts = _json.loads(response)
-        if isinstance(facts, list):
-            return [f for f in facts if f.get('entity') and f.get('relation') and f.get('target')]
+
+        import json
+        facts = json.loads(response)
+        if not isinstance(facts, list):
+            return []
+
+        # Validate and clean
+        cleaned = []
+        for f in facts:
+            if (
+                isinstance(f, dict)
+                and f.get("entity")
+                and f.get("relation")
+                and f.get("target")
+            ):
+                target = str(f["target"]).strip()
+                if 3 < len(target) < 300:
+                    cleaned.append({
+                        "entity": "User",
+                        "relation": f["relation"].title(),
+                        "target": target,
+                    })
+        return cleaned
+
     except Exception as e:
         print(f"[WARNING] LLM fact extraction failed: {e}")
-    return []
+        return []
 
 
-def extract_semantic_facts(messages):
-    """Extract semantic triples from a list of messages.
+# ── Episodic helpers ───────────────────────────────────────────────────────────
 
-    Tries regex first, then falls back to LLM extraction if no facts found.
-    """
-    facts = []
-    for msg in messages:
-        if msg.get('role') != 'user':
-            continue
-        content = msg.get('content', '')
-        for pattern, relation in _PREFERENCE_PATTERNS:
-            match = re.search(pattern, content, re.IGNORECASE)
-            if match:
-                target = match.group(1).strip()
-                target = re.sub(r'[.,!?;:]+$', '', target).strip()
-                if target and len(target) < 200:
-                    facts.append({
-                        'entity': 'User',
-                        'relation': relation,
-                        'target': target,
-                    })
-
-    # LLM fallback: if regex found nothing, try LLM extraction
-    if not facts:
-        llm_facts = _llm_extract_facts(messages)
-        if llm_facts:
-            facts.extend(llm_facts)
-
-    return facts
+_EMOTIONAL_KEYWORDS = [
+    "angry", "frustrated", "sad", "happy", "excited", "love",
+    "hate", "cry", "laugh", "upset", "worried", "scared",
+    "marah", "kesal", "sedih", "senang", "sayang", "benci",
+    "takut", "khawatir", "kecewa",
+]
 
 
-def calculate_emotional_weight(messages):
-    """Calculate emotional intensity from a list of messages. Returns 0.0–1.0."""
+def calculate_emotional_weight(messages) -> float:
+    """Calculate emotional intensity. Returns 0.0–1.0."""
     if not messages:
         return 0.0
-    total_hits = 0
-    for msg in messages:
-        content = msg.get('content', '').lower()
-        for keyword in _EMOTIONAL_KEYWORDS:
-            if keyword in content:
-                total_hits += 1
+    total_hits = sum(
+        1
+        for msg in messages
+        for kw in _EMOTIONAL_KEYWORDS
+        if kw in msg.get("content", "").lower()
+    )
     return min(total_hits / max(len(messages), 1) * 0.3, 1.0)
 
 
-def should_create_episodic(messages, affection_delta=0):
-    """Determine if an episodic memory should be created."""
+def should_create_episodic(messages, affection_delta: float = 0) -> bool:
+    """Trigger episodic memory on emotion, length, or affection change."""
     if not messages:
         return False
-    emotional_weight = calculate_emotional_weight(messages)
-    if emotional_weight >= 0.3:
+    if calculate_emotional_weight(messages) >= 0.3:
         return True
     if len(messages) >= 10:
         return True
@@ -133,46 +149,40 @@ def should_create_episodic(messages, affection_delta=0):
     return False
 
 
-def generate_episodic_summary(messages):
-    """Generate a concise summary from a list of messages using LLM.
-
-    Tries LLM summarization first; falls back to naive truncation on failure.
-    """
+def generate_episodic_summary(messages) -> str | None:
+    """Generate episodic summary via LLM. Returns None on failure."""
     if not messages:
-        return ""
-    summary = _llm_summarize(messages)
-    if summary:
-        return summary
-    return _truncate_summary(messages)
+        return None
 
-
-def _llm_summarize(messages) -> str | None:
-    """Use the LLM to generate a concise summary of a message list.
-
-    Sends the conversation to the AI and asks for a 1-3 sentence summary.
-    Returns None on failure (falls back to truncation).
-    """
     try:
         ai_manager = _get_ai_manager()
-        prompt_messages = [
-            {"role": "system", "content": (
-                "You are a memory summarizer. Read the conversation below and produce "
-                "a concise 1-3 sentence summary that captures the key topic, any "
-                "decisions made, and the user's emotional state. Be specific and factual. "
-                "Do not add information not present in the conversation."
-            )},
-        ]
-        for msg in messages:
-            role = msg.get('role', 'unknown')
-            content = msg.get('content', '')
-            if isinstance(content, list):
-                content = ' '.join(
-                    c.get('text', '') for c in content if c.get('type') == 'text'
-                )
-            if role in ('user', 'assistant'):
-                label = 'User' if role == 'user' else 'AI'
-                prompt_messages.append({"role": "user", "content": f"{label}: {content}"})
+    except Exception:
+        return None
 
+    # Build conversation for summarization
+    prompt_messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a memory summarizer. Produce a concise 1-3 sentence "
+                "third-person summary of the conversation. Focus on: what topic "
+                "was discussed, any decisions made, and the user's emotional state. "
+                "Be specific and factual. Do not add information not present."
+            ),
+        }
+    ]
+    for msg in messages:
+        role = msg.get("role", "unknown")
+        content = msg.get("content", "")
+        if isinstance(content, list):
+            content = " ".join(
+                c.get("text", "") for c in content if c.get("type") == "text"
+            )
+        if role in ("user", "assistant"):
+            label = "User" if role == "user" else "AI"
+            prompt_messages.append({"role": "user", "content": f"{label}: {content}"})
+
+    try:
         response = ai_manager.send_message(
             provider=None,
             model=None,
@@ -183,35 +193,22 @@ def _llm_summarize(messages) -> str | None:
         if response and isinstance(response, str) and response.strip():
             return response.strip()
     except Exception as e:
-        print(f"[WARNING] LLM summarization failed: {e}")
+        print(f"[WARNING] Episodic LLM summarization failed: {e}")
+
     return None
 
 
-def _truncate_summary(messages):
-    """Fallback: produce a naive text truncation when LLM is unavailable."""
-    parts = []
-    for msg in messages:
-        role = msg.get('role', 'unknown')
-        content = msg.get('content', '')
-        if len(content) > 150:
-            content = content[:150] + '...'
-        if role in ('user', 'assistant'):
-            label = 'User' if role == 'user' else 'AI'
-            parts.append(f"{label}: {content}")
-    if len(parts) > 6:
-        return '\n'.join(parts[:3] + ['...'] + parts[-3:])
-    return '\n'.join(parts)
-
-
-def _build_semantic_text(entity, relation, target):
+def _build_semantic_text(entity, relation, target) -> str:
     """Build a searchable text from a semantic triple."""
     return f"{entity} {relation} {target}"
 
 
+# ── Storage ──────────────────────────────────────────────────────────────────
+
 def upsert_semantic_memory(session_id, entity, relation, target):
-    """Insert or update a semantic memory triple with embedding."""
+    """Insert or update a semantic memory with embedding."""
     text = _build_semantic_text(entity, relation, target)
-    vector = embed_text(text)  # Returns None gracefully if embedding fails
+    vector = embed_text(text)  # Returns None gracefully on failure
 
     with get_db_session() as session:
         existing = session.query(SemanticMemory).filter(
@@ -245,7 +242,7 @@ def upsert_semantic_memory(session_id, entity, relation, target):
 
 def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance=0.5):
     """Create a new episodic memory record with embedding."""
-    vector = embed_text(summary)  # Returns None gracefully if embedding fails
+    vector = embed_text(summary)
 
     with get_db_session() as session:
         mem = EpisodicMemory(
@@ -261,25 +258,33 @@ def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance
         session.commit()
 
 
-def process_messages_for_memory(session_id, messages, affection_delta=0):
-    """Main entry point: analyze messages and extract memories."""
+# ── Main entry point ─────────────────────────────────────────────────────────
+
+def process_messages_for_memory(session_id, messages, affection_delta: float = 0):
+    """Analyze messages and extract memories (LLM-only semantic, LLM episodic).
+
+    This is called from session init. Idempotent per session.
+    """
     if not messages:
         return
 
-    # 1. Extract semantic facts
-    facts = extract_semantic_facts(messages)
-    for fact in facts:
-        try:
-            upsert_semantic_memory(
-                session_id,
-                fact['entity'],
-                fact['relation'],
-                fact['target'],
-            )
-        except Exception as e:
-            print(f"[WARNING] Semantic memory extraction failed: {e}")
+    # 1. LLM semantic extraction
+    try:
+        facts = extract_semantic_facts(messages)
+        for fact in facts:
+            try:
+                upsert_semantic_memory(
+                    session_id,
+                    fact["entity"],
+                    fact["relation"],
+                    fact["target"],
+                )
+            except Exception as e:
+                print(f"[WARNING] Semantic memory upsert failed: {e}")
+    except Exception as e:
+        print(f"[WARNING] Semantic fact extraction failed: {e}")
 
-    # 2. Check if episodic memory should be created
+    # 2. Episodic if emotionally significant
     if should_create_episodic(messages, affection_delta):
         emotional_weight = calculate_emotional_weight(messages)
         summary = generate_episodic_summary(messages)
