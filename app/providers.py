@@ -573,7 +573,7 @@ class ChutesProvider(AIProvider):
             "moonshotai/Kimi-K2.5-TEE",
             "tngtech/DeepSeek-TNG-R1T-Chimera",
             "tngtech/DeepSeek-TNG-R1T2-Chimera",
-            "Qwen/Qwen3-235B-A22B-Instruct-2507",
+            "Qwen/Qwen3-Next-80B-A3B-Instruct",
             "Qwen/Qwen3-235B-A22B-Thinking-2507",
             "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8-TEE",
             "zai-org/GLM-4.5-TEE",
@@ -832,7 +832,7 @@ class AIProviderManager:
 
     # Preferred models for internal (non-chat) LLM calls
     _PREFERRED_MODELS = [
-        'Qwen/Qwen3-235B-A22B-Instruct-2507',
+        'Qwen/Qwen3-Next-80B-A3B-Instruct',
         'moonshotai/Kimi-K2.5-TEE',
         'deepseek-ai/DeepSeek-V3-0324',
     ]
