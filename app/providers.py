@@ -830,19 +830,37 @@ class AIProviderManager:
             yield f"Streaming error: {str(e)}"
 
 
+    # Preferred models for internal (non-chat) LLM calls
+    _PREFERRED_MODELS = [
+        'Qwen/Qwen3-235B-A22B-Instruct-2507',
+        'moonshotai/Kimi-K2.5-TEE',
+        'deepseek-ai/DeepSeek-V3-0324',
+    ]
+
+    def _best_model(self, provider: str) -> Optional[str]:
+        """Pick the best available model for internal LLM tasks."""
+        if provider not in self.providers:
+            return None
+        models = self.providers[provider].get_models()
+        for preferred in self._PREFERRED_MODELS:
+            if preferred in models:
+                return preferred
+        return models[0] if models else None
+
     def auto_send_message(self, messages: List[Dict], **kwargs) -> Optional[str]:
         """Auto-select provider and model, then dispatch. Fallback wrapper."""
+        model_hint = kwargs.pop('model', None) or kwargs.pop('model_name', None)
         # Try each available provider in priority order
         for provider in ['chutes', 'openrouter', 'ollama', 'cerebras']:
             if provider not in self.providers:
                 continue
             provider_obj = self.providers[provider]
-            models = provider_obj.get_models()
-            if not models:
+            if model_hint:
+                model = model_hint if model_hint in provider_obj.get_models() else provider_obj.get_models()[0]
+            else:
+                model = self._best_model(provider)
+            if not model:
                 continue
-            model = kwargs.pop('model', None) or kwargs.pop('model_name', None) or models[0]
-            if model not in models:
-                model = models[0]
             try:
                 result = provider_obj.send_message(messages, model, **kwargs)
                 if result:
