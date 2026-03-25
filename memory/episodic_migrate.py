@@ -14,7 +14,7 @@ import struct
 import requests
 import re
 from datetime import datetime
-from database import Database, get_db_session, EpisodicMemory
+from app.database import Database, get_db_session, EpisodicMemory
 
 
 CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-8b.chutes.ai/v1/embeddings"

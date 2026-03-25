@@ -12,10 +12,10 @@ from flask import Flask, render_template, request, jsonify, send_from_directory,
 import json
 import os
 from datetime import datetime
-from app import handle_user_message, handle_user_message_streaming, start_session, end_session_cleanup, summarize_memory, summarize_global_player_profile
-from app import set_preferred_provider, get_vision_capabilities
-from database import Database
-from providers import get_ai_manager
+from app.app import handle_user_message, handle_user_message_streaming, start_session, end_session_cleanup, summarize_memory, summarize_global_player_profile
+from app.app import set_preferred_provider, get_vision_capabilities
+from app.database import Database
+from app.providers import get_ai_manager
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 

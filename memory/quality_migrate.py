@@ -17,7 +17,7 @@ import time
 import struct
 import requests
 from datetime import datetime
-from database import Database, get_db_session, SemanticMemory, EpisodicMemory
+from app.database import Database, get_db_session, SemanticMemory, EpisodicMemory
 from sqlalchemy import text
 
 

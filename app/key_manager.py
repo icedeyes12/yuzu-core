@@ -11,41 +11,40 @@
 #!/usr/bin/env python3
 import argparse
 import sys
-from encryption import encryptor
-from backup import BackupManager
+from app.encryption import encryptor
+# from app.backup import BackupManager  # backup module not present
 
 def main():
     parser = argparse.ArgumentParser(description="Yuzu Companion Encryption Key Manager")
-    parser.add_argument('--backup', action='store_true', help='Backup encryption key')
-    parser.add_argument('--restore', action='store_true', help='Restore encryption key from backup')
     parser.add_argument('--info', action='store_true', help='Show key information')
     parser.add_argument('--test', action='store_true', help='Test encryption/decryption')
-    parser.add_argument('--backup-path', default='backup_encryption.key', help='Backup file path')
-    parser.add_argument('--list-backups', action='store_true', help='List key backups')
-    parser.add_argument('--backup-dir', default='backup', help='Backup directory path')
+    # parser.add_argument('--backup', action='store_true', help='Backup encryption key')
+    # parser.add_argument('--restore', action='store_true', help='Restore encryption key from backup')
+    # parser.add_argument('--backup-path', default='backup_encryption.key', help='Backup file path')
+    # parser.add_argument('--list-backups', action='store_true', help='List key backups')
+    # parser.add_argument('--backup-dir', default='backup', help='Backup directory path')
     
     args = parser.parse_args()
+    # backup_manager = BackupManager(args.backup_dir)
     
-    backup_manager = BackupManager(args.backup_dir)
+    # if args.backup:
+    #     print("Backing up encryption key...")
+    #     key_files = backup_manager.backup_encryption_keys()
+    #     if key_files:
+    #         print("Key backup completed successfully")
+    #     else:
+    #         print("Key backup failed")
+    #         sys.exit(1)
+    #
+    # elif args.restore:
+    #     print("Restoring encryption key...")
+    #     if backup_manager.restore_encryption_key():
+    #         print("Key restore completed successfully")
+    #     else:
+    #         print("Key restore failed")
+    #         sys.exit(1)
     
-    if args.backup:
-        print("Backing up encryption key...")
-        key_files = backup_manager.backup_encryption_keys()
-        if key_files:
-            print("Key backup completed successfully")
-        else:
-            print("Key backup failed")
-            sys.exit(1)
-    
-    elif args.restore:
-        print("Restoring encryption key...")
-        if backup_manager.restore_encryption_key():
-            print("Key restore completed successfully")
-        else:
-            print("Key restore failed")
-            sys.exit(1)
-    
-    elif args.info:
+    if args.info:
         info = encryptor.get_key_info()
         print("Encryption Key Information:")
         for key, value in info.items():
@@ -77,8 +76,8 @@ def main():
             print("Some tests failed!")
             sys.exit(1)
     
-    elif args.list_backups:
-        backup_manager.list_key_backups()
+    # elif args.list_backups:
+    #     backup_manager.list_key_backups()
     
     else:
         parser.print_help()

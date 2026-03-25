@@ -3,7 +3,7 @@
 
 import math
 import struct
-from database import Database
+from app.database import Database
 
 
 CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-8b.chutes.ai/v1/embeddings"
