@@ -23,3 +23,5 @@ static/
 templates/
 memory/
 docs/
+
+*_checkpoint.json
