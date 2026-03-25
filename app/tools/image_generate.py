@@ -8,7 +8,7 @@ Z_TURBO_ENDPOINT = "https://chutes-z-image-turbo.chutes.ai/generate"
 QWEN_IMAGE_ENDPOINT = "https://image.chutes.ai/generate"
 
 def execute(arguments, **kwargs):
-    from tools.registry import build_markdown_contract
+    from app.tools.registry import build_markdown_contract
 
     prompt = arguments.get("prompt", "")
     if not prompt:
