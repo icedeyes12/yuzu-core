@@ -68,7 +68,7 @@ def execute_tool(tool_name, arguments, session_id=None):
         print(f"[tool_error] {tool_name}: {e}")
         profile = {}
         try:
-            from database import Database
+            from app.database import Database
             profile = Database.get_profile() or {}
         except Exception:
             pass

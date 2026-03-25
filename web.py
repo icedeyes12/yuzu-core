@@ -475,7 +475,7 @@ def api_rebuild_structured_memory():
         segment_session(session_id)
 
         # Get current memory stats
-        from database import get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
+        from app.database import get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
         with get_db_session() as db_session:
             semantic_count = db_session.query(SemanticMemory).filter_by(session_id=session_id).count()
             episodic_count = db_session.query(EpisodicMemory).filter_by(session_id=session_id).count()
@@ -519,7 +519,7 @@ def api_memory_stats():
         active_session = Database.get_active_session()
         session_id = active_session['id']
 
-        from database import get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
+        from app.database import get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
         with get_db_session() as db_session:
             semantic_count = db_session.query(SemanticMemory).filter_by(session_id=session_id).count()
             episodic_count = db_session.query(EpisodicMemory).filter_by(session_id=session_id).count()
