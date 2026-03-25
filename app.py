@@ -382,7 +382,7 @@ def handle_user_message(user_message, interface="terminal"):
             auto_name_session_if_needed(session_id, active_session)
             if should_summarize_memory(profile, user_message, session_id):
                 summarize_memory(profile, user_message, final_response, session_id)
-            _trigger_memory_extraction(session_id)
+            _trigger_memory_pipeline(session_id)
             return final_response
         
         else:
@@ -392,16 +392,16 @@ def handle_user_message(user_message, interface="terminal"):
             auto_name_session_if_needed(session_id, active_session)
             if should_summarize_memory(profile, user_message, session_id):
                 summarize_memory(profile, user_message, raw_ai_response, session_id)
-            _trigger_memory_extraction(session_id)
+            _trigger_memory_pipeline(session_id)
             return raw_ai_response
 
 
-def _trigger_memory_extraction(session_id):
-    """Extract structured memories from recent messages.
+def _trigger_memory_pipeline(session_id):
+    """Run episodic memory extraction on recent messages.
 
-    NOTE: Semantic fact extraction (regex-based) is DISABLED.
-    High-quality semantic facts are created via LLM extraction in memory/quality_migrate.py (batch).
-    Only episodic memory creation remains active here (triggered by emotion/length).
+    Called after each user/assistant exchange.
+    Semantic fact extraction (regex-based) is gated by emotion thresholds here;
+    a separate call at session start handles non-gated semantic extraction.
     """
     try:
         from memory.extractor import should_create_episodic, calculate_emotional_weight
@@ -505,7 +505,7 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
                 auto_name_session_if_needed(session_id, active_session)
                 if should_summarize_memory(profile, user_message, session_id):
                     summarize_memory(profile, user_message, final_response, session_id)
-                _trigger_memory_extraction(session_id)
+                _trigger_memory_pipeline(session_id)
                 return
             
             else:
@@ -517,7 +517,7 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
         if should_summarize_memory(profile, user_message, session_id):
             summarize_memory(profile, user_message, full_response, session_id)
 
-        _trigger_memory_extraction(session_id)
+        _trigger_memory_pipeline(session_id)
     return
 
 def extract_recent_images(session_id, limit=3):
@@ -1588,7 +1588,26 @@ def start_session(interface="terminal"):
         }
         session_history['total_sessions'] = session_history.get('total_sessions', 0) + 1
         Database.update_profile({'session_history': session_history})
-        
+
+        # --- Memory system initialization ---
+        try:
+            from memory.segmenter import segment_session
+            from memory.review import run_decay
+            from memory.extractor import process_messages_for_memory
+
+            # Apply FSRS decay to existing memories
+            run_decay(session_id)
+
+            # Segment unsegmented messages from past sessions
+            segment_session(session_id)
+
+            # Extract semantic facts + episodic memories from recent history
+            recent = Database.get_chat_history(session_id=session_id, limit=50, recent=True)
+            if recent:
+                process_messages_for_memory(session_id, recent)
+        except Exception as e:
+            print(f"[WARNING] Memory system init failed: {e}")
+
         return profile
 
 def detect_important_content(message):
