@@ -347,21 +347,18 @@ def handle_user_message(user_message, interface="terminal"):
             # Save tool output as tool message
             Database.add_message(tool_role, tool_output, session_id=session_id)
             
-            # PHASE 3: ALL tools trigger second pass (deterministic two-pass architecture)
-            # Section IV: If last tool role == image_tools, prepare base64 for second pass
-            # Section IV: If last tool role == image_tools, prepare base64 for second pass
-            image_base64_for_context = None
+            # PHASE 3: image_tools is TERMINAL — return tool output only, no synthesis pass
+            # The base64 injection approach caused context overflow (400 errors).
+            final_response = tool_output
             if tool_role == "image_tools":
-                image_path = _parse_image_result_from_formatted(tool_output)
-                if image_path and os.path.exists(image_path):
-                    import base64
-                    with open(image_path, 'rb') as f:
-                        img_data = f.read()
-                    img_b64 = base64.b64encode(img_data).decode('utf-8')
-                    mime_type = 'image/png' if image_path.endswith('.png') else 'image/jpeg'
-                    image_base64_for_context = f"image_tools: data:{mime_type};base64,{img_b64}"
-            
-            second_reply = generate_ai_response(profile, "", interface, session_id, image_base64_for_context=image_base64_for_context)
+                auto_name_session_if_needed(session_id, active_session)
+                if should_summarize_memory(profile, user_message, session_id):
+                    summarize_memory(profile, user_message, final_response, session_id)
+                _trigger_memory_pipeline(session_id)
+                return
+
+            # Non-terminal tools — second pass synthesis (other tools only)
+            second_reply = generate_ai_response(profile, "", interface, session_id)
             if second_reply and second_reply.strip():
                 second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
                 Database.add_message('assistant', second_clean, session_id=session_id)
@@ -517,25 +514,19 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
                 
                 # Yield tool output
                 yield "\n\n" + tool_output
-                
-                # PHASE 3: Check if terminal tool (no synthesis pass)
-                # Section IV: If last tool role == image_tools, prepare base64 for second pass
-                image_base64_for_context = None
-                if tool_role == "image_tools":
-                    image_path = _parse_image_result_from_formatted(tool_output)
-                    if image_path and os.path.exists(image_path):
-                        import base64
-                        with open(image_path, 'rb') as f:
-                            img_data = f.read()
-                        img_b64 = base64.b64encode(img_data).decode('utf-8')
-                        mime_type = 'image/png' if image_path.endswith('.png') else 'image/jpeg'
-                        image_base64_for_context = f"image_tools: data:{mime_type};base64,{img_b64}"
-                
-                # ALL tools trigger second pass (deterministic two-pass architecture)
-                final_response = tool_output
 
-                # Trigger synthesis pass
-                second_reply = generate_ai_response(profile, "", interface, session_id, image_base64_for_context=image_base64_for_context)
+                # PHASE 3: image_tools is TERMINAL — return tool output only, no synthesis pass
+                # The base64 injection approach caused context overflow (400 errors).
+                final_response = tool_output
+                if tool_role == "image_tools":
+                    auto_name_session_if_needed(session_id, active_session)
+                    if should_summarize_memory(profile, user_message, session_id):
+                        summarize_memory(profile, user_message, final_response, session_id)
+                    _trigger_memory_pipeline(session_id)
+                    return
+
+                # Non-terminal tools — second pass synthesis (other tools only)
+                second_reply = generate_ai_response(profile, "", interface, session_id)
                 if second_reply and second_reply.strip():
                     second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
                     Database.add_message('assistant', second_clean, session_id=session_id)
