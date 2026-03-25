@@ -1,8 +1,9 @@
 {
-  "phase": 3,
-  "episodic_embedded": 1307,
-  "episodic_batch": 6,
+  "phase": 0,
+  "episodic_embedded": 0,
+  "episodic_batch": 0,
   "semantic_embedded": 0,
-  "started_at": "2026-03-23T07:00:00",
+  "extracted_facts": [],
+  "started_at": null,
   "last_run": null
 }

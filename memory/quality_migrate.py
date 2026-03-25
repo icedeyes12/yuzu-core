@@ -356,20 +356,26 @@ def phase3_extract_facts(cp):
     episodic_data = episodic_data[batch_offset:]
     extracted_facts = []  # list of {"fact": ..., "category": ...}
 
+    # Load previously extracted facts (resume-safe)
+    extracted_facts = cp.get("extracted_facts", [])
+    _log(f"Resuming with {len(extracted_facts)} already-extracted facts")
+
+    total_episodes = len(episodic_data)
     for batch_start in range(0, len(episodic_data), BATCH_SIZE):
         batch = episodic_data[batch_start:batch_start + BATCH_SIZE]
         facts = _extract_facts_via_llm(batch)
 
         for f in facts:
-            f["source_episode_id"] = batch[0]["id"]  # associate with first episode in batch
+            f["source_episode_id"] = batch[0]["id"]
 
         extracted_facts.extend(facts)
-        cp["episodic_batch"] = batch_offset // BATCH_SIZE + 1
+        # checkpoint: absolute episode count, not batch number
+        episodes_done = batch_offset + batch_start + len(batch)
+        cp["episodic_batch"] = episodes_done
+        cp["extracted_facts"] = extracted_facts
         _save_cp(cp)
 
-        # Progress log
-        total_done = batch_offset + batch_start + len(batch)
-        _log(f"  {total_done}/{len(episodic_data) + batch_offset} episodes | {len(extracted_facts)} facts extracted so far")
+        _log(f"  {episodes_done}/{total_episodes + batch_offset} episodes | {len(extracted_facts)} facts total")
 
     cp["phase"] = 3  # Mark done
     cp["extracted_facts"] = extracted_facts
