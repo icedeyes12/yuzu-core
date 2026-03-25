@@ -4,17 +4,16 @@ This document describes how memories are selected and injected into
 the LLM context.
 
 Retrieval combines:
-
 1. Semantic memory (facts)
 2. Episodic memory (events)
-3. Recent raw messages
+3. Conversation segments
+4. Recent raw messages
 
 ---
 
 ## Retrieval Goals
 
 The retrieval system must:
-
 - Keep context small
 - Keep context relevant
 - Preserve long-term consistency
@@ -25,74 +24,78 @@ The retrieval system must:
 ## Retrieval Layers
 
 Context is assembled in this order:
-
 1. System message
 2. Semantic memory
 3. Episodic memory
-4. Recent messages
+4. Conversation segments
+5. Recent messages
 
 ---
 
 ## Semantic Retrieval
 
-Selection rules:
+**Scoring formula:**
+```
+score = cosine_sim × 0.6 + importance × 0.2 + confidence × 0.2
+```
 
-- Sort by confidence (descending)
-- Secondary sort: access_count
-- Secondary sort: recency
+When no query embedding is available, falls back to: `importance × confidence`
 
-Typical limits:
+**Selection rules:**
+1. Sort by score (descending)
+2. Limit: top 10–15 results
 
-- 10–20 semantic facts
-
-Example:
-
-User prefers concise answers. User works mostly at night. User uses Python for backend work.
+**Example output:**
+```
+Known preferences:
+- User Prefers concise answers
+- User Uses Python for backend
+```
 
 ---
 
 ## Episodic Retrieval
 
-Episodic memories represent:
+**Scoring formula:**
+```
+score = cosine_sim × 0.5 + importance × 0.25 + recency × 0.25
+```
 
-- Important conversations
-- Emotional shifts
-- Decisions
-- Shared events
+Recency factor uses exponential decay with 24h half-life:
+```
+recency = exp(-hours_since_last_access / 24.0)
+```
 
-Selection scoring:
+When no query embedding is available, falls back to:
+```
+score = importance + emotional_weight × 0.5 + recency
+```
 
-score = importance_score * 0.5
-
-retrievability * 0.3
-
-recency_weight * 0.2
-
-
-Typical limits:
-
-- Top 5–10 episodes
+**Selection rules:**
+1. Sort by score (descending)
+2. Limit: top 5 results
 
 ---
 
-## Recency Weight
+## Segment Retrieval
 
-Recency weight is derived from:
+**Scoring formula:**
+```
+score = cosine_sim × 0.5 + importance × 0.5
+```
 
-time_since_last_access
-
-Newer or recently accessed memories are preferred.
+**Selection rules:**
+1. Sort by score (descending)
+2. Limit: top 5 results
 
 ---
 
 ## Recent Message Window
 
 Always include:
-
 - Last 10–20 raw messages
 
 Purpose:
-
 - Preserve conversational continuity
 - Capture immediate context
 
@@ -100,25 +103,28 @@ Purpose:
 
 ## Final Context Layout
 
-Example structure:
-
+```
 System message
 
 [Semantic memory]
-
-User prefers concise answers.
-
-User works at night.
-
+Known preferences:
+- User Prefers concise answers
+- User Works at night
 
 [Episodic memory]
+Recent important events:
+- User completed a major refactor last week
+- User expressed frustration with network issues yesterday
 
-Last week: user completed major refactor.
+[Segments]
+Relevant past context:
+- User asked about deployment on 2026-03-20
 
-Yesterday: user expressed frustration with network issues.
-
-
-[Recent messages] User: ... Assistant: ... User: ...
+[Recent messages]
+User: ...
+Assistant: ...
+User: ...
+```
 
 ---
 
@@ -127,13 +133,17 @@ Yesterday: user expressed frustration with network issues.
 File: `memory/retrieval.py`
 
 Responsibilities:
-
-1. Retrieve top semantic facts
-2. Retrieve top episodic memories
-3. Assemble ranked memory lists
+1. Retrieve top semantic facts by hybrid score
+2. Retrieve top episodic memories by hybrid score
+3. Retrieve top conversation segments
+4. Assemble and format memory bundle for context injection
 
 Primary functions:
+- `retrieve_semantic_memories(session_id, query, limit)`
+- `retrieve_episodic_memories(session_id, query, limit)`
+- `retrieve_segments(session_id, query, limit)`
+- `retrieve_memory(session_id, query)` — returns dict with semantic, episodic, segments
+- `format_memory(memory_bundle)` — formats for system message injection
 
-- get_semantic_memories(session_id, limit)
-- get_episodic_memories(session_id, limit)
-- rank_episodic_memories(episodes)
+Recency helper:
+- `_recency_factor(last_accessed)` — returns 0.0–1.0, half-life 24h

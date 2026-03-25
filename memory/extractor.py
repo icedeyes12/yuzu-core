@@ -9,6 +9,12 @@ from database import (
 from memory.embedder import embed_text, vec_to_blob
 
 
+def _get_ai_manager():
+    """Lazy-import ai_manager to avoid circular imports."""
+    from app import get_ai_manager
+    return get_ai_manager()
+
+
 # Keywords that indicate preference or identity facts
 _PREFERENCE_PATTERNS = [
     (r'\b(?:i prefer|i like|i love|i enjoy|i want|i need)\b(.+)', 'Prefers'),
@@ -78,9 +84,63 @@ def should_create_episodic(messages, affection_delta=0):
 
 
 def generate_episodic_summary(messages):
-    """Generate a simple text summary from a list of messages (no LLM)."""
+    """Generate a concise summary from a list of messages using LLM.
+
+    Tries LLM summarization first; falls back to naive truncation on failure.
+    """
     if not messages:
         return ""
+    # Try LLM summarization first
+    summary = _llm_summarize(messages)
+    if summary:
+        return summary
+    # Fallback to truncation
+    return _truncate_summary(messages)
+
+
+def _llm_summarize(messages) -> str | None:
+    """Use the LLM to generate a concise summary of a message list.
+
+    Sends the conversation to the AI and asks for a 1-3 sentence summary.
+    Returns None on failure (falls back to truncation).
+    """
+    try:
+        ai_manager = _get_ai_manager()
+        prompt_messages = [
+            {"role": "system", "content": (
+                "You are a memory summarizer. Read the conversation below and produce "
+                "a concise 1-3 sentence summary that captures the key topic, any "
+                "decisions made, and the user's emotional state. Be specific and factual. "
+                "Do not add information not present in the conversation."
+            )},
+        ]
+        for msg in messages:
+            role = msg.get('role', 'unknown')
+            content = msg.get('content', '')
+            if isinstance(content, list):
+                content = ' '.join(
+                    c.get('text', '') for c in content if c.get('type') == 'text'
+                )
+            if role in ('user', 'assistant'):
+                label = 'User' if role == 'user' else 'AI'
+                prompt_messages.append({"role": "user", "content": f"{label}: {content}"})
+
+        response = ai_manager.send_message(
+            provider=None,
+            model=None,
+            messages=prompt_messages,
+            timeout=30,
+            max_tokens=200,
+        )
+        if response and isinstance(response, str) and response.strip():
+            return response.strip()
+    except Exception as e:
+        print(f"[WARNING] LLM summarization failed: {e}")
+    return None
+
+
+def _truncate_summary(messages):
+    """Fallback: produce a naive text truncation when LLM is unavailable."""
     parts = []
     for msg in messages:
         role = msg.get('role', 'unknown')
@@ -91,10 +151,8 @@ def generate_episodic_summary(messages):
             label = 'User' if role == 'user' else 'AI'
             parts.append(f"{label}: {content}")
     if len(parts) > 6:
-        summary_parts = parts[:3] + ['...'] + parts[-3:]
-    else:
-        summary_parts = parts
-    return '\n'.join(summary_parts)
+        return '\n'.join(parts[:3] + ['...'] + parts[-3:])
+    return '\n'.join(parts)
 
 
 def _embed_text(text: str) -> list[float] | None:
