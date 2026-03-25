@@ -446,7 +446,12 @@ def _trigger_memory_pipeline(session_id):
             try:
                 facts = extract_semantic_facts(recent)
                 for fact in facts:
-                    upsert_semantic_memory(session_id, fact['entity'], fact['relation'], fact['target'])
+                    try:
+                        upsert_semantic_memory(session_id, fact['entity'], fact['relation'], fact['target'])
+                    except (KeyError, ValueError) as e:
+                        print(f"[WARNING] Semantic fact malformed: {e}")
+                    except Exception as e:
+                        print(f"[WARNING] Semantic memory upsert failed: {e}")
                 _memory_semantic_last_run[session_id] = datetime.now()
                 _memory_semantic_last_msg_count[session_id] = msg_count
             except Exception as e:
@@ -1645,12 +1650,27 @@ def start_session(interface="terminal"):
             # Segment unsegmented messages from past sessions
             segment_session(session_id)
 
-            # Extract semantic facts + episodic memories — idemponent per session
-            if not _MEMORY_INIT_DONE.get(session_id):
+            # Extract semantic facts + episodic memories — idempotent per session
+            # Check DB directly instead of in-memory dict (survives restarts)
+            from app.database import get_db_session
+            from app.memory.models import SemanticMemory, EpisodicMemory
+            already_initialized = False
+            try:
+                with get_db_session() as db:
+                    sem_count = db.query(SemanticMemory).filter(
+                        SemanticMemory.session_id == session_id
+                    ).count()
+                    epi_count = db.query(EpisodicMemory).filter(
+                        EpisodicMemory.session_id == session_id
+                    ).count()
+                    already_initialized = (sem_count > 0 or epi_count > 0)
+            except Exception:
+                already_initialized = False
+
+            if not already_initialized:
                 recent = Database.get_chat_history(session_id=session_id, limit=50, recent=True)
                 if recent:
                     process_messages_for_memory(session_id, recent)
-                _MEMORY_INIT_DONE[session_id] = True
         except Exception as e:
             print(f"[WARNING] Memory system init failed: {e}")
 
@@ -1739,16 +1759,10 @@ just a natural paragraph.
         Database.update_session_memory(session_id, memory_update)
 
         # Also sync to structured DB so both systems stay aligned
+        # Note: semantic facts are already extracted by _trigger_memory_pipeline()
+        # to avoid duplicate LLM calls. Only episodic sync here.
         try:
-            from app.memory.extractor import upsert_semantic_memory, create_episodic_memory
-            from app.memory.extractor import extract_semantic_facts, calculate_emotional_weight
-
-            facts = extract_semantic_facts(chat_history[-20:])
-            for fact in facts:
-                try:
-                    upsert_semantic_memory(session_id, fact['entity'], fact['relation'], fact['target'])
-                except Exception as e:
-                    print(f"[WARNING] Sync semantic to DB failed: {e}")
+            from app.memory.extractor import create_episodic_memory, calculate_emotional_weight
 
             emotional = calculate_emotional_weight(chat_history[-20:])
             importance = 0.5 + emotional * 0.3

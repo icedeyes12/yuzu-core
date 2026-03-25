@@ -80,13 +80,28 @@ Extract ONLY persistent, high-value facts from the user's messages.
                 {"role": "user", "content": user_prompt},
             ],
             timeout=30,
-            max_tokens=500,
+            max_tokens=800,
         )
         if not response:
             return []
 
         import json
-        facts = json.loads(response)
+        # Robust parse: try full response first, then fallback to truncated-cleanup
+        try:
+            facts = json.loads(response)
+        except json.JSONDecodeError:
+            # Response may be truncated mid-JSON; find last valid close bracket
+            facts = []
+            for i in range(len(response), 0, -1):
+                try:
+                    facts = json.loads(response[:i])
+                    if isinstance(facts, list):
+                        break
+                except json.JSONDecodeError:
+                    continue
+            if not isinstance(facts, list):
+                print(f"[WARNING] LLM returned invalid JSON (len={len(response)}), skipping extraction")
+                return []
         if not isinstance(facts, list):
             return []
 
@@ -188,7 +203,7 @@ def generate_episodic_summary(messages) -> str | None:
             model=None,
             messages=prompt_messages,
             timeout=30,
-            max_tokens=200,
+            max_tokens=300,
         )
         if response and isinstance(response, str) and response.strip():
             return response.strip()
