@@ -1540,12 +1540,10 @@ def end_session_cleanup(profile, interface="terminal", unexpected_exit=False):
         all_sessions = Database.get_all_sessions()
         session_count = len(all_sessions)
         
-        last_active = "Never"
         if len(all_sessions) > 1:
             sorted_sessions = sorted(all_sessions, key=lambda x: x.get('updated_at', ''), reverse=True)
             for session in sorted_sessions[1:]:
                 if session.get('updated_at'):
-                    last_active = session['updated_at']
                     break
         
         connection_msg = (
@@ -1661,7 +1659,7 @@ def should_summarize_memory(profile, user_message, session_id):
         if total_conversation_count > last_summary_count:
             # Check idle time
             try:
-                from datetime import datetime, timedelta
+                from datetime import datetime
                 last_msg_time = session_memory.get('last_message_time')
                 if last_msg_time:
                     last_dt = datetime.fromisoformat(last_msg_time)
