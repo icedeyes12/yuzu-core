@@ -6,7 +6,7 @@ from datetime import datetime
 from app.database import (
     get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
 )
-from app.memory.embedder import cosine_similarity, blob_to_vec
+from memory.embedder import cosine_similarity, blob_to_vec
 
 
 def _recency_factor(last_accessed) -> float:

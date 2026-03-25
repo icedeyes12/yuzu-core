@@ -17,7 +17,7 @@ def _get_session():
     if _session is None:
         api_key = Database.get_api_key("chutes")
         if not api_key:
-            raise RuntimeError("Chutes API key not found in database")
+            return None
         _session = __import__("requests").Session()
         _session.headers.update({
             "Authorization": f"Bearer {api_key}",
@@ -28,6 +28,9 @@ def _get_session():
 
 def embed_texts(texts, model=None, dimensions=None, encoding_format="float"):
     """Embed a list of strings via Chutes API. Returns list of embedding lists."""
+    session = _get_session()
+    if session is None:
+        raise RuntimeError("Chutes API key not configured")
     if isinstance(texts, str):
         texts = [texts]
     if not texts:
@@ -41,14 +44,17 @@ def embed_texts(texts, model=None, dimensions=None, encoding_format="float"):
         payload["dimensions"] = dimensions
     payload["encoding_format"] = encoding_format
 
-    resp = _get_session().post(CHUTES_EMBED_ENDPOINT, json=payload, timeout=60)
+    resp = session.post(CHUTES_EMBED_ENDPOINT, json=payload, timeout=60)
     resp.raise_for_status()
     return [item["embedding"] for item in resp.json()["data"]]
 
 
 def embed_text(text, **kwargs):
-    """Embed a single string."""
-    return embed_texts([text], **kwargs)[0]
+    """Embed a single string. Returns None if embedding fails."""
+    try:
+        return embed_texts([text], **kwargs)[0]
+    except Exception:
+        return None
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -63,10 +69,14 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
 
 def vec_to_blob(vec: list[float]) -> bytes:
     """Serialize a float list to bytes for SQLite BLOB storage."""
+    if vec is None:
+        return b""
     return struct.pack(f"{len(vec)}f", *vec)
 
 
 def blob_to_vec(blob: bytes) -> list[float]:
     """Deserialize bytes back to float list."""
+    if not blob:
+        return []
     count = len(blob) // 4
     return list(struct.unpack(f"{count}f", blob))
