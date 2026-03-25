@@ -1,5 +1,5 @@
-FILE: app/memory/batch_migrate.py
-DESCRIPTION: Batch migration script for backfilling embeddings on existing memory records
+# FILE: app/memory/batch_migrate.py
+# DESCRIPTION: Batch migration script for backfilling embeddings on existing memory records
 
 import os
 import json

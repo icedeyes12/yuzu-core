@@ -1,5 +1,5 @@
-FILE: app/memory/vector_store.py
-DESCRIPTION: FAISS ANN index for memory retrieval
+# FILE: app/memory/vector_store.py
+# DESCRIPTION: FAISS ANN index for memory retrieval
 
 from __future__ import annotations
 

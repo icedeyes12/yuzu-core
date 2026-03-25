@@ -1,5 +1,5 @@
-FILE: app/tools/image_generate.py
-DESCRIPTION: Image generation tool using diffusion models
+# FILE: app/tools/image_generate.py
+# DESCRIPTION: Image generation tool using diffusion models
 
 import os
 import requests

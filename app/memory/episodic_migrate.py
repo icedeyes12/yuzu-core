@@ -1,5 +1,5 @@
-FILE: app/memory/episodic_migrate.py
-DESCRIPTION: Regenerate episodic summaries with LLM - raw snippets to proper narrative and title
+# FILE: app/memory/episodic_migrate.py
+# DESCRIPTION: Regenerate episodic summaries with LLM - raw snippets to proper narrative and title
 
 import os
 import json

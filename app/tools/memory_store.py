@@ -1,5 +1,5 @@
-FILE: app/tools/memory_store.py
-DESCRIPTION: Tool for storing memories to vector database
+# FILE: app/tools/memory_store.py
+# DESCRIPTION: Tool for storing memories to vector database
 
 from datetime import datetime
 from app.database import Database, get_db_session, SemanticMemory

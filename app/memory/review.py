@@ -1,5 +1,5 @@
-FILE: app/memory/review.py
-DESCRIPTION: FSRS-style review and decay system for memory
+# FILE: app/memory/review.py
+# DESCRIPTION: FSRS-style review and decay system for memory
 
 import math
 import os

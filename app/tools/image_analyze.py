@@ -1,5 +1,5 @@
-FILE: app/tools/image_analyze.py
-DESCRIPTION: Image analysis tool using vision models
+# FILE: app/tools/image_analyze.py
+# DESCRIPTION: Image analysis tool using vision models
 
 import json
 import re

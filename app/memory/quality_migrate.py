@@ -1,5 +1,5 @@
-FILE: app/memory/quality_migrate.py
-DESCRIPTION: High-quality semantic memory extraction via LLM from existing episodic records
+# FILE: app/memory/quality_migrate.py
+# DESCRIPTION: High-quality semantic memory extraction via LLM from existing episodic records
 
 import os
 import json

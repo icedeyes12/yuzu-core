@@ -1,5 +1,5 @@
-FILE: app/tools/multimodal.py
-DESCRIPTION: Multimodal tools with image caching and vision support
+# FILE: app/tools/multimodal.py
+# DESCRIPTION: Multimodal tools with image caching and vision support
 
 import requests
 import base64
