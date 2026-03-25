@@ -1,9 +1,34 @@
 # [FILE: memory/review.py]
 # [DESCRIPTION: FSRS-style review and decay system for memory]
+# Unused schema columns removed: stability, difficulty, retrieval_count (computed dynamically)
 
 import math
+import os
+import json
 from datetime import datetime
 from app.database import get_db_session, SemanticMemory, EpisodicMemory
+
+_DECAY_STATE_FILE = os.path.join(os.path.dirname(__file__), '.decay_state.json')
+
+
+def _get_last_decay_time():
+    """Return the last time decay ran (epoch), or None if never run."""
+    if not os.path.exists(_DECAY_STATE_FILE):
+        return None
+    try:
+        with open(_DECAY_STATE_FILE) as f:
+            return json.load(f).get('last_decay')
+    except (ValueError, IOError):
+        return None
+
+
+def _set_last_decay_time():
+    """Record current time as last decay timestamp."""
+    try:
+        with open(_DECAY_STATE_FILE, 'w') as f:
+            json.dump({'last_decay': datetime.now().isoformat()}, f)
+    except IOError as e:
+        print(f"[WARNING] Could not write decay state: {e}")
 
 
 def _hours_since(dt):
@@ -34,7 +59,6 @@ def decay_semantic_memories(session_id=None):
 
         for mem in memories:
             hours = _hours_since(mem.last_accessed)
-            # Stability: higher access count = higher stability
             stability = max(24.0 * (1 + (mem.access_count or 0) * 0.5), 24.0)
             decay_factor = math.exp(-hours / stability)
             mem.importance = max((mem.importance or 0.5) * decay_factor, 0.01)
@@ -86,11 +110,24 @@ def reinforce_memory(memory_id, memory_type='semantic'):
             session.commit()
 
 
-def run_decay(session_id=None):
+def run_decay(session_id=None, force=False):
     """Run full decay cycle on all memory types.
 
-    Can be called periodically (e.g., on startup or on schedule).
+    Skips if decay ran within the last 6 hours unless force=True.
     """
+    if not force:
+        last = _get_last_decay_time()
+        if last:
+            try:
+                last_dt = datetime.strptime(last, '%Y-%m-%dT%H:%M:%S.%f')
+                hours_since = (datetime.now() - last_dt).total_seconds() / 3600.0
+                if hours_since < 6.0:
+                    print(f"[decay] Skipped — ran {hours_since:.1f}h ago (min interval: 6h)")
+                    return
+            except (ValueError, TypeError):
+                pass
+
+    print("[decay] Running memory decay...")
     try:
         decay_semantic_memories(session_id)
     except Exception as e:
@@ -99,3 +136,6 @@ def run_decay(session_id=None):
         decay_episodic_memories(session_id)
     except Exception as e:
         print(f"[WARNING] Episodic decay failed: {e}")
+
+    _set_last_decay_time()
+    print("[decay] Done.")

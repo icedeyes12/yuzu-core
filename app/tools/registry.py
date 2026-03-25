@@ -5,8 +5,6 @@ TOOL_ROLE_MAP = {
     "image_generate": "image_tools",
     "imagine": "image_tools",
     "request": "request_tools",
-    "memory_search": "memory_search_tools",
-    "memory_sql": "memory_sql_tools",
     "memory_store": "memory_store_tools",
     "image_analyze": "image_analyze_tools",
 }
@@ -50,12 +48,6 @@ def execute_tool(tool_name, arguments, session_id=None):
     elif tool_name == "request":
         from tools import http_request
         module = http_request
-    elif tool_name == "memory_search":
-        from tools import memory_search
-        module = memory_search
-    elif tool_name == "memory_sql":
-        from tools import memory_sql
-        module = memory_sql
     elif tool_name == "memory_store":
         from tools import memory_store
         module = memory_store

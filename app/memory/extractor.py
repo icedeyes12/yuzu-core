@@ -35,8 +35,51 @@ _EMOTIONAL_KEYWORDS = [
 ]
 
 
+def _llm_extract_facts(messages) -> list[dict]:
+    """Use the LLM to extract semantic facts from user messages.
+
+    Called as fallback when regex finds nothing.
+    Returns a list of dicts: {entity, relation, target}
+    """
+    try:
+        ai_manager = _get_ai_manager()
+        conversation = '\n'.join(
+            f"{'User' if m.get('role') == 'user' else 'AI'}: {m.get('content', '')}"
+            for m in messages if m.get('role') in ('user', 'assistant')
+        )
+        prompt = (
+            "Extract factual preferences or identity statements from the user's messages above. "
+            "Return a JSON list of facts, each with fields: entity (always 'User'), relation (one of: "
+            "Prefers, Dislikes, Is, Uses, Often), and target (the specific fact, max 200 chars). "
+            "Return an empty list if nothing meaningful can be extracted. "
+            "Example: [{\"entity\": \"User\", \"relation\": \"Prefers\", \"target\": \"working after 10pm\"}]"
+        )
+        response = ai_manager.send_message(
+            provider=None,
+            model=None,
+            messages=[
+                {"role": "system", "content": "You extract structured preference facts from conversation."},
+                {"role": "user", "content": conversation + "\n\n" + prompt},
+            ],
+            timeout=30,
+            max_tokens=300,
+        )
+        if not response:
+            return []
+        import json as _json
+        facts = _json.loads(response)
+        if isinstance(facts, list):
+            return [f for f in facts if f.get('entity') and f.get('relation') and f.get('target')]
+    except Exception as e:
+        print(f"[WARNING] LLM fact extraction failed: {e}")
+    return []
+
+
 def extract_semantic_facts(messages):
-    """Extract semantic triples from a list of messages."""
+    """Extract semantic triples from a list of messages.
+
+    Tries regex first, then falls back to LLM extraction if no facts found.
+    """
     facts = []
     for msg in messages:
         if msg.get('role') != 'user':
@@ -53,6 +96,13 @@ def extract_semantic_facts(messages):
                         'relation': relation,
                         'target': target,
                     })
+
+    # LLM fallback: if regex found nothing, try LLM extraction
+    if not facts:
+        llm_facts = _llm_extract_facts(messages)
+        if llm_facts:
+            facts.extend(llm_facts)
+
     return facts
 
 

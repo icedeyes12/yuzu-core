@@ -97,6 +97,17 @@ def _create_segment(session_id, group):
 
     summary = generate_episodic_summary(group)
 
+    # Generate and store embedding for the summary
+    embedding_blob = None
+    try:
+        from app.memory.embedder import embed_text, vec_to_blob
+        vec = embed_text(summary)
+        if vec is not None:
+            embedding_blob = vec_to_blob(vec)
+    except Exception as e:
+        print(f"[segmenter] Embedding skipped: {e}")
+
+    # Own session — no nesting
     with get_db_session() as session:
         segment = ConversationSegment(
             session_id=session_id,
@@ -104,6 +115,7 @@ def _create_segment(session_id, group):
             end_message_id=end_id,
             summary=summary,
             importance=0.5,
+            embedding=embedding_blob,
         )
         session.add(segment)
         session.commit()

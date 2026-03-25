@@ -2,12 +2,103 @@
 # [DESCRIPTION: Memory retrieval pipeline - cosine similarity + hybrid scoring]
 
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 from app.database import (
-    get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
+    get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment, Message
 )
 from app.memory.embedder import cosine_similarity, blob_to_vec
 
+
+# ── Temporal cue helpers (inlined from deleted tools/memory_search.py) ─────────
+
+_TEMPORAL_CUES = [
+    "kemarin", "minggu lalu", "waktu itu", "terakhir", "pas aku",
+    "last time", "yesterday", "last week", "before", "remember when",
+    "dulu", "tadi", "bulan lalu", "tahun lalu", "pernah",
+    "last month", "last year", "earlier", "previously", "ago"
+]
+
+_MONTH_NAMES = {
+    "januari": 1, "februari": 2, "maret": 3, "april": 4,
+    "mei": 5, "juni": 6, "juli": 7, "agustus": 8,
+    "september": 9, "oktober": 10, "november": 11, "desember": 12,
+    "january": 1, "february": 2, "march": 3, "may": 5,
+    "june": 6, "july": 7, "august": 8, "october": 10, "december": 12,
+}
+
+_RELATIVE_CUES = {
+    "kemarin":     lambda now: (now - timedelta(days=1), now),
+    "yesterday":   lambda now: (now - timedelta(days=1), now),
+    "tadi":        lambda now: (now.replace(hour=0, minute=0, second=0), now),
+    "minggu lalu": lambda now: (now - timedelta(weeks=1), now),
+    "last week":   lambda now: (now - timedelta(weeks=1), now),
+    "bulan lalu":  lambda now: (now - timedelta(days=30), now),
+    "last month":  lambda now: (now - timedelta(days=30), now),
+    "tahun lalu":  lambda now: (now - timedelta(days=365), now),
+    "last year":   lambda now: (now - timedelta(days=365), now),
+}
+
+
+def _detect_month(query):
+    ql = query.lower()
+    for name, num in _MONTH_NAMES.items():
+        if name in ql:
+            return num
+    return None
+
+
+def _detect_time_window(query):
+    now = datetime.now()
+    ql = query.lower()
+    month = _detect_month(query)
+    if month is not None:
+        year = now.year if month <= now.month else now.year - 1
+        start = datetime(year, month, 1)
+        end = datetime(year + 1, 1, 1) if month == 12 else datetime(year, month + 1, 1)
+        return start, end
+    for cue, calc in _RELATIVE_CUES.items():
+        if cue in ql:
+            return calc(now)
+    return None
+
+
+def _search_temporal_messages(session_id, start, end, limit=200):
+    results = []
+    try:
+        start_str = start.strftime('%Y-%m-%d %H:%M:%S')
+        end_str = end.strftime('%Y-%m-%d %H:%M:%S')
+        with get_db_session() as session:
+            messages = (
+                session.query(Message)
+                .filter(
+                    Message.session_id == session_id,
+                    Message.role.in_(['user', 'assistant']),
+                    Message.timestamp >= start_str,
+                    Message.timestamp <= end_str,
+                )
+                .order_by(Message.timestamp.asc())
+                .limit(limit)
+                .all()
+            )
+            for msg in messages:
+                content = msg.content
+                if msg.content_encrypted:
+                    try:
+                        from app.encryption import encryptor
+                        content = encryptor.decrypt(content)
+                    except Exception:
+                        content = "[ENCRYPTED]"
+                results.append({
+                    "timestamp": msg.timestamp,
+                    "role": msg.role,
+                    "content": content[:500],
+                })
+    except Exception as e:
+        print(f"[retrieval] Temporal scan failed: {e}")
+    return results
+
+
+# ── Original retrieval functions ─────────────────────────────────────────────
 
 def _recency_factor(last_accessed) -> float:
     """Recency score 0.0–1.0, half-life of 24 hours."""
@@ -206,7 +297,6 @@ def retrieve_memory(session_id, query=None):
     temporal_messages = []
     if query:
         try:
-            from tools.memory_search import _detect_time_window, _search_temporal_messages
             time_window = _detect_time_window(query)
             if time_window:
                 start, end = time_window
