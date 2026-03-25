@@ -2,10 +2,10 @@
 # [DESCRIPTION: Conversation segmentation engine]
 
 from datetime import datetime
-from database import (
+from app.database import (
     get_db_session, Message, ConversationSegment
 )
-from memory.extractor import generate_episodic_summary
+from app.memory.extractor import generate_episodic_summary
 
 
 # Segmentation limits

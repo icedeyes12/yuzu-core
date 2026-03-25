@@ -17,7 +17,7 @@ import hashlib
 import shutil
 import subprocess
 from urllib.parse import unquote
-from database import Database
+from app.database import Database
 from typing import List, Dict, Optional, Tuple
 
 class MultimodalTools:

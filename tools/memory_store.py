@@ -1,7 +1,7 @@
 from datetime import datetime
-from database import Database, get_db_session, SemanticMemory
-from memory.embedder import embed_texts
-from tools.registry import build_markdown_contract
+from app.database import Database, get_db_session, SemanticMemory
+from app.memory.embedder import embed_texts
+from app.tools.registry import build_markdown_contract
 
 
 def _infer_category(fact):

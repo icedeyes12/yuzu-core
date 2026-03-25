@@ -1,7 +1,7 @@
 import os
 import requests
 from datetime import datetime
-from database import Database
+from app.database import Database
 
 HUNYUAN_ENDPOINT = "https://chutes-hunyuan-image-3.chutes.ai/generate"
 Z_TURBO_ENDPOINT = "https://chutes-z-image-turbo.chutes.ai/generate"

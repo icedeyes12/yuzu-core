@@ -3,7 +3,7 @@
 
 import math
 from datetime import datetime
-from database import get_db_session, SemanticMemory, EpisodicMemory
+from app.database import get_db_session, SemanticMemory, EpisodicMemory
 
 
 def _hours_since(dt):

@@ -3,10 +3,10 @@
 
 import math
 from datetime import datetime
-from database import (
+from app.database import (
     get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
 )
-from memory.embedder import cosine_similarity, blob_to_vec
+from app.memory.embedder import cosine_similarity, blob_to_vec
 
 
 def _recency_factor(last_accessed) -> float:

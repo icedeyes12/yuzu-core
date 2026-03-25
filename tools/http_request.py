@@ -7,7 +7,7 @@ import ipaddress
 import re
 from urllib.parse import urlparse
 from datetime import datetime
-from database import Database
+from app.database import Database
 
 MAX_BYTES = 2 * 1024 * 1024
 TIMEOUT = 90

@@ -7,8 +7,8 @@ import json
 import time
 import struct
 from datetime import datetime
-from database import get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment, Message, ChatSession
-from memory.embedder import embed_texts
+from app.database import get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment, Message, ChatSession
+from app.memory.embedder import embed_texts
 
 
 CHECKPOINT_FILE = os.path.join(os.path.dirname(__file__), 'migration_checkpoint.json')
