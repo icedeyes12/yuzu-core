@@ -255,7 +255,11 @@ def retrieve_episodic_memories(session_id, query=None, limit=5):
 
 
 def retrieve_segments(session_id, query=None, limit=5):
-    """Retrieve conversation segments by importance or similarity."""
+    """Retrieve conversation segments by importance or similarity.
+
+    Score (with query): cosine_sim × 0.5 + importance × 0.5
+    Score (fallback):   importance
+    """
     with get_db_session() as session:
         segments = session.query(ConversationSegment).filter(
             ConversationSegment.session_id == session_id
@@ -285,6 +289,16 @@ def retrieve_segments(session_id, query=None, limit=5):
             })
 
         scored.sort(key=lambda x: x['score'], reverse=True)
+
+        top_ids = [s['id'] for s in scored[:limit]]
+        if top_ids:
+            for seg in session.query(ConversationSegment).filter(
+                ConversationSegment.id.in_(top_ids)
+            ).all():
+                seg.access_count = (seg.access_count or 0) + 1
+                seg.last_accessed = datetime.now()
+            session.commit()
+
         return scored[:limit]
 
 

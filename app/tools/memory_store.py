@@ -1,6 +1,8 @@
 from datetime import datetime
 from app.database import Database, get_db_session, SemanticMemory
 from app.memory.embedder import embed_texts
+from app.memory.embedder import cosine_similarity, blob_to_vec, vec_to_blob
+from app.memory.vector_store import mark_dirty
 from app.tools.registry import build_markdown_contract
 
 
@@ -55,13 +57,13 @@ def execute(arguments, **kwargs):
             partner_name,
         )
 
-    category = arguments.get("category", _infer_category(fact))
+    category = arguments.get("category") or _infer_category(fact)
     full_command = f"/memory_store fact=\"{fact[:60]}\" category={category}"
 
     # Embed the fact text
-    embed_text = f"[{category}] {fact}"
+    fact_embed_text = f"[{category}] {fact}"
     try:
-        vecs = embed_texts([embed_text])
+        vecs = embed_texts([fact_embed_text])
         vector = vecs[0]  # extract single vector from list
     except Exception as e:
         print(f"[memory_store] Embed failed: {e}")
@@ -73,8 +75,6 @@ def execute(arguments, **kwargs):
         )
 
     # Check for duplicate using cosine similarity
-    from app.memory.embedder import cosine_similarity, blob_to_vec, vec_to_blob
-
     with get_db_session() as session:
         existing = session.query(SemanticMemory).filter(
             SemanticMemory.session_id == session_id,
@@ -120,6 +120,7 @@ def execute(arguments, **kwargs):
         )
         session.add(new_mem)
         session.commit()
+        mark_dirty(session_id, "semantic")
 
     return build_markdown_contract(
         "memory_store_tools",

@@ -6,6 +6,7 @@ from app.database import (
     get_db_session, SemanticMemory, EpisodicMemory
 )
 from app.memory.embedder import embed_text, vec_to_blob
+from app.memory.vector_store import mark_dirty
 
 
 def _get_ai_manager():
@@ -253,6 +254,7 @@ def upsert_semantic_memory(session_id, entity, relation, target):
             )
             session.add(new_mem)
         session.commit()
+        mark_dirty(session_id, "semantic")
 
 
 def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance=0.5):
@@ -271,6 +273,7 @@ def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance
         )
         session.add(mem)
         session.commit()
+        mark_dirty(session_id, "episodic")
 
 
 # ── Main entry point ─────────────────────────────────────────────────────────

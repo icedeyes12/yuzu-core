@@ -19,9 +19,6 @@ if TYPE_CHECKING:
 _INDEX_DIR = os.path.join(os.path.dirname(__file__), "indexes")
 _MANIFEST_FILE = os.path.join(_INDEX_DIR, "manifest.json")
 
-# Track bootstrap errors so startup doesn't fail silently
-_BOOTSTRAP_ERRORS = []
-
 
 def _ensure_index_dir():
     os.makedirs(_INDEX_DIR, exist_ok=True)

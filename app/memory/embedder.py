@@ -3,6 +3,7 @@
 
 import math
 import struct
+import threading
 from app.database import Database
 
 
@@ -10,21 +11,21 @@ CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-8b.chutes.ai/v1/emb
 DEFAULT_MODEL = "Qwen/Qwen3-Embedding-8B"
 EMBEDDING_DIM = 4096  # Qwen3-Embedding-8B default output dimension
 
-_session = None
+_thread_local = threading.local()
 
 
 def _get_session():
-    global _session
-    if _session is None:
+    """Get or create a thread-local requests session."""
+    if not hasattr(_thread_local, "session") or _thread_local.session is None:
         api_key = Database.get_api_key("chutes")
         if not api_key:
             return None
-        _session = __import__("requests").Session()
-        _session.headers.update({
+        _thread_local.session = __import__("requests").Session()
+        _thread_local.session.headers.update({
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         })
-    return _session
+    return _thread_local.session
 
 
 def embed_texts(texts, model=None, dimensions=None, encoding_format="float"):
