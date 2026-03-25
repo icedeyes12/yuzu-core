@@ -73,7 +73,7 @@ def execute(arguments, **kwargs):
         )
 
     # Check for duplicate using text similarity
-    from memory.embedder import cosine_similarity, blob_to_vec
+    from app.memory.embedder import cosine_similarity, blob_to_vec
 
     with get_db_session() as session:
         existing = session.query(SemanticMemory).filter(

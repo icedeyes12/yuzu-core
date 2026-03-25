@@ -1,6 +1,6 @@
 # [FILE: memory/episodic_migrate.py]
 # [DESCRIPTION: Regenerate episodic summaries with LLM - raw snippets → proper narrative + title]
-# [USAGE: python -c "from memory.episodic_migrate import run; run()"]
+# [USAGE: python -c "from app.memory.episodic_migrate import run; run()"]
 #
 # Converts raw message snippets in episodic.summary into:
 #   - metadata["title"]: 5-15 word narrative title

@@ -6,7 +6,7 @@ from datetime import datetime
 from app.database import (
     get_db_session, SemanticMemory, EpisodicMemory
 )
-from memory.embedder import embed_text, vec_to_blob
+from app.memory.embedder import embed_text, vec_to_blob
 
 
 def _get_ai_manager():
