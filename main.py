@@ -14,7 +14,7 @@ from app.app import handle_user_message, handle_user_message_streaming, start_se
 from app.app import get_available_providers, get_all_models, set_preferred_provider, get_vision_capabilities
 from app.database import Database
 from app.providers import get_ai_manager
-from tools import multimodal_tools
+from app.tools import multimodal_tools
 from datetime import datetime
 import threading
 import webbrowser

@@ -15,7 +15,7 @@ import json
 import time
 from typing import List, Dict, Optional, Generator
 from app.database import Database
-from tools import multimodal_tools
+from app.tools import multimodal_tools
 
 class AIProvider:
     def __init__(self, name: str, config: Dict = None):

@@ -19,8 +19,8 @@ from datetime import datetime
 from typing import Dict, Optional, List
 from app.database import Database
 from app.providers import get_ai_manager, reload_ai_manager
-from tools import multimodal_tools
-from tools.registry import execute_tool, get_tool_role, TOOL_ROLE_MAP
+from app.tools import multimodal_tools
+from app.tools.registry import execute_tool, get_tool_role, TOOL_ROLE_MAP
 # ---------------------------------------------------------------------------
 # Persistent visual context buffer (per-session, runtime-only)
 # Stores the last processed image as base64 for N follow-up turns so the
@@ -412,10 +412,10 @@ def _trigger_memory_pipeline(session_id):
     - Decay: time-gated (once per _DECAY_INTERVAL_HOURS).
     """
     try:
-        from memory.extractor import should_create_episodic, calculate_emotional_weight
-        from memory.extractor import generate_episodic_summary, create_episodic_memory
-        from memory.extractor import extract_semantic_facts, upsert_semantic_memory
-        from memory.review import run_decay
+        from app.memory.extractor import should_create_episodic, calculate_emotional_weight
+        from app.memory.extractor import generate_episodic_summary, create_episodic_memory
+        from app.memory.extractor import extract_semantic_facts, upsert_semantic_memory
+        from app.memory.review import run_decay
 
         recent = Database.get_chat_history(session_id=session_id, limit=20, recent=True)
         if not recent:
@@ -645,7 +645,7 @@ def _build_generation_context(profile, session_id, interface="terminal", user_me
 
     # --- Structured memory retrieval (embedding-based, replaces legacy) ---
     try:
-        from memory.retrieval import retrieve_memory, format_memory
+        from app.memory.retrieval import retrieve_memory, format_memory
         memory_bundle = retrieve_memory(session_id, query=user_message)
         structured_memory_text = format_memory(memory_bundle)
         if structured_memory_text:
@@ -1622,9 +1622,9 @@ def start_session(interface="terminal"):
 
         # --- Memory system initialization ---
         try:
-            from memory.segmenter import segment_session
-            from memory.review import run_decay
-            from memory.extractor import process_messages_for_memory
+            from app.memory.segmenter import segment_session
+            from app.memory.review import run_decay
+            from app.memory.extractor import process_messages_for_memory
 
             # Apply FSRS decay to existing memories
             run_decay(session_id)
@@ -1727,8 +1727,8 @@ just a natural paragraph.
 
         # Also sync to structured DB so both systems stay aligned
         try:
-            from memory.extractor import upsert_semantic_memory, create_episodic_memory
-            from memory.extractor import extract_semantic_facts, calculate_emotional_weight
+            from app.memory.extractor import upsert_semantic_memory, create_episodic_memory
+            from app.memory.extractor import extract_semantic_facts, calculate_emotional_weight
 
             facts = extract_semantic_facts(chat_history[-20:])
             for fact in facts:

@@ -6,7 +6,7 @@ from datetime import datetime
 from app.database import (
     get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
 )
-from memory.embedder import cosine_similarity, blob_to_vec
+from app.memory.embedder import cosine_similarity, blob_to_vec
 
 
 def _recency_factor(last_accessed) -> float:
@@ -26,7 +26,7 @@ def _recency_factor(last_accessed) -> float:
 def _embed_query(text: str) -> list[float] | None:
     """Embed a query string via Chutes API."""
     try:
-        from memory.embedder import embed_text
+        from app.memory.embedder import embed_text
         return embed_text(text)
     except Exception as e:
         print(f"[WARNING] Query embedding failed: {e}")

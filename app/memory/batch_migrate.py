@@ -1,6 +1,6 @@
 # [FILE: memory/batch_migrate.py]
 # [DESCRIPTION: Batch migration script for backfilling embeddings on existing memory records]
-# [USAGE: python -c "from memory.batch_migrate import run_migration; run_migration()"]
+# [USAGE: python -c "from app.memory.batch_migrate import run_migration; run_migration()"]
 
 import os
 import json
@@ -234,7 +234,7 @@ def process_unprocessed_messages():
         for i in range(0, len(msg_list), WINDOW):
             window = msg_list[i:i + WINDOW]
             try:
-                from memory.extractor import process_messages_for_memory
+                from app.memory.extractor import process_messages_for_memory
                 process_messages_for_memory(session_id, window)
                 extracted += 1
             except Exception as e:

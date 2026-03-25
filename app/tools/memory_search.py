@@ -140,7 +140,7 @@ def execute(arguments, **kwargs):
 
     # Step 1: Embedding-based semantic retrieval (pass query for similarity search)
     try:
-        from memory.retrieval import retrieve_memory
+        from app.memory.retrieval import retrieve_memory
         memory_bundle = retrieve_memory(session_id, query=query)
         semantic = memory_bundle.get("semantic", [])
         episodic = memory_bundle.get("episodic", [])

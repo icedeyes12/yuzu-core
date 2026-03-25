@@ -461,8 +461,8 @@ def api_rebuild_structured_memory():
         active_session = Database.get_active_session()
         session_id = active_session['id']
 
-        from memory.extractor import process_messages_for_memory
-        from memory.segmenter import segment_session
+        from app.memory.extractor import process_messages_for_memory
+        from app.memory.segmenter import segment_session
 
         # Extract semantic + episodic memories from recent messages
         recent = Database.get_chat_history(session_id=session_id, limit=50, recent=True)
@@ -501,7 +501,7 @@ def api_run_memory_decay():
         active_session = Database.get_active_session()
         session_id = active_session['id']
 
-        from memory.review import run_decay
+        from app.memory.review import run_decay
         run_decay(session_id)
 
         return jsonify({

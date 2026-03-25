@@ -1,6 +1,6 @@
 # [FILE: memory/quality_migrate.py]
 # [DESCRIPTION: High-quality semantic memory extraction via LLM from existing episodic records]
-# [USAGE: python -c "from memory.quality_migrate import run_migration; run_migration()"]
+# [USAGE: python -c "from app.memory.quality_migrate import run_migration; run_migration()"]
 #
 # Phases:
 #   1. Embed unvectored episodic memories (Chutes embedding API)

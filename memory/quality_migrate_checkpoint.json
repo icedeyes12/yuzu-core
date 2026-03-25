@@ -1,9 +1,0 @@
-{
-  "phase": 0,
-  "episodic_embedded": 0,
-  "episodic_batch": 0,
-  "semantic_embedded": 0,
-  "extracted_facts": [],
-  "started_at": null,
-  "last_run": null
-}
