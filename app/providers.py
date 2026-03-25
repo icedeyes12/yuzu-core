@@ -829,6 +829,31 @@ class AIProviderManager:
         except Exception as e:
             yield f"Streaming error: {str(e)}"
 
+
+    def auto_send_message(self, messages: List[Dict], **kwargs) -> Optional[str]:
+        """Auto-select provider and model, then dispatch. Fallback wrapper."""
+        # Try each available provider in priority order
+        for provider in ['chutes', 'openrouter', 'ollama', 'cerebras']:
+            if provider not in self.providers:
+                continue
+            provider_obj = self.providers[provider]
+            models = provider_obj.get_models()
+            if not models:
+                continue
+            model = kwargs.pop('model', None) or kwargs.pop('model_name', None) or models[0]
+            if model not in models:
+                model = models[0]
+            try:
+                result = provider_obj.send_message(messages, model, **kwargs)
+                if result:
+                    print(f"[AIProviderManager] auto_send_message: {provider}/{model} OK")
+                    return result
+            except Exception as e:
+                print(f"[AIProviderManager] {provider} failed: {e}")
+                continue
+        print("[AIProviderManager] auto_send_message: all providers failed")
+        return None
+
 _ai_manager_instance = None
 
 def get_ai_manager():
