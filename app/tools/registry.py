@@ -44,19 +44,19 @@ def execute_tool(tool_name, arguments, session_id=None):
     """
     # Lazy import to avoid circular dependency
     if tool_name == "image_generate":
-        from tools import image_generate
+        from app.tools import image_generate
         module = image_generate
     elif tool_name == "request":
-        from tools import http_request
+        from app.tools import http_request
         module = http_request
     elif tool_name == "memory_store":
-        from tools import memory_store
+        from app.tools import memory_store
         module = memory_store
     elif tool_name == "image_analyze":
-        from tools import image_analyze
+        from app.tools import image_analyze
         module = image_analyze
     elif tool_name == "memory_search":
-        from tools import memory_search
+        from app.tools import memory_search
         module = memory_search
     else:
         return json.dumps({"error": f"Unknown tool: {tool_name}"})
