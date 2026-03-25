@@ -1194,8 +1194,21 @@ Your speaking style and personality are defined above.
 
     return messages
 
-def _handle_vision_processing(messages, user_message, current_provider, current_model):
-    """Handle vision model switching and message formatting"""
+def _handle_vision_processing(messages, user_message, current_provider, current_model, image_base64_for_context=None):
+    """Handle vision model switching and message formatting.
+    
+    Force switches to vision model when image_base64_for_context is present
+    (i.e., second pass after image_tools generated a response).
+    """
+    # Force vision on second pass — image_tools output means we need vision model
+    force_vision = image_base64_for_context is not None
+
+    if force_vision:
+        vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
+        if vision_provider and vision_model:
+            print(f"[Vision] Force switching to {vision_provider}/{vision_model} for image_tools output")
+            return messages, vision_provider, vision_model
+
     should_switch_provider = multimodal_tools.should_use_vision(user_message, current_provider, current_model)
 
     if should_switch_provider:
@@ -1278,7 +1291,8 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
     
     # Handle vision processing
     messages, preferred_provider, preferred_model = _handle_vision_processing(
-        messages, user_message, preferred_provider, preferred_model
+        messages, user_message, preferred_provider, preferred_model,
+        image_base64_for_context=image_base64_for_context
     )
     
     # Inject persistent visual context if user references a previous image
@@ -1390,7 +1404,8 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
     
     # Handle vision processing for image-containing messages
     messages, preferred_provider, preferred_model = _handle_vision_processing(
-        messages, user_message, preferred_provider, preferred_model
+        messages, user_message, preferred_provider, preferred_model,
+        image_base64_for_context=image_base64_for_context
     )
     
     # Inject persistent visual context if user references a previous image
