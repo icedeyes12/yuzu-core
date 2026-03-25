@@ -28,12 +28,11 @@ from sqlalchemy import text
 CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-8b.chutes.ai/v1/embeddings"
 CHUTES_CHAT_ENDPOINT = "https://llm.chutes.ai/v1/chat/completions"
 
-# Cost control: smaller model = cheaper + faster for extraction
 EXTRACTION_MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE"  # 262k context window
 BATCH_SIZE = 200            # episodes per LLM call (fits ~262k context)
 EMBED_BATCH_SIZE = 32      # embed calls
-LLM_TIMEOUT = 180           # seconds (was timing out at 120)
-WAIT_BETWEEN_BATCHES = 5    # seconds (avoid rate limit)
+LLM_TIMEOUT = 180           # seconds
+WAIT_BETWEEN_BATCHES = 5    # seconds
 MAX_RETRIES = 5
 CHECKPOINT_FILE = os.path.join(os.path.dirname(__file__), 'quality_migrate_checkpoint.json')
 
@@ -47,8 +46,8 @@ def _ts():
     return datetime.now().strftime('%H:%M:%S')
 
 def _log(msg):
-    time.time() - (_start_time or time.time())
-    print(f"  [{_ts()}] {msg}")
+    elapsed = time.time() - (_start_time or time.time())
+    print(f"  [{_ts()}] {msg} ({elapsed:.1f}s)")
 
 def _log_phase(phase_num, title):
     print(f"\n[{_ts()}] === Phase {phase_num}: {title} ===")
@@ -80,16 +79,13 @@ def _save_cp(cp):
 # ─────────────────────────────────────────────────────────────
 
 def _get_llm_key():
-    """Get Chutes key for LLM extraction calls."""
     return Database.get_api_key("chutes")
 
 def _embed_batch(texts, retries=MAX_RETRIES):
-    """Embed texts via Chutes embedding API."""
     if not texts:
         return []
     for attempt in range(retries):
         try:
-            
             resp = requests.post(
                 CHUTES_EMBED_ENDPOINT,
                 headers={
@@ -123,19 +119,10 @@ def _vec_to_blob(vec):
     return struct.pack(f'{len(vec)}f', *vec)
 
 # ─────────────────────────────────────────────────────────────
-# OpenRouter LLM (used for extraction — bypasses Chutes rate limit)
+# LLM extraction
 # ─────────────────────────────────────────────────────────────
 
-OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
-OR_KEY = None  # lazy-loaded
-
 def _extract_facts_via_llm(episodes, retries=MAX_RETRIES):
-    """
-    Call Chutes chat API to extract high-value semantic facts from episode summaries.
-    episodes: list of dicts with 'id' and 'summary' only
-    Returns: list of dicts with 'fact', 'category'
-    """
-    # Build the prompt — only use 'summary' (no 'title' field exists)
     episodes_text = "\n\n".join([
         f"Episode {i+1}:\n{e['summary']}"
         for i, e in enumerate(episodes)
@@ -186,12 +173,6 @@ Respond with JSON only."""
 
     for attempt in range(retries):
         try:
-            print("[DEBUG] LLM URL: " + CHUTES_CHAT_ENDPOINT)
-            print("[DEBUG] LLM Model: " + EXTRACTION_MODEL)
-            llm_key = _get_llm_key()
-            print("[DEBUG] LLM Key prefix: " + (llm_key[:10] if llm_key else "None"))
-            print("[DEBUG] Episode count: " + str(len(episodes)))
-
             resp = requests.post(
                 CHUTES_CHAT_ENDPOINT,
                 headers={
@@ -223,12 +204,9 @@ Respond with JSON only."""
             data = resp.json()
             content = data["choices"][0]["message"]["content"]
 
-            # Extract JSON from response
             try:
-                # Try direct JSON parse first
                 parsed = json.loads(content)
             except json.JSONDecodeError:
-                # Try extracting from markdown code blocks
                 import re
                 m = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
                 if m:
@@ -238,12 +216,11 @@ Respond with JSON only."""
                     return []
 
             facts = parsed.get("facts", [])
-            # Validate
             validated = []
             for f in facts:
                 if isinstance(f, dict) and f.get("fact") and f.get("category"):
                     fact_text = f["fact"].strip()
-                    if 5 < len(fact_text) < 300:  # Reasonable length
+                    if 5 < len(fact_text) < 300:
                         validated.append({
                             "fact": fact_text,
                             "category": f["category"],
@@ -265,7 +242,6 @@ def phase1_embed_episodic(cp):
     _log_phase(1, "Embedding unvectored episodic memories")
 
     with get_db_session() as session:
-        session.query(EpisodicMemory).count()
         unembedded = session.query(EpisodicMemory).filter(
             EpisodicMemory.embedding is None
         ).order_by(EpisodicMemory.id.asc()).all()
@@ -278,11 +254,7 @@ def phase1_embed_episodic(cp):
 
     _log(f"Embedding {len(unembedded)} records (batch_size={EMBED_BATCH_SIZE})...")
 
-    # Load IDs + texts inside session
-    items = []
-    for rec in unembedded:
-        items.append({"id": rec.id, "text": rec.summary or ""})
-
+    items = [{"id": rec.id, "text": rec.summary or ""} for rec in unembedded]
     start_offset = cp.get("episodic_embedded", 0)
     items = items[start_offset:]
     migrated = 0
@@ -338,9 +310,8 @@ def phase3_extract_facts(cp):
         episodic_records = session.query(EpisodicMemory).order_by(
             EpisodicMemory.id.asc()
         ).all()
-        # Load inside session to avoid detach
         episodic_data = [
-            {"id": r.id, "summary": r.summary or ""}
+            {"id": r.id, "session_id": r.session_id, "summary": r.summary or ""}
             for r in episodic_records
         ]
 
@@ -352,32 +323,30 @@ def phase3_extract_facts(cp):
 
     _log(f"Processing {len(episodic_data)} episodic records (batch_size={BATCH_SIZE})...")
 
-    batch_offset = cp.get("episodic_batch", 0) * BATCH_SIZE
-    episodic_data = episodic_data[batch_offset:]
-    extracted_facts = []  # list of {"fact": ..., "category": ...}
-
-    # Load previously extracted facts (resume-safe)
+    # episodic_batch stores absolute episode count (not batch number)
+    episodes_done = cp.get("episodic_batch", 0)
+    episodic_data = episodic_data[episodes_done:]
     extracted_facts = cp.get("extracted_facts", [])
-    _log(f"Resuming with {len(extracted_facts)} already-extracted facts")
+    _log(f"Resuming from episode {episodes_done}, {len(extracted_facts)} facts already extracted")
 
-    total_episodes = len(episodic_data)
+    total_episodes = len(episodic_data) + episodes_done
     for batch_start in range(0, len(episodic_data), BATCH_SIZE):
         batch = episodic_data[batch_start:batch_start + BATCH_SIZE]
         facts = _extract_facts_via_llm(batch)
 
         for f in facts:
             f["source_episode_id"] = batch[0]["id"]
+            f["source_session_id"] = batch[0].get("session_id", 1)
 
         extracted_facts.extend(facts)
-        # checkpoint: absolute episode count, not batch number
-        episodes_done = batch_offset + batch_start + len(batch)
+        episodes_done += len(batch)
         cp["episodic_batch"] = episodes_done
         cp["extracted_facts"] = extracted_facts
         _save_cp(cp)
 
-        _log(f"  {episodes_done}/{total_episodes + batch_offset} episodes | {len(extracted_facts)} facts total")
+        _log(f"  {episodes_done}/{total_episodes} episodes | {len(extracted_facts)} facts total")
 
-    cp["phase"] = 3  # Mark done
+    cp["phase"] = 3
     cp["extracted_facts"] = extracted_facts
     _save_cp(cp)
     _log(f"Done: {len(extracted_facts)} facts extracted from episodic memories")
@@ -399,7 +368,6 @@ def phase4_embed_and_store_facts(cp):
 
     _log(f"Embedding {len(facts)} facts...")
 
-    # Build search text for each fact (category prefix helps embedding)
     texts_to_embed = [f"{f['category']}: {f['fact']}" for f in facts]
     vecs = _embed_batch(texts_to_embed)
 
@@ -410,8 +378,10 @@ def phase4_embed_and_store_facts(cp):
         for j, f in enumerate(facts):
             if vecs[j] is None:
                 continue
+            # Use actual session_id from source episode, not hardcoded default
+            session_id = f.get("source_session_id", 1)
             mem = SemanticMemory(
-                session_id=1,  # default session
+                session_id=session_id,
                 entity="User",
                 relation=f["category"].title(),
                 target=f["fact"],
@@ -430,7 +400,6 @@ def phase4_embed_and_store_facts(cp):
 
         session.commit()
 
-    # Clear extracted_facts from checkpoint (done)
     cp["extracted_facts"] = []
     cp["phase"] = 4
     _save_cp(cp)
@@ -455,25 +424,21 @@ def run_migration():
         cp["started_at"] = datetime.now().isoformat()
         _save_cp(cp)
 
-    # Phase 1: Embed unvectored episodic records
     if cp.get("phase", 0) < 1:
         phase1_embed_episodic(cp)
     else:
         _log_phase(1, "Embedding unvectored episodic memories — SKIPPED (already done)")
 
-    # Phase 2: Delete old bad semantic records
     if cp.get("phase", 0) < 2:
         phase2_delete_old_semantic(cp)
     else:
         _log_phase(2, "Deleting low-quality semantic records — SKIPPED (already done)")
 
-    # Phase 3: LLM extract facts
     if cp.get("phase", 0) < 3:
         phase3_extract_facts(cp)
     else:
         _log_phase(3, "LLM fact extraction — SKIPPED (already done)")
 
-    # Phase 4: Embed + store new facts
     if cp.get("phase", 0) < 4:
         phase4_embed_and_store_facts(cp)
     else:

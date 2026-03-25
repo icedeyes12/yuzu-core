@@ -84,7 +84,7 @@ def _get_embedding_dim() -> int:
         if mem:
             vec = blob_to_vec(mem.embedding_vector)
             return len(vec)
-    return EMBEDDING_DIM  # fallback — chutes default is often 1024 or 1280
+    return EMBEDDING_DIM  # fallback — chutes Qwen3-Embedding-8B default is 4096
 
 
 # ── Public API ────────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ from app.database import Database
 
 CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-8b.chutes.ai/v1/embeddings"
 DEFAULT_MODEL = "Qwen/Qwen3-Embedding-8B"
+EMBEDDING_DIM = 4096  # Qwen3-Embedding-8B default output dimension
 
 _session = None
 
