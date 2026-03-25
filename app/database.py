@@ -92,6 +92,9 @@ class SemanticMemory(Base):
     confidence = Column(Float, default=0.5)
     importance = Column(Float, default=0.5)
     embedding_vector = Column(LargeBinary, nullable=True)  # NEW: stored embedding
+    stability = Column(Float, default=24.0)  # hours; FSRS-derived
+    difficulty = Column(Float, default=0.5)   # FSRS difficulty factor
+    source_episodic_ids = Column(Text, nullable=True)  # JSON array of episodic memory IDs
     last_accessed = Column(DateTime, nullable=True)
     access_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.now)
@@ -231,6 +234,24 @@ def _migrate_add_semantic_embedding_vector(engine):
             conn.execute(text('ALTER TABLE semantic_memories ADD COLUMN embedding_vector BLOB'))
             conn.commit()
 
+def _migrate_add_memory_columns(engine):
+    """Add source_episodic_ids, stability, and difficulty columns to semantic_memories if missing."""
+    from sqlalchemy import inspect as sa_inspect, text
+    inspector = sa_inspect(engine)
+    columns = [col['name'] for col in inspector.get_columns('semantic_memories')]
+    if 'source_episodic_ids' not in columns:
+        with engine.connect() as conn:
+            conn.execute(text('ALTER TABLE semantic_memories ADD COLUMN source_episodic_ids TEXT'))
+            conn.commit()
+    if 'stability' not in columns:
+        with engine.connect() as conn:
+            conn.execute(text('ALTER TABLE semantic_memories ADD COLUMN stability FLOAT DEFAULT 24.0'))
+            conn.commit()
+    if 'difficulty' not in columns:
+        with engine.connect() as conn:
+            conn.execute(text('ALTER TABLE semantic_memories ADD COLUMN difficulty FLOAT DEFAULT 0.5'))
+            conn.commit()
+
 def init_db():
     """
     Initialize database with safety guards.
@@ -304,7 +325,13 @@ def init_db():
     try:
         _migrate_add_semantic_embedding_vector(engine)
     except Exception as e:
-        print(f"[WARNING] semantic_embedding_vector migration skipped: {e}")
+        print(f"[WARNING] semantic embedding_vector migration skipped: {e}")
+    
+    # Migrate existing databases: add source_episodic_ids, stability, and difficulty columns if missing
+    try:
+        _migrate_add_memory_columns(engine)
+    except Exception as e:
+        print(f"[WARNING] memory columns migration skipped: {e}")
     
     with get_db_session() as session:
         # Create default profile and session if needed

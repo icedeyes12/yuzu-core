@@ -9,7 +9,7 @@ from app.database import (
 from app.memory.embedder import cosine_similarity, blob_to_vec
 
 
-# ── Temporal cue helpers (inlined from deleted tools/memory_search.py) ─────────
+# ── Temporal cue helpers ──────────────────────────────────────────────────────
 
 _TEMPORAL_CUES = [
     "kemarin", "minggu lalu", "waktu itu", "terakhir", "pas aku",
@@ -17,7 +17,6 @@ _TEMPORAL_CUES = [
     "dulu", "tadi", "bulan lalu", "tahun lalu", "pernah",
     "last month", "last year", "earlier", "previously", "ago"
 ]
-
 _MONTH_NAMES = {
     "januari": 1, "februari": 2, "maret": 3, "april": 4,
     "mei": 5, "juni": 6, "juli": 7, "agustus": 8,
@@ -25,7 +24,6 @@ _MONTH_NAMES = {
     "january": 1, "february": 2, "march": 3, "may": 5,
     "june": 6, "july": 7, "august": 8, "october": 10, "december": 12,
 }
-
 _RELATIVE_CUES = {
     "kemarin":     lambda now: (now - timedelta(days=1), now),
     "yesterday":   lambda now: (now - timedelta(days=1), now),
@@ -98,7 +96,33 @@ def _search_temporal_messages(session_id, start, end, limit=200):
     return results
 
 
-# ── Original retrieval functions ─────────────────────────────────────────────
+# ── Fallback scoring — consistent across all memory types ─────────────────────
+
+def _semantic_fallback_score(mem) -> float:
+    """Consistent fallback scoring for semantic memories.
+
+    Formula: normalized importance × confidence, weighted by recency.
+    Uses the same multiplicative model as the primary scoring path.
+    """
+    importance = mem.importance or 0.5
+    confidence = mem.confidence or 0.5
+    recency = _recency_factor(mem.last_accessed)
+    return importance * confidence * (0.5 + recency * 0.5)
+
+
+def _episodic_fallback_score(mem) -> float:
+    """Consistent fallback scoring for episodic memories.
+
+    Formula: importance × recency, with emotional weight as a boost.
+    Uses the same multiplicative structure as the semantic fallback.
+    """
+    importance = mem.importance or 0.5
+    recency = _recency_factor(mem.last_accessed)
+    emotional = mem.emotional_weight or 0.0
+    return importance * recency * (1.0 + emotional * 0.3)
+
+
+# ── Retrieval functions ────────────────────────────────────────────────────────
 
 def _recency_factor(last_accessed) -> float:
     """Recency score 0.0–1.0, half-life of 24 hours."""
@@ -127,9 +151,9 @@ def _embed_query(text: str) -> list[float] | None:
 def retrieve_semantic_memories(session_id, query=None, limit=15):
     """
     Retrieve semantic memories by cosine similarity to query.
-    
-    If query is provided: embed query, rank by cosine similarity.
-    If query is None or embedding fails: fall back to importance × confidence.
+
+    Score (with query): cosine_sim × 0.6 + importance × 0.2 + confidence × 0.2
+    Score (fallback):    importance × confidence × (0.5 + recency × 0.5)
     """
     with get_db_session() as session:
         memories = session.query(SemanticMemory).filter(
@@ -149,10 +173,9 @@ def retrieve_semantic_memories(session_id, query=None, limit=15):
                     sim = cosine_similarity(query_vec, mem_vec)
                     score = sim * 0.6 + (mem.importance or 0.5) * 0.2 + (mem.confidence or 0.5) * 0.2
                 except Exception:
-                    score = (mem.importance or 0.5) * (mem.confidence or 0.5)
+                    score = _semantic_fallback_score(mem)
             else:
-                # Fallback: importance × confidence
-                score = (mem.importance or 0.5) * (mem.confidence or 0.5)
+                score = _semantic_fallback_score(mem)
 
             scored.append({
                 'id': mem.id,
@@ -181,8 +204,9 @@ def retrieve_semantic_memories(session_id, query=None, limit=15):
 def retrieve_episodic_memories(session_id, query=None, limit=5):
     """
     Retrieve episodic memories by cosine similarity + hybrid score.
-    
-    Score = cosine_sim * 0.5 + importance * 0.25 + recency * 0.25
+
+    Score (with query): cosine_sim × 0.5 + importance × 0.25 + recency × 0.25
+    Score (fallback):   importance × recency × (1.0 + emotional_weight × 0.3)
     """
     with get_db_session() as session:
         memories = session.query(EpisodicMemory).filter(
@@ -204,9 +228,9 @@ def retrieve_episodic_memories(session_id, query=None, limit=5):
                     sim = cosine_similarity(query_vec, mem_vec)
                     score = sim * 0.5 + (mem.importance or 0.5) * 0.25 + recency * 0.25
                 except Exception:
-                    score = ((mem.importance or 0.5) + (mem.emotional_weight or 0.0) * 0.5 + recency)
+                    score = _episodic_fallback_score(mem)
             else:
-                score = ((mem.importance or 0.5) + (mem.emotional_weight or 0.0) * 0.5 + recency)
+                score = _episodic_fallback_score(mem)
 
             scored.append({
                 'id': mem.id,
@@ -267,11 +291,11 @@ def retrieve_segments(session_id, query=None, limit=5):
 def retrieve_memory(session_id, query=None):
     """
     Main retrieval entry point.
-    
+
     Args:
         session_id: current session
         query: optional user query for semantic search
-    
+
     Returns:
         dict with semantic, episodic, segments
     """
@@ -293,7 +317,6 @@ def retrieve_memory(session_id, query=None):
         print(f"[WARNING] Segment retrieval failed: {e}")
         segments = []
 
-    # Supplement: if query contains temporal cues, also scan messages directly
     temporal_messages = []
     if query:
         try:

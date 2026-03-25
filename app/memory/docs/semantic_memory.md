@@ -158,17 +158,18 @@ Typical usage:
 
 ## Module Responsibilities
 
-File: `memory/semantic.py`
+File: `app/memory/extractor.py`
 
 Responsibilities:
 
-1. Extract facts from episodic memory
+1. Extract facts from episodic memory (LLM-only, no regex rules)
 2. Merge or update existing facts
 3. Manage confidence
 4. Provide semantic retrieval API
 
 Primary functions:
 
-- extract_semantic_facts(episode)
-- merge_or_insert_fact(triple)
-- get_top_semantic_memories(limit)
+- `extract_semantic_facts(messages)` — LLM extraction of RDF triples from raw messages
+- `upsert_semantic_memory(session_id, entity, relation, target)` — insert or reinforce a semantic fact
+- `get_top_semantic_memories(limit)` — retrieve highest-confidence facts
+- `_build_semantic_text(entity, relation, target)` — build searchable text from a triple (used by upsert)

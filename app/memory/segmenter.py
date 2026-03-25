@@ -24,7 +24,6 @@ def _parse_timestamp(ts):
 def _get_unsegmented_messages(session_id):
     """Get messages that have not yet been assigned to a segment."""
     with get_db_session() as session:
-        # Find the last segmented message id
         last_segment = session.query(ConversationSegment).filter(
             ConversationSegment.session_id == session_id
         ).order_by(ConversationSegment.end_message_id.desc()).first()
@@ -63,7 +62,6 @@ def _detect_boundaries(messages):
 
     for msg in messages:
         if current_group:
-            # Check time gap
             prev_ts = _parse_timestamp(current_group[-1].get('timestamp'))
             curr_ts = _parse_timestamp(msg.get('timestamp'))
             if prev_ts and curr_ts:
@@ -72,15 +70,12 @@ def _detect_boundaries(messages):
                     segments.append(current_group)
                     current_group = []
 
-            # Check max size
             if len(current_group) >= MAX_MESSAGES_PER_SEGMENT:
                 segments.append(current_group)
                 current_group = []
 
         current_group.append(msg)
 
-    # Don't create segments from groups that are too small (less than 5)
-    # unless there are no other segments
     if current_group and len(current_group) >= 5:
         segments.append(current_group)
 
@@ -88,26 +83,29 @@ def _detect_boundaries(messages):
 
 
 def _create_segment(session_id, group):
-    """Create a conversation segment from a message group."""
+    """Create a conversation segment from a message group.
+    
+    Returns the generated summary string so callers can reuse it
+    without calling the LLM again (avoids double summarization).
+    """
     if not group:
-        return
+        return None
 
     start_id = group[0]['id']
     end_id = group[-1]['id']
 
+    # Generate summary ONCE — caller reuses this, no second LLM call
     summary = generate_episodic_summary(group)
 
-    # Generate and store embedding for the summary
     embedding_blob = None
     try:
         from app.memory.embedder import embed_text, vec_to_blob
-        vec = embed_text(summary)
+        vec = embed_text(summary or "")
         if vec is not None:
             embedding_blob = vec_to_blob(vec)
     except Exception as e:
         print(f"[segmenter] Embedding skipped: {e}")
 
-    # Own session — no nesting
     with get_db_session() as session:
         segment = ConversationSegment(
             session_id=session_id,
@@ -120,23 +118,82 @@ def _create_segment(session_id, group):
         session.add(segment)
         session.commit()
 
+    return summary
+
 
 def segment_session(session_id):
     """Segment unsegmented messages in a session.
 
-    Returns the number of segments created.
+    Returns:
+        dict with 'segments_created' count and 'summaries' list.
+        Summaries are reused by process_messages_for_memory to avoid
+        double LLM summarization.
     """
     messages = _get_unsegmented_messages(session_id)
     if not messages:
-        return 0
+        return {'segments_created': 0, 'summaries': []}
 
     groups = _detect_boundaries(messages)
+    summaries = []
     count = 0
     for group in groups:
         try:
-            _create_segment(session_id, group)
+            summary = _create_segment(session_id, group)
+            if summary:
+                summaries.append(summary)
             count += 1
         except Exception as e:
             print(f"[WARNING] Segmentation failed for group: {e}")
 
-    return count
+    return {'segments_created': count, 'summaries': summaries}
+
+
+# Backwards-compatibility alias
+def process_messages_for_memory(session_id, messages, affection_delta: float = 0):
+    """Legacy entry point — now delegates to segment_session + extractor.
+
+    Kept for backwards compatibility. New code should call
+    segment_session() and extractor.process_messages_for_memory() separately.
+    """
+    from app.memory.extractor import (
+        should_create_episodic,
+        calculate_emotional_weight,
+        create_episodic_memory,
+        extract_semantic_facts,
+        upsert_semantic_memory,
+    )
+
+    if not messages:
+        return
+
+    # Segment + get summaries in one pass (single LLM call per group)
+    seg_result = segment_session(session_id)
+
+    # Reuse summaries from segmentation — NO second LLM call for episodic
+    for summary in seg_result['summaries']:
+        try:
+            # Calculate emotional weight from messages
+            emotional_weight = calculate_emotional_weight(messages)
+            if should_create_episodic(messages, affection_delta):
+                importance = 0.5 + emotional_weight * 0.3
+                create_episodic_memory(
+                    session_id, summary, emotional_weight, importance
+                )
+        except Exception as e:
+            print(f"[WARNING] Episodic memory creation failed: {e}")
+
+    # Semantic extraction (separate LLM pass — not duplicated)
+    try:
+        facts = extract_semantic_facts(messages)
+        for fact in facts:
+            try:
+                upsert_semantic_memory(
+                    session_id,
+                    fact["entity"],
+                    fact["relation"],
+                    fact["target"],
+                )
+            except Exception as e:
+                print(f"[WARNING] Semantic memory upsert failed: {e}")
+    except Exception as e:
+        print(f"[WARNING] Semantic fact extraction failed: {e}")

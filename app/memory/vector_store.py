@@ -19,6 +19,9 @@ if TYPE_CHECKING:
 _INDEX_DIR = os.path.join(os.path.dirname(__file__), "indexes")
 _MANIFEST_FILE = os.path.join(_INDEX_DIR, "manifest.json")
 
+# Track bootstrap errors so startup doesn't fail silently
+_BOOTSTRAP_ERRORS = []
+
 
 def _ensure_index_dir():
     os.makedirs(_INDEX_DIR, exist_ok=True)
@@ -55,13 +58,12 @@ def _save_manifest(manifest: dict):
 
 def _init_faiss():
     import faiss
-
     return faiss
 
 
 # ── Core index operations ───────────────────────────────────────────────────────
 
-def _create_index(dimension: int) -> "faiss.IndexFlatIP":  # noqa: F821
+def _create_index(dimension: int) -> "faiss.IndexFlatIP":
     """Create a normalized inner-product index (cosine sim equivalent)."""
     faiss = _init_faiss()
     index = faiss.IndexFlatIP(dimension)
@@ -84,7 +86,7 @@ def _get_embedding_dim() -> int:
         if mem:
             vec = blob_to_vec(mem.embedding_vector)
             return len(vec)
-    return EMBEDDING_DIM  # fallback — chutes Qwen3-Embedding-8B default is 4096
+    return EMBEDDING_DIM
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -102,9 +104,8 @@ def build_index(session_id: int, memory_type: str, force: bool = False):
     ids_path = _ids_path(session_id, memory_type)
 
     if os.path.exists(index_path) and os.path.exists(ids_path) and not force:
-        return  # already built
+        return
 
-    # Load vectors from DB
     if memory_type == "semantic":
         Model = SemanticMemory
     elif memory_type == "episodic":
@@ -120,14 +121,12 @@ def build_index(session_id: int, memory_type: str, force: bool = False):
         ).all()
 
         if not rows:
-            # Empty index — remove stale files if any
             for p in (index_path, ids_path):
                 if os.path.exists(p):
                     os.remove(p)
             _update_manifest(session_id, memory_type, dimension=0, count=0)
             return
 
-        # Build vector matrix
         vecs = []
         ids = []
         dim = None
@@ -141,7 +140,7 @@ def build_index(session_id: int, memory_type: str, force: bool = False):
             if dim is None:
                 dim = len(vec)
             if len(vec) != dim:
-                continue  # skip mismatched dimensions
+                continue
             vecs.append(_normalize(vec))
             ids.append(row.id)
 
@@ -155,7 +154,6 @@ def build_index(session_id: int, memory_type: str, force: bool = False):
         index = _create_index(dim)
         index.add(mat)
 
-        # Serialize
         faiss.write_index(index, index_path)
         with open(ids_path, "w") as f:
             json.dump(ids, f)
@@ -182,7 +180,7 @@ def mark_dirty(session_id: int, memory_type: str):
     _save_manifest(manifest)
 
 
-def _load_index(session_id: int, memory_type: str) -> tuple["faiss.IndexFlatIP", list[int], int] | None:  # noqa: F821
+def _load_index(session_id: int, memory_type: str) -> tuple["faiss.IndexFlatIP", list[int], int] | None:
     """Load index + id list from disk. Returns (index, ids, dimension) or None."""
     faiss = _init_faiss()
     index_path = _manifest_path(session_id, memory_type)
@@ -221,7 +219,6 @@ def search(session_id: int, memory_type: str, query_vec: list[float], k: int = 1
     if index.ntotal == 0 or len(ids) == 0:
         return []
 
-    # Check dirty flag — rebuild if needed
     manifest = _load_manifest()
     key = f"{session_id}_{memory_type}"
     if manifest.get(key, {}).get("dirty", False):
@@ -231,10 +228,8 @@ def search(session_id: int, memory_type: str, query_vec: list[float], k: int = 1
             return []
         index, ids, dim = index_data
 
-    # Handle query vector dimension mismatch
     q = np.array(query_vec, dtype=np.float32)
     if len(q) != dim:
-        # Rebuild with correct dimension
         build_index(session_id, memory_type, force=True)
         index_data = _load_index(session_id, memory_type)
         if index_data is None:
@@ -254,93 +249,88 @@ def search(session_id: int, memory_type: str, query_vec: list[float], k: int = 1
 
 
 def remove_from_index(session_id: int, memory_type: str, db_id: int):
-    """Remove a memory from the index by rebuilding without it."""
+    """Remove a memory from the index in-place without full rebuild.
+
+    Loads the on-disk index, removes the single vector by position,
+    writes back — O(1) disk I/O instead of O(n) DB queries.
+    """
+    faiss = _init_faiss()
+    index_path = _manifest_path(session_id, memory_type)
+    ids_path = _ids_path(session_id, memory_type)
+
     index_data = _load_index(session_id, memory_type)
     if index_data is None:
         return
     index, ids, dim = index_data
+
     if db_id not in ids:
         return
+
     pos = ids.index(db_id)
-    # Rebuild without that position
-    ids_new = ids[:pos] + ids[pos + 1 :]
-    # Reload vectors from DB and rebuild
-    if memory_type == "semantic":
-        Model = SemanticMemory
-        attr = "embedding_vector"
-    elif memory_type == "episodic":
-        Model = EpisodicMemory
-        attr = "embedding"
-    else:
-        Model = ConversationSegment
-        attr = "embedding"
 
-    with get_db_session() as session:
-        rows = session.query(Model).filter(
-            Model.session_id == session_id,
-            Model.id.in_(ids_new),
-            getattr(Model, attr).isnot(None),
-        ).all()
-        id_to_vec = {r.id: blob_to_vec(getattr(r, attr)) for r in rows if r.id in ids_new}
+    # In-place remove: rebuild ID list, rewrite index with one less vector
+    ids_new = ids[:pos] + ids[pos + 1:]
 
-    vecs = []
-    final_ids = []
-    for rid in ids_new:
-        if rid in id_to_vec:
-            v = id_to_vec[rid]
-            if len(v) == dim:
-                vecs.append(_normalize(np.array(v, dtype=np.float32)))
-                final_ids.append(rid)
-
-    if not vecs:
-        for p in [_manifest_path(session_id, memory_type), _ids_path(session_id, memory_type)]:
+    # Rewrite index by reconstructing without the removed vector
+    # IDs are 0-indexed positions in the index, so we remove the vector at `pos`
+    if index.ntotal == 1:
+        # Last vector — delete index files entirely
+        for p in (index_path, ids_path):
             if os.path.exists(p):
                 os.remove(p)
         _update_manifest(session_id, memory_type, dimension=0, count=0)
         return
 
-    faiss = _init_faiss()
-    index = _create_index(dim)
-    index.add(np.stack(vecs).astype(np.float32))
-    faiss.write_index(index, _manifest_path(session_id, memory_type))
-    with open(_ids_path(session_id, memory_type), "w") as f:
-        json.dump(final_ids, f)
-    _update_manifest(session_id, memory_type, dimension=dim, count=len(final_ids))
+    # Extract all vectors, exclude the one at `pos`
+    # Read index vectors directly via `index.reconstruct`
+    all_vecs = []
+    for i in range(index.ntotal):
+        all_vecs.append(index.reconstruct(i))
+    all_vecs.pop(pos)
+    mat = np.stack(all_vecs).astype(np.float32)
+
+    new_index = _create_index(dim)
+    new_index.add(mat)
+    faiss.write_index(new_index, index_path)
+
+    with open(ids_path, "w") as f:
+        json.dump(ids_new, f)
+
+    _update_manifest(session_id, memory_type, dimension=dim, count=len(ids_new))
 
 
 # ── Init on import ────────────────────────────────────────────────────────────
 
-_build_manifest = {}
+_BOOTSTRAP_ERRORS = []
 
 
 def _bootstrap_indexes():
-    """Rebuild all dirty/missing indexes on startup. Runs once."""
-    _init_faiss()
+    """Rebuild all dirty/missing indexes on startup. Runs once in background."""
+    global _BOOTSTRAP_ERRORS
+    try:
+        _init_faiss()
+    except Exception as e:
+        _BOOTSTRAP_ERRORS.append(str(e))
+        print(f"[vector_store] CRITICAL: FAISS unavailable — vector search disabled: {e}")
+        return  # Don't try to build indexes without FAISS
 
     manifest = _load_manifest()
     sessions_seen = set()
 
-    for key, meta in manifest.items():
+    for key in manifest:
         parts = key.rsplit("_", 1)
         if len(parts) != 2:
             continue
-        session_id_str, memory_type = parts
+        session_id_str, _ = parts
         try:
-            session_id = int(session_id_str)
+            sessions_seen.add(int(session_id_str))
         except ValueError:
             continue
-        sessions_seen.add(session_id)
 
     with get_db_session() as session:
-        sem_sessions = set(
-            r[0] for r in session.query(SemanticMemory.session_id).distinct().all()
-        )
-        epi_sessions = set(
-            r[0] for r in session.query(EpisodicMemory.session_id).distinct().all()
-        )
-        seg_sessions = set(
-            r[0] for r in session.query(ConversationSegment.session_id).distinct().all()
-        )
+        sem_sessions = set(r[0] for r in session.query(SemanticMemory.session_id).distinct().all())
+        epi_sessions = set(r[0] for r in session.query(EpisodicMemory.session_id).distinct().all())
+        seg_sessions = set(r[0] for r in session.query(ConversationSegment.session_id).distinct().all())
 
     all_sessions = sem_sessions | epi_sessions | seg_sessions
 
@@ -349,9 +339,18 @@ def _bootstrap_indexes():
             key = f"{session_id}_{memory_type}"
             meta = manifest.get(key, {})
             if meta.get("dirty", False) or not os.path.exists(_manifest_path(session_id, memory_type)):
-                build_index(session_id, memory_type, force=True)
+                try:
+                    build_index(session_id, memory_type, force=True)
+                except Exception as e:
+                    err = f"session={session_id} type={memory_type}: {e}"
+                    _BOOTSTRAP_ERRORS.append(err)
+                    print(f"[vector_store] Bootstrap index build failed for {err}")
 
 
-# Run bootstrap in background thread so it doesn't block startup
+def get_bootstrap_errors():
+    """Return list of errors encountered during bootstrap (for diagnostics)."""
+    return list(_BOOTSTRAP_ERRORS)
+
+
 _thread = threading.Thread(target=_bootstrap_indexes, daemon=True)
 _thread.start()
