@@ -1,5 +1,5 @@
-# [FILE: app/memory/extractor.py]
-# [DESCRIPTION: LLM-only semantic fact extraction — no regex rules]
+FILE: app/memory/extractor.py
+DESCRIPTION: LLM-only semantic fact extraction - no regex rules
 
 from datetime import datetime
 from app.database import (

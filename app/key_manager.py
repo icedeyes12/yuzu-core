@@ -1,14 +1,6 @@
-# [FILE: key_manager.py]
-# # [VERSION: 1.0.69.28v4]
-# [DATE: 2026-03-24]
-# [PROJECT: HKKM - Yuzu Companion]
-# [DESCRIPTION: Encryption key management utility]
-# [AUTHOR: Project Lead: Bani Baskara]
-# [TEAM: Deepseek, GPT, Qwen, Aihara]
-# [REPOSITORY: https://guthib.com/icedeyes12]
-# [LICENSE: MIT]
+# FILE: app/key_manager.py
+# DESCRIPTION: Encryption key management utility
 
-#!/usr/bin/env python3
 import argparse
 import sys
 from app.encryption import encryptor

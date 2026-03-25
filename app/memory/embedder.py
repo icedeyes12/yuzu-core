@@ -1,5 +1,5 @@
-# [FILE: memory/embedder.py]
-# [DESCRIPTION: Chutes API embedding client for memory vectors]
+FILE: app/memory/embedder.py
+DESCRIPTION: Chutes API embedding client for memory vectors
 
 import math
 import struct

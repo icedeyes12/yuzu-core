@@ -1,14 +1,5 @@
-// [FILE: config.js]
-// // [VERSION: 1.0.69.28v4]
-// [DATE: 2026-03-24]
-// [PROJECT: HKKM - Yuzu Companion]
-// [DESCRIPTION: Configuration page functionality]
-// [AUTHOR: Project Lead: Bani Baskara]
-// [TEAM: Deepseek, GPT, Qwen, Aihara]
-// [REPOSITORY: https://github.com/icedeyes12]
-// [LICENSE: MIT]
-
-// Configuration page functionality
+// FILE: static/js/config.js
+// DESCRIPTION: Configuration page functionality
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Config page loaded - initializing...');
     loadProfileData();

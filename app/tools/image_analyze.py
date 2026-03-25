@@ -1,3 +1,6 @@
+FILE: app/tools/image_analyze.py
+DESCRIPTION: Image analysis tool using vision models
+
 import json
 import re
 import os

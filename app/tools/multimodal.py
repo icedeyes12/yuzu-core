@@ -1,12 +1,5 @@
-# [FILE: tools.py]
-# # [VERSION: 1.0.69.28v4]
-# [DATE: 2026-03-24]
-# [PROJECT: HKKM - Yuzu Companion]
-# [DESCRIPTION: Multimodal tools with image caching]
-# [AUTHOR: Project Lead: Bani Baskara]
-# [TEAM: Deepseek, GPT, Qwen, Gemini]
-# [REPOSITORY: https://guthib.com/icedeyes12]
-# [LICENSE: MIT]
+FILE: app/tools/multimodal.py
+DESCRIPTION: Multimodal tools with image caching and vision support
 
 import requests
 import base64

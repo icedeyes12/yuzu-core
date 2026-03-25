@@ -1,8 +1,6 @@
-# ==========================================================
-# [FILE]        : main.py  
-# # [VERSION: 1.0.69.28v4] - Complete Working Version
-# [DATE: 2026-03-24]
-# [PROJECT]     : HKKM - Yuzu Companion
+# FILE: main.py
+# DESCRIPTION: CLI entrypoint for the bot
+
 # [DESCRIPTION] : Complete CLI with all menu methods implemented
 # [AUTHOR]      : Project Lead: Bani Baskara
 # [TEAM]        : Deepseek, GPT, Qwen, Aihara

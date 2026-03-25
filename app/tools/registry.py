@@ -1,3 +1,6 @@
+# FILE: app/tools/registry.py
+# DESCRIPTION: Tool registry for executing and managing available tools
+
 import json
 
 # Tool name → tool role used for DB storage

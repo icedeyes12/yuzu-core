@@ -1,5 +1,5 @@
-# [FILE: memory/vector_store.py]
-# [DESCRIPTION: FAISS ANN index for memory retrieval — replaces brute-force O(n)]
+FILE: app/memory/vector_store.py
+DESCRIPTION: FAISS ANN index for memory retrieval
 
 from __future__ import annotations
 

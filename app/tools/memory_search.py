@@ -1,5 +1,5 @@
-# [FILE: app/tools/memory_search.py]
-# [DESCRIPTION: Query structured memory — semantic + episodic + temporal]
+FILE: app/tools/memory_search.py
+DESCRIPTION: Query structured memory - semantic, episodic, and temporal
 
 from app.database import Database
 from app.memory.retrieval import retrieve_memory, format_memory

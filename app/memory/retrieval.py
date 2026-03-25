@@ -1,5 +1,5 @@
-# [FILE: memory/retrieval.py]
-# [DESCRIPTION: Memory retrieval pipeline - cosine similarity + hybrid scoring]
+FILE: app/memory/retrieval.py
+DESCRIPTION: Memory retrieval pipeline with cosine similarity and hybrid scoring
 
 import math
 from datetime import datetime, timedelta

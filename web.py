@@ -1,12 +1,5 @@
-# [FILE: web.py]
-# # [VERSION: 1.0.69.28v4]
-# [DATE: 2026-03-24]
-# [PROJECT: HKKM - Yuzu Companion]
-# [DESCRIPTION: Web interface for AI companion system]
-# [AUTHOR: Project Lead: Bani Baskara]
-# [TEAM: Deepseek, GPT, Qwen, Aihara]
-# [REPOSITORY: https://guthib.com/icedeyes12]
-# [LICENSE: MIT]
+# FILE: web.py
+# DESCRIPTION: Web interface for AI companion system
 
 from flask import Flask, render_template, request, jsonify, send_from_directory, session, Response
 import json

@@ -1,9 +1,6 @@
-# ==========================================================
-# [FILE]        : providers.py
-# # [VERSION: 1.0.69.28v4]
-# [DATE: 2026-03-24]
-# [PROJECT]     : HKKM - Yuzu Companion
-# [DESCRIPTION] : AI provider management
+# FILE: app/providers.py
+# DESCRIPTION: AI provider configuration and client management
+
 # [AUTHOR]      : Project Lead: Bani Baskara
 # [TEAM]        : Deepseek, GPT, Qwen, Gemini
 # [REPOSITORY]  : https://guthib.com/icedeyes12
