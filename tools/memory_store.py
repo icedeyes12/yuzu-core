@@ -73,8 +73,7 @@ def execute(arguments, **kwargs):
         )
 
     # Check for duplicate using text similarity
-    from memory.embedder import cosine_similarity
-    from memory.retrieval import _blob_to_vec
+    from memory.embedder import cosine_similarity, blob_to_vec
 
     with get_db_session() as session:
         existing = session.query(SemanticMemory).filter(
@@ -85,7 +84,7 @@ def execute(arguments, **kwargs):
         for rec in existing:
             if rec.embedding_vector:
                 try:
-                    rec_vec = _blob_to_vec(rec.embedding_vector)
+                    rec_vec = blob_to_vec(rec.embedding_vector)
                     sim = cosine_similarity(vector, rec_vec)
                     if sim > 0.95:
                         duplicate_id = rec.id

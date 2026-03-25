@@ -202,10 +202,23 @@ def retrieve_memory(session_id, query=None):
         print(f"[WARNING] Segment retrieval failed: {e}")
         segments = []
 
+    # Supplement: if query contains temporal cues, also scan messages directly
+    temporal_messages = []
+    if query:
+        try:
+            from tools.memory_search import _detect_time_window, _search_temporal_messages
+            time_window = _detect_time_window(query)
+            if time_window:
+                start, end = time_window
+                temporal_messages = _search_temporal_messages(session_id, start, end)
+        except Exception:
+            pass
+
     return {
         'semantic': semantic,
         'episodic': episodic,
         'segments': segments,
+        'temporal_messages': temporal_messages,
     }
 
 
@@ -236,5 +249,14 @@ def format_memory(memory_bundle):
             if len(summary) > 200:
                 summary = summary[:200] + '...'
             parts.append(f"- {summary}")
+
+    temporal = memory_bundle.get('temporal_messages', [])
+    if temporal:
+        parts.append("\nMessages from requested time period:")
+        for msg in temporal[:10]:
+            ts = msg.get('timestamp', '')[:16]
+            role = msg.get('role', '')
+            content = msg.get('content', '')[:300]
+            parts.append(f"- [{ts}] {role}: {content}")
 
     return '\n'.join(parts)

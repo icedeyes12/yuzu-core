@@ -396,18 +396,31 @@ def handle_user_message(user_message, interface="terminal"):
             return raw_ai_response
 
 
+_memory_semantic_last_run: Dict[int, datetime] = {}
+_memory_semantic_last_msg_count: Dict[int, int] = {}
+_last_decay_run: Dict[int, datetime] = {}
+_DECAY_INTERVAL_HOURS = 6
+_SEMANTIC_COOLDOWN_MSGS = 10
+
 def _trigger_memory_pipeline(session_id):
-    """Run episodic memory extraction on recent messages.
+    """Run episodic + semantic memory extraction on recent messages.
 
     Called after each user/assistant exchange.
-    Semantic fact extraction (regex-based) is gated by emotion thresholds here;
-    a separate call at session start handles non-gated semantic extraction.
+    - Episodic: emotion-threshold gated (every emotional turn).
+    - Semantic: lightweight regex, gated by message-count cooldown.
+    - Decay: time-gated (runs at most once per _DECAY_INTERVAL_HOURS).
     """
     try:
         from memory.extractor import should_create_episodic, calculate_emotional_weight
         from memory.extractor import generate_episodic_summary, create_episodic_memory
-        recent = Database.get_chat_history(session_id=session_id, limit=20, recent=True)
+        from memory.extractor import extract_semantic_facts, upsert_semantic_memory
+        from memory.review import run_decay
 
+        recent = Database.get_chat_history(session_id=session_id, limit=20, recent=True)
+        if not recent:
+            return
+
+        # --- Episodic: emotion gated ---
         if should_create_episodic(recent):
             emotional_weight = calculate_emotional_weight(recent)
             summary = generate_episodic_summary(recent)
@@ -417,6 +430,34 @@ def _trigger_memory_pipeline(session_id):
                     create_episodic_memory(session_id, summary, emotional_weight, importance)
                 except Exception as e:
                     print(f"[WARNING] Episodic memory creation failed: {e}")
+
+        # --- Semantic: cooldown-gated lightweight regex per message ---
+        last_run = _memory_semantic_last_run.get(session_id)
+        session_memory = Database.get_session_memory(session_id)
+        msg_count = session_memory.get('message_count', 0) if session_memory else 0
+        should_run_semantic = (
+            last_run is None or
+            msg_count - _memory_semantic_last_msg_count.get(session_id, 0) >= _SEMANTIC_COOLDOWN_MSGS
+        )
+        if should_run_semantic:
+            try:
+                facts = extract_semantic_facts(recent)
+                for fact in facts:
+                    upsert_semantic_memory(session_id, fact['entity'], fact['relation'], fact['target'])
+                _memory_semantic_last_run[session_id] = datetime.now()
+                _memory_semantic_last_msg_count[session_id] = msg_count
+            except Exception as e:
+                print(f"[WARNING] Per-message semantic extraction failed: {e}")
+
+        # --- Decay: time-gated (once per 6 hours) ---
+        try:
+            last_decay = _last_decay_run.get(session_id)
+            now = datetime.now()
+            if last_decay is None or (now - last_decay).total_seconds() >= _DECAY_INTERVAL_HOURS * 3600:
+                run_decay(session_id)
+                _last_decay_run[session_id] = now
+        except Exception as e:
+            print(f"[WARNING] Memory decay failed: {e}")
     except Exception as e:
         print(f"[WARNING] Memory extraction failed: {e}")
 
@@ -1686,10 +1727,36 @@ just a natural paragraph.
         memory_update = {
             "session_context": context_paragraph.strip(),
             "last_summarized": datetime.now().isoformat(),
-            "last_summary_count": current_count
+            "last_summary_count": current_count,
+            "last_message_time": datetime.now().isoformat(),
         }
         
         Database.update_session_memory(session_id, memory_update)
+
+        # Also sync to structured DB so both systems stay aligned
+        try:
+            from memory.extractor import upsert_semantic_memory, create_episodic_memory
+            from memory.extractor import extract_semantic_facts, calculate_emotional_weight
+            from memory.embedder import embed_text
+            from memory.embedder import vec_to_blob
+            from database import get_db_session, SemanticMemory, EpisodicMemory
+
+            facts = extract_semantic_facts(chat_history[-20:])
+            for fact in facts:
+                try:
+                    upsert_semantic_memory(session_id, fact['entity'], fact['relation'], fact['target'])
+                except Exception as e:
+                    print(f"[WARNING] Sync semantic to DB failed: {e}")
+
+            emotional = calculate_emotional_weight(chat_history[-20:])
+            importance = 0.5 + emotional * 0.3
+            try:
+                create_episodic_memory(session_id, context_paragraph.strip(), emotional, importance)
+            except Exception as e:
+                print(f"[WARNING] Sync episodic to DB failed: {e}")
+        except Exception as e:
+            print(f"[WARNING] Structured-DB sync skipped: {e}")
+
         return True
     else:
         return False
