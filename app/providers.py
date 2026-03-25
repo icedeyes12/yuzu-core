@@ -14,7 +14,7 @@ import requests
 import json
 import time
 from typing import List, Dict, Optional, Generator
-from database import Database
+from app.database import Database
 from tools import multimodal_tools
 
 class AIProvider:

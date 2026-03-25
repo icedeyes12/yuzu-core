@@ -17,8 +17,8 @@ import json
 import traceback
 from datetime import datetime
 from typing import Dict, Optional, List
-from .database import Database
-from providers import get_ai_manager, reload_ai_manager
+from app.database import Database
+from app.providers import get_ai_manager, reload_ai_manager
 from tools import multimodal_tools
 from tools.registry import execute_tool, get_tool_role, TOOL_ROLE_MAP
 # ---------------------------------------------------------------------------
@@ -399,6 +399,7 @@ def handle_user_message(user_message, interface="terminal"):
 _memory_semantic_last_run: Dict[int, datetime] = {}
 _memory_semantic_last_msg_count: Dict[int, int] = {}
 _last_decay_run: Dict[int, datetime] = {}
+_MEMORY_INIT_DONE: Dict[int, bool] = {}  # session_id -> True after first init
 _DECAY_INTERVAL_HOURS = 6
 _SEMANTIC_COOLDOWN_MSGS = 10
 
@@ -435,10 +436,12 @@ def _trigger_memory_pipeline(session_id):
         last_run = _memory_semantic_last_run.get(session_id)
         session_memory = Database.get_session_memory(session_id)
         msg_count = session_memory.get('message_count', 0) if session_memory else 0
-        should_run_semantic = (
+        msg_delta = msg_count - _memory_semantic_last_msg_count.get(session_id, 0)
+        time_ok = (
             last_run is None or
-            msg_count - _memory_semantic_last_msg_count.get(session_id, 0) >= _SEMANTIC_COOLDOWN_MSGS
+            (datetime.now() - last_run).total_seconds() >= 300  # 5 min cooldown
         )
+        should_run_semantic = msg_delta >= _SEMANTIC_COOLDOWN_MSGS and time_ok
         if should_run_semantic:
             try:
                 facts = extract_semantic_facts(recent)
@@ -1532,51 +1535,38 @@ def end_session_cleanup(profile, interface="terminal", unexpected_exit=False):
         active_session = Database.get_active_session()
         session_id = active_session['id']
         
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+        all_sessions = Database.get_all_sessions()
+        session_count = len(all_sessions)
+        
+        last_active = "Never"
+        if len(all_sessions) > 1:
+            sorted_sessions = sorted(all_sessions, key=lambda x: x.get('updated_at', ''), reverse=True)
+            for session in sorted_sessions[1:]:
+                if session.get('updated_at'):
+                    last_active = session['updated_at']
+                    break
+        
+        connection_msg = (
+            f"*{profile['display_name']} disconnected from {interface} "
+            f"at {current_time} after a {session_count} session*"
+        )
+        
+        Database.add_message('system', connection_msg, session_id)
+        
         session_history = profile.get('session_history', {})
-        current_session = session_history.get('current_session', {})
-        start_time = current_session.get('start_time')
-        
-        duration = 0
-        end_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-        
-        if start_time:
-            try:
-                start = datetime.fromisoformat(start_time)
-                duration = (datetime.now() - start).total_seconds() / 60
-            except Exception:
-                pass
-        
-        if unexpected_exit:
-            disconnect_msg = (
-                f"*{profile['display_name']} disconnected unexpectedly from {interface} "
-                f"at {end_time}. Session duration: {duration:.1f} minutes*"
-            )
-        else:
-            if duration < 1:
-                time_desc = "quick"
-            elif duration < 5:
-                time_desc = "short"
-            else:
-                time_desc = f"{duration:.1f} minute"
-            
-            disconnect_msg = (
-                f"*{profile['display_name']} disconnected from {interface} "
-                f"at {end_time} after a {time_desc} session*"
-            )
-        
-        Database.add_message('system', disconnect_msg, session_id)
-        
         session_history['last_session'] = {
             'end_time': datetime.now().isoformat(),
-            'end_timestamp': end_time,
-            'duration_minutes': round(duration, 1),
-            'message_count': current_session.get('message_count', 0),
+            'end_timestamp': current_time,
+            'duration_minutes': round(session_count, 1),
+            'message_count': session_count,
             'interface': interface,
             'unexpected_exit': unexpected_exit
         }
         
-        session_history['total_sessions'] = session_history.get('total_sessions', 0) + 1
-        session_history['total_time_minutes'] = session_history.get('total_time_minutes', 0) + duration
+        session_history['total_sessions'] = session_history.get('total_sessions', 0) + session_count
+        session_history['total_time_minutes'] = session_history.get('total_time_minutes', 0) + session_count
         session_history['current_session'] = {}
         
         Database.update_profile({'session_history': session_history})
@@ -1585,14 +1575,14 @@ def end_session_cleanup(profile, interface="terminal", unexpected_exit=False):
             if unexpected_exit:
                 pass
             else:
-                if duration < 1:
+                if session_count < 1:
                     pass
-                elif duration < 5:
+                elif session_count < 5:
                     pass
                 else:
                     pass
         
-        return disconnect_msg
+        return connection_msg
 
 def start_session(interface="terminal"):
     with UserContext():
@@ -1642,10 +1632,12 @@ def start_session(interface="terminal"):
             # Segment unsegmented messages from past sessions
             segment_session(session_id)
 
-            # Extract semantic facts + episodic memories from recent history
-            recent = Database.get_chat_history(session_id=session_id, limit=50, recent=True)
-            if recent:
-                process_messages_for_memory(session_id, recent)
+            # Extract semantic facts + episodic memories — idemponent per session
+            if not _MEMORY_INIT_DONE.get(session_id):
+                recent = Database.get_chat_history(session_id=session_id, limit=50, recent=True)
+                if recent:
+                    process_messages_for_memory(session_id, recent)
+                _MEMORY_INIT_DONE[session_id] = True
         except Exception as e:
             print(f"[WARNING] Memory system init failed: {e}")
 
@@ -1737,9 +1729,6 @@ just a natural paragraph.
         try:
             from memory.extractor import upsert_semantic_memory, create_episodic_memory
             from memory.extractor import extract_semantic_facts, calculate_emotional_weight
-            from memory.embedder import embed_text
-            from memory.embedder import vec_to_blob
-            from database import get_db_session, SemanticMemory, EpisodicMemory
 
             facts = extract_semantic_facts(chat_history[-20:])
             for fact in facts:
@@ -1918,11 +1907,9 @@ def summarize_global_player_profile():
             print(f"[INFO] Removed oldest session, now {len(conversation_text):,} chars")
     
     print("[INFO] Analysis Summary:")
-    print(f"  - Sessions total: {len(all_sessions)}")
-    print(f"  - Sessions with data: {total_sessions_with_data}")
-    print(f"  - Sessions analyzed: {len(all_conversations)}")
+    print(f"  - Sessions total: {len(all_conversations)}")
     print(f"  - Messages processed: {total_messages_processed}")
-    print(f"  - Conversation data: {len(conversation_text):,} characters")
+    print(f"  - Data volume: {len(conversation_text):,} chars")
     print(f"  - Model utilization: ~{len(conversation_text)//4:,} tokens")
     
     # Create analysis prompt (sama seperti sebelumnya)
@@ -2252,7 +2239,7 @@ def _try_alternative_models(prompt: str, api_key: str) -> Optional[str]:
         "Authorization": f"Bearer {api_key}"
     }
     
-    for model, max_tokens in alternatives:
+    for model in alternatives:
         print(f"[INFO] Trying alternative model: {model}")
         
         try:
@@ -2273,7 +2260,7 @@ def _try_alternative_models(prompt: str, api_key: str) -> Optional[str]:
                     }
                 ],
                 "temperature": 0.2,
-                "max_tokens": max_tokens,
+                "max_tokens": 2000,  # Free models have lower limits
                 "top_p": 0.9,
                 "stream": False
             }
@@ -2282,23 +2269,20 @@ def _try_alternative_models(prompt: str, api_key: str) -> Optional[str]:
                 "https://llm.chutes.ai/v1/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=180
+                timeout=300
             )
             
             if response.status_code == 200:
                 result = response.json()
                 content = result['choices'][0]['message']['content'].strip()
-                print(f"[SUCCESS] Got response from {model}: {len(content):,} chars")
+                print(f"[SUCCESS] Free model response: {len(content):,} chars")
                 return content
-            else:
-                print(f"[WARNING] {model} failed: {response.status_code}")
-                continue
                 
         except Exception as e:
-            print(f"[WARNING] Error with {model}: {str(e)}")
+            print(f"[WARNING] Free model {model} error: {str(e)}")
             continue
     
-    print("[ERROR] All alternative models failed")
+    print("[ERROR] All free models failed")
     return None
 
 
@@ -2536,7 +2520,7 @@ def get_provider_models(provider_name):
 
 
 def get_vision_capabilities():
-    from tools import multimodal_tools
+    from app.tools import multimodal_tools
     
     capabilities = {
         'has_vision': False,

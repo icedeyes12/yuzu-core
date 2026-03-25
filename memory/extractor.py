@@ -6,7 +6,7 @@ from datetime import datetime
 from app.database import (
     get_db_session, SemanticMemory, EpisodicMemory
 )
-from app.memory.embedder import embed_text, vec_to_blob
+from memory.embedder import embed_text, vec_to_blob
 
 
 def _get_ai_manager():
@@ -90,11 +90,9 @@ def generate_episodic_summary(messages):
     """
     if not messages:
         return ""
-    # Try LLM summarization first
     summary = _llm_summarize(messages)
     if summary:
         return summary
-    # Fallback to truncation
     return _truncate_summary(messages)
 
 
@@ -155,15 +153,6 @@ def _truncate_summary(messages):
     return '\n'.join(parts)
 
 
-def _embed_text(text: str) -> list[float] | None:
-    """Embed a single text via Chutes API. Returns None on failure."""
-    try:
-        return embed_text(text)
-    except Exception as e:
-        print(f"[WARNING] Embedding failed: {e}")
-        return None
-
-
 def _build_semantic_text(entity, relation, target):
     """Build a searchable text from a semantic triple."""
     return f"{entity} {relation} {target}"
@@ -172,7 +161,7 @@ def _build_semantic_text(entity, relation, target):
 def upsert_semantic_memory(session_id, entity, relation, target):
     """Insert or update a semantic memory triple with embedding."""
     text = _build_semantic_text(entity, relation, target)
-    vector = _embed_text(text)
+    vector = embed_text(text)  # Returns None gracefully if embedding fails
 
     with get_db_session() as session:
         existing = session.query(SemanticMemory).filter(
@@ -186,7 +175,7 @@ def upsert_semantic_memory(session_id, entity, relation, target):
             existing.confidence = min(existing.confidence + 0.1, 1.0)
             existing.access_count += 1
             existing.last_accessed = datetime.now()
-            if vector:
+            if vector is not None:
                 existing.embedding_vector = vec_to_blob(vector)
         else:
             new_mem = SemanticMemory(
@@ -196,7 +185,7 @@ def upsert_semantic_memory(session_id, entity, relation, target):
                 target=target,
                 confidence=0.5,
                 importance=0.5,
-                embedding_vector=vec_to_blob(vector) if vector else None,
+                embedding_vector=vec_to_blob(vector) if vector is not None else None,
                 last_accessed=datetime.now(),
                 access_count=1,
             )
@@ -206,13 +195,13 @@ def upsert_semantic_memory(session_id, entity, relation, target):
 
 def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance=0.5):
     """Create a new episodic memory record with embedding."""
-    vector = _embed_text(summary)
+    vector = embed_text(summary)  # Returns None gracefully if embedding fails
 
     with get_db_session() as session:
         mem = EpisodicMemory(
             session_id=session_id,
             summary=summary,
-            embedding=vec_to_blob(vector) if vector else None,
+            embedding=vec_to_blob(vector) if vector is not None else None,
             importance=importance,
             emotional_weight=emotional_weight,
             last_accessed=datetime.now(),

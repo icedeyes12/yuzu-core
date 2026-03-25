@@ -13,7 +13,7 @@ import os
 import hashlib
 from datetime import datetime
 from contextlib import contextmanager
-from encryption import encryptor
+from app.encryption import encryptor
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, Float, LargeBinary, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
