@@ -185,7 +185,7 @@ def _execute_command_tool(command_info, session_id=None):
     elif tool_name == "request":
         exec_tool_name = "request"
         args = {"url": args_str}
-    elif tool_name in ("memory_search", "memory_sql", "web_search", "weather", "image_analyze"):
+    elif tool_name in ("memory_search", "web_search", "weather", "image_analyze"):
         exec_tool_name = tool_name
         # Parse arguments as JSON if possible, otherwise use as query
         try:
