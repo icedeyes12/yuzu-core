@@ -378,24 +378,23 @@ def handle_user_message(user_message, interface="terminal"):
             # Save tool output as tool message
             Database.add_message(tool_role, tool_output, session_id=session_id)
             
-            # PHASE 3: image_tools is TERMINAL — return tool output only, no synthesis pass
-            # The base64 injection approach caused context overflow (400 errors).
-            final_response = tool_output
-            if tool_role == "image_tools":
-                auto_name_session_if_needed(session_id, active_session)
-                if should_summarize_memory(profile, user_message, session_id):
-                    summarize_memory(profile, user_message, final_response, session_id)
-                _trigger_memory_pipeline(session_id)
-                return final_response
+            # PHASE 3: image_tools — 2nd pass with vision model for natural response
+            # Extract image path from tool output and send to vision model
+            img_path = _parse_image_result_from_formatted(tool_output)
+            if img_path:
+                # Build URL for vision processing (multimodal_tools expects markdown image)
+                # Use absolute path so vision handler can resolve it
+                image_msg = f"Here's the generated image:\n\n![Generated Image](/{img_path})"
+                second_reply = generate_ai_response(profile, image_msg, interface, session_id)
+            else:
+                second_reply = None
 
-            # Non-terminal tools — second pass synthesis (other tools only)
-            second_reply = generate_ai_response(profile, "", interface, session_id)
             if second_reply and second_reply.strip():
                 second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
                 Database.add_message('assistant', second_clean, session_id=session_id)
-                final_response = tool_output + "\n\n" + second_clean
+                final_response = second_clean  # Return natural response, not raw tool contract
             else:
-                # Synthesis failed — return tool output alone
+                # Vision pass failed or no image path — fall back to tool output
                 final_response = tool_output
             
             auto_name_session_if_needed(session_id, active_session)
@@ -558,18 +557,17 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
                 # Yield tool output
                 yield "\n\n" + tool_output
 
-                # PHASE 3: image_tools is TERMINAL — return tool output only, no synthesis pass
-                # The base64 injection approach caused context overflow (400 errors).
-                final_response = tool_output
-                if tool_role == "image_tools":
-                    auto_name_session_if_needed(session_id, active_session)
-                    if should_summarize_memory(profile, user_message, session_id):
-                        summarize_memory(profile, user_message, final_response, session_id)
-                    _trigger_memory_pipeline(session_id)
-                    return
+                # PHASE 3: image_tools — 2nd pass with vision model for natural response
+                # Extract image path from tool output and send to vision model
+                img_path = _parse_image_result_from_formatted(tool_output)
+                if img_path:
+                    # Build URL for vision processing (multimodal_tools expects markdown image)
+                    # Use absolute path so vision handler can resolve it
+                    image_msg = f"Here's the generated image:\n\n![Generated Image](/{img_path})"
+                    second_reply = generate_ai_response(profile, image_msg, interface, session_id)
+                else:
+                    second_reply = None
 
-                # Non-terminal tools — second pass synthesis (other tools only)
-                second_reply = generate_ai_response(profile, "", interface, session_id)
                 if second_reply and second_reply.strip():
                     second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
                     Database.add_message('assistant', second_clean, session_id=session_id)
