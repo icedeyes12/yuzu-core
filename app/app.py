@@ -83,6 +83,23 @@ def _parse_image_result_from_formatted(formatted_result):
         pass
     return None
 
+def _load_generated_image_base64(img_path):
+    """Load a generated image and return base64 + mime for vision model."""
+    try:
+        import base64
+        if not os.path.exists(img_path):
+            print(f"[Vision2nd] Image file not found: {img_path}")
+            return None, None
+        with open(img_path, 'rb') as f:
+            img_data = f.read()
+        mime_type = 'image/png' if img_path.endswith('.png') else 'image/jpeg'
+        img_b64 = base64.b64encode(img_data).decode('utf-8')
+        return img_b64, mime_type
+    except Exception as e:
+        print(f"[Vision2nd] Failed to load image: {e}")
+        return None, None
+
+
 def _detect_command(response_text):
     """
     Detect if the response starts with a tool command on the first line.
@@ -382,10 +399,15 @@ def handle_user_message(user_message, interface="terminal"):
             # Extract image path from tool output and send to vision model
             img_path = _parse_image_result_from_formatted(tool_output)
             if img_path:
-                # Build URL for vision processing (multimodal_tools expects markdown image)
-                # Use absolute path so vision handler can resolve it
-                image_msg = f"Here's the generated image:\n\n![Generated Image](/{img_path})"
-                second_reply = generate_ai_response(profile, image_msg, interface, session_id)
+                # Load image and encode as base64 for vision model
+                img_b64, mime = _load_generated_image_base64(img_path)
+                if img_b64:
+                    second_reply = generate_ai_response(
+                        profile, "", interface, session_id,
+                        image_base64_for_context={"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}}
+                    )
+                else:
+                    second_reply = None
             else:
                 second_reply = None
 
@@ -561,10 +583,15 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
                 # Extract image path from tool output and send to vision model
                 img_path = _parse_image_result_from_formatted(tool_output)
                 if img_path:
-                    # Build URL for vision processing (multimodal_tools expects markdown image)
-                    # Use absolute path so vision handler can resolve it
-                    image_msg = f"Here's the generated image:\n\n![Generated Image](/{img_path})"
-                    second_reply = generate_ai_response(profile, image_msg, interface, session_id)
+                    # Load image and encode as base64 for vision model
+                    img_b64, mime = _load_generated_image_base64(img_path)
+                    if img_b64:
+                        second_reply = generate_ai_response(
+                            profile, "", interface, session_id,
+                            image_base64_for_context={"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}}
+                        )
+                    else:
+                        second_reply = None
                 else:
                     second_reply = None
 
