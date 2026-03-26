@@ -414,7 +414,7 @@ def handle_user_message(user_message, interface="terminal"):
             if second_reply and second_reply.strip():
                 second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
                 Database.add_message('assistant', second_clean, session_id=session_id)
-                final_response = second_clean  # Return natural response, not raw tool contract
+                final_response = tool_output + "\n\n" + second_clean
             else:
                 # Vision pass failed or no image path — fall back to tool output
                 final_response = tool_output
