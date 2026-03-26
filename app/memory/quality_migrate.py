@@ -324,9 +324,11 @@ def phase3_extract_facts(cp):
         batch = episodic_data[batch_start:batch_start + BATCH_SIZE]
         facts = _extract_facts_via_llm(batch)
 
-        for f in facts:
-            f["source_episode_id"] = batch[0]["id"]
-            f["source_session_id"] = batch[0].get("session_id", 1)
+        # Tag each fact with its source episode — one ID per episode, not batch[0]
+        for i, f in enumerate(facts):
+            episode_idx = i % len(batch)  # round-robin across episodes in batch
+            f["source_episode_id"] = batch[episode_idx]["id"]
+            f["source_session_id"] = batch[episode_idx].get("session_id", 1)
 
         extracted_facts.extend(facts)
         episodes_done += len(batch)
@@ -368,8 +370,10 @@ def phase4_embed_and_store_facts(cp):
         for j, f in enumerate(facts):
             if vecs[j] is None:
                 continue
-            # Use actual session_id from source episode, not hardcoded default
             session_id = f.get("source_session_id", 1)
+            episode_id = f.get("source_episode_id")
+            source_episodic_ids = [episode_id] if episode_id else []
+
             mem = SemanticMemory(
                 session_id=session_id,
                 entity="User",
@@ -380,6 +384,7 @@ def phase4_embed_and_store_facts(cp):
                 embedding_vector=_vec_to_blob(vecs[j]),
                 last_accessed=now,
                 access_count=0,
+                source_episodic_ids=str(source_episodic_ids),
             )
             session.add(mem)
             stored += 1

@@ -1635,7 +1635,7 @@ def start_session(interface="terminal"):
             # Extract semantic facts + episodic memories — idempotent per session
             # Check DB directly instead of in-memory dict (survives restarts)
             from app.database import get_db_session
-            from app.memory.models import SemanticMemory, EpisodicMemory
+            from app.memory.models import SemanticMemory, EpisodicMemory, ConversationSegment
             already_initialized = False
             try:
                 with get_db_session() as db:
@@ -1645,7 +1645,10 @@ def start_session(interface="terminal"):
                     epi_count = db.query(EpisodicMemory).filter(
                         EpisodicMemory.session_id == session_id
                     ).count()
-                    already_initialized = (sem_count > 0 or epi_count > 0)
+                    seg_count = db.query(ConversationSegment).filter(
+                        ConversationSegment.session_id == session_id
+                    ).count()
+                    already_initialized = (sem_count > 0 or epi_count > 0 or seg_count > 0)
             except Exception:
                 already_initialized = False
 

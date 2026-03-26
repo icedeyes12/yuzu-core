@@ -7,7 +7,28 @@ import json
 import os
 import threading
 
-import numpy as np
+# ── Module-level FAISS/numpy availability flags ──────────────────────────────────
+#
+# TERMUX COMPATIBLE: no native extension required at import time.
+# FAISS is optional; pure-Python fallback used automatically when unavailable.
+#
+# ── Module-level FAISS/numpy availability flags ──────────────────────────────────
+
+_FAISS_AVAILABLE = False
+_NUMPY_AVAILABLE = False
+
+try:
+    import numpy as np
+    _NUMPY_AVAILABLE = True
+except ImportError:
+    np = None  # type: ignore
+
+try:
+    import faiss
+    _FAISS_AVAILABLE = True
+except ImportError:
+    faiss = None  # type: ignore
+
 from app.database import get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
 from app.memory.embedder import blob_to_vec, EMBEDDING_DIM
 from typing import TYPE_CHECKING
@@ -67,11 +88,18 @@ def _create_index(dimension: int) -> "faiss.IndexFlatIP":
     return index
 
 
-def _normalize(vec: np.ndarray) -> np.ndarray:
-    norm = np.linalg.norm(vec)
+def _normalize(vec) -> list[float]:
+    """L2-normalize a vector. Works with both numpy arrays and plain lists."""
+    if _NUMPY_AVAILABLE and hasattr(vec, '__len__') and not isinstance(vec, list):
+        import numpy as np
+        norm = float(np.linalg.norm(vec))
+        if norm == 0:
+            return vec.tolist()
+        return (vec / norm).tolist()
+    norm = __import__("math").sqrt(sum(x * x for x in vec))
     if norm == 0:
-        return vec
-    return vec / norm
+        return list(vec)
+    return [x / norm for x in vec]
 
 
 def _get_embedding_dim() -> int:
@@ -349,5 +377,3 @@ def get_bootstrap_errors():
     return list(_BOOTSTRAP_ERRORS)
 
 
-_thread = threading.Thread(target=_bootstrap_indexes, daemon=True)
-_thread.start()

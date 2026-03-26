@@ -1,11 +1,23 @@
 # FILE: app/memory/extractor.py
 # DESCRIPTION: LLM-only semantic fact extraction - no regex rules
 
+from __future__ import annotations
+
+__all__ = [
+    "process_messages_for_memory",
+    "extract_semantic_facts",
+    "upsert_semantic_memory",
+    "create_episodic_memory",
+    "generate_episodic_summary",
+    "calculate_emotional_weight",
+    "should_create_episodic",
+]
+
 from datetime import datetime
 from app.database import (
     get_db_session, SemanticMemory, EpisodicMemory
 )
-from app.memory.embedder import embed_text, vec_to_blob
+from app.memory.embedder import embed_text, vec_to_blob, blob_to_vec, cosine_similarity
 from app.memory.vector_store import mark_dirty
 
 
@@ -222,43 +234,68 @@ def _build_semantic_text(entity, relation, target) -> str:
 # ── Storage ──────────────────────────────────────────────────────────────────
 
 def upsert_semantic_memory(session_id, entity, relation, target):
-    """Insert or update a semantic memory with embedding."""
+    """Insert or update a semantic memory with embedding.
+
+    Duplicate detection: cosine similarity > 0.95 on the full triple text.
+    This matches the memory_store tool strategy and prevents near-duplicate
+    facts from accumulating across repeated extraction passes.
+
+    New records use confidence=0.7, importance=0.7 to be consistent with
+    quality_migrate phase4 and the memory_store tool.
+    """
     text = _build_semantic_text(entity, relation, target)
     vector = embed_text(text)  # Returns None gracefully on failure
 
     with get_db_session() as session:
-        existing = session.query(SemanticMemory).filter(
-            SemanticMemory.session_id == session_id,
-            SemanticMemory.entity == entity,
-            SemanticMemory.relation == relation,
-            SemanticMemory.target == target,
-        ).first()
+        # Scan for embedding-similar existing records (idempotency)
+        if vector is not None:
+            existing = session.query(SemanticMemory).filter(
+                SemanticMemory.session_id == session_id,
+            ).all()
 
-        if existing:
-            existing.confidence = min(existing.confidence + 0.1, 1.0)
-            existing.access_count += 1
-            existing.last_accessed = datetime.now()
-            if vector is not None:
-                existing.embedding_vector = vec_to_blob(vector)
-        else:
-            new_mem = SemanticMemory(
-                session_id=session_id,
-                entity=entity,
-                relation=relation,
-                target=target,
-                confidence=0.5,
-                importance=0.5,
-                embedding_vector=vec_to_blob(vector) if vector is not None else None,
-                last_accessed=datetime.now(),
-                access_count=1,
-            )
-            session.add(new_mem)
+            for rec in existing:
+                if rec.embedding_vector is not None:
+                    try:
+                        rec_vec = blob_to_vec(rec.embedding_vector)
+                        sim = cosine_similarity(vector, rec_vec)
+                        if sim > 0.95:
+                            # Duplicate found — reinforce existing record
+                            rec.confidence = min(rec.confidence + 0.1, 1.0)
+                            rec.access_count = (rec.access_count or 0) + 1
+                            rec.last_accessed = datetime.now()
+                            session.commit()
+                            mark_dirty(session_id, "semantic")
+                            return
+                    except Exception:
+                        pass
+
+        # No duplicate found — insert new record
+        new_mem = SemanticMemory(
+            session_id=session_id,
+            entity=entity,
+            relation=relation,
+            target=target,
+            confidence=0.7,
+            importance=0.7,
+            embedding_vector=vec_to_blob(vector) if vector is not None else None,
+            last_accessed=datetime.now(),
+            access_count=1,
+        )
+        session.add(new_mem)
         session.commit()
         mark_dirty(session_id, "semantic")
 
 
-def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance=0.5):
-    """Create a new episodic memory record with embedding."""
+def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance=0.5, source_message_ids=None):
+    """Create a new episodic memory record with embedding.
+
+    Args:
+        session_id: session this episodic memory belongs to
+        summary: LLM-generated narrative summary
+        emotional_weight: 0.0-1.0 emotional intensity score
+        importance: 0.0-1.0 importance score
+        source_message_ids: list of message IDs that contributed to this episodic (for cross-layer tracing)
+    """
     vector = embed_text(summary)
 
     with get_db_session() as session:
@@ -269,10 +306,18 @@ def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance
             importance=importance,
             emotional_weight=emotional_weight,
             last_accessed=datetime.now(),
-            access_count=0,
+            access_count=1,
         )
         session.add(mem)
         session.commit()
+
+        # Populate cross-layer source mapping AFTER commit (mem.id is now available)
+        if source_message_ids and mem.id:
+            session.query(SemanticMemory).filter(
+                SemanticMemory.session_id == session_id
+            ).update({"source_episodic_ids": str(list(source_message_ids))})
+            session.commit()
+
         mark_dirty(session_id, "episodic")
 
 

@@ -1,6 +1,10 @@
 # FILE: app/memory/segmenter.py
 # DESCRIPTION: Conversation segmentation engine
 
+from __future__ import annotations
+
+__all__ = ["segment_session", "_detect_boundaries", "_create_segment"]
+
 from datetime import datetime
 from app.database import (
     get_db_session, Message, ConversationSegment
@@ -76,7 +80,9 @@ def _detect_boundaries(messages):
 
         current_group.append(msg)
 
-    if current_group and len(current_group) >= 5:
+    # Always flush the final group — no minimum threshold.
+    # Segments with 1 message are better than silent data loss.
+    if current_group:
         segments.append(current_group)
 
     return segments
@@ -146,54 +152,3 @@ def segment_session(session_id):
             print(f"[WARNING] Segmentation failed for group: {e}")
 
     return {'segments_created': count, 'summaries': summaries}
-
-
-# Backwards-compatibility alias
-def process_messages_for_memory(session_id, messages, affection_delta: float = 0):
-    """Legacy entry point — now delegates to segment_session + extractor.
-
-    Kept for backwards compatibility. New code should call
-    segment_session() and extractor.process_messages_for_memory() separately.
-    """
-    from app.memory.extractor import (
-        should_create_episodic,
-        calculate_emotional_weight,
-        create_episodic_memory,
-        extract_semantic_facts,
-        upsert_semantic_memory,
-    )
-
-    if not messages:
-        return
-
-    # Segment + get summaries in one pass (single LLM call per group)
-    seg_result = segment_session(session_id)
-
-    # Reuse summaries from segmentation — NO second LLM call for episodic
-    for summary in seg_result['summaries']:
-        try:
-            # Calculate emotional weight from messages
-            emotional_weight = calculate_emotional_weight(messages)
-            if should_create_episodic(messages, affection_delta):
-                importance = 0.5 + emotional_weight * 0.3
-                create_episodic_memory(
-                    session_id, summary, emotional_weight, importance
-                )
-        except Exception as e:
-            print(f"[WARNING] Episodic memory creation failed: {e}")
-
-    # Semantic extraction (separate LLM pass — not duplicated)
-    try:
-        facts = extract_semantic_facts(messages)
-        for fact in facts:
-            try:
-                upsert_semantic_memory(
-                    session_id,
-                    fact["entity"],
-                    fact["relation"],
-                    fact["target"],
-                )
-            except Exception as e:
-                print(f"[WARNING] Semantic memory upsert failed: {e}")
-    except Exception as e:
-        print(f"[WARNING] Semantic fact extraction failed: {e}")

@@ -55,9 +55,11 @@ def migrate_session(session_id, batch_size=20):
 
     # Create segments
     try:
-        segment_count = segment_session(session_id)
+        seg_result = segment_session(session_id)
+        segment_count = seg_result.get('segments_created', 0)
     except Exception as e:
         print(f"[WARNING] Segmentation failed during migration: {e}")
+        segment_count = 0
 
     return {
         'semantic_count': semantic_count,
