@@ -355,7 +355,7 @@ def handle_user_message(user_message, interface="terminal"):
                 if should_summarize_memory(profile, user_message, session_id):
                     summarize_memory(profile, user_message, final_response, session_id)
                 _trigger_memory_pipeline(session_id)
-                return
+                return final_response
 
             # Non-terminal tools — second pass synthesis (other tools only)
             second_reply = generate_ai_response(profile, "", interface, session_id)
