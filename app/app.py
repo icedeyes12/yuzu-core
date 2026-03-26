@@ -1260,6 +1260,14 @@ def _handle_vision_processing(messages, user_message, current_provider, current_
         vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
         if vision_provider and vision_model:
             print(f"[Vision] Force switching to {vision_provider}/{vision_model} for image_tools output")
+            # Inject image into an empty user message so vision model can see it
+            messages.append({
+                "role": "user",
+                "content": [{
+                    "type": "text",
+                    "text": "Here's the generated image for your reference."
+                }] + image_content_for_context
+            })
             return messages, vision_provider, vision_model
 
     should_switch_provider = multimodal_tools.should_use_vision(user_message, current_provider, current_model)
