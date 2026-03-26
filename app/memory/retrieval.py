@@ -487,7 +487,7 @@ def format_memory(memory_bundle):
     if episodic:
         parts.append("\nRecent important events:")
         for mem in episodic:
-            summary = mem.get('summary', '')
+            summary = mem.get('summary') or ''
             if len(summary) > 200:
                 summary = summary[:200] + '...'
             parts.append(f"- {summary}")
@@ -496,7 +496,7 @@ def format_memory(memory_bundle):
     if segments:
         parts.append("\nRelevant past context:")
         for seg in segments:
-            summary = seg.get('summary', '')
+            summary = seg.get('summary') or ''
             if len(summary) > 200:
                 summary = summary[:200] + '...'
             parts.append(f"- {summary}")
