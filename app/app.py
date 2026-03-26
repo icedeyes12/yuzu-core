@@ -404,7 +404,7 @@ def handle_user_message(user_message, interface="terminal"):
                 if img_b64:
                     second_reply = generate_ai_response(
                         profile, "", interface, session_id,
-                        image_base64_for_context={"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}}
+                        image_content_for_context=[{"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}}]
                     )
                 else:
                     second_reply = None
@@ -588,7 +588,7 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
                     if img_b64:
                         second_reply = generate_ai_response(
                             profile, "", interface, session_id,
-                            image_base64_for_context={"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}}
+                            image_content_for_context=[{"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}}]
                         )
                     else:
                         second_reply = None
@@ -1247,14 +1247,14 @@ Your speaking style and personality are defined above.
 
     return messages
 
-def _handle_vision_processing(messages, user_message, current_provider, current_model, image_base64_for_context=None):
+def _handle_vision_processing(messages, user_message, current_provider, current_model, image_content_for_context=None):
     """Handle vision model switching and message formatting.
     
-    Force switches to vision model when image_base64_for_context is present
+    Force switches to vision model when image_content_for_context is present
     (i.e., second pass after image_tools generated a response).
     """
     # Force vision on second pass — image_tools output means we need vision model
-    force_vision = image_base64_for_context is not None
+    force_vision = image_content_for_context is not None
 
     if force_vision:
         vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
@@ -1311,7 +1311,7 @@ def _handle_ai_image_generation(ai_response, session_id):
     
     return ai_response
 
-def generate_ai_response_streaming(profile, user_message, interface="terminal", session_id=None, provider=None, model=None, image_base64_for_context=None):
+def generate_ai_response_streaming(profile, user_message, interface="terminal", session_id=None, provider=None, model=None, image_content_for_context=None):
     """Generate a single AI response (streaming variant) — no agentic looping.
 
     Same deterministic model as generate_ai_response:
@@ -1345,7 +1345,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
     # Handle vision processing
     messages, preferred_provider, preferred_model = _handle_vision_processing(
         messages, user_message, preferred_provider, preferred_model,
-        image_base64_for_context=image_base64_for_context
+        image_content_for_context=image_content_for_context
     )
     
     # Inject persistent visual context if user references a previous image
@@ -1362,10 +1362,10 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
             print("[Vision] Re-injected persistent visual context")
     
     # Section IV: Inject image base64 for second pass after image_tools
-    if image_base64_for_context:
+    if image_content_for_context:
         messages.append({
             "role": "user",
-            "content": image_base64_for_context
+            "content": image_content_for_context
         })
         print("[IMAGE TOOL] Injected base64 image context for second pass")
     
@@ -1414,7 +1414,7 @@ def generate_ai_response_streaming(profile, user_message, interface="terminal", 
         print(f"[ERROR] Streaming response failed: {error_msg}")
         yield error_msg
 
-def generate_ai_response(profile, user_message, interface="terminal", session_id=None, image_base64_for_context=None):
+def generate_ai_response(profile, user_message, interface="terminal", session_id=None, image_content_for_context=None):
     """Generate a single AI response — no agentic looping.
 
     Execution model (STRICT):
@@ -1458,7 +1458,7 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
     # Handle vision processing for image-containing messages
     messages, preferred_provider, preferred_model = _handle_vision_processing(
         messages, user_message, preferred_provider, preferred_model,
-        image_base64_for_context=image_base64_for_context
+        image_content_for_context=image_content_for_context
     )
     
     # Inject persistent visual context if user references a previous image
@@ -1475,10 +1475,10 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
             print("[Vision] Re-injected persistent visual context")
     
     # Section IV: Inject image base64 for second pass after image_tools
-    if image_base64_for_context:
+    if image_content_for_context:
         messages.append({
             "role": "user",
-            "content": image_base64_for_context
+            "content": image_content_for_context
         })
         print("[IMAGE TOOL] Injected base64 image context for second pass")
     
