@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import os
-import threading
 
 # ── Module-level FAISS/numpy availability flags ──────────────────────────────────
 #
@@ -29,9 +28,9 @@ try:
 except ImportError:
     faiss = None  # type: ignore
 
-from app.database import get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
-from app.memory.embedder import blob_to_vec, EMBEDDING_DIM
-from typing import TYPE_CHECKING
+from app.database import get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment  # noqa: E402
+from app.memory.embedder import blob_to_vec, EMBEDDING_DIM  # noqa: E402
+from typing import TYPE_CHECKING  # noqa: E402
 
 if TYPE_CHECKING:
     import faiss
