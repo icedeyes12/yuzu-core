@@ -1,0 +1,63 @@
+name: Bug Report
+description: Report something that isn't working correctly
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+
+  - type: input
+    id: bot-version
+    attributes:
+      label: Bot Version / Commit Hash
+      description: Which version or commit is affected?
+      placeholder: e.g. master, 230a165, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce the issue?
+      placeholder: |
+        1. Go to '...'
+        2. Run command '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happens?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: Paste any relevant error logs (remove sensitive data first)
+      placeholder: |
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues and confirmed this is not a duplicate
+          required: true
+        - label: I have removed any sensitive information (API keys, tokens, etc.) from the logs
+          required: true
