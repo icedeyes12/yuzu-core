@@ -1,5 +1,5 @@
 # FILE: app/memory/retrieval.py
-# DESCRIPTION: Memory retrieval pipeline with cosine similarity and hybrid scoring
+# DESCRIPTION: Memory retrieval pipeline with FAISS ANN search + hybrid scoring
 
 import math
 from datetime import datetime, timedelta
@@ -36,14 +36,12 @@ _RELATIVE_CUES = {
     "last year":   lambda now: (now - timedelta(days=365), now),
 }
 
-
 def _detect_month(query):
     ql = query.lower()
     for name, num in _MONTH_NAMES.items():
         if name in ql:
             return num
     return None
-
 
 def _detect_time_window(query):
     now = datetime.now()
@@ -58,7 +56,6 @@ def _detect_time_window(query):
         if cue in ql:
             return calc(now)
     return None
-
 
 def _search_temporal_messages(session_id, start, end, limit=200):
     results = []
@@ -95,35 +92,6 @@ def _search_temporal_messages(session_id, start, end, limit=200):
         print(f"[retrieval] Temporal scan failed: {e}")
     return results
 
-
-# ── Fallback scoring — consistent across all memory types ─────────────────────
-
-def _semantic_fallback_score(mem) -> float:
-    """Consistent fallback scoring for semantic memories.
-
-    Formula: normalized importance × confidence, weighted by recency.
-    Uses the same multiplicative model as the primary scoring path.
-    """
-    importance = mem.importance or 0.5
-    confidence = mem.confidence or 0.5
-    recency = _recency_factor(mem.last_accessed)
-    return importance * confidence * (0.5 + recency * 0.5)
-
-
-def _episodic_fallback_score(mem) -> float:
-    """Consistent fallback scoring for episodic memories.
-
-    Formula: importance × recency, with emotional weight as a boost.
-    Uses the same multiplicative structure as the semantic fallback.
-    """
-    importance = mem.importance or 0.5
-    recency = _recency_factor(mem.last_accessed)
-    emotional = mem.emotional_weight or 0.0
-    return importance * recency * (1.0 + emotional * 0.3)
-
-
-# ── Retrieval functions ────────────────────────────────────────────────────────
-
 def _recency_factor(last_accessed) -> float:
     """Recency score 0.0–1.0, half-life of 24 hours."""
     if not last_accessed:
@@ -137,7 +105,6 @@ def _recency_factor(last_accessed) -> float:
     delta_hours = (now - last_accessed).total_seconds() / 3600.0
     return math.exp(-delta_hours / 24.0)
 
-
 def _embed_query(text: str) -> list[float] | None:
     """Embed a query string via Chutes API."""
     try:
@@ -148,22 +115,60 @@ def _embed_query(text: str) -> list[float] | None:
         return None
 
 
-def retrieve_semantic_memories(session_id, query=None, limit=15):
-    """
-    Retrieve semantic memories by cosine similarity to query.
+# ── FAISS-backed retrieval (primary) ──────────────────────────────────────────
 
-    Score (with query): cosine_sim × 0.6 + importance × 0.2 + confidence × 0.2
-    Score (fallback):    importance × confidence × (0.5 + recency × 0.5)
-    """
+def _retrieve_semantic_faiss(session_id, query_vec, limit):
+    """Use FAISS ANN index for semantic memory search. Returns list of (id, faiss_score)."""
+    try:
+        from app.memory.vector_store import search
+        return search(session_id, "semantic", query_vec, k=limit)
+    except Exception as e:
+        print(f"[retrieval] FAISS semantic search failed, falling back to O(n): {e}")
+        return []
+
+def _retrieve_episodic_faiss(session_id, query_vec, limit):
+    """Use FAISS ANN index for episodic memory search."""
+    try:
+        from app.memory.vector_store import search
+        return search(session_id, "episodic", query_vec, k=limit)
+    except Exception as e:
+        print(f"[retrieval] FAISS episodic search failed, falling back to O(n): {e}")
+        return []
+
+def _retrieve_segments_faiss(session_id, query_vec, limit):
+    """Use FAISS ANN index for segment search."""
+    try:
+        from app.memory.vector_store import search
+        return search(session_id, "segment", query_vec, k=limit)
+    except Exception as e:
+        print(f"[retrieval] FAISS segment search failed, falling back to O(n): {e}")
+        return []
+
+
+# ── O(n) fallback — used only when FAISS is unavailable or returns empty ─────
+
+def _semantic_fallback_score(mem) -> float:
+    """Fallback scoring: importance × confidence × recency factor."""
+    importance = mem.importance or 0.5
+    confidence = mem.confidence or 0.5
+    recency = _recency_factor(mem.last_accessed)
+    return importance * confidence * (0.5 + recency * 0.5)
+
+def _episodic_fallback_score(mem) -> float:
+    """Fallback scoring: importance × recency × emotional boost."""
+    importance = mem.importance or 0.5
+    recency = _recency_factor(mem.last_accessed)
+    emotional = mem.emotional_weight or 0.0
+    return importance * recency * (1.0 + emotional * 0.3)
+
+def _semantic_on2_scan(session_id, query_vec, limit):
+    """O(n) cosine scan for semantic memories. FAISS fallback only."""
     with get_db_session() as session:
         memories = session.query(SemanticMemory).filter(
             SemanticMemory.session_id == session_id
         ).all()
-
         if not memories:
             return []
-
-        query_vec = _embed_query(query) if query else None
 
         scored = []
         for mem in memories:
@@ -188,40 +193,20 @@ def retrieve_semantic_memories(session_id, query=None, limit=15):
             })
 
         scored.sort(key=lambda x: x['score'], reverse=True)
-
-        top_ids = [m['id'] for m in scored[:limit]]
-        if top_ids:
-            for mem in session.query(SemanticMemory).filter(
-                SemanticMemory.id.in_(top_ids)
-            ).all():
-                mem.access_count = (mem.access_count or 0) + 1
-                mem.last_accessed = datetime.now()
-            session.commit()
-
         return scored[:limit]
 
-
-def retrieve_episodic_memories(session_id, query=None, limit=5):
-    """
-    Retrieve episodic memories by cosine similarity + hybrid score.
-
-    Score (with query): cosine_sim × 0.5 + importance × 0.25 + recency × 0.25
-    Score (fallback):   importance × recency × (1.0 + emotional_weight × 0.3)
-    """
+def _episodic_on2_scan(session_id, query_vec, limit):
+    """O(n) cosine scan for episodic memories. FAISS fallback only."""
     with get_db_session() as session:
         memories = session.query(EpisodicMemory).filter(
             EpisodicMemory.session_id == session_id
         ).all()
-
         if not memories:
             return []
-
-        query_vec = _embed_query(query) if query else None
 
         scored = []
         for mem in memories:
             recency = _recency_factor(mem.last_accessed)
-
             if query_vec and mem.embedding:
                 try:
                     mem_vec = blob_to_vec(mem.embedding)
@@ -241,33 +226,18 @@ def retrieve_episodic_memories(session_id, query=None, limit=5):
             })
 
         scored.sort(key=lambda x: x['score'], reverse=True)
-
-        top_ids = [m['id'] for m in scored[:limit]]
-        if top_ids:
-            for mem in session.query(EpisodicMemory).filter(
-                EpisodicMemory.id.in_(top_ids)
-            ).all():
-                mem.access_count = (mem.access_count or 0) + 1
-                mem.last_accessed = datetime.now()
-            session.commit()
-
         return scored[:limit]
 
-
-def retrieve_segments(session_id, query=None, limit=5):
-    """Retrieve conversation segments by importance or similarity.
-
-    Score (with query): cosine_sim × 0.5 + importance × 0.5
-    Score (fallback):   importance
-    """
+def _segments_on2_scan(session_id, query_vec, limit):
+    """O(n) cosine scan for segments. FAISS fallback only."""
     with get_db_session() as session:
         segments = session.query(ConversationSegment).filter(
             ConversationSegment.session_id == session_id
         ).order_by(ConversationSegment.created_at.desc()).all()
+        if not segments:
+            return []
 
         scored = []
-        query_vec = _embed_query(query) if query else None
-
         for seg in segments:
             if query_vec and seg.embedding:
                 try:
@@ -289,8 +259,162 @@ def retrieve_segments(session_id, query=None, limit=5):
             })
 
         scored.sort(key=lambda x: x['score'], reverse=True)
+        return scored[:limit]
 
+
+# ── Retrieval functions ────────────────────────────────────────────────────────
+
+def retrieve_semantic_memories(session_id, query=None, limit=15):
+    """
+    Retrieve semantic memories using FAISS ANN index when available.
+    Falls back to O(n) cosine scan if FAISS returns no results or is unavailable.
+    """
+    query_vec = _embed_query(query) if query else None
+
+    # Try FAISS first if we have a query vector
+    faiss_results = []
+    if query_vec:
+        faiss_results = _retrieve_semantic_faiss(session_id, query_vec, limit)
+
+    # Fall back to O(n) scan if FAISS unavailable or returned empty
+    if not faiss_results:
+        return _semantic_on2_scan(session_id, query_vec, limit)
+
+    # FAISS hit — fetch full records and apply hybrid scoring
+    faiss_id_score_map = {db_id: score for db_id, score in faiss_results}
+    faiss_ids = list(faiss_id_score_map.keys())
+
+    with get_db_session() as session:
+        rows = session.query(SemanticMemory).filter(
+            SemanticMemory.id.in_(faiss_ids)
+        ).all()
+
+        scored = []
+        for mem in rows:
+            faiss_score = faiss_id_score_map.get(mem.id, 0.0)
+            # Hybrid: FAISS cosine × 0.6 + importance × 0.2 + confidence × 0.2
+            score = (
+                faiss_score * 0.6
+                + (mem.importance or 0.5) * 0.2
+                + (mem.confidence or 0.5) * 0.2
+            )
+            scored.append({
+                'id': mem.id,
+                'entity': mem.entity,
+                'relation': mem.relation,
+                'target': mem.target,
+                'confidence': mem.confidence,
+                'importance': mem.importance,
+                'score': score,
+            })
+
+        scored.sort(key=lambda x: x['score'], reverse=True)
+        top_ids = [m['id'] for m in scored[:limit]]
+
+        if top_ids:
+            for mem in session.query(SemanticMemory).filter(
+                SemanticMemory.id.in_(top_ids)
+            ).all():
+                mem.access_count = (mem.access_count or 0) + 1
+                mem.last_accessed = datetime.now()
+            session.commit()
+
+        return scored[:limit]
+
+
+def retrieve_episodic_memories(session_id, query=None, limit=5):
+    """
+    Retrieve episodic memories using FAISS ANN index when available.
+    Falls back to O(n) cosine scan if FAISS returns no results.
+    """
+    query_vec = _embed_query(query) if query else None
+
+    faiss_results = []
+    if query_vec:
+        faiss_results = _retrieve_episodic_faiss(session_id, query_vec, limit)
+
+    if not faiss_results:
+        return _episodic_on2_scan(session_id, query_vec, limit)
+
+    faiss_id_score_map = {db_id: score for db_id, score in faiss_results}
+    faiss_ids = list(faiss_id_score_map.keys())
+
+    with get_db_session() as session:
+        rows = session.query(EpisodicMemory).filter(
+            EpisodicMemory.id.in_(faiss_ids)
+        ).all()
+
+        scored = []
+        for mem in rows:
+            faiss_score = faiss_id_score_map.get(mem.id, 0.0)
+            recency = _recency_factor(mem.last_accessed)
+            # Hybrid: FAISS cosine × 0.5 + importance × 0.25 + recency × 0.25
+            score = (
+                faiss_score * 0.5
+                + (mem.importance or 0.5) * 0.25
+                + recency * 0.25
+            )
+            scored.append({
+                'id': mem.id,
+                'summary': mem.summary,
+                'importance': mem.importance,
+                'emotional_weight': mem.emotional_weight,
+                'score': score,
+            })
+
+        scored.sort(key=lambda x: x['score'], reverse=True)
+        top_ids = [m['id'] for m in scored[:limit]]
+
+        if top_ids:
+            for mem in session.query(EpisodicMemory).filter(
+                EpisodicMemory.id.in_(top_ids)
+            ).all():
+                mem.access_count = (mem.access_count or 0) + 1
+                mem.last_accessed = datetime.now()
+            session.commit()
+
+        return scored[:limit]
+
+
+def retrieve_segments(session_id, query=None, limit=5):
+    """
+    Retrieve conversation segments using FAISS ANN index when available.
+    Falls back to O(n) cosine scan if FAISS returns no results.
+    """
+    query_vec = _embed_query(query) if query else None
+
+    faiss_results = []
+    if query_vec:
+        faiss_results = _retrieve_segments_faiss(session_id, query_vec, limit)
+
+    if not faiss_results:
+        return _segments_on2_scan(session_id, query_vec, limit)
+
+    faiss_id_score_map = {db_id: score for db_id, score in faiss_results}
+    faiss_ids = list(faiss_id_score_map.keys())
+
+    with get_db_session() as session:
+        rows = session.query(ConversationSegment).filter(
+            ConversationSegment.id.in_(faiss_ids)
+        ).all()
+
+        scored = []
+        for seg in rows:
+            faiss_score = faiss_id_score_map.get(seg.id, 0.0)
+            # Hybrid: FAISS cosine × 0.5 + importance × 0.5
+            score = faiss_score * 0.5 + (seg.importance or 0.5) * 0.5
+            scored.append({
+                'id': seg.id,
+                'summary': seg.summary,
+                'importance': seg.importance,
+                'start_message_id': seg.start_message_id,
+                'end_message_id': seg.end_message_id,
+                'score': score,
+            })
+
+        scored.sort(key=lambda x: x['score'], reverse=True)
         top_ids = [s['id'] for s in scored[:limit]]
+
         if top_ids:
             for seg in session.query(ConversationSegment).filter(
                 ConversationSegment.id.in_(top_ids)

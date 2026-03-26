@@ -115,6 +115,7 @@ class ConversationSegment(Base):
     summary = Column(Text, nullable=True)
     embedding = Column(LargeBinary, nullable=True)
     importance = Column(Float, default=0.5)
+    access_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.now)
 
 # Indexes for performance

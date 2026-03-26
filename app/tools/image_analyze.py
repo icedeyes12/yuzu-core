@@ -112,19 +112,61 @@ def _resolve_source(source):
 
 
 def execute(arguments, **kwargs):
+    from app.tools.registry import build_markdown_contract
+
+    profile = Database.get_profile() or {}
+    partner_name = profile.get("partner_name", "Yuzu")
+
     source = arguments.get("image_source", "")
+    full_command = f"/image_analyze source=\"{source[:60]}\"" if source else "/image_analyze"
+
     if not source:
-        return json.dumps({"error": "No image source provided"})
+        return build_markdown_contract(
+            "image_analyze_tools",
+            full_command,
+            ["Error: No image source provided"],
+            partner_name,
+        )
 
     filepath = _resolve_source(source)
     if not filepath:
-        return json.dumps({"error": f"Could not resolve image: {source}"})
+        return build_markdown_contract(
+            "image_analyze_tools",
+            full_command,
+            [f"Error: Could not resolve image: {source}"],
+            partner_name,
+        )
 
     image_base64, mime = _encode_to_base64(filepath)
     if not image_base64:
-        return json.dumps({"error": f"Could not encode image: {filepath}"})
+        return build_markdown_contract(
+            "image_analyze_tools",
+            full_command,
+            [f"Error: Could not encode image: {filepath}"],
+            partner_name,
+        )
 
-    return json.dumps({
-        "image_base64": image_base64,
-        "mime": mime
-    })
+    # Attempt vision analysis
+    try:
+        from app.tools import multimodal_tools
+        analysis = multimodal_tools.analyze_image_base64(image_base64, mime)
+        if analysis:
+            return build_markdown_contract(
+                "image_analyze_tools",
+                full_command,
+                [analysis],
+                partner_name,
+            )
+        return build_markdown_contract(
+            "image_analyze_tools",
+            full_command,
+            ["Error: Vision analysis failed"],
+            partner_name,
+        )
+    except Exception as e:
+        return build_markdown_contract(
+            "image_analyze_tools",
+            full_command,
+            [f"Error: {str(e)}"],
+            partner_name,
+        )

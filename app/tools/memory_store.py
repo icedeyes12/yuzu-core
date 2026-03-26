@@ -9,24 +9,53 @@ from app.memory.vector_store import mark_dirty
 from app.tools.registry import build_markdown_contract
 
 
-def _infer_category(fact):
-    s = fact.lower()
-    if any(w in s for w in ["prefer", "like", "love", "hate", "dislike", "favorite", "enjoy"]):
-        return "Preference"
-    if any(w in s for w in ["name", "live", "work", "job", "career", "company", "city", "age", "born"]):
+def _classify_category_llm(fact: str) -> str:
+    """Classify a fact into a memory category using LLM.
+
+    Returns one of: Identity, Preference, Interest, Personality,
+    Relationship, Experience, Goal, Guideline.
+    """
+    try:
+        from app import get_ai_manager
+        ai_manager = get_ai_manager()
+    except Exception as e:
+        print(f"[memory_store] AI manager unavailable: {e}")
         return "Identity"
-    if any(w in s for w in ["interest", "hobby", "learn", "study", "passion"]):
-        return "Interest"
-    if any(w in s for w in ["should", "avoid", "never", "always", "tone", "behave", "call me"]):
-        return "Guideline"
-    if any(w in s for w in ["goal", "plan", "want", "aspire", "dream"]):
-        return "Goal"
-    if any(w in s for w in ["family", "friend", "partner", "relationship", "girlfriend", "boyfriend"]):
-        return "Relationship"
-    if any(w in s for w in ["skill", "experience", "past project", "built", "made"]):
-        return "Experience"
-    if any(w in s for w in ["personality", "style", "tend", "usually", "often", "communicat"]):
-        return "Personality"
+
+    system_prompt = """You are a memory categorizer. Classify the following fact into exactly ONE category.
+
+Categories:
+- Identity: name, profession, location, company, education, demographics
+- Preference: likes, dislikes, favorites, stylistic choices, habits
+- Interest: topics, hobbies, domains they engage with
+- Personality: communication style, emotional tendencies, character traits
+- Relationship: how they treat you, shared routines, inside jokes, social bonds
+- Experience: skills, past events, professional background, completed projects
+- Goal: plans, aspirations, things they're working toward
+- Guideline: how you (assistant) should behave around them
+
+Respond with ONLY the category name, nothing else."""
+
+    try:
+        response = ai_manager.auto_send_message(
+            provider=None,
+            model=None,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Fact: {fact}"},
+            ],
+            timeout=15,
+            max_tokens=30,
+        )
+        if response:
+            category = response.strip().title()
+            valid = {"Identity", "Preference", "Interest", "Personality",
+                     "Relationship", "Experience", "Goal", "Guideline"}
+            if category in valid:
+                return category
+    except Exception as e:
+        print(f"[memory_store] LLM classification failed: {e}")
+
     return "Identity"
 
 
@@ -60,7 +89,9 @@ def execute(arguments, **kwargs):
             partner_name,
         )
 
-    category = arguments.get("category") or _infer_category(fact)
+    category = arguments.get("category")
+    if not category:
+        category = _classify_category_llm(fact)
     full_command = f"/memory_store fact=\"{fact[:60]}\" category={category}"
 
     # Embed the fact text
