@@ -4,7 +4,6 @@
 import requests
 import os
 import re
-import json
 import traceback
 from datetime import datetime
 from typing import Dict, Optional, List
@@ -198,7 +197,7 @@ def _execute_command_tool(command_info, session_id=None):
     elif tool_name == "request":
         exec_tool_name = "request"
         args = {"url": args_str}
-    elif tool_name in ("memory_search", "web_search", "weather", "image_analyze"):
+    elif tool_name in ("memory_search", "web_search", "weather"):
         exec_tool_name = tool_name
         # Parse arguments as JSON if possible, otherwise use as query
         try:
@@ -1031,8 +1030,6 @@ Examples:
   /request https://api.open-meteo.com/v1/forecast?latitude=-6.2&longitude=106.8&current_weather=true
   /request https://html.duckduckgo.com/html/?q=search+query
 
-Response format: Tool output is rendered as a markdown contract with raw response content.
-The assistant should interpret and summarize the results for the user.
 
 ---
 

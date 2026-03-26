@@ -10,7 +10,6 @@ TOOL_ROLE_MAP = {
     "request": "request_tools",
     "memory_store": "memory_store_tools",
     "memory_search": "memory_search_tools",
-    "image_analyze": "image_analyze_tools",
 }
 
 TERMINAL_TOOL_ROLES = set()
@@ -55,9 +54,6 @@ def execute_tool(tool_name, arguments, session_id=None):
     elif tool_name == "memory_store":
         from app.tools import memory_store
         module = memory_store
-    elif tool_name == "image_analyze":
-        from app.tools import image_analyze
-        module = image_analyze
     elif tool_name == "memory_search":
         from app.tools import memory_search
         module = memory_search
