@@ -123,6 +123,28 @@ def _is_tool_markdown(response_text):
     stripped = response_text.strip()
     return stripped.startswith("<details>")
 
+# ----------------------------------------------------------------------
+# Guard: detect when model tries to shortcut image generation by
+# directly outputting a markdown image instead of calling /imagine.
+# Pattern: ![alt](static/.../something.png) or ![alt](uploads/...)
+# This is NOT the same as a tool contract — it's raw text output.
+# ----------------------------------------------------------------------
+def _is_model_using_markdown_image_shortcut(response_text):
+    """Detect if model is outputting markdown image syntax instead of /imagine tool call."""
+    if not response_text:
+        return False
+    # Match markdown image syntax that points to local generated/uploaded images
+    # Exclude tool contracts (which use <details>) and URLs (external images)
+    import re
+    md_img_pattern = re.compile(r'!\[[^\]]*\]\((static/|uploads/|generated_images/)[^)]+\)')
+    return bool(md_img_pattern.search(response_text))
+
+def _extract_prompt_from_markdown_image(response_text):
+    """If model outputs a markdown image shortcut, extract the path for logging."""
+    import re
+    m = re.search(r'!\[[^\]]*\]\(([^)]+)\)', response_text)
+    return m.group(1) if m else None
+
 def _extract_tool_role(response_text):
     """Extract tool role from <summary>🔧 role</summary> in a markdown contract."""
     if not response_text:
@@ -336,6 +358,15 @@ def handle_user_message(user_message, interface="terminal"):
         if not raw_ai_response:
             raw_ai_response = "I'm having trouble responding right now. Please try again."
         
+        # ----------------------------------------------------------------
+        # GUARD: Intercept markdown image shortcut (same check as streaming).
+        # ----------------------------------------------------------------
+        if _is_model_using_markdown_image_shortcut(raw_ai_response):
+            img_path = _extract_prompt_from_markdown_image(raw_ai_response)
+            print(f"[IMAGE GUARD] Detected markdown image shortcut! path={img_path}")
+            print("[IMAGE GUARD] Intercepted shortcut — model must use /imagine tool")
+            return "\n\n⚠️ *Image output detected via incorrect method. Please use /imagine to generate images.*"
+        
         # PHASE 2: Tool detection — ONLY in handle_user_message
         cmd_info = _detect_command(raw_ai_response)
         
@@ -489,6 +520,18 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
             # Persist user message even on streaming failure
             Database.add_message('user', user_message, session_id=session_id)
             raise
+        
+        # ----------------------------------------------------------------
+        # GUARD: Intercept markdown image shortcut.
+        # If the model outputs ![...](static/...) directly instead of
+        # calling /imagine, reject it and instruct the model to retry.
+        # ----------------------------------------------------------------
+        if _is_model_using_markdown_image_shortcut(full_response):
+            img_path = _extract_prompt_from_markdown_image(full_response)
+            print(f"[IMAGE GUARD] Detected markdown image shortcut! path={img_path}")
+            print("[IMAGE GUARD] Intercepted shortcut — model must use /imagine tool")
+            yield "\n\n⚠️ *Image output detected via incorrect method. Please use /imagine to generate images.*"
+            return
         
         # Persist user message to DB after successful LLM response
         if user_message and user_message.strip():
