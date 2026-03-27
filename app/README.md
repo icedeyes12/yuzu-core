@@ -403,7 +403,7 @@ flowchart TD
     I --> J[moonshotai/kimi-k2.5]
     J --> K[Vision analysis]
     
-    L[/imagine prompt] --> M[Chutes API]
+    L[imagine command] --> M[Chutes API]
     M --> N[Save to<br/>static/generated_images/]
     N --> O[Return path in contract]
 ```
