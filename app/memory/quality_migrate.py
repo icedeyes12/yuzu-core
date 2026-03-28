@@ -328,7 +328,7 @@ def phase3_extract_facts(cp):
         for i, f in enumerate(facts):
             episode_idx = i % len(batch)  # round-robin across episodes in batch
             f["source_episode_id"] = batch[episode_idx]["id"]
-            f["source_session_id"] = batch[episode_idx].get("session_id", 1)
+            f["source_session_id"] = batch[episode_idx].get("session_id")
 
         extracted_facts.extend(facts)
         episodes_done += len(batch)
@@ -370,7 +370,7 @@ def phase4_embed_and_store_facts(cp):
         for j, f in enumerate(facts):
             if vecs[j] is None:
                 continue
-            session_id = f.get("source_session_id", 1)
+            session_id = f.get("source_session_id")
             episode_id = f.get("source_episode_id")
             source_episodic_ids = [episode_id] if episode_id else []
 

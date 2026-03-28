@@ -23,7 +23,7 @@ def execute(arguments, **kwargs):
         )
 
     try:
-        memory_bundle = retrieve_memory(session_id, query=query)
+        memory_bundle = retrieve_memory(session_id=session_id, query=query)
     except Exception as e:
         print(f"[memory_search] Retrieval failed: {e}")
         return build_markdown_contract(

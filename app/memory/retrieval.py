@@ -309,9 +309,11 @@ def retrieve_semantic_memories(session_id, query=None, limit=15):
             })
 
         scored.sort(key=lambda x: x['score'], reverse=True)
-        top_ids = [m['id'] for m in scored[:limit]]
+        top = scored[:limit]
 
-        if top_ids:
+        if top:
+            top_ids = [m['id'] for m in top]
+            # Single query: fetch and update in one pass (no second filter)
             for mem in session.query(SemanticMemory).filter(
                 SemanticMemory.id.in_(top_ids)
             ).all():
@@ -363,9 +365,11 @@ def retrieve_episodic_memories(session_id, query=None, limit=5):
             })
 
         scored.sort(key=lambda x: x['score'], reverse=True)
-        top_ids = [m['id'] for m in scored[:limit]]
+        top = scored[:limit]
 
-        if top_ids:
+        if top:
+            top_ids = [m['id'] for m in top]
+            # Single query: fetch and update in one pass (no second filter)
             for mem in session.query(EpisodicMemory).filter(
                 EpisodicMemory.id.in_(top_ids)
             ).all():
@@ -413,9 +417,11 @@ def retrieve_segments(session_id, query=None, limit=5):
             })
 
         scored.sort(key=lambda x: x['score'], reverse=True)
-        top_ids = [s['id'] for s in scored[:limit]]
+        top = scored[:limit]
 
-        if top_ids:
+        if top:
+            top_ids = [m['id'] for m in top]
+            # Single query: fetch and update in one pass (no second filter)
             for seg in session.query(ConversationSegment).filter(
                 ConversationSegment.id.in_(top_ids)
             ).all():

@@ -9,11 +9,11 @@ from datetime import datetime
 from app.database import (
     get_db_session, Message, ConversationSegment
 )
-from app.memory.extractor import generate_episodic_summary
 
 
 # Segmentation limits
 MAX_MESSAGES_PER_SEGMENT = 20
+MIN_MESSAGES_PER_SEGMENT = 5  # enforced on all segments except the final flush group
 TIME_GAP_MINUTES = 15
 
 
@@ -88,11 +88,16 @@ def _detect_boundaries(messages):
     return segments
 
 
-def _create_segment(session_id, group):
+def _create_segment(session_id, group, precomputed_summary=None):
     """Create a conversation segment from a message group.
-    
-    Returns the generated summary string so callers can reuse it
-    without calling the LLM again (avoids double summarization).
+
+    Args:
+        session_id: session this segment belongs to
+        group: list of message dicts
+        precomputed_summary: optional LLM summary from prior extraction pass.
+            If None, a trivial placeholder is stored — episodic creation will
+            regenerate a proper summary on demand. This avoids a wasted LLM call
+            when segments are created without episodic extraction.
     """
     if not group:
         return None
@@ -100,8 +105,11 @@ def _create_segment(session_id, group):
     start_id = group[0]['id']
     end_id = group[-1]['id']
 
-    # Generate summary ONCE — caller reuses this, no second LLM call
-    summary = generate_episodic_summary(group)
+    # Only use a precomputed summary if one was already generated.
+    # Never call generate_episodic_summary here — that LLM call is wasted
+    # because callers (e.g. process_messages_for_memory) will regenerate it
+    # anyway when they decide whether to create an episodic memory.
+    summary = precomputed_summary
 
     embedding_blob = None
     try:
@@ -131,24 +139,20 @@ def segment_session(session_id):
     """Segment unsegmented messages in a session.
 
     Returns:
-        dict with 'segments_created' count and 'summaries' list.
-        Summaries are reused by process_messages_for_memory to avoid
-        double LLM summarization.
+        int: number of segments created.
     """
     messages = _get_unsegmented_messages(session_id)
     if not messages:
-        return {'segments_created': 0, 'summaries': []}
+        return 0
 
     groups = _detect_boundaries(messages)
-    summaries = []
     count = 0
     for group in groups:
         try:
-            summary = _create_segment(session_id, group)
-            if summary:
-                summaries.append(summary)
-            count += 1
+            if len(group) >= MIN_MESSAGES_PER_SEGMENT:
+                _create_segment(session_id, group, precomputed_summary=None)
+                count += 1
         except Exception as e:
             print(f"[WARNING] Segmentation failed for group: {e}")
 
-    return {'segments_created': count, 'summaries': summaries}
+    return count

@@ -17,7 +17,7 @@ from datetime import datetime
 from app.database import (
     get_db_session, SemanticMemory, EpisodicMemory
 )
-from app.memory.embedder import embed_text, vec_to_blob, blob_to_vec, cosine_similarity
+from app.memory.embedder import embed_text, vec_to_blob
 from app.memory.vector_store import mark_dirty
 
 
@@ -236,40 +236,35 @@ def _build_semantic_text(entity, relation, target) -> str:
 def upsert_semantic_memory(session_id, entity, relation, target):
     """Insert or update a semantic memory with embedding.
 
-    Duplicate detection: cosine similarity > 0.95 on the full triple text.
-    This matches the memory_store tool strategy and prevents near-duplicate
-    facts from accumulating across repeated extraction passes.
-
-    New records use confidence=0.7, importance=0.7 to be consistent with
-    quality_migrate phase4 and the memory_store tool.
+    Duplicate detection: FAISS ANN search for top-5 similar records;
+    if any cosine similarity > 0.95, reinforce the existing record.
+    Falls back to no deduplication if FAISS is unavailable or the
+    new vector could not be computed.
     """
     text = _build_semantic_text(entity, relation, target)
     vector = embed_text(text)  # Returns None gracefully on failure
 
     with get_db_session() as session:
-        # Scan for embedding-similar existing records (idempotency)
+        # Use FAISS ANN search for duplicate detection (O(log n) vs O(n))
         if vector is not None:
-            existing = session.query(SemanticMemory).filter(
-                SemanticMemory.session_id == session_id,
-            ).all()
-
-            for rec in existing:
-                if rec.embedding_vector is not None:
-                    try:
-                        rec_vec = blob_to_vec(rec.embedding_vector)
-                        sim = cosine_similarity(vector, rec_vec)
-                        if sim > 0.95:
-                            # Duplicate found — reinforce existing record
+            try:
+                from app.memory.vector_store import search
+                faiss_results = search(session_id, "semantic", vector, k=5)
+                for db_id, faiss_score in faiss_results:
+                    if faiss_score > 0.95:
+                        # Duplicate found — reinforce existing record
+                        rec = session.query(SemanticMemory).filter_by(id=db_id).first()
+                        if rec:
                             rec.confidence = min(rec.confidence + 0.1, 1.0)
                             rec.access_count = (rec.access_count or 0) + 1
                             rec.last_accessed = datetime.now()
                             session.commit()
                             mark_dirty(session_id, "semantic")
-                            return
-                    except Exception:
-                        pass
+                            return  # done — no insert needed
+            except Exception:
+                pass  # FAISS unavailable or failed — fall through to insert
 
-        # No duplicate found — insert new record
+        # No duplicate found (or FAISS unavailable) — insert new record
         new_mem = SemanticMemory(
             session_id=session_id,
             entity=entity,

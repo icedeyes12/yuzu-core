@@ -461,6 +461,9 @@ def _trigger_memory_pipeline(session_id):
         if not recent:
             return
 
+        # Extract IDs once — used for both episodic and semantic passes
+        recent_ids = [m['id'] for m in recent]
+
         # --- Episodic: emotion gated ---
         if should_create_episodic(recent):
             emotional_weight = calculate_emotional_weight(recent)
@@ -468,7 +471,10 @@ def _trigger_memory_pipeline(session_id):
             if summary:
                 importance = 0.5 + emotional_weight * 0.3
                 try:
-                    create_episodic_memory(session_id, summary, emotional_weight, importance)
+                    create_episodic_memory(
+                        session_id, summary, emotional_weight, importance,
+                        source_message_ids=recent_ids,
+                    )
                 except Exception as e:
                     print(f"[WARNING] Episodic memory creation failed: {e}")
 
@@ -1826,7 +1832,10 @@ just a natural paragraph.
             emotional = calculate_emotional_weight(chat_history[-20:])
             importance = 0.5 + emotional * 0.3
             try:
-                create_episodic_memory(session_id, context_paragraph.strip(), emotional, importance)
+                create_episodic_memory(
+                    session_id, context_paragraph.strip(), emotional, importance,
+                    source_message_ids=[m['id'] for m in chat_history[-20:]],
+                )
             except Exception as e:
                 print(f"[WARNING] Sync episodic to DB failed: {e}")
         except Exception as e:
