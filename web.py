@@ -213,8 +213,26 @@ async def api_get_profile():
         api_keys = Database.get_api_keys()
         vision_capabilities = get_vision_capabilities()
         
+        # Convert datetime objects to strings for JSON serialization
+        profile_dict = {
+            "id": profile["id"],
+            "display_name": profile["display_name"],
+            "partner_name": profile["partner_name"],
+            "affection": profile["affection"],
+            "theme": profile["theme"],
+            "memory": profile["memory"],
+            "session_history": profile["session_history"],
+            "global_knowledge": profile["global_knowledge"],
+            "providers_config": profile["providers_config"],
+            "context": profile["context"],
+            "image_model": profile["image_model"],
+            "vision_model": profile["vision_model"],
+            "created_at": profile["created_at"].isoformat() if profile["created_at"] else None,
+            "updated_at": profile["updated_at"].isoformat() if profile["updated_at"] else None,
+        }
+        
         return {
-            **profile,
+            **profile_dict,
             "chat_history": chat_history,
             "api_keys": api_keys,
             "active_session": active_session,
