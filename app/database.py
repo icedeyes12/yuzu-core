@@ -689,3 +689,122 @@ class Database:
                 chat_session.updated_at = datetime.now()
             
             session.commit()
+
+    @staticmethod
+    def add_session_event(content, interface="terminal"):
+        """Add a session event message."""
+        active_session = Database.get_active_session()
+        session_id = active_session['id']
+        event_content = f"*{content} on {interface}*"
+        Database.add_message('system', event_content, session_id)
+
+    @staticmethod
+    def get_recent_sessions(limit=20):
+        """Get recent session events across all sessions."""
+        with get_db_session() as session:
+            messages = session.query(Message).filter(
+                Message.role == 'system',
+                Message.content.like('*%')
+            ).order_by(Message.timestamp.desc()).limit(limit).all()
+            
+            return [{
+                'content': m.content,
+                'timestamp': m.timestamp
+            } for m in messages]
+
+    @staticmethod
+    def get_recent_sessions_for_session(session_id, limit=20):
+        """Get recent session events for a specific session."""
+        with get_db_session() as session:
+            messages = session.query(Message).filter(
+                Message.role == 'system',
+                Message.session_id == session_id,
+                Message.content.like('*%')
+            ).order_by(Message.timestamp.desc()).limit(limit).all()
+            
+            return [{
+                'content': m.content,
+                'timestamp': m.timestamp
+            } for m in messages]
+
+    @staticmethod
+    def get_session_messages_count(session_id):
+        """Get message count for a session."""
+        with get_db_session() as session:
+            return session.query(Message).filter(
+                Message.session_id == session_id,
+                Message.role.in_(['user', 'assistant'])
+            ).count()
+
+    @staticmethod
+    def get_session_conversation_summary(session_id, limit=20):
+        """Get a summary of recent conversation."""
+        with get_db_session() as session:
+            messages = session.query(Message).filter(
+                Message.session_id == session_id,
+                Message.role.in_(['user', 'assistant'])
+            ).order_by(Message.timestamp.asc()).limit(limit).all()
+            
+            return "\n".join([
+                f"{'User' if m.role == 'user' else 'AI'}: {m.content[:100]}{'...' if len(m.content) > 100 else ''}"
+                for m in messages
+            ])
+
+    @staticmethod
+    def get_encryption_status():
+        """Get encryption status summary."""
+        with get_db_session() as session:
+            total_messages = session.query(Message).count()
+            encrypted_messages = session.query(Message).filter(Message.content_encrypted).count()
+            total_keys = session.query(APIKey).count()
+            encrypted_keys = session.query(APIKey).filter(APIKey.key_encrypted).count()
+            
+            return {
+                'messages': {
+                    'total': total_messages,
+                    'encrypted': encrypted_messages,
+                    'policy': 'NO_ENCRYPTION'
+                },
+                'api_keys': {
+                    'total': total_keys,
+                    'encrypted': encrypted_keys,
+                    'policy': 'FULL_ENCRYPTION'
+                }
+            }
+
+    @staticmethod
+    def get_all_encrypted_messages():
+        """Get all encrypted messages (for migration)."""
+        with get_db_session() as session:
+            return [{
+                'id': m.id,
+                'session_id': m.session_id,
+                'role': m.role,
+                'content': m.content,
+                'timestamp': m.timestamp
+            } for m in session.query(Message).filter(Message.content_encrypted).all()]
+
+    @staticmethod
+    def batch_decrypt_messages(message_ids):
+        """Batch decrypt messages."""
+        decrypted_count = 0
+        failed_count = 0
+        
+        with get_db_session() as session:
+            for msg_id in message_ids:
+                try:
+                    msg = session.query(Message).filter_by(id=msg_id).first()
+                    if msg and msg.content_encrypted:
+                        from app.encryption import encryptor
+                        msg.content = encryptor.decrypt(msg.content)
+                        msg.content_encrypted = False
+                        decrypted_count += 1
+                        if decrypted_count % 100 == 0:
+                            session.commit()
+                except Exception as e:
+                    failed_count += 1
+                    print(f"Failed to decrypt message {msg_id}: {e}")
+            
+            session.commit()
+        
+        return {'decrypted': decrypted_count, 'failed': failed_count, 'total': len(message_ids)}
