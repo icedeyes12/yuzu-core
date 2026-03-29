@@ -45,6 +45,14 @@ All notable changes to this project will be documented in this file.
 - Static file serving moved from `flask.send_from_directory` to `fastapi.staticfiles.StaticFiles`
 - Template rendering moved from `flask.render_template` to `fastapi.templating.Jinja2Templates`
 
+### Fixed — Critical (Post-Migration)
+
+- **P1**: `get_chat_history_for_ai` missing — restored full implementation with markdown contract parsing
+- **P2**: `get_chat_history` filter too restrictive — added `ALL_TOOL_ROLES` to include tool messages in UI
+- **P3**: Chat history limit too low — changed `limit=1000` to `limit=None` for sessions with 4000+ messages
+- **P4**: Datetime serialization error — fixed `api_get_profile` datetime → ISO string conversion
+- **P5**: Missing Database methods — added `add_image_tools_message`, `add_tool_result`, `add_system_note`, `add_memory_note`
+
 ## [1.0.69.29] - 2026-03-27
 
 ### Fixed — Memory System (Critical)
