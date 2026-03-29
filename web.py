@@ -1,194 +1,273 @@
 # FILE: web.py
-# DESCRIPTION: Web interface for AI companion system
+# DESCRIPTION: FastAPI web interface for AI companion system
 
-from flask import Flask, render_template, request, jsonify, send_from_directory, session, Response
+from fastapi import FastAPI, Request, HTTPException, Form, File, UploadFile
+from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, Field
+from typing import List, Dict, Optional
+from datetime import datetime
 import json
 import os
-from datetime import datetime
-from app.app import handle_user_message, handle_user_message_streaming, start_session, end_session_cleanup, summarize_memory, summarize_global_player_profile
-from app.app import set_preferred_provider, get_vision_capabilities
+
+from app.app import (
+    handle_user_message, handle_user_message_streaming, start_session,
+    end_session_cleanup, summarize_memory, summarize_global_player_profile,
+    set_preferred_provider, get_vision_capabilities
+)
 from app.database import Database
 from app.providers import get_ai_manager
 
+# ---------------------------------------------------------------------------
+# FastAPI Application Setup
+# ---------------------------------------------------------------------------
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-app = Flask(__name__,
-    static_folder=os.path.join(BASE_DIR, 'static'),
-    template_folder=os.path.join(BASE_DIR, 'templates')
+app = FastAPI(
+    title="Yuzu Companion",
+    description="AI companion system with memory, multimodal, and multi-provider support",
+    version="1.0.0"
 )
 
-app.secret_key = os.urandom(24)
+# Mount static directories
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+app.mount("/uploads", StaticFiles(directory=os.path.join(BASE_DIR, "static/uploads")), name="uploads")
+app.mount("/generated_images", StaticFiles(directory=os.path.join(BASE_DIR, "static/generated_images")), name="generated_images")
 
-print(f"Project directory: {BASE_DIR}")
-print(f"Static folder: {app.static_folder}")
-print(f"Templates folder: {app.template_folder}")
+# Jinja2 templates
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+
+# Simple in-memory session tracking (replaces Flask signed cookies)
+_web_session_tracker: Dict[str, bool] = {}
+
 
 def ensure_static_dirs():
     static_dirs = [
-        'static/uploads',
-        'static/generated_images',
-        'static/image_cache'
+        os.path.join(BASE_DIR, 'static/uploads'),
+        os.path.join(BASE_DIR, 'static/generated_images'),
+        os.path.join(BASE_DIR, 'static/image_cache')
     ]
-    
     for dir_path in static_dirs:
         os.makedirs(dir_path, exist_ok=True)
-        print(f"Ensured directory: {dir_path}")
+
+
+def _get_session_id(request: Request) -> str:
+    client_host = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    return f"{client_host}_{hash(user_agent) % 10000}"
+
 
 ensure_static_dirs()
 
-@app.route('/')
-def home():
-    profile = Database.get_profile()
-    return render_template('index.html', profile=profile)
+# ---------------------------------------------------------------------------
+# Pydantic Models
+# ---------------------------------------------------------------------------
 
-@app.route('/dashboard')
-def dashboard():
-    profile = Database.get_profile()
-    return render_template('dashboard.html', profile=profile)
+class MessageRequest(BaseModel):
+    message: str = Field(..., min_length=1, description="User message text")
 
-@app.route('/chat')
-def chat():
-    # Gunakan Flask session instead of global variable
-    if 'web_session_started' not in session:
-        print("Flask session not found, starting new web session...")
-        
-        # Panggil fungsi start_session dari app.py - semua logika connection_msg sudah diurus di sana
-        start_session(interface="web") 
-        
-        # Tandai session user ini sudah dimulai
-        session['web_session_started'] = True
-        print("Web session started and flagged in Flask session.")
+
+class StreamMessageRequest(BaseModel):
+    message: str = Field(..., min_length=1, description="User message text")
+    provider: Optional[str] = Field(None, description="AI provider to use")
+    model: Optional[str] = Field(None, description="AI model to use")
+
+
+class ApiKeyRequest(BaseModel):
+    key_name: str = Field(..., min_length=1, description="Name for the API key")
+    api_key: str = Field(..., min_length=1, description="The API key value")
+
+
+class ChutesKeyRequest(BaseModel):
+    api_key: str = Field(..., min_length=1, description="Chutes API key value")
+
+
+class SessionCreateRequest(BaseModel):
+    name: str = Field(default="New Chat", min_length=1, description="Session name")
+
+
+class SessionSwitchRequest(BaseModel):
+    session_id: int = Field(..., gt=0, description="Session ID to switch to")
+
+
+class SessionRenameRequest(BaseModel):
+    session_id: int = Field(..., gt=0, description="Session ID to rename")
+    name: str = Field(..., min_length=1, description="New session name")
+
+
+class SessionDeleteRequest(BaseModel):
+    session_id: int = Field(..., gt=0, description="Session ID to delete")
+
+
+class ProviderSetRequest(BaseModel):
+    provider_name: str = Field(..., min_length=1, description="AI provider name")
+    model_name: Optional[str] = Field(None, description="Optional model name")
+
+
+class ProviderTestRequest(BaseModel):
+    provider_name: str = Field(..., min_length=1, description="Provider name to test")
+
+
+class LocationUpdateRequest(BaseModel):
+    lat: float = Field(..., description="Latitude")
+    lon: float = Field(..., description="Longitude")
+
+
+class GlobalKnowledgeUpdateRequest(BaseModel):
+    facts: str = Field(..., description="Global knowledge facts")
+
+
+# ---------------------------------------------------------------------------
+# HTML Page Routes
+# ---------------------------------------------------------------------------
+
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    profile = Database.get_profile()
+    return templates.TemplateResponse("index.html", {"request": request, "profile": profile})
+
+
+@app.get("/chat", response_class=HTMLResponse)
+async def chat_page(request: Request):
+    session_id = _get_session_id(request)
+    
+    if not _web_session_tracker.get(session_id):
+        print(f"Web session not found for {session_id}, starting new web session...")
+        start_session(interface="web")
+        _web_session_tracker[session_id] = True
+        print("Web session started and flagged.")
     
     profile = Database.get_profile()
-    return render_template('chat.html', profile=profile)
+    return templates.TemplateResponse("chat.html", {"request": request, "profile": profile})
 
-@app.route('/config')
-def config():
+
+@app.get("/config", response_class=HTMLResponse)
+async def config_page(request: Request):
     profile = Database.get_profile()
-    return render_template('config.html', profile=profile)
+    return templates.TemplateResponse("config.html", {"request": request, "profile": profile})
 
-@app.route('/about')
-def about():
-    return render_template('about.html')
 
-@app.route('/static/html/sidebar.html')
-def serve_sidebar():
-    try:
-        return send_from_directory('templates', 'sidebar.html')
-    except Exception:
-        return """
-        <div class="sidebar" id="mainSidebar">
-            <div class="sidebar-header">
-                <h2>Yuzu Companion</h2>
-                <button class="close-sidebar" onclick="toggleSidebar()">×</button>
-            </div>
-            <div class="sidebar-content">
-                <div class="sidebar-section">
-                    <h3>Navigation</h3>
-                    <a href="/" class="sidebar-link">Home</a>
-                    <a href="/chat" class="sidebar-link">Chat</a>
-                    <a href="/config" class="sidebar-link">Config</a>
-                    <a href="/about" class="sidebar-link">About</a>
-                </div>
-            </div>
+@app.get("/about", response_class=HTMLResponse)
+async def about_page(request: Request):
+    return templates.TemplateResponse("about.html", {"request": request})
+
+
+@app.get("/static/html/sidebar.html", response_class=HTMLResponse)
+async def serve_sidebar():
+    sidebar_path = os.path.join(BASE_DIR, "templates", "sidebar.html")
+    if os.path.exists(sidebar_path):
+        with open(sidebar_path, "r") as f:
+            return HTMLResponse(f.read())
+    
+    fallback = """<div class="sidebar" id="mainSidebar">
+        <div class="sidebar-header"><h2>Yuzu Companion</h2></div>
+        <div class="sidebar-content">
+            <a href="/">Home</a>
+            <a href="/chat">Chat</a>
+            <a href="/config">Config</a>
+            <a href="/about">About</a>
         </div>
-        """
+    </div>"""
+    return HTMLResponse(fallback)
 
-@app.route('/api/get_profile')
-def api_get_profile():
+
+# ---------------------------------------------------------------------------
+# API Routes - Profile & Chat
+# ---------------------------------------------------------------------------
+
+@app.get("/api/get_profile")
+async def api_get_profile():
     try:
         profile = Database.get_profile()
         active_session = Database.get_active_session()
-        
-        chat_history = Database.get_chat_history(session_id=active_session['id'])
-        
-        session_memory = Database.get_session_memory(active_session['id'])
+        chat_history = Database.get_chat_history(session_id=active_session["id"])
+        session_memory = Database.get_session_memory(active_session["id"])
         
         ai_manager = get_ai_manager()
         available_providers = ai_manager.get_available_providers()
         all_models = ai_manager.get_all_models()
         
-        providers_config = profile.get('providers_config', {})
-        current_provider = providers_config.get('preferred_provider', 'ollama')
-        current_model = providers_config.get('preferred_model', 'glm-4.6:cloud')
+        providers_config = profile.get("providers_config", {})
+        current_provider = providers_config.get("preferred_provider", "ollama")
+        current_model = providers_config.get("preferred_model", "glm-4.6:cloud")
         
         api_keys = Database.get_api_keys()
-        
         vision_capabilities = get_vision_capabilities()
         
-        print(f"Sending profile data - Active Session: {active_session['id']}, History: {len(chat_history)} messages")
-        
-        return jsonify({
-            **profile, 
-            'chat_history': chat_history,
-            'api_keys': api_keys,
-            'active_session': active_session,
-            'session_memory': session_memory,
-            'ai_providers': {
-                'available_providers': available_providers,
-                'all_models': all_models,
-                'current_provider': current_provider,
-                'current_model': current_model
+        return {
+            **profile,
+            "chat_history": chat_history,
+            "api_keys": api_keys,
+            "active_session": active_session,
+            "session_memory": session_memory,
+            "ai_providers": {
+                "available_providers": available_providers,
+                "all_models": all_models,
+                "current_provider": current_provider,
+                "current_model": current_model
             },
-            'multimodal_capabilities': vision_capabilities
-        })
+            "multimodal_capabilities": vision_capabilities
+        }
     except Exception as e:
         print(f"Error in api_get_profile: {e}")
-        return jsonify({'error': 'Failed to load profile'}), 500
+        raise HTTPException(status_code=500, detail="Failed to load profile")
 
-@app.route('/api/send_message', methods=['POST'])
-def api_send_message():
+
+@app.post("/api/send_message")
+async def api_send_message(request: MessageRequest):
     try:
-        data = request.get_json()
-        user_message = data.get('message', '').strip()
+        user_message = request.message.strip()
         
         if not user_message:
-            return jsonify({'reply': 'Please type a message!'})
+            return {"reply": "Please type a message!"}
         
         print(f"Web message: {user_message[:200]}...")
         
         active_session = Database.get_active_session()
-        active_session['id']
+        _ = active_session["id"]
         
         ai_reply = handle_user_message(user_message, interface="web")
         
         print(f"AI reply: {ai_reply}")
         
-        return jsonify({'reply': ai_reply})
+        return {"reply": ai_reply}
         
     except Exception as e:
         print(f"Error in api_send_message: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'reply': 'Sorry, I encountered an error processing your message.'})
+        return {"reply": "Sorry, I encountered an error processing your message."}
 
-@app.route('/api/send_message_stream', methods=['POST'])
-def api_send_message_stream():
+
+@app.post("/api/send_message_stream")
+async def api_send_message_stream(request: StreamMessageRequest):
     try:
-        data = request.get_json()
-        user_message = data.get('message', '').strip()
+        user_message = request.message.strip()
         
         if not user_message:
-            def generate():
+            async def empty_generator():
                 yield 'data: {"chunk": "Please type a message!"}\n\n'
-            return Response(generate(), mimetype='text/event-stream')
+            return StreamingResponse(empty_generator(), media_type="text/event-stream")
         
         print(f"Streaming message: {user_message[:200]}...")
         
         # Get streaming response generator from app.py
         response_generator = handle_user_message_streaming(
-            user_message, 
+            user_message,
             interface="web",
-            provider=data.get('provider'),
-            model=data.get('model')
+            provider=request.provider,
+            model=request.model
         )
         
         def generate():
             for chunk in response_generator:
                 if chunk:
-                    yield f'data: {{"chunk": {json.dumps(chunk)}}}\n\n'
+                    escaped_chunk = json.dumps(chunk)
+                    yield f'data: {{"chunk": {escaped_chunk}}}\n\n'
         
-        return Response(generate(), mimetype='text/event-stream')
+        return StreamingResponse(generate(), media_type="text/event-stream")
         
     except Exception as e:
         print(f"Error in streaming: {e}")
@@ -198,26 +277,30 @@ def api_send_message_stream():
         def generate_error():
             yield 'data: {"chunk": "Sorry, I encountered an error processing your message."}\n\n'
         
-        return Response(generate_error(), mimetype='text/event-stream')
-        
-@app.route('/api/send_message_with_images', methods=['POST'])
-def api_send_message_with_images():
+        return StreamingResponse(generate_error(), media_type="text/event-stream")
+
+
+@app.post("/api/send_message_with_images")
+async def api_send_message_with_images(
+    request: Request,
+    message: str = Form(""),
+    images: List[UploadFile] = File(default=[])
+):
     try:
-        message_text = request.form.get('message', '').strip()
-        image_files = request.files.getlist('images')
+        message_text = message.strip()
         
-        if not message_text and not image_files:
-            return jsonify({'reply': 'Please provide a message or images!'})
+        if not message_text and not images:
+            return {"reply": "Please provide a message or images!"}
         
-        print(f"Processing message with {len(image_files)} images")
+        print(f"Processing message with {len(images)} images")
         
         active_session = Database.get_active_session()
-        active_session['id']
+        _ = active_session["id"]
         
         saved_images = []
         image_markdowns = []
         
-        for i, image_file in enumerate(image_files):
+        for i, image_file in enumerate(images):
             if image_file and image_file.filename:
                 uploads_dir = "static/uploads"
                 os.makedirs(uploads_dir, exist_ok=True)
@@ -227,17 +310,19 @@ def api_send_message_with_images():
                 filename = f"{timestamp}_{i}_{safe_filename}"
                 filepath = os.path.join(uploads_dir, filename)
                 
-                image_file.save(filepath)
+                # Save uploaded file
+                content = await image_file.read()
+                with open(filepath, "wb") as f:
+                    f.write(content)
                 
-                web_url = f"/static/uploads/{filename}"
-                
-                image_markdown = f"![Uploaded Image](static/uploads/{filename})"
+                web_url = f"/uploads/{filename}"
+                image_markdown = f"![Uploaded Image](uploads/{filename})"
                 image_markdowns.append(image_markdown)
                 
                 saved_images.append({
-                    'web_url': web_url,
-                    'filepath': filepath,
-                    'markdown': image_markdown
+                    "web_url": web_url,
+                    "filepath": filepath,
+                    "markdown": image_markdown
                 })
                 print(f"Saved image to static: {filepath}")
         
@@ -250,185 +335,224 @@ def api_send_message_with_images():
         
         ai_reply = handle_user_message(final_user_message, interface="web")
         
-        return jsonify({
-            'reply': ai_reply,
-            'uploaded_images': saved_images
-        })
+        return {
+            "reply": ai_reply,
+            "uploaded_images": saved_images
+        }
         
     except Exception as e:
         print(f"Error: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'reply': 'Error processing message.'})
+        return {"reply": "Error processing message."}
 
-@app.route('/api/generate_image', methods=['POST'])
-def api_generate_image():
+
+@app.post("/api/generate_image")
+async def api_generate_image(request: MessageRequest):
     """Image generation now uses /api/send_message. Redirect for backwards compat."""
     try:
-        data = request.get_json()
-        prompt = data.get('prompt', '').strip()
+        prompt = request.message.strip()
         if not prompt:
-            return jsonify({'error': 'Prompt required'}), 400
+            raise HTTPException(status_code=400, detail="Prompt required")
         
         # Route through the unified send_message pipeline
         ai_reply = handle_user_message(f"/imagine {prompt}", interface="web")
-        return jsonify({'reply': ai_reply, 'status': 'success'})
+        return {"reply": ai_reply, "status": "success"}
     except Exception as e:
         print(f"Error generating image: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/static/generated_images/<filename>')
-def serve_generated_image(filename):
+
+@app.get("/static/uploads/{filename}")
+async def serve_uploaded_image(filename: str):
     try:
-        return send_from_directory('static/generated_images', filename)
-    except FileNotFoundError:
-        return jsonify({'error': 'Image not found'}), 404
+        file_path = os.path.join(BASE_DIR, "static/uploads", filename)
+        if os.path.exists(file_path):
+            return FileResponse(file_path)
+        raise HTTPException(status_code=404, detail="Image not found")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=404, detail="Image not found")
 
-@app.route('/static/uploads/<filename>')
-def serve_uploaded_image(filename):
+
+@app.get("/static/generated_images/{filename}")
+async def serve_generated_image(filename: str):
     try:
-        return send_from_directory('static/uploads', filename)
-    except FileNotFoundError:
-        return jsonify({'error': 'Image not found'}), 404
+        file_path = os.path.join(BASE_DIR, "static/generated_images", filename)
+        if os.path.exists(file_path):
+            return FileResponse(file_path)
+        raise HTTPException(status_code=404, detail="Image not found")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=404, detail="Image not found")
 
-@app.route('/api/get_vision_capabilities', methods=['GET'])
-def api_get_vision_capabilities():
+
+@app.get("/api/get_vision_capabilities")
+async def api_get_vision_capabilities():
     try:
         capabilities = get_vision_capabilities()
-        return jsonify({
-            'status': 'success',
-            'capabilities': capabilities
-        })
+        return {
+            "status": "success",
+            "capabilities": capabilities
+        }
     except Exception as e:
         print(f"Error getting vision capabilities: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/update_profile', methods=['POST'])
-def api_update_profile():
-    updates = request.get_json()
-    Database.update_profile(updates)
-    return jsonify({'status': 'success'})
 
-@app.route('/api/clear_chat', methods=['POST'])
-def api_clear_chat():
-    active_session = Database.get_active_session()
-    session_id = active_session['id']
-    
-    Database.clear_chat_history(session_id)
-    
-    # Reset session flag instead of global variable
-    session.pop('web_session_started', None)
-    return jsonify({'status': 'success'})
-
-@app.route('/api/end_session', methods=['POST'])
-def api_end_session():
-    # Reset session flag instead of global variable
-    session.pop('web_session_started', None)
-    
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-    profile = Database.get_profile()
-    
-    session_history = profile.get('session_history', {})
-    current_session = session_history.get('current_session', {})
-    start_time = current_session.get('start_time')
-    duration = 0
-    
-    if start_time:
-        try:
-            start = datetime.fromisoformat(start_time)
-            duration = (datetime.now() - start).total_seconds() / 60
-        except Exception:
-            pass
-    
-    disconnect_msg = (
-        f"*{profile['display_name']} disconnected from web interface at {current_time}. "
-        f"Session duration: {duration:.1f} minutes*"
-    )
-    
-    Database.add_message('system', disconnect_msg)
-    end_session_cleanup(profile, interface="web", unexpected_exit=False)
-    return jsonify({'status': 'session ended'})
-
-@app.route('/api/add_api_key', methods=['POST'])
-def api_add_api_key():
-    data = request.get_json()
-    key_name = data.get('key_name', '').strip()
-    api_key = data.get('api_key', '').strip()
-    
-    if not api_key or not key_name:
-        return jsonify({'status': 'error', 'message': 'Key name and API key required'})
-    
-    if Database.add_api_key(key_name, api_key):
-        return jsonify({'status': 'success', 'message': f'{key_name} API key added'})
-    else:
-        return jsonify({'status': 'error', 'message': 'API key already exists or failed to save'})
-
-@app.route('/api/add_chutes_key', methods=['POST'])
-def api_add_chutes_key():
+@app.post("/api/update_profile")
+async def api_update_profile(request: Request):
     try:
-        data = request.get_json()
-        api_key = data.get('api_key', '').strip()
-        
-        if not api_key:
-            return jsonify({'status': 'error', 'message': 'Chutes API key required'})
-        
-        if Database.add_api_key('chutes', api_key):
-            return jsonify({'status': 'success', 'message': 'Chutes API key added successfully!'})
-        else:
-            return jsonify({'status': 'error', 'message': 'Failed to save Chutes API key'})
+        updates = await request.json()
+        Database.update_profile(updates)
+        return {"status": "success"}
     except Exception as e:
-        print(f"Error adding Chutes API key: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/remove_api_key', methods=['POST'])
-def api_remove_api_key():
-    data = request.get_json()
-    key_name = data.get('key_name', '').strip()
-    
-    if not key_name:
-        return jsonify({'status': 'error', 'message': 'Key name required'})
-    
-    if Database.remove_api_key(key_name):
-        return jsonify({'status': 'success', 'message': f'{key_name} API key removed'})
-    else:
-        return jsonify({'status': 'error', 'message': 'API key not found'})
 
-@app.route('/api/update_session_context', methods=['POST'])
-def api_update_session_context():
+@app.post("/api/clear_chat")
+async def api_clear_chat(request: Request):
     try:
         active_session = Database.get_active_session()
-        session_id = active_session['id']
+        session_id = active_session["id"]
+        
+        Database.clear_chat_history(session_id)
+        
+        # Reset session flag
+        client_id = _get_session_id(request)
+        _web_session_tracker.pop(client_id, None)
+        
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/end_session")
+async def api_end_session(request: Request):
+    try:
+        # Reset session flag
+        client_id = _get_session_id(request)
+        _web_session_tracker.pop(client_id, None)
+        
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        profile = Database.get_profile()
+        
+        session_history = profile.get("session_history", {})
+        current_session = session_history.get("current_session", {})
+        start_time = current_session.get("start_time")
+        duration = 0
+        
+        if start_time:
+            try:
+                start = datetime.fromisoformat(start_time)
+                duration = (datetime.now() - start).total_seconds() / 60
+            except Exception:
+                pass
+        
+        disconnect_msg = (
+            f"*{profile['display_name']} disconnected from web interface at {current_time}. "
+            f"Session duration: {duration:.1f} minutes*"
+        )
+        
+        Database.add_message("system", disconnect_msg)
+        end_session_cleanup(profile, interface="web", unexpected_exit=False)
+        return {"status": "session ended"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# API Routes - API Keys
+# ---------------------------------------------------------------------------
+
+@app.post("/api/add_api_key")
+async def api_add_api_key(request: ApiKeyRequest):
+    if not request.api_key or not request.key_name:
+        return {"status": "error", "message": "Key name and API key required"}
+    
+    if Database.add_api_key(request.key_name, request.api_key):
+        return {"status": "success", "message": f"{request.key_name} API key added"}
+    else:
+        return {"status": "error", "message": "API key already exists or failed to save"}
+
+
+@app.post("/api/add_chutes_key")
+async def api_add_chutes_key(request: ChutesKeyRequest):
+    try:
+        api_key = request.api_key.strip()
+        
+        if not api_key:
+            return {"status": "error", "message": "Chutes API key required"}
+        
+        if Database.add_api_key("chutes", api_key):
+            return {"status": "success", "message": "Chutes API key added successfully!"}
+        else:
+            return {"status": "error", "message": "Failed to save Chutes API key"}
+    except Exception as e:
+        print(f"Error adding Chutes API key: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/remove_api_key")
+async def api_remove_api_key(request: Request):
+    try:
+        data = await request.json()
+        key_name = data.get("key_name", "").strip()
+        
+        if not key_name:
+            return {"status": "error", "message": "Key name required"}
+        
+        if Database.remove_api_key(key_name):
+            return {"status": "success", "message": f"{key_name} API key removed"}
+        else:
+            return {"status": "error", "message": "API key not found"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# API Routes - Memory & Context
+# ---------------------------------------------------------------------------
+
+@app.post("/api/update_session_context")
+async def api_update_session_context():
+    try:
+        active_session = Database.get_active_session()
+        session_id = active_session["id"]
         profile = Database.get_profile()
         
         chat_history = Database.get_chat_history(session_id=session_id)
         
         if len(chat_history) < 5:
-            return jsonify({'status': 'error', 'message': 'Need at least 5 conversation messages'})
+            return {"status": "error", "message": "Need at least 5 conversation messages"}
         
-        last_user_msg = next((msg for msg in reversed(chat_history) if msg['role'] == 'user'), None)
-        last_ai_reply = next((msg for msg in reversed(chat_history) if msg['role'] == 'assistant'), None)
+        last_user_msg = next((msg for msg in reversed(chat_history) if msg["role"] == "user"), None)
+        last_ai_reply = next((msg for msg in reversed(chat_history) if msg["role"] == "assistant"), None)
         
         if last_user_msg and last_ai_reply:
-            success = summarize_memory(profile, last_user_msg['content'], last_ai_reply['content'], session_id)
+            success = summarize_memory(profile, last_user_msg["content"], last_ai_reply["content"], session_id)
             
             if success:
                 session_memory = Database.get_session_memory(session_id)
-                return jsonify({
-                    'status': 'success',
-                    'message': 'Session context updated!',
-                    'session_memory': session_memory
-                })
+                return {
+                    "status": "success",
+                    "message": "Session context updated!",
+                    "session_memory": session_memory
+                }
             else:
-                return jsonify({'status': 'error', 'message': 'Session context update failed'})
+                return {"status": "error", "message": "Session context update failed"}
         else:
-            return jsonify({'status': 'error', 'message': 'Need conversation history'})
+            return {"status": "error", "message": "Need conversation history"}
             
     except Exception as e:
         print(f"Error updating session context: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/update_global_profile', methods=['POST'])
-def api_update_global_profile():
+
+@app.post("/api/update_global_profile")
+async def api_update_global_profile():
     try:
         success = summarize_global_player_profile()
         
@@ -436,23 +560,24 @@ def api_update_global_profile():
             profile = Database.get_profile()
             print(f"Returning updated profile with memory: {profile.get('memory', {})}")
             
-            return jsonify({
-                'status': 'success', 
-                'message': 'Global player profile updated from ALL sessions!',
-                'profile': profile
-            })
+            return {
+                "status": "success",
+                "message": "Global player profile updated from ALL sessions!",
+                "profile": profile
+            }
         else:
-            return jsonify({'status': 'error', 'message': 'Global profile analysis failed'})
+            return {"status": "error", "message": "Global profile analysis failed"}
     except Exception as e:
         print(f"Error updating global profile: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/rebuild_structured_memory', methods=['POST'])
-def api_rebuild_structured_memory():
+
+@app.post("/api/rebuild_structured_memory")
+async def api_rebuild_structured_memory():
     """Rebuild structured memory from current session messages."""
     try:
         active_session = Database.get_active_session()
-        session_id = active_session['id']
+        session_id = active_session["id"]
 
         from app.memory.extractor import process_messages_for_memory
         from app.memory.segmenter import segment_session
@@ -460,7 +585,10 @@ def api_rebuild_structured_memory():
         # Extract semantic + episodic memories from recent messages
         recent = Database.get_chat_history(session_id=session_id, limit=50, recent=True)
         if len(recent) < 3:
-            return jsonify({'status': 'error', 'message': 'Need at least 3 conversation messages to extract memory. Continue chatting and try again.'})
+            return {
+                "status": "error",
+                "message": "Need at least 3 conversation messages to extract memory. Continue chatting and try again."
+            }
 
         process_messages_for_memory(session_id, recent)
 
@@ -474,43 +602,45 @@ def api_rebuild_structured_memory():
             episodic_count = db_session.query(EpisodicMemory).filter_by(session_id=session_id).count()
             segment_total = db_session.query(ConversationSegment).filter_by(session_id=session_id).count()
 
-        return jsonify({
-            'status': 'success',
-            'message': f'Structured memory rebuilt: {semantic_count} facts, {episodic_count} episodes, {segment_total} segments',
-            'stats': {
-                'semantic': semantic_count,
-                'episodic': episodic_count,
-                'segments': segment_total,
+        return {
+            "status": "success",
+            "message": f"Structured memory rebuilt: {semantic_count} facts, {episodic_count} episodes, {segment_total} segments",
+            "stats": {
+                "semantic": semantic_count,
+                "episodic": episodic_count,
+                "segments": segment_total,
             }
-        })
+        }
     except Exception as e:
         print(f"Error rebuilding structured memory: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/run_memory_decay', methods=['POST'])
-def api_run_memory_decay():
-    """Run FSRS-style decay on all memories for the current session."""
+
+@app.post("/api/run_memory_decay")
+async def api_run_memory_decay():
+    """Run FSRS memory decay on current session."""
     try:
         active_session = Database.get_active_session()
-        session_id = active_session['id']
+        session_id = active_session["id"]
 
         from app.memory.review import run_decay
         run_decay(session_id)
 
-        return jsonify({
-            'status': 'success',
-            'message': 'Memory decay applied. Old memories faded, recent ones preserved.'
-        })
+        return {
+            "status": "success",
+            "message": "Memory decay applied. Old memories faded, recent ones preserved."
+        }
     except Exception as e:
         print(f"Error running memory decay: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/memory_stats', methods=['GET'])
-def api_memory_stats():
+
+@app.get("/api/memory_stats")
+async def api_memory_stats():
     """Get structured memory statistics for the current session."""
     try:
         active_session = Database.get_active_session()
-        session_id = active_session['id']
+        session_id = active_session["id"]
 
         from app.database import get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
         with get_db_session() as db_session:
@@ -528,159 +658,171 @@ def api_memory_stats():
                 for f in top_facts
             ]
 
-        return jsonify({
-            'status': 'success',
-            'stats': {
-                'semantic': semantic_count,
-                'episodic': episodic_count,
-                'segments': segment_count,
-                'top_facts': facts_list,
+        return {
+            "status": "success",
+            "stats": {
+                "semantic": semantic_count,
+                "episodic": episodic_count,
+                "segments": segment_count,
+                "top_facts": facts_list,
             }
-        })
+        }
     except Exception as e:
         print(f"Error getting memory stats: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/providers/list', methods=['GET'])
-def api_list_providers():
+
+# ---------------------------------------------------------------------------
+# API Routes - Provider Management
+# ---------------------------------------------------------------------------
+
+@app.get("/api/providers/list")
+async def api_list_providers():
     try:
         ai_manager = get_ai_manager()
         available_providers = ai_manager.get_available_providers()
         all_models = ai_manager.get_all_models()
         
         profile = Database.get_profile()
-        providers_config = profile.get('providers_config', {})
-        current_provider = providers_config.get('preferred_provider', 'ollama')
-        current_model = providers_config.get('preferred_model', 'glm-4.6:cloud')
+        providers_config = profile.get("providers_config", {})
+        current_provider = providers_config.get("preferred_provider", "ollama")
+        current_model = providers_config.get("preferred_model", "glm-4.6:cloud")
         
-        return jsonify({
-            'status': 'success',
-            'available_providers': available_providers,
-            'all_models': all_models,
-            'current_provider': current_provider,
-            'current_model': current_model
-        })
+        return {
+            "status": "success",
+            "available_providers": available_providers,
+            "all_models": all_models,
+            "current_provider": current_provider,
+            "current_model": current_model
+        }
     except Exception as e:
         print(f"Error listing providers: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/providers/set_preferred', methods=['POST'])
-def api_set_preferred_provider():
+
+@app.post("/api/providers/set_preferred")
+async def api_set_preferred_provider(request: ProviderSetRequest):
     try:
-        data = request.get_json()
-        provider_name = data.get('provider_name', '').strip()
-        model_name = data.get('model_name', '').strip()
+        if not request.provider_name:
+            return {"status": "error", "message": "Provider name required"}
         
-        if not provider_name:
-            return jsonify({'status': 'error', 'message': 'Provider name required'})
+        result = set_preferred_provider(request.provider_name, request.model_name)
         
-        result = set_preferred_provider(provider_name, model_name)
-        
-        return jsonify({
-            'status': 'success',
-            'message': result
-        })
+        return {
+            "status": "success",
+            "message": result
+        }
     except Exception as e:
         print(f"Error setting preferred provider: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/providers/test_connection', methods=['POST'])
-def api_test_provider_connection():
+
+@app.post("/api/providers/test_connection")
+async def api_test_provider_connection(request: ProviderTestRequest):
     try:
-        data = request.get_json()
-        provider_name = data.get('provider_name', '').strip()
-        
-        if not provider_name:
-            return jsonify({'status': 'error', 'message': 'Provider name required'})
+        if not request.provider_name:
+            return {"status": "error", "message": "Provider name required"}
         
         ai_manager = get_ai_manager()
-        provider = ai_manager.providers.get(provider_name)
+        provider = ai_manager.providers.get(request.provider_name)
         
         if not provider:
-            return jsonify({'status': 'error', 'message': f'Provider {provider_name} not found'})
+            return {
+                "status": "error",
+                "message": f"Provider {request.provider_name} not found"
+            }
         
         is_connected = provider.test_connection()
         
-        return jsonify({
-            'status': 'success',
-            'provider': provider_name,
-            'connected': is_connected,
-            'message': f'{provider_name}: {"Connected" if is_connected else "Connection failed"}'
-        })
+        return {
+            "status": "success",
+            "provider": request.provider_name,
+            "connected": is_connected,
+            "message": f'{request.provider_name}: {"Connected" if is_connected else "Connection failed"}'
+        }
     except Exception as e:
         print(f"Error testing provider connection: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/browser_unload', methods=['POST'])
-def api_browser_unload():
-    # Reset session flag instead of global variable
-    session.pop('web_session_started', None)
-    print("Web page closed or refreshed - Flask session cleared")
-    
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-    profile = Database.get_profile()
-    
-    session_history = profile.get('session_history', {})
-    current_session = session_history.get('current_session', {})
-    start_time = current_session.get('start_time')
-    duration = 0
-    
-    if start_time:
-        try:
-            start = datetime.fromisoformat(start_time)
-            duration = (datetime.now() - start).total_seconds() / 60
-        except Exception:
-            pass
-    
-    disconnect_msg = (
-        f"*{profile['display_name']} disconnected unexpectedly from web interface at {current_time}. "
-        f"Session duration: {duration:.1f} minutes*"
-    )
-    
-    Database.add_message('system', disconnect_msg)
-    end_session_cleanup(profile, interface="web", unexpected_exit=True)
-    
-    return jsonify({'status': 'page closed'})
 
-@app.route('/api/sessions/list', methods=['GET'])
-def api_list_sessions():
+@app.post("/api/browser_unload")
+async def api_browser_unload(request: Request):
+    """Handle browser page unload/reload events."""
+    try:
+        # Reset session flag
+        client_id = _get_session_id(request)
+        _web_session_tracker.pop(client_id, None)
+        print("Web page closed or refreshed - session cleared")
+        
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        profile = Database.get_profile()
+        
+        session_history = profile.get("session_history", {})
+        current_session = session_history.get("current_session", {})
+        start_time = current_session.get("start_time")
+        duration = 0
+        
+        if start_time:
+            try:
+                start = datetime.fromisoformat(start_time)
+                duration = (datetime.now() - start).total_seconds() / 60
+            except Exception:
+                pass
+        
+        disconnect_msg = (
+            f"*{profile['display_name']} disconnected unexpectedly from web interface at {current_time}. "
+            f"Session duration: {duration:.1f} minutes*"
+        )
+        
+        Database.add_message("system", disconnect_msg)
+        end_session_cleanup(profile, interface="web", unexpected_exit=True)
+        
+        return {"status": "page closed"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# API Routes - Session Management
+# ---------------------------------------------------------------------------
+
+@app.get("/api/sessions/list")
+async def api_list_sessions():
     try:
         sessions = Database.get_all_sessions()
-        return jsonify({'sessions': sessions})
+        return {"sessions": sessions}
     except Exception as e:
         print(f"Error listing sessions: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/sessions/create', methods=['POST'])
-def api_create_session():
+
+@app.post("/api/sessions/create")
+async def api_create_session(request: SessionCreateRequest):
     try:
-        data = request.get_json()
-        name = data.get('name', 'New Chat')
-        
-        session_id = Database.create_session(name)
+        session_id = Database.create_session(request.name)
         Database.switch_session(session_id)
         
-        # Reset session flag instead of global variable
-        session.pop('web_session_started', None)
+        # Reset session flag
+        client_id = _get_session_id(Request)
+        _web_session_tracker.pop(client_id, None)
         
-        return jsonify({'status': 'success', 'session_id': session_id})
+        return {"status": "success", "session_id": session_id}
     except Exception as e:
         print(f"Error creating session: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/sessions/switch', methods=['POST'])
-def api_switch_session():
+
+@app.post("/api/sessions/switch")
+async def api_switch_session(request: SessionSwitchRequest, http_request: Request):
     try:
-        data = request.get_json()
-        session_id = data.get('session_id')
+        if not request.session_id:
+            raise HTTPException(status_code=400, detail="session_id required")
         
-        if not session_id:
-            return jsonify({'error': 'session_id required'}), 400
+        Database.switch_session(request.session_id)
         
-        Database.switch_session(session_id)
-        
-        # Reset session flag instead of global variable
-        session.pop('web_session_started', None)
+        # Reset session flag
+        client_id = _get_session_id(http_request)
+        _web_session_tracker.pop(client_id, None)
         
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
         profile = Database.get_profile()
@@ -690,130 +832,133 @@ def api_switch_session():
         
         connection_msg = (
             f"*{profile['display_name']} connected to web interface at {current_time}. "
-            f"Switched to session #{[s['id'] for s in all_sessions].index(session_id) + 1} of {session_count}*"
+            f"Switched to session #{[s['id'] for s in all_sessions].index(request.session_id) + 1} of {session_count}*"
         )
         
-        Database.add_message('system', connection_msg, session_id=session_id)
+        Database.add_message("system", connection_msg, session_id=request.session_id)
         
         # Set session flag for the new session
-        session['web_session_started'] = True
+        _web_session_tracker[client_id] = True
         
-        chat_history = Database.get_chat_history(session_id)
-        session_memory = Database.get_session_memory(session_id)
+        chat_history = Database.get_chat_history(session_id=request.session_id)
+        session_memory = Database.get_session_memory(session_id=request.session_id)
         
-        return jsonify({
-            'status': 'success',
-            'session_id': session_id,
-            'chat_history': chat_history,
-            'session_memory': session_memory
-        })
+        return {
+            "status": "success",
+            "session_id": request.session_id,
+            "chat_history": chat_history,
+            "session_memory": session_memory
+        }
     except Exception as e:
         print(f"Error switching session: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/sessions/rename', methods=['POST'])
-def api_rename_session():
+
+@app.post("/api/sessions/rename")
+async def api_rename_session(request: SessionRenameRequest):
     try:
-        data = request.get_json()
-        session_id = data.get('session_id')
-        new_name = data.get('name')
+        if not request.session_id or not request.name:
+            raise HTTPException(status_code=400, detail="session_id and name required")
         
-        if not session_id or not new_name:
-            return jsonify({'error': 'session_id and name required'}), 400
-        
-        success = Database.rename_session(session_id, new_name)
+        success = Database.rename_session(request.session_id, request.name)
         
         if success:
-            return jsonify({'status': 'success'})
+            return {"status": "success"}
         else:
-            return jsonify({'error': 'Session not found'}), 404
+            raise HTTPException(status_code=404, detail="Session not found")
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error renaming session: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/sessions/delete', methods=['POST'])
-def api_delete_session():
+
+@app.post("/api/sessions/delete")
+async def api_delete_session(request: SessionDeleteRequest):
     try:
-        data = request.get_json()
-        session_id = data.get('session_id')
+        if not request.session_id:
+            raise HTTPException(status_code=400, detail="session_id required")
         
-        if not session_id:
-            return jsonify({'error': 'session_id required'}), 400
-        
-        success = Database.delete_session(session_id)
+        success = Database.delete_session(request.session_id)
         
         if success:
             active_session = Database.get_active_session()
             chat_history = Database.get_chat_history()
-            session_memory = Database.get_session_memory(active_session['id'])
+            session_memory = Database.get_session_memory(active_session["id"])
             
-            return jsonify({
-                'status': 'success',
-                'active_session': active_session,
-                'chat_history': chat_history,
-                'session_memory': session_memory
-            })
+            return {
+                "status": "success",
+                "active_session": active_session,
+                "chat_history": chat_history,
+                "session_memory": session_memory
+            }
         else:
-            return jsonify({'error': 'Session not found'}), 404
+            raise HTTPException(status_code=404, detail="Session not found")
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error deleting session: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/sessions/<int:session_id>/memory', methods=['GET'])
-def api_get_session_memory(session_id):
+
+@app.get("/api/sessions/{session_id}/memory")
+async def api_get_session_memory(session_id: int):
     try:
         session_memory = Database.get_session_memory(session_id)
-        return jsonify({
-            'status': 'success',
-            'session_id': session_id,
-            'session_context': session_memory.get('session_context', ''),
-            'last_summarized': session_memory.get('last_summarized', 'Never')
-        })
+        return {
+            "status": "success",
+            "session_id": session_id,
+            "session_context": session_memory.get("session_context", ""),
+            "last_summarized": session_memory.get("last_summarized", "Never")
+        }
     except Exception as e:
         print(f"Error getting session memory: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/update_location', methods=['POST'])
-def api_update_location():
+
+# ---------------------------------------------------------------------------
+# API Routes - Location & Global Knowledge
+# ---------------------------------------------------------------------------
+
+@app.post("/api/update_location")
+async def api_update_location(request: LocationUpdateRequest):
     try:
-        data = request.get_json()
-        lat = float(data.get('lat', 0.0))
-        lon = float(data.get('lon', 0.0))
         context = Database.get_context()
-        context['location'] = {'lat': lat, 'lon': lon}
+        context["location"] = {"lat": request.lat, "lon": request.lon}
         Database.update_context(context)
-        return jsonify({'status': 'ok'})
+        return {"status": "ok"}
     except Exception as e:
         print(f"Error updating location: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/update_weather_location', methods=['POST'])
-def api_update_weather_location():
+
+@app.post("/api/update_weather_location")
+async def api_update_weather_location(request: LocationUpdateRequest):
     try:
-        data = request.get_json()
-        lat = float(data.get('lat', 0.0))
-        lon = float(data.get('lon', 0.0))
         context = Database.get_context()
-        context['location'] = {'lat': lat, 'lon': lon}
+        context["location"] = {"lat": request.lat, "lon": request.lon}
         Database.update_context(context)
-        return jsonify({'status': 'success', 'message': 'Weather location updated'})
+        return {"status": "success", "message": "Weather location updated"}
     except Exception as e:
         print(f"Error updating weather location: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/global_knowledge/update', methods=['POST'])
-def api_update_global_knowledge():
+
+@app.post("/api/global_knowledge/update")
+async def api_update_global_knowledge(request: GlobalKnowledgeUpdateRequest):
     try:
-        data = request.get_json()
-        facts = data.get('facts', '')
-        
-        global_knowledge = {'facts': facts}
-        Database.update_profile({'global_knowledge': global_knowledge})
-        
-        return jsonify({'status': 'success', 'message': 'Global knowledge updated'})
+        global_knowledge = {"facts": request.facts}
+        Database.update_profile({"global_knowledge": global_knowledge})
+        return {"status": "success", "message": "Global knowledge updated"}
     except Exception as e:
         print(f"Error updating global knowledge: {e}")
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=5000)
+
+# ---------------------------------------------------------------------------
+# Main Entry Point
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5000, log_level="info")

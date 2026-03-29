@@ -2,6 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2026-03-29
+
+### Changed — Architecture (Breaking)
+
+- **Complete migration from Flask to FastAPI**: Entire web interface (`web.py`) rewritten with FastAPI best practices
+  - Replaces `Flask(__name__)` with `FastAPI()` application instance
+  - Replaces `@app.route()` decorators with `@app.get()` / `@app.post()`
+  - Replaces Flask `render_template()` with `Jinja2Templates` + `TemplateResponse`
+  - Replaces Flask `send_from_directory()` with `FileResponse`
+  - Replaces Flask `jsonify()` with native Pydantic model responses or `dict`
+  - Replaces Flask `session` cookies with in-memory `_web_session_tracker` dict
+
+### Removed — Flask Stack
+
+- **Flask** (`Flask>=3.0.0`) — web framework
+- **Werkzeug** (`Werkzeug>=3.0.0`) — WSGI utilities (no longer needed with ASGI/uvicorn)
+
+### Added — FastAPI Stack
+
+- **FastAPI** (`fastapi>=0.115.0`) — modern, high-performance web framework
+- **uvicorn** (`uvicorn[standard]>=0.30.0`) — ASGI server with auto-reload support
+- **python-multipart** (`python-multipart>=0.0.9`) — form data/file upload handling
+- **Pydantic v2** integrated validation for all request/response models:
+  - `MessageRequest`, `StreamMessageRequest`, `ApiKeyRequest`, `ChutesKeyRequest`
+  - `SessionCreateRequest`, `SessionSwitchRequest`, `SessionRenameRequest`, `SessionDeleteRequest`
+  - `ProviderSetRequest`, `ProviderTestRequest`, `LocationUpdateRequest`, `GlobalKnowledgeUpdateRequest`
+
+### Added — FastAPI Database Support
+
+- `app/database.py`: Added `get_db()` generator for FastAPI `Depends()` dependency injection
+  - Maintains compatibility with legacy `get_db_session()` context manager
+
+### Migrated — Entry Point
+
+- `main.py`: `launch_web_interface()` updated to use `uvicorn.run()` instead of Flask `app.run()`
+  - Supports configurable `host`, `port`, and `reload` parameters
+
+### Notes
+
+- API routes remain at the same paths (`/api/*`) — backward compatible with frontend
+- Static file serving moved from `flask.send_from_directory` to `fastapi.staticfiles.StaticFiles`
+- Template rendering moved from `flask.render_template` to `fastapi.templating.Jinja2Templates`
+
 ## [1.0.69.29] - 2026-03-27
 
 ### Fixed — Memory System (Critical)

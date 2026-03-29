@@ -1211,24 +1211,28 @@ class YuzuCompanionAgent:
         table.add_row("Global Profile", f"{len(profile.get('memory', {}).get('player_summary', ''))} chars")
         console.print(table)
 
-    def launch_web_interface(self):
-        def start_flask_server():
-            from web import app
-            app.run(debug=False, port=5000, host='0.0.0.0', use_reloader=False)
+    def launch_web_interface(self, port: int = 5000, host: str = "0.0.0.0", reload: bool = False):
+        """Launch FastAPI web interface using uvicorn."""
+        import uvicorn
+        from web import app  # Import FastAPI app from web.py
         
-        console.print("[dim]Starting web interface...[/]")
-        flask_thread = threading.Thread(target=start_flask_server, daemon=True)
-        flask_thread.start()
-        time.sleep(2)
-        webbrowser.open('http://127.0.0.1:5000')
-        success("Web interface launched at: http://127.0.0.1:5000")
+        console.print(f"[dim]Starting FastAPI web interface on {host}:{port}...[/]")
+        
+        # Open browser after a short delay
+        def open_browser():
+            time.sleep(2)
+            webbrowser.open(f'http://127.0.0.1:{port}')
+        
+        browser_thread = threading.Thread(target=open_browser, daemon=True)
+        browser_thread.start()
+        
+        success(f"Web interface launched at: http://{host}:{port}")
         console.print("[yellow]Press Ctrl+C to return to terminal.[/]")
         
         try:
-            while flask_thread.is_alive():
-                time.sleep(1)
+            uvicorn.run(app, host=host, port=port, reload=reload, log_level="info")
         except KeyboardInterrupt:
-            console.print("\n[yellow]Returning to terminal interface...[/]")
+            console.print("\n[yellow]Web server stopped. Returning to terminal interface...[/]")
 
 def main():
     agent = YuzuCompanionAgent()
