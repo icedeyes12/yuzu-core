@@ -199,7 +199,7 @@ async def api_get_profile():
     try:
         profile = Database.get_profile()
         active_session = Database.get_active_session()
-        chat_history = Database.get_chat_history(session_id=active_session["id"])
+        chat_history = Database.get_chat_history(session_id=active_session["id"], limit=None)
         session_memory = Database.get_session_memory(active_session["id"])
         
         ai_manager = get_ai_manager()
