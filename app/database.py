@@ -808,3 +808,16 @@ class Database:
             session.commit()
         
         return {'decrypted': decrypted_count, 'failed': failed_count, 'total': len(message_ids)}
+
+    @staticmethod
+    def get_chat_history_for_ai(session_id=None, limit=1000, recent=False):
+        """Get chat history formatted for AI context building.
+        
+        Same as get_chat_history but filters out tool role messages
+        and includes ALL_TOOL_ROLES for message formatting.
+        """
+        if session_id is None:
+            active_session = Database.get_active_session()
+            session_id = active_session['id']
+        
+        return Database.get_chat_history(session_id=session_id, limit=limit, recent=False)
