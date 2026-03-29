@@ -821,3 +821,105 @@ class Database:
             session_id = active_session['id']
         
         return Database.get_chat_history(session_id=session_id, limit=limit, recent=False)
+
+    @staticmethod
+    def add_image_tools_message(image_url, session_id=None):
+        """Add an image tools message."""
+        if session_id is None:
+            active_session = Database.get_active_session()
+            session_id = active_session['id']
+        
+        with get_db_session() as session:
+            local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            message = Message(
+                session_id=session_id,
+                role='image_tools',
+                content=image_url,
+                content_encrypted=False,
+                timestamp=local_time
+            )
+            session.add(message)
+            session.commit()
+
+    @staticmethod
+    def add_tool_result(tool_name, result_content, session_id=None):
+        """
+        Store tool result in database with tool-specific role.
+        The result_content is expected to be a fully formatted markdown contract.
+        """
+        if session_id is None:
+            active_session = Database.get_active_session()
+            session_id = active_session['id']
+        
+        role = TOOL_ROLES.get(tool_name, f'{tool_name}_tools')
+        
+        with get_db_session() as session:
+            local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            message = Message(
+                session_id=session_id,
+                role=role,
+                content=result_content,
+                content_encrypted=False,
+                timestamp=local_time
+            )
+            session.add(message)
+            session.commit()
+
+    @staticmethod
+    def add_system_note(content, session_id=None):
+        """Add a system note message."""
+        if session_id is None:
+            active_session = Database.get_active_session()
+            session_id = active_session['id']
+        
+        with get_db_session() as session:
+            local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            message = Message(
+                session_id=session_id,
+                role='system',
+                content=content,
+                content_encrypted=False,
+                timestamp=local_time
+            )
+            session.add(message)
+            session.commit()
+
+    @staticmethod
+    def add_memory_note(content, session_id=None):
+        """Add a memory note (alias for add_system_note)."""
+        Database.add_system_note(content, session_id)
+
+    @staticmethod
+    def _extract_command_from_markdown_contract(content):
+        """Extract command from markdown contract."""
+        import re
+        if not content:
+            return content
+        m = re.search(r'```bash\n\S+\$\s*(/[^\n]+)\n```', content)
+        if m:
+            return m.group(1).strip()
+        return content
+
+    @staticmethod
+    def _extract_raw_result_from_markdown_contract(content):
+        """Extract raw result from markdown contract, stripping formatting."""
+        import re
+        if not content:
+            return content
+
+        result = content
+        result = re.sub(r'<details>\s*<summary>.*?</summary>', '', result, flags=re.DOTALL)
+        result = re.sub(r'</details>', '', result, flags=re.DOTALL)
+        result = re.sub(r'```bash\n.*?\n```', '', result, flags=re.DOTALL)
+        result = re.sub(r'```[\w]*\n?', '', result)
+        result = re.sub(r'```', '', result)
+        result = re.sub(r'^>\s*', '', result, flags=re.MULTILINE)
+        result = re.sub(r'<[^>]+>', '', result)
+        result = re.sub(r'^\n+', '', result)
+        result = re.sub(r'\n+$', '', result)
+        result = result.strip()
+
+        return result
+
+# Initialize database
+init_db()
