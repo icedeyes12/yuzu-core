@@ -125,15 +125,12 @@ class GlobalKnowledgeUpdateRequest(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    profile_data = Database.get_profile()
-    # Flatten profile for template (avoid nested dicts causing unhashable issues)
-    profile_simple = {
-        'display_name': profile_data.get('display_name', 'User'),
-        'partner_name': profile_data.get('partner_name', 'Yuzu'),
-        'affection': profile_data.get('affection', 50),
-        'theme': profile_data.get('theme', 'default'),
-    }
-    return templates.TemplateResponse("index.html", {"request": request, "profile": profile_simple})
+    profile = Database.get_profile()
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"profile": profile}
+    )
 
 
 @app.get("/chat", response_class=HTMLResponse)
@@ -146,31 +143,32 @@ async def chat_page(request: Request):
         _web_session_tracker[session_id] = True
         print("Web session started and flagged.")
     
-    profile_data = Database.get_profile()
-    profile_simple = {
-        'display_name': profile_data.get('display_name', 'User'),
-        'partner_name': profile_data.get('partner_name', 'Yuzu'),
-        'affection': profile_data.get('affection', 50),
-        'theme': profile_data.get('theme', 'default'),
-    }
-    return templates.TemplateResponse("chat.html", {"request": request, "profile": profile_simple})
+    profile = Database.get_profile()
+    return templates.TemplateResponse(
+        request=request,
+        name="chat.html",
+        context={"profile": profile}
+    )
 
 
 @app.get("/config", response_class=HTMLResponse)
 async def config_page(request: Request):
-    profile_data = Database.get_profile()
-    profile_simple = {
-        'display_name': profile_data.get('display_name', 'User'),
-        'partner_name': profile_data.get('partner_name', 'Yuzu'),
-        'affection': profile_data.get('affection', 50),
-        'theme': profile_data.get('theme', 'default'),
-    }
-    return templates.TemplateResponse("config.html", {"request": request, "profile": profile_simple})
+    profile = Database.get_profile()
+    return templates.TemplateResponse(
+        request=request,
+        name="config.html",
+        context={"profile": profile}
+    )
 
 
 @app.get("/about", response_class=HTMLResponse)
 async def about_page(request: Request):
-    return templates.TemplateResponse("about.html", {"request": request})
+    profile = Database.get_profile()
+    return templates.TemplateResponse(
+        request=request,
+        name="about.html",
+        context={"profile": profile}
+    )
 
 
 @app.get("/static/html/sidebar.html", response_class=HTMLResponse)
