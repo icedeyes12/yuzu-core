@@ -6,10 +6,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Home | Yuzu Companion</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/sidebar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/theme.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/home.css') }}">
 </head>
 <body class="home-body">
   <!-- Unified Sidebar -->
@@ -106,7 +106,7 @@
     <span class="footer-link" onclick="window.location.href='/about'">©2025 hkkm project</span> | built with love
   </footer>
 
-  <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/home.js') }}"></script>
+  <script src="{{ url_for('static', path='js/sidebar.js') }}"></script>
+  <script src="{{ url_for('static', path='js/home.js') }}"></script>
 </body>
 </html>
