@@ -829,6 +829,7 @@ class Database:
                         content = "[ENCRYPTED_LEGACY_DATA]"
                 
                 result_messages.append({
+                    'id': msg.id,
                     'role': msg.role,
                     'content': content,
                     'timestamp': msg.timestamp,
