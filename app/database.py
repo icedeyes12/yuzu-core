@@ -810,17 +810,76 @@ class Database:
         return {'decrypted': decrypted_count, 'failed': failed_count, 'total': len(message_ids)}
 
     @staticmethod
-    def get_chat_history_for_ai(session_id=None, limit=1000, recent=False):
-        """Get chat history formatted for AI context building.
-        
-        Same as get_chat_history but filters out tool role messages
-        and includes ALL_TOOL_ROLES for message formatting.
+    def get_chat_history_for_ai(session_id=None, limit=None, recent=False):
+        """
+        Build message context for AI provider.
+
+        Returns chronologically ordered messages with tool results parsed into
+        separate assistant command + tool role entries. No markdown contracts,
+        no HTML, no <details> blocks reach the LLM.
         """
         if session_id is None:
             active_session = Database.get_active_session()
             session_id = active_session['id']
-        
-        return Database.get_chat_history(session_id=session_id, limit=limit, recent=False)
+
+        with get_db_session() as session:
+            query = session.query(Message).filter(
+                Message.session_id == session_id,
+                Message.role.in_(['user', 'assistant', 'system'] + ALL_TOOL_ROLES)
+            )
+
+            if recent and limit:
+                messages = query.order_by(Message.timestamp.desc()).limit(limit).all()
+                messages = list(reversed(messages))
+            elif limit:
+                messages = query.order_by(Message.timestamp.asc()).limit(limit).all()
+            else:
+                messages = query.order_by(Message.timestamp.asc()).all()
+
+            formatted_messages = []
+            for msg in messages:
+                content = msg.content
+                
+                # Skip event_log roles
+                if msg.role == 'event_log':
+                    continue
+
+                if msg.role == 'user':
+                    try:
+                        dt = datetime.strptime(msg.timestamp, '%Y-%m-%d %H:%M:%S')
+                        formatted_timestamp = dt.strftime('[%Y-%m-%d %H:%M:%S]')
+                    except Exception:
+                        formatted_timestamp = f"[{msg.timestamp}]"
+                    ai_formatted_content = f"{content} {formatted_timestamp}"
+                    formatted_messages.append({
+                        'role': msg.role,
+                        'content': ai_formatted_content
+                    })
+                elif msg.role == 'assistant':
+                    formatted_messages.append({
+                        'role': msg.role,
+                        'content': content
+                    })
+                elif msg.role == 'system':
+                    formatted_messages.append({
+                        'role': msg.role,
+                        'content': content
+                    })
+                elif msg.role in ALL_TOOL_ROLES:
+                    # Parse canonical markdown contract
+                    command_line = Database._extract_command_from_markdown_contract(content)
+                    raw_result = Database._extract_raw_result_from_markdown_contract(content)
+                    # Append TWO entries: assistant command + tool result
+                    formatted_messages.append({
+                        'role': 'assistant',
+                        'content': command_line
+                    })
+                    formatted_messages.append({
+                        'role': msg.role,
+                        'content': raw_result
+                    })
+
+            return formatted_messages
 
     @staticmethod
     def add_image_tools_message(image_url, session_id=None):
