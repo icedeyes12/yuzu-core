@@ -2,11 +2,34 @@
 # DESCRIPTION: Tool for storing memories to vector database
 
 from datetime import datetime
-from app.database import Database, get_db_session, SemanticMemory
-from app.memory.embedder import embed_texts
-from app.memory.embedder import cosine_similarity, blob_to_vec, vec_to_blob
-from app.memory.vector_store import mark_dirty
-from app.tools.registry import build_markdown_contract
+from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
+
+
+TOOL_DEFINITION = ToolDefinition(
+    name="memory_store",
+    description="Store a new fact or piece of information about the user into long-term memory. "
+                "The system auto-classifies into categories: Identity, Preference, Interest, "
+                "Personality, Relationship, Experience, Goal, or Guideline.",
+    role="memory_store_tools",
+    parameters=[
+        ToolParam(
+            name="fact",
+            description="The fact or information to store (5-500 characters)",
+            type="string",
+            required=True,
+        ),
+        ToolParam(
+            name="category",
+            description="Optional memory category. If omitted, auto-detected by LLM.",
+            type="string",
+            required=False,
+            enum=["Identity", "Preference", "Interest", "Personality",
+                  "Relationship", "Experience", "Goal", "Guideline"],
+        ),
+    ],
+    needs_session=True,
+    is_terminal=True,
+)
 
 
 def _classify_category_llm(fact: str) -> str:
@@ -61,50 +84,55 @@ Respond with ONLY the category name, nothing else."""
 
 def execute(arguments, **kwargs):
     session_id = kwargs.get("session_id")
+    from app.database import Database, get_db_session, SemanticMemory
+    from app.memory.embedder import cosine_similarity, blob_to_vec, vec_to_blob
+    from app.memory.vector_store import mark_dirty
+
     profile = Database.get_profile() or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     fact = arguments.get("fact", "").strip()
     if not fact:
-        return build_markdown_contract(
-            "memory_store_tools",
+        return error_result(
+            "'fact' is required",
+            TOOL_DEFINITION,
             "/memory_store",
-            ["Error: 'fact' is required"],
             partner_name,
         )
 
     if len(fact) < 5:
-        return build_markdown_contract(
-            "memory_store_tools",
+        return error_result(
+            "Fact too short (min 5 chars)",
+            TOOL_DEFINITION,
             "/memory_store",
-            ["Error: Fact too short (min 5 chars)"],
             partner_name,
         )
 
     if len(fact) > 500:
-        return build_markdown_contract(
-            "memory_store_tools",
+        return error_result(
+            "Fact too long (max 500 chars)",
+            TOOL_DEFINITION,
             "/memory_store",
-            ["Error: Fact too long (max 500 chars)"],
             partner_name,
         )
 
     category = arguments.get("category")
     if not category:
         category = _classify_category_llm(fact)
-    full_command = f"/memory_store fact=\"{fact[:60]}\" category={category}"
+    full_command = f'/memory_store fact="{fact[:60]}" category={category}'
 
     # Embed the fact text
     fact_embed_text = f"[{category}] {fact}"
     try:
-        vecs = embed_texts([fact_embed_text])
-        vector = vecs[0]  # extract single vector from list
+        from app.memory.embedder import embed_texts as _embed
+        vecs = _embed([fact_embed_text])
+        vector = vecs[0]
     except Exception as e:
         print(f"[memory_store] Embed failed: {e}")
-        return build_markdown_contract(
-            "memory_store_tools",
+        return error_result(
+            "Embedding service unavailable",
+            TOOL_DEFINITION,
             full_command,
-            ["Error: Embedding service unavailable"],
             partner_name,
         )
 
@@ -133,10 +161,10 @@ def execute(arguments, **kwargs):
                 rec.access_count = (rec.access_count or 0) + 1
                 rec.last_accessed = datetime.now()
                 session.commit()
-            return build_markdown_contract(
-                "memory_store_tools",
+            return ok_result(
+                {"status": "duplicate", "confidence": rec.confidence if rec else None},
+                TOOL_DEFINITION,
                 full_command,
-                [f"Already remembered (confidence {rec.confidence:.2f})"],
                 partner_name,
             )
 
@@ -156,9 +184,9 @@ def execute(arguments, **kwargs):
         session.commit()
         mark_dirty(session_id, "semantic")
 
-    return build_markdown_contract(
-        "memory_store_tools",
+    return ok_result(
+        {"status": "stored", "category": category, "fact": fact},
+        TOOL_DEFINITION,
         full_command,
-        [f"Stored: [{category}] {fact}"],
         partner_name,
     )

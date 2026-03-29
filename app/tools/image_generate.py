@@ -4,38 +4,57 @@
 import os
 import requests
 from datetime import datetime
-from app.database import Database
+from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 
 HUNYUAN_ENDPOINT = "https://chutes-hunyuan-image-3.chutes.ai/generate"
 Z_TURBO_ENDPOINT = "https://chutes-z-image-turbo.chutes.ai/generate"
 QWEN_IMAGE_ENDPOINT = "https://image.chutes.ai/generate"
 
+
+TOOL_DEFINITION = ToolDefinition(
+    name="image_generate",
+    description="Generate an image from a text prompt using AI diffusion models. "
+                "Returns the generated image displayed inline.",
+    role="image_tools",
+    parameters=[
+        ToolParam(
+            name="prompt",
+            description="Detailed description of the image to generate",
+            type="string",
+            required=True,
+        ),
+    ],
+    is_terminal=True,
+)
+
+
 def execute(arguments, **kwargs):
-    from app.tools.registry import build_markdown_contract
+    from app.database import Database
 
     prompt = arguments.get("prompt", "")
     if not prompt:
-        return build_markdown_contract(
-            "image_tools", "/imagine", ["Error: No prompt provided"], "Yuzu"
+        return error_result(
+            "No prompt provided",
+            TOOL_DEFINITION,
+            "/imagine",
+            "Yuzu",
         )
+
+    profile = Database.get_profile() or {}
+    partner_name = profile.get("partner_name", "Yuzu")
 
     try:
         api_keys = Database.get_api_keys()
         api_key = api_keys.get('chutes')
         if not api_key:
-            profile = Database.get_profile() or {}
-            partner_name = profile.get("partner_name", "Yuzu")
-            return build_markdown_contract(
-                "image_tools", f"/imagine {prompt}",
-                ["Error: No Chutes API key available"],
+            return error_result(
+                "No Chutes API key available",
+                TOOL_DEFINITION,
+                f"/imagine {prompt}",
                 partner_name,
             )
 
-        # Resolve image model from profile — no silent fallback
-        profile = Database.get_profile() or {}
-        partner_name = profile.get("partner_name", "Yuzu")
         image_model = profile.get("image_model", "hunyuan")
-        
         print(f"[IMAGE TOOL] Model: {image_model}")
 
         if image_model == "qwen_image":
@@ -55,16 +74,14 @@ def execute(arguments, **kwargs):
         else:
             endpoint = HUNYUAN_ENDPOINT
             payload = {"prompt": prompt}
-        
+
         print(f"[IMAGE TOOL] Endpoint: {endpoint}")
+        print(f"[IMAGE TOOL] Generating image (prompt length: {len(prompt)} chars)")
 
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
-
-        
-        print(f"[IMAGE TOOL] Generating image (prompt length: {len(prompt)} chars)")
 
         response = requests.post(
             endpoint,
@@ -73,43 +90,47 @@ def execute(arguments, **kwargs):
             timeout=300
         )
 
-        if response.status_code == 200:
-            images_dir = "static/generated_images"
-            os.makedirs(images_dir, exist_ok=True)
-
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            safe_prompt = "".join(c for c in prompt[:30] if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            ext = "jpg" if image_model == "qwen_image" else "png"
-            filename = f"{timestamp}_{safe_prompt}.{ext}"
-            filepath = os.path.join(images_dir, filename)
-
-            with open(filepath, 'wb') as f:
-                f.write(response.content)
-
-            print(f"[IMAGE TOOL] Saved: {filepath}")
-
-            full_command = f"/imagine {prompt}"
-            return build_markdown_contract(
-                "image_tools", full_command,
-                [f'<img src="static/generated_images/{filename}" alt="Generated Image">'],
-                partner_name,
-            )
-        else:
+        if response.status_code != 200:
             print(f"[IMAGE TOOL] API error {response.status_code}")
-            return build_markdown_contract(
-                "image_tools", f"/imagine {prompt}",
-                [f"Error: API error {response.status_code}"],
+            return error_result(
+                f"API error {response.status_code}",
+                TOOL_DEFINITION,
+                f"/imagine {prompt}",
                 partner_name,
             )
+
+        images_dir = "static/generated_images"
+        os.makedirs(images_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_prompt = "".join(c for c in prompt[:30] if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        ext = "jpg" if image_model == "qwen_image" else "png"
+        filename = f"{timestamp}_{safe_prompt}.{ext}"
+        filepath = os.path.join(images_dir, filename)
+
+        with open(filepath, 'wb') as f:
+            f.write(response.content)
+
+        print(f"[IMAGE TOOL] Saved: {filepath}")
+
+        full_command = f"/imagine {prompt}"
+        return ok_result(
+            {
+                "image_path": f"static/generated_images/{filename}",
+                "model": image_model,
+            },
+            TOOL_DEFINITION,
+            full_command,
+            partner_name,
+        )
 
     except Exception as e:
-        # Log full exception details server-side
         print(f"[IMAGE TOOL] Exception: {str(e)}")
         profile = Database.get_profile() or {}
         partner_name = profile.get("partner_name", "Yuzu")
-        # Return a generic error message without exposing internal details
-        return build_markdown_contract(
-            "image_tools", f"/imagine {prompt}",
-            ["Error: Image generation failed. Please try again later."],
+        return error_result(
+            "Image generation failed. Please try again later.",
+            TOOL_DEFINITION,
+            f"/imagine {prompt}",
             partner_name,
         )

@@ -8,12 +8,38 @@ import ipaddress
 import re
 from urllib.parse import urlparse
 from datetime import datetime
-from app.database import Database
+from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 
 MAX_BYTES = 2 * 1024 * 1024
 TIMEOUT = 90
 
-# validate public https url
+
+TOOL_DEFINITION = ToolDefinition(
+    name="http_request",
+    description="Make HTTP requests to public HTTPS endpoints. "
+                "Use for web searches, fetching data from public APIs, or retrieving content. "
+                "Only accepts public HTTPS URLs. Returns text content or downloaded images.",
+    role="request_tools",
+    parameters=[
+        ToolParam(
+            name="url",
+            description="The full HTTPS URL to request",
+            type="string",
+            required=True,
+        ),
+        ToolParam(
+            name="method",
+            description="HTTP method to use",
+            type="string",
+            required=False,
+            default="GET",
+            enum=["GET", "POST", "PUT", "DELETE"],
+        ),
+    ],
+    is_terminal=True,
+)
+
+
 def is_safe_public_url(url: str) -> bool:
     parsed = urlparse(url)
 
@@ -42,28 +68,25 @@ def is_safe_public_url(url: str) -> bool:
 
 def _extract_url(args_str: str) -> tuple:
     """Extract HTTP method and URL from arguments.
-    
+
     Supports formats like:
     - "https://example.com" (implicit GET)
     - "GET https://example.com"
     - "POST https://example.com"
-    
+
     Returns: (method, url) tuple, defaults to GET if no method specified.
     """
     args_str = args_str.strip()
-    
-    # Check for explicit HTTP method
+
     method_match = re.match(r'^(GET|POST|PUT|DELETE|PATCH)\s+(.+)$', args_str, re.IGNORECASE)
     if method_match:
         method = method_match.group(1).upper()
         url = method_match.group(2).strip()
         return method, url
-    
-    # No method specified, default to GET
+
     return "GET", args_str
 
 
-# resolve absolute media directory
 def get_media_dir():
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     media_dir = os.path.join(project_root, "static", "media")
@@ -71,9 +94,8 @@ def get_media_dir():
     return media_dir
 
 
-# execute request tool
-def execute(arguments, session_id=None):
-    from app.tools.registry import build_markdown_contract
+def execute(arguments, **kwargs):
+    from app.database import Database
 
     profile = Database.get_profile() or {}
     partner_name = profile.get("partner_name", "Yuzu")
@@ -86,24 +108,29 @@ def execute(arguments, session_id=None):
     # Extract HTTP method and URL from arguments
     method, url = _extract_url(args_str)
 
+    # Allow method override from arguments dict
+    if isinstance(arguments, dict) and arguments.get("method"):
+        method = arguments["method"].upper()
+
+    full_command = f"/request {method} {url}" if method != "GET" else f"/request {url}"
+
     if not url:
-        return build_markdown_contract(
-            "request_tools",
+        return error_result(
+            "No URL provided",
+            TOOL_DEFINITION,
             "/request",
-            ["Error: No URL provided"],
             partner_name,
         )
 
     if not is_safe_public_url(url):
-        return build_markdown_contract(
-            "request_tools",
+        return error_result(
+            "Unsafe or invalid URL (HTTPS public endpoints only)",
+            TOOL_DEFINITION,
             f"/request {args_str}",
-            ["Error: unsafe or invalid URL (HTTPS public endpoints only)"],
             partner_name,
         )
 
     try:
-        # Use the extracted method (currently only GET is fully supported)
         if method == "POST":
             resp = requests.post(url, timeout=TIMEOUT, stream=True)
         elif method == "PUT":
@@ -111,17 +138,16 @@ def execute(arguments, session_id=None):
         elif method == "DELETE":
             resp = requests.delete(url, timeout=TIMEOUT, stream=True)
         else:
-            # Default to GET
             resp = requests.get(url, timeout=TIMEOUT, stream=True)
 
         content = b""
         for chunk in resp.iter_content(8192):
             content += chunk
             if len(content) > MAX_BYTES:
-                return build_markdown_contract(
-                    "request_tools",
-                    f"/request {args_str}",
-                    ["Error: response too large (max 2MB)"],
+                return error_result(
+                    "Response too large (max 2MB)",
+                    TOOL_DEFINITION,
+                    full_command,
                     partner_name,
                 )
 
@@ -141,14 +167,15 @@ def execute(arguments, session_id=None):
 
             web_path = f"static/media/{filename}"
 
-            return build_markdown_contract(
-                "request_tools",
-                f"/request {args_str}",
-                [
-                    f'<img src="{web_path}" alt="Fetched Image">',
-                    f"Content-Type: {content_type}",
-                    f"Size: {size} bytes"
-                ],
+            return ok_result(
+                {
+                    "type": "image",
+                    "path": web_path,
+                    "content_type": content_type,
+                    "size_bytes": size,
+                },
+                TOOL_DEFINITION,
+                full_command,
                 partner_name,
             )
 
@@ -158,19 +185,24 @@ def execute(arguments, session_id=None):
         except Exception:
             lines = ["Binary content received (non-text, non-image)"]
 
-        return build_markdown_contract(
-            "request_tools",
-            f"/request {args_str}",
-            lines,
+        return ok_result(
+            {
+                "type": "text",
+                "content": "\n".join(lines),
+                "content_type": content_type,
+                "size_bytes": size,
+                "truncated": len(lines) >= 200,
+            },
+            TOOL_DEFINITION,
+            full_command,
             partner_name,
         )
 
     except Exception as e:
-        # Log detailed exception server-side but return a generic message to the user
         print(f"[request_tools] Exception during HTTP request: {e}")
-        return build_markdown_contract(
-            "request_tools",
-            f"/request {args_str}",
-            ["Error: request failed. Please check the URL or try again later."],
+        return error_result(
+            "Request failed. Please check the URL or try again later.",
+            TOOL_DEFINITION,
+            full_command,
             partner_name,
         )
