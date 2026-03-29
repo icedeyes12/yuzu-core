@@ -103,11 +103,13 @@ def execute(arguments, **kwargs):
             )
 
     except Exception as e:
+        # Log full exception details server-side
         print(f"[IMAGE TOOL] Exception: {str(e)}")
         profile = Database.get_profile() or {}
         partner_name = profile.get("partner_name", "Yuzu")
+        # Return a generic error message without exposing internal details
         return build_markdown_contract(
             "image_tools", f"/imagine {prompt}",
-            [f"Error: Image generation failed: {str(e)}"],
+            ["Error: Image generation failed. Please try again later."],
             partner_name,
         )

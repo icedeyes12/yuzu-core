@@ -64,6 +64,7 @@ def execute_tool(tool_name, arguments, session_id=None):
         result = module.execute(arguments, session_id=session_id)
         return result
     except Exception as e:
+        # Log detailed error for debugging but avoid leaking it to end users
         print(f"[tool_error] {tool_name}: {e}")
         profile = {}
         try:
@@ -75,7 +76,7 @@ def execute_tool(tool_name, arguments, session_id=None):
         return build_markdown_contract(
             TOOL_ROLE_MAP.get(tool_name, f"{tool_name}_tools"),
             f"/{tool_name}",
-            [f"Error: Tool execution failed: {str(e)}"],
+            ["Error: Tool execution failed. Please try again later."],
             partner_name,
         )
 
