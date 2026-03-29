@@ -670,7 +670,7 @@ class Database:
                 'content': m.content,
                 'timestamp': m.timestamp,
                 'image_paths': json.loads(m.image_paths) if m.image_paths else None
-            } for m in messages if m.role in ['user', 'assistant', 'system']]
+            } for m in messages if m.role in ['user', 'assistant', 'system'] + ALL_TOOL_ROLES]
 
     @staticmethod
     def clear_chat_history(session_id=None):
