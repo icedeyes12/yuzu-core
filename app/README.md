@@ -2,7 +2,31 @@
 
 The `app/` directory is the core of Yuzu Companion — the AI companion system that powers emotional, long-running conversations with persistent memory across sessions.
 
+
 ---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Directory Structure](#directory-structure)
+- [Core Entry Points](#core-entry-points)
+  - [`app.py`](#apppy--orchestration-core)
+  - [`main.py`](#mainpy--cli-application)
+  - [`web.py`](#webpy--fastapi-web-server)
+- [Database Layer](#database-layer)
+- [AI Provider System](#ai-provider-system)
+- [Tool System](#tool-system)
+- [Memory System](#memory-system)
+- [Multimodal System](#multimodal-system)
+- [Encryption](#encryption)
+- [Session Management](#session-management)
+- [Configuration](#configuration)
+- [Workflow: Message Processing](#workflow-message-processing)
+- [Dependencies](#dependencies)
+- [Architecture Principles](#architecture-principles)
+
+---
+
 
 ## Overview
 
