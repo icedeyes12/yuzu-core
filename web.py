@@ -401,7 +401,10 @@ async def api_generate_image(request: MessageRequest):
 @app.get("/static/uploads/{filename}")
 async def serve_uploaded_image(filename: str):
     try:
-        file_path = os.path.join(BASE_DIR, "static/uploads", filename)
+        uploads_dir = os.path.abspath(os.path.join(BASE_DIR, "static", "uploads"))
+        file_path = os.path.abspath(os.path.normpath(os.path.join(uploads_dir, filename)))
+        if not file_path.startswith(uploads_dir + os.sep):
+            raise HTTPException(status_code=404, detail="Image not found")
         if os.path.exists(file_path):
             return FileResponse(file_path)
         raise HTTPException(status_code=404, detail="Image not found")
@@ -414,7 +417,10 @@ async def serve_uploaded_image(filename: str):
 @app.get("/static/generated_images/{filename}")
 async def serve_generated_image(filename: str):
     try:
-        file_path = os.path.join(BASE_DIR, "static/generated_images", filename)
+        generated_dir = os.path.abspath(os.path.join(BASE_DIR, "static", "generated_images"))
+        file_path = os.path.abspath(os.path.normpath(os.path.join(generated_dir, filename)))
+        if not file_path.startswith(generated_dir + os.sep):
+            raise HTTPException(status_code=404, detail="Image not found")
         if os.path.exists(file_path):
             return FileResponse(file_path)
         raise HTTPException(status_code=404, detail="Image not found")
