@@ -25,11 +25,12 @@ def execute(arguments, **kwargs):
     try:
         memory_bundle = retrieve_memory(session_id=session_id, query=query)
     except Exception as e:
+        # Log the detailed error but avoid exposing internal exception text to the user
         print(f"[memory_search] Retrieval failed: {e}")
         return build_markdown_contract(
             "memory_search_tools",
             full_command,
-            [f"Error: retrieval failed: {e}"],
+            ["Error: retrieval failed. Please try again later."],
             partner_name,
         )
 

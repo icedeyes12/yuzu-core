@@ -166,9 +166,11 @@ def execute(arguments, session_id=None):
         )
 
     except Exception as e:
+        # Log detailed exception server-side but return a generic message to the user
+        print(f"[request_tools] Exception during HTTP request: {e}")
         return build_markdown_contract(
             "request_tools",
             f"/request {args_str}",
-            [f"Error: {str(e)}"],
+            ["Error: request failed. Please check the URL or try again later."],
             partner_name,
         )

@@ -457,7 +457,9 @@ class MultimodalTools:
                 return m.group(1), None
             return None, "No image in result"
         except Exception as e:
-            return None, str(e)
+            # Log the parsing error but return a generic message
+            print(f"[multimodal] Failed to parse image generation result: {e}")
+            return None, "Image result parsing failed"
     
     def get_best_vision_provider(self) -> Tuple[Optional[str], Optional[str]]:
         api_keys = Database.get_api_keys()

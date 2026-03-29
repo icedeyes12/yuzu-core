@@ -8,10 +8,10 @@
     <title>Configuration - Yuzu Companion</title>
     
     <!-- IMPORT CSS MODULES -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/config.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/config.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/sidebar.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/theme.css') }}">
 </head>
 <body class="config-body">
     <!-- Unified Sidebar -->
@@ -274,7 +274,7 @@
         <span class="footer-link" onclick="window.location.href='/about'">©2025 hkkm project</span> | built with love
     </footer>
 
-    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/config.js') }}"></script>
+    <script src="{{ url_for('static', path='js/sidebar.js') }}"></script>
+    <script src="{{ url_for('static', path='js/config.js') }}"></script>
 </body>
 </html>

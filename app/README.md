@@ -2,7 +2,31 @@
 
 The `app/` directory is the core of Yuzu Companion — the AI companion system that powers emotional, long-running conversations with persistent memory across sessions.
 
+
 ---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Directory Structure](#directory-structure)
+- [Core Entry Points](#core-entry-points)
+  - [`app.py`](#apppy--orchestration-core)
+  - [`main.py`](#mainpy--cli-application)
+  - [`web.py`](#webpy--fastapi-web-server)
+- [Database Layer](#database-layer)
+- [AI Provider System](#ai-provider-system)
+- [Tool System](#tool-system)
+- [Memory System](#memory-system)
+- [Multimodal System](#multimodal-system)
+- [Encryption](#encryption)
+- [Session Management](#session-management)
+- [Configuration](#configuration)
+- [Workflow: Message Processing](#workflow-message-processing)
+- [Dependencies](#dependencies)
+- [Architecture Principles](#architecture-principles)
+
+---
+
 
 ## Overview
 
@@ -12,7 +36,7 @@ Yuzu Companion is a multi-interface AI companion with:
 - **Multimodal interaction** — text, images, vision analysis, image generation
 - **Session-based memory** — episodic + semantic long-term memory with FSRS-inspired retention
 - **Encrypted conversations** — ChaCha20-Poly1305 encryption for API keys
-- **Three interfaces** — Terminal (Rich UI), Web (Flask), and programmatic (CLI/API)
+- **Three interfaces** — Terminal (Rich UI), Web (FastAPI), and programmatic (CLI/API)
 
 ```mermaid
 graph LR
@@ -114,7 +138,7 @@ Terminal interface using Rich + prompt_toolkit. Provides:
 - Code block extraction and saving
 - Web interface launcher
 
-### `web.py` — Flask Web Server
+### `web.py` — FastAPI Web Server
 
 REST API + templates for the web UI:
 - `/` — landing page
@@ -538,10 +562,12 @@ sequenceDiagram
 SQLAlchemy>=2.0.0     # ORM
 pycryptodome>=3.20.0  # Encryption
 
-# Web
-Flask>=3.0.0
-Werkzeug>=3.0.0
-Jinja2>=3.1.0
+# Web (FastAPI)
+fastapi>=0.115.0      # Modern async web framework
+uvicorn[standard]>=0.30.0  # ASGI server
+pydantic>=2.8.0       # Data validation with type hints
+python-multipart>=0.0.9   # For file uploads
+Jinja2>=3.1.0         # Template engine (still used)
 
 # Terminal UI
 rich>=13.0.0

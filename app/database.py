@@ -1,15 +1,14 @@
 # FILE: app/database.py
-# DESCRIPTION: SQLAlchemy database models and operations
+# DESCRIPTION: SQLAlchemy database models and operations with FastAPI support
 
 import json
 import os
-import hashlib
 from datetime import datetime
 from contextlib import contextmanager
-from app.encryption import encryptor
+from typing import Generator
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, Float, LargeBinary, Index
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
 # SQLAlchemy setup
@@ -61,9 +60,9 @@ class Message(Base):
     session_id = Column(Integer, nullable=False)
     role = Column(String(50), nullable=False)
     content = Column(Text, nullable=False)
-    content_encrypted = Column(Boolean, nullable=False, default=False)  # Kept for compatibility
+    content_encrypted = Column(Boolean, nullable=False, default=False)
     timestamp = Column(String(255), nullable=False)
-    image_paths = Column(Text, nullable=True)  # JSON list of cached image paths
+    image_paths = Column(Text, nullable=True)
 
 class APIKey(Base):
     __tablename__ = 'api_keys'
@@ -71,7 +70,7 @@ class APIKey(Base):
     id = Column(Integer, primary_key=True)
     key_name = Column(String(255), nullable=False, default='openrouter')
     key_value = Column(Text, nullable=False)
-    key_encrypted = Column(Boolean, nullable=False, default=True)  # API keys tetap terenkripsi
+    key_encrypted = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=datetime.now)
 
 class SemanticMemory(Base):
@@ -84,10 +83,10 @@ class SemanticMemory(Base):
     target = Column(Text, nullable=False)
     confidence = Column(Float, default=0.5)
     importance = Column(Float, default=0.5)
-    embedding_vector = Column(LargeBinary, nullable=True)  # NEW: stored embedding
-    stability = Column(Float, default=24.0)  # hours; FSRS-derived
-    difficulty = Column(Float, default=0.5)   # FSRS difficulty factor
-    source_episodic_ids = Column(Text, nullable=True)  # JSON array of episodic memory IDs
+    embedding_vector = Column(LargeBinary, nullable=True)
+    stability = Column(Float, default=24.0)
+    difficulty = Column(Float, default=0.5)
+    source_episodic_ids = Column(Text, nullable=True)
     last_accessed = Column(DateTime, nullable=True)
     access_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.now)
@@ -128,22 +127,180 @@ Index('idx_api_keys_name', APIKey.key_name)
 Index('idx_semantic_session', SemanticMemory.session_id)
 Index('idx_semantic_entity', SemanticMemory.entity)
 Index('idx_semantic_confidence', SemanticMemory.confidence)
-Index('idx_semantic_importance', SemanticMemory.importance)  # NEW: for retrieval scoring
+Index('idx_semantic_importance', SemanticMemory.importance)
 Index('idx_episodic_session', EpisodicMemory.session_id)
 Index('idx_episodic_importance', EpisodicMemory.importance)
 Index('idx_segments_session', ConversationSegment.session_id)
 
-def get_db_path():
-    return os.path.join(os.path.dirname(__file__), 'yuzu_core.db')
+# ---------------------------------------------------------------------------
+# Database Engine & Session Factory (FastAPI Compatible)
+# ---------------------------------------------------------------------------
+
+_db_path = None
+_engine = None
+_SessionLocal = None
+
+def _get_db_path():
+    global _db_path
+    if _db_path is None:
+        _db_path = os.path.join(os.path.dirname(__file__), 'yuzu_core.db')
+    return _db_path
+
+def get_engine():
+    """Get or create the SQLAlchemy engine (singleton)."""
+    global _engine
+    if _engine is None:
+        db_path = _get_db_path()
+        _engine = create_engine(
+            f'sqlite:///{db_path}',
+            poolclass=StaticPool,
+            connect_args={'check_same_thread': False}
+        )
+    return _engine
+
+def get_session_factory():
+    """Get or create the session factory (singleton)."""
+    global _SessionLocal
+    if _SessionLocal is None:
+        _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
+    return _SessionLocal
+
+@contextmanager
+def get_db_session() -> Generator[Session, None, None]:
+    """Context manager for database sessions (legacy support)."""
+    SessionLocal = get_session_factory()
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+# ---------------------------------------------------------------------------
+# FastAPI Dependency Injection
+# ---------------------------------------------------------------------------
+
+def get_db() -> Generator[Session, None, None]:
+    """
+    FastAPI dependency that yields a database session.
+    
+    Usage:
+        from fastapi import Depends
+        from app.database import get_db
+        
+        @app.get("/api/items")
+        def get_items(db: Session = Depends(get_db)):
+            return db.query(Item).all()
+    """
+    SessionLocal = get_session_factory()
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# ---------------------------------------------------------------------------
+# Database Initialization
+# ---------------------------------------------------------------------------
+
+def init_db():
+    """
+    Initialize database with safety guards.
+    
+    SAFETY RULES:
+    - NEVER drops tables
+    - NEVER recreates database
+    - Only runs safe migrations
+    - Aborts if database corruption detected
+    """
+    db_path = _get_db_path()
+    db_existed_before = os.path.exists(db_path)
+    db_size_before = os.path.getsize(db_path) if db_existed_before else 0
+    
+    print(f"[DB INIT] Database path: {os.path.abspath(db_path)}")
+    print(f"[DB INIT] File existed before: {db_existed_before}")
+    print(f"[DB INIT] File size before: {db_size_before} bytes")
+    
+    # SAFETY CHECK: Abort if database file exists but is empty
+    if db_existed_before and db_size_before == 0:
+        print("[DB ERROR] Database file exists but is empty (0 bytes)")
+        print("[DB ERROR] This indicates corruption. Aborting to prevent data loss.")
+        raise RuntimeError("Database file corrupted (0 bytes). Check for backups or remove the file.")
+    
+    # Create tables if they don't exist
+    engine = get_engine()
+    Base.metadata.create_all(bind=engine)
+    
+    print("[DB INIT] Database initialized successfully")
+    
+    # Run migrations
+    _run_migrations(engine)
+    
+    # Migrate API keys if needed
+    with get_db_session() as session:
+        migrate_api_keys_from_files(session)
+
+
+def _run_migrations(engine):
+    """Run all pending migrations."""
+    from sqlalchemy import inspect as sa_inspect, text
+    
+    inspector = sa_inspect(engine)
+    
+    # Migration: Add context column to profiles
+    columns = [col['name'] for col in inspector.get_columns('profiles')]
+    if 'context' not in columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE profiles ADD COLUMN context TEXT DEFAULT '{}'"))
+            conn.commit()
+    
+    # Migration: Add image_paths column to messages
+    columns = [col['name'] for col in inspector.get_columns('messages')]
+    if 'image_paths' not in columns:
+        with engine.connect() as conn:
+            conn.execute(text('ALTER TABLE messages ADD COLUMN image_paths TEXT'))
+            conn.commit()
+    
+    # Migration: Add image_model column to profiles
+    if 'image_model' not in [col['name'] for col in inspector.get_columns('profiles')]:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE profiles ADD COLUMN image_model TEXT DEFAULT 'hunyuan'"))
+            conn.commit()
+    
+    # Migration: Add vision_model column to profiles
+    if 'vision_model' not in [col['name'] for col in inspector.get_columns('profiles')]:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE profiles ADD COLUMN vision_model TEXT DEFAULT 'moonshotai/kimi-k2.5'"))
+            conn.commit()
+    
+    # Migration: Add embedding_vector to semantic_memories
+    if 'embedding_vector' not in [col['name'] for col in inspector.get_columns('semantic_memories')]:
+        with engine.connect() as conn:
+            conn.execute(text('ALTER TABLE semantic_memories ADD COLUMN embedding_vector BLOB'))
+            conn.commit()
+    
+    # Migration: Add source_episodic_ids, stability, difficulty
+    columns = [col['name'] for col in inspector.get_columns('semantic_memories')]
+    if 'source_episodic_ids' not in columns:
+        with engine.connect() as conn:
+            conn.execute(text('ALTER TABLE semantic_memories ADD COLUMN source_episodic_ids TEXT'))
+            conn.commit()
+    if 'stability' not in columns:
+        with engine.connect() as conn:
+            conn.execute(text('ALTER TABLE semantic_memories ADD COLUMN stability FLOAT DEFAULT 24.0'))
+            conn.commit()
+    if 'difficulty' not in columns:
+        with engine.connect() as conn:
+            conn.execute(text('ALTER TABLE semantic_memories ADD COLUMN difficulty FLOAT DEFAULT 0.5'))
+            conn.commit()
+
 
 def migrate_api_keys_from_files(session):
     """Migrate API keys from various key files to database"""
     key_files = {
         'ce.key': 'cerebras',
-        'cu.key': 'chutes', 
+        'cu.key': 'chutes',
         'or.key': 'openrouter'
     }
-    
     migrated_count = 0
     
     for key_file, key_name in key_files.items():
@@ -153,12 +310,8 @@ def migrate_api_keys_from_files(session):
                     api_key = f.read().strip()
                 
                 if api_key:
-                    # Check if key already exists in database
                     existing_key = session.query(APIKey).filter_by(key_name=key_name).first()
-                    
-                    if existing_key:
-                        pass
-                    else:
+                    if not existing_key:
                         encrypted_key = Database._encrypt_api_key(api_key)
                         new_api_key = APIKey(
                             key_name=key_name,
@@ -176,324 +329,91 @@ def migrate_api_keys_from_files(session):
             except Exception:
                 pass
     
+    session.commit()
     return migrated_count
 
-def _migrate_add_context_column(engine):
-    """Add context column to profiles table if it does not exist."""
-    from sqlalchemy import inspect as sa_inspect, text
-    inspector = sa_inspect(engine)
-    columns = [col['name'] for col in inspector.get_columns('profiles')]
-    if 'context' not in columns:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE profiles ADD COLUMN context TEXT DEFAULT '{}'"))
-            conn.commit()
 
-def _migrate_add_image_paths_column(engine):
-    """Add image_paths column to messages table if it does not exist."""
-    from sqlalchemy import inspect as sa_inspect, text
-    inspector = sa_inspect(engine)
-    columns = [col['name'] for col in inspector.get_columns('messages')]
-    if 'image_paths' not in columns:
-        with engine.connect() as conn:
-            conn.execute(text('ALTER TABLE messages ADD COLUMN image_paths TEXT'))
-            conn.commit()
 
-def _migrate_add_image_model_column(engine):
-    """Add image_model column to profiles table if it does not exist."""
-    from sqlalchemy import inspect as sa_inspect, text
-    inspector = sa_inspect(engine)
-    columns = [col['name'] for col in inspector.get_columns('profiles')]
-    if 'image_model' not in columns:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE profiles ADD COLUMN image_model TEXT DEFAULT 'hunyuan'"))
-            conn.commit()
-
-def _migrate_add_vision_model_column(engine):
-    """Add vision_model column to profiles table if it does not exist."""
-    from sqlalchemy import inspect as sa_inspect, text
-    inspector = sa_inspect(engine)
-    columns = [col['name'] for col in inspector.get_columns('profiles')]
-    if 'vision_model' not in columns:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE profiles ADD COLUMN vision_model TEXT DEFAULT 'moonshotai/kimi-k2.5'"))
-            conn.commit()
-
-def _migrate_add_semantic_embedding_vector(engine):
-    """Add embedding_vector column to semantic_memories if it does not exist."""
-    from sqlalchemy import inspect as sa_inspect, text
-    inspector = sa_inspect(engine)
-    columns = [col['name'] for col in inspector.get_columns('semantic_memories')]
-    if 'embedding_vector' not in columns:
-        with engine.connect() as conn:
-            conn.execute(text('ALTER TABLE semantic_memories ADD COLUMN embedding_vector BLOB'))
-            conn.commit()
-
-def _migrate_add_memory_columns(engine):
-    """Add source_episodic_ids, stability, and difficulty columns to semantic_memories if missing."""
-    from sqlalchemy import inspect as sa_inspect, text
-    inspector = sa_inspect(engine)
-    columns = [col['name'] for col in inspector.get_columns('semantic_memories')]
-    if 'source_episodic_ids' not in columns:
-        with engine.connect() as conn:
-            conn.execute(text('ALTER TABLE semantic_memories ADD COLUMN source_episodic_ids TEXT'))
-            conn.commit()
-    if 'stability' not in columns:
-        with engine.connect() as conn:
-            conn.execute(text('ALTER TABLE semantic_memories ADD COLUMN stability FLOAT DEFAULT 24.0'))
-            conn.commit()
-    if 'difficulty' not in columns:
-        with engine.connect() as conn:
-            conn.execute(text('ALTER TABLE semantic_memories ADD COLUMN difficulty FLOAT DEFAULT 0.5'))
-            conn.commit()
-
-def init_db():
-    """
-    Initialize database with safety guards.
-    
-    SAFETY RULES:
-    - NEVER drops tables
-    - NEVER recreates database
-    - Only runs safe migrations
-    - Aborts if database corruption detected
-    """
-    db_path = get_db_path()
-    db_existed_before = os.path.exists(db_path)
-    db_size_before = os.path.getsize(db_path) if db_existed_before else 0
-    
-    print(f"[DB INIT] Database path: {os.path.abspath(db_path)}")
-    print(f"[DB INIT] File existed before: {db_existed_before}")
-    print(f"[DB INIT] File size before: {db_size_before} bytes")
-    
-    # SAFETY CHECK: Abort if database file exists but is empty
-    if db_existed_before and db_size_before == 0:
-        print("[DB ERROR] Database file exists but is empty (0 bytes)")
-        print("[DB ERROR] This indicates corruption. Aborting to prevent data loss.")
-        print("[DB ERROR] To recover:")
-        print("[DB ERROR]   1. Check for backup files (*.db.backup)")
-        print(f"[DB ERROR]   2. Remove corrupted file: rm {db_path}")
-        print("[DB ERROR]   3. Restore from backup if available")
-        print("[DB ERROR]   4. Or restart with fresh database")
-        raise RuntimeError("Database file corrupted (0 bytes). Manual intervention required.")
-    
-    engine = get_engine()
-    
-    # Check table count before operations
-    from sqlalchemy import inspect as sa_inspect
-    inspector = sa_inspect(engine)
-    tables_before = inspector.get_table_names()
-    table_count_before = len(tables_before)
-    
-    print(f"[DB INIT] Tables before: {table_count_before}")
-    if db_existed_before and table_count_before == 0:
-        print("[DB CRITICAL] Database file existed but contains no tables")
-        print("[DB CRITICAL] This may indicate data loss or corruption")
-    
-    # SAFE OPERATION: Only creates tables that don't exist
-    Base.metadata.create_all(engine)
-    
-    # Migrate existing databases: add image_paths column if missing
-    try:
-        _migrate_add_image_paths_column(engine)
-    except Exception as e:
-        print(f"[WARNING] image_paths migration skipped: {e}")
-    
-    # Migrate existing databases: add context column if missing
-    try:
-        _migrate_add_context_column(engine)
-    except Exception as e:
-        print(f"[WARNING] context migration skipped: {e}")
-    
-    # Migrate existing databases: add image_model column if missing
-    try:
-        _migrate_add_image_model_column(engine)
-    except Exception as e:
-        print(f"[WARNING] image_model migration skipped: {e}")
-    
-    # Migrate existing databases: add vision_model column if missing
-    try:
-        _migrate_add_vision_model_column(engine)
-    except Exception as e:
-        print(f"[WARNING] vision_model migration skipped: {e}")
-    
-    # Migrate existing databases: add embedding_vector column if missing
-    try:
-        _migrate_add_semantic_embedding_vector(engine)
-    except Exception as e:
-        print(f"[WARNING] semantic embedding_vector migration skipped: {e}")
-    
-    # Migrate existing databases: add source_episodic_ids, stability, and difficulty columns if missing
-    try:
-        _migrate_add_memory_columns(engine)
-    except Exception as e:
-        print(f"[WARNING] memory columns migration skipped: {e}")
-    
-    with get_db_session() as session:
-        # Create default profile and session if needed
-        if session.query(Profile).count() == 0:
-            profile = Profile(
-                display_name='user',
-                partner_name='Yuzu', 
-                affection=50,
-                providers_config_json=json.dumps({
-                    'preferred_provider': 'ollama',
-                    'preferred_model': 'glm-4.6:cloud',
-                    'providers': {
-                        'ollama': {'enabled': True, 'base_url': 'http://127.0.0.1:11434'},
-                        'cerebras': {'enabled': True},
-                        'openrouter': {'enabled': True},
-                        'chutes': {'enabled': True}
-                    }
-                })
-            )
-            session.add(profile)
-            
-            chat_session = ChatSession(
-                name='New Chat',
-                is_active=True
-            )
-            session.add(chat_session)
-            
-            # Migrate API keys from files
-            migrate_api_keys_from_files(session)
-            
-            session.commit()
-    
-    # AUDIT LOG: Report final state
-    with get_db_session() as session:
-        profile_count = session.query(Profile).count()
-        session_count = session.query(ChatSession).count()
-        message_count = session.query(Message).count()
-        apikey_count = session.query(APIKey).count()
-        
-        print("[DB AUDIT] Database initialization complete")
-        print(f"[DB AUDIT] Profiles: {profile_count}")
-        print(f"[DB AUDIT] Chat Sessions: {session_count}")
-        print(f"[DB AUDIT] Messages: {message_count}")
-        print(f"[DB AUDIT] API Keys: {apikey_count}")
-        
-        db_size_after = os.path.getsize(db_path)
-        print(f"[DB AUDIT] File size after: {db_size_after} bytes")
-
-# Database engine and session management
-_engine = None
-_SessionLocal = None
-
-def get_engine():
-    global _engine
-    if _engine is None:
-        _engine = create_engine(
-            f'sqlite:///{get_db_path()}',
-            poolclass=StaticPool,
-            connect_args={'check_same_thread': False},
-            echo=False
-        )
-    return _engine
-
-def get_session_local():
-    global _SessionLocal
-    if _SessionLocal is None:
-        _SessionLocal = sessionmaker(bind=get_engine())
-    return _SessionLocal
-
-@contextmanager
-def get_db_session():
-    session = get_session_local()()
-    try:
-        yield session
-        session.commit()
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
-
-def hash_password(password):
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
-
-def verify_password(stored_password, provided_password):
-    return stored_password == hashlib.sha256(provided_password.encode('utf-8')).hexdigest()
+# ---------------------------------------------------------------------------
+# Database Utility Class
+# ---------------------------------------------------------------------------
 
 class Database:
-    @staticmethod
-    def _encrypt_content(content):
-        """
-        DEPRECATED: Tidak lagi mengenkripsi pesan
-        Hanya untuk backward compatibility
-        """
-        return content  # Return as-is, no encryption
-
-    @staticmethod
-    def _decrypt_content(content, is_encrypted):
-        """
-        DEPRECATED: Tidak perlu dekripsi pesan
-        Hanya untuk backward compatibility
-        """
-        return content  # Return as-is, no decryption needed
+    """Static helper class for common database operations."""
     
     @staticmethod
-    def _encrypt_api_key(key_value):
-        """Hanya API key yang tetap terenkripsi"""
-        try:
-            return encryptor.encrypt(key_value)
-        except Exception as e:
-            print(f"[WARNING] API key encryption failed: {e}")
-            return key_value
+    def _encrypt_api_key(api_key):
+        """Encrypt an API key."""
+        from app.encryption import encryptor
+        return encryptor.encrypt(api_key)
     
     @staticmethod
-    def _decrypt_api_key(key_value, is_encrypted):
-        """Dekripsi hanya untuk API key"""
+    def _decrypt_api_key(encrypted_key, is_encrypted=True):
+        """Decrypt an API key."""
         if not is_encrypted:
-            return key_value
-        
+            return encrypted_key
+        from app.encryption import encryptor
         try:
-            return encryptor.decrypt(key_value)
-        except Exception as e:
-            print(f"[ERROR] API key decryption failed: {e}")
+            return encryptor.decrypt(encrypted_key)
+        except Exception:
             return "[DECRYPTION_ERROR]"
-
+    
     @staticmethod
     def get_profile():
+        """Get the user profile."""
         with get_db_session() as session:
             profile = session.query(Profile).first()
-            if profile:
-                return {
-                    'id': profile.id,
-                    'display_name': profile.display_name,
-                    'partner_name': profile.partner_name,
-                    'affection': profile.affection,
-                    'theme': profile.theme,
-                    'memory': json.loads(profile.memory_json),
-                    'session_history': json.loads(profile.session_history_json),
-                    'global_knowledge': json.loads(profile.global_knowledge_json),
-                    'providers_config': json.loads(profile.providers_config_json),
-                    'context': json.loads(profile.context or '{}'),
-                    'image_model': profile.image_model or 'hunyuan',
-                    'vision_model': profile.vision_model if hasattr(profile, 'vision_model') and profile.vision_model else 'moonshotai/kimi-k2.5',
-                    'created_at': profile.created_at,
-                    'updated_at': profile.updated_at
-                }
-            return None
-
+            if not profile:
+                profile = Profile()
+                session.add(profile)
+                session.commit()
+                session.refresh(profile)
+            
+            return {
+                'id': profile.id,
+                'display_name': profile.display_name,
+                'partner_name': profile.partner_name,
+                'affection': profile.affection,
+                'theme': profile.theme,
+                'memory': json.loads(profile.memory_json),
+                'session_history': json.loads(profile.session_history_json),
+                'global_knowledge': json.loads(profile.global_knowledge_json),
+                'providers_config': json.loads(profile.providers_config_json),
+                'context': json.loads(profile.context),
+                'image_model': profile.image_model,
+                'vision_model': profile.vision_model,
+                'created_at': profile.created_at,
+                'updated_at': profile.updated_at
+            }
+    
     @staticmethod
     def update_profile(updates):
+        """Update the user profile."""
         with get_db_session() as session:
             profile = session.query(Profile).first()
             if not profile:
                 return
             
             for key, value in updates.items():
-                if key in ['memory', 'session_history', 'global_knowledge', 'providers_config']:
-                    setattr(profile, f"{key}_json", json.dumps(value))
-                elif key == 'context':
-                    setattr(profile, 'context', json.dumps(value))
-                else:
+                if hasattr(profile, key):
                     setattr(profile, key, value)
+                elif key == 'memory':
+                    profile.memory_json = json.dumps(value)
+                elif key == 'session_history':
+                    profile.session_history_json = json.dumps(value)
+                elif key == 'global_knowledge':
+                    profile.global_knowledge_json = json.dumps(value)
+                elif key == 'providers_config':
+                    profile.providers_config_json = json.dumps(value)
+                elif key == 'context':
+                    profile.context = json.dumps(value)
             
             profile.updated_at = datetime.now()
             session.commit()
-
+    
     @staticmethod
     def get_context():
+        """Get the user context."""
         with get_db_session() as session:
             profile = session.query(Profile).first()
             if profile:
@@ -502,9 +422,10 @@ class Database:
                 except (json.JSONDecodeError, TypeError):
                     return {}
             return {}
-
+    
     @staticmethod
     def update_context(context_dict):
+        """Update the user context."""
         with get_db_session() as session:
             profile = session.query(Profile).first()
             if not profile:
@@ -512,9 +433,10 @@ class Database:
             profile.context = json.dumps(context_dict)
             profile.updated_at = datetime.now()
             session.commit()
-
+    
     @staticmethod
     def get_api_keys(key_name=None):
+        """Get API keys (decrypted)."""
         with get_db_session() as session:
             query = session.query(APIKey)
             if key_name:
@@ -524,7 +446,6 @@ class Database:
             decrypted_keys = {}
             
             for key in keys:
-                # Hanya decrypt jika ini API key (bukan pesan)
                 if key.key_encrypted:
                     decrypted_key = Database._decrypt_api_key(key.key_value, True)
                     if decrypted_key != "[DECRYPTION_ERROR]":
@@ -533,14 +454,16 @@ class Database:
                     decrypted_keys[key.key_name] = key.key_value
             
             return decrypted_keys
-
+    
     @staticmethod
     def get_api_key(key_name):
+        """Get a single API key."""
         keys = Database.get_api_keys(key_name)
         return keys.get(key_name)
-
+    
     @staticmethod
     def add_api_key(key_name, key_value):
+        """Add or update an API key."""
         with get_db_session() as session:
             encrypted_key = Database._encrypt_api_key(key_value)
             is_encrypted = encrypted_key != key_value
@@ -559,16 +482,19 @@ class Database:
             
             session.commit()
             return True
-
+    
     @staticmethod
     def remove_api_key(key_name):
+        """Remove an API key."""
         with get_db_session() as session:
             deleted = session.query(APIKey).filter(APIKey.key_name == key_name).delete()
             session.commit()
             return deleted > 0
 
+
     @staticmethod
     def create_session(name="New Chat"):
+        """Create a new chat session."""
         with get_db_session() as session:
             chat_session = ChatSession(
                 name=name,
@@ -580,6 +506,7 @@ class Database:
 
     @staticmethod
     def get_active_session():
+        """Get the currently active session."""
         with get_db_session() as session:
             active_session = session.query(ChatSession).filter_by(is_active=True).first()
             
@@ -603,25 +530,22 @@ class Database:
 
     @staticmethod
     def get_all_sessions():
+        """Get all sessions ordered by updated_at."""
         with get_db_session() as session:
             sessions = session.query(ChatSession).order_by(ChatSession.updated_at.desc()).all()
-            result = []
-            
-            for session_obj in sessions:
-                result.append({
-                    'id': session_obj.id,
-                    'name': session_obj.name,
-                    'is_active': session_obj.is_active,
-                    'message_count': session_obj.message_count,
-                    'memory': json.loads(session_obj.memory_json),
-                    'created_at': session_obj.created_at,
-                    'updated_at': session_obj.updated_at
-                })
-            
-            return result
+            return [{
+                'id': s.id,
+                'name': s.name,
+                'is_active': s.is_active,
+                'message_count': s.message_count,
+                'memory': json.loads(s.memory_json),
+                'created_at': s.created_at,
+                'updated_at': s.updated_at
+            } for s in sessions]
 
     @staticmethod
     def switch_session(session_id):
+        """Switch to a different session."""
         with get_db_session() as session:
             session.query(ChatSession).update({'is_active': False})
             
@@ -635,6 +559,7 @@ class Database:
 
     @staticmethod
     def rename_session(session_id, new_name):
+        """Rename a session."""
         with get_db_session() as session:
             chat_session = session.query(ChatSession).filter_by(id=session_id).first()
             if chat_session:
@@ -646,13 +571,13 @@ class Database:
 
     @staticmethod
     def delete_session(session_id):
+        """Delete a session."""
         with get_db_session() as session:
             chat_session = session.query(ChatSession).filter_by(id=session_id).first()
             if not chat_session:
                 return False
             
             was_active = chat_session.is_active
-            
             session.delete(chat_session)
             
             if was_active:
@@ -665,146 +590,71 @@ class Database:
 
     @staticmethod
     def get_session_memory(session_id):
-        with get_db_session() as session:
-            chat_session = session.query(ChatSession).filter_by(id=session_id).first()
-            if chat_session and chat_session.memory_json:
-                try:
-                    return json.loads(chat_session.memory_json)
-                except json.JSONDecodeError:
-                    return {}
-            return {}
-
-    @staticmethod
-    def update_session_memory(session_id, memory_data):
+        """Get session memory."""
         with get_db_session() as session:
             chat_session = session.query(ChatSession).filter_by(id=session_id).first()
             if chat_session:
-                chat_session.memory_json = json.dumps(memory_data)
-                chat_session.updated_at = datetime.now()
-                session.commit()
+                return json.loads(chat_session.memory_json)
+            return {
+                'session_context': '',
+                'last_summarized': 'Never',
+                'last_summary_count': 0,
+                'last_message_time': None
+            }
 
     @staticmethod
-    def add_message(role, content, session_id=None, image_paths=None):
+    def update_session_memory(session_id, memory_update):
+        """Update session memory."""
+        with get_db_session() as session:
+            chat_session = session.query(ChatSession).filter_by(id=session_id).first()
+            if chat_session:
+                current_memory = json.loads(chat_session.memory_json)
+                current_memory.update(memory_update)
+                chat_session.memory_json = json.dumps(current_memory)
+                session.commit()
+                return True
+            return False
+
+    @staticmethod
+    def add_message(role, content, session_id=None, timestamp=None, image_paths=None):
+        """Add a message to the conversation."""
+        if timestamp is None:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
         if session_id is None:
             active_session = Database.get_active_session()
             session_id = active_session['id']
         
         with get_db_session() as session:
-            local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            # TIDAK LAGI mengenkripsi pesan, simpan langsung
-            message = Message(
+            new_message = Message(
                 session_id=session_id,
                 role=role,
-                content=content,  # Langsung simpan tanpa enkripsi
-                content_encrypted=False,  # Selalu False untuk pesan baru
-                timestamp=local_time,
-                image_paths=json.dumps(image_paths) if image_paths else None
+                content=content,
+                timestamp=timestamp
             )
-            session.add(message)
+            if image_paths:
+                new_message.image_paths = json.dumps(image_paths)
+            
+            session.add(new_message)
             
             # Update session message count
             chat_session = session.query(ChatSession).filter_by(id=session_id).first()
-            if chat_session and role in ['user', 'assistant']:
+            if chat_session:
                 chat_session.message_count += 1
                 chat_session.updated_at = datetime.now()
-                # Update last_message_time for idle detection
-                try:
-                    mem = json.loads(chat_session.memory_json) if chat_session.memory_json else {}
-                    mem['last_message_time'] = datetime.now().isoformat()
-                    chat_session.memory_json = json.dumps(mem)
-                except Exception:
-                    pass
             
             session.commit()
+            return new_message.id
 
     @staticmethod
-    def add_image_tools_message(image_url, session_id=None):
+    def get_chat_history(session_id=None, limit=1000, recent=False):
+        """Get chat history for a session."""
         if session_id is None:
             active_session = Database.get_active_session()
             session_id = active_session['id']
         
         with get_db_session() as session:
-            local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            message = Message(
-                session_id=session_id,
-                role='image_tools',
-                content=image_url,
-                content_encrypted=False,
-                timestamp=local_time
-            )
-            session.add(message)
-            session.commit()
-
-    @staticmethod
-    def add_tool_result(tool_name, result_content, session_id=None):
-        """
-        Store tool result in database with tool-specific role.
-        
-        The result_content is expected to be a fully formatted markdown
-        contract (``<details>`` block) returned by ``build_markdown_contract``.
-        It is stored as-is — no additional wrapping is applied.
-        
-        Args:
-            tool_name (str): Name of the tool that was executed
-            result_content (str): Formatted markdown contract from tool execution
-            session_id (int, optional): Session ID. Defaults to active session if None.
-        """
-        if session_id is None:
-            active_session = Database.get_active_session()
-            session_id = active_session['id']
-        
-        # Use tool-specific role from TOOL_ROLES mapping
-        role = TOOL_ROLES.get(tool_name, f'{tool_name}_tools')
-        
-        with get_db_session() as session:
-            local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            message = Message(
-                session_id=session_id,
-                role=role,
-                content=result_content,
-                content_encrypted=False,
-                timestamp=local_time
-            )
-            session.add(message)
-            session.commit()
-
-    @staticmethod
-    def add_system_note(content, session_id=None):
-        if session_id is None:
-            active_session = Database.get_active_session()
-            session_id = active_session['id']
-        
-        with get_db_session() as session:
-            local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            message = Message(
-                session_id=session_id,
-                role='system',
-                content=content,
-                content_encrypted=False,
-                timestamp=local_time
-            )
-            session.add(message)
-            session.commit()
-
-    @staticmethod
-    def add_memory_note(content, session_id=None):
-        Database.add_system_note(content, session_id)
-        
-    @staticmethod
-    def get_chat_history(session_id=None, limit=None, recent=False):
-        if session_id is None:
-            active_session = Database.get_active_session()
-            session_id = active_session['id']
-        
-        with get_db_session() as session:
-            query = session.query(Message).filter(
-                Message.session_id == session_id,
-                Message.role.in_(['user', 'assistant'] + ALL_TOOL_ROLES)
-            )
+            query = session.query(Message).filter_by(session_id=session_id)
             
             if recent and limit:
                 messages = query.order_by(Message.timestamp.desc()).limit(limit).all()
@@ -814,29 +664,150 @@ class Database:
             else:
                 messages = query.order_by(Message.timestamp.asc()).all()
             
-            # Tidak perlu dekripsi karena pesan tidak terenkripsi
-            result_messages = []
-            for msg in messages:
-                # Untuk pesan lama yang masih terenkripsi (backward compatibility)
-                content = msg.content
-                if msg.content_encrypted:
-                    # Coba dekripsi jika masih terenkripsi (legacy data)
-                    try:
-                        content = encryptor.decrypt(content)
-                    except Exception as e:
-                        import logging
-                        logging.error(f"Failed to decrypt message {msg.id}: {e}")
-                        content = "[ENCRYPTED_LEGACY_DATA]"
-                
-                result_messages.append({
-                    'id': msg.id,
-                    'role': msg.role,
-                    'content': content,
-                    'timestamp': msg.timestamp,
-                    'image_paths': json.loads(msg.image_paths) if msg.image_paths else []
-                })
+            return [{
+                'id': m.id,
+                'role': m.role,
+                'content': m.content,
+                'timestamp': m.timestamp,
+                'image_paths': json.loads(m.image_paths) if m.image_paths else None
+            } for m in messages if m.role in ['user', 'assistant', 'system'] + ALL_TOOL_ROLES]
+
+    @staticmethod
+    def clear_chat_history(session_id=None):
+        """Clear chat history for a session."""
+        if session_id is None:
+            active_session = Database.get_active_session()
+            session_id = active_session['id']
+        
+        with get_db_session() as session:
+            session.query(Message).filter_by(session_id=session_id).delete()
             
-            return result_messages
+            chat_session = session.query(ChatSession).filter_by(id=session_id).first()
+            if chat_session:
+                chat_session.message_count = 0
+                chat_session.memory_json = '{}'
+                chat_session.updated_at = datetime.now()
+            
+            session.commit()
+
+    @staticmethod
+    def add_session_event(content, interface="terminal"):
+        """Add a session event message."""
+        active_session = Database.get_active_session()
+        session_id = active_session['id']
+        event_content = f"*{content} on {interface}*"
+        Database.add_message('system', event_content, session_id)
+
+    @staticmethod
+    def get_recent_sessions(limit=20):
+        """Get recent session events across all sessions."""
+        with get_db_session() as session:
+            messages = session.query(Message).filter(
+                Message.role == 'system',
+                Message.content.like('*%')
+            ).order_by(Message.timestamp.desc()).limit(limit).all()
+            
+            return [{
+                'content': m.content,
+                'timestamp': m.timestamp
+            } for m in messages]
+
+    @staticmethod
+    def get_recent_sessions_for_session(session_id, limit=20):
+        """Get recent session events for a specific session."""
+        with get_db_session() as session:
+            messages = session.query(Message).filter(
+                Message.role == 'system',
+                Message.session_id == session_id,
+                Message.content.like('*%')
+            ).order_by(Message.timestamp.desc()).limit(limit).all()
+            
+            return [{
+                'content': m.content,
+                'timestamp': m.timestamp
+            } for m in messages]
+
+    @staticmethod
+    def get_session_messages_count(session_id):
+        """Get message count for a session."""
+        with get_db_session() as session:
+            return session.query(Message).filter(
+                Message.session_id == session_id,
+                Message.role.in_(['user', 'assistant'])
+            ).count()
+
+    @staticmethod
+    def get_session_conversation_summary(session_id, limit=20):
+        """Get a summary of recent conversation."""
+        with get_db_session() as session:
+            messages = session.query(Message).filter(
+                Message.session_id == session_id,
+                Message.role.in_(['user', 'assistant'])
+            ).order_by(Message.timestamp.asc()).limit(limit).all()
+            
+            return "\n".join([
+                f"{'User' if m.role == 'user' else 'AI'}: {m.content[:100]}{'...' if len(m.content) > 100 else ''}"
+                for m in messages
+            ])
+
+    @staticmethod
+    def get_encryption_status():
+        """Get encryption status summary."""
+        with get_db_session() as session:
+            total_messages = session.query(Message).count()
+            encrypted_messages = session.query(Message).filter(Message.content_encrypted).count()
+            total_keys = session.query(APIKey).count()
+            encrypted_keys = session.query(APIKey).filter(APIKey.key_encrypted).count()
+            
+            return {
+                'messages': {
+                    'total': total_messages,
+                    'encrypted': encrypted_messages,
+                    'policy': 'NO_ENCRYPTION'
+                },
+                'api_keys': {
+                    'total': total_keys,
+                    'encrypted': encrypted_keys,
+                    'policy': 'FULL_ENCRYPTION'
+                }
+            }
+
+    @staticmethod
+    def get_all_encrypted_messages():
+        """Get all encrypted messages (for migration)."""
+        with get_db_session() as session:
+            return [{
+                'id': m.id,
+                'session_id': m.session_id,
+                'role': m.role,
+                'content': m.content,
+                'timestamp': m.timestamp
+            } for m in session.query(Message).filter(Message.content_encrypted).all()]
+
+    @staticmethod
+    def batch_decrypt_messages(message_ids):
+        """Batch decrypt messages."""
+        decrypted_count = 0
+        failed_count = 0
+        
+        with get_db_session() as session:
+            for msg_id in message_ids:
+                try:
+                    msg = session.query(Message).filter_by(id=msg_id).first()
+                    if msg and msg.content_encrypted:
+                        from app.encryption import encryptor
+                        msg.content = encryptor.decrypt(msg.content)
+                        msg.content_encrypted = False
+                        decrypted_count += 1
+                        if decrypted_count % 100 == 0:
+                            session.commit()
+                except Exception as e:
+                    failed_count += 1
+                    print(f"Failed to decrypt message {msg_id}: {e}")
+            
+            session.commit()
+        
+        return {'decrypted': decrypted_count, 'failed': failed_count, 'total': len(message_ids)}
 
     @staticmethod
     def get_chat_history_for_ai(session_id=None, limit=None, recent=False):
@@ -868,14 +839,7 @@ class Database:
             formatted_messages = []
             for msg in messages:
                 content = msg.content
-                if msg.content_encrypted:
-                    try:
-                        content = encryptor.decrypt(content)
-                    except Exception as e:
-                        import logging
-                        logging.error(f"Failed to decrypt message {msg.id}: {e}")
-                        content = "[ENCRYPTED_LEGACY_DATA]"
-
+                
                 # Skip event_log roles
                 if msg.role == 'event_log':
                     continue
@@ -916,9 +880,77 @@ class Database:
                     })
 
             return formatted_messages
-    
+
+    @staticmethod
+    def add_image_tools_message(image_url, session_id=None):
+        """Add an image tools message."""
+        if session_id is None:
+            active_session = Database.get_active_session()
+            session_id = active_session['id']
+        
+        with get_db_session() as session:
+            local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            message = Message(
+                session_id=session_id,
+                role='image_tools',
+                content=image_url,
+                content_encrypted=False,
+                timestamp=local_time
+            )
+            session.add(message)
+            session.commit()
+
+    @staticmethod
+    def add_tool_result(tool_name, result_content, session_id=None):
+        """
+        Store tool result in database with tool-specific role.
+        The result_content is expected to be a fully formatted markdown contract.
+        """
+        if session_id is None:
+            active_session = Database.get_active_session()
+            session_id = active_session['id']
+        
+        role = TOOL_ROLES.get(tool_name, f'{tool_name}_tools')
+        
+        with get_db_session() as session:
+            local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            message = Message(
+                session_id=session_id,
+                role=role,
+                content=result_content,
+                content_encrypted=False,
+                timestamp=local_time
+            )
+            session.add(message)
+            session.commit()
+
+    @staticmethod
+    def add_system_note(content, session_id=None):
+        """Add a system note message."""
+        if session_id is None:
+            active_session = Database.get_active_session()
+            session_id = active_session['id']
+        
+        with get_db_session() as session:
+            local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            message = Message(
+                session_id=session_id,
+                role='system',
+                content=content,
+                content_encrypted=False,
+                timestamp=local_time
+            )
+            session.add(message)
+            session.commit()
+
+    @staticmethod
+    def add_memory_note(content, session_id=None):
+        """Add a memory note (alias for add_system_note)."""
+        Database.add_system_note(content, session_id)
+
     @staticmethod
     def _extract_command_from_markdown_contract(content):
+        """Extract command from markdown contract."""
         import re
         if not content:
             return content
@@ -926,239 +958,27 @@ class Database:
         if m:
             return m.group(1).strip()
         return content
-    
+
     @staticmethod
     def _extract_raw_result_from_markdown_contract(content):
-        """Extract raw result from markdown contract, stripping all formatting."""
+        """Extract raw result from markdown contract, stripping formatting."""
         import re
         if not content:
             return content
 
         result = content
-
-        # Remove <details> block wrapper entirely
         result = re.sub(r'<details>\s*<summary>.*?</summary>', '', result, flags=re.DOTALL)
         result = re.sub(r'</details>', '', result, flags=re.DOTALL)
-
-        # Remove bash code block (contains the command)
         result = re.sub(r'```bash\n.*?\n```', '', result, flags=re.DOTALL)
-
-        # Remove any other code fences
         result = re.sub(r'```[\w]*\n?', '', result)
         result = re.sub(r'```', '', result)
-
-        # Remove blockquote markers (> )
         result = re.sub(r'^>\s*', '', result, flags=re.MULTILINE)
-
-        # Remove HTML tags
         result = re.sub(r'<[^>]+>', '', result)
-
-        # Clean up whitespace
         result = re.sub(r'^\n+', '', result)
         result = re.sub(r'\n+$', '', result)
         result = result.strip()
 
         return result
-
-    @staticmethod
-    def clear_chat_history(session_id=None):
-        if session_id is None:
-            active_session = Database.get_active_session()
-            session_id = active_session['id']
-        
-        with get_db_session() as session:
-            session.query(Message).filter(Message.session_id == session_id).delete()
-            
-            chat_session = session.query(ChatSession).filter_by(id=session_id).first()
-            if chat_session:
-                chat_session.message_count = 0
-                chat_session.updated_at = datetime.now()
-            
-            session.commit()
-
-    @staticmethod
-    def add_session_event(content, interface="terminal"):
-        active_session = Database.get_active_session()
-        session_id = active_session['id']
-        
-        event_content = f"*{content} on {interface}*"
-        Database.add_message('system', event_content, session_id)
-
-    @staticmethod
-    def get_recent_sessions(limit=20):
-        with get_db_session() as session:
-            messages = session.query(Message).filter(
-                Message.role == 'system',
-                Message.content.like('*%')
-            ).order_by(Message.timestamp.desc()).limit(limit).all()
-            
-            events = []
-            for msg in messages:
-                content = msg.content
-                if msg.content_encrypted:
-                    try:
-                        content = encryptor.decrypt(content)
-                    except Exception as e:
-                        import logging
-                        logging.error(f"Failed to decrypt message {msg.id}: {e}")
-                        content = "[ENCRYPTED_LEGACY_DATA]"
-                
-                events.append({
-                    'content': content,
-                    'timestamp': msg.timestamp
-                })
-            
-            return events
-
-    @staticmethod
-    def get_recent_sessions_for_session(session_id, limit=20):
-        with get_db_session() as session:
-            messages = session.query(Message).filter(
-                Message.role == 'system',
-                Message.session_id == session_id,
-                Message.content.like('*%')
-            ).order_by(Message.timestamp.desc()).limit(limit).all()
-            
-            events = []
-            for msg in messages:
-                content = msg.content
-                if msg.content_encrypted:
-                    try:
-                        content = encryptor.decrypt(content)
-                    except Exception as e:
-                        import logging
-                        logging.error(f"Failed to decrypt message {msg.id}: {e}")
-                        content = "[ENCRYPTED_LEGACY_DATA]"
-                
-                events.append({
-                    'content': content,
-                    'timestamp': msg.timestamp
-                })
-            
-            return events
-
-    @staticmethod
-    def get_session_messages_count(session_id):
-        with get_db_session() as session:
-            count = session.query(Message).filter(
-                Message.session_id == session_id,
-                Message.role.in_(['user', 'assistant'])
-            ).count()
-            return count
-
-    @staticmethod
-    def get_session_conversation_summary(session_id, limit=20):
-        with get_db_session() as session:
-            messages = session.query(Message).filter(
-                Message.session_id == session_id,
-                Message.role.in_(['user', 'assistant'])
-            ).order_by(Message.timestamp.asc()).limit(limit).all()
-            
-            summary_parts = []
-            for msg in messages:
-                role_label = "User" if msg.role == 'user' else "AI"
-                content = msg.content
-                
-                # Handle legacy encrypted data
-                if msg.content_encrypted:
-                    try:
-                        content = encryptor.decrypt(content)
-                    except Exception as e:
-                        import logging
-                        logging.error(f"Failed to decrypt message {msg.id}: {e}")
-                        content = "[ENCRYPTED_DATA]"
-                
-                # Truncate if too long
-                content = content[:100]
-                if len(msg.content) > 100:
-                    content += "..."
-                
-                summary_parts.append(f"{role_label}: {content}")
-            
-            return "\n".join(summary_parts)
-
-    @staticmethod
-    def get_encryption_status():
-        with get_db_session() as session:
-            total_messages = session.query(Message).count()
-            encrypted_messages = session.query(Message).filter(Message.content_encrypted).count()
-            
-            total_keys = session.query(APIKey).count()
-            encrypted_keys = session.query(APIKey).filter(APIKey.key_encrypted).count()
-            
-            return {
-                'messages': {
-                    'total_messages': total_messages,
-                    'encrypted_messages': encrypted_messages,
-                    'encryption_policy': 'NO_ENCRYPTION'  # Policy baru
-                },
-                'api_keys': {
-                    'total_keys': total_keys,
-                    'encrypted_keys': encrypted_keys,
-                    'encryption_policy': 'FULL_ENCRYPTION'  # API key tetap terenkripsi
-                },
-                'summary': {
-                    'message_encryption': 'DISABLED',
-                    'api_key_encryption': 'ENABLED',
-                    'legacy_encrypted_messages': encrypted_messages
-                }
-            }
-
-    @staticmethod
-    def get_all_encrypted_messages():
-        """Get all messages that are still encrypted (for migration purposes)"""
-        with get_db_session() as session:
-            messages = session.query(Message).filter(Message.content_encrypted).all()
-            
-            result = []
-            for msg in messages:
-                result.append({
-                    'id': msg.id,
-                    'session_id': msg.session_id,
-                    'role': msg.role,
-                    'content': msg.content,
-                    'timestamp': msg.timestamp
-                })
-            
-            return result
-
-    @staticmethod
-    def batch_decrypt_messages(message_ids):
-        """Batch decrypt messages (for migration tool)"""
-        decrypted_count = 0
-        failed_count = 0
-        
-        with get_db_session() as session:
-            for msg_id in message_ids:
-                try:
-                    msg = session.query(Message).filter(Message.id == msg_id).first()
-                    if msg and msg.content_encrypted:
-                        # Decrypt the content
-                        decrypted_content = encryptor.decrypt(msg.content)
-                        
-                        # Update the message
-                        msg.content = decrypted_content
-                        msg.content_encrypted = False
-                        
-                        decrypted_count += 1
-                        
-                        # Commit every 100 messages
-                        if decrypted_count % 100 == 0:
-                            session.commit()
-                            
-                except Exception as e:
-                    failed_count += 1
-                    print(f"Failed to decrypt message {msg_id}: {e}")
-                    continue
-            
-            # Final commit
-            session.commit()
-        
-        return {
-            'decrypted': decrypted_count,
-            'failed': failed_count,
-            'total': len(message_ids)
-        }
 
 # Initialize database
 init_db()
