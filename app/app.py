@@ -412,15 +412,19 @@ def handle_user_message(user_message, interface="terminal"):
                 image_content_for_context=img_context,
             )
 
+            is_image_tool = img_context is not None
+
             second_text = second_result if isinstance(second_result, str) else (second_result or "" if second_result else "")
 
             if second_text and second_text.strip():
                 second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_text.strip())
                 Database.add_message('assistant', second_clean, session_id=session_id)
-                final_response = second_clean
-            else:
-                # Synthesis empty/failed — return raw tool output
-                final_response = tool_md
+                # Image tools: show tool output (image visible before reload)
+                # Non-image tools: synthesis response only (already summarized)
+                if is_image_tool:
+                    final_response = tool_md + "\n\n" + second_clean
+                else:
+                    final_response = second_clean
             
             auto_name_session_if_needed(session_id, active_session)
             if should_summarize_memory(profile, user_message, session_id):
@@ -602,15 +606,18 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
                     image_content_for_context=img_context,
                 )
 
+                is_image_tool = img_context is not None
+
                 second_text = second_result if isinstance(second_result, str) else (second_result or "" if second_result else "")
 
                 if second_text and second_text.strip():
                     second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_text.strip())
                     Database.add_message('assistant', second_clean, session_id=session_id)
-                    yield "\n\n" + second_clean
+                    if is_image_tool:
+                        yield tool_md + "\n\n" + second_clean
+                    else:
+                        yield second_clean
                     final_response = second_clean
-                # Extract image path from tool output and send to vision model
-                img_path = _parse_image_result_from_formatted(tool_output.get("markdown", ""))
                 if img_path:
                     # Load image and encode as base64 for vision model
                     img_b64, mime = _load_generated_image_base64(img_path)
