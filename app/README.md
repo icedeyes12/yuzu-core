@@ -75,7 +75,8 @@ graph TD
     G --> G5[embedder.py<br/>Vector embeddings via Chutes]
     G --> G6[models.py<br/>ORM model re-exports]
     
-    H --> H1[registry.py<br/>Tool execution dispatcher]
+    H --> H1[registry.py<br/>Tool execution + schema registry]
+    H --> H1b[schemas.py<br/>ToolParam + ToolDefinition dataclasses]
     H --> H2[multimodal.py<br/>Vision & image caching]
     H --> H3[image_generate.py<br/>Image generation]
     H --> H4[http_request.py<br/>HTTP GET/POST tool]
@@ -93,7 +94,7 @@ The single entry point for all user messages. Handles:
 
 1. Image caching from user messages
 2. Vision model routing when images detected
-3. Tool command detection (`/imagine`, `/request`, `/memory_search`, etc.)
+3. **Standard tool calling** — `tool_calls` from LLM + legacy `/command` fallback
 4. Memory pipeline triggering
 5. Response generation via provider selection
 6. Markdown contract building for tool results
@@ -327,20 +328,81 @@ deepseek-ai/DeepSeek-V3, Qwen/Qwen3-8B, meta-llama/llama-3.3-70b-instruct
 
 ## Tool System
 
-### `tools/registry.py`
+The tool system has two execution modes:
 
-Central tool dispatcher. All tool execution goes through `execute_tool()`.
+1. **Standard tool calling** — OpenAI `function` call format (primary, v2.1+)
+2. **Legacy `/command` text detection** — command-prefixed responses (fallback compat)
 
-**Available tools:**
+### `tools/schemas.py` — Tool Schema Definitions
 
-| Tool | Command | Purpose |
-|------|---------|---------|
-| Image Generation | `/imagine <prompt>` | Generate images via Chutes API |
-| HTTP Request | `/request <url>` | Fetch public HTTPS endpoints |
-| Memory Store | `/memory_store` | Persist important facts |
-| Memory Search | `/memory_search` | Retrieve relevant memories |
+Declarative tool definitions using `ToolParam` and `ToolDefinition` dataclasses.
 
-**Markdown contract format** — tool results are stored in a `<details>` block:
+```python
+@dataclass
+class ToolParam:
+    name: str
+    description: str
+    type: str = "string"
+    required: bool = True
+    default: Optional[str] = None
+
+@dataclass
+class ToolDefinition:
+    name: str
+    description: str
+    parameters: List[ToolParam]
+    requires_session: bool = False
+    is_terminal: bool = False   # skips second LLM pass on success
+    category: str = "general"
+```
+
+### `tools/registry.py` — Central Registry
+
+Single source of truth for tool dispatch. Lazy-loads `TOOL_DEFINITIONS` from each tool module on first access.
+
+**Key exports:**
+- `get_tool_definitions()` — returns list of all registered `ToolDefinition` dicts
+- `get_tool_definition(name)` — returns schema for a specific tool
+- `execute_tool(name, arguments, session_id)` — dispatch and return markdown contract
+- `format_tool_result()` — produces structured `GenerateResult(text, tool_calls)`
+- `get_tool_role(name)` — maps tool name to DB role string
+
+### Tool Dispatch Flow
+
+```mermaid
+flowchart TD
+    A[LLM response] --> B{tool_calls present?}
+    B -->|Yes| C[Structured function call]
+    B -->|No| D{Legacy /command?}
+    D -->|Yes| E[Text command detection]
+    D -->|No| F[Plain text response]
+    C --> G[execute_tool name, args]
+    E --> G
+    G --> H[Markdown contract]
+    H --> I{Terminal tool?}
+    I -->|Yes| J[Return result]
+    I -->|No| K[Synthesis pass]
+    K --> L[Final response]
+    J --> L
+```
+
+**Dispatch priority:**
+1. Structured `tool_calls[0]` from LLM → execute via registry → done
+2. Legacy `/command` text detection → execute via registry → done
+3. Plain text → return as-is
+
+### Registered Tool Schemas
+
+| Tool | Role | Params | Terminal |
+|------|-------|--------|----------|
+| `image_generate` | `image_tools` | `prompt` (str, required) | ✅ |
+| `request` | `request_tools` | `url` (str, required), `method` (str, optional) | ❌ |
+| `memory_search` | `memory_search_tools` | `query` (str, required) | ❌ |
+| `memory_store` | `memory_store_tools` | `fact` (str, required), `category` (str, optional) | ❌ |
+
+### Markdown Contract Format
+
+Tool results are stored in a `<details>` block:
 
 ```html
 <details>
@@ -355,6 +417,18 @@ Yuzu$ /imagine a cute cat
 
 </details>
 ```
+
+### Tool Modules
+
+Each tool module exports a `TOOL_DEFINITION` dict alongside its `execute()` function:
+
+| Module | Purpose |
+|--------|---------|
+| `image_generate.py` | Image generation via Chutes API (HunYuan, Z-Turbo, Qwen) |
+| `http_request.py` | Fetch public HTTPS endpoints with size/type validation |
+| `memory_store.py` | Persist semantic facts with LLM-guided categorization |
+| `memory_search.py` | Hybrid retrieval across semantic + episodic memories |
+| `multimodal.py` | Vision model routing and image caching (non-tool, helpers) |
 
 ---
 
