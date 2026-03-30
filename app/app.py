@@ -3,6 +3,7 @@
 
 import requests
 import os
+import threading
 import re
 import json
 import traceback
@@ -17,7 +18,6 @@ from app.tools.registry import execute_tool, get_tool_role, TOOL_ROLE_MAP
 # Stores the last processed image as base64 for N follow-up turns so the
 # model can compare or reference it without a new tool call.
 # ---------------------------------------------------------------------------
-import threading
 _visual_context_buffer = {}  # session_id -> {"base64": str, "mime": str, "turns_left": int}
 _visual_context_lock = threading.Lock()
 _VISUAL_CONTEXT_TURNS = 3
