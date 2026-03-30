@@ -878,12 +878,7 @@ class AIProviderManager:
         if provider_name not in self.providers:
             return None
         provider = self.providers[provider_name]
-        start_time = time.time()
         try:
-            # Call the provider's raw send_message path but return full response
-            result = provider.send_message(messages, model, **kwargs)
-            # Providers return str, not full dict — we need to return the raw response
-            # So we call requests directly here for full control
             import requests as _req
             headers = {
                 "Authorization": f"Bearer {provider.api_key}",
