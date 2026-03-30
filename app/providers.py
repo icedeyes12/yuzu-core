@@ -24,10 +24,24 @@ class AIProvider:
         raise NotImplementedError
     
     def send_message(self, messages: List[Dict], model: str, **kwargs) -> Optional[str]:
+        """Send a message. Supports tools=[] kwarg for function calling.
+        
+        Returns:
+            str: Natural text response. Tool execution is handled by caller
+                 via parse_tool_calls() on the raw response.
+        """
         raise NotImplementedError
     
     def send_message_streaming(self, messages: List[Dict], model: str, **kwargs) -> Generator[str, None, None]:
         raise NotImplementedError
+    
+    def parse_tool_calls(self, raw_response) -> List[Dict]:
+        """Parse tool_calls from a provider-specific response object.
+
+        Returns list of {"name": str, "arguments": dict, "id": str} or empty list.
+        Override per-provider since response shapes differ.
+        """
+        return []
     
     def test_connection(self) -> bool:
         try:
@@ -451,6 +465,10 @@ class OpenRouterProvider(AIProvider):
                 "typical_p": typical_p,
                 "stream": False
             }
+            # Add tools if provided (for function calling)
+            tools = kwargs.get('tools')
+            if tools:
+                payload["tools"] = tools
 
             # Debug: Log summary (not full payload)
             print(f"[OpenRouter] {model} | max_tokens={max_tokens}")
@@ -552,6 +570,28 @@ class OpenRouterProvider(AIProvider):
                 
         except Exception as e:
             yield f"Error: {str(e)}"
+
+    def parse_tool_calls(self, raw_response) -> List[Dict]:
+        """Parse tool_calls from OpenRouter API response.
+        
+        Returns list of {"name": str, "arguments": dict, "id": str}.
+        """
+        if not isinstance(raw_response, dict):
+            return []
+        try:
+            message = raw_response.get("choices", [{}])[0].get("message", {})
+            tool_calls = message.get("tool_calls", [])
+            results = []
+            for tc in tool_calls:
+                fn = tc.get("function", {})
+                results.append({
+                    "id": tc.get("id", ""),
+                    "name": fn.get("name", ""),
+                    "arguments": json.loads(fn.get("arguments", "{}")),
+                })
+            return results
+        except Exception:
+            return []
 
 class ChutesProvider(AIProvider):
     def __init__(self, config: Dict = None):
@@ -661,6 +701,10 @@ class ChutesProvider(AIProvider):
                 "top_k": top_k,
                 "stream": stream
             }
+            # Add tools if provided (for function calling)
+            tools = kwargs.get('tools')
+            if tools:
+                payload["tools"] = tools
 
             # Debug: Log summary (not full payload)
             print(f"[Chutes] {model} | max_tokens={max_tokens}")
@@ -826,6 +870,52 @@ class AIProviderManager:
         except Exception as e:
             yield f"Streaming error: {str(e)}"
 
+    def send_message_full(self, provider_name: str, model: str, messages: List[Dict], **kwargs) -> Optional[Dict]:
+        """Send a message and return the full API response dict.
+        
+        Lets caller inspect tool_calls. Returns None on failure.
+        """
+        if provider_name not in self.providers:
+            return None
+        provider = self.providers[provider_name]
+        start_time = time.time()
+        try:
+            # Call the provider's raw send_message path but return full response
+            result = provider.send_message(messages, model, **kwargs)
+            # Providers return str, not full dict — we need to return the raw response
+            # So we call requests directly here for full control
+            import requests as _req
+            headers = {
+                "Authorization": f"Bearer {provider.api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/icedeyes12/yuzu-companion",
+                "X-Title": "Yuzu-Companion"
+            }
+            temperature = kwargs.get('temperature', 0.73)
+            max_tokens = kwargs.get('max_tokens', 4096)
+            payload = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "stream": False
+            }
+            tools = kwargs.get('tools')
+            if tools:
+                payload["tools"] = tools
+            resp = _req.post(
+                provider.base_url,
+                headers=headers,
+                json=payload,
+                timeout=kwargs.get('timeout', 180),
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            print(f"[send_message_full] {provider_name} error {resp.status_code}")
+            return None
+        except Exception as e:
+            print(f"[send_message_full] {provider_name} exception: {e}")
+            return None
 
     # Preferred models for internal (non-chat) LLM calls
     _PREFERRED_MODELS = [
