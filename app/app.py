@@ -417,7 +417,7 @@ def handle_user_message(user_message, interface="terminal"):
             if second_text and second_text.strip():
                 second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_text.strip())
                 Database.add_message('assistant', second_clean, session_id=session_id)
-                final_response = tool_md + "\n\n" + second_clean
+                final_response = second_clean
             else:
                 # Synthesis empty/failed — return raw tool output
                 final_response = tool_md
@@ -608,7 +608,7 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
                     second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_text.strip())
                     Database.add_message('assistant', second_clean, session_id=session_id)
                     yield "\n\n" + second_clean
-                    final_response = tool_md + "\n\n" + second_clean
+                    final_response = second_clean
                 # Extract image path from tool output and send to vision model
                 img_path = _parse_image_result_from_formatted(tool_output.get("markdown", ""))
                 if img_path:
@@ -628,7 +628,7 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
                     second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
                     Database.add_message('assistant', second_clean, session_id=session_id)
                     yield "\n\n" + second_clean
-                    final_response = tool_output.get("markdown", str(tool_output)) + "\n\n" + second_clean
+                    final_response = second_clean
 
                 auto_name_session_if_needed(session_id, active_session)
                 if should_summarize_memory(profile, user_message, session_id):
