@@ -88,7 +88,14 @@ def build_tool_contract(
     Returns a ``<details>`` block — the ONLY format stored in DB
     and rendered by the frontend.
     """
-    formatted_output = "\n".join(f"> {line}" for line in output_lines)
+    quoted = []
+    raw = []
+    for line in output_lines:
+        if line.startswith("<img ") or line.startswith("<video "):
+            raw.append(line)
+        else:
+            quoted.append(f"> {line}")
+    formatted_output = "\n".join(quoted) + ("\n\n" + "\n".join(raw) if raw else "")
 
     return (
         f"<details>\n"

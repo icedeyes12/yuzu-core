@@ -393,31 +393,34 @@ def handle_user_message(user_message, interface="terminal"):
             tool_role = get_tool_role(exec_tool_name)
             
             # Save tool output as tool message
-            Database.add_message(tool_role, tool_output.get("markdown", str(tool_output)), session_id=session_id)
-            
-            # PHASE 3: image_tools — 2nd pass with vision model for natural response
-            # Extract image path from tool output and send to vision model
-            img_path = _parse_image_result_from_formatted(tool_output.get("markdown", ""))
+            tool_md = tool_output.get("markdown", str(tool_output))
+            Database.add_message(tool_role, tool_md, session_id=session_id)
+
+            # PHASE 3: SYNTHESIS PASS — 2nd LLM call with tool result so model
+            # can respond naturally based on what the tool returned.
+            # Image tools: also attach the generated image for vision synthesis.
+            img_path = _parse_image_result_from_formatted(tool_md)
+            img_context = None
             if img_path:
-                # Load image and encode as base64 for vision model
                 img_b64, mime = _load_generated_image_base64(img_path)
                 if img_b64:
-                    second_reply = generate_ai_response(
-                        profile, "", interface, session_id,
-                        image_content_for_context=[{"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}}]
-                    )
-                else:
-                    second_reply = None
-            else:
-                second_reply = None
+                    img_context = [{"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}}]
+                    print("[IMAGE TOOL] Attached generated image to synthesis pass")
 
-            if second_reply and second_reply.strip():
-                second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_reply).strip()
+            second_result = generate_ai_response(
+                profile, "", interface, session_id,
+                image_content_for_context=img_context,
+            )
+
+            second_text = second_result if isinstance(second_result, str) else (second_result or "" if second_result else "")
+
+            if second_text and second_text.strip():
+                second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_text.strip())
                 Database.add_message('assistant', second_clean, session_id=session_id)
-                final_response = tool_output.get("markdown", str(tool_output)) + "\n\n" + second_clean
+                final_response = tool_md + "\n\n" + second_clean
             else:
-                # Vision pass failed or no image path — fall back to tool output
-                final_response = tool_output.get("markdown", str(tool_output))
+                # Synthesis empty/failed — return raw tool output
+                final_response = tool_md
             
             auto_name_session_if_needed(session_id, active_session)
             if should_summarize_memory(profile, user_message, session_id):
@@ -580,12 +583,32 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
                 tool_role = get_tool_role(exec_tool_name)
                 
                 # Save tool output as tool message
-                Database.add_message(tool_role, tool_output.get("markdown", str(tool_output)), session_id=session_id)
-                
-                # Yield tool output
-                yield "\n\n" + tool_output.get("markdown", str(tool_output))
+                tool_md = tool_output.get("markdown", str(tool_output))
+                Database.add_message(tool_role, tool_md, session_id=session_id)
 
-                # PHASE 3: image_tools — 2nd pass with vision model for natural response
+                # Yield raw tool output first
+                yield "\n\n" + tool_md
+
+                # PHASE 3: SYNTHESIS PASS — 2nd LLM call with tool result
+                img_path = _parse_image_result_from_formatted(tool_md)
+                img_context = None
+                if img_path:
+                    img_b64, mime = _load_and_attach_generated_image(img_path, [], session_id)
+                    if img_b64:
+                        img_context = [{"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}}]
+
+                second_result = generate_ai_response(
+                    profile, "", interface, session_id,
+                    image_content_for_context=img_context,
+                )
+
+                second_text = second_result if isinstance(second_result, str) else (second_result or "" if second_result else "")
+
+                if second_text and second_text.strip():
+                    second_clean = re.sub(r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_text.strip())
+                    Database.add_message('assistant', second_clean, session_id=session_id)
+                    yield "\n\n" + second_clean
+                    final_response = tool_md + "\n\n" + second_clean
                 # Extract image path from tool output and send to vision model
                 img_path = _parse_image_result_from_formatted(tool_output.get("markdown", ""))
                 if img_path:
