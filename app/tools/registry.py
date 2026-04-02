@@ -66,7 +66,7 @@ def _collect_definitions():
     try:
         from app.tools import http_request
         _TOOL_DEFINITIONS["http_request"] = http_request.TOOL_DEFINITION
-        _TOOL_DEFINITIONS["request"] = http_request.TOOL_DEFINITION  # alias for backward compat
+        _TOOL_DEFINITIONS["request"] = http_request.TOOL_DEFINITION  # alias
     except Exception as e:
         print(f"[registry] Failed to load http_request definition: {e}")
 
