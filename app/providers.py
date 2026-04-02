@@ -917,8 +917,6 @@ class AIProviderManager:
     _PREFERRED_MODELS = [
         'Qwen/Qwen3-Next-80B-A3B-Instruct',
         'Qwen/Qwen3-30B-A3B',
-        'moonshotai/Kimi-K2.5-TEE',
-        'deepseek-ai/DeepSeek-V3-0324',
     ]
 
     def _best_model(self, provider: str) -> Optional[str]:
