@@ -964,8 +964,8 @@ class AIProviderManager:
 
     # Preferred models for internal (non-chat) LLM calls
     _PREFERRED_MODELS = [
-        'Qwen/Qwen3-Next-80B-A3B-Instruct',
         'Qwen/Qwen3-30B-A3B',
+        'Qwen/Qwen3-Next-80B-A3B-Instruct',
     ]
 
     def _best_model(self, provider: str) -> Optional[str]:
@@ -978,8 +978,48 @@ class AIProviderManager:
                 return preferred
         return models[0] if models else None
 
+    def _internal_llm_call(self, messages: List[Dict], **kwargs) -> Optional[str]:
+        """Dedicated internal LLM call for memory extractor, summarizer, etc.
+        
+        Uses Chutes only, with ordered model preference:
+          1. Qwen/Qwen3-30B-A3B  (new, reliable)
+          2. Qwen/Qwen3-Next-80B-A3B-Instruct  (powerful but may be unavailable)
+          3. Other available Chutes models as fallback
+        
+        Logs clearly which model succeeded.
+        """
+        if 'chutes' not in self.providers:
+            return None
+        provider = self.providers['chutes']
+        
+        # Ordered preference: 30B first (reliable), then 80B (powerful), then rest
+        preference = ['Qwen/Qwen3-30B-A3B', 'Qwen/Qwen3-Next-80B-A3B-Instruct']
+        tried = set()
+        
+        # First: try preferred models in order
+        for candidate in preference:
+            if candidate in provider.available_models and candidate not in tried:
+                tried.add(candidate)
+                result = provider.send_message(messages, candidate, **kwargs)
+                if result:
+                    print(f"[internal] chutes/{candidate} OK")
+                    return result
+                print(f"[internal] chutes/{candidate} FAILED, trying next...")
+        
+        # Second: try remaining available models
+        for candidate in provider.available_models:
+            if candidate not in tried:
+                tried.add(candidate)
+                result = provider.send_message(messages, candidate, **kwargs)
+                if result:
+                    print(f"[internal] chutes/{candidate} OK")
+                    return result
+        
+        print("[internal] all Chutes models failed")
+        return None
+
     def auto_send_message(self, messages: List[Dict], **kwargs) -> Optional[str]:
-        """Auto-select Chutes model for internal LLM calls (memory extraction, etc).
+        """Auto-select Chutes model for internal LLM calls.
         
         Stays within Chutes only — retries different Chutes models on failure.
         Does NOT fall back to other providers.
@@ -988,18 +1028,15 @@ class AIProviderManager:
         if provider not in self.providers:
             print("[AIProviderManager] auto_send_message: chutes not available")
             return None
-        
-        provider_obj = self.providers[provider]
-        # Pop model hints so they don't get passed to send_message as duplicate kwargs
-        kwargs.pop('model', None)
-        kwargs.pop('model_name', None)
-        model_hint = None  # already resolved above
-        
+
+        model_hint = kwargs.pop('model', None) or kwargs.pop('model_name', None)
+
         # Build ordered model list: preferred first, then others
         preferred = self._PREFERRED_MODELS
+        provider_obj = self.providers[provider]
         all_models = provider_obj.get_models()
         tried = set()
-        
+
         # First try explicitly requested model
         if model_hint and model_hint in all_models:
             tried.add(model_hint)
@@ -1007,7 +1044,7 @@ class AIProviderManager:
             if result:
                 print(f"[AIProviderManager] auto_send_message: chutes/{model_hint} OK")
                 return result
-        
+
         # Then try preferred models in order
         for candidate in preferred:
             if candidate in all_models and candidate not in tried:
@@ -1016,7 +1053,7 @@ class AIProviderManager:
                 if result:
                     print(f"[AIProviderManager] auto_send_message: chutes/{candidate} OK")
                     return result
-        
+
         # Then try remaining available models
         for candidate in all_models:
             if candidate not in tried:
@@ -1025,7 +1062,7 @@ class AIProviderManager:
                 if result:
                     print(f"[AIProviderManager] auto_send_message: chutes/{candidate} OK")
                     return result
-        
+
         print("[AIProviderManager] auto_send_message: all Chutes models failed")
         return None
 
