@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2026-03-30
+
+### Added — Standard Tool Calling System
+
+- **`app/tools/schemas.py`**: New tool schema system with `ToolParam` and `ToolDefinition` dataclasses
+  - Standardized tool definitions with name, description, and typed parameters
+  - Every tool module now exports `TOOL_DEFINITION` for declarative schema
+
+- **`app/tools/registry.py`**: Central tool registry — single source of truth for dispatch
+  - Lazy-loaded `TOOL_DEFINITIONS` collected from each tool module on first access
+  - `get_tool_definitions()` — returns list of all registered tool schemas
+  - `get_tool_definition(name)` — returns schema for a specific tool
+  - `format_tool_result()` — produces structured `GenerateResult(text, tool_calls)`
+  - Legacy `execute_tool()` and `get_tool_role()` maintained for backward compat
+
+- **`app/tools/__init__.py`**: Re-exports new registry API
+
+### Changed — Provider Tool Support
+
+- **`app/providers.py`**: OpenRouter and Chutes providers now accept `tools=[]` parameter
+  - OpenAI-compatible `function` call schemas injected into chat completions payload
+  - `send_message_full()` — returns `GenerateResult(text, tool_calls, provider, model)`
+  - `parse_tool_calls()` — extracts structured tool calls from LLM response
+
+### Changed — App Orchestration
+
+- **`app/app.py`**: `handle_user_message` now dispatches structured tool_calls first
+  - `ToolCall` and `GenerateResult` dataclasses for typed tool call handling
+  - `generate_ai_response()` calls `send_message_full(tools=[...])` — LLM sees tool schemas
+  - **New priority**: structured `tool_calls[0]` from LLM → execute via registry → done
+  - **Fallback**: legacy `/command` text detection still works (backward compat)
+  - Image tools remain terminal (no synthesis pass on success)
+
+### Tool Schemas Registered
+
+| Tool | Role | Params |
+|---|---|---|
+| `image_generate` | `image_tools` | `prompt` (str, required) |
+| `request` | `request_tools` | `url` (str, required), `method` (str, optional) |
+| `memory_search` | `memory_search_tools` | `query` (str, required) |
+| `memory_store` | `memory_store_tools` | `fact` (str, required), `category` (str, optional) |
+
 ## [2.0.0] - 2026-03-29
 
 ### Changed — Architecture (Breaking)

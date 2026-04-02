@@ -838,13 +838,13 @@ async def api_list_sessions():
 
 
 @app.post("/api/sessions/create")
-async def api_create_session(request: SessionCreateRequest):
+async def api_create_session(http_request: Request, request: SessionCreateRequest):
     try:
         session_id = Database.create_session(request.name)
         Database.switch_session(session_id)
         
         # Reset session flag
-        client_id = _get_session_id(Request)
+        client_id = _get_session_id(http_request)
         _web_session_tracker.pop(client_id, None)
         
         return {"status": "success", "session_id": session_id}

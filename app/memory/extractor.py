@@ -85,9 +85,7 @@ Extract ONLY persistent, high-value facts from the user's messages.
     user_prompt = f"Extract facts from this conversation:\n\n{conversation}\n\nRespond with a JSON array of facts."
 
     try:
-        response = ai_manager.auto_send_message(
-            provider=None,
-            model=None,
+        response = ai_manager._internal_llm_call(
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -100,6 +98,7 @@ Extract ONLY persistent, high-value facts from the user's messages.
 
         import json
         # Robust parse: try full response first, then fallback to truncated-cleanup
+        print(f"[DEBUG extract_semantic_facts] conv_len={len(conversation)} chars, raw_response (first 500): {response[:500]}")
         try:
             facts = json.loads(response)
         except json.JSONDecodeError:
@@ -211,12 +210,10 @@ def generate_episodic_summary(messages) -> str | None:
             prompt_messages.append({"role": "user", "content": f"{label}: {content}"})
 
     try:
-        response = ai_manager.auto_send_message(
-            provider=None,
-            model=None,
+        response = ai_manager._internal_llm_call(
             messages=prompt_messages,
             timeout=30,
-            max_tokens=300,
+            max_tokens=800,
         )
         if response and isinstance(response, str) and response.strip():
             return response.strip()
