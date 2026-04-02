@@ -600,11 +600,24 @@ class ChutesProvider(AIProvider):
         self.api_key = self._load_api_key()
         self.is_available = bool(self.api_key)
         self.available_models = [
-            # Reliable models for Chutes
-            "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE",
             "Qwen/Qwen3-VL-235B-A22B-Instruct",
-            "Qwen/Qwen3-30B-A3B",
+            "Qwen/Qwen3.5-397B-A17B-TEE",
+            "deepseek-ai/DeepSeek-V3-0324",
+            "deepseek-ai/DeepSeek-V3.1",
+            "deepseek-ai/DeepSeek-V3.1-Terminus",
+            "deepseek-ai/DeepSeek-V3.2-Exp",
+            "moonshotai/Kimi-K2-Instruct-0905",
+            "moonshotai/Kimi-K2.5-TEE",
+            "tngtech/DeepSeek-TNG-R1T-Chimera",
+            "tngtech/DeepSeek-TNG-R1T2-Chimera",
             "Qwen/Qwen3-Next-80B-A3B-Instruct",
+            "Qwen/Qwen3-30B-A3B",
+            "Qwen/Qwen3-235B-A22B-Thinking-2507",
+            "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8-TEE",
+            "zai-org/GLM-4.5-TEE",
+            "zai-org/GLM-4.6-TEE",
+            "zai-org/GLM-4.7-TEE",
+            "deepseek-ai/DeepSeek-R1"
         ]
     
     def _normalize_messages_for_chutes(self, messages: List[Dict]) -> List[Dict]:
@@ -662,10 +675,59 @@ class ChutesProvider(AIProvider):
         kwargs.pop('model', None)
         kwargs.pop('model_name', None)
 
-        # Single shot — model selection and retry handled by _internal_llm_call
-        status, data, error = self._chutes_raw(model, messages, kwargs)
-        if status == 200:
-            return data
+        # Determine if model was explicitly requested (user picked it) vs auto-selected
+        model_hint = kwargs.get('model') or kwargs.get('model_name')
+        explicit_model = model_hint and model_hint in self.available_models
+
+        # Retryable error codes — try another Chutes model before giving up
+        retryable_codes = {400, 429, 500, 502, 503, 504}
+
+        attempt = 0
+        last_error = None
+
+        # Try up to 3 Chutes models before falling back
+        max_attempts = 3
+
+        while attempt < max_attempts:
+            attempt += 1
+            current_model = model if attempt == 1 else None
+
+            # On retry, pick next available model (skip if it was explicitly requested)
+            if current_model is None:
+                tried = set()
+                if attempt > 1:
+                    # Already tried model on first attempt
+                    tried.add(model)
+                # Try models in order of preference (Qwen first)
+                priority = [m for m in self.available_models if m not in tried]
+                # Prefer Qwen models for better tool-calling support
+                qwen_first = sorted(priority, key=lambda m: 0 if 'Qwen' in m else 1)
+                for candidate in qwen_first:
+                    if explicit_model and candidate == model_hint:
+                        continue
+                    tried.add(candidate)
+                    current_model = candidate
+                    break
+
+            if not current_model:
+                break
+
+            result = self._chutes_raw(current_model, messages, kwargs)
+            status = result[0]
+            data = result[1]
+
+            if status == 200:
+                return data
+
+            last_error = result[2] if len(result) > 2 else str(status)
+
+            # Only retry on retryable errors
+            if status not in retryable_codes:
+                return None
+
+            print(f"[Chutes] {current_model} failed ({status}), retrying with another model...")
+
+        print(f"[Chutes] All models exhausted, last error: {last_error}")
         return None
 
     def _chutes_raw(self, model: str, messages: List[Dict], kwargs) -> tuple:
@@ -934,9 +996,11 @@ class AIProviderManager:
             "Qwen/Qwen3-Next-80B-A3B-Instruct",
             "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE",
         ]
+        tried = set()
         
         for candidate in preference:
-            if candidate in provider.available_models:
+            if candidate in provider.available_models and candidate not in tried:
+                tried.add(candidate)
                 result = provider.send_message(messages, candidate, **kwargs)
                 if result:
                     print(f"[internal] chutes/{candidate} OK")
