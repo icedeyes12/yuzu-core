@@ -212,7 +212,7 @@ def generate_episodic_summary(messages) -> str | None:
         response = ai_manager._internal_llm_call(
             messages=prompt_messages,
             timeout=30,
-            max_tokens=300,
+            max_tokens=800,
         )
         if response and isinstance(response, str) and response.strip():
             return response.strip()
