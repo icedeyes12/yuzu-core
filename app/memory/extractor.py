@@ -98,6 +98,7 @@ Extract ONLY persistent, high-value facts from the user's messages.
 
         import json
         # Robust parse: try full response first, then fallback to truncated-cleanup
+        print(f"[DEBUG extract_semantic_facts] raw_response (first 500): {response[:500]}")
         try:
             facts = json.loads(response)
         except json.JSONDecodeError:
