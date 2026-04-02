@@ -668,71 +668,116 @@ class ChutesProvider(AIProvider):
         return self.available_models
     
     def send_message(self, messages: List[Dict], model: str, **kwargs) -> Optional[str]:
-        if not self.api_key or model not in self.available_models:
+        if not self.api_key:
             return None
-        
+
+        # Determine if model was explicitly requested (user picked it) vs auto-selected
+        model_hint = kwargs.get('model') or kwargs.get('model_name')
+        explicit_model = model_hint and model_hint in self.available_models
+
+        # Retryable error codes — try another Chutes model before giving up
+        retryable_codes = {400, 429, 500, 502, 503, 504}
+
+        attempt = 0
+        last_error = None
+
+        # Try up to 3 Chutes models before falling back
+        max_attempts = 3
+
+        while attempt < max_attempts:
+            attempt += 1
+            current_model = model if attempt == 1 else None
+
+            # On retry, pick next available model (skip if it was explicitly requested)
+            if current_model is None:
+                tried = set()
+                if attempt > 1:
+                    # Already tried model on first attempt
+                    tried.add(model)
+                # Try models in order of preference (Qwen first)
+                priority = [m for m in self.available_models if m not in tried]
+                # Prefer Qwen models for better tool-calling support
+                qwen_first = sorted(priority, key=lambda m: 0 if 'Qwen' in m else 1)
+                for candidate in qwen_first:
+                    if explicit_model and candidate == model_hint:
+                        continue
+                    tried.add(candidate)
+                    current_model = candidate
+                    break
+
+            if not current_model:
+                break
+
+            result = self._chutes_raw(current_model, messages, kwargs)
+            status = result[0]
+            data = result[1]
+
+            if status == 200:
+                return data
+
+            last_error = result[2] if len(result) > 2 else str(status)
+
+            # Only retry on retryable errors
+            if status not in retryable_codes:
+                return None
+
+            print(f"[Chutes] {current_model} failed ({status}), retrying with another model...")
+
+        print(f"[Chutes] All models exhausted, last error: {last_error}")
+        return None
+
+    def _chutes_raw(self, model: str, messages: List[Dict], kwargs) -> tuple:
+        """Single Chutes API call. Returns (status_code, content_or_None, error_detail)."""
+        messages = self._normalize_messages_for_chutes(list(messages))
+
+        if self.supports_vision(model) and messages:
+            last_user_message = self._get_last_user_message(messages)
+            if last_user_message and multimodal_tools.has_images(last_user_message):
+                vision_messages = self.format_vision_message(last_user_message)
+                messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
+
+        temperature = kwargs.get('temperature', 0.73)
+        max_tokens = kwargs.get('max_tokens', 4096)
+        top_p = kwargs.get('top_p', 0.9)
+        top_k = kwargs.get('top_k', 45)
+        stream = kwargs.get('stream', False)
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "top_p": top_p,
+            "top_k": top_k,
+            "stream": stream
+        }
+        tools = kwargs.get('tools')
+        if tools:
+            payload["tools"] = tools
+
+        print(f"[Chutes] {model} | max_tokens={max_tokens}")
+
         try:
-            # Normalize messages for Chutes API (system message must be first)
-            messages = self._normalize_messages_for_chutes(messages)
-            
-            if self.supports_vision(model) and messages:
-                last_user_message = self._get_last_user_message(messages)
-                if last_user_message and multimodal_tools.has_images(last_user_message):
-                    vision_messages = self.format_vision_message(last_user_message)
-                    messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
-            
-            temperature = kwargs.get('temperature', 0.73)
-            max_tokens = kwargs.get('max_tokens', 4096)
-            top_p = kwargs.get('top_p', 0.9)
-            top_k = kwargs.get('top_k', 45)
-            kwargs.get('typical_p', 0.85)
-            stream = kwargs.get('stream', False)
-            
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            payload = {
-                "model": model,
-                "messages": messages,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "top_p": top_p,
-                "top_k": top_k,
-                "stream": stream
-            }
-            # Add tools if provided (for function calling)
-            tools = kwargs.get('tools')
-            if tools:
-                payload["tools"] = tools
-
-            # Debug: Log summary (not full payload)
-            print(f"[Chutes] {model} | max_tokens={max_tokens}")
-
             response = requests.post(
                 self.base_url,
                 headers=headers,
                 json=payload,
-                timeout=kwargs.get('timeout', 120)
+                timeout=kwargs.get('timeout', 120),
             )
-
-            # Debug: Log response
-            if response.status_code != 200:
-                print(f"[Chutes] Error {response.status_code}: {response.text[:200]}")
-            else:
-                print(f"[Chutes] OK {response.status_code}")
-            
             if response.status_code == 200:
-                result = response.json()
-                return result['choices'][0]['message']['content'].strip()
+                print(f"[Chutes] OK {response.status_code}")
+                return (200, response.json()['choices'][0]['message']['content'].strip())
             else:
-                print(f"[ERROR] Chutes API error {response.status_code}: {response.text}")
-                return None
-                
+                print(f"[Chutes] Error {response.status_code}: {response.text[:200]}")
+                return (response.status_code, None, response.text[:200])
         except Exception as e:
-            print(f"[ERROR] Chutes send_message exception: {str(e)}")
-            return None
+            print(f"[Chutes] Exception: {e}")
+            return (0, None, str(e))
     
     def send_message_streaming(self, messages: List[Dict], model: str, **kwargs) -> Generator[str, None, None]:
         if not self.api_key or model not in self.available_models:
@@ -930,28 +975,51 @@ class AIProviderManager:
         return models[0] if models else None
 
     def auto_send_message(self, messages: List[Dict], **kwargs) -> Optional[str]:
-        """Auto-select provider and model, then dispatch. Fallback wrapper."""
-        model_hint = kwargs.pop('model', None) or kwargs.pop('model_name', None)
-        # Try each available provider in priority order
-        for provider in ['chutes', 'openrouter', 'ollama', 'cerebras']:
-            if provider not in self.providers:
-                continue
-            provider_obj = self.providers[provider]
-            if model_hint:
-                model = model_hint if model_hint in provider_obj.get_models() else provider_obj.get_models()[0]
-            else:
-                model = self._best_model(provider)
-            if not model:
-                continue
-            try:
-                result = provider_obj.send_message(messages, model, **kwargs)
+        """Auto-select Chutes model for internal LLM calls (memory extraction, etc).
+        
+        Stays within Chutes only — retries different Chutes models on failure.
+        Does NOT fall back to other providers.
+        """
+        provider = 'chutes'
+        if provider not in self.providers:
+            print("[AIProviderManager] auto_send_message: chutes not available")
+            return None
+        
+        provider_obj = self.providers[provider]
+        model_hint = kwargs.get('model') or kwargs.get('model_name')
+        
+        # Build ordered model list: preferred first, then others
+        preferred = self._PREFERRED_MODELS
+        all_models = provider_obj.get_models()
+        tried = set()
+        
+        # First try explicitly requested model
+        if model_hint and model_hint in all_models:
+            tried.add(model_hint)
+            result = provider_obj.send_message(messages, model_hint, **kwargs)
+            if result:
+                print(f"[AIProviderManager] auto_send_message: chutes/{model_hint} OK")
+                return result
+        
+        # Then try preferred models in order
+        for candidate in preferred:
+            if candidate in all_models and candidate not in tried:
+                tried.add(candidate)
+                result = provider_obj.send_message(messages, candidate, **kwargs)
                 if result:
-                    print(f"[AIProviderManager] auto_send_message: {provider}/{model} OK")
+                    print(f"[AIProviderManager] auto_send_message: chutes/{candidate} OK")
                     return result
-            except Exception as e:
-                print(f"[AIProviderManager] {provider} failed: {e}")
-                continue
-        print("[AIProviderManager] auto_send_message: all providers failed")
+        
+        # Then try remaining available models
+        for candidate in all_models:
+            if candidate not in tried:
+                tried.add(candidate)
+                result = provider_obj.send_message(messages, candidate, **kwargs)
+                if result:
+                    print(f"[AIProviderManager] auto_send_message: chutes/{candidate} OK")
+                    return result
+        
+        print("[AIProviderManager] auto_send_message: all Chutes models failed")
         return None
 
 _ai_manager_instance = None
