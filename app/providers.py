@@ -902,8 +902,8 @@ class AIProviderManager:
 
     # Preferred models for internal (non-chat) LLM calls
     _PREFERRED_MODELS = [
+        "Qwen/Qwen3-Next-80B-A3B-Instruct",
         "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE",
-        "Qwen/Qwen3-30B-A3B",
     ]
 
     def _best_model(self, provider: str) -> Optional[str]:
@@ -918,10 +918,8 @@ class AIProviderManager:
 
     def _internal_llm_call(self, messages: List[Dict], **kwargs) -> Optional[str]:
         """Dedicated internal LLM call for memory extractor, summarizer, etc.
-          1. Qwen/Qwen3-Next-80B-A3B-Instruct  (powerful, try first)
-          2. unsloth/Llama-3.2-3B-Instruct  (fast, local-style)
-          3. unsloth/gemma-3-27b-it  (Google quality)
-          4. Other available Chutes models as fallback
+          1. Qwen/Qwen3-Next-80B-A3B-Instruct  (primary)
+          2. Qwen/Qwen3-235B-A22B-Instruct-2507-TEE  (fallback)
         
         Logs clearly which model succeeded.
         """
@@ -929,30 +927,20 @@ class AIProviderManager:
             return None
         provider = self.providers['chutes']
         
-        # Ordered preference: 80B first, then Llama 3B, then Gemma, then rest
-        preference = ["Qwen/Qwen3-Next-80B-A3B-Instruct", "unsloth/Llama-3.2-3B-Instruct", "unsloth/gemma-3-27b-it"]
-        tried = set()
+        preference = [
+            "Qwen/Qwen3-Next-80B-A3B-Instruct",
+            "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE",
+        ]
         
-        # First: try preferred models in order
         for candidate in preference:
-            if candidate in provider.available_models and candidate not in tried:
-                tried.add(candidate)
+            if candidate in provider.available_models:
                 result = provider.send_message(messages, candidate, **kwargs)
                 if result:
                     print(f"[internal] chutes/{candidate} OK")
                     return result
-                print(f"[internal] chutes/{candidate} FAILED, trying next...")
+                print(f"[internal] chutes/{candidate} FAILED")
         
-        # Second: try remaining available models
-        for candidate in provider.available_models:
-            if candidate not in tried:
-                tried.add(candidate)
-                result = provider.send_message(messages, candidate, **kwargs)
-                if result:
-                    print(f"[internal] chutes/{candidate} OK")
-                    return result
-        
-        print("[internal] all Chutes models failed")
+        print("[internal] all preferred models failed")
         return None
 
     def auto_send_message(self, messages: List[Dict], **kwargs) -> Optional[str]:
