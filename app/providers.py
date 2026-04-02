@@ -671,6 +671,10 @@ class ChutesProvider(AIProvider):
         if not self.api_key:
             return None
 
+        # Prevent duplicate 'model' kwarg if caller passed it
+        kwargs.pop('model', None)
+        kwargs.pop('model_name', None)
+
         # Determine if model was explicitly requested (user picked it) vs auto-selected
         model_hint = kwargs.get('model') or kwargs.get('model_name')
         explicit_model = model_hint and model_hint in self.available_models
@@ -986,7 +990,10 @@ class AIProviderManager:
             return None
         
         provider_obj = self.providers[provider]
-        model_hint = kwargs.get('model') or kwargs.get('model_name')
+        # Pop model hints so they don't get passed to send_message as duplicate kwargs
+        kwargs.pop('model', None)
+        kwargs.pop('model_name', None)
+        model_hint = None  # already resolved above
         
         # Build ordered model list: preferred first, then others
         preferred = self._PREFERRED_MODELS
