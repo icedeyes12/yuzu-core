@@ -918,6 +918,8 @@ class AIProviderManager:
 
     def _internal_llm_call(self, messages: List[Dict], **kwargs) -> Optional[str]:
         """Dedicated internal LLM call for memory extractor, summarizer, etc.
+        
+        Uses Chutes only, with ordered model preference:
           1. Qwen/Qwen3-Next-80B-A3B-Instruct  (primary)
           2. Qwen/Qwen3-235B-A22B-Instruct-2507-TEE  (fallback)
         
@@ -927,6 +929,7 @@ class AIProviderManager:
             return None
         provider = self.providers['chutes']
         
+        # Ordered preference: Next-80B first, then TEE as fallback
         preference = [
             "Qwen/Qwen3-Next-80B-A3B-Instruct",
             "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE",
@@ -940,7 +943,7 @@ class AIProviderManager:
                     return result
                 print(f"[internal] chutes/{candidate} FAILED")
         
-        print("[internal] all preferred models failed")
+        print("[internal] all Chutes models failed")
         return None
 
     def auto_send_message(self, messages: List[Dict], **kwargs) -> Optional[str]:
