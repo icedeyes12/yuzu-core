@@ -611,6 +611,8 @@ class ChutesProvider(AIProvider):
             "tngtech/DeepSeek-TNG-R1T-Chimera",
             "tngtech/DeepSeek-TNG-R1T2-Chimera",
             "Qwen/Qwen3-Next-80B-A3B-Instruct",
+            "unsloth/Llama-3.2-3B-Instruct",
+            "unsloth/gemma-3-27b-it",
             "Qwen/Qwen3-30B-A3B",
             "Qwen/Qwen3-235B-A22B-Thinking-2507",
             "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8-TEE",
@@ -964,10 +966,8 @@ class AIProviderManager:
 
     # Preferred models for internal (non-chat) LLM calls
     _PREFERRED_MODELS = [
-        'Qwen/Qwen3-30B-A3B',
-        'Qwen/Qwen3-Next-80B-A3B-Instruct',
+        "Qwen/Qwen3-Next-80B-A3B-Instruct",
     ]
-
     def _best_model(self, provider: str) -> Optional[str]:
         """Pick the best available model for internal LLM tasks."""
         if provider not in self.providers:
@@ -980,11 +980,10 @@ class AIProviderManager:
 
     def _internal_llm_call(self, messages: List[Dict], **kwargs) -> Optional[str]:
         """Dedicated internal LLM call for memory extractor, summarizer, etc.
-        
-        Uses Chutes only, with ordered model preference:
-          1. Qwen/Qwen3-30B-A3B  (new, reliable)
-          2. Qwen/Qwen3-Next-80B-A3B-Instruct  (powerful but may be unavailable)
-          3. Other available Chutes models as fallback
+          1. Qwen/Qwen3-Next-80B-A3B-Instruct  (powerful, try first)
+          2. unsloth/Llama-3.2-3B-Instruct  (fast, local-style)
+          3. unsloth/gemma-3-27b-it  (Google quality)
+          4. Other available Chutes models as fallback
         
         Logs clearly which model succeeded.
         """
@@ -992,8 +991,8 @@ class AIProviderManager:
             return None
         provider = self.providers['chutes']
         
-        # Ordered preference: 30B first (reliable), then 80B (powerful), then rest
-        preference = ['Qwen/Qwen3-30B-A3B', 'Qwen/Qwen3-Next-80B-A3B-Instruct']
+        # Ordered preference: 80B first, then Llama 3B, then Gemma, then rest
+        preference = ["Qwen/Qwen3-Next-80B-A3B-Instruct", "unsloth/Llama-3.2-3B-Instruct", "unsloth/gemma-3-27b-it"]
         tried = set()
         
         # First: try preferred models in order
