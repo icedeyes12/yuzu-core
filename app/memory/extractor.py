@@ -85,9 +85,7 @@ Extract ONLY persistent, high-value facts from the user's messages.
     user_prompt = f"Extract facts from this conversation:\n\n{conversation}\n\nRespond with a JSON array of facts."
 
     try:
-        response = ai_manager.auto_send_message(
-            provider=None,
-            model=None,
+        response = ai_manager._internal_llm_call(
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -211,9 +209,7 @@ def generate_episodic_summary(messages) -> str | None:
             prompt_messages.append({"role": "user", "content": f"{label}: {content}"})
 
     try:
-        response = ai_manager.auto_send_message(
-            provider=None,
-            model=None,
+        response = ai_manager._internal_llm_call(
             messages=prompt_messages,
             timeout=30,
             max_tokens=300,

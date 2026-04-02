@@ -60,9 +60,7 @@ Categories:
 Respond with ONLY the category name, nothing else."""
 
     try:
-        response = ai_manager.auto_send_message(
-            provider=None,
-            model=None,
+        response = ai_manager._internal_llm_call(
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Fact: {fact}"},
