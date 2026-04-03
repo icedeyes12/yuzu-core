@@ -214,7 +214,7 @@ def get_facts_by_session(
     params.append(limit)
 
     return pg_fetchall(
-        f"SELECT * FROM semantic_facts WHERE metadata->>'session_id'=%s{extra} LIMIT %s",
+        f"SELECT * FROM semantic_facts WHERE metadata->>'session_id'::int=%s{extra} LIMIT %s",
         params,
     )
 
@@ -311,7 +311,7 @@ def delete_facts_by_session(session_id: int, fact_type: str | None = None) -> in
         params.append(fact_type)
     try:
         with PgSession() as s:
-            s.execute(f"DELETE FROM semantic_facts WHERE metadata->>'session_id'=%s{extra}", params)
+            s.execute(f"DELETE FROM semantic_facts WHERE metadata->>'session_id'::int=%s{extra}", params)
             return s.conn.affected_rows if hasattr(s.conn, "affected_rows") else 0
     except Exception:
         return 0
