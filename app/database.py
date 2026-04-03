@@ -39,6 +39,7 @@ from app.db_pg_models import (
     # Message operations
     add_message as _pg_add_message,
     get_session_messages as _pg_get_session_messages,
+    get_chat_history as _pg_get_chat_history,
     clear_session_messages as _pg_clear_session_messages,
     get_message_count as _pg_get_message_count,
     add_session_event as _pg_add_session_event,
@@ -227,6 +228,14 @@ class Database:
             active_session = Database.get_active_session()
             session_id = active_session['id']
         return _pg_get_session_messages(session_id, limit or 100)
+
+    @staticmethod
+    def get_chat_history(session_id: int | None = None, limit: int | None = None, recent: bool = False) -> list[dict]:
+        """Get chat history for a session."""
+        if session_id is None:
+            active_session = Database.get_active_session()
+            session_id = active_session['id']
+        return _pg_get_chat_history(session_id, limit, recent)
 
     @staticmethod
     def clear_session(session_id: int | None = None) -> bool:

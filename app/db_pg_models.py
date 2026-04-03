@@ -343,14 +343,65 @@ def update_session_memory(session_id: int, memory: dict) -> bool:
 
 
 def get_session_memory(session_id: int) -> dict:
-    """Get session memory from chat_sessions memory_json field."""
-    row = pg_fetchone(
-        "SELECT memory_json FROM chat_sessions WHERE id = %s",
+    """Get session memory from messages table - returns system/memory notes for the session."""
+    rows = pg_fetchall(
+        """
+        SELECT content, role, created_at
+        FROM messages
+        WHERE chat_session_id = %s AND role IN ('system', 'memory')
+        ORDER BY created_at DESC
+        LIMIT 50
+        """,
         (session_id,)
     )
-    if not row:
+    if not rows:
         return {}
-    return _parse_json(row.get('memory_json', '{}'))
+    return {
+        'notes': [{'content': r.get('content'), 'role': r.get('role'), 'timestamp': str(r.get('created_at'))} for r in rows],
+        'count': len(rows)
+    }
+
+
+def get_chat_history(session_id: int, limit: int | None = None, recent: bool = False) -> list[dict]:
+    """Get chat history for a session - returns messages ordered by created_at."""
+    if limit and recent:
+        query = """
+            SELECT id, chat_session_id, role, content, created_at
+            FROM messages
+            WHERE chat_session_id = %s AND role IN ('user', 'assistant', 'system')
+            ORDER BY created_at DESC
+            LIMIT %s
+        """
+        rows = pg_fetchall(query, (session_id, limit))
+        return list(reversed(rows))
+    elif limit:
+        query = """
+            SELECT id, chat_session_id, role, content, created_at
+            FROM messages
+            WHERE chat_session_id = %s AND role IN ('user', 'assistant', 'system')
+            ORDER BY created_at ASC
+            LIMIT %s
+        """
+        rows = pg_fetchall(query, (session_id, limit))
+    else:
+        query = """
+            SELECT id, chat_session_id, role, content, created_at
+            FROM messages
+            WHERE chat_session_id = %s AND role IN ('user', 'assistant', 'system')
+            ORDER BY created_at ASC
+        """
+        rows = pg_fetchall(query, (session_id,))
+    
+    return [
+        {
+            'id': r.get('id'),
+            'session_id': r.get('chat_session_id'),
+            'role': r.get('role'),
+            'content': r.get('content'),
+            'timestamp': str(r.get('created_at', '')),
+        }
+        for r in rows
+    ]
 
 
 def increment_message_count(session_id: int) -> bool:
