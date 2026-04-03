@@ -505,8 +505,8 @@ def add_message(session_id: int, role: str, content: str, image_paths: str | Non
         with PgSession() as s:
             row = s.execute_returning(
                 """
-                INSERT INTO messages (session_id, role, content, timestamp)
-                VALUES (%s, %s, %s, %s) RETURNING id
+                INSERT INTO messages (session_id, role, content, timestamp, content_encrypted)
+                VALUES (%s, %s, %s, %s, FALSE) RETURNING id
                 """,
                 (session_id, role, content, now)
             )
