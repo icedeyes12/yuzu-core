@@ -130,19 +130,20 @@ def upsert_fact(
             limit=1,
             max_distance=0.05,  # cosine similarity threshold
         )
-        if existing:
-            e = existing[0]
-            # Reinforce existing
-            meta = e.get("metadata") or {}
-            new_confidence = min((meta.get("confidence") or 0.5) + 0.1, 1.0)
-            new_access_count = (meta.get("access_count") or 0) + 1
-            meta["confidence"] = new_confidence
-            meta["access_count"] = new_access_count
-            pg_execute(
-                "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
-                (datetime.now(), Json(meta), e["id"]),
-            )
-            return e["id"], True
+        if not existing:
+            return None, False
+        e = existing[0]
+        # Reinforce existing
+        meta = e.get("metadata") or {}
+        new_confidence = min((meta.get("confidence") or 0.5) + 0.1, 1.0)
+        new_access_count = (meta.get("access_count") or 0) + 1
+        meta["confidence"] = new_confidence
+        meta["access_count"] = new_access_count
+        pg_execute(
+            "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
+            (datetime.now(), Json(meta), e["id"]),
+        )
+        return e["id"], True
 
     new_id = save_fact(session_id, content, embedding, fact_type, metadata)
     return new_id, False
@@ -162,6 +163,8 @@ def search_similar(
     Returns list of dicts: {id, content, fact_type, metadata, last_accessed, distance}
     """
     norm_vec = _normalize(embedding)
+    if not norm_vec or len(norm_vec) == 0:
+        return None
     vec_str = "{" + ",".join(str(x) for x in norm_vec) + "}"
 
     conditions = []
