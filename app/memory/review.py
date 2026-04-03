@@ -1,11 +1,11 @@
 # FILE: app/memory/review.py
-# DESCRIPTION: FSRS-style review and decay system for memory
+# DESCRIPTION: FSRS-style review and decay system for memory - uses db_memory
 
-import math
 import os
 import json
 from datetime import datetime
-from app.database import get_db_session, SemanticMemory, EpisodicMemory
+from app.memory.db_memory import decay_facts, increment_importance, FACT_TYPE_STATIC, FACT_TYPE_DYNAMIC
+
 
 _DECAY_STATE_FILE = os.path.join(os.path.dirname(__file__), '.decay_state.json')
 
@@ -30,89 +30,14 @@ def _set_last_decay_time():
         print(f"[WARNING] Could not write decay state: {e}")
 
 
-def _hours_since(dt):
-    """Calculate hours since a given datetime."""
-    if not dt:
-        return 720.0  # Default: 30 days
-    now = datetime.now()
-    if isinstance(dt, str):
-        try:
-            dt = datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')
-        except (ValueError, TypeError):
-            return 720.0
-    return max((now - dt).total_seconds() / 3600.0, 0.0)
-
-
-def decay_semantic_memories(session_id=None):
-    """Apply decay to semantic memories.
-
-    importance *= exp(-time_since_last_access / stability)
-
-    Stability is derived from access_count (more access = more stable).
-    """
-    with get_db_session() as session:
-        query = session.query(SemanticMemory)
-        if session_id is not None:
-            query = query.filter(SemanticMemory.session_id == session_id)
-        memories = query.all()
-
-        for mem in memories:
-            hours = _hours_since(mem.last_accessed)
-            stability = max(24.0 * (1 + (mem.access_count or 0) * 0.5), 24.0)
-            decay_factor = math.exp(-hours / stability)
-            mem.importance = max((mem.importance or 0.5) * decay_factor, 0.01)
-
-        session.commit()
-
-
-def decay_episodic_memories(session_id=None):
-    """Apply decay to episodic memories.
-
-    importance *= exp(-time_since_last_access / stability)
-    """
-    with get_db_session() as session:
-        query = session.query(EpisodicMemory)
-        if session_id is not None:
-            query = query.filter(EpisodicMemory.session_id == session_id)
-        memories = query.all()
-
-        for mem in memories:
-            hours = _hours_since(mem.last_accessed)
-            stability = max(48.0 * (1 + (mem.access_count or 0) * 0.3), 48.0)
-            decay_factor = math.exp(-hours / stability)
-            mem.importance = max((mem.importance or 0.5) * decay_factor, 0.01)
-
-        session.commit()
-
-
-def reinforce_memory(memory_id, memory_type='semantic'):
-    """Increase importance when a memory is retrieved.
-
-    Args:
-        memory_id: ID of the memory to reinforce.
-        memory_type: 'semantic' or 'episodic'.
-    """
-    with get_db_session() as session:
-        if memory_type == 'semantic':
-            mem = session.query(SemanticMemory).filter(
-                SemanticMemory.id == memory_id
-            ).first()
-        else:
-            mem = session.query(EpisodicMemory).filter(
-                EpisodicMemory.id == memory_id
-            ).first()
-
-        if mem:
-            mem.importance = min((mem.importance or 0.5) + 0.05, 1.0)
-            mem.access_count = (mem.access_count or 0) + 1
-            mem.last_accessed = datetime.now()
-            session.commit()
-
-
 def run_decay(session_id=None, force=False):
     """Run full decay cycle on all memory types.
 
     Skips if decay ran within the last 6 hours unless force=True.
+    
+    Args:
+        session_id: optional session to limit decay scope
+        force: run even if recently ran
     """
     if not force:
         last = _get_last_decay_time()
@@ -127,14 +52,30 @@ def run_decay(session_id=None, force=False):
                 pass
 
     print("[decay] Running memory decay...")
+    
     try:
-        decay_semantic_memories(session_id)
+        # Decay semantic memories (static facts)
+        count_semantic = decay_facts(session_id=session_id, fact_type=FACT_TYPE_STATIC)
+        print(f"[decay] Decayed {count_semantic} semantic memories")
     except Exception as e:
         print(f"[WARNING] Semantic decay failed: {e}")
+    
     try:
-        decay_episodic_memories(session_id)
+        # Decay episodic memories (dynamic facts from episodic_memories)
+        count_episodic = decay_facts(session_id=session_id, fact_type=FACT_TYPE_DYNAMIC)
+        print(f"[decay] Decayed {count_episodic} episodic memories")
     except Exception as e:
         print(f"[WARNING] Episodic decay failed: {e}")
 
     _set_last_decay_time()
     print("[decay] Done.")
+
+
+def reinforce_memory(memory_id, memory_type='semantic'):
+    """Increase importance when a memory is retrieved.
+
+    Args:
+        memory_id: ID of the memory to reinforce.
+        memory_type: 'semantic' or 'episodic' (ignored, all use same table)
+    """
+    increment_importance(memory_id, delta=0.05, cap=1.0)

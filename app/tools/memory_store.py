@@ -1,8 +1,8 @@
 # FILE: app/tools/memory_store.py
-# DESCRIPTION: Tool for storing memories to vector database
+# DESCRIPTION: Tool for storing memories to PostgreSQL vector database
 
-from datetime import datetime
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
+from app.memory.db_memory import save_fact, search_similar, FACT_TYPE_STATIC
 
 
 TOOL_DEFINITION = ToolDefinition(
@@ -82,11 +82,10 @@ Respond with ONLY the category name, nothing else."""
 
 def execute(arguments, **kwargs):
     session_id = kwargs.get("session_id")
-    from app.database import Database, get_db_session, SemanticMemory
-    from app.memory.embedder import cosine_similarity, blob_to_vec, vec_to_blob
-    from app.memory.vector_store import mark_dirty
+    from app.db_pg_models import get_profile
+    from app.memory.embedder import embed_texts
 
-    profile = Database.get_profile() or {}
+    profile = get_profile() or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     fact = arguments.get("fact", "").strip()
@@ -122,8 +121,7 @@ def execute(arguments, **kwargs):
     # Embed the fact text
     fact_embed_text = f"[{category}] {fact}"
     try:
-        from app.memory.embedder import embed_texts as _embed
-        vecs = _embed([fact_embed_text])
+        vecs = embed_texts([fact_embed_text])
         vector = vecs[0]
     except Exception as e:
         print(f"[memory_store] Embed failed: {e}")
@@ -134,57 +132,57 @@ def execute(arguments, **kwargs):
             partner_name,
         )
 
-    # Check for duplicate using cosine similarity
-    with get_db_session() as session:
-        existing = session.query(SemanticMemory).filter(
-            SemanticMemory.session_id == session_id,
-        ).all()
-
-        duplicate_id = None
-        for rec in existing:
-            if rec.embedding_vector:
-                try:
-                    rec_vec = blob_to_vec(rec.embedding_vector)
-                    sim = cosine_similarity(vector, rec_vec)
-                    if sim > 0.95:
-                        duplicate_id = rec.id
-                        break
-                except Exception:
-                    pass
-
-        if duplicate_id:
-            rec = session.query(SemanticMemory).filter_by(id=duplicate_id).first()
-            if rec:
-                rec.confidence = min((rec.confidence or 0.5) + 0.1, 1.0)
-                rec.access_count = (rec.access_count or 0) + 1
-                rec.last_accessed = datetime.now()
-                session.commit()
-            return ok_result(
-                {"status": "duplicate", "confidence": rec.confidence if rec else None},
-                TOOL_DEFINITION,
-                full_command,
-                partner_name,
-            )
-
-        # Insert new fact — store as blob bytes, not raw list
-        new_mem = SemanticMemory(
-            session_id=session_id,
-            entity="User",
-            relation=category,
-            target=fact,
-            confidence=0.7,
-            importance=0.6,
-            embedding_vector=vec_to_blob(vector),
-            last_accessed=datetime.now(),
-            access_count=1,
-        )
-        session.add(new_mem)
-        session.commit()
-        mark_dirty(session_id, "semantic")
-
-    return ok_result(
-        {"status": "stored", "category": category, "fact": fact},
-        TOOL_DEFINITION,
-        full_command,
-        partner_name,
+    # Check for duplicate using vector distance
+    existing = search_similar(
+        embedding=vector,
+        session_id=session_id,
+        fact_type=FACT_TYPE_STATIC,
+        limit=1,
+        max_distance=0.05,  # cosine distance threshold (similar to 0.95 similarity)
     )
+
+    if existing:
+        # Duplicate found — reinforce existing fact
+        from app.memory.db_memory import increment_importance
+        e = existing[0]
+        increment_importance(e["id"], delta=0.1, cap=1.0)
+        new_confidence = e.get("metadata", {}).get("confidence", 0.7)
+        return ok_result(
+            {"status": "duplicate", "confidence": new_confidence},
+            TOOL_DEFINITION,
+            full_command,
+            partner_name,
+        )
+
+    # Insert new fact into semantic_facts
+    fact_id = save_fact(
+        session_id=session_id,
+        content=f"{category} {fact}",  # Store as "category fact" for searchability
+        embedding=vector,
+        fact_type=FACT_TYPE_STATIC,
+        metadata={
+            "category": category,
+            "entity": "User",
+            "relation": category,
+            "target": fact,
+            "confidence": 0.7,
+            "importance": 0.6,
+            "source_table": "semantic_memories",
+            "session_id": session_id,
+        },
+    )
+
+    if fact_id:
+        return ok_result(
+            {"status": "stored", "category": category, "fact": fact, "id": fact_id},
+            TOOL_DEFINITION,
+            full_command,
+            partner_name,
+        )
+    else:
+        return error_result(
+            "Failed to store memory",
+            TOOL_DEFINITION,
+            full_command,
+            partner_name,
+        )

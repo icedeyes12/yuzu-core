@@ -1,14 +1,13 @@
 # FILE: app/memory/segmenter.py
-# DESCRIPTION: Conversation segmentation engine
+# DESCRIPTION: Conversation segmentation engine - uses db_memory for storage
 
 from __future__ import annotations
 
 __all__ = ["segment_session", "_detect_boundaries", "_create_segment"]
 
 from datetime import datetime
-from app.database import (
-    get_db_session, Message, ConversationSegment
-)
+from app.db_pg_models import get_session_messages
+from app.memory.db_memory import save_fact, FACT_TYPE_DYNAMIC
 
 
 # Segmentation limits
@@ -27,28 +26,24 @@ def _parse_timestamp(ts):
 
 def _get_unsegmented_messages(session_id):
     """Get messages that have not yet been assigned to a segment."""
-    with get_db_session() as session:
-        last_segment = session.query(ConversationSegment).filter(
-            ConversationSegment.session_id == session_id
-        ).order_by(ConversationSegment.end_message_id.desc()).first()
-
-        last_id = last_segment.end_message_id if last_segment else 0
-
-        messages = session.query(Message).filter(
-            Message.session_id == session_id,
-            Message.id > last_id,
-            Message.role.in_(['user', 'assistant']),
-        ).order_by(Message.id.asc()).all()
-
-        return [
-            {
-                'id': m.id,
-                'role': m.role,
-                'content': m.content,
-                'timestamp': m.timestamp,
-            }
-            for m in messages
-        ]
+    # Get all messages for session
+    messages = get_session_messages(session_id, limit=10000)
+    
+    # Check for last segment in semantic_facts
+    from app.memory.db_memory import get_facts_by_session
+    segments = get_facts_by_session(session_id, fact_type=FACT_TYPE_DYNAMIC, limit=100)
+    segments = [s for s in segments if s.get("metadata", {}).get("source_table") == "conversation_segments"]
+    
+    if segments:
+        last_end_id = max(s.get("metadata", {}).get("end_message_id", 0) for s in segments)
+    else:
+        last_end_id = 0
+    
+    # Filter messages after last segment
+    return [
+        m for m in messages
+        if m.get("id", 0) > last_end_id and m.get("role") in ("user", "assistant")
+    ]
 
 
 def _detect_boundaries(messages):
@@ -95,42 +90,37 @@ def _create_segment(session_id, group, precomputed_summary=None):
         session_id: session this segment belongs to
         group: list of message dicts
         precomputed_summary: optional LLM summary from prior extraction pass.
-            If None, a trivial placeholder is stored — episodic creation will
-            regenerate a proper summary on demand. This avoids a wasted LLM call
-            when segments are created without episodic extraction.
+            If None, a trivial placeholder is stored.
     """
     if not group:
         return None
 
-    start_id = group[0]['id']
-    end_id = group[-1]['id']
+    start_id = group[0].get('id')
+    end_id = group[-1].get('id')
 
-    # Only use a precomputed summary if one was already generated.
-    # Never call generate_episodic_summary here — that LLM call is wasted
-    # because callers (e.g. process_messages_for_memory) will regenerate it
-    # anyway when they decide whether to create an episodic memory.
     summary = precomputed_summary
 
-    embedding_blob = None
-    try:
-        from app.memory.embedder import embed_text, vec_to_blob
-        vec = embed_text(summary or "")
-        if vec is not None:
-            embedding_blob = vec_to_blob(vec)
-    except Exception as e:
-        print(f"[segmenter] Embedding skipped: {e}")
+    embedding = None
+    if summary:
+        try:
+            from app.memory.embedder import embed_text
+            embedding = embed_text(summary)
+        except Exception as e:
+            print(f"[segmenter] Embedding skipped: {e}")
 
-    with get_db_session() as session:
-        segment = ConversationSegment(
-            session_id=session_id,
-            start_message_id=start_id,
-            end_message_id=end_id,
-            summary=summary,
-            importance=0.5,
-            embedding=embedding_blob,
-        )
-        session.add(segment)
-        session.commit()
+    save_fact(
+        session_id=session_id,
+        content=summary or "",
+        embedding=embedding,
+        fact_type=FACT_TYPE_DYNAMIC,
+        metadata={
+            "start_message_id": start_id,
+            "end_message_id": end_id,
+            "importance": 0.5,
+            "source_table": "conversation_segments",
+            "session_id": session_id,
+        },
+    )
 
     return summary
 
