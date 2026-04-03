@@ -54,7 +54,8 @@ def embed_texts(texts, model=None, dimensions=None, encoding_format="float"):
 def embed_text(text, **kwargs):
     """Embed a single string. Returns None if embedding fails."""
     try:
-        return embed_texts([text], **kwargs)[0]
+        results = embed_texts([text], **kwargs)
+        return results[0] if results else None
     except Exception:
         return None
 
