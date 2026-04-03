@@ -157,7 +157,7 @@ def search_similar(
     params = [vec_str]
 
     if session_id is not None:
-        conditions.append("metadata->>'session_id' = %s")
+        conditions.append("metadata->>'session_id'::int = %s")
         params.append(session_id)
 
     if fact_type:
@@ -224,7 +224,7 @@ def count_facts(fact_type: str | None = None, session_id: int | None = None) -> 
         conditions.append("fact_type = %s")
         params.append(fact_type)
     if session_id is not None:
-        conditions.append("metadata->>'session_id' = %s")
+        conditions.append("metadata->>'session_id'::int = %s")
         params.append(session_id)
     where = "WHERE " + " AND ".join(conditions) if conditions else ""
 
@@ -326,7 +326,7 @@ def decay_facts(session_id: int | None = None, fact_type: str | None = None) -> 
     conditions = []
     params = []
     if session_id is not None:
-        conditions.append("metadata->>'session_id' = %s")
+        conditions.append("metadata->>'session_id'::int = %s")
         params.append(session_id)
     if fact_type:
         conditions.append("fact_type = %s")
