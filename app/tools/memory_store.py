@@ -122,6 +122,13 @@ def execute(arguments, **kwargs):
     fact_embed_text = f"[{category}] {fact}"
     try:
         vecs = embed_texts([fact_embed_text])
+        if not vecs or len(vecs) == 0:
+            return error_result(
+                "Embedding service unavailable",
+                TOOL_DEFINITION,
+                full_command,
+                partner_name,
+            )
         vector = vecs[0]
     except Exception as e:
         print(f"[memory_store] Embed failed: {e}")
@@ -138,10 +145,10 @@ def execute(arguments, **kwargs):
         session_id=session_id,
         fact_type=FACT_TYPE_STATIC,
         limit=1,
-        max_distance=0.05,  # cosine distance threshold (similar to 0.95 similarity)
+        max_distance=0.05,
     )
 
-    if existing:
+    if existing and len(existing) > 0:
         # Duplicate found — reinforce existing fact
         from app.memory.db_memory import increment_importance
         e = existing[0]
