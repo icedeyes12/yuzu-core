@@ -216,13 +216,19 @@ def get_facts_by_session(
     fact_type: str | None = None,
     limit: int = 100,
 ) -> list[dict]:
+    # Static (global) facts - ignore session_id filter
+    if fact_type == "static":
+        return pg_fetchall(
+            "SELECT * FROM semantic_facts WHERE fact_type=%s LIMIT %s",
+            (fact_type, limit),
+        )
+    # Dynamic facts - filter by session_id
     params = [session_id]
     extra = ""
     if fact_type:
         extra = " AND fact_type = %s"
         params.append(fact_type)
     params.append(limit)
-
     return pg_fetchall(
         f"SELECT * FROM semantic_facts WHERE (metadata->>'session_id')::int=%s{extra} LIMIT %s",
         params,
