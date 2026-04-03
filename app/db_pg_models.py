@@ -248,7 +248,7 @@ def get_active_session() -> dict:
         'is_active': row.get('is_active', False),
         'message_count': row.get('message_count', 0),
         'memory': _parse_json(row.get('memory_json', '{}')),
-        'timestamp': row.get('created_at'),
+        'timestamp': row.get('timestamp'),
         'updated_at': row.get('updated_at'),
     }
 
