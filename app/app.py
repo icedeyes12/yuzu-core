@@ -741,7 +741,7 @@ def _build_generation_context(profile, session_id, interface="terminal", user_me
     """Shared context building logic for both streaming and non-streaming responses"""
     from datetime import datetime
 
-    datetime.now().strftime("%Y-%m-%d %H:%M")
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
     affection = profile.get('affection', 50)
 
     if affection < 25:
@@ -883,6 +883,7 @@ Relationship framing:
 You are {profile['partner_name']}, a warm, confident Onee-san presence for {profile['display_name']}.
 
 Current internal state:
+- System clock (real time): {current_time} (use this to calculate time gaps from message timestamps)
 - Affection level: {affection}/100
 - Emotional closeness mode: {closeness_mode}
   (Describes emotional proximity and confidence, not entitlement or control.)
