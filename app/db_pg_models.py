@@ -230,7 +230,7 @@ def get_active_session() -> dict:
         now = datetime.now()
         pg_execute(
             """
-            INSERT INTO chat_sessions (name, is_active, message_count, memory_json, timestamp, updated_at)
+            INSERT INTO chat_sessions (name, is_active, message_count, memory_json, created_at, updated_at)
             VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
             """,
             ('New Chat', True, 0, '{}', now, now)
@@ -248,7 +248,7 @@ def get_active_session() -> dict:
         'is_active': row.get('is_active', False),
         'message_count': row.get('message_count', 0),
         'memory': _parse_json(row.get('memory_json', '{}')),
-        'timestamp': row.get('timestamp'),
+        'timestamp': row.get('created_at'),
         'updated_at': row.get('updated_at'),
     }
 
@@ -279,7 +279,7 @@ def create_session(name: str = "New Chat") -> int | None:
         with PgSession() as s:
             row = s.execute_returning(
                 """
-                INSERT INTO chat_sessions (name, is_active, message_count, memory_json, timestamp, updated_at)
+                INSERT INTO chat_sessions (name, is_active, message_count, memory_json, created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
                 """,
                 (name, False, 0, '{}', now, now)
@@ -583,7 +583,7 @@ def get_recent_sessions(limit: int = 20) -> list[dict]:
         """
         SELECT content, timestamp
         FROM messages
-        WHERE role = 'system' AND content LIKE '*%'
+        WHERE role = 'system'
         ORDER BY timestamp DESC
         LIMIT %s
         """,
@@ -604,7 +604,7 @@ def get_recent_sessions_for_session(session_id: int, limit: int = 20) -> list[di
         """
         SELECT content, timestamp
         FROM messages
-        WHERE role = 'system' AND session_id = %s AND content LIKE '*%'
+        WHERE role = 'system' AND session_id = %s
         ORDER BY timestamp DESC
         LIMIT %s
         """,
