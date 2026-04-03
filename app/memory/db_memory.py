@@ -28,7 +28,7 @@ from __future__ import annotations
 import math
 from datetime import datetime
 
-from app.db_pg import PgSession, pg_fetchone, pg_fetchall, pg_execute
+from app.db_pg import PgSession, pg_fetchone, pg_fetchall, pg_execute, vector_sql
 from psycopg2.extras import Json
 
 
@@ -86,7 +86,7 @@ def save_fact(
         VALUES (%s, %s, %s, %s, %s, %s)
         RETURNING id
     """
-    vec_sql = norm_vec if norm_vec is not None else None
+    vec_sql = vector_sql(norm_vec) if norm_vec is not None else None
 
     try:
         with PgSession() as s:

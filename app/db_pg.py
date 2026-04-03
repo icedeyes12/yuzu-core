@@ -12,6 +12,7 @@ from typing import Any
 
 from psycopg2 import pool
 from psycopg2.extras import RealDictCursor
+from psycopg2.extensions import register_adapter, AsIs
 
 # ── Env defaults (Termux/local dev) ──────────────────────────────────────────
 _PG_HOST     = os.getenv("PG_HOST",     "127.0.0.1")
@@ -25,6 +26,22 @@ _MAX_CONN    = 10
 # ── Global pool (lazy singleton) ──────────────────────────────────────────────
 _pool: pool.ThreadedConnectionPool | None = None
 
+class Vector:
+    """Wrapper for pgvector list[float] that psycopg2 can serialize."""
+    def __init__(self, data):
+        self.data = data
+    
+    def __repr__(self):
+        return "{" + ",".join(str(x) for x in self.data) + "}"
+
+def vector_sql(val):
+    """Convert list[float] to Vector wrapper for psycopg2."""
+    if val is None:
+        return None
+    return Vector(val)
+
+# Register adapter for list type (when passing list to VECTOR column)
+register_adapter(list, lambda v: AsIs(vector_sql(v)))
 
 def _build_dsn() -> str:
     return (
