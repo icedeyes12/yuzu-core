@@ -124,7 +124,7 @@ def upsert_fact(
             limit=1,
             max_distance=0.05,  # cosine similarity threshold
         )
-        if not existing:
+        if not existing or len(existing) == 0:
             return None, False
         e = existing[0]
         # Reinforce existing

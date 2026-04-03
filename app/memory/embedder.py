@@ -55,7 +55,7 @@ def embed_text(text, **kwargs):
     """Embed a single string. Returns None if embedding fails."""
     try:
         results = embed_texts([text], **kwargs)
-        return results[0] if results else None
+        return results[0] if results and len(results) > 0 else None
     except Exception:
         return None
 

@@ -255,7 +255,7 @@ def upsert_semantic_memory(session_id, entity, relation, target):
             max_distance=0.05,
         )
         
-        if existing:
+        if existing and len(existing) > 0:
             # Duplicate found — reinforce existing
             from app.memory.db_memory import increment_importance
             increment_importance(existing[0]["id"], delta=0.1, cap=1.0)
