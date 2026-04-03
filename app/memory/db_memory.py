@@ -157,54 +157,57 @@ def search_similar(
     metadata_filter: dict | None = None,
 ) -> list[dict]:
     """
-    ANN search via PostgreSQL <-> (cosine) operator.
+    ANN search via PostgreSQL <=> (cosine) operator.
     Returns list of dicts: {id, content, fact_type, metadata, last_accessed, distance}
     """
-    norm_vec = _normalize(embedding)
-    if not norm_vec or len(norm_vec) == 0:
-        return []
-
-    vec_str = "[" + ",".join(str(x) for x in norm_vec) + "]"
-    
-    params = [vec_str]  # For ORDER BY
-    conditions = ["embedding IS NOT NULL"]
-
-    if session_id is not None:
-        conditions.append("(metadata->>'session_id')::int = %s")
-        params.append(session_id)
-
-    if fact_type:
-        conditions.append("fact_type = %s")
-        params.append(fact_type)
-
-    if metadata_filter:
-        for key, val in metadata_filter.items():
-            conditions.append("metadata->>%s = %s")
-            params.append(key)
-            params.append(val)
-
-    # Distance filter
-    conditions.append("(embedding <=> %s::vector) < %s")
-    params.append(vec_str)
-    params.append(max_distance)
-
-    where_clause = "WHERE " + " AND ".join(conditions)
-    params.append(limit)
-
-    query = f"""
-        SELECT id, fact_type, content, metadata,
-               last_accessed, created_at,
-               (embedding <=> %s::vector) AS distance
-        FROM semantic_facts
-        {where_clause}
-        ORDER BY embedding <=> %s::vector
-        LIMIT %s
-    """
-
     try:
-        return pg_fetchall(query, params)
+        norm_vec = _normalize(embedding)
+        if not norm_vec or len(norm_vec) == 0:
+            print("[db_memory] search_similar: normalized vector is empty")
+            return []
+
+        vec_str = "[" + ",".join(str(x) for x in norm_vec) + "]"
+        
+        params = [vec_str]  # For ORDER BY
+        conditions = ["embedding IS NOT NULL"]
+
+        if session_id is not None:
+            conditions.append("(metadata->>'session_id')::int = %s")
+            params.append(session_id)
+
+        if fact_type:
+            conditions.append("fact_type = %s")
+            params.append(fact_type)
+
+        if metadata_filter:
+            for key, val in metadata_filter.items():
+                conditions.append("metadata->>%s = %s")
+                params.append(key)
+                params.append(val)
+
+        # Distance filter
+        conditions.append("(embedding <=> %s::vector) < %s")
+        params.append(vec_str)
+        params.append(max_distance)
+
+        where_clause = "WHERE " + " AND ".join(conditions)
+        params.append(limit)
+
+        query = f"""
+            SELECT id, fact_type, content, metadata,
+                   last_accessed, created_at,
+                   (embedding <=> %s::vector) AS distance
+            FROM semantic_facts
+            {where_clause}
+            ORDER BY embedding <=> %s::vector
+            LIMIT %s
+        """
+        
+        results = pg_fetchall(query, params)
+        return results if results else []
+        
     except Exception as e:
-        print(f"[db_memory] search_similar failed: {e}")
+        print(f"[db_memory] search_similar EXCEPTION: {type(e).__name__}: {e}")
         return []
 
 
