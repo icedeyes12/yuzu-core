@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Re-embed semantic_facts with NULL embeddings using Chutes batch API.
-Simple, robust, no checkpoint complexity.
 """
 import os
 import sys
@@ -9,116 +8,115 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app.db_pg import PgSession, pg_fetchall
+from app.db_pg import pg_fetchone, pg_execute
 from app.memory.embedder import embed_texts
 
 BATCH_SIZE = 32
 
 
 def get_null_count():
-    result = pg_fetchall(
-        "SELECT COUNT(*) as cnt FROM semantic_facts WHERE embedding IS NULL"
-    )
-    return result[0]['cnt'] if result else 0
+    row = pg_fetchone("SELECT COUNT(*) as cnt FROM semantic_facts WHERE embedding IS NULL")
+    return row.get('cnt', 0) if row else 0
 
 
-def get_null_embeddings(limit=100):
-    return pg_fetchall(
-        "SELECT id, content FROM semantic_facts WHERE embedding IS NULL ORDER BY id LIMIT %s",
-        (limit,)
+def get_null_embeddings_batch(last_id: int, batch_size: int = 100):
+    return pg_fetchone(
+        "SELECT id, content FROM semantic_facts WHERE embedding IS NULL AND id > %s ORDER BY id LIMIT %s",
+        (last_id, batch_size)
     )
 
 
-def update_embedding(fact_id: int, embedding: list[float]):
-    with PgSession() as s:
-        cur = s.conn.cursor()
-        cur.execute(
-            "UPDATE semantic_facts SET embedding = %s WHERE id = %s",
-            (embedding, fact_id)
-        )
-        s.conn.commit()
+def update_embedding(fact_id: int, embedding: list):
+    pg_execute(
+        "UPDATE semantic_facts SET embedding = %s WHERE id = %s",
+        (embedding, fact_id)
+    )
 
 
 def main():
     print("=" * 60)
     print("[REEMBED] Batch Re-Embedding via Chutes API")
     print("=" * 60)
-    print("Model: Qwen/Qwen3-Embedding-8B (4096 dims)")
-    print(f"Batch size: {BATCH_SIZE}")
+
+    total = get_null_count()
+    print(f"Total NULL embeddings: {total}")
     print()
 
-    total_null = get_null_count()
-    print(f"Total NULL embeddings to fix: {total_null}")
-    print()
-
-    if total_null == 0:
-        print("[DONE] No NULL embeddings!")
+    if total == 0:
+        print("[DONE] No NULL embeddings found!")
         return
 
+    last_id = 0
     total_embedded = 0
     total_failed = 0
+    batch_buffer = []
+    batch_ids = []
 
     while True:
-        rows = get_null_embeddings(limit=100)
-        if not rows:
+        row = get_null_embeddings_batch(last_id, batch_size=100)
+
+        if not row:
             break
 
-        print(f"[FETCH] Got {len(rows)} rows")
+        fact_id = row.get('id')
+        content = row.get('content', '')
 
-        batch_texts = []
-        batch_ids = []
-
-        for row in rows:
-            content = row.get('content', '')
-            if content and len(content.strip()) >= 5:
-                batch_texts.append(content[:500])
-                batch_ids.append(row['id'])
-
-        if not batch_texts:
-            print("[SKIP] All rows too short")
+        if not content or len(content.strip()) < 5:
+            last_id = fact_id
             continue
 
-        # Embed in batches
-        for i in range(0, len(batch_texts), BATCH_SIZE):
-            texts = batch_texts[i:i + BATCH_SIZE]
-            ids = batch_ids[i:i + BATCH_SIZE]
+        batch_buffer.append(content[:500])
+        batch_ids.append(fact_id)
 
-            print(f"[EMBED] Batch of {len(texts)} texts...")
+        if len(batch_buffer) >= BATCH_SIZE:
+            print(f"[EMBED] Batch of {len(batch_buffer)}...")
             try:
-                embeddings = embed_texts(texts)
+                embeddings = embed_texts(batch_buffer)
                 print(f"[OK] Got {len(embeddings)} embeddings")
 
-                for fid, emb in zip(ids, embeddings):
+                for fid, emb in zip(batch_ids, embeddings):
                     if emb is None or len(emb) == 0:
                         total_failed += 1
-                        print(f"  - ID {fid}: NULL embedding")
                         continue
-
                     try:
                         update_embedding(fid, emb)
                         total_embedded += 1
-                        print(f"  + ID {fid}: OK ({len(emb)} dims)")
+                        last_id = fid
                     except Exception as e:
                         total_failed += 1
-                        print(f"  - ID {fid}: UPDATE FAILED - {e}")
+                        print(f"  - ID {fid}: FAILED - {e}")
+
+                remaining = get_null_count()
+                print(f"[PROGRESS] Embedded: {total_embedded}, Failed: {total_failed}, Remaining: {remaining}")
 
             except Exception as e:
                 print(f"[ERROR] Batch embed failed: {e}")
-                total_failed += len(ids)
+                total_failed += len(batch_ids)
 
+            batch_buffer = []
+            batch_ids = []
             time.sleep(0.5)
 
-        remaining = get_null_count()
-        print(f"[PROGRESS] Embedded: {total_embedded}, Failed: {total_failed}, Remaining: {remaining}")
-        print()
+    if batch_buffer:
+        print(f"[EMBED] Final batch of {len(batch_buffer)}...")
+        try:
+            embeddings = embed_texts(batch_buffer)
+            for fid, emb in zip(batch_ids, embeddings):
+                if emb is None or len(emb) == 0:
+                    total_failed += 1
+                    continue
+                try:
+                    update_embedding(fid, emb)
+                    total_embedded += 1
+                except Exception:
+                    total_failed += 1
+        except Exception as e:
+            print(f"[ERROR] Final batch failed: {e}")
+            total_failed += len(batch_buffer)
 
-        if remaining == 0:
-            break
-
+    print()
     print("=" * 60)
-    print("[DONE]")
-    print(f"  Embedded: {total_embedded}")
-    print(f"  Failed: {total_failed}")
+    print(f"[DONE] Embedded: {total_embedded}, Failed: {total_failed}, Remaining: {get_null_count()}")
     print("=" * 60)
 
 
