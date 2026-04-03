@@ -38,22 +38,16 @@ FACT_TYPE_DYNAMIC = "dynamic"
 
 # ── Embedding helpers ─────────────────────────────────────────────────────────
 def _normalize(vec) -> list[float]:
-    """L2-normalize a vector. Works with lists and string representations."""
+    """Normalize vector to unit length for cosine similarity."""
     if not vec:
         return []
-    # Handle string representation from TEXT column
-    if isinstance(vec, str):
-        try:
-            import ast
-            vec = ast.literal_eval(vec)
-        except Exception:
+    try:
+        norm = sum(x * x for x in vec) ** 0.5
+        if norm == 0:
             return []
-    if not vec:
+        return [x / norm for x in vec]
+    except (TypeError, ValueError):
         return []
-    norm = math.sqrt(sum(x * x for x in vec))
-    if norm == 0:
-        return list(vec)
-    return [x / norm for x in vec]
 
 
 def _embed_text(text: str) -> list[float] | None:
@@ -166,11 +160,9 @@ def search_similar(
     if not norm_vec or len(norm_vec) == 0:
         return []
 
-    # Build params list in exact order the query expects:
-    # vec_str x3 (SELECT distance, WHERE distance, ORDER BY), session_id, fact_type, metadata values, limit, max_distance
-    vec_str = "{" + ",".join(str(x) for x in norm_vec) + "}"
-    params = [vec_str, vec_str, vec_str]  # 3x for the 3 vector comparisons
-
+    vec_str = "[" + ",".join(str(x) for x in norm_vec) + "]"
+    
+    params = [vec_str]  # For ORDER BY
     conditions = ["embedding IS NOT NULL"]
 
     if session_id is not None:
@@ -187,6 +179,7 @@ def search_similar(
             params.append(key)
             params.append(val)
 
+    # Distance filter
     conditions.append("(embedding <=> %s::vector) < %s")
     params.append(vec_str)
     params.append(max_distance)
