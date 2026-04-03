@@ -129,6 +129,13 @@ def execute(arguments, **kwargs):
                 full_command,
                 partner_name,
             )
+        if not vecs or len(vecs) == 0:
+            return error_result(
+                "Embedding service unavailable",
+                TOOL_DEFINITION,
+                full_command,
+                partner_name,
+            )
         vector = vecs[0]
     except Exception as e:
         print(f"[memory_store] Embed failed: {e}")
