@@ -216,7 +216,7 @@ def get_facts_by_session(
     fact_type: str | None = None,
     limit: int = 100,
 ) -> list[dict]:
-    # Static (global) facts - ignore session_id filter
+    # Static facts are GLOBAL - no session_id filter
     if fact_type == "static":
         return pg_fetchall(
             "SELECT * FROM semantic_facts WHERE fact_type=%s LIMIT %s",
@@ -398,7 +398,9 @@ def decay_facts(session_id: int | None = None, fact_type: str | None = None) -> 
 def get_memory_stats(session_id: int | None = None) -> dict:
     """Return memory statistics."""
     total = count_facts(session_id=session_id)
-    static_count = count_facts(fact_type=FACT_TYPE_STATIC, session_id=session_id)
+    # Static facts are GLOBAL - don't filter by session_id
+    static_count = count_facts(fact_type=FACT_TYPE_STATIC)
+    # Dynamic facts are session-scoped
     dynamic_count = count_facts(fact_type=FACT_TYPE_DYNAMIC, session_id=session_id)
 
     return {
