@@ -37,8 +37,17 @@ FACT_TYPE_STATIC  = "static"
 FACT_TYPE_DYNAMIC = "dynamic"
 
 # ── Embedding helpers ─────────────────────────────────────────────────────────
-def _normalize(vec: list[float]) -> list[float]:
-    """L2-normalize a vector. Works with plain lists (no numpy needed)."""
+def _normalize(vec) -> list[float]:
+    """L2-normalize a vector. Works with lists and string representations."""
+    if not vec:
+        return []
+    # Handle string representation from TEXT column
+    if isinstance(vec, str):
+        try:
+            import ast
+            vec = ast.literal_eval(vec)
+        except Exception:
+            return []
     if not vec:
         return []
     norm = math.sqrt(sum(x * x for x in vec))
@@ -153,7 +162,7 @@ def search_similar(
     Returns list of dicts: {id, content, fact_type, metadata, last_accessed, distance}
     """
     norm_vec = _normalize(embedding)
-    vec_str = "[" + ",".join(str(x) for x in norm_vec) + "]"
+    vec_str = "{" + ",".join(str(x) for x in norm_vec) + "}"
 
     conditions = []
     params = [vec_str]
