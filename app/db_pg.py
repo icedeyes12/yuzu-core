@@ -15,11 +15,11 @@ from psycopg2.extras import RealDictCursor
 from psycopg2.extensions import register_adapter, AsIs
 
 # ── Env defaults (Termux/local dev) ──────────────────────────────────────────
-_PG_HOST     = os.getenv("PG_HOST",     "127.0.0.1")
-_PG_PORT     = os.getenv("PG_PORT",     "5432")
-_PG_DBNAME   = os.getenv("PG_DBNAME",   "yuzuki")
-_PG_USER     = os.getenv("PG_USER",     "icedeyes12")
-_PG_PASSWORD = os.getenv("PG_PASSWORD", "")
+_PG_HOST     = os.getenv("PGHOST", os.getenv("PG_HOST", "127.0.0.1"))
+_PG_PORT     = os.getenv("PGPORT", os.getenv("PG_PORT", "5432"))
+_PG_DBNAME   = os.getenv("PGDATABASE", os.getenv("PG_DBNAME", "yuzuki"))
+_PG_USER     = os.getenv("PGUSER", os.getenv("PG_USER", "icedeyes12"))
+_PG_PASSWORD = os.getenv("PGPASSWORD", os.getenv("PG_PASSWORD", ""))
 _MIN_CONN    = 1
 _MAX_CONN    = 10
 
