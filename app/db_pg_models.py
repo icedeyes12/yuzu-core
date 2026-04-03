@@ -11,14 +11,14 @@
 #     id, display_name, partner_name, affection, theme,
 #     memory_json, session_history_json, global_knowledge_json,
 #     providers_config_json, context, image_model, vision_model,
-#     created_at, updated_at
+#     timestamp, updated_at
 #   )
 #   chat_sessions (
 #     id, name, is_active, message_count, memory_json,
-#     created_at, updated_at
+#     timestamp, updated_at
 #   )
 #   api_keys (
-#     id, key_name, key_value, key_encrypted, created_at
+#     id, key_name, key_value, key_encrypted, timestamp
 #   )
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ def init_pg_tables():
             context TEXT NOT NULL DEFAULT '{}',
             image_model VARCHAR(50) NOT NULL DEFAULT 'hunyuan',
             vision_model VARCHAR(100) NOT NULL DEFAULT 'moonshotai/kimi-k2.5',
-            created_at TIMESTAMP DEFAULT NOW(),
+            timestamp TIMESTAMP DEFAULT NOW(),
             updated_at TIMESTAMP DEFAULT NOW()
         )
         """,
@@ -59,7 +59,7 @@ def init_pg_tables():
             is_active BOOLEAN NOT NULL DEFAULT FALSE,
             message_count INTEGER NOT NULL DEFAULT 0,
             memory_json TEXT NOT NULL DEFAULT '{}',
-            created_at TIMESTAMP DEFAULT NOW(),
+            timestamp TIMESTAMP DEFAULT NOW(),
             updated_at TIMESTAMP DEFAULT NOW()
         )
         """,
@@ -69,19 +69,19 @@ def init_pg_tables():
             key_name VARCHAR(255) NOT NULL DEFAULT 'openrouter',
             key_value TEXT NOT NULL,
             key_encrypted BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMP DEFAULT NOW()
+            timestamp TIMESTAMP DEFAULT NOW()
         )
         """,
         """
         CREATE TABLE IF NOT EXISTS messages (
             id SERIAL PRIMARY KEY,
-            chat_session_id INTEGER NOT NULL,
+            session_id INTEGER NOT NULL,
             role VARCHAR(50) NOT NULL,
             content TEXT NOT NULL,
             content_encrypted BOOLEAN NOT NULL DEFAULT FALSE,
             image_paths TEXT NOT NULL DEFAULT '{}',
-            created_at TIMESTAMP DEFAULT NOW(),
-            FOREIGN KEY (chat_session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+            timestamp TIMESTAMP DEFAULT NOW(),
+            FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
         )
         """,
         """
@@ -132,7 +132,7 @@ def get_profile() -> dict:
             """
             INSERT INTO profiles (display_name, partner_name, affection, theme,
                                   memory_json, session_history_json, global_knowledge_json,
-                                  providers_config_json, context, created_at, updated_at)
+                                  providers_config_json, context, timestamp, updated_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             ('bani', 'Yuzu', 85, 'default', '{}', '{}', '{}', '{}', '{}', now, now)
@@ -155,7 +155,7 @@ def get_profile() -> dict:
         'context': _parse_json(row.get('context', '{}')),
         'image_model': row.get('image_model', 'hunyuan'),
         'vision_model': row.get('vision_model', 'moonshotai/kimi-k2.5'),
-        'created_at': row.get('created_at'),
+        'timestamp': row.get('timestamp'),
         'updated_at': row.get('updated_at'),
     }
 
@@ -230,7 +230,7 @@ def get_active_session() -> dict:
         now = datetime.now()
         pg_execute(
             """
-            INSERT INTO chat_sessions (name, is_active, message_count, memory_json, created_at, updated_at)
+            INSERT INTO chat_sessions (name, is_active, message_count, memory_json, timestamp, updated_at)
             VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
             """,
             ('New Chat', True, 0, '{}', now, now)
@@ -248,7 +248,7 @@ def get_active_session() -> dict:
         'is_active': row.get('is_active', False),
         'message_count': row.get('message_count', 0),
         'memory': _parse_json(row.get('memory_json', '{}')),
-        'created_at': row.get('created_at'),
+        'timestamp': row.get('timestamp'),
         'updated_at': row.get('updated_at'),
     }
 
@@ -265,7 +265,7 @@ def get_all_sessions() -> list[dict]:
             'is_active': r.get('is_active', False),
             'message_count': r.get('message_count', 0),
             'memory': _parse_json(r.get('memory_json', '{}')),
-            'created_at': r.get('created_at'),
+            'timestamp': r.get('timestamp'),
             'updated_at': r.get('updated_at'),
         }
         for r in rows
@@ -279,7 +279,7 @@ def create_session(name: str = "New Chat") -> int | None:
         with PgSession() as s:
             row = s.execute_returning(
                 """
-                INSERT INTO chat_sessions (name, is_active, message_count, memory_json, created_at, updated_at)
+                INSERT INTO chat_sessions (name, is_active, message_count, memory_json, timestamp, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
                 """,
                 (name, False, 0, '{}', now, now)
@@ -346,10 +346,10 @@ def get_session_memory(session_id: int) -> dict:
     """Get session memory from messages table - returns system/memory notes for the session."""
     rows = pg_fetchall(
         """
-        SELECT content, role, created_at
+        SELECT content, role, timestamp
         FROM messages
-        WHERE chat_session_id = %s AND role IN ('system', 'memory')
-        ORDER BY created_at DESC
+        WHERE session_id = %s AND role IN ('system', 'memory')
+        ORDER BY timestamp DESC
         LIMIT 50
         """,
         (session_id,)
@@ -357,48 +357,48 @@ def get_session_memory(session_id: int) -> dict:
     if not rows:
         return {}
     return {
-        'notes': [{'content': r.get('content'), 'role': r.get('role'), 'timestamp': str(r.get('created_at'))} for r in rows],
+        'notes': [{'content': r.get('content'), 'role': r.get('role'), 'timestamp': str(r.get('timestamp'))} for r in rows],
         'count': len(rows)
     }
 
 
 def get_chat_history(session_id: int, limit: int | None = None, recent: bool = False) -> list[dict]:
-    """Get chat history for a session - returns messages ordered by created_at."""
+    """Get chat history for a session - returns messages ordered by timestamp."""
     if limit and recent:
         query = """
-            SELECT id, chat_session_id, role, content, created_at
+            SELECT id, session_id, role, content, timestamp
             FROM messages
-            WHERE chat_session_id = %s AND role IN ('user', 'assistant', 'system')
-            ORDER BY created_at DESC
+            WHERE session_id = %s AND role IN ('user', 'assistant', 'system')
+            ORDER BY timestamp DESC
             LIMIT %s
         """
         rows = pg_fetchall(query, (session_id, limit))
         return list(reversed(rows))
     elif limit:
         query = """
-            SELECT id, chat_session_id, role, content, created_at
+            SELECT id, session_id, role, content, timestamp
             FROM messages
-            WHERE chat_session_id = %s AND role IN ('user', 'assistant', 'system')
-            ORDER BY created_at ASC
+            WHERE session_id = %s AND role IN ('user', 'assistant', 'system')
+            ORDER BY timestamp ASC
             LIMIT %s
         """
         rows = pg_fetchall(query, (session_id, limit))
     else:
         query = """
-            SELECT id, chat_session_id, role, content, created_at
+            SELECT id, session_id, role, content, timestamp
             FROM messages
-            WHERE chat_session_id = %s AND role IN ('user', 'assistant', 'system')
-            ORDER BY created_at ASC
+            WHERE session_id = %s AND role IN ('user', 'assistant', 'system')
+            ORDER BY timestamp ASC
         """
         rows = pg_fetchall(query, (session_id,))
     
     return [
         {
             'id': r.get('id'),
-            'session_id': r.get('chat_session_id'),
+            'session_id': r.get('session_id'),
             'role': r.get('role'),
             'content': r.get('content'),
-            'timestamp': str(r.get('created_at', '')),
+            'timestamp': str(r.get('timestamp', '')),
         }
         for r in rows
     ]
@@ -466,7 +466,7 @@ def add_api_key(key_name: str, key_value: str) -> bool:
             )
         else:
             pg_execute(
-                "INSERT INTO api_keys (key_name, key_value, key_encrypted, created_at) VALUES (%s, %s, %s, %s)",
+                "INSERT INTO api_keys (key_name, key_value, key_encrypted, timestamp) VALUES (%s, %s, %s, %s)",
                 (key_name, encrypted, is_encrypted, datetime.now())
             )
         return True
@@ -505,7 +505,7 @@ def add_message(session_id: int, role: str, content: str, image_paths: str | Non
         with PgSession() as s:
             row = s.execute_returning(
                 """
-                INSERT INTO messages (chat_session_id, role, content, created_at)
+                INSERT INTO messages (session_id, role, content, timestamp)
                 VALUES (%s, %s, %s, %s) RETURNING id
                 """,
                 (session_id, role, content, now)
@@ -520,13 +520,13 @@ def add_message(session_id: int, role: str, content: str, image_paths: str | Non
 
 
 def get_session_messages(session_id: int, limit: int = 100) -> list[dict]:
-    """Get messages for a session, ordered by created_at."""
+    """Get messages for a session, ordered by timestamp."""
     rows = pg_fetchall(
         """
-        SELECT id, chat_session_id, role, content, created_at
+        SELECT id, session_id, role, content, timestamp
         FROM messages
-        WHERE chat_session_id = %s
-        ORDER BY created_at ASC
+        WHERE session_id = %s
+        ORDER BY timestamp ASC
         LIMIT %s
         """,
         (session_id, limit)
@@ -534,10 +534,10 @@ def get_session_messages(session_id: int, limit: int = 100) -> list[dict]:
     return [
         {
             'id': r.get('id'),
-            'session_id': r.get('chat_session_id'),
+            'session_id': r.get('session_id'),
             'role': r.get('role'),
             'content': r.get('content'),
-            'timestamp': str(r.get('created_at', '')),
+            'timestamp': str(r.get('timestamp', '')),
         }
         for r in rows
     ]
@@ -551,7 +551,7 @@ def get_recent_messages(session_id: int, limit: int = 20) -> list[dict]:
 def clear_session_messages(session_id: int) -> bool:
     """Delete all messages for a session."""
     try:
-        pg_execute("DELETE FROM messages WHERE chat_session_id = %s", (session_id,))
+        pg_execute("DELETE FROM messages WHERE session_id = %s", (session_id,))
         pg_execute(
             "UPDATE chat_sessions SET message_count = 0, memory_json = '{}', updated_at = %s WHERE id = %s",
             (datetime.now(), session_id)
@@ -565,7 +565,7 @@ def clear_session_messages(session_id: int) -> bool:
 def get_message_count(session_id: int) -> int:
     """Get message count for a session (user + assistant only)."""
     row = pg_fetchone(
-        "SELECT COUNT(*) as cnt FROM messages WHERE chat_session_id = %s AND role IN ('user', 'assistant')",
+        "SELECT COUNT(*) as cnt FROM messages WHERE session_id = %s AND role IN ('user', 'assistant')",
         (session_id,)
     )
     return row.get('cnt', 0) if row else 0
@@ -581,10 +581,10 @@ def get_recent_sessions(limit: int = 20) -> list[dict]:
     """Get recent session events across all sessions."""
     rows = pg_fetchall(
         """
-        SELECT content, created_at
+        SELECT content, timestamp
         FROM messages
         WHERE role = 'system' AND content LIKE '*%'
-        ORDER BY created_at DESC
+        ORDER BY timestamp DESC
         LIMIT %s
         """,
         (limit,)
@@ -592,7 +592,7 @@ def get_recent_sessions(limit: int = 20) -> list[dict]:
     return [
         {
             'content': r.get('content', ''),
-            'timestamp': str(r.get('created_at', '')),
+            'timestamp': str(r.get('timestamp', '')),
         }
         for r in rows
     ]
@@ -602,10 +602,10 @@ def get_recent_sessions_for_session(session_id: int, limit: int = 20) -> list[di
     """Get recent session events for a specific session."""
     rows = pg_fetchall(
         """
-        SELECT content, created_at
+        SELECT content, timestamp
         FROM messages
-        WHERE role = 'system' AND chat_session_id = %s AND content LIKE '*%'
-        ORDER BY created_at DESC
+        WHERE role = 'system' AND session_id = %s AND content LIKE '*%'
+        ORDER BY timestamp DESC
         LIMIT %s
         """,
         (session_id, limit)
@@ -613,7 +613,7 @@ def get_recent_sessions_for_session(session_id: int, limit: int = 20) -> list[di
     return [
         {
             'content': r.get('content', ''),
-            'timestamp': str(r.get('created_at', '')),
+            'timestamp': str(r.get('timestamp', '')),
         }
         for r in rows
     ]
@@ -625,8 +625,8 @@ def get_session_conversation_summary(session_id: int, limit: int = 20) -> str:
         """
         SELECT role, content
         FROM messages
-        WHERE chat_session_id = %s AND role IN ('user', 'assistant')
-        ORDER BY created_at ASC
+        WHERE session_id = %s AND role IN ('user', 'assistant')
+        ORDER BY timestamp ASC
         LIMIT %s
         """,
         (session_id, limit)
@@ -701,29 +701,29 @@ def get_chat_history_for_ai(session_id: int, limit: int | None = None, recent: b
     """
     if limit and recent:
         query = """
-            SELECT id, role, content, created_at
+            SELECT id, role, content, timestamp
             FROM messages
-            WHERE chat_session_id = %s AND role IN ('user', 'assistant', 'system')
-            ORDER BY created_at DESC
+            WHERE session_id = %s AND role IN ('user', 'assistant', 'system')
+            ORDER BY timestamp DESC
             LIMIT %s
         """
         rows = pg_fetchall(query, (session_id, limit))
         rows = list(reversed(rows))
     elif limit:
         query = """
-            SELECT id, role, content, created_at
+            SELECT id, role, content, timestamp
             FROM messages
-            WHERE chat_session_id = %s AND role IN ('user', 'assistant', 'system')
-            ORDER BY created_at ASC
+            WHERE session_id = %s AND role IN ('user', 'assistant', 'system')
+            ORDER BY timestamp ASC
             LIMIT %s
         """
         rows = pg_fetchall(query, (session_id, limit))
     else:
         query = """
-            SELECT id, role, content, created_at
+            SELECT id, role, content, timestamp
             FROM messages
-            WHERE chat_session_id = %s AND role IN ('user', 'assistant', 'system')
-            ORDER BY created_at ASC
+            WHERE session_id = %s AND role IN ('user', 'assistant', 'system')
+            ORDER BY timestamp ASC
         """
         rows = pg_fetchall(query, (session_id,))
 
@@ -737,7 +737,7 @@ def get_chat_history_for_ai(session_id: int, limit: int | None = None, recent: b
             continue
 
         if role == 'user':
-            ts = msg.get('created_at', '')
+            ts = msg.get('timestamp', '')
             try:
                 if isinstance(ts, str):
                     dt = datetime.strptime(ts[:19], '%Y-%m-%d %H:%M:%S')
@@ -797,7 +797,7 @@ def get_all_encrypted_messages() -> list[dict]:
     """Get all encrypted messages (for migration)."""
     rows = pg_fetchall(
         """
-        SELECT id, chat_session_id, role, content, created_at
+        SELECT id, session_id, role, content, timestamp
         FROM messages
         WHERE content_encrypted = TRUE
         """
@@ -805,10 +805,10 @@ def get_all_encrypted_messages() -> list[dict]:
     return [
         {
             'id': r.get('id'),
-            'session_id': r.get('chat_session_id'),
+            'session_id': r.get('session_id'),
             'role': r.get('role'),
             'content': r.get('content'),
-            'timestamp': str(r.get('created_at', '')),
+            'timestamp': str(r.get('timestamp', '')),
         }
         for r in rows
     ]
