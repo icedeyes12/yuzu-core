@@ -155,7 +155,7 @@ def get_profile() -> dict:
         'context': _parse_json(row.get('context', '{}')),
         'image_model': row.get('image_model', 'hunyuan'),
         'vision_model': row.get('vision_model', 'moonshotai/kimi-k2.5'),
-        'timestamp': row.get('timestamp'),
+        'created_at': row.get('created_at'),
         'updated_at': row.get('updated_at'),
     }
 
@@ -248,7 +248,7 @@ def get_active_session() -> dict:
         'is_active': row.get('is_active', False),
         'message_count': row.get('message_count', 0),
         'memory': _parse_json(row.get('memory_json', '{}')),
-        'timestamp': row.get('timestamp'),
+        'created_at': row.get('created_at'),
         'updated_at': row.get('updated_at'),
     }
 
