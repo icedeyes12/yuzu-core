@@ -1,10 +1,10 @@
 # FILE: app/memory/embedder.py
 # DESCRIPTION: Chutes API embedding client for memory vectors
+#              PostgreSQL handles list[float] natively - no blob conversion needed
 
 import math
-import struct
 import threading
-from app.database import Database
+from app.db_pg_models import get_api_key
 
 
 CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-8b.chutes.ai/v1/embeddings"
@@ -17,7 +17,7 @@ _thread_local = threading.local()
 def _get_session():
     """Get or create a thread-local requests session."""
     if not hasattr(_thread_local, "session") or _thread_local.session is None:
-        api_key = Database.get_api_key("chutes")
+        api_key = get_api_key("chutes")
         if not api_key:
             return None
         _thread_local.session = __import__("requests").Session()
@@ -54,7 +54,8 @@ def embed_texts(texts, model=None, dimensions=None, encoding_format="float"):
 def embed_text(text, **kwargs):
     """Embed a single string. Returns None if embedding fails."""
     try:
-        return embed_texts([text], **kwargs)[0]
+        results = embed_texts([text], **kwargs)
+        return results[0] if results and len(results) > 0 else None
     except Exception:
         return None
 
@@ -69,16 +70,11 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     return dot / (norm_a * norm_b)
 
 
-def vec_to_blob(vec: list[float]) -> bytes:
-    """Serialize a float list to bytes for SQLite BLOB storage."""
-    if vec is None:
-        return b""
-    return struct.pack(f"{len(vec)}f", *vec)
+# ── Vector normalization (for pgvector) ────────────────────────────────────────
 
-
-def blob_to_vec(blob: bytes) -> list[float]:
-    """Deserialize bytes back to float list."""
-    if not blob:
-        return []
-    count = len(blob) // 4
-    return list(struct.unpack(f"{count}f", blob))
+def normalize_vector(vec: list[float]) -> list[float]:
+    """L2-normalize a vector for pgvector cosine similarity."""
+    norm = math.sqrt(sum(x * x for x in vec))
+    if norm == 0:
+        return vec
+    return [x / norm for x in vec]

@@ -1,12 +1,19 @@
 # FILE: app/memory/retrieval.py
-# DESCRIPTION: Memory retrieval pipeline with FAISS ANN search + hybrid scoring
+# DESCRIPTION: Memory retrieval with PostgreSQL pgvector.
+#              Simplified to 2 types: static (global) and dynamic (per-session).
+#
+# No more semantic/episodic/segments - just static and dynamic.
 
 import math
 from datetime import datetime, timedelta
-from app.database import (
-    get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment, Message
+from app.memory.db_memory import (
+    search_similar,
+    get_facts_by_session,
+    update_last_accessed,
+    FACT_TYPE_STATIC,
+    FACT_TYPE_DYNAMIC,
 )
-from app.memory.embedder import cosine_similarity, blob_to_vec
+from app.db_pg_models import get_session_messages
 
 
 # ── Temporal cue helpers ──────────────────────────────────────────────────────
@@ -36,12 +43,14 @@ _RELATIVE_CUES = {
     "last year":   lambda now: (now - timedelta(days=365), now),
 }
 
+
 def _detect_month(query):
     ql = query.lower()
     for name, num in _MONTH_NAMES.items():
         if name in ql:
             return num
     return None
+
 
 def _detect_time_window(query):
     now = datetime.now()
@@ -57,43 +66,41 @@ def _detect_time_window(query):
             return calc(now)
     return None
 
+
 def _search_temporal_messages(session_id, start, end, limit=200):
+    """Search messages within a time window using PostgreSQL."""
     results = []
     try:
         start_str = start.strftime('%Y-%m-%d %H:%M:%S')
         end_str = end.strftime('%Y-%m-%d %H:%M:%S')
-        with get_db_session() as session:
-            messages = (
-                session.query(Message)
-                .filter(
-                    Message.session_id == session_id,
-                    Message.role.in_(['user', 'assistant']),
-                    Message.timestamp >= start_str,
-                    Message.timestamp <= end_str,
-                )
-                .order_by(Message.timestamp.asc())
-                .limit(limit)
-                .all()
-            )
-            for msg in messages:
-                content = msg.content
-                if msg.content_encrypted:
-                    try:
-                        from app.encryption import encryptor
-                        content = encryptor.decrypt(content)
-                    except Exception:
-                        content = "[ENCRYPTED]"
-                results.append({
-                    "timestamp": msg.timestamp,
-                    "role": msg.role,
-                    "content": content[:500],
-                })
+
+        messages = get_session_messages(session_id, limit=limit)
+
+        for msg in messages:
+            ts = msg.get("timestamp", "")
+            if ts < start_str or ts > end_str:
+                continue
+
+            content = msg.get("content", "")
+            if msg.get("content_encrypted"):
+                try:
+                    from app.encryption import encryptor
+                    content = encryptor.decrypt(content)
+                except Exception:
+                    content = "[ENCRYPTED]"
+
+            results.append({
+                "timestamp": ts,
+                "role": msg.get("role"),
+                "content": content[:500],
+            })
     except Exception as e:
         print(f"[retrieval] Temporal scan failed: {e}")
     return results
 
+
 def _recency_factor(last_accessed) -> float:
-    """Recency score 0.0–1.0, half-life of 24 hours."""
+    """Recency score 0.0-1.0, half-life of 24 hours."""
     if not last_accessed:
         return 0.1
     now = datetime.now()
@@ -105,6 +112,7 @@ def _recency_factor(last_accessed) -> float:
     delta_hours = (now - last_accessed).total_seconds() / 3600.0
     return math.exp(-delta_hours / 24.0)
 
+
 def _embed_query(text: str) -> list[float] | None:
     """Embed a query string via Chutes API."""
     try:
@@ -115,351 +123,123 @@ def _embed_query(text: str) -> list[float] | None:
         return None
 
 
-# ── FAISS-backed retrieval (primary) ──────────────────────────────────────────
-
-def _retrieve_semantic_faiss(session_id, query_vec, limit):
-    """Use FAISS ANN index for semantic memory search. Returns list of (id, faiss_score)."""
-    try:
-        from app.memory.vector_store import search
-        return search(session_id, "semantic", query_vec, k=limit)
-    except Exception as e:
-        print(f"[retrieval] FAISS semantic search failed, falling back to O(n): {e}")
-        return []
-
-def _retrieve_episodic_faiss(session_id, query_vec, limit):
-    """Use FAISS ANN index for episodic memory search."""
-    try:
-        from app.memory.vector_store import search
-        return search(session_id, "episodic", query_vec, k=limit)
-    except Exception as e:
-        print(f"[retrieval] FAISS episodic search failed, falling back to O(n): {e}")
-        return []
-
-def _retrieve_segments_faiss(session_id, query_vec, limit):
-    """Use FAISS ANN index for segment search."""
-    try:
-        from app.memory.vector_store import search
-        return search(session_id, "segment", query_vec, k=limit)
-    except Exception as e:
-        print(f"[retrieval] FAISS segment search failed, falling back to O(n): {e}")
-        return []
+def _score_fact(r: dict) -> float:
+    """Hybrid score: similarity * 0.6 + importance * 0.2 + confidence * 0.2"""
+    meta = r.get("metadata", {})
+    distance = r.get("distance", 0.0)
+    similarity = 1.0 - distance
+    importance = meta.get("importance", 0.5)
+    confidence = meta.get("confidence", 0.5)
+    return similarity * 0.6 + importance * 0.2 + confidence * 0.2
 
 
-# ── O(n) fallback — used only when FAISS is unavailable or returns empty ─────
+def _parse_fact_content(r: dict) -> dict:
+    """Parse fact content and metadata into standardized format."""
+    meta = r.get("metadata", {})
+    content = r.get("content", "")
 
-def _semantic_fallback_score(mem) -> float:
-    """Fallback scoring: importance × confidence × recency factor."""
-    importance = mem.importance or 0.5
-    confidence = mem.confidence or 0.5
-    recency = _recency_factor(mem.last_accessed)
-    return importance * confidence * (0.5 + recency * 0.5)
+    # Try to parse as "entity relation target" format
+    parts = content.split(" ", 2)
+    entity = meta.get("entity", parts[0] if len(parts) > 0 else "User")
+    relation = meta.get("relation", parts[1] if len(parts) > 1 else "unknown")
+    target = meta.get("target", parts[2] if len(parts) > 2 else content)
 
-def _episodic_fallback_score(mem) -> float:
-    """Fallback scoring: importance × recency × emotional boost."""
-    importance = mem.importance or 0.5
-    recency = _recency_factor(mem.last_accessed)
-    emotional = mem.emotional_weight or 0.0
-    return importance * recency * (1.0 + emotional * 0.3)
-
-def _semantic_on2_scan(session_id, query_vec, limit):
-    """O(n) cosine scan for semantic memories. FAISS fallback only."""
-    with get_db_session() as session:
-        memories = session.query(SemanticMemory).filter(
-            SemanticMemory.session_id == session_id
-        ).all()
-        if not memories:
-            return []
-
-        scored = []
-        for mem in memories:
-            if query_vec and mem.embedding_vector:
-                try:
-                    mem_vec = blob_to_vec(mem.embedding_vector)
-                    sim = cosine_similarity(query_vec, mem_vec)
-                    score = sim * 0.6 + (mem.importance or 0.5) * 0.2 + (mem.confidence or 0.5) * 0.2
-                except Exception:
-                    score = _semantic_fallback_score(mem)
-            else:
-                score = _semantic_fallback_score(mem)
-
-            scored.append({
-                'id': mem.id,
-                'entity': mem.entity,
-                'relation': mem.relation,
-                'target': mem.target,
-                'confidence': mem.confidence,
-                'importance': mem.importance,
-                'score': score,
-            })
-
-        scored.sort(key=lambda x: x['score'], reverse=True)
-        return scored[:limit]
-
-def _episodic_on2_scan(session_id, query_vec, limit):
-    """O(n) cosine scan for episodic memories. FAISS fallback only."""
-    with get_db_session() as session:
-        memories = session.query(EpisodicMemory).filter(
-            EpisodicMemory.session_id == session_id
-        ).all()
-        if not memories:
-            return []
-
-        scored = []
-        for mem in memories:
-            recency = _recency_factor(mem.last_accessed)
-            if query_vec and mem.embedding:
-                try:
-                    mem_vec = blob_to_vec(mem.embedding)
-                    sim = cosine_similarity(query_vec, mem_vec)
-                    score = sim * 0.5 + (mem.importance or 0.5) * 0.25 + recency * 0.25
-                except Exception:
-                    score = _episodic_fallback_score(mem)
-            else:
-                score = _episodic_fallback_score(mem)
-
-            scored.append({
-                'id': mem.id,
-                'summary': mem.summary,
-                'importance': mem.importance,
-                'emotional_weight': mem.emotional_weight,
-                'score': score,
-            })
-
-        scored.sort(key=lambda x: x['score'], reverse=True)
-        return scored[:limit]
-
-def _segments_on2_scan(session_id, query_vec, limit):
-    """O(n) cosine scan for segments. FAISS fallback only."""
-    with get_db_session() as session:
-        segments = session.query(ConversationSegment).filter(
-            ConversationSegment.session_id == session_id
-        ).order_by(ConversationSegment.created_at.desc()).all()
-        if not segments:
-            return []
-
-        scored = []
-        for seg in segments:
-            if query_vec and seg.embedding:
-                try:
-                    mem_vec = blob_to_vec(seg.embedding)
-                    sim = cosine_similarity(query_vec, mem_vec)
-                    score = sim * 0.5 + (seg.importance or 0.5) * 0.5
-                except Exception:
-                    score = seg.importance or 0.5
-            else:
-                score = seg.importance or 0.5
-
-            scored.append({
-                'id': seg.id,
-                'summary': seg.summary,
-                'importance': seg.importance,
-                'start_message_id': seg.start_message_id,
-                'end_message_id': seg.end_message_id,
-                'score': score,
-            })
-
-        scored.sort(key=lambda x: x['score'], reverse=True)
-        return scored[:limit]
+    return {
+        "id": r.get("id"),
+        "content": content,
+        "entity": entity,
+        "relation": relation,
+        "target": target,
+        "confidence": meta.get("confidence", 0.5),
+        "importance": meta.get("importance", 0.5),
+        "score": _score_fact(r),
+        "last_accessed": r.get("last_accessed"),
+    }
 
 
-# ── Retrieval functions ────────────────────────────────────────────────────────
+# ── Retrieval functions ──────────────────────────────────────────────────────
 
-def retrieve_semantic_memories(session_id, query=None, limit=15):
+def retrieve_static_memories(query=None, limit=15):
     """
-    Retrieve semantic memories using FAISS ANN index when available.
-    Falls back to O(n) cosine scan if FAISS returns no results or is unavailable.
+    Retrieve static (global) memories - no session filter.
+    Returns list of parsed facts sorted by score.
     """
     query_vec = _embed_query(query) if query else None
 
-    # Try FAISS first if we have a query vector
-    faiss_results = []
     if query_vec:
-        faiss_results = _retrieve_semantic_faiss(session_id, query_vec, limit)
+        results = search_similar(
+            embedding=query_vec,
+            fact_type=FACT_TYPE_STATIC,
+            limit=limit,
+        )
+    else:
+        results = get_facts_by_session(session_id=None, fact_type=FACT_TYPE_STATIC, limit=limit)
 
-    # Fall back to O(n) scan if FAISS unavailable or returned empty
-    if not faiss_results:
-        return _semantic_on2_scan(session_id, query_vec, limit)
+    if not results:
+        return []
 
-    # FAISS hit — fetch full records and apply hybrid scoring
-    faiss_id_score_map = {db_id: score for db_id, score in faiss_results}
-    faiss_ids = list(faiss_id_score_map.keys())
+    parsed = [_parse_fact_content(r) for r in results]
+    parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
 
-    with get_db_session() as session:
-        rows = session.query(SemanticMemory).filter(
-            SemanticMemory.id.in_(faiss_ids)
-        ).all()
+    if parsed:
+        update_last_accessed([m["id"] for m in parsed])
 
-        scored = []
-        for mem in rows:
-            faiss_score = faiss_id_score_map.get(mem.id, 0.0)
-            # Hybrid: FAISS cosine × 0.6 + importance × 0.2 + confidence × 0.2
-            score = (
-                faiss_score * 0.6
-                + (mem.importance or 0.5) * 0.2
-                + (mem.confidence or 0.5) * 0.2
-            )
-            scored.append({
-                'id': mem.id,
-                'entity': mem.entity,
-                'relation': mem.relation,
-                'target': mem.target,
-                'confidence': mem.confidence,
-                'importance': mem.importance,
-                'score': score,
-            })
-
-        scored.sort(key=lambda x: x['score'], reverse=True)
-        top = scored[:limit]
-
-        if top:
-            top_ids = [m['id'] for m in top]
-            # Single query: fetch and update in one pass (no second filter)
-            for mem in session.query(SemanticMemory).filter(
-                SemanticMemory.id.in_(top_ids)
-            ).all():
-                mem.access_count = (mem.access_count or 0) + 1
-                mem.last_accessed = datetime.now()
-            session.commit()
-
-        return scored[:limit]
+    return parsed
 
 
-def retrieve_episodic_memories(session_id, query=None, limit=5):
+def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
     """
-    Retrieve episodic memories using FAISS ANN index when available.
-    Falls back to O(n) cosine scan if FAISS returns no results.
+    Retrieve dynamic (per-session) memories.
+    Returns list of parsed facts sorted by score.
     """
     query_vec = _embed_query(query) if query else None
 
-    faiss_results = []
     if query_vec:
-        faiss_results = _retrieve_episodic_faiss(session_id, query_vec, limit)
+        results = search_similar(
+            embedding=query_vec,
+            session_id=session_id,
+            fact_type=FACT_TYPE_DYNAMIC,
+            limit=limit,
+        )
+    else:
+        results = get_facts_by_session(session_id=session_id, fact_type=FACT_TYPE_DYNAMIC, limit=limit)
 
-    if not faiss_results:
-        return _episodic_on2_scan(session_id, query_vec, limit)
+    if not results:
+        return []
 
-    faiss_id_score_map = {db_id: score for db_id, score in faiss_results}
-    faiss_ids = list(faiss_id_score_map.keys())
+    parsed = [_parse_fact_content(r) for r in results]
+    parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
 
-    with get_db_session() as session:
-        rows = session.query(EpisodicMemory).filter(
-            EpisodicMemory.id.in_(faiss_ids)
-        ).all()
+    if parsed:
+        update_last_accessed([m["id"] for m in parsed])
 
-        scored = []
-        for mem in rows:
-            faiss_score = faiss_id_score_map.get(mem.id, 0.0)
-            recency = _recency_factor(mem.last_accessed)
-            # Hybrid: FAISS cosine × 0.5 + importance × 0.25 + recency × 0.25
-            score = (
-                faiss_score * 0.5
-                + (mem.importance or 0.5) * 0.25
-                + recency * 0.25
-            )
-            scored.append({
-                'id': mem.id,
-                'summary': mem.summary,
-                'importance': mem.importance,
-                'emotional_weight': mem.emotional_weight,
-                'score': score,
-            })
-
-        scored.sort(key=lambda x: x['score'], reverse=True)
-        top = scored[:limit]
-
-        if top:
-            top_ids = [m['id'] for m in top]
-            # Single query: fetch and update in one pass (no second filter)
-            for mem in session.query(EpisodicMemory).filter(
-                EpisodicMemory.id.in_(top_ids)
-            ).all():
-                mem.access_count = (mem.access_count or 0) + 1
-                mem.last_accessed = datetime.now()
-            session.commit()
-
-        return scored[:limit]
+    return parsed
 
 
-def retrieve_segments(session_id, query=None, limit=5):
-    """
-    Retrieve conversation segments using FAISS ANN index when available.
-    Falls back to O(n) cosine scan if FAISS returns no results.
-    """
-    query_vec = _embed_query(query) if query else None
-
-    faiss_results = []
-    if query_vec:
-        faiss_results = _retrieve_segments_faiss(session_id, query_vec, limit)
-
-    if not faiss_results:
-        return _segments_on2_scan(session_id, query_vec, limit)
-
-    faiss_id_score_map = {db_id: score for db_id, score in faiss_results}
-    faiss_ids = list(faiss_id_score_map.keys())
-
-    with get_db_session() as session:
-        rows = session.query(ConversationSegment).filter(
-            ConversationSegment.id.in_(faiss_ids)
-        ).all()
-
-        scored = []
-        for seg in rows:
-            faiss_score = faiss_id_score_map.get(seg.id, 0.0)
-            # Hybrid: FAISS cosine × 0.5 + importance × 0.5
-            score = faiss_score * 0.5 + (seg.importance or 0.5) * 0.5
-            scored.append({
-                'id': seg.id,
-                'summary': seg.summary,
-                'importance': seg.importance,
-                'start_message_id': seg.start_message_id,
-                'end_message_id': seg.end_message_id,
-                'score': score,
-            })
-
-        scored.sort(key=lambda x: x['score'], reverse=True)
-        top = scored[:limit]
-
-        if top:
-            top_ids = [m['id'] for m in top]
-            # Single query: fetch and update in one pass (no second filter)
-            for seg in session.query(ConversationSegment).filter(
-                ConversationSegment.id.in_(top_ids)
-            ).all():
-                seg.access_count = (seg.access_count or 0) + 1
-                seg.last_accessed = datetime.now()
-            session.commit()
-
-        return scored[:limit]
+# Legacy aliases for backward compat
+retrieve_semantic_memories = retrieve_static_memories
+retrieve_episodic_memories = retrieve_dynamic_memories
+retrieve_segments = retrieve_dynamic_memories
 
 
-def retrieve_memory(session_id, query=None):
+def retrieve_memory(session_id: int, query=None):
     """
     Main retrieval entry point.
 
-    Args:
-        session_id: current session
-        query: optional user query for semantic search
-
     Returns:
-        dict with semantic, episodic, segments
+        dict with static, dynamic, temporal_messages
     """
     try:
-        semantic = retrieve_semantic_memories(session_id, query=query, limit=15)
+        static = retrieve_static_memories(query=query, limit=15)
     except Exception as e:
-        print(f"[WARNING] Semantic memory retrieval failed: {e}")
-        semantic = []
+        print(f"[WARNING] Static memory retrieval failed: {e}")
+        static = []
 
     try:
-        episodic = retrieve_episodic_memories(session_id, query=query, limit=5)
+        dynamic = retrieve_dynamic_memories(session_id, query=query, limit=10)
     except Exception as e:
-        print(f"[WARNING] Episodic memory retrieval failed: {e}")
-        episodic = []
-
-    try:
-        segments = retrieve_segments(session_id, query=query, limit=5)
-    except Exception as e:
-        print(f"[WARNING] Segment retrieval failed: {e}")
-        segments = []
+        print(f"[WARNING] Dynamic memory retrieval failed: {e}")
+        dynamic = []
 
     temporal_messages = []
     if query:
@@ -472,10 +252,9 @@ def retrieve_memory(session_id, query=None):
             pass
 
     return {
-        'semantic': semantic,
-        'episodic': episodic,
-        'segments': segments,
-        'temporal_messages': temporal_messages,
+        "static": static,
+        "dynamic": dynamic,
+        "temporal_messages": temporal_messages,
     }
 
 
@@ -483,37 +262,31 @@ def format_memory(memory_bundle):
     """Format a memory bundle into a text string for system message injection."""
     parts = []
 
-    semantic = memory_bundle.get('semantic', [])
-    if semantic:
+    # Static memories - global facts
+    static = memory_bundle.get("static", [])
+    if static:
         parts.append("Known preferences:")
-        for mem in semantic:
+        for mem in static[:10]:
             parts.append(f"- {mem['entity']} {mem['relation']} {mem['target']}")
 
-    episodic = memory_bundle.get('episodic', [])
-    if episodic:
-        parts.append("\nRecent important events:")
-        for mem in episodic:
-            summary = mem.get('summary') or ''
-            if len(summary) > 200:
-                summary = summary[:200] + '...'
-            parts.append(f"- {summary}")
+    # Dynamic memories - session-specific facts
+    dynamic = memory_bundle.get("dynamic", [])
+    if dynamic:
+        parts.append("\nSession memories:")
+        for mem in dynamic[:5]:
+            content = mem.get("content") or mem.get("target") or ""
+            if len(content) > 150:
+                content = content[:150] + "..."
+            parts.append(f"- {content}")
 
-    segments = memory_bundle.get('segments', [])
-    if segments:
-        parts.append("\nRelevant past context:")
-        for seg in segments:
-            summary = seg.get('summary') or ''
-            if len(summary) > 200:
-                summary = summary[:200] + '...'
-            parts.append(f"- {summary}")
-
-    temporal = memory_bundle.get('temporal_messages', [])
+    # Temporal messages
+    temporal = memory_bundle.get("temporal_messages", [])
     if temporal:
         parts.append("\nMessages from requested time period:")
         for msg in temporal[:10]:
-            ts = msg.get('timestamp', '')[:16]
-            role = msg.get('role', '')
-            content = msg.get('content', '')[:300]
+            ts = msg.get("timestamp", "")[:16]
+            role = msg.get("role", "")
+            content = msg.get("content", "")[:200]
             parts.append(f"- [{ts}] {role}: {content}")
 
-    return '\n'.join(parts)
+    return "\n".join(parts)

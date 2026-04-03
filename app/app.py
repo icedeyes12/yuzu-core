@@ -741,7 +741,7 @@ def _build_generation_context(profile, session_id, interface="terminal", user_me
     """Shared context building logic for both streaming and non-streaming responses"""
     from datetime import datetime
 
-    datetime.now().strftime("%Y-%m-%d %H:%M")
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
     affection = profile.get('affection', 50)
 
     if affection < 25:
@@ -883,6 +883,7 @@ Relationship framing:
 You are {profile['partner_name']}, a warm, confident Onee-san presence for {profile['display_name']}.
 
 Current internal state:
+- System clock (real time): {current_time} (use this to calculate time gaps from message timestamps)
 - Affection level: {affection}/100
 - Emotional closeness mode: {closeness_mode}
   (Describes emotional proximity and confidence, not entitlement or control.)
@@ -1843,22 +1844,13 @@ def start_session(interface="terminal"):
             segment_session(session_id)
 
             # Extract semantic facts + episodic memories — idempotent per session
-            # Check DB directly instead of in-memory dict (survives restarts)
-            from app.database import get_db_session
-            from app.memory.models import SemanticMemory, EpisodicMemory, ConversationSegment
+            # Check semantic_facts table via db_memory (PostgreSQL)
+            from app.memory.db_memory import count_facts, FACT_TYPE_STATIC, FACT_TYPE_DYNAMIC
             already_initialized = False
             try:
-                with get_db_session() as db:
-                    sem_count = db.query(SemanticMemory).filter(
-                        SemanticMemory.session_id == session_id
-                    ).count()
-                    epi_count = db.query(EpisodicMemory).filter(
-                        EpisodicMemory.session_id == session_id
-                    ).count()
-                    seg_count = db.query(ConversationSegment).filter(
-                        ConversationSegment.session_id == session_id
-                    ).count()
-                    already_initialized = (sem_count > 0 or epi_count > 0 or seg_count > 0)
+                static_count = count_facts(fact_type=FACT_TYPE_STATIC, session_id=session_id)
+                dynamic_count = count_facts(fact_type=FACT_TYPE_DYNAMIC, session_id=session_id)
+                already_initialized = (static_count > 0 or dynamic_count > 0)
             except Exception:
                 already_initialized = False
 

@@ -19,6 +19,7 @@
 # ---------------------
 SQLAlchemy>=2.0.0           # Database ORM and session management
 pycryptodome>=3.20.0        # ChaCha20-Poly1305 encryption for API keys
+psycopg2-binary>=2.9.9      # PostgreSQL adapter (use -binary for easier install)
 
 # WEB INTERFACE (FastAPI)
 # -----------------------

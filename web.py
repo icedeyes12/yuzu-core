@@ -636,20 +636,18 @@ async def api_rebuild_structured_memory():
         # Create conversation segments
         segment_session(session_id)
 
-        # Get current memory stats
-        from app.database import get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
-        with get_db_session() as db_session:
-            semantic_count = db_session.query(SemanticMemory).filter_by(session_id=session_id).count()
-            episodic_count = db_session.query(EpisodicMemory).filter_by(session_id=session_id).count()
-            segment_total = db_session.query(ConversationSegment).filter_by(session_id=session_id).count()
+        # Get current memory stats using db_memory
+        from app.memory.db_memory import count_facts, FACT_TYPE_STATIC, FACT_TYPE_DYNAMIC
+        semantic_count = count_facts(fact_type=FACT_TYPE_STATIC, session_id=session_id)
+        episodic_count = count_facts(fact_type=FACT_TYPE_DYNAMIC, session_id=session_id)
 
         return {
             "status": "success",
-            "message": f"Structured memory rebuilt: {semantic_count} facts, {episodic_count} episodes, {segment_total} segments",
+            "message": f"Structured memory rebuilt: {semantic_count} facts, {episodic_count} episodes, {0} segments",
             "stats": {
                 "semantic": semantic_count,
                 "episodic": episodic_count,
-                "segments": segment_total,
+                "segments": 0,
             }
         }
     except Exception as e:
@@ -683,29 +681,31 @@ async def api_memory_stats():
         active_session = Database.get_active_session()
         session_id = active_session["id"]
 
-        from app.database import get_db_session, SemanticMemory, EpisodicMemory, ConversationSegment
-        with get_db_session() as db_session:
-            semantic_count = db_session.query(SemanticMemory).filter_by(session_id=session_id).count()
-            episodic_count = db_session.query(EpisodicMemory).filter_by(session_id=session_id).count()
-            segment_count = db_session.query(ConversationSegment).filter_by(session_id=session_id).count()
+        # Get current memory stats using db_memory
+        from app.memory.db_memory import count_facts, FACT_TYPE_STATIC, FACT_TYPE_DYNAMIC, get_facts_by_session
+        semantic_count = count_facts(fact_type=FACT_TYPE_STATIC, session_id=session_id)
+        episodic_count = count_facts(fact_type=FACT_TYPE_DYNAMIC, session_id=session_id)
 
-            # Get top semantic facts for display
-            top_facts = db_session.query(SemanticMemory).filter_by(
-                session_id=session_id
-            ).order_by(SemanticMemory.confidence.desc()).limit(10).all()
-
-            facts_list = [
-                f"{f.entity} {f.relation} {f.target}"
-                for f in top_facts
-            ]
+        # Get top facts for display
+        top_facts = []
+        try:
+            facts = get_facts_by_session(session_id=session_id, fact_type=FACT_TYPE_STATIC, limit=10)
+            for f in facts:
+                meta = f.get("metadata") or {}
+                content = f.get("content", "")
+                category = meta.get("category", "")
+                if content:
+                    top_facts.append(f"{category}: {content[:100]}" if category else content[:100])
+        except Exception as e:
+            print(f"[memory_stats] top_facts failed: {e}")
 
         return {
             "status": "success",
             "stats": {
                 "semantic": semantic_count,
                 "episodic": episodic_count,
-                "segments": segment_count,
-                "top_facts": facts_list,
+                "segments": 0,
+                "top_facts": top_facts,
             }
         }
     except Exception as e:

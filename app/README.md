@@ -48,7 +48,7 @@ graph LR
     C --> E
     D --> E
     
-    E --> F[(Database<br/>yuzu_core.db)]
+    E --> F[(Database<br/>yuzuki PostgreSQL)]
     E --> G[AI Providers<br/>Ollama/Cerebras/OpenRouter/Chutes]
     E --> H[Tools<br/>ImageGen/Search/Memory]
     E --> I[Memory System<br/>episodic + semantic]
@@ -156,15 +156,12 @@ REST API + templates for the web UI:
 
 ### `database.py`
 
-SQLAlchemy ORM with SQLite backend (`yuzu_core.db`).
+Hybrid Library architecture: SQLAlchemy-style ORM operations via raw psycopg2. All data in PostgreSQL (`yuzuki`).
 
 ```mermaid
 erDiagram
     PROFILE ||--o{ CHAT_SESSION : has
     CHAT_SESSION ||--o{ MESSAGE : contains
-    CHAT_SESSION ||--o{ SEMANTIC_MEMORY : references
-    CHAT_SESSION ||--o{ EPISODIC_MEMORY : references
-    CHAT_SESSION ||--o{ CONVERSATION_SEGMENT : references
     
     PROFILE {
         int id PK
@@ -195,36 +192,15 @@ erDiagram
         string timestamp
     }
     
-    SEMANTIC_MEMORY {
+    SEMANTIC_FACTS {
         int id PK
         int session_id FK
-        text entity
-        text relation
-        text target
-        float confidence
-        float importance
-        blob embedding_vector
-        float stability
-        float difficulty
-    }
-    
-    EPISODIC_MEMORY {
-        int id PK
-        int session_id FK
-        text summary
-        blob embedding
-        float importance
-        float emotional_weight
-    }
-    
-    CONVERSATION_SEGMENT {
-        int id PK
-        int session_id FK
-        int start_message_id
-        int end_message_id
-        text summary
-        blob embedding
-        float importance
+        string fact_type
+        text content
+        vector embedding
+        jsonb metadata
+        timestamp created_at
+        timestamp last_accessed
     }
 ```
 
@@ -233,9 +209,14 @@ erDiagram
 - `chat_sessions` — session tracking, per-session memory
 - `messages` — conversation log (role, content, timestamp, image_paths)
 - `api_keys` — encrypted API key storage
-- `semantic_memories` — RDF-like (entity, relation, target) triples
-- `episodic_memories` — summarized interaction segments
-- `conversation_segments` — chunked conversation windows
+- `semantic_facts` — unified memory table with pgvector embeddings
+  - `fact_type='static'` — semantic memories (stable facts)
+  - `fact_type='dynamic'` — episodic memories and segments (decayable)
+
+**PostgreSQL Modules:**
+- `db_pg.py` — connection pool (`ThreadedConnectionPool`) + `PgSession` context manager
+- `db_pg_models.py` — CRUD for profiles, sessions, messages, API keys (raw psycopg2)
+- `db_memory.py` — unified memory layer over `semantic_facts` with vector search
 
 **Safety rules:**
 - NEVER drops tables
@@ -440,12 +421,12 @@ The memory subsystem lives in `app/memory/` and provides long-term, structured m
 flowchart LR
     A[User Message] --> B[messages table]
     B --> C[segmenter.py<br/>Split by time/size]
-    C --> D[conversation_segments]
+    C --> D[semantic_facts<br/>fact_type=dynamic<br/>source_table=segments]
     B --> E[extractor.py<br/>Semantic facts]
-    E --> F[semantic_memories]
+    E --> F[semantic_facts<br/>fact_type=static]
     B --> E
-    E --> G[episodic_memories]
-    D --> H[retrieval.py<br/>Hybrid scoring]
+    E --> G[semantic_facts<br/>fact_type=dynamic<br/>source_table=episodic]
+    D --> H[retrieval.py<br/>pgvector search]
     F --> H
     G --> H
     H --> I[Context for LLM]
@@ -457,17 +438,41 @@ flowchart LR
 
 ### Memory Layers
 
-| Layer | Table | Purpose |
-|-------|-------|---------|
-| **Episodic** | `episodic_memories` | Summarized interaction events with emotional weight |
-| **Semantic** | `semantic_memories` | Stable facts as (entity, relation, target) triples |
-| **Segments** | `conversation_segments` | Chunked conversation windows for summarization |
+| Layer | `fact_type` | `metadata.source_table` | Purpose |
+|-------|-------------|------------------------|---------|
+| **Semantic** | `static` | — | Stable facts as (entity, relation, target) triples |
+| **Episodic** | `dynamic` | `episodic_memories` | Summarized interaction events with emotional weight |
+| **Segments** | `dynamic` | `conversation_segments` | Chunked conversation windows for summarization |
 
-### Retrieval Scoring
+### Unified `semantic_facts` Table
 
+All memory types stored in a single PostgreSQL table with pgvector:
+
+```sql
+CREATE TABLE semantic_facts (
+    id SERIAL PRIMARY KEY,
+    session_id INTEGER,
+    fact_type VARCHAR(20),  -- 'static' | 'dynamic'
+    content TEXT,
+    embedding VECTOR(4096),
+    metadata JSONB,         -- confidence, importance, source_table, etc.
+    created_at TIMESTAMP,
+    last_accessed TIMESTAMP
+);
 ```
-semantic_score = similarity × 0.6 + importance × 0.2 + confidence × 0.2
-episodic_score = similarity × 0.5 + importance × 0.25 + recency × 0.25
+
+### Retrieval Scoring (pgvector)
+
+```sql
+-- Hybrid search: vector distance + metadata scores
+SELECT *, 
+  (embedding <=> query_vector) * 0.6 + 
+  (metadata->>'importance')::float * 0.2 + 
+  (metadata->>'confidence')::float * 0.2 AS score
+FROM semantic_facts
+WHERE fact_type = 'static'
+ORDER BY embedding <=> query_vector
+LIMIT 15;
 ```
 
 ### FSRS-Inspired Retention
@@ -476,6 +481,17 @@ episodic_score = similarity × 0.5 + importance × 0.25 + recency × 0.25
 - **Importance** decays: `importance × exp(-hours/stability)`
 - Frequently retrieved memories become **long-term anchors**
 - Low-importance memories **naturally fade**
+
+### Key Modules
+
+| Module | Purpose |
+|--------|---------|
+| `db_memory.py` | Unified CRUD over `semantic_facts` with pgvector search |
+| `retrieval.py` | Hybrid scoring retrieval pipeline |
+| `extractor.py` | LLM-based semantic + episodic extraction |
+| `segmenter.py` | Conversation chunking |
+| `review.py` | FSRS-style decay and reinforcement |
+| `embedder.py` | Chutes API embedding client |
 
 See [`memory/README.md`](memory/README.md) for full documentation.
 

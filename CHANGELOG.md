@@ -2,6 +2,87 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0] - 2026-04-03
+
+### Changed — Database Architecture (Breaking)
+
+- **Complete migration from SQLite to PostgreSQL**: All data now stored in PostgreSQL (`yuzuki` database)
+  - Hybrid Library architecture: SQLAlchemy-style ORM + raw psycopg2 for vector operations
+  - NO SQLite, NO `yuzu_core.db` — all tables in PostgreSQL
+  - pgvector extension for native vector storage and ANN search
+
+### Added — PostgreSQL Infrastructure
+
+- **`app/db_pg.py`**: New psycopg2 connection pool with `ThreadedConnectionPool`
+  - `PgSession` context manager for transaction-safe queries
+  - Environment-driven config: `PG_HOST`, `PG_PORT`, `PG_DBNAME`, `PG_USER`, `PG_PASSWORD`
+  - Module-level helpers: `pg_fetchone()`, `pg_fetchall()`, `pg_execute()`
+
+- **`app/db_pg_models.py`**: PostgreSQL models for core tables
+  - `profiles` — user profile and preferences
+  - `chat_sessions` — conversation sessions
+  - `messages` — all chat messages with tool role support
+  - `api_keys` — encrypted API key storage
+  - Full CRUD operations via raw psycopg2 SQL
+
+- **`app/memory/db_memory.py`**: Unified memory layer over `semantic_facts` table
+  - `save_fact()` — insert with optional embedding
+  - `upsert_fact()` — insert or reinforce existing (duplicate detection via vector distance)
+  - `search_similar()` — pgvector ANN search via `<=>` operator
+  - `decay_facts()` — FSRS-style importance decay
+  - Supports `fact_type='static'` (semantic) and `fact_type='dynamic'` (episodic/segments)
+
+### Changed — Memory System
+
+- **`app/memory/embedder.py`**: Removed `vec_to_blob()`/`blob_to_vec()` — PostgreSQL handles `list[float]` natively
+- **`app/memory/vector_store.py`**: DEPRECATED — FAISS replaced by pgvector, stub delegates to `db_memory.search_similar()`
+- **`app/memory/retrieval.py`**: Rewritten for PostgreSQL vector search
+  - `_search_semantic_pg()` — queries `semantic_facts` with `fact_type='static'`
+  - `_search_episodic_pg()` — queries with `fact_type='dynamic'` + metadata filter
+  - `_search_segments_pg()` — queries with `fact_type='dynamic'` + source_table filter
+  - Hybrid scoring: `(distance * 0.6 + importance * 0.2 + confidence * 0.2)`
+
+- **`app/memory/extractor.py`**: Uses `db_memory.save_fact()` instead of ORM
+- **`app/memory/segmenter.py`**: Uses `db_memory.save_fact()` instead of ORM
+- **`app/memory/review.py`**: Uses `db_memory` for decay operations
+
+### Changed — Tools
+
+- **`app/tools/memory_store.py`**: Uses `db_memory.save_fact()` with raw `list[float]` embedding
+  - Duplicate detection via `search_similar()` distance < 0.05
+  - Reinforces existing facts on duplicate instead of inserting
+
+### Changed — Database Interface
+
+- **`app/database.py`**: Refactored as thin delegate layer
+  - All operations delegate to `db_pg_models.py`
+  - ORM models removed: `SemanticMemory`, `EpisodicMemory`, `ConversationSegment` → deprecated
+  - `Profile`, `ChatSession`, `Message`, `APIKey` tables remain (via psycopg2)
+
+### Removed — Migration Scripts (Cleanup)
+
+- `app/memory/batch_migrate.py` — deleted (SQLite migration complete)
+- `app/memory/episodic_migrate.py` — deleted (SQLite migration complete)
+- `app/memory/quality_migrate.py` — deleted (SQLite migration complete)
+- `migrate_from_sqlite()` in `db_pg_models.py` — deleted (no longer needed)
+
+### Dependencies
+
+- Added `psycopg2-binary>=2.9.9` to requirements.txt
+
+### Documentation
+
+- **`app/memory/docs/architecture.md`** — consolidated into single source of truth
+  - Absorbed content from `fsrs.md`, `retrieval.md`, `segmentation.md`, `semantic_memory.md`
+  - All diagrams use Mermaid syntax (no ASCII art)
+  - Removed outdated SQLite/FAISS references
+- Deleted deprecated doc files: `fsrs.md`, `retrieval.md`, `segmentation.md`, `semantic_memory.md`
+
+### Migration
+
+- Data migrated via `a.py` and `b.py` scripts (already run)
+- All SQLite → PostgreSQL migration code removed (migration complete)
+
 ## [2.1.0] - 2026-03-30
 
 ### Added — Standard Tool Calling System

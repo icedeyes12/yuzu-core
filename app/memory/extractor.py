@@ -1,5 +1,5 @@
 # FILE: app/memory/extractor.py
-# DESCRIPTION: LLM-only semantic fact extraction - no regex rules
+# DESCRIPTION: LLM-only semantic fact extraction - uses db_memory for storage
 
 from __future__ import annotations
 
@@ -13,12 +13,12 @@ __all__ = [
     "should_create_episodic",
 ]
 
-from datetime import datetime
-from app.database import (
-    get_db_session, SemanticMemory, EpisodicMemory
+from app.memory.db_memory import (
+    save_fact,
+    search_similar,
+    FACT_TYPE_STATIC,
+    FACT_TYPE_DYNAMIC,
 )
-from app.memory.embedder import embed_text, vec_to_blob
-from app.memory.vector_store import mark_dirty
 
 
 def _get_ai_manager():
@@ -97,7 +97,6 @@ Extract ONLY persistent, high-value facts from the user's messages.
             return []
 
         import json
-        # Robust parse: try full response first, then fallback to truncated-cleanup
         print(f"[DEBUG extract_semantic_facts] conv_len={len(conversation)} chars, raw_response (first 500): {response[:500]}")
         try:
             facts = json.loads(response)
@@ -228,54 +227,56 @@ def _build_semantic_text(entity, relation, target) -> str:
     return f"{entity} {relation} {target}"
 
 
-# ── Storage ──────────────────────────────────────────────────────────────────
+# ── Storage (using db_memory) ──────────────────────────────────────────────────
 
 def upsert_semantic_memory(session_id, entity, relation, target):
     """Insert or update a semantic memory with embedding.
 
-    Duplicate detection: FAISS ANN search for top-5 similar records;
-    if any cosine similarity > 0.95, reinforce the existing record.
-    Falls back to no deduplication if FAISS is unavailable or the
-    new vector could not be computed.
+    Duplicate detection: vector search for top-5 similar records;
+    if any distance < 0.05, reinforce the existing record.
     """
     text = _build_semantic_text(entity, relation, target)
-    vector = embed_text(text)  # Returns None gracefully on failure
+    
+    # Embed the text
+    try:
+        from app.memory.embedder import embed_text
+        vector = embed_text(text)
+    except Exception as e:
+        print(f"[WARNING] Embedding failed: {e}")
+        vector = None
 
-    with get_db_session() as session:
-        # Use FAISS ANN search for duplicate detection (O(log n) vs O(n))
-        if vector is not None:
-            try:
-                from app.memory.vector_store import search
-                faiss_results = search(session_id, "semantic", vector, k=5)
-                for db_id, faiss_score in faiss_results:
-                    if faiss_score > 0.95:
-                        # Duplicate found — reinforce existing record
-                        rec = session.query(SemanticMemory).filter_by(id=db_id).first()
-                        if rec:
-                            rec.confidence = min(rec.confidence + 0.1, 1.0)
-                            rec.access_count = (rec.access_count or 0) + 1
-                            rec.last_accessed = datetime.now()
-                            session.commit()
-                            mark_dirty(session_id, "semantic")
-                            return  # done — no insert needed
-            except Exception:
-                pass  # FAISS unavailable or failed — fall through to insert
-
-        # No duplicate found (or FAISS unavailable) — insert new record
-        new_mem = SemanticMemory(
+    if vector is not None:
+        # Check for duplicates
+        existing = search_similar(
+            embedding=vector,
             session_id=session_id,
-            entity=entity,
-            relation=relation,
-            target=target,
-            confidence=0.7,
-            importance=0.7,
-            embedding_vector=vec_to_blob(vector) if vector is not None else None,
-            last_accessed=datetime.now(),
-            access_count=1,
+            fact_type=FACT_TYPE_STATIC,
+            limit=5,
+            max_distance=0.05,
         )
-        session.add(new_mem)
-        session.commit()
-        mark_dirty(session_id, "semantic")
+        
+        if existing and len(existing) > 0:
+            # Duplicate found — reinforce existing
+            from app.memory.db_memory import increment_importance
+            increment_importance(existing[0]["id"], delta=0.1, cap=1.0)
+            return  # done — no insert needed
+
+    # No duplicate — insert new fact
+    save_fact(
+        session_id=session_id,
+        content=f"{entity} {relation} {target}",
+        embedding=vector,
+        fact_type=FACT_TYPE_STATIC,
+        metadata={
+            "entity": entity,
+            "relation": relation,
+            "target": target,
+            "confidence": 0.7,
+            "importance": 0.7,
+            "source_table": "semantic_memories",
+            "session_id": session_id,
+        },
+    )
 
 
 def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance=0.5, source_message_ids=None):
@@ -286,31 +287,29 @@ def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance
         summary: LLM-generated narrative summary
         emotional_weight: 0.0-1.0 emotional intensity score
         importance: 0.0-1.0 importance score
-        source_message_ids: list of message IDs that contributed to this episodic (for cross-layer tracing)
+        source_message_ids: list of message IDs (for cross-layer tracing)
     """
-    vector = embed_text(summary)
+    # Embed the summary
+    try:
+        from app.memory.embedder import embed_text
+        vector = embed_text(summary)
+    except Exception as e:
+        print(f"[WARNING] Embedding failed: {e}")
+        vector = None
 
-    with get_db_session() as session:
-        mem = EpisodicMemory(
-            session_id=session_id,
-            summary=summary,
-            embedding=vec_to_blob(vector) if vector is not None else None,
-            importance=importance,
-            emotional_weight=emotional_weight,
-            last_accessed=datetime.now(),
-            access_count=1,
-        )
-        session.add(mem)
-        session.commit()
-
-        # Populate cross-layer source mapping AFTER commit (mem.id is now available)
-        if source_message_ids and mem.id:
-            session.query(SemanticMemory).filter(
-                SemanticMemory.session_id == session_id
-            ).update({"source_episodic_ids": str(list(source_message_ids))})
-            session.commit()
-
-        mark_dirty(session_id, "episodic")
+    save_fact(
+        session_id=session_id,
+        content=summary,
+        embedding=vector,
+        fact_type=FACT_TYPE_DYNAMIC,
+        metadata={
+            "importance": importance,
+            "emotional_weight": emotional_weight,
+            "source_table": "episodic_memories",
+            "source_message_ids": source_message_ids,
+            "session_id": session_id,
+        },
+    )
 
 
 # ── Main entry point ─────────────────────────────────────────────────────────
