@@ -682,9 +682,22 @@ async def api_memory_stats():
         session_id = active_session["id"]
 
         # Get current memory stats using db_memory
-        from app.memory.db_memory import count_facts, FACT_TYPE_STATIC, FACT_TYPE_DYNAMIC
+        from app.memory.db_memory import count_facts, FACT_TYPE_STATIC, FACT_TYPE_DYNAMIC, get_facts_by_session
         semantic_count = count_facts(fact_type=FACT_TYPE_STATIC, session_id=session_id)
         episodic_count = count_facts(fact_type=FACT_TYPE_DYNAMIC, session_id=session_id)
+
+        # Get top facts for display
+        top_facts = []
+        try:
+            facts = get_facts_by_session(session_id=session_id, fact_type=FACT_TYPE_STATIC, limit=10)
+            for f in facts:
+                meta = f.get("metadata") or {}
+                content = f.get("content", "")
+                category = meta.get("category", "")
+                if content:
+                    top_facts.append(f"{category}: {content[:100]}" if category else content[:100])
+        except Exception as e:
+            print(f"[memory_stats] top_facts failed: {e}")
 
         return {
             "status": "success",
@@ -692,6 +705,7 @@ async def api_memory_stats():
                 "semantic": semantic_count,
                 "episodic": episodic_count,
                 "segments": 0,
+                "top_facts": top_facts,
             }
         }
     except Exception as e:
