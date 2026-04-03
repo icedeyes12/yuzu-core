@@ -1,5 +1,8 @@
 # FILE: app/memory/retrieval.py
-# DESCRIPTION: Memory retrieval pipeline with PostgreSQL pgvector search + hybrid scoring
+# DESCRIPTION: Memory retrieval with PostgreSQL pgvector.
+#              Simplified to 2 types: static (global) and dynamic (per-session).
+#
+# No more semantic/episodic/segments - just static and dynamic.
 
 import math
 from datetime import datetime, timedelta
@@ -70,15 +73,14 @@ def _search_temporal_messages(session_id, start, end, limit=200):
     try:
         start_str = start.strftime('%Y-%m-%d %H:%M:%S')
         end_str = end.strftime('%Y-%m-%d %H:%M:%S')
-        
+
         messages = get_session_messages(session_id, limit=limit)
-        
+
         for msg in messages:
-            # Filter by timestamp
             ts = msg.get("timestamp", "")
             if ts < start_str or ts > end_str:
                 continue
-                
+
             content = msg.get("content", "")
             if msg.get("content_encrypted"):
                 try:
@@ -86,7 +88,7 @@ def _search_temporal_messages(session_id, start, end, limit=200):
                     content = encryptor.decrypt(content)
                 except Exception:
                     content = "[ENCRYPTED]"
-                    
+
             results.append({
                 "timestamp": ts,
                 "role": msg.get("role"),
@@ -98,7 +100,7 @@ def _search_temporal_messages(session_id, start, end, limit=200):
 
 
 def _recency_factor(last_accessed) -> float:
-    """Recency score 0.0–1.0, half-life of 24 hours."""
+    """Recency score 0.0-1.0, half-life of 24 hours."""
     if not last_accessed:
         return 0.1
     now = datetime.now()
@@ -121,230 +123,123 @@ def _embed_query(text: str) -> list[float] | None:
         return None
 
 
-# ── Retrieval functions ────────────────────────────────────────────────────────
+def _score_fact(r: dict) -> float:
+    """Hybrid score: similarity * 0.6 + importance * 0.2 + confidence * 0.2"""
+    meta = r.get("metadata", {})
+    distance = r.get("distance", 0.0)
+    similarity = 1.0 - distance
+    importance = meta.get("importance", 0.5)
+    confidence = meta.get("confidence", 0.5)
+    return similarity * 0.6 + importance * 0.2 + confidence * 0.2
 
-def retrieve_semantic_memories(session_id, query=None, limit=15):
+
+def _parse_fact_content(r: dict) -> dict:
+    """Parse fact content and metadata into standardized format."""
+    meta = r.get("metadata", {})
+    content = r.get("content", "")
+
+    # Try to parse as "entity relation target" format
+    parts = content.split(" ", 2)
+    entity = meta.get("entity", parts[0] if len(parts) > 0 else "User")
+    relation = meta.get("relation", parts[1] if len(parts) > 1 else "unknown")
+    target = meta.get("target", parts[2] if len(parts) > 2 else content)
+
+    return {
+        "id": r.get("id"),
+        "content": content,
+        "entity": entity,
+        "relation": relation,
+        "target": target,
+        "confidence": meta.get("confidence", 0.5),
+        "importance": meta.get("importance", 0.5),
+        "score": _score_fact(r),
+        "last_accessed": r.get("last_accessed"),
+    }
+
+
+# ── Retrieval functions ──────────────────────────────────────────────────────
+
+def retrieve_static_memories(query=None, limit=15):
     """
-    Retrieve semantic memories using PostgreSQL pgvector search.
-    
-    Args:
-        session_id: current session
-        query: optional user query for semantic search
-        limit: max results
-        
-    Returns:
-        list of dicts with entity, relation, target, confidence, importance, score
+    Retrieve static (global) memories - no session filter.
+    Returns list of parsed facts sorted by score.
     """
     query_vec = _embed_query(query) if query else None
-    
+
     if query_vec:
-        # Vector search via PostgreSQL
         results = search_similar(
             embedding=query_vec,
-            session_id=session_id,
             fact_type=FACT_TYPE_STATIC,
-            metadata_filter={"source_table": "semantic_memories"},
             limit=limit,
         )
-        
-        scored = []
-        for r in results:
-            meta = r.get("metadata", {})
-            # Hybrid scoring: similarity * 0.6 + importance * 0.2 + confidence * 0.2
-            distance = r.get("distance", 0.0)
-            similarity = 1.0 - distance  # Convert distance to similarity
-            importance = meta.get("importance", 0.5)
-            confidence = meta.get("confidence", 0.5)
-            score = similarity * 0.6 + importance * 0.2 + confidence * 0.2
-            
-            # Parse content as "entity relation target" format
-            content = r.get("content", "")
-            parts = content.split(" ", 2)
-            entity = parts[0] if len(parts) > 0 else "User"
-            relation = parts[1] if len(parts) > 1 else "unknown"
-            target = parts[2] if len(parts) > 2 else content
-            
-            scored.append({
-                "id": r.get("id"),
-                "entity": meta.get("entity", entity),
-                "relation": meta.get("relation", relation),
-                "target": meta.get("target", target),
-                "confidence": confidence,
-                "importance": importance,
-                "score": score,
-            })
-        
-        # Update last_accessed for retrieved memories
-        if scored:
-            update_last_accessed([m["id"] for m in scored])
-        
-        return sorted(scored, key=lambda x: x["score"], reverse=True)[:limit]
-    
-    # Fallback: get all static facts for session
-    facts = get_facts_by_session(session_id, fact_type=FACT_TYPE_STATIC, limit=limit)
-    return [
-        {
-            "id": f.get("id"),
-            "entity": f.get("metadata", {}).get("entity", "User"),
-            "relation": f.get("metadata", {}).get("relation", "unknown"),
-            "target": f.get("metadata", {}).get("target", f.get("content", "")),
-            "confidence": f.get("metadata", {}).get("confidence", 0.5),
-            "importance": f.get("metadata", {}).get("importance", 0.5),
-            "score": f.get("metadata", {}).get("importance", 0.5),
-        }
-        for f in facts
-    ]
+    else:
+        results = get_facts_by_session(session_id=None, fact_type=FACT_TYPE_STATIC, limit=limit)
+
+    if not results:
+        return []
+
+    parsed = [_parse_fact_content(r) for r in results]
+    parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
+
+    if parsed:
+        update_last_accessed([m["id"] for m in parsed])
+
+    return parsed
 
 
-def retrieve_episodic_memories(session_id, query=None, limit=5):
+def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
     """
-    Retrieve episodic memories using PostgreSQL pgvector search.
-    
-    Args:
-        session_id: current session
-        query: optional user query for semantic search
-        limit: max results
-        
-    Returns:
-        list of dicts with summary, importance, emotional_weight, score
+    Retrieve dynamic (per-session) memories.
+    Returns list of parsed facts sorted by score.
     """
     query_vec = _embed_query(query) if query else None
-    
+
     if query_vec:
         results = search_similar(
             embedding=query_vec,
             session_id=session_id,
             fact_type=FACT_TYPE_DYNAMIC,
-            metadata_filter={"source_table": "episodic_memories"},
             limit=limit,
         )
-        
-        scored = []
-        for r in results:
-            meta = r.get("metadata", {})
-            distance = r.get("distance", 0.0)
-            similarity = 1.0 - distance
-            importance = meta.get("importance", 0.5)
-            recency = _recency_factor(r.get("last_accessed"))
-            score = similarity * 0.5 + importance * 0.25 + recency * 0.25
-            
-            scored.append({
-                "id": r.get("id"),
-                "summary": r.get("content"),
-                "importance": importance,
-                "emotional_weight": meta.get("emotional_weight", 0.0),
-                "score": score,
-            })
-        
-        if scored:
-            update_last_accessed([m["id"] for m in scored])
-        
-        return sorted(scored, key=lambda x: x["score"], reverse=True)[:limit]
-    
-    # Fallback
-    facts = get_facts_by_session(session_id, fact_type=FACT_TYPE_DYNAMIC, limit=limit)
-    return [
-        {
-            "id": f.get("id"),
-            "summary": f.get("content"),
-            "importance": f.get("metadata", {}).get("importance", 0.5),
-            "emotional_weight": f.get("metadata", {}).get("emotional_weight", 0.0),
-            "score": f.get("metadata", {}).get("importance", 0.5),
-        }
-        for f in facts
-        if f.get("metadata", {}).get("source_table") == "episodic_memories"
-    ]
+    else:
+        results = get_facts_by_session(session_id=session_id, fact_type=FACT_TYPE_DYNAMIC, limit=limit)
+
+    if not results:
+        return []
+
+    parsed = [_parse_fact_content(r) for r in results]
+    parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
+
+    if parsed:
+        update_last_accessed([m["id"] for m in parsed])
+
+    return parsed
 
 
-def retrieve_segments(session_id, query=None, limit=5):
-    """
-    Retrieve conversation segments using PostgreSQL pgvector search.
-    
-    Args:
-        session_id: current session
-        query: optional user query for semantic search
-        limit: max results
-        
-    Returns:
-        list of dicts with summary, importance, start_message_id, end_message_id, score
-    """
-    query_vec = _embed_query(query) if query else None
-    
-    if query_vec:
-        results = search_similar(
-            embedding=query_vec,
-            session_id=session_id,
-            fact_type=FACT_TYPE_DYNAMIC,
-            metadata_filter={"source_table": "conversation_segments"},
-            limit=limit,
-        )
-        
-        scored = []
-        for r in results:
-            meta = r.get("metadata", {})
-            distance = r.get("distance", 0.0)
-            similarity = 1.0 - distance
-            importance = meta.get("importance", 0.5)
-            score = similarity * 0.5 + importance * 0.5
-            
-            scored.append({
-                "id": r.get("id"),
-                "summary": r.get("content"),
-                "importance": importance,
-                "start_message_id": meta.get("start_message_id"),
-                "end_message_id": meta.get("end_message_id"),
-                "score": score,
-            })
-        
-        if scored:
-            update_last_accessed([m["id"] for m in scored])
-        
-        return sorted(scored, key=lambda x: x["score"], reverse=True)[:limit]
-    
-    # Fallback
-    facts = get_facts_by_session(session_id, fact_type=FACT_TYPE_DYNAMIC, limit=limit)
-    return [
-        {
-            "id": f.get("id"),
-            "summary": f.get("content"),
-            "importance": f.get("metadata", {}).get("importance", 0.5),
-            "start_message_id": f.get("metadata", {}).get("start_message_id"),
-            "end_message_id": f.get("metadata", {}).get("end_message_id"),
-            "score": f.get("metadata", {}).get("importance", 0.5),
-        }
-        for f in facts
-        if f.get("metadata", {}).get("source_table") == "conversation_segments"
-    ]
+# Legacy aliases for backward compat
+retrieve_semantic_memories = retrieve_static_memories
+retrieve_episodic_memories = retrieve_dynamic_memories
+retrieve_segments = retrieve_dynamic_memories
 
 
-def retrieve_memory(session_id, query=None):
+def retrieve_memory(session_id: int, query=None):
     """
     Main retrieval entry point.
 
-    Args:
-        session_id: current session
-        query: optional user query for semantic search
-
     Returns:
-        dict with semantic, episodic, segments, temporal_messages
+        dict with static, dynamic, temporal_messages
     """
     try:
-        semantic = retrieve_semantic_memories(session_id, query=query, limit=15)
+        static = retrieve_static_memories(query=query, limit=15)
     except Exception as e:
-        print(f"[WARNING] Semantic memory retrieval failed: {e}")
-        semantic = []
+        print(f"[WARNING] Static memory retrieval failed: {e}")
+        static = []
 
     try:
-        episodic = retrieve_episodic_memories(session_id, query=query, limit=5)
+        dynamic = retrieve_dynamic_memories(session_id, query=query, limit=10)
     except Exception as e:
-        print(f"[WARNING] Episodic memory retrieval failed: {e}")
-        episodic = []
-
-    try:
-        segments = retrieve_segments(session_id, query=query, limit=5)
-    except Exception as e:
-        print(f"[WARNING] Segment retrieval failed: {e}")
-        segments = []
+        print(f"[WARNING] Dynamic memory retrieval failed: {e}")
+        dynamic = []
 
     temporal_messages = []
     if query:
@@ -357,9 +252,8 @@ def retrieve_memory(session_id, query=None):
             pass
 
     return {
-        "semantic": semantic,
-        "episodic": episodic,
-        "segments": segments,
+        "static": static,
+        "dynamic": dynamic,
         "temporal_messages": temporal_messages,
     }
 
@@ -368,37 +262,31 @@ def format_memory(memory_bundle):
     """Format a memory bundle into a text string for system message injection."""
     parts = []
 
-    semantic = memory_bundle.get("semantic", [])
-    if semantic:
+    # Static memories - global facts
+    static = memory_bundle.get("static", [])
+    if static:
         parts.append("Known preferences:")
-        for mem in semantic:
+        for mem in static[:10]:
             parts.append(f"- {mem['entity']} {mem['relation']} {mem['target']}")
 
-    episodic = memory_bundle.get("episodic", [])
-    if episodic:
-        parts.append("\nRecent important events:")
-        for mem in episodic:
-            summary = mem.get("summary") or ""
-            if len(summary) > 200:
-                summary = summary[:200] + "..."
-            parts.append(f"- {summary}")
+    # Dynamic memories - session-specific facts
+    dynamic = memory_bundle.get("dynamic", [])
+    if dynamic:
+        parts.append("\nSession memories:")
+        for mem in dynamic[:5]:
+            content = mem.get("content") or mem.get("target") or ""
+            if len(content) > 150:
+                content = content[:150] + "..."
+            parts.append(f"- {content}")
 
-    segments = memory_bundle.get("segments", [])
-    if segments:
-        parts.append("\nRelevant past context:")
-        for seg in segments:
-            summary = seg.get("summary") or ""
-            if len(summary) > 200:
-                summary = summary[:200] + "..."
-            parts.append(f"- {summary}")
-
+    # Temporal messages
     temporal = memory_bundle.get("temporal_messages", [])
     if temporal:
         parts.append("\nMessages from requested time period:")
         for msg in temporal[:10]:
             ts = msg.get("timestamp", "")[:16]
             role = msg.get("role", "")
-            content = msg.get("content", "")[:300]
+            content = msg.get("content", "")[:200]
             parts.append(f"- [{ts}] {role}: {content}")
 
     return "\n".join(parts)
