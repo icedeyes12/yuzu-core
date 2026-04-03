@@ -159,7 +159,7 @@ def search_similar(
     params = [vec_str]
 
     if session_id is not None:
-        conditions.append("metadata->>'session_id'::int = %s")
+        conditions.append("(metadata->>'session_id')::int = %s")
         params.append(session_id)
 
     if fact_type:
@@ -214,7 +214,7 @@ def get_facts_by_session(
     params.append(limit)
 
     return pg_fetchall(
-        f"SELECT * FROM semantic_facts WHERE metadata->>'session_id'::int=%s{extra} LIMIT %s",
+        f"SELECT * FROM semantic_facts WHERE (metadata->>'session_id')::int=%s{extra} LIMIT %s",
         params,
     )
 
@@ -226,7 +226,7 @@ def count_facts(fact_type: str | None = None, session_id: int | None = None) -> 
         conditions.append("fact_type = %s")
         params.append(fact_type)
     if session_id is not None:
-        conditions.append("metadata->>'session_id'::int = %s")
+        conditions.append("(metadata->>'session_id')::int = %s")
         params.append(session_id)
     where = "WHERE " + " AND ".join(conditions) if conditions else ""
 
@@ -311,7 +311,7 @@ def delete_facts_by_session(session_id: int, fact_type: str | None = None) -> in
         params.append(fact_type)
     try:
         with PgSession() as s:
-            s.execute(f"DELETE FROM semantic_facts WHERE metadata->>'session_id'::int=%s{extra}", params)
+            s.execute(f"DELETE FROM semantic_facts WHERE (metadata->>'session_id')::int=%s{extra}", params)
             return s.conn.affected_rows if hasattr(s.conn, "affected_rows") else 0
     except Exception:
         return 0
@@ -328,7 +328,7 @@ def decay_facts(session_id: int | None = None, fact_type: str | None = None) -> 
     conditions = []
     params = []
     if session_id is not None:
-        conditions.append("metadata->>'session_id'::int = %s")
+        conditions.append("(metadata->>'session_id')::int = %s")
         params.append(session_id)
     if fact_type:
         conditions.append("fact_type = %s")
