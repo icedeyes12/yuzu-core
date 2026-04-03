@@ -117,16 +117,20 @@ def upsert_fact(
     Returns: (existing_id, reinforced=True) or (new_id, reinforced=False)
     """
     if embedding:
-        existing = search_similar(
-            embedding=embedding,
-            session_id=session_id,
-            fact_type=fact_type,
-            limit=1,
-            max_distance=0.05,  # cosine similarity threshold
-        )
+        try:
+            existing = search_similar(
+                embedding=embedding,
+                session_id=session_id,
+                fact_type=fact_type,
+                limit=1,
+                max_distance=0.05,  # cosine similarity threshold
+            )
+        except Exception as e:
+            print(f"[db_memory] upsert_fact search_similar error: {e}")
+            existing = []
         if not existing or len(existing) == 0:
             return None, False
-        e = existing[0] if existing else None
+        e = existing[0]
         # Reinforce existing
         meta = e.get("metadata") or {}
         new_confidence = min((meta.get("confidence") or 0.5) + 0.1, 1.0)
