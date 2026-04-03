@@ -167,8 +167,10 @@ def search_similar(
             return []
 
         vec_str = "[" + ",".join(str(x) for x in norm_vec) + "]"
+        vec_str2 = "[" + ",".join(str(x) for x in norm_vec) + "]"
+        vec_str3 = "[" + ",".join(str(x) for x in norm_vec) + "]"
         
-        params = [vec_str]  # For ORDER BY
+        params = [vec_str]  # For SELECT distance calculation
         conditions = ["embedding IS NOT NULL"]
 
         if session_id is not None:
@@ -187,10 +189,11 @@ def search_similar(
 
         # Distance filter
         conditions.append("(embedding <=> %s::vector) < %s")
-        params.append(vec_str)
+        params.append(vec_str2)  # For WHERE distance filter
         params.append(max_distance)
 
         where_clause = "WHERE " + " AND ".join(conditions)
+        params.append(vec_str3)  # For ORDER BY
         params.append(limit)
 
         query = f"""
