@@ -39,6 +39,8 @@ FACT_TYPE_DYNAMIC = "dynamic"
 # ── Embedding helpers ─────────────────────────────────────────────────────────
 def _normalize(vec: list[float]) -> list[float]:
     """L2-normalize a vector. Works with plain lists (no numpy needed)."""
+    if not vec:
+        return []
     norm = math.sqrt(sum(x * x for x in vec))
     if norm == 0:
         return list(vec)
