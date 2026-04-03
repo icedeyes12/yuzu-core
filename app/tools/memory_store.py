@@ -136,7 +136,7 @@ def execute(arguments, **kwargs):
                 full_command,
                 partner_name,
             )
-        vector = vecs[0]
+        vector = vecs[0] if vecs and len(vecs) > 0 else None
     except Exception as e:
         print(f"[memory_store] Embed failed: {e}")
         return error_result(
@@ -158,7 +158,7 @@ def execute(arguments, **kwargs):
     if existing and len(existing) > 0:
         # Duplicate found — reinforce existing fact
         from app.memory.db_memory import increment_importance
-        e = existing[0]
+        e = existing[0] if existing else None
         increment_importance(e["id"], delta=0.1, cap=1.0)
         new_confidence = e.get("metadata", {}).get("confidence", 0.7)
         return ok_result(

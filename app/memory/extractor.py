@@ -258,7 +258,7 @@ def upsert_semantic_memory(session_id, entity, relation, target):
         if existing and len(existing) > 0:
             # Duplicate found — reinforce existing
             from app.memory.db_memory import increment_importance
-            increment_importance(existing[0].get("id"), delta=0.1, cap=1.0)
+            increment_importance(existing[0] if existing else None.get("id"), delta=0.1, cap=1.0)
             return  # done — no insert needed
 
     # No duplicate — insert new fact
