@@ -342,6 +342,17 @@ def update_session_memory(session_id: int, memory: dict) -> bool:
         return False
 
 
+def get_session_memory(session_id: int) -> dict:
+    """Get session memory from chat_sessions memory_json field."""
+    row = pg_fetchone(
+        "SELECT memory_json FROM chat_sessions WHERE id = %s",
+        (session_id,)
+    )
+    if not row:
+        return {}
+    return _parse_json(row.get('memory_json', '{}'))
+
+
 def increment_message_count(session_id: int) -> bool:
     """Increment the message count for a session."""
     try:
