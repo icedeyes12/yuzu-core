@@ -126,7 +126,7 @@ def upsert_fact(
         )
         if not existing or len(existing) == 0:
             return None, False
-        e = existing[0]
+        e = existing[0] if existing else None
         # Reinforce existing
         meta = e.get("metadata") or {}
         new_confidence = min((meta.get("confidence") or 0.5) + 0.1, 1.0)
