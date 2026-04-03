@@ -95,7 +95,8 @@ class PgSession:
         """Return first row or None."""
         cur = self.conn.cursor()
         cur.execute(query, params)
-        return dict(cur.fetchone()) if cur.fetchone() else None
+        result = cur.fetchone()
+        return dict(result) if result else None
 
     def fetchall(self, query: str, params: tuple | dict | None = None) -> list[dict]:
         """Return all rows as list of dicts."""
@@ -119,7 +120,8 @@ class PgSession:
         """Execute INSERT ... RETURNING * and return the row dict."""
         cur = self.conn.cursor()
         cur.execute(query, params)
-        return dict(cur.fetchone()) if cur.fetchone() else None
+        result = cur.fetchone()
+        return dict(result) if result else None
 
     def execute_batch(self, query: str, params_list: list[tuple]) -> int:
         """Execute many rows (executemany). Returns rowcount."""
