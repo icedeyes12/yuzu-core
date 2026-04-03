@@ -368,7 +368,7 @@ def get_chat_history(session_id: int, limit: int | None = None, recent: bool = F
         query = """
             SELECT id, session_id, role, content, timestamp
             FROM messages
-            WHERE session_id = %s AND role IN ('user', 'assistant', 'system')
+            WHERE session_id = %s
             ORDER BY timestamp DESC
             LIMIT %s
         """
@@ -378,7 +378,7 @@ def get_chat_history(session_id: int, limit: int | None = None, recent: bool = F
         query = """
             SELECT id, session_id, role, content, timestamp
             FROM messages
-            WHERE session_id = %s AND role IN ('user', 'assistant', 'system')
+            WHERE session_id = %s
             ORDER BY timestamp ASC
             LIMIT %s
         """
@@ -387,7 +387,7 @@ def get_chat_history(session_id: int, limit: int | None = None, recent: bool = F
         query = """
             SELECT id, session_id, role, content, timestamp
             FROM messages
-            WHERE session_id = %s AND role IN ('user', 'assistant', 'system')
+            WHERE session_id = %s
             ORDER BY timestamp ASC
         """
         rows = pg_fetchall(query, (session_id,))
@@ -703,7 +703,7 @@ def get_chat_history_for_ai(session_id: int, limit: int | None = None, recent: b
         query = """
             SELECT id, role, content, timestamp
             FROM messages
-            WHERE session_id = %s AND role IN ('user', 'assistant', 'system')
+            WHERE session_id = %s
             ORDER BY timestamp DESC
             LIMIT %s
         """
@@ -713,7 +713,7 @@ def get_chat_history_for_ai(session_id: int, limit: int | None = None, recent: b
         query = """
             SELECT id, role, content, timestamp
             FROM messages
-            WHERE session_id = %s AND role IN ('user', 'assistant', 'system')
+            WHERE session_id = %s
             ORDER BY timestamp ASC
             LIMIT %s
         """
@@ -722,7 +722,7 @@ def get_chat_history_for_ai(session_id: int, limit: int | None = None, recent: b
         query = """
             SELECT id, role, content, timestamp
             FROM messages
-            WHERE session_id = %s AND role IN ('user', 'assistant', 'system')
+            WHERE session_id = %s
             ORDER BY timestamp ASC
         """
         rows = pg_fetchall(query, (session_id,))
