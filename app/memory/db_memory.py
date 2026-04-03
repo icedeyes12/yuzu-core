@@ -77,8 +77,8 @@ def save_fact(
 
     query = """
         INSERT INTO semantic_facts
-            (session_id, fact_type, content, embedding, metadata, created_at, last_accessed)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+            (fact_type, content, embedding, metadata, created_at, last_accessed)
+        VALUES (%s, %s, %s, %s, %s, %s)
         RETURNING id
     """
     vec_sql = norm_vec if norm_vec is not None else None
@@ -86,7 +86,6 @@ def save_fact(
     try:
         with PgSession() as s:
             row = s.execute_returning(query, (
-                session_id,
                 fact_type,
                 content,
                 vec_sql,
@@ -158,7 +157,7 @@ def search_similar(
     params = [vec_str]
 
     if session_id is not None:
-        conditions.append("session_id = %s")
+        conditions.append("metadata->>'session_id' = %s")
         params.append(session_id)
 
     if fact_type:
@@ -175,7 +174,7 @@ def search_similar(
     params.append(limit)
 
     query = f"""
-        SELECT id, session_id, fact_type, content, metadata,
+        SELECT id, fact_type, content, metadata,
                last_accessed, created_at,
                (embedding <=> %s::vector) AS distance
         FROM semantic_facts
@@ -213,7 +212,7 @@ def get_facts_by_session(
     params.append(limit)
 
     return pg_fetchall(
-        f"SELECT * FROM semantic_facts WHERE session_id=%s{extra} LIMIT %s",
+        f"SELECT * FROM semantic_facts WHERE metadata->>'session_id'=%s{extra} LIMIT %s",
         params,
     )
 
@@ -225,7 +224,7 @@ def count_facts(fact_type: str | None = None, session_id: int | None = None) -> 
         conditions.append("fact_type = %s")
         params.append(fact_type)
     if session_id is not None:
-        conditions.append("session_id = %s")
+        conditions.append("metadata->>'session_id' = %s")
         params.append(session_id)
     where = "WHERE " + " AND ".join(conditions) if conditions else ""
 
@@ -310,7 +309,7 @@ def delete_facts_by_session(session_id: int, fact_type: str | None = None) -> in
         params.append(fact_type)
     try:
         with PgSession() as s:
-            s.execute(f"DELETE FROM semantic_facts WHERE session_id=%s{extra}", params)
+            s.execute(f"DELETE FROM semantic_facts WHERE metadata->>'session_id'=%s{extra}", params)
             return s.conn.affected_rows if hasattr(s.conn, "affected_rows") else 0
     except Exception:
         return 0
@@ -327,7 +326,7 @@ def decay_facts(session_id: int | None = None, fact_type: str | None = None) -> 
     conditions = []
     params = []
     if session_id is not None:
-        conditions.append("session_id = %s")
+        conditions.append("metadata->>'session_id' = %s")
         params.append(session_id)
     if fact_type:
         conditions.append("fact_type = %s")
