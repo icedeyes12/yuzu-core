@@ -207,7 +207,9 @@ def search_similar(
         return results if results else []
         
     except Exception as e:
+        import traceback
         print(f"[db_memory] search_similar EXCEPTION: {type(e).__name__}: {e}")
+        traceback.print_exc()
         return []
 
 
