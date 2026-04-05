@@ -9,7 +9,7 @@
 #     session_id     INTEGER,
 #     fact_type      VARCHAR(20)  -- 'static' | 'dynamic'
 #     content        TEXT,
-#     embedding      VECTOR(4096), -- pgvector, NULL allowed
+#     embedding      VECTOR(1024), -- pgvector, NULL allowed
 #     metadata       JSONB,        -- carries per-type fields
 #     created_at     TIMESTAMP DEFAULT NOW(),
 #     last_accessed  TIMESTAMP DEFAULT NOW()
@@ -28,7 +28,7 @@ from __future__ import annotations
 import math
 from datetime import datetime
 
-from app.db_pg import PgSession, pg_fetchone, pg_fetchall, pg_execute, vector_sql
+from app.db_pg import PgSession, pg_fetchone, pg_fetchall, pg_execute
 from psycopg2.extras import Json
 
 
@@ -67,36 +67,55 @@ def save_fact(
     embedding: list[float] | None,
     fact_type: str = FACT_TYPE_STATIC,
     metadata: dict | None = None,
+    category: str | None = None,
 ) -> int | None:
     """
     Insert a new fact into semantic_facts.
 
     Returns the new row id, or None on failure.
     """
-    meta = metadata or {}
+    meta = dict(metadata) if metadata else {}
     if "session_id" not in meta:
         meta["session_id"] = session_id
+    if category:
+        meta["category"] = category
 
-    now = datetime.now()
     norm_vec = _normalize(embedding) if embedding else None
+
+    if norm_vec is not None and len(norm_vec) != 1024:
+        raise ValueError(f"Embedding dimension must be 1024, got {len(norm_vec)}")
+
+    # Build pgvector literal directly — safe: norm_vec is list[float] with no user input
+    vec_literal = ("[" + ",".join(str(x) for x in norm_vec) + "]") if norm_vec is not None else None
+
+    # Reject exact content duplicates (same fact_type + content + not invalidated)
+    try:
+        dup_check = pg_fetchone(
+            "SELECT id FROM semantic_facts WHERE fact_type=%s AND content=%s AND invalid_at IS NULL LIMIT 1",
+            (fact_type, content),
+        )
+        if dup_check:
+            print(f"[db_memory] save_fact: duplicate content found, rejecting id={dup_check['id']}")
+            return dup_check["id"]
+    except Exception as e:
+        print(f"[db_memory] save_fact: dup check failed: {e}")
 
     query = """
         INSERT INTO semantic_facts
             (fact_type, content, embedding, metadata, created_at, last_accessed)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s::vector, %s, %s, %s)
         RETURNING id
     """
-    vec_sql = vector_sql(norm_vec) if norm_vec is not None else None
 
     try:
         with PgSession() as s:
             row = s.execute_returning(query, (
                 fact_type,
                 content,
-                vec_sql,
+                vec_literal,
                 Json(meta),
-                now,
-                now,
+                datetime.now(),
+                datetime.now(),
             ))
             return row["id"] if row else None
     except Exception as e:
@@ -155,23 +174,26 @@ def search_similar(
     limit: int = 15,
     max_distance: float = 1.5,
     metadata_filter: dict | None = None,
+    category: str | None = None,
 ) -> list[dict]:
     """
     ANN search via PostgreSQL <=> (cosine) operator.
-    Returns list of dicts: {id, content, fact_type, metadata, last_accessed, distance}
+    Distance is computed once via CTE and used in WHERE and ORDER BY.
+
+    Returns list of dicts: {id, content, fact_type, metadata,
+                            last_accessed, created_at, distance}
     """
     try:
         norm_vec = _normalize(embedding)
-        if not norm_vec or len(norm_vec) == 0:
+        if not norm_vec:
             print("[db_memory] search_similar: normalized vector is empty")
             return []
 
-        vec_str = "[" + ",".join(str(x) for x in norm_vec) + "]"
-        vec_str2 = "[" + ",".join(str(x) for x in norm_vec) + "]"
-        vec_str3 = "[" + ",".join(str(x) for x in norm_vec) + "]"
-        
-        params = [vec_str]  # For SELECT distance calculation
+        vec_literal = "[" + ",".join(str(x) for x in norm_vec) + "]"
+
+        # Build conditions and params
         conditions = ["embedding IS NOT NULL"]
+        params: list = []
 
         if session_id is not None:
             conditions.append("(metadata->>'session_id')::int = %s")
@@ -181,34 +203,40 @@ def search_similar(
             conditions.append("fact_type = %s")
             params.append(fact_type)
 
+        if category:
+            conditions.append("(metadata->>'category') = %s")
+            params.append(category)
+
         if metadata_filter:
             for key, val in metadata_filter.items():
                 conditions.append("metadata->>%s = %s")
                 params.append(key)
                 params.append(val)
 
-        # Distance filter
-        conditions.append("(embedding <=> %s::vector) < %s")
-        params.append(vec_str2)  # For WHERE distance filter
-        params.append(max_distance)
+        cond_sql = " AND ".join(conditions)
 
-        where_clause = "WHERE " + " AND ".join(conditions)
-        params.append(vec_str3)  # For ORDER BY
-        params.append(limit)
-
+        # NOTE: vec_literal is interpolated directly as a string literal.
+        # It is a pure float list — no SQL injection risk.
         query = f"""
+            WITH searched AS (
+                SELECT id, fact_type, content, metadata,
+                       last_accessed, created_at,
+                       (embedding <=> '{vec_literal}'::vector) AS distance
+                FROM semantic_facts
+                WHERE {cond_sql}
+                  AND (embedding <=> '{vec_literal}'::vector) < %s
+            )
             SELECT id, fact_type, content, metadata,
-                   last_accessed, created_at,
-                   (embedding <=> %s::vector) AS distance
-            FROM semantic_facts
-            {where_clause}
-            ORDER BY embedding <=> %s::vector
+                   last_accessed, created_at, distance
+            FROM searched
+            ORDER BY distance
             LIMIT %s
         """
-        
+        params.extend([max_distance, limit])
+
         results = pg_fetchall(query, params)
         return results if results else []
-        
+
     except Exception as e:
         import traceback
         print(f"[db_memory] search_similar EXCEPTION: {type(e).__name__}: {e}")
@@ -319,9 +347,57 @@ def increment_importance(id: int, delta: float = 0.05, cap: float = 1.0) -> bool
         return False
 
 
+# ── Soft Delete ───────────────────────────────────────────────────────────────
+def invalidate_fact(id: int) -> bool:
+    """
+    Soft-delete a fact by setting invalid_at = NOW().
+    Does NOT hard-delete — preserves history for audit.
+    """
+    try:
+        pg_execute(
+            "UPDATE semantic_facts SET invalid_at=%s, last_accessed=%s WHERE id=%s",
+            (datetime.now(), datetime.now(), id),
+        )
+        return True
+    except Exception as e:
+        print(f"[db_memory] invalidate_fact failed: {e}")
+        return False
+
+
+def get_active_facts(
+    session_id: int | None = None,
+    fact_type: str | None = None,
+    category: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """
+    Get active (non-deleted) facts only.
+    Adds WHERE invalid_at IS NULL to all reads.
+    """
+    conditions = ["invalid_at IS NULL"]
+    params: list = []
+
+    if session_id is not None:
+        conditions.append("(metadata->>'session_id')::int = %s")
+        params.append(session_id)
+    if fact_type:
+        conditions.append("fact_type = %s")
+        params.append(fact_type)
+    if category:
+        conditions.append("(metadata->>'category') = %s")
+        params.append(category)
+
+    params.append(limit)
+    where = " AND ".join(conditions)
+    return pg_fetchall(
+        f"SELECT * FROM semantic_facts WHERE {where} LIMIT %s",
+        params,
+    )
+
+
 # ── Delete ────────────────────────────────────────────────────────────────────
 def delete_fact(id: int) -> bool:
-    """Delete a single fact by id. Returns True if deleted."""
+    """Hard-delete a single fact by id. Prefer invalidate_fact() for soft delete."""
     try:
         pg_execute("DELETE FROM semantic_facts WHERE id=%s", (id,))
         return True

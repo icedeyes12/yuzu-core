@@ -7,9 +7,9 @@ import threading
 from app.db_pg_models import get_api_key
 
 
-CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-8b.chutes.ai/v1/embeddings"
-DEFAULT_MODEL = "Qwen/Qwen3-Embedding-8B"
-EMBEDDING_DIM = 4096  # Qwen3-Embedding-8B default output dimension
+CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-0-6b.chutes.ai/v1/embeddings"
+DEFAULT_MODEL = "Qwen/Qwen3-Embedding-0.6B"
+EMBEDDING_DIM = 1024  # Qwen3-Embedding-0.6B output dimension
 
 _thread_local = threading.local()
 
@@ -48,7 +48,10 @@ def embed_texts(texts, model=None, dimensions=None, encoding_format="float"):
 
     resp = session.post(CHUTES_EMBED_ENDPOINT, json=payload, timeout=60)
     resp.raise_for_status()
-    return [item["embedding"] for item in resp.json()["data"]]
+    results = [item["embedding"] for item in resp.json()["data"]]
+    if results and len(results[0]) != EMBEDDING_DIM:
+        raise ValueError(f"Embedding dim mismatch: got {len(results[0])}, expected {EMBEDDING_DIM}")
+    return results
 
 
 def embed_text(text, **kwargs):

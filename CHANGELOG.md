@@ -2,6 +2,81 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.3.0] - 2026-04-05
+
+### Added — Memory System Major Upgrade (Phases 3-8)
+
+- **`app/memory/pcl.py`** (NEW): Predict-Calibrate Learning pipeline
+  - `run_predict_calibrate()` — aligned with plast-mem's PCL: PREDICT → CALIBRATE → CONSOLIDATE
+  - `load_relevant_semantic_facts()` — fetches top active semantic facts as prediction context
+  - `predict_episode_content()` — LLM predicts episode content from existing knowledge
+  - `calibrate_and_extract()` — identifies knowledge gaps between prediction and reality
+  - `consolidate_facts()` — applies actions: new / reinforce / update / invalidate
+  - Wired into `process_messages_for_memory()` after episodic creation
+
+- **`app/memory/memory_review.py`** (NEW): LLM-based memory review system
+  - `review_memory()` — LLM rates each retrieved memory: Again/Hard/Good/Easy
+  - `mark_retrieved_as_pending_review()` — marks retrieved facts for deferred review
+  - FSRS parameter updates: Again (×0.5), Hard (×0.9), Good (×1.2), Easy (×1.5)
+  - `pending_review` flag in metadata cleared after review
+
+- **`app/memory/segmenter.py`** — LLM dual-channel segmentation
+  - `_llm_detect_boundary()` — LLM returns `{should_segment, surprise_level, topic_shift}`
+  - `_should_segment()` — dual-channel: time-gap rule OR LLM decides
+  - `surprise_level` passed to `create_episodic_memory` → flashbulb stability boost
+  - `segment_session()` threads previous summary for LLM context
+
+- **`app/memory/retrieval.py`** — Reciprocal Rank Fusion (RRF) + dedicated segment retrieval
+  - `_rrf_merge()` — full RRF implementation: `score = Σ 1.0 / (k + rank)`, k=60
+  - Hybrid scoring after RRF: `similarity × 0.6 + importance × 0.2 + confidence × 0.2`
+  - `retrieve_segments()` — dedicated segment retrieval (source_table filter), not alias
+  - `retrieve_memory()` wires `mark_retrieved_as_pending_review()` on all returned fact IDs
+
+### Changed — Memory System
+
+- **`app/memory/embedder.py`**: Switched to Qwen3-Embedding-0.6B (1024-dim)
+  - Endpoint: `https://chutes-qwen-qwen3-embedding-0-6b.chutes.ai/v1/embeddings`
+  - `EMBEDDING_DIM`: 4096 → 1024
+  - Dimension guard in `embed_texts()` — raises if returned vector != 1024
+
+- **`app/memory/db_memory.py`**: Search + storage improvements
+  - `search_similar()` — direct string interpolation for vec_literal (avoids psycopg2 CTE binding issues)
+  - `save_fact()` — dimension assert (raises if embedding != 1024)
+  - `_normalize()` — unit-length for cosine similarity
+  - `invalidate_fact()` — soft delete: sets `invalid_at = NOW()`
+  - `get_active_facts()` — excludes soft-deleted facts (`invalid_at IS NULL`)
+  - `soft_delete_fact()` — alias for `invalidate_fact()`
+  - `save_fact()` accepts explicit `category` param
+
+- **`app/memory/extractor.py`**: 8-category taxonomy + source tracking
+  - `_RELATION_TO_CATEGORY` mapping — all 8 plast-mem categories
+  - `upsert_semantic_memory()` — category mapped from relation, `source_episodic_ids` tracked
+  - On reinforce: appends to `source_episodic_ids` (not just `access_count`)
+  - On new: initializes `source_episodic_ids = [episode_id]`
+  - `create_episodic_memory()` returns `fact_id` for PCL chaining
+
+- **`app/memory/review.py`**: FSRS scope narrowed
+  - Decay applies to episodic/dynamic only — static/semantic facts NOT decayed
+  - Semantic facts use temporal validity (`valid_at`/`invalid_at`) instead of FSRS decay
+
+- **`app/db_pg.py`**: `Vector` class repr fixed
+  - `__repr__` uses `[]` (pgvector array syntax) not `{}`
+
+### Changed — Embedding Infrastructure
+
+- **`scripts/reembed_all.py`** (NEW): Three-phase column migration
+  - `--migrate` — adds `embedding_1024` column (VECTOR(1024))
+  - `--reembed` — re-embed all existing 4096-dim memories to 1024-dim
+  - `--finalize` — rename `embedding_1024 → embedding`, drop old column
+  - Uses direct SQL string interpolation for pgvector literals
+
+### Documentation
+
+- **`app/memory/docs/architecture.md`**: Fully rewritten
+  - Reflects current implementation: Qwen3-Embedding-0.6B, 1024-dim, RRF, PCL, dual-channel segmentation, LLM review
+  - All Mermaid diagrams updated
+  - Core Modules Summary now includes `pcl.py` and `memory_review.py`
+
 ## [2.2.0] - 2026-04-03
 
 ### Changed — Database Architecture (Breaking)

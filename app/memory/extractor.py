@@ -119,19 +119,37 @@ Extract ONLY persistent, high-value facts from the user's messages.
         # Validate and clean
         cleaned = []
         for f in facts:
-            if (
-                isinstance(f, dict)
-                and f.get("entity")
-                and f.get("relation")
-                and f.get("target")
-            ):
-                target = str(f["target"]).strip()
-                if 3 < len(target) < 300:
-                    cleaned.append({
-                        "entity": "User",
-                        "relation": f["relation"].title(),
-                        "target": target,
-                    })
+            if not isinstance(f, dict):
+                continue
+            entity = str(f.get("entity", "")).strip()
+            relation = f.get("relation", "")
+            target = str(f.get("target", "")).strip()
+
+            # Skip if LLM mistakenly assigns entity=Yuzu/companion/AI
+            if entity.lower() in ("yuzu", "companion", "ai", "assistant", "your name", ""):
+                entity = "User"
+
+            if not (entity and relation and target):
+                continue
+            if not (3 < len(target) < 300):
+                continue
+
+            # Prune: skip facts that describe Yuzu itself, not the user
+            lc = (entity + " " + relation + " " + target).lower()
+            skip_patterns = [
+                "i am yuzu", "saya yuzu", "aku yuzu",
+                "my name is yuzu", "nama saya yuzu",
+                "call me yuzu", "yuzu is a",
+                "yuzu does", "yuzu can", "yuzu will",
+            ]
+            if any(p in lc for p in skip_patterns):
+                continue
+
+            cleaned.append({
+                "entity": entity,
+                "relation": relation.title(),
+                "target": target,
+            })
         return cleaned
 
     except Exception as e:
@@ -229,14 +247,67 @@ def _build_semantic_text(entity, relation, target) -> str:
 
 # ── Storage (using db_memory) ──────────────────────────────────────────────────
 
-def upsert_semantic_memory(session_id, entity, relation, target):
-    """Insert or update a semantic memory with embedding.
+_RELATION_TO_CATEGORY = {
+    # identity
+    "identity": "Identity",
+    "name": "Identity",
+    "profession": "Identity",
+    "location": "Identity",
+    "company": "Identity",
+    "education": "Identity",
+    "demographics": "Identity",
+    # preference
+    "preference": "Preference",
+    "likes": "Preference",
+    "dislikes": "Preference",
+    "favorites": "Preference",
+    "habit": "Preference",
+    # interest
+    "interest": "Interest",
+    "hobby": "Interest",
+    "topic": "Interest",
+    # personality
+    "personality": "Personality",
+    "communication_style": "Personality",
+    "emotional_tendency": "Personality",
+    "trait": "Personality",
+    # relationship
+    "relationship": "Relationship",
+    "shared_routine": "Relationship",
+    "inside_joke": "Relationship",
+    # experience
+    "experience": "Experience",
+    "skill": "Experience",
+    "past_event": "Experience",
+    "background": "Experience",
+    # goal
+    "goal": "Goal",
+    "aspiration": "Goal",
+    "plan": "Goal",
+    # guideline
+    "guideline": "Guideline",
+    "behavior": "Guideline",
+    "tone": "Guideline",
+}
+
+
+def _map_relation_to_category(relation: str) -> str:
+    """Map a relation keyword to one of the 8 categories."""
+    key = relation.lower().strip()
+    return _RELATION_TO_CATEGORY.get(key, "Experience")
+
+
+def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None):
+    """Insert or update a semantic memory with embedding and 8-category taxonomy.
 
     Duplicate detection: vector search for top-5 similar records;
     if any distance < 0.05, reinforce the existing record.
+    On reinforce: append to source_episodic_ids.
+    On new: initialize source_episodic_ids = [episode_id] if provided.
     """
+    category = _map_relation_to_category(relation)
     text = _build_semantic_text(entity, relation, target)
-    
+
     # Embed the text
     try:
         from app.memory.embedder import embed_text
@@ -254,28 +325,76 @@ def upsert_semantic_memory(session_id, entity, relation, target):
             limit=5,
             max_distance=0.05,
         )
-        
+
+        # FALLBACK: text-level dedupe (in case embedding failed)
         if existing and len(existing) > 0:
-            # Duplicate found — reinforce existing
-            from app.memory.db_memory import increment_importance
-            increment_importance(existing[0]["id"], delta=0.1, cap=1.0)
-            return  # done — no insert needed
+            e = existing[0]
+            if e.get("content") == text:
+                # Exact content match — reinforce existing
+                from app.memory.db_memory import increment_importance, pg_execute
+                from psycopg2.extras import Json
+                from datetime import datetime
+                increment_importance(e["id"], delta=0.1, cap=1.0)
+                meta = e.get("metadata") or {}
+                ids = meta.get("source_episodic_ids", [])
+                if episode_id and episode_id not in ids:
+                    ids.append(episode_id)
+                elif not ids:
+                    ids = [episode_id] if episode_id else []
+                meta["source_episodic_ids"] = ids
+                meta["category"] = category
+                pg_execute(
+                    "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
+                    (datetime.now(), Json(meta), e["id"]),
+                )
+                return  # done — no insert needed
+
+        # Also check by exact content match directly in DB
+        from app.memory.db_memory import pg_fetchone
+        existing_exact = pg_fetchone(
+            "SELECT id, metadata FROM semantic_facts WHERE fact_type=%s AND content=%s AND invalid_at IS NULL LIMIT 1",
+            (FACT_TYPE_STATIC, text)
+        )
+        if existing_exact:
+            from app.memory.db_memory import increment_importance, pg_execute
+            from psycopg2.extras import Json
+            from datetime import datetime
+            increment_importance(existing_exact["id"], delta=0.1, cap=1.0)
+            meta = existing_exact.get("metadata") or {}
+            ids = meta.get("source_episodic_ids", [])
+            if episode_id and episode_id not in ids:
+                ids.append(episode_id)
+            elif not ids:
+                ids = [episode_id] if episode_id else []
+            meta["source_episodic_ids"] = ids
+            meta["category"] = category
+            pg_execute(
+                "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
+                (datetime.now(), Json(meta), existing_exact["id"]),
+            )
+            return  # exact content dupe — reinforce, don't insert
 
     # No duplicate — insert new fact
+    metadata = {
+        "entity": entity,
+        "relation": relation,
+        "target": target,
+        "confidence": 0.7,
+        "importance": 0.7,
+        "category": category,
+        "source_table": "semantic_memories",
+        "session_id": session_id,
+    }
+    if episode_id:
+        metadata["source_episodic_ids"] = [episode_id]
+
     save_fact(
         session_id=session_id,
         content=f"{entity} {relation} {target}",
         embedding=vector,
         fact_type=FACT_TYPE_STATIC,
-        metadata={
-            "entity": entity,
-            "relation": relation,
-            "target": target,
-            "confidence": 0.7,
-            "importance": 0.7,
-            "source_table": "semantic_memories",
-            "session_id": session_id,
-        },
+        metadata=metadata,
+        category=category,
     )
 
 
@@ -297,7 +416,7 @@ def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance
         print(f"[WARNING] Embedding failed: {e}")
         vector = None
 
-    save_fact(
+    fact_id = save_fact(
         session_id=session_id,
         content=summary,
         embedding=vector,
@@ -310,12 +429,14 @@ def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance
             "session_id": session_id,
         },
     )
+    return fact_id
 
 
 # ── Main entry point ─────────────────────────────────────────────────────────
 
 def process_messages_for_memory(session_id, messages, affection_delta: float = 0):
     """Analyze messages and extract memories (LLM-only semantic, LLM episodic).
+    After episodic creation, triggers PCL pipeline.
 
     This is called from session init. Idempotent per session.
     """
@@ -339,14 +460,30 @@ def process_messages_for_memory(session_id, messages, affection_delta: float = 0
         print(f"[WARNING] Semantic fact extraction failed: {e}")
 
     # 2. Episodic if emotionally significant
+    episode_id = None
+    episode_summary = None
     if should_create_episodic(messages, affection_delta):
         emotional_weight = calculate_emotional_weight(messages)
         summary = generate_episodic_summary(messages)
         if summary:
             try:
                 importance = 0.5 + emotional_weight * 0.3
-                create_episodic_memory(
+                episode_id = create_episodic_memory(
                     session_id, summary, emotional_weight, importance
                 )
+                episode_summary = summary
             except Exception as e:
                 print(f"[WARNING] Episodic memory creation failed: {e}")
+
+    # 3. PCL pipeline — trigger after episodic creation
+    if episode_id and episode_summary:
+        try:
+            from app.memory.pcl import run_predict_calibrate
+            run_predict_calibrate(
+                session_id=session_id,
+                episode_summary=episode_summary,
+                messages=messages,
+                episode_id=episode_id,
+            )
+        except Exception as e:
+            print(f"[WARNING] PCL pipeline failed: {e}")

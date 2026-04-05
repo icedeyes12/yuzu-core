@@ -1670,21 +1670,21 @@ def generate_ai_response(profile, user_message, interface="terminal", session_id
 def auto_name_session_if_needed(session_id, active_session):
     if active_session.get('name') != 'New Chat':
         return
-    
+
     message_count = Database.get_session_messages_count(session_id)
-    
+
     if message_count == 10:
         conversation_summary = Database.get_session_conversation_summary(session_id, limit=15)
-        
+
         api_keys = Database.get_api_keys()
         openrouter_key = api_keys.get('openrouter')
-        
+
         if openrouter_key:
             name = generate_session_name_ai(conversation_summary, openrouter_key)
             if name:
                 Database.rename_session(session_id, name)
                 return
-        
+
         chat_history = Database.get_chat_history(session_id, limit=5)
         for msg in chat_history:
             if msg['role'] == 'user' and len(msg['content'].strip()) > 10:
@@ -1693,7 +1693,7 @@ def auto_name_session_if_needed(session_id, active_session):
                     first_msg += "..."
                 Database.rename_session(session_id, first_msg)
                 return
-        
+
         fallback_name = f"Chat {session_id}"
         Database.rename_session(session_id, fallback_name)
 
@@ -1703,16 +1703,16 @@ def generate_session_name_ai(conversation_summary, api_key):
 {conversation_summary}
 
 Reply with ONLY the title, nothing else."""
-    
+
     headers = {
         "Content-Type": "application/json",
         "HTTP-Referer": "https://github.com/icedeyes/yuzu-companion",
         "X-Title": "Yuzu-Session-Naming"
     }
-    
+
     try:
         headers["Authorization"] = f"Bearer {api_key}"
-        
+
         data = {
             "model": "tngtech/deepseek-r1t2-chimera:free",
             "messages": [
@@ -1722,14 +1722,14 @@ Reply with ONLY the title, nothing else."""
             "temperature": 3,
             "stream": False
         }
-        
+
         response = requests.post(
             "https://llm.chutes.ai/v1/chat/completions",
             headers=headers,
             json=data,
             timeout=30
         )
-        
+
         if response.status_code == 200:
             result = response.json()
             name = result['choices'][0]['message']['content'].strip()
@@ -1739,7 +1739,7 @@ Reply with ONLY the title, nothing else."""
             return name
         else:
             return None
-            
+
     except Exception:
         return None
 
@@ -1833,31 +1833,15 @@ def start_session(interface="terminal"):
 
         # --- Memory system initialization ---
         try:
-            from app.memory.segmenter import segment_session
+            from app.memory.segmenter import segment_session_init
             from app.memory.review import run_decay
-            from app.memory.extractor import process_messages_for_memory
 
             # Apply FSRS decay to existing memories
             run_decay(session_id)
 
-            # Segment unsegmented messages from past sessions
-            segment_session(session_id)
-
-            # Extract semantic facts + episodic memories — idempotent per session
-            # Check semantic_facts table via db_memory (PostgreSQL)
-            from app.memory.db_memory import count_facts, FACT_TYPE_STATIC, FACT_TYPE_DYNAMIC
-            already_initialized = False
-            try:
-                static_count = count_facts(fact_type=FACT_TYPE_STATIC, session_id=session_id)
-                dynamic_count = count_facts(fact_type=FACT_TYPE_DYNAMIC, session_id=session_id)
-                already_initialized = (static_count > 0 or dynamic_count > 0)
-            except Exception:
-                already_initialized = False
-
-            if not already_initialized:
-                recent = Database.get_chat_history(session_id=session_id, limit=50, recent=True)
-                if recent:
-                    process_messages_for_memory(session_id, recent)
+            # Segment unsegmented messages — fast-path, NO LLM calls
+            # (LLM boundary detection has no useful prior context during init)
+            segment_session_init(session_id)
         except Exception as e:
             print(f"[WARNING] Memory system init failed: {e}")
 
