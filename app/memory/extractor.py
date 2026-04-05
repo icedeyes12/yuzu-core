@@ -119,19 +119,37 @@ Extract ONLY persistent, high-value facts from the user's messages.
         # Validate and clean
         cleaned = []
         for f in facts:
-            if (
-                isinstance(f, dict)
-                and f.get("entity")
-                and f.get("relation")
-                and f.get("target")
-            ):
-                target = str(f["target"]).strip()
-                if 3 < len(target) < 300:
-                    cleaned.append({
-                        "entity": "User",
-                        "relation": f["relation"].title(),
-                        "target": target,
-                    })
+            if not isinstance(f, dict):
+                continue
+            entity = str(f.get("entity", "")).strip()
+            relation = f.get("relation", "")
+            target = str(f.get("target", "")).strip()
+
+            # Skip if LLM mistakenly assigns entity=Yuzu/companion/AI
+            if entity.lower() in ("yuzu", "companion", "ai", "assistant", "your name", ""):
+                entity = "User"
+
+            if not (entity and relation and target):
+                continue
+            if not (3 < len(target) < 300):
+                continue
+
+            # Prune: skip facts that describe Yuzu itself, not the user
+            lc = (entity + " " + relation + " " + target).lower()
+            skip_patterns = [
+                "i am yuzu", "saya yuzu", "aku yuzu",
+                "my name is yuzu", "nama saya yuzu",
+                "call me yuzu", "yuzu is a",
+                "yuzu does", "yuzu can", "yuzu will",
+            ]
+            if any(p in lc for p in skip_patterns):
+                continue
+
+            cleaned.append({
+                "entity": entity,
+                "relation": relation.title(),
+                "target": target,
+            })
         return cleaned
 
     except Exception as e:
