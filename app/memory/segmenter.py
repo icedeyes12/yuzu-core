@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-__all__ = ["segment_session", "_detect_boundaries", "_create_segment"]
+__all__ = ["segment_session", "segment_session_init", "_detect_boundaries", "_create_segment"]
 
 from datetime import datetime
 from app.db_pg_models import get_session_messages
@@ -54,46 +54,72 @@ def _build_message_context(messages: list[dict], max_msgs: int = 6) -> str:
     )
 
 
-def _llm_detect_boundary(messages: list, prev_summary: str | None = None) -> dict:
-    """LLM dual-channel boundary detection — topic shift + surprise.
+def _should_segment_fastpath(prev_group, current_group) -> bool:
+    """Fast-path segmentation: True if time gap OR group size warrants a boundary.
 
-    Returns:
-        dict: {should_segment: bool, surprise_level: float, topic_shift: bool}
+    NO LLM calls — safe for session-init (no conversation context available).
     """
-    if len(messages) < 3:
-        return {"should_segment": False, "surprise_level": 0.0, "topic_shift": False}
+    if not prev_group or not current_group:
+        return False
 
-    try:
-        ai_manager = __import__("app").get_ai_manager()
-    except Exception:
-        return {"should_segment": False, "surprise_level": 0.0, "topic_shift": False}
+    prev_ts = _parse_timestamp(prev_group[-1].get('timestamp'))
+    curr_ts = _parse_timestamp(current_group[0].get('timestamp'))
 
-    # Build a compact representation of this message group
+    # Rule 1: Time gap
+    if prev_ts and curr_ts:
+        gap_minutes = (curr_ts - prev_ts).total_seconds() / 60.0
+        if gap_minutes >= TIME_GAP_MINUTES:
+            return True
+
+    # Rule 2: Size-based
+    if len(prev_group) >= MAX_MESSAGES_PER_SEGMENT:
+        return True
+
+    return False
+
+
+def _default_boundary_result() -> dict:
+    """Default return when LLM boundary detection fails or has no context."""
+    return {"should_segment": False, "surprise_level": 0.0, "topic_shift": False}
+
+
+def _get_ai_manager():
+    """Lazy-import to avoid circular imports."""
+    from app import get_ai_manager
+    return get_ai_manager()
+
+
+def _llm_detect_boundary(current_group, prev_summary, surprise_boost=0.0):
+    """LLM refinement channel — only used during active conversation, not init.
+
+    Returns dict: {should_segment: bool, surprise_level: float, topic_shift: bool}
+    """
+    if not prev_summary or len(current_group) < 3:
+        return _default_boundary_result()
+
     conversation = "\n".join(
         f"{'User' if m.get('role') == 'user' else 'AI'}: {m.get('content', '')}"
-        for m in messages[-6:]  # last 6 messages max
+        for m in current_group
         if m.get("role") in ("user", "assistant")
     )
 
-    prev_context = f"\n\nPrevious segment summary: {prev_summary}" if prev_summary else ""
+    system_prompt = """You are a conversation boundary detector.
 
-    system_prompt = """You are a conversation boundary detector. Analyze the last few messages and respond with ONLY a JSON object, no markdown, no explanation.
+Given the PREVIOUS segment summary and the CURRENT message group, decide if there is a meaningful conversation boundary.
 
-Respond with this exact format:
-{"should_segment": true/false, "surprise_level": 0.0-1.0, "topic_shift": true/false}
+Respond with ONLY a valid JSON object, no markdown, no explanation:
+{"should_segment": true/false, "surprise_level": 0.0-1.0, "topic_shift": true/false, "reason": "brief reason"}
 
-Rules:
-- should_segment = true if there is a meaningful topic change OR a surprising event
-- surprise_level = how emotionally or contextually surprising this segment is (0.0=normal, 1.0=shocking)
-- topic_shift = true if the conversation moved to a substantially different topic
+Consider:
+- topic_shift: did the conversation topic change significantly?
+- surprise_level: was there a significant emotional or informational shift?
+- should_segment: is the boundary meaningful enough to start a new segment?"""
 
-Emotional reactions alone (happy/sad/angry) without topic shift should NOT trigger segmentation unless surprise_level >= 0.7."""
-
-    user_prompt = f"""Analyze this recent conversation:{prev_context}\n\n{conversation}\n\nRespond with ONLY the JSON object."""
+    user_prompt = f"Previous segment summary: {prev_summary}\n\nCurrent messages:\n{conversation[:1000]}"
 
     try:
-        import json
-        response = ai_manager._internal_llm_call(
+        ai = _get_ai_manager()
+        response = ai._internal_llm_call(
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -102,30 +128,30 @@ Emotional reactions alone (happy/sad/angry) without topic shift should NOT trigg
             max_tokens=100,
         )
         if not response:
-            return {"should_segment": False, "surprise_level": 0.0, "topic_shift": False}
+            return _default_boundary_result()
 
-        # Parse JSON, handle truncation
-        try:
-            result = json.loads(response)
-        except json.JSONDecodeError:
-            for i in range(len(response), 0, -1):
-                try:
-                    result = json.loads(response[:i])
-                    if isinstance(result, dict):
-                        break
-                except json.JSONDecodeError:
-                    continue
-            else:
-                return {"should_segment": False, "surprise_level": 0.0, "topic_shift": False}
+        import json
+        result = None
+        for i in range(len(response), 0, -1):
+            try:
+                result = json.loads(response[:i])
+                if isinstance(result, dict) and "should_segment" in result:
+                    break
+            except json.JSONDecodeError:
+                continue
+
+        if not isinstance(result, dict):
+            return _default_boundary_result()
 
         return {
             "should_segment": bool(result.get("should_segment", False)),
             "surprise_level": float(result.get("surprise_level", 0.0)),
             "topic_shift": bool(result.get("topic_shift", False)),
         }
+
     except Exception as e:
-        print(f"[WARNING] LLM boundary detection failed: {e}")
-        return {"should_segment": False, "surprise_level": 0.0, "topic_shift": False}
+        print(f"[segmenter] LLM boundary detection failed: {e}")
+        return _default_boundary_result()
 
 
 def _should_segment(messages: list, prev_summary: str | None = None) -> dict:
@@ -260,8 +286,69 @@ def _detect_boundaries(messages: list[dict], prev_summary: str | None = None) ->
     return segments
 
 
+def _detect_boundaries_fast(messages: list[dict]) -> list[list[dict]]:
+    """Time-gap-only segmentation — NO LLM calls. Safe for session-init."""
+    if not messages:
+        return []
+
+    segments = []
+    current_group = []
+
+    for msg in messages:
+        if current_group:
+            prev_ts = _parse_timestamp(current_group[-1].get("timestamp"))
+            curr_ts = _parse_timestamp(msg.get("timestamp"))
+            if prev_ts and curr_ts:
+                gap_minutes = (curr_ts - prev_ts).total_seconds() / 60.0
+                if gap_minutes >= TIME_GAP_MINUTES:
+                    segments.append(current_group)
+                    current_group = []
+
+            if len(current_group) >= MAX_MESSAGES_PER_SEGMENT:
+                segments.append(current_group)
+                current_group = []
+
+        current_group.append(msg)
+
+    if current_group:
+        segments.append(current_group)
+
+    return segments
+
+
+def segment_session_init(session_id: int) -> int:
+    """Fast-path session initialization — time-gap segmentation only, NO LLM.
+
+    Called from start_session to quickly chunk old messages without burning
+    API credits on boundary detection that has no useful prior context.
+
+    Returns:
+        int: number of segments created.
+    """
+    messages = _get_unsegmented_messages(session_id)
+    if not messages:
+        return 0
+
+    groups = _detect_boundaries_fast(messages)
+    count = 0
+
+    for group in groups:
+        try:
+            if len(group) < MIN_MESSAGES_PER_SEGMENT:
+                continue
+            _create_segment(session_id, group, precomputed_summary=None, surprise_level=0.0)
+            count += 1
+        except Exception as e:
+            print(f"[WARNING] Fast segmentation failed for group: {e}")
+
+    return count
+
+
 def segment_session(session_id: int, prev_summary: str | None = None) -> int:
     """Segment unsegmented messages in a session.
+
+    Uses time-gap rules AND LLM boundary detection (dual-channel).
+    For session-init with no prior context, use segment_session_init() instead.
 
     Args:
         session_id: session to segment
