@@ -13,28 +13,27 @@ flowchart TB
     subgraph PostgreSQL["PostgreSQL (yuzuki)"]
         direction TB
         PG_CORE["Core Tables\nprofiles, chat_sessions,\nmessages, api_keys"]
-        PG_VECTOR["Vector Table\nsemantic_facts\n(VECTOR column)"]
-        PG_INDEX["IVFFlat Index\nANN vector search"]
+        PG_VECTOR["Vector Table\nsemantic_facts\n(VECTOR(1024))"]
     end
 
     subgraph MemoryLayer["Memory Processing Layer"]
-        EMBED["embedder.py\nChutes API embedding"]
-        EXTRACT["extractor.py\nSemantic fact extraction"]
-        SEGMENT["segmenter.py\nConversation segmentation"]
-        RETRIEVE["retrieval.py\nHybrid scoring retrieval"]
-        REVIEW["review.py\nFSRS-style decay"]
+        EMBED["embedder.py\nChutes API (Qwen3-Embedding-0.6B)\n1024-dim vectors"]
+        SEGMENT["segmenter.py\nDual-channel segmentation\n(time-gap + LLM)"]
+        EXTRACT["extractor.py\nLLM semantic extraction\n+ PCL pipeline"]
+        RETRIEVE["retrieval.py\nRRF + hybrid scoring\n+ temporal search"]
+        REVIEW["review.py + memory_review.py\nFSRS decay (episodic)\nLLM memory review"]
+        PCL["pcl.py\nPredict-Calibrate Learning\n(new/reinforce/update/invalidate)"]
     end
 
     USER["User Message"] --> MSG["messages table"]
     MSG --> SEGMENT
     SEGMENT --> EXTRACT
-    EXTRACT --> EMBED
+    EXTRACT --> PCL
+    PCL --> EMBED
     EMBED -->|"list[float]"| PG_VECTOR
-    PG_VECTOR --> PG_INDEX
-    PG_INDEX --> RETRIEVE
+    PG_VECTOR --> RETRIEVE
     RETRIEVE --> CONTEXT["Context Builder"]
     CONTEXT --> LLM["LLM Response"]
-    REVIEW --> PG_VECTOR
 ```
 
 ---
@@ -47,154 +46,176 @@ All data lives in a single PostgreSQL database (`yuzuki`) with the pgvector exte
 
 **Key Design:**
 - No SQLite. No FAISS. No BLOB serialization.
-- Embeddings stored as native `VECTOR(1536)` columns.
-- psycopg2 handles `list[float]` ↔ PostgreSQL vector natively.
+- Embeddings stored as native `VECTOR(1024)` columns.
+- psycopg2 handles `list[float]` directly via string interpolation of float lists.
 
-### Core Tables (db_pg_models.py)
-
-| Table | Purpose |
-|-------|---------|
-| `profiles` | User profile, settings, context |
-| `chat_sessions` | Chat session metadata |
-| `messages` | Raw conversation log |
-| `api_keys` | Encrypted API keys |
-
-### Unified Memory Table (db_memory.py)
-
-**`semantic_facts`** — All memory types in a single table with pgvector.
+### Unified Memory Table (`semantic_facts`)
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | SERIAL PK | Auto-increment ID |
-| `fact_type` | VARCHAR | Memory type: `static`, `dynamic`, `episodic`, `segment` |
-| `content` | TEXT | The actual memory content |
-| `embedding` | VECTOR(1536) | pgvector embedding (native, no serialization) |
-| `metadata` | JSONB | Flexible metadata (session_id, importance, confidence, etc.) |
+| `fact_type` | VARCHAR(20) | `static` (semantic) or `dynamic` (episodic/segment) |
+| `content` | TEXT | The memory content |
+| `embedding` | VECTOR(1024) | pgvector embedding (native, no serialization) |
+| `metadata` | JSONB | Flexible per-type fields |
 | `created_at` | TIMESTAMP | Creation timestamp |
-| `last_accessed` | TIMESTAMP | Last retrieval time |
+| `last_accessed` | TIMESTAMP | Last retrieval timestamp |
+| `invalid_at` | TIMESTAMP | Soft delete — `NULL` = active, set = invalidated |
 
 **Index:** IVFFlat on `embedding` for approximate nearest neighbor (ANN) search.
 
-**Memory Types:**
-
-| `fact_type` | Purpose | Example |
-|-------------|---------|---------|
-| `static` | Stable semantic facts | "User prefers concise answers" |
-| `dynamic` | Decayable memories | "User was frustrated yesterday" |
-| `episodic` | Event summaries | "User completed a major refactor last week" |
-| `segment` | Conversation chunks | Raw message window for context |
-
 ---
 
-## Memory Data Flow
+## Memory Types
 
-```mermaid
-flowchart LR
-    subgraph Input
-        MSG["User Message"]
-    end
+| fact_type | Scope | Decay? | Description |
+|-----------|-------|--------|-------------|
+| `static` | Global (no session filter) | NO — uses `invalid_at` | Semantic facts (preferences, identity, etc.) |
+| `dynamic` | Per-session | YES — FSRS-style | Episodic memories + conversation segments |
 
-    subgraph Processing
-        SEG["segmenter.py\nTime-gap segmentation"]
-        EXT["extractor.py\nLLM fact extraction"]
-        EMB["embedder.py\nVector embedding"]
-    end
+### Metadata per Type
 
-    subgraph Storage["PostgreSQL (yuzuki)"]
-        SEM["semantic_facts\nVECTOR column"]
-    end
+**static (semantic):**
+```json
+{
+  "category": "Preference",
+  "entity": "User",
+  "relation": "Preference",
+  "target": "...fact...",
+  "confidence": 0.7,
+  "importance": 0.7,
+  "source_table": "semantic_memories",
+  "source_episodic_ids": [1, 2, 3],
+  "stability": 1.0,
+  "difficulty": 1.0,
+  "pending_review": false,
+  "last_reviewed_at": null
+}
+```
 
-    subgraph Retrieval
-        RET["retrieval.py\nHybrid scoring"]
-        DEC["review.py\nFSRS decay"]
-    end
+**dynamic (episodic):**
+```json
+{
+  "importance": 0.6,
+  "emotional_weight": 0.4,
+  "summary": "User discussed their coding project",
+  "source_table": "episodic_memories",
+  "consolidated_at": "2026-04-05T10:00:00",
+  "stability": 1.5,
+  "surprise_level": 0.2
+}
+```
 
-    MSG --> SEG
-    SEG --> EXT
-    EXT --> EMB
-    EMB -->|"list[float]"| SEM
-    SEM --> RET
-    SEM --> DEC
-    RET --> CTX["Context for LLM"]
+**dynamic (segment):**
+```json
+{
+  "start_message_id": 42,
+  "end_message_id": 61,
+  "importance": 0.5,
+  "source_table": "conversation_segments"
+}
 ```
 
 ---
 
 ## Segmentation System
 
-Segmentation converts raw message streams into structured memory units.
+Segmentation converts raw message streams into structured memory units. Dual-channel: time-gap rules (fast-path) + LLM boundary detection (refinement).
 
 ### Segmentation Rules
 
-| Rule | Threshold | Purpose |
+| Rule | Threshold | Channel |
 |------|-----------|---------|
-| **Time Gap** | ≥ 15 minutes | Natural conversation break |
-| **Max Size** | 20 messages | Prevent oversized segments |
-| **Min Size** | 3 messages | Discard noise |
+| **Time Gap** | ≥ 15 minutes | Fast-path (no LLM) |
+| **Max Size** | 20 messages | Always enforced |
+| **LLM Detection** | topic shift OR surprise | LLM channel |
+| **Flashbulb** | surprise ≥ 0.85 | Stability boost |
 
-### Segmentation Algorithm
+### Dual-Channel Algorithm
 
 ```mermaid
 flowchart TD
-    A["Fetch unsegmented messages"] --> B["Iterate messages"]
-    B --> C{"Time gap ≥ 15 min?"}
-    C -->|Yes| D["Close segment"]
-    C -->|No| E{"Size ≥ 20?"}
-    E -->|Yes| D
-    E -->|No| F["Add to current group"]
-    D --> G{"Group size ≥ 3?"}
-    G -->|Yes| H["Store segment"]
-    G -->|No| I["Discard"]
-    H --> B
-    F --> B
+    A["New message group (≥3 msgs)"] --> B{"Obvious time-gap ≥ 15 min?"}
+    B -->|Yes| C["Segment — time-gap found"] 
+    B -->|No| D["LLM: _llm_detect_boundary()"]
+    D --> E{"should_segment OR topic_shift?"}
+    E -->|Yes| F["Segment — LLM detected boundary"]
+    E -->|No| G["Continue accumulating"]
+    C --> H["Create episodic memory"]
+    F --> H
+    H --> I{"surprise_level ≥ 0.85?"}
+    I -->|Yes| J["Flashbulb boost: stability × 1.5"]
+    I -->|No| K["Normal stability"]
+    J --> L["Trigger PCL pipeline"]
+    K --> L
+    G --> A
 ```
 
 ### Module: `segmenter.py`
 
 ```python
-# Constants
-MAX_MESSAGES_PER_SEGMENT = 20
-TIME_GAP_MINUTES = 15
-MIN_MESSAGES_PER_SEGMENT = 3
-
-# Key functions
-detect_boundaries(messages)  # Apply time/size rules
-segment_session(session_id)  # Main entry, returns segments created
+segment_session(session_id, prev_summary=None)  # Main entry, returns count
+_should_segment(messages, prev_summary)         # Dual-channel decision
+_llm_detect_boundary(messages, prev_summary)  # LLM boundary detection
 ```
 
 ---
 
-## Semantic Extraction
+## Semantic Extraction + PCL Pipeline
 
-Semantic memory stores long-term, generalized knowledge as RDF-like triples.
+Semantic facts are extracted via the Predict-Calibrate Learning (PCL) pipeline, triggered after episodic memory creation.
 
-### Triple Format
+### PCL Flow
 
+```mermaid
+sequenceDiagram
+    participant SEG as segmenter.py
+    participant PCL as pcl.py
+    participant LLM as AI Manager
+    participant DB as PostgreSQL
+
+    SEG->>PCL: run_predict_calibrate(episode, messages)
+    PCL->>LLM: PREDICT: predict_episode_content(existing_facts, title)
+    LLM-->>PCL: predicted content
+    PCL->>LLM: CALIBRATE: calibrate_and_extract(predicted, actual_messages)
+    LLM-->>PCL: {fact, category, action}
+    PCL->>DB: consolidate_facts() → new | reinforce | update | invalidate
+    DB-->>PCL: applied
+    PCL->>DB: Mark episode consolidated_at=NOW()
 ```
-(entity, relation, target)
-```
 
-**Examples:**
-- `User — Prefers — concise answers`
-- `User — Uses — dark mode`
-- `User — Often works — at night`
+### Consolidation Actions
 
-### Confidence Model
+| Action | When | Behavior |
+|--------|------|----------|
+| `new` | No duplicate found | Insert with embedding + source_episodic_ids |
+| `reinforce` | Duplicate (cosine < 0.05) | Append to source_episodic_ids, bump confidence |
+| `update` | Same fact, new nuance | Invalidate old, insert new version |
+| `invalidate` | Contradicted | Set invalid_at=NOW() on old fact |
 
-| Range | Meaning |
-|-------|---------|
-| 0.0–0.3 | Weak signal |
-| 0.3–0.6 | Probable pattern |
-| 0.6–0.85 | Strong preference |
-| 0.85–1.0 | Stable long-term fact |
+### 8-Category Taxonomy
 
-### Module: `extractor.py`
+Every semantic fact is assigned exactly one category:
+
+| Category | Captures |
+|---------|----------|
+| `Identity` | name, profession, location, company, education |
+| `Preference` | likes, dislikes, favorites, stylistic choices |
+| `Interest` | topics, hobbies, domains engaged with |
+| `Personality` | communication style, emotional tendencies |
+| `Relationship` | dynamics, shared routines, inside jokes |
+| `Experience` | skills, past events, professional background |
+| `Goal` | plans, aspirations, things being worked toward |
+| `Guideline` | how the assistant should behave |
+
+### Module: `pcl.py`
 
 ```python
-extract_semantic_facts(messages)      # LLM extraction of triples
-calculate_emotional_weight(messages)  # Keyword intensity scoring
-should_create_episodic(messages)      # Trigger episodic creation
-process_messages_for_memory(...)      # Main pipeline entry
+run_predict_calibrate(episode_id, messages, session_id)   # Main entry
+load_relevant_semantic_facts(session_id, limit=10)       # Fetch top facts
+predict_episode_content(existing_facts, episode_title)   # PREDICT phase
+calibrate_and_extract(predicted_content, actual_messages) # CALIBRATE phase
+consolidate_facts(extracted, session_id)                 # CONSOLIDATE phase
 ```
 
 ---
@@ -207,124 +228,94 @@ process_messages_for_memory(...)      # Main pipeline entry
 score = similarity × 0.6 + importance × 0.2 + confidence × 0.2
 ```
 
-When no query embedding available:
-```
-score = importance × confidence
-```
+### RRF Merge
 
-### Vector Search Query
+When both static and dynamic results are available, Reciprocal Rank Fusion merges them:
 
-```sql
-SELECT id, fact_type, content, metadata,
-       1 - (embedding <=> %s::vector) as similarity
-FROM semantic_facts
-ORDER BY embedding <=> %s::vector
-LIMIT %s;
+```
+RRF_score = Σ 1.0 / (k + rank)  per list, k=60
 ```
 
-The `<=>` operator is pgvector's cosine distance operator.
+Tie-breaking: higher individual score first, then lower ID.
 
 ### Retrieval Pipeline
 
 ```mermaid
 sequenceDiagram
-    participant APP as App/Context Builder
+    participant APP as Context Builder
     participant RET as retrieval.py
     participant DB as PostgreSQL (pgvector)
     participant EMB as embedder.py
+    participant REV as memory_review.py
 
-    APP->>RET: retrieve_memories(query)
+    APP->>RET: retrieve_memory(session_id, query)
     RET->>EMB: embed_text(query)
-    EMB-->>RET: list[float] embedding
-    RET->>DB: SELECT ... ORDER BY embedding <=> query_vec LIMIT N
-    DB-->>RET: Similar memories (with metadata)
-    RET->>RET: Apply hybrid scoring
-    RET-->>APP: Ranked memory list
+    EMB-->>RET: [0.1, ...]  (1024-dim)
+    RET->>DB: search_similar(query_vec)
+    DB-->>RET: ranked results
+    RET->>REV: mark_retrieved_as_pending_review(ids)
+    REV-->>RET: marked
+    RET-->>APP: {static, dynamic, temporal_messages}
 ```
 
 ### Context Assembly Order
 
 1. System message
-2. Semantic memory (facts)
-3. Episodic memory (events)
-4. Conversation segments
+2. Static memories (global semantic facts)
+3. Dynamic memories (episodic memories)
+4. Temporal messages (time-window filtered)
 5. Recent raw messages
 
-### Module: `retrieval.py`
+### Modules
 
-```python
-retrieve_memories(session_id, query, limit)  # Vector search + scoring
-format_memory(memory_bundle)                 # Format for LLM injection
-```
+| Module | Key Functions |
+|--------|--------------|
+| `retrieval.py` | `retrieve_memory()`, `retrieve_static_memories()`, `retrieve_dynamic_memories()`, `retrieve_segments()`, `format_memory()` |
+| `memory_review.py` | `review_memory()`, `mark_retrieved_as_pending_review()` |
 
 ---
 
 ## FSRS-Inspired Retention
 
-Memory importance decays over time, simulating natural forgetting. Based on Free Spaced Repetition Scheduler (FSRS) principles.
+### Scope: Episodic Only
+
+**Semantic (static) facts do NOT decay.** They use temporal validity (`invalid_at`) instead.
+
+**Episodic (dynamic) facts decay via FSRS.**
 
 ### Core Variables
 
-| Variable | Description | Effect |
-|----------|-------------|--------|
-| `importance` | Primary score | Decays: `imp × exp(-hours/stability)` |
-| `stability` | Resistance to decay | Derived from `access_count` |
-| `access_count` | Times retrieved | More access → higher stability |
-| `last_accessed` | Last retrieval | Used for recency factor |
+| Variable | Applies To | Description |
+|---------|-----------|-------------|
+| `importance` | Both | Primary relevance score |
+| `stability` | Episodic | Resistance to decay |
+| `difficulty` | Episodic | How hard to memorize |
+| `access_count` | Both | Times retrieved |
 
 ### Decay Formula
 
 ```
 importance = importance × exp(-hours_since_last_access / stability)
+stability = 24 × (1 + access_count × 0.5)
 ```
 
-**Stability derivation:**
-```
-stability = max(24 × (1 + access_count × 0.5), 24h)
-```
+### Memory Review (LLM-based)
 
-**Minimum importance:** 0.01 (memories never fully vanish, just become invisible in retrieval).
+After retrieval, facts are marked pending review. When `review_memory()` is called:
 
-### Reinforcement
+| Rating | Stability | Difficulty | Effect |
+|--------|-----------|------------|--------|
+| `again` | × 0.5 | +0.15 | Memory was noise |
+| `hard` | × 0.9 | +0.05 | Weak connection |
+| `good` | × 1.2 | −0.05 | Directly relevant |
+| `easy` | × 1.5 | −0.10 | Core pillar |
 
-When a memory is retrieved:
+### Modules
 
-1. `access_count` increments
-2. `last_accessed` updates to now
-3. `importance` bumps by +0.05 (capped at 1.0)
-
-### Recency Factor
-
-Used in retrieval scoring:
-
-```
-recency = exp(-hours_since_last_access / 24.0)
-```
-
-| Time | Recency |
-|------|---------|
-| 0 hours | 1.0 |
-| 24 hours | 0.37 |
-| 48 hours | 0.14 |
-| 7 days | 0.04 |
-
-### Decay Cycle
-
-```mermaid
-flowchart LR
-    A["Session Start"] --> B["run_decay()"]
-    B --> C["Apply decay to all memories"]
-    C --> D["Update importance values"]
-    D --> E["Memories with low importance\nbecome invisible in retrieval"]
-```
-
-### Module: `review.py`
-
-```python
-decay_memories()              # Apply FSRS decay to all memories
-reinforce_memory(memory_id)   # Boost importance on retrieval
-run_decay()                   # Full decay cycle (call on session start)
-```
+| Module | Key Functions |
+|--------|--------------|
+| `review.py` | `run_decay()`, `reinforce_memory()` |
+| `memory_review.py` | `review_memory()`, `mark_retrieved_as_pending_review()` |
 
 ---
 
@@ -332,12 +323,14 @@ run_decay()                   # Full decay cycle (call on session start)
 
 | Module | Purpose | Key Functions |
 |--------|---------|---------------|
-| `db_memory.py` | Unified CRUD over `semantic_facts` | `store_memory()`, `search_memories()` |
-| `embedder.py` | Chutes API embedding client | `embed_text()`, `embed_texts()` |
-| `extractor.py` | LLM-based fact extraction | `extract_semantic_facts()`, `process_messages_for_memory()` |
-| `segmenter.py` | Conversation chunking | `detect_boundaries()`, `segment_session()` |
-| `retrieval.py` | Hybrid scoring retrieval | `retrieve_memories()`, `format_memory()` |
-| `review.py` | FSRS-style decay & reinforcement | `decay_memories()`, `reinforce_memory()`, `run_decay()` |
+| `db_memory.py` | Unified CRUD over `semantic_facts` | `save_fact()`, `search_similar()`, `invalidate_fact()`, `increment_importance()`, `decay_facts()` |
+| `embedder.py` | Chutes API embedding client | `embed_text()`, `embed_texts()`, `EMBEDDING_DIM=1024` |
+| `extractor.py` | Semantic fact extraction + PCL wiring | `extract_semantic_facts()`, `upsert_semantic_memory()`, `create_episodic_memory()`, `process_messages_for_memory()` |
+| `segmenter.py` | Dual-channel conversation segmentation | `segment_session()`, `_should_segment()`, `_llm_detect_boundary()` |
+| `retrieval.py` | Hybrid scoring + RRF retrieval | `retrieve_memory()`, `retrieve_static_memories()`, `retrieve_segments()`, `format_memory()` |
+| `review.py` | FSRS decay for episodic memories | `run_decay()`, `reinforce_memory()` |
+| `memory_review.py` | LLM-based memory review | `review_memory()`, `mark_retrieved_as_pending_review()` |
+| `pcl.py` | Predict-Calibrate Learning pipeline | `run_predict_calibrate()`, `consolidate_facts()` |
 
 **Deprecated:** `vector_store.py` — stub redirecting to `db_memory.py`
 
@@ -348,16 +341,17 @@ run_decay()                   # Full decay cycle (call on session start)
 ```
 app/memory/
 ├── __init__.py
-├── db_memory.py      # Unified memory CRUD (PostgreSQL + pgvector)
-├── embedder.py       # Chutes API embedding client
-├── extractor.py      # Semantic fact extraction (LLM)
-├── segmenter.py      # Message window segmentation
-├── retrieval.py      # Hybrid scoring retrieval
-├── review.py         # FSRS-style decay & reinforcement
-├── models.py         # Data models / type definitions
-├── vector_store.py   # DEPRECATED: stub redirecting to db_memory
+├── db_memory.py         # Unified memory CRUD (PostgreSQL + pgvector)
+├── embedder.py           # Chutes API embedding client (1024-dim)
+├── extractor.py           # Semantic fact extraction + PCL wiring
+├── segmenter.py          # Dual-channel conversation segmentation
+├── retrieval.py           # RRF + hybrid scoring retrieval
+├── review.py             # FSRS-style decay (episodic only)
+├── memory_review.py      # LLM-based memory review + FSRS updates
+├── pcl.py                # Predict-Calibrate Learning pipeline
+├── vector_store.py        # DEPRECATED: stub redirecting to db_memory
 └── docs/
-    └── architecture.md  # This file (single source of truth)
+    └── architecture.md    # This file (single source of truth)
 ```
 
 ---
@@ -370,7 +364,7 @@ app/memory/
 from app.memory.segmenter import segment_session
 from app.memory.review import run_decay
 from app.memory.extractor import process_messages_for_memory
-from app.memory.retrieval import retrieve_memories, format_memory
+from app.memory.retrieval import retrieve_memory, format_memory
 
 # On session start
 segment_session(session_id)
@@ -380,40 +374,19 @@ run_decay(session_id)
 process_messages_for_memory(session_id, recent_messages)
 
 # Context building
-memories = retrieve_memories(session_id, query)
+memories = retrieve_memory(session_id, query)
 context = format_memory(memories)
 ```
 
 ---
 
-## Migration History
-
-| Phase | Status | Description |
-|-------|--------|-------------|
-| 1-5 | ✅ Done | Original SQLite + FAISS implementation |
-| 6 | ✅ Done | PostgreSQL migration with pgvector |
-| 7 | ✅ Done | Unified memory table (`semantic_facts`) |
-| 8 | ✅ Done | Cleanup: removed SQLite, FAISS, vec_to_blob |
-| 9 | ✅ Done | Documentation consolidation |
-
-**Removed Files:**
-- `quality_migrate.py`, `batch_migrate.py`, `episodic_migrate.py` — SQLite migration scripts
-- `fsrs.md`, `retrieval.md`, `segmentation.md`, `semantic_memory.md` — Consolidated into this file
-- `migrate_from_sqlite()` function in `db_pg_models.py`
-
-**Removed Patterns:**
-- SQLite BLOB serialization (`vec_to_blob`, `blob_to_vec`)
-- FAISS index files
-- `yuzu_core.db` SQLite database
-
----
-
 ## Key Design Decisions
 
-1. **Native Vector Storage**: pgvector stores `VECTOR(1536)` natively. No BLOB serialization.
-2. **Unified Memory Table**: All memory types in `semantic_facts`, differentiated by `fact_type` and `metadata`.
-3. **Raw psycopg2 for Vectors**: No ORM overhead for vector operations. psycopg2 handles `list[float]` directly.
-4. **IVFFlat Index**: Approximate nearest neighbor for fast similarity search at scale.
-5. **Hybrid Scoring**: Combine vector similarity with importance/confidence scores.
-6. **FSRS Decay**: Memory importance decays over time, reinforced on retrieval.
-7. **Single Source of Truth**: This document is the only memory architecture reference.
+1. **1024-dim Embeddings**: Qwen3-Embedding-0.6B via Chutes API — smaller, faster, still high quality.
+2. **Soft Delete**: Facts never hard-deleted. `invalid_at` preserves history and enables temporal queries.
+3. **PCL Pipeline**: Predict-Calibrate Learning extracts durable knowledge from episodic episodes — closes the complementary learning systems loop.
+4. **Dual-Channel Segmentation**: Time-gap fast-path + LLM refinement. No unnecessary LLM calls for obvious breaks.
+5. **RRF Merge**: Combines static and dynamic retrieval rankings without BM25 (unavailable on Termux).
+6. **FSRS Scope Restriction**: Semantic facts don't decay — they use `invalid_at` for temporal validity.
+7. **Inline/Synchronous**: No background workers. PCL and review run synchronously to keep the system simple.
+8. **Vector Literal Interpolation**: psycopg2 cannot adapt Vector objects over the wire protocol — vectors are interpolated as string literals directly in SQL.

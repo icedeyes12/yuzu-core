@@ -175,32 +175,32 @@ Branch: `feature/memory-system-alignment`
 - [x] Map rating to FSRS parameter updates in metadata
 
 ### 8.3 — Apply FSRS updates
-- [ ] **Again**: stability × 0.5
-- [ ] **Hard**: stability × 0.9
-- [ ] **Good**: stability × 1.2
-- [ ] **Easy**: stability × 1.5
-- [ ] Update `last_reviewed_at = NOW()`
+- [x] **Again**: stability × 0.5
+- [x] **Hard**: stability × 0.9
+- [x] **Good**: stability × 1.2
+- [x] **Easy**: stability × 1.5
+- [x] Update `last_reviewed_at = NOW()`
 
 ### 8.4 — Wire into session start
-- [ ] On session start: process any pending reviews before serving
+- [x] On session start: process any pending reviews before serving
 
 ---
 
 ## Phase 9: Fix `retrieve_segments` Alias
 
 ### 9.1 — Correct alias mapping
-- [ ] `retrieve_segments` should NOT alias to `retrieve_dynamic_memories`
-- [ ] Create dedicated `retrieve_segments(session_id, query, limit)` using `metadata_filter={"source_table": "conversation_segments"}`
+- [x] `retrieve_segments` should NOT alias to `retrieve_dynamic_memories`
+- [x] Create dedicated `retrieve_segments(session_id, query, limit)` using `metadata_filter={"source_table": "conversation_segments"}`
 
 ### 9.2 — Update callers
-- [ ] Find all callers of `retrieve_segments` — confirm they pass correct `session_id`
-- [ ] Add integration test: store a segment, retrieve it via `retrieve_segments`
+- [x] Find all callers of `retrieve_segments` — confirm they pass correct `session_id`
+- [x] Add integration test: store a segment, retrieve it via `retrieve_segments`
 
 ---
 
 ## Phase 10: Documentation Update
 
-- [ ] Update `app/memory/docs/architecture.md` to reflect actual implementation
+- [x] Update `app/memory/docs/architecture.md` to reflect actual implementation
 - [ ] Update `CHANGELOG.md` with all changes in this branch
 - [ ] Update `app/README.md` if memory layer references changed
 - [ ] Remove outdated `ROADMAP.md` references to SQLite/FAISS
@@ -210,15 +210,15 @@ Branch: `feature/memory-system-alignment`
 ## Phase 11: Final Verification
 
 ### 11.1 — Lint & compile
-- [ ] `ruff check app/memory/ app/tools/memory_store.py app/db_pg.py` — must be clean
-- [ ] `python3 -m py_compile` on all modified files
+- [x] `ruff check app/memory/ app/tools/memory_store.py app/db_pg.py` — must be clean
+- [x] `python3 -m py_compile` on all modified files
 
 ### 11.2 — Runtime tests
-- [ ] `search_similar` returns results without crash
-- [ ] `retrieve_memory(1, "test")` returns `{static, dynamic, temporal_messages}`
-- [ ] `process_messages_for_memory` stores and retrieves facts
-- [ ] `run_decay` completes without error
-- [ ] New embedding dimension (1024) is confirmed in DB: `SELECT id, vector_dims(embedding) FROM semantic_facts LIMIT 5`
+- [x] `search_similar` returns results without crash
+- [x] `retrieve_memory(1, "test")` returns `{static, dynamic, temporal_messages}`
+- [x] `process_messages_for_memory` stores and retrieves facts
+- [x] `run_decay` completes without error
+- [x] New embedding dimension (1024) is confirmed in DB: `SELECT id, vector_dims(embedding) FROM semantic_facts LIMIT 5`
 
 ### 11.3 — Commit & push
 - [ ] `git add . && git co-author "feat: align memory system with plast-mem (1024-dim, RRF, categories, soft-delete, PCL)"`
