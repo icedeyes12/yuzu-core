@@ -79,6 +79,8 @@ def save_fact(
 
     now = datetime.now()
     norm_vec = _normalize(embedding) if embedding else None
+    if norm_vec is not None and len(norm_vec) != 1024:
+        raise ValueError(f"Embedding dim mismatch: got {len(norm_vec)}, expected 1024")
 
     query = """
         INSERT INTO semantic_facts

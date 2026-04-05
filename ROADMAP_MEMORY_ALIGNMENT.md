@@ -45,8 +45,8 @@ Branch: `feature/memory-system-alignment`
 - [x] Update docstring to reflect the model change
 
 ### 2.2 — Add dimension guard
-- [ ] In `db_memory.save_fact`: assert `len(embedding) == 1024` before saving
-- [ ] In `embedder.embed_texts`: validate returned vector length, raise if mismatched
+- [x] In `db_memory.save_fact`: assert `len(embedding) == 1024` before saving
+- [x] In `embedder.embed_texts`: validate returned vector length, raise if mismatched
 
 ### 2.3 — Re-embed all existing memories
 - [x] Write `scripts/reembed_all.py` that:

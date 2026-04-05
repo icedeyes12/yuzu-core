@@ -48,7 +48,10 @@ def embed_texts(texts, model=None, dimensions=None, encoding_format="float"):
 
     resp = session.post(CHUTES_EMBED_ENDPOINT, json=payload, timeout=60)
     resp.raise_for_status()
-    return [item["embedding"] for item in resp.json()["data"]]
+    results = [item["embedding"] for item in resp.json()["data"]]
+    if results and len(results[0]) != EMBEDDING_DIM:
+        raise ValueError(f"Embedding dim mismatch: got {len(results[0])}, expected {EMBEDDING_DIM}")
+    return results
 
 
 def embed_text(text, **kwargs):
