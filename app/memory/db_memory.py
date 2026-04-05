@@ -175,7 +175,7 @@ def search_similar(
 
         # Build filter conditions for the OUTER query
         outer_conditions = []
-        outer_params = [vec_str, max_distance, limit]
+        outer_params = [vec_str, vec_str, max_distance, limit]
 
         if session_id is not None:
             outer_conditions.append("(metadata->>'session_id')::int = %s")
