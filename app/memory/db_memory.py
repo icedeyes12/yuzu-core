@@ -28,7 +28,7 @@ from __future__ import annotations
 import math
 from datetime import datetime
 
-from app.db_pg import PgSession, pg_fetchone, pg_fetchall, pg_execute, vector_sql
+from app.db_pg import PgSession, pg_fetchone, pg_fetchall, pg_execute
 from psycopg2.extras import Json
 
 
@@ -86,20 +86,22 @@ def save_fact(
     if norm_vec is not None and len(norm_vec) != 1024:
         raise ValueError(f"Embedding dimension must be 1024, got {len(norm_vec)}")
 
+    # Build pgvector literal directly — safe: norm_vec is list[float] with no user input
+    vec_literal = ("[" + ",".join(str(x) for x in norm_vec) + "]") if norm_vec is not None else None
+
     query = """
         INSERT INTO semantic_facts
             (fact_type, content, embedding, metadata, created_at, last_accessed)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s::vector, %s, %s, %s)
         RETURNING id
     """
-    vec_sql = vector_sql(norm_vec) if norm_vec is not None else None
 
     try:
         with PgSession() as s:
             row = s.execute_returning(query, (
                 fact_type,
                 content,
-                vec_sql,
+                vec_literal,
                 Json(meta),
                 now,
                 now,

@@ -39,10 +39,14 @@ def vector_sql(val):
     """Convert list[float] to Vector wrapper for psycopg2."""
     if val is None:
         return None
+    if isinstance(val, Vector):
+        return val  # already wrapped — don't double-wrap
     return Vector(val)
 
 # Register adapter for list type (when passing list to VECTOR column)
-register_adapter(list, lambda v: AsIs(vector_sql(v)))
+# Register adapters: list -> Vector literal, Vector -> AsIs(str) for pgvector
+register_adapter(list, lambda v: AsIs(str(vector_sql(v))))
+register_adapter(Vector, lambda v: AsIs(str(v)))
 
 def _build_dsn() -> str:
     return (
