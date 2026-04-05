@@ -21,8 +21,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.memory.embedder import embed_texts, EMBEDDING_DIM
-from app.db_pg import PgSession, Vector
-from psycopg2.extensions import AsIs
+from app.db_pg import PgSession
 
 
 def get_total_count():
@@ -48,13 +47,11 @@ def update_embeddings(rows):
         return 0
     with PgSession() as s:
         for row_id, embedding in rows:
-            # embedding may be a Vector object (from fetchall) or already a list
-            vec = embedding.data if hasattr(embedding, "data") else embedding
-            # Produce PostgreSQL vector literal: {val1,val2,...}
-            vec_literal = AsIs(repr(Vector(vec)))
+            # Vector literal is just comma-separated floats — no injection risk
+            vec_literal = "[" + ",".join(str(x) for x in embedding) + "]"
             s.execute(
-                "UPDATE semantic_facts SET embedding=%s WHERE id=%s",
-                (vec_literal, row_id),
+                f"UPDATE semantic_facts SET embedding='{vec_literal}'::vector WHERE id={row_id}",
+                None,
             )
     return len(rows)
 
