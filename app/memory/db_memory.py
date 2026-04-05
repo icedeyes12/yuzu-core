@@ -159,8 +159,7 @@ def search_similar(
 ) -> list[dict]:
     """
     ANN search via PostgreSQL <=> (cosine) operator.
-    Uses a CTE to compute distance once — referenced by both the
-    distance-filter in WHERE and the sort key in ORDER BY.
+    Distance is computed once via CTE and used in WHERE and ORDER BY.
 
     Returns list of dicts: {id, content, fact_type, metadata,
                             last_accessed, created_at, distance}
@@ -171,50 +170,52 @@ def search_similar(
             print("[db_memory] search_similar: normalized vector is empty")
             return []
 
-        vec_str = "[" + ",".join(str(x) for x in norm_vec) + "]"
+        vec_literal = "[" + ",".join(str(x) for x in norm_vec) + "]"
 
-        # Build filter conditions for the OUTER query
-        outer_conditions = []
-        outer_params = [vec_str, vec_str, max_distance, limit]
+        # Build conditions and params
+        conditions = ["embedding IS NOT NULL"]
+        params: list = []
 
         if session_id is not None:
-            outer_conditions.append("(metadata->>'session_id')::int = %s")
-            outer_params.append(session_id)
+            conditions.append("(metadata->>'session_id')::int = %s")
+            params.append(session_id)
 
         if fact_type:
-            outer_conditions.append("fact_type = %s")
-            outer_params.append(fact_type)
+            conditions.append("fact_type = %s")
+            params.append(fact_type)
 
         if category:
-            outer_conditions.append("(metadata->>'category') = %s")
-            outer_params.append(category)
+            conditions.append("(metadata->>'category') = %s")
+            params.append(category)
 
         if metadata_filter:
             for key, val in metadata_filter.items():
-                outer_conditions.append("metadata->>%s = %s")
-                outer_params.append(key)
-                outer_params.append(val)
+                conditions.append("metadata->>%s = %s")
+                params.append(key)
+                params.append(val)
 
-        where_clause = ("WHERE " + " AND ".join(outer_conditions)) if outer_conditions else ""
+        cond_sql = " AND ".join(conditions)
 
+        # NOTE: vec_literal is interpolated directly as a string literal.
+        # It is a pure float list — no SQL injection risk.
         query = f"""
             WITH searched AS (
                 SELECT id, fact_type, content, metadata,
                        last_accessed, created_at,
-                       (embedding <=> %s::vector) AS distance
+                       (embedding <=> '{vec_literal}'::vector) AS distance
                 FROM semantic_facts
-                WHERE embedding IS NOT NULL
-                  AND (embedding <=> %s::vector) < %s
+                WHERE {cond_sql}
+                  AND (embedding <=> '{vec_literal}'::vector) < %s
             )
             SELECT id, fact_type, content, metadata,
                    last_accessed, created_at, distance
             FROM searched
-            {where_clause}
             ORDER BY distance
             LIMIT %s
         """
+        params.extend([max_distance, limit])
 
-        results = pg_fetchall(query, outer_params)
+        results = pg_fetchall(query, params)
         return results if results else []
 
     except Exception as e:
