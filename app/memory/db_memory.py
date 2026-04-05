@@ -80,7 +80,6 @@ def save_fact(
     if category and "category" not in meta:
         meta["category"] = category
 
-    now = datetime.now()
     norm_vec = _normalize(embedding) if embedding else None
 
     if norm_vec is not None and len(norm_vec) != 1024:
@@ -88,6 +87,18 @@ def save_fact(
 
     # Build pgvector literal directly — safe: norm_vec is list[float] with no user input
     vec_literal = ("[" + ",".join(str(x) for x in norm_vec) + "]") if norm_vec is not None else None
+
+    # Reject exact content duplicates (same fact_type + content + not invalidated)
+    try:
+        dup_check = pg_fetchone(
+            "SELECT id FROM semantic_facts WHERE fact_type=%s AND content=%s AND invalid_at IS NULL LIMIT 1",
+            (fact_type, content),
+        )
+        if dup_check:
+            print(f"[db_memory] save_fact: duplicate content found, rejecting id={dup_check['id']}")
+            return dup_check["id"]
+    except Exception as e:
+        print(f"[db_memory] save_fact: dup check failed: {e}")
 
     query = """
         INSERT INTO semantic_facts
@@ -103,8 +114,8 @@ def save_fact(
                 content,
                 vec_literal,
                 Json(meta),
-                now,
-                now,
+                datetime.now(),
+                datetime.now(),
             ))
             return row["id"] if row else None
     except Exception as e:
@@ -344,8 +355,8 @@ def invalidate_fact(id: int) -> bool:
     """
     try:
         pg_execute(
-            "UPDATE semantic_facts SET last_accessed=%s WHERE id=%s",
-            (datetime.now(), id),
+            "UPDATE semantic_facts SET invalid_at=%s, last_accessed=%s WHERE id=%s",
+            (datetime.now(), datetime.now(), id),
         )
         return True
     except Exception as e:
