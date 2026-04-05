@@ -64,47 +64,47 @@ Branch: `feature/memory-system-alignment`
 ## Phase 3: Add Reciprocal Rank Fusion (RRF) Without BM25
 
 ### 3.1 — Implement RRF merge
-- [ ] In `retrieval.py`, add `_rrf_merge(list_a, list_b, k=60)` function
-- [ ] RRF formula: `score = Σ 1.0 / (k + rank)` per list
-- [ ] Each input is a list of `(db_id, value)` dicts with a `score` key
+- [x] In `retrieval.py`, add `_rrf_merge(list_a, list_b, k=60)` function
+- [x] RRF formula: `score = Σ 1.0 / (k + rank)` per list
+- [x] Each input is a list of `(db_id, value)` dicts with a `score` key
 
 ### 3.2 — Dualsignal retrieval (no BM25 fallback)
-- [ ] `retrieve_static_memories`: call `search_similar` (vector) — keep as-is for now
-- [ ] `retrieve_dynamic_memories`: call `search_similar` (vector) — keep as-is for now
-- [ ] Future: when BM25 becomes available, add it as a third signal
+- [x] `retrieve_static_memories`: call `search_similar` (vector) — keep as-is for now
+- [x] `retrieve_dynamic_memories`: call `search_similar` (vector) — keep as-is for now
+- [x] Future: when BM25 becomes available, add it as a third signal
 
 ### 3.3 — Verify RRF scoring
-- [ ] Confirm `_score_fact` applies after RRF: `similarity * 0.6 + importance * 0.2 + confidence * 0.2`
-- [ ] Add unit test: `_rrf_merge([{id:1, score:0.9}], [{id:2, score:0.8}], k=60)` — verify ordering
+- [x] Confirm `_score_fact` applies after RRF: `similarity * 0.6 + importance * 0.2 + confidence * 0.2`
+- [x] Add unit test: `_rrf_merge([{id:1, score:0.9}], [{id:2, score:0.8}], k=60)` — verify ordering
 
 ---
 
 ## Phase 4: Semantic Memory — 8-Category + Soft Delete
 
 ### 4.1 — Add `category` to metadata
-- [ ] Update `save_fact` / `upsert_fact` to accept explicit `category` param
-- [ ] `memory_store.py` — ensure `category` is stored in metadata correctly
-- [ ] `extractor.py` — map LLM relation output to category name
+- [x] Update `save_fact` / `upsert_fact` to accept explicit `category` param
+- [x] `memory_store.py` — ensure `category` is stored in metadata correctly
+- [x] `extractor.py` — map LLM relation output to category name
 
 ### 4.2 — Add `category` filter to `search_similar`
-- [ ] `search_similar(..., category: str | None = None)` — filter on `metadata->>'category'`
-- [ ] Update `retrieve_static_memories(query, limit, category=None)` to pass category
+- [x] `search_similar(..., category: str | None = None)` — filter on `metadata->>'category'`
+- [x] Update `retrieve_static_memories(query, limit, category=None)` to pass category
 
 ### 4.3 — Add `invalid_at` column (soft delete)
-- [ ] Run ALTER: `ALTER TABLE semantic_facts ADD COLUMN invalid_at TIMESTAMP NULL;`
-- [ ] `invalidate_fact(id)` — sets `invalid_at = NOW()`
-- [ ] `get_active_facts(...)` — add `WHERE invalid_at IS NULL` to all reads
-- [ ] Update `delete_fact` to call `invalidate_fact` (soft delete by default)
+- [ ] Run ALTER: `ALTER TABLE semantic_facts ADD COLUMN invalid_at TIMESTAMP NULL;` (user must run manually)
+- [x] `invalidate_fact(id)` — sets `invalid_at = NOW()`
+- [x] `get_active_facts(...)` — add `WHERE invalid_at IS NULL` to all reads
+- [x] Update `delete_fact` to call `invalidate_fact` (soft delete by default)
 
 ### 4.4 — Add source tracking in metadata
-- [ ] Add `source_episodic_ids: list[int]` to metadata
-- [ ] On `upsert_semantic_memory` reinforce: **append** to `source_episodic_ids` instead of just incrementing `access_count`
-- [ ] On `upsert_semantic_memory` new: initialize `source_episodic_ids = [episode_id]`
+- [x] Add `source_episodic_ids: list[int]` to metadata
+- [x] On `upsert_semantic_memory` reinforce: **append** to `source_episodic_ids` instead of just incrementing `access_count`
+- [x] On `upsert_semantic_memory` new: initialize `source_episodic_ids = [episode_id]`
 
 ### 4.5 — Update `extractor.py` storage
-- [ ] `upsert_semantic_memory`: pass `category` mapped from relation
-- [ ] On duplicate: append to `source_episodic_ids`
-- [ ] On new: insert with `source_episodic_ids = [episode_id]`
+- [x] `upsert_semantic_memory`: pass `category` mapped from relation
+- [x] On duplicate: append to `source_episodic_ids`
+- [x] On new: insert with `source_episodic_ids = [episode_id]`
 
 ---
 
