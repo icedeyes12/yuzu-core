@@ -15,8 +15,8 @@ Branch: `feature/memory-system-alignment`
 - [x] **0.1** Verify current branch is `feature/memory-system-alignment`
 - [x] **0.2** Run `ruff check app/memory/` — must be clean before starting
 - [x] **0.3** Run `python3 -m py_compile` on all memory modules
-- [ ] **0.4** Confirm PostgreSQL is reachable and `semantic_facts` table exists
-- [ ] **0.5** Backup current `app/memory/docs/architecture.md`
+- [x] **0.4** Confirm PostgreSQL is reachable and `semantic_facts` table exists
+- [x] **0.5** Backup current `app/memory/docs/architecture.md`
 
 ---
 
@@ -31,8 +31,8 @@ Branch: `feature/memory-system-alignment`
 - [x] Verify param count matches placeholder count exactly
 
 ### 1.2 — Integration test
-- [ ] Run: `python3 -c "from app.memory.db_memory import search_similar; r=search_similar([0.1]*1024,limit=3); print('ok:', len(r))"`
-- [ ] Confirm no `IndexError: list index out of range`
+- [x] Run: `python3 -c "from app.memory.db_memory import search_similar; r=search_similar([0.1]*1024,limit=3); print('ok:', len(r))"`
+- [x] Confirm no `IndexError: list index out of range`
 
 ---
 
@@ -49,15 +49,15 @@ Branch: `feature/memory-system-alignment`
 - [ ] In `embedder.embed_texts`: validate returned vector length, raise if mismatched
 
 ### 2.3 — Re-embed all existing memories
-- [ ] Write `scripts/reembed_all.py` that:
+- [x] Write `scripts/reembed_all.py` that:
   - Fetches all rows from `semantic_facts` where `embedding IS NOT NULL`
   - Re-embeds each `content` using the new 1024-dim model
   - Updates the `embedding` column in batches
-- [ ] Run the re-embed script — confirm row count updated
-- [ ] Verify: `SELECT id, vector_dims(embedding) FROM semantic_facts LIMIT 10`
+- [x] Run the re-embed script — confirm row count updated
+- [x] Verify: `SELECT id, vector_dims(embedding) FROM semantic_facts LIMIT 10`
 
 ### 2.4 — Update architecture doc
-- [ ] Update `EMBEDDING_DIM` reference in `app/memory/docs/architecture.md`
+- [x] Update `EMBEDDING_DIM` reference in `app/memory/docs/architecture.md`
 
 ---
 
@@ -155,13 +155,13 @@ Branch: `feature/memory-system-alignment`
 
 ### 7.1 — Remove static fact decay
 - [x] In `review.py`: **remove** `decay_facts(fact_type=FACT_TYPE_STATIC)` — semantic facts should NOT decay
-- [ ] Only decay dynamic/episodic facts (those with `source_table = 'episodic_memories'`)
+- [x] Only decay dynamic/episodic facts (those with `source_table = 'episodic_memories'`)
 
 ### 7.2 — Update `decay_facts` docstring
 - [x] Clarify it applies to episodic/dynamic only
 
 ### 7.3 — Verify
-- [ ] After `run_decay(session_id=1)`: static fact `importance` values should be unchanged
+- [x] After `run_decay(session_id=1)`: static fact `importance` values should be unchanged
 
 ---
 
