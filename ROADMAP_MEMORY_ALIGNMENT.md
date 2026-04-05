@@ -135,16 +135,16 @@ Branch: `feature/memory-system-alignment`
 ## Phase 6: Segmentation — LLM Dual-Channel
 
 ### 6.1 — LLM boundary detection
-- [ ] Add `_llm_detect_boundary(segment_messages, prev_summary)` in `segmenter.py`
-- [ ] LLM prompt: returns `{should_segment: bool, surprise_level: float, topic_shift: bool}`
+- [x] Add `_llm_detect_boundary(segment_messages, prev_summary)` in `segmenter.py`
+- [x] LLM prompt: returns `{should_segment: bool, surprise_level: float, topic_shift: bool}`
 
 ### 6.2 — Flashbulb stability boost
-- [ ] If `surprise_level >= 0.85`: boost episodic `importance` and `stability` in metadata
-- [ ] Pass `surprise_level` to `create_episodic_memory`
+- [x] If `surprise_level >= 0.85`: boost episodic `importance` and `stability` in metadata
+- [x] Pass `surprise_level` to `create_episodic_memory`
 
 ### 6.3 — Dual-channel decision
-- [ ] `_should_segment(messages)` → True if **either** time-gap rule **or** LLM says segment
-- [ ] Keep time-gap as fast-path (no LLM for obvious breaks)
+- [x] `_should_segment(messages)` → True if **either** time-gap rule **or** LLM says segment
+- [x] Keep time-gap as fast-path (no LLM for obvious breaks)
 
 ### 6.4 — Remove MIN_MESSAGES_PER_SEGMENT for final flush
 - [ ] Already implemented — verify and add assertion test
@@ -168,11 +168,11 @@ Branch: `feature/memory-system-alignment`
 ## Phase 8: LLM Memory Review (Inline)
 
 ### 8.1 — Add review trigger
-- [ ] After `retrieve_memory` returns results: mark retrieved memories as "pending review" (add `pending_review: bool` to metadata or use a separate `memory_reviews` table)
+- [x] After `retrieve_memory` returns results: mark retrieved memories as "pending review" (add `pending_review: bool` to metadata or use a separate `memory_reviews` table)
 
 ### 8.2 — LLM reviewer
-- [ ] `review_memory(memory_content, conversation_context)` — LLM rates: Again/Hard/Good/Easy
-- [ ] Map rating to FSRS parameter updates in metadata
+- [x] `review_memory(memory_content, conversation_context)` — LLM rates: Again/Hard/Good/Easy
+- [x] Map rating to FSRS parameter updates in metadata
 
 ### 8.3 — Apply FSRS updates
 - [ ] **Again**: stability × 0.5
