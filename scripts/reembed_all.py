@@ -13,7 +13,6 @@ This script:
 4. Reports progress and final count
 """
 
-import argparse
 import sys
 import os
 
@@ -56,15 +55,90 @@ def update_embeddings(rows):
     return len(rows)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Re-embed all memories to 1024-dim")
-    parser.add_argument("--batch-size", type=int, default=50)
-    args = parser.parse_args()
+def migrate_column():
+    """Migrate embedding column from 4096-dim to 1024-dim via new column rename."""
 
-    print(f"[reembed] Target dimension: {EMBEDDING_DIM}")
+    with PgSession() as s:
+        # 1. Verify current column dimension
+        row = s.fetchone(
+            "SELECT vector_dims(embedding) AS dims FROM semantic_facts LIMIT 1"
+        )
+        current_dim = row["dims"] if row else None
+        print(f"[migrate] Current embedding column dimension: {current_dim}")
+
+        if current_dim == EMBEDDING_DIM:
+            print(f"[migrate] Column already at target dim {EMBEDDING_DIM}, nothing to do.")
+            return
+
+        new_col = "embedding_1024"
+
+        # 2. Add new column with correct dimension
+        print(f"[migrate] Adding new column {new_col} as VECTOR({EMBEDDING_DIM})...")
+        s.execute(f"ALTER TABLE semantic_facts ADD COLUMN {new_col} vector({EMBEDDING_DIM})")
+
+        # 3. Commit so the column exists before re-embed script uses it
+        s.conn.commit()
+        print("[migrate] New column added. Run reembed script, then run migrate_column(confirm=True).")
+
+        # 4. Informational: count rows
+        count_row = s.fetchone(
+            "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE embedding IS NOT NULL"
+        )
+        print(f"[migrate] {count_row['cnt']} rows still need re-embedding.")
+
+
+def finalize_migration():
+    """Drop old 4096 embedding column and rename new one. Run AFTER reembed completes."""
+
+    with PgSession() as s:
+        # Verify all rows have been re-embedded
+        count_row = s.fetchone(
+            "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE embedding IS NULL AND embedding_1024 IS NOT NULL"
+        )
+        if count_row and count_row["cnt"] > 0:
+            print(f"[migrate] ERROR: {count_row['cnt']} rows still have NULL in new column. Run reembed first.")
+            return
+
+        row = s.fetchone(
+            "SELECT vector_dims(embedding_1024) AS dims FROM semantic_facts LIMIT 1"
+        )
+        if not row:
+            print("[migrate] ERROR: new column is empty or doesn't exist.")
+            return
+
+        print(f"[migrate] New column dimension: {row['dims']} — looks good.")
+
+        # 5. Drop old column
+        print("[migrate] Dropping old embedding column...")
+        s.execute("ALTER TABLE semantic_facts DROP COLUMN embedding")
+
+        # 6. Rename new column to original name
+        print("[migrate] Renaming embedding_1024 → embedding...")
+        s.execute("ALTER TABLE semantic_facts RENAME COLUMN embedding_1024 TO embedding")
+
+        s.conn.commit()
+        print("[migrate] Done. Column is now VECTOR(1024).")
+
+
+def reembed_into_new_column(batch_size=50):
+    """Re-embed ALL memories into the new 1024-dim column (embedding_1024).
+    
+    Safe: fetches from original embedding column, writes to new column.
+    If the new column doesn't exist yet, aborts.
+    """
+    new_col = "embedding_1024"
+    
+    # Verify new column exists
+    with PgSession() as s:
+        col_check = s.fetchone(
+            f"SELECT vector_dims({new_col}) AS dims FROM semantic_facts LIMIT 1"
+        )
+        if col_check is None or (col_check.get("dims") is None and "dims" in col_check):
+            print(f"[reembed] Column {new_col} not found. Run --migrate first.")
+            return
+
     total = get_total_count()
     print(f"[reembed] Total rows to re-embed: {total}")
-
     if total == 0:
         print("[reembed] Nothing to do.")
         return
@@ -74,7 +148,7 @@ def main():
     errors = 0
 
     while offset < total:
-        batch = fetch_batch(offset, args.batch_size)
+        batch = fetch_batch(offset, batch_size)
         if not batch:
             break
 
@@ -86,16 +160,15 @@ def main():
         except Exception as e:
             print(f"[reembed] Embedding API failed: {e}")
             errors += len(batch)
-            offset += args.batch_size
+            offset += batch_size
             continue
 
         if not embeddings or len(embeddings) != len(texts):
             print(f"[reembed] Embedding count mismatch: expected {len(texts)}, got {len(embeddings) if embeddings else 0}")
             errors += len(batch)
-            offset += args.batch_size
+            offset += batch_size
             continue
 
-        # Validate dimensions — only include correct embeddings in pairs
         pairs = []
         for i, emb in enumerate(embeddings):
             if len(emb) != EMBEDDING_DIM:
@@ -105,27 +178,58 @@ def main():
             pairs.append((ids[i], emb))
 
         if not pairs:
-            offset += args.batch_size
+            offset += batch_size
             continue
 
-        count = update_embeddings(pairs)
+        # Write to NEW column (embedding_1024)
+        count = update_embeddings_into_new_col(pairs, new_col)
         updated += count
         print(f"[reembed] Updated {count}/{len(pairs)} rows (total: {updated}/{total})")
 
-        offset += args.batch_size
+        offset += batch_size
 
     print(f"\n[reembed] Done. Updated: {updated}, Errors: {errors}")
 
-    # Spot-check: verify a few rows
-    print("\n[reembed] Spot-checking dimensions...")
+    # Spot-check new column dimensions
+    print("\n[reembed] Spot-checking new column dimensions...")
     with PgSession() as s:
         sample = s.fetchall(
-            "SELECT id, vector_dims(embedding) AS dims FROM semantic_facts "
-            "WHERE embedding IS NOT NULL ORDER BY id DESC LIMIT 5"
+            f"SELECT id, vector_dims({new_col}) AS dims FROM semantic_facts "
+            f"WHERE {new_col} IS NOT NULL ORDER BY id DESC LIMIT 5"
         )
         for row in sample:
             print(f"  id={row['id']}  dims={row['dims']}")
 
 
+def update_embeddings_into_new_col(rows, column):
+    """rows: list of (id, new_embedding_list)"""
+    if not rows:
+        return 0
+    with PgSession() as s:
+        for row_id, embedding in rows:
+            vec_literal = "[" + ",".join(str(x) for x in embedding) + "]"
+            s.execute(
+                f"UPDATE semantic_facts SET {column}='{vec_literal}'::vector WHERE id={row_id}",
+                None,
+            )
+    return len(rows)
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) < 2:
+        print("Usage:")
+        print("  python3 scripts/reembed_all.py --migrate          # add new 1024-dim column")
+        print("  python3 scripts/reembed_all.py --reembed         # reembed into new column")
+        print("  python3 scripts/reembed_all.py --finalize        # swap columns after reembed")
+        sys.exit(1)
+
+    cmd = sys.argv[1]
+    if cmd == "--migrate":
+        migrate_column()
+    elif cmd == "--reembed":
+        reembed_into_new_column()
+    elif cmd == "--finalize":
+        finalize_migration()
+    else:
+        print(f"Unknown command: {cmd}")
+        sys.exit(1)
