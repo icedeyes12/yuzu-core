@@ -201,9 +201,9 @@ Branch: `feature/memory-system-alignment`
 ## Phase 10: Documentation Update
 
 - [x] Update `app/memory/docs/architecture.md` to reflect actual implementation
-- [ ] Update `CHANGELOG.md` with all changes in this branch
-- [ ] Update `app/README.md` if memory layer references changed
-- [ ] Remove outdated `ROADMAP.md` references to SQLite/FAISS
+- [x] Update `CHANGELOG.md` with all changes in this branch
+- [x] Update `app/README.md` if memory layer references changed
+- [x] Remove outdated `ROADMAP.md` references to SQLite/FAISS
 
 ---
 
@@ -221,5 +221,5 @@ Branch: `feature/memory-system-alignment`
 - [x] New embedding dimension (1024) is confirmed in DB: `SELECT id, vector_dims(embedding) FROM semantic_facts LIMIT 5`
 
 ### 11.3 — Commit & push
-- [ ] `git add . && git co-author "feat: align memory system with plast-mem (1024-dim, RRF, categories, soft-delete, PCL)"`
-- [ ] `git push -u origin feature/memory-system-alignment`
+- [x] `git add . && git co-author "feat: align memory system with plast-mem (1024-dim, RRF, categories, soft-delete, PCL)"`
+- [x] `git push -u origin feature/memory-system-alignment`
