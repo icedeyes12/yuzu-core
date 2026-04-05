@@ -47,9 +47,11 @@ def update_embeddings(rows):
         return 0
     with PgSession() as s:
         for row_id, embedding in rows:
+            # embedding may be a Vector object (from fetchall) or already a list
+            vec = embedding.data if hasattr(embedding, "data") else embedding
             s.execute(
                 "UPDATE semantic_facts SET embedding=%s WHERE id=%s",
-                (vector_sql(embedding), row_id),
+                (vector_sql(vec), row_id),
             )
     return len(rows)
 
