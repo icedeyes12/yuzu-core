@@ -128,12 +128,14 @@ def reembed_into_new_column(batch_size=50):
     """
     new_col = "embedding_1024"
     
-    # Verify new column exists
+    # Verify new column exists via information_schema
     with PgSession() as s:
         col_check = s.fetchone(
-            f"SELECT vector_dims({new_col}) AS dims FROM semantic_facts LIMIT 1"
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name='semantic_facts' AND column_name=%s",
+            (new_col,)
         )
-        if col_check is None or (col_check.get("dims") is None and "dims" in col_check):
+        if col_check is None:
             print(f"[reembed] Column {new_col} not found. Run --migrate first.")
             return
 
