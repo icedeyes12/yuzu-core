@@ -240,10 +240,15 @@ def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
             embedding=query_vec,
             session_id=session_id,
             fact_type=FACT_TYPE_DYNAMIC,
+            metadata_filter={"source_table": "episodic_memories"},
             limit=limit,
         )
     else:
-        results = get_facts_by_session(session_id=session_id, fact_type=FACT_TYPE_DYNAMIC, limit=limit)
+        all_dynamic = get_facts_by_session(session_id=session_id, fact_type=FACT_TYPE_DYNAMIC, limit=limit * 3)
+        results = [
+            r for r in all_dynamic
+            if r.get("metadata", {}).get("source_table") == "episodic_memories"
+        ][:limit]
 
     if not results:
         return []

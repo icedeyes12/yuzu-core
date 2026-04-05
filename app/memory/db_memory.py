@@ -74,10 +74,10 @@ def save_fact(
 
     Returns the new row id, or None on failure.
     """
-    meta = metadata or {}
+    meta = dict(metadata) if metadata else {}
     if "session_id" not in meta:
         meta["session_id"] = session_id
-    if category and "category" not in meta:
+    if category:
         meta["category"] = category
 
     norm_vec = _normalize(embedding) if embedding else None
