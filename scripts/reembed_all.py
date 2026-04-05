@@ -22,7 +22,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.memory.embedder import embed_texts, EMBEDDING_DIM
 from app.db_pg import PgSession, vector_sql
-from psycopg2.extras import Json
 
 
 def get_total_count():

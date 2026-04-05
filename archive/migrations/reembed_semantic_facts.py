@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 """
-Re-embed semantic_facts with NULL embeddings using Chutes batch API.
+Re-embed semantic_facts using halvec (HNSW indexing) with Chutes API.
+
+HNSW notes:
+- halvec max_dim = 2000, so we use halvec(2560) which auto-truncates to 2000
+- Alternative: use pgvector with lower dim (1536) for full HNSW support
 """
 import os
 import sys
 import time
+import json
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from app.db_pg import pg_fetchone, pg_fetchall, pg_execute
 from app.memory.embedder import embed_texts
 
 BATCH_SIZE = 32
+TARGET_DIM = 2560  # halvec will truncate to 2000 for HNSW index
 
 
 def get_null_count():
@@ -20,7 +26,6 @@ def get_null_count():
 
 
 def get_null_embeddings_batch(last_id: int, batch_size: int = 100):
-    """Returns list of rows."""
     return pg_fetchall(
         "SELECT id, content FROM semantic_facts WHERE embedding IS NULL AND id > %s ORDER BY id LIMIT %s",
         (last_id, batch_size)
@@ -28,16 +33,18 @@ def get_null_embeddings_batch(last_id: int, batch_size: int = 100):
 
 
 def update_embedding(fact_id: int, embedding: list):
+    """Store embedding as JSON string for halvec."""
     pg_execute(
         "UPDATE semantic_facts SET embedding = %s WHERE id = %s",
-        (embedding, fact_id)
+        (json.dumps(embedding), fact_id)
     )
 
 
 def main():
     print("=" * 60)
-    print("[REEMBED] Batch Re-Embedding via Chutes API")
+    print("[REEMBED] HNSW + halvec Re-Embedding")
     print("=" * 60)
+    print(f"Target dim: {TARGET_DIM} (halvec truncates to 2000 for HNSW)")
 
     total = get_null_count()
     print(f"Total NULL embeddings: {total}")
@@ -58,7 +65,7 @@ def main():
             print("[DONE] No more rows")
             break
 
-        print(f"[FETCH] Got {len(rows)} rows, processing...")
+        print(f"[FETCH] Got {len(rows)} rows")
 
         batch_buffer = []
         batch_ids = []
@@ -76,7 +83,7 @@ def main():
             last_id = fact_id
 
         if not batch_buffer:
-            print("[SKIP] All rows too short, continuing...")
+            print("[SKIP] All rows too short")
             continue
 
         print(f"[EMBED] Batch of {len(batch_buffer)}...")
@@ -89,10 +96,17 @@ def main():
                     total_failed += 1
                     print(f"  - ID {fid}: NULL")
                     continue
+
+                # Truncate to TARGET_DIM (halvec will further truncate to 2000)
+                truncated = emb[:TARGET_DIM] if len(emb) >= TARGET_DIM else emb
+                # Pad if shorter
+                while len(truncated) < TARGET_DIM:
+                    truncated.append(0.0)
+
                 try:
-                    update_embedding(fid, emb)
+                    update_embedding(fid, truncated)
                     total_embedded += 1
-                    print(f"  + ID {fid}: OK ({len(emb)} dims)")
+                    print(f"  + ID {fid}: OK ({len(truncated)} dims)")
                 except Exception as e:
                     total_failed += 1
                     print(f"  - ID {fid}: {e}")
@@ -103,7 +117,6 @@ def main():
 
         remaining = get_null_count()
         print(f"[PROGRESS] Embedded: {total_embedded}, Failed: {total_failed}, Remaining: {remaining}")
-        print()
 
         if remaining == 0:
             break
@@ -112,8 +125,12 @@ def main():
 
     print()
     print("=" * 60)
-    print(f"[DONE] Embedded: {total_embedded}, Failed: {total_failed}, Remaining: {get_null_count()}")
+    print(f"[DONE] Embedded: {total_embedded}, Failed: {total_failed}")
     print("=" * 60)
+    print()
+    print("NOTE: After re-embedding, create HNSW index:")
+    print("  CREATE INDEX idx_hnsw ON semantic_facts USING hnsw (embedding halvec_l2_ops)")
+    print("  WITH (m = 16, ef_construction = 200);")
 
 
 if __name__ == "__main__":
