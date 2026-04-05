@@ -388,6 +388,22 @@ def run_predict_calibrate(
 
         # 4. CONSOLIDATE
         result = consolidate_facts(extracted, session_id, episode_id=episode_id)
+
+        # 5. Mark episode consolidated
+        if episode_id:
+            try:
+                from app.memory.db_memory import pg_execute
+                ep = get_fact_by_id(episode_id)
+                if ep:
+                    meta = ep.get("metadata") or {}
+                    meta["consolidated_at"] = datetime.now().isoformat()
+                    pg_execute(
+                        "UPDATE semantic_facts SET metadata=%s, last_accessed=%s WHERE id=%s",
+                        (Json(meta), datetime.now(), episode_id),
+                    )
+            except Exception as e:
+                print(f"[PCL] Failed to mark episode {episode_id} consolidated: {e}")
+
         print(f"[PCL] session={session_id} result={result}")
         return result
 

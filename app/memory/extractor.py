@@ -374,7 +374,7 @@ def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance
         print(f"[WARNING] Embedding failed: {e}")
         vector = None
 
-    save_fact(
+    fact_id = save_fact(
         session_id=session_id,
         content=summary,
         embedding=vector,
@@ -387,12 +387,14 @@ def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance
             "session_id": session_id,
         },
     )
+    return fact_id
 
 
 # ── Main entry point ─────────────────────────────────────────────────────────
 
 def process_messages_for_memory(session_id, messages, affection_delta: float = 0):
     """Analyze messages and extract memories (LLM-only semantic, LLM episodic).
+    After episodic creation, triggers PCL pipeline.
 
     This is called from session init. Idempotent per session.
     """
@@ -416,14 +418,30 @@ def process_messages_for_memory(session_id, messages, affection_delta: float = 0
         print(f"[WARNING] Semantic fact extraction failed: {e}")
 
     # 2. Episodic if emotionally significant
+    episode_id = None
+    episode_summary = None
     if should_create_episodic(messages, affection_delta):
         emotional_weight = calculate_emotional_weight(messages)
         summary = generate_episodic_summary(messages)
         if summary:
             try:
                 importance = 0.5 + emotional_weight * 0.3
-                create_episodic_memory(
+                episode_id = create_episodic_memory(
                     session_id, summary, emotional_weight, importance
                 )
+                episode_summary = summary
             except Exception as e:
                 print(f"[WARNING] Episodic memory creation failed: {e}")
+
+    # 3. PCL pipeline — trigger after episodic creation
+    if episode_id and episode_summary:
+        try:
+            from app.memory.pcl import run_predict_calibrate
+            run_predict_calibrate(
+                session_id=session_id,
+                episode_summary=episode_summary,
+                messages=messages,
+                episode_id=episode_id,
+            )
+        except Exception as e:
+            print(f"[WARNING] PCL pipeline failed: {e}")
