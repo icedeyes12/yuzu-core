@@ -308,17 +308,41 @@ def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None
             max_distance=0.05,
         )
 
+        # FALLBACK: text-level dedupe (in case embedding failed)
         if existing and len(existing) > 0:
-            # Duplicate found — reinforce existing
+            e = existing[0]
+            if e.get("content") == text:
+                # Exact content match — reinforce existing
+                from app.memory.db_memory import increment_importance, pg_execute
+                from psycopg2.extras import Json
+                from datetime import datetime
+                increment_importance(e["id"], delta=0.1, cap=1.0)
+                meta = e.get("metadata") or {}
+                ids = meta.get("source_episodic_ids", [])
+                if episode_id and episode_id not in ids:
+                    ids.append(episode_id)
+                elif not ids:
+                    ids = [episode_id] if episode_id else []
+                meta["source_episodic_ids"] = ids
+                meta["category"] = category
+                pg_execute(
+                    "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
+                    (datetime.now(), Json(meta), e["id"]),
+                )
+                return  # done — no insert needed
+
+        # Also check by exact content match directly in DB
+        from app.memory.db_memory import pg_fetchone
+        existing_exact = pg_fetchone(
+            "SELECT id, metadata FROM semantic_facts WHERE fact_type=%s AND content=%s AND invalid_at IS NULL LIMIT 1",
+            (FACT_TYPE_STATIC, text)
+        )
+        if existing_exact:
             from app.memory.db_memory import increment_importance, pg_execute
             from psycopg2.extras import Json
             from datetime import datetime
-
-            e = existing[0]
-            increment_importance(e["id"], delta=0.1, cap=1.0)
-
-            # Append to source_episodic_ids
-            meta = e.get("metadata") or {}
+            increment_importance(existing_exact["id"], delta=0.1, cap=1.0)
+            meta = existing_exact.get("metadata") or {}
             ids = meta.get("source_episodic_ids", [])
             if episode_id and episode_id not in ids:
                 ids.append(episode_id)
@@ -328,9 +352,9 @@ def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None
             meta["category"] = category
             pg_execute(
                 "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
-                (datetime.now(), Json(meta), e["id"]),
+                (datetime.now(), Json(meta), existing_exact["id"]),
             )
-            return  # done — no insert needed
+            return  # exact content dupe — reinforce, don't insert
 
     # No duplicate — insert new fact
     metadata = {
