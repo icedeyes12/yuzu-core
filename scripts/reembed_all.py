@@ -21,7 +21,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.memory.embedder import embed_texts, EMBEDDING_DIM
-from app.db_pg import PgSession, vector_sql
+from app.db_pg import PgSession, Vector
+from psycopg2.extensions import AsIs
 
 
 def get_total_count():
@@ -49,20 +50,13 @@ def update_embeddings(rows):
         for row_id, embedding in rows:
             # embedding may be a Vector object (from fetchall) or already a list
             vec = embedding.data if hasattr(embedding, "data") else embedding
+            # Produce PostgreSQL vector literal: {val1,val2,...}
+            vec_literal = AsIs(repr(Vector(vec)))
             s.execute(
                 "UPDATE semantic_facts SET embedding=%s WHERE id=%s",
-                (vector_sql(vec), row_id),
+                (vec_literal, row_id),
             )
     return len(rows)
-
-
-def get_embedding_dimensions(row_id):
-    with PgSession() as s:
-        row = s.fetchone(
-            "SELECT vector_dims(embedding) AS dims FROM semantic_facts WHERE id=%s",
-            (row_id,),
-        )
-        return row["dims"] if row else None
 
 
 def main():
@@ -104,16 +98,19 @@ def main():
             offset += args.batch_size
             continue
 
-        # Validate dimensions
+        # Validate dimensions — only include correct embeddings in pairs
+        pairs = []
         for i, emb in enumerate(embeddings):
             if len(emb) != EMBEDDING_DIM:
                 print(f"[reembed] WARNING: row id={ids[i]} got dim={len(emb)}, expected {EMBEDDING_DIM} — skipping")
                 errors += 1
                 continue
+            pairs.append((ids[i], emb))
 
-        # Pair and update
-        pairs = list(zip(ids, embeddings))
-        # (vec, row_id) pairs — vec is a raw list (no Vector object here)
+        if not pairs:
+            offset += args.batch_size
+            continue
+
         count = update_embeddings(pairs)
         updated += count
         print(f"[reembed] Updated {count}/{len(pairs)} rows (total: {updated}/{total})")
