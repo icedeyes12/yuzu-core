@@ -1835,7 +1835,6 @@ def start_session(interface="terminal"):
         try:
             from app.memory.segmenter import segment_session_init
             from app.memory.review import run_decay
-            from app.memory.extractor import process_messages_for_memory
 
             # Apply FSRS decay to existing memories
             run_decay(session_id)
