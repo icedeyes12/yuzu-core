@@ -32,7 +32,8 @@ class Vector:
         self.data = data
     
     def __repr__(self):
-        return "{" + ",".join(str(x) for x in self.data) + "}"
+        # pgvector uses square brackets, not curly braces
+        return "[" + ",".join(str(x) for x in self.data) + "]"
 
 def vector_sql(val):
     """Convert list[float] to Vector wrapper for psycopg2."""
