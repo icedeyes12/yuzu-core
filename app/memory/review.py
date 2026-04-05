@@ -4,7 +4,7 @@
 import os
 import json
 from datetime import datetime
-from app.memory.db_memory import decay_facts, increment_importance, FACT_TYPE_STATIC, FACT_TYPE_DYNAMIC
+from app.memory.db_memory import decay_facts, increment_importance, FACT_TYPE_DYNAMIC
 
 
 _DECAY_STATE_FILE = os.path.join(os.path.dirname(__file__), '.decay_state.json')
@@ -31,7 +31,10 @@ def _set_last_decay_time():
 
 
 def run_decay(session_id=None, force=False):
-    """Run full decay cycle on all memory types.
+    """Run full decay cycle on episodic/dynamic memories only.
+
+    Semantic (static) facts are NOT decayed — they use temporal validity
+    (valid_at/invalid_at) instead of FSRS-style decay.
 
     Skips if decay ran within the last 6 hours unless force=True.
     
@@ -53,15 +56,8 @@ def run_decay(session_id=None, force=False):
 
     print("[decay] Running memory decay...")
     
+    # Decay episodic memories (dynamic facts) — NOT semantic static facts
     try:
-        # Decay semantic memories (static facts)
-        count_semantic = decay_facts(session_id=session_id, fact_type=FACT_TYPE_STATIC)
-        print(f"[decay] Decayed {count_semantic} semantic memories")
-    except Exception as e:
-        print(f"[WARNING] Semantic decay failed: {e}")
-    
-    try:
-        # Decay episodic memories (dynamic facts from episodic_memories)
         count_episodic = decay_facts(session_id=session_id, fact_type=FACT_TYPE_DYNAMIC)
         print(f"[decay] Decayed {count_episodic} episodic memories")
     except Exception as e:

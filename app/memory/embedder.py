@@ -7,9 +7,9 @@ import threading
 from app.db_pg_models import get_api_key
 
 
-CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-8b.chutes.ai/v1/embeddings"
-DEFAULT_MODEL = "Qwen/Qwen3-Embedding-8B"
-EMBEDDING_DIM = 4096  # Qwen3-Embedding-8B default output dimension
+CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-0-6b.chutes.ai/v1/embeddings"
+DEFAULT_MODEL = "Qwen/Qwen3-Embedding-0.6B"
+EMBEDDING_DIM = 1024  # Qwen3-Embedding-0.6B output dimension
 
 _thread_local = threading.local()
 

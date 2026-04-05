@@ -9,7 +9,7 @@
 #     session_id     INTEGER,
 #     fact_type      VARCHAR(20)  -- 'static' | 'dynamic'
 #     content        TEXT,
-#     embedding      VECTOR(4096), -- pgvector, NULL allowed
+#     embedding      VECTOR(1024), -- pgvector, NULL allowed
 #     metadata       JSONB,        -- carries per-type fields
 #     created_at     TIMESTAMP DEFAULT NOW(),
 #     last_accessed  TIMESTAMP DEFAULT NOW()
@@ -155,60 +155,68 @@ def search_similar(
     limit: int = 15,
     max_distance: float = 1.5,
     metadata_filter: dict | None = None,
+    category: str | None = None,
 ) -> list[dict]:
     """
     ANN search via PostgreSQL <=> (cosine) operator.
-    Returns list of dicts: {id, content, fact_type, metadata, last_accessed, distance}
+    Uses a CTE to compute distance once — referenced by both the
+    distance-filter in WHERE and the sort key in ORDER BY.
+
+    Returns list of dicts: {id, content, fact_type, metadata,
+                            last_accessed, created_at, distance}
     """
     try:
         norm_vec = _normalize(embedding)
-        if not norm_vec or len(norm_vec) == 0:
+        if not norm_vec:
             print("[db_memory] search_similar: normalized vector is empty")
             return []
 
         vec_str = "[" + ",".join(str(x) for x in norm_vec) + "]"
-        vec_str2 = "[" + ",".join(str(x) for x in norm_vec) + "]"
-        vec_str3 = "[" + ",".join(str(x) for x in norm_vec) + "]"
-        
-        params = [vec_str]  # For SELECT distance calculation
-        conditions = ["embedding IS NOT NULL"]
+
+        # Build filter conditions for the OUTER query
+        outer_conditions = []
+        outer_params = [vec_str, max_distance, limit]
 
         if session_id is not None:
-            conditions.append("(metadata->>'session_id')::int = %s")
-            params.append(session_id)
+            outer_conditions.append("(metadata->>'session_id')::int = %s")
+            outer_params.append(session_id)
 
         if fact_type:
-            conditions.append("fact_type = %s")
-            params.append(fact_type)
+            outer_conditions.append("fact_type = %s")
+            outer_params.append(fact_type)
+
+        if category:
+            outer_conditions.append("(metadata->>'category') = %s")
+            outer_params.append(category)
 
         if metadata_filter:
             for key, val in metadata_filter.items():
-                conditions.append("metadata->>%s = %s")
-                params.append(key)
-                params.append(val)
+                outer_conditions.append("metadata->>%s = %s")
+                outer_params.append(key)
+                outer_params.append(val)
 
-        # Distance filter
-        conditions.append("(embedding <=> %s::vector) < %s")
-        params.append(vec_str2)  # For WHERE distance filter
-        params.append(max_distance)
-
-        where_clause = "WHERE " + " AND ".join(conditions)
-        params.append(vec_str3)  # For ORDER BY
-        params.append(limit)
+        where_clause = ("WHERE " + " AND ".join(outer_conditions)) if outer_conditions else ""
 
         query = f"""
+            WITH searched AS (
+                SELECT id, fact_type, content, metadata,
+                       last_accessed, created_at,
+                       (embedding <=> %s::vector) AS distance
+                FROM semantic_facts
+                WHERE embedding IS NOT NULL
+                  AND (embedding <=> %s::vector) < %s
+            )
             SELECT id, fact_type, content, metadata,
-                   last_accessed, created_at,
-                   (embedding <=> %s::vector) AS distance
-            FROM semantic_facts
+                   last_accessed, created_at, distance
+            FROM searched
             {where_clause}
-            ORDER BY embedding <=> %s::vector
+            ORDER BY distance
             LIMIT %s
         """
-        
-        results = pg_fetchall(query, params)
+
+        results = pg_fetchall(query, outer_params)
         return results if results else []
-        
+
     except Exception as e:
         import traceback
         print(f"[db_memory] search_similar EXCEPTION: {type(e).__name__}: {e}")
