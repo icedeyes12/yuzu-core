@@ -260,7 +260,47 @@ def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
 # Legacy aliases for backward compat
 retrieve_semantic_memories = retrieve_static_memories
 retrieve_episodic_memories = retrieve_dynamic_memories
-retrieve_segments = retrieve_dynamic_memories
+
+
+def retrieve_segments(session_id: int, query=None, limit: int = 10):
+    """
+    Retrieve conversation segments for a session.
+    
+    Segments are stored as fact_type=dynamic with source_table='conversation_segments'.
+    They represent raw message windows, not semantic facts.
+    """
+    query_vec = _embed_query(query) if query else None
+
+    if query_vec:
+        results = search_similar(
+            embedding=query_vec,
+            session_id=session_id,
+            fact_type=FACT_TYPE_DYNAMIC,
+            metadata_filter={"source_table": "conversation_segments"},
+            limit=limit,
+        )
+    else:
+        # Fall back: fetch segments without vector search
+        all_dynamic = get_facts_by_session(
+            session_id=session_id,
+            fact_type=FACT_TYPE_DYNAMIC,
+            limit=limit * 3,  # over-fetch, filter below
+        )
+        results = [
+            r for r in all_dynamic
+            if r.get("metadata", {}).get("source_table") == "conversation_segments"
+        ][:limit]
+
+    if not results:
+        return []
+
+    parsed = [_parse_fact_content(r) for r in results]
+    parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
+
+    if parsed:
+        update_last_accessed([m["id"] for m in parsed])
+
+    return parsed
 
 
 def retrieve_memory(session_id: int, query=None):
@@ -281,6 +321,15 @@ def retrieve_memory(session_id: int, query=None):
     except Exception as e:
         print(f"[WARNING] Dynamic memory retrieval failed: {e}")
         dynamic = []
+
+    # Wire Phase 8.4: mark retrieved facts as pending review
+    retrieved_ids = [m["id"] for m in static] + [m["id"] for m in dynamic]
+    if retrieved_ids:
+        try:
+            from app.memory.memory_review import mark_retrieved_as_pending_review
+            mark_retrieved_as_pending_review(retrieved_ids, session_id)
+        except Exception:
+            pass  # non-critical — don't fail retrieval on review errors
 
     temporal_messages = []
     if query:

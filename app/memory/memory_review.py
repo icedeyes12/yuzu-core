@@ -27,35 +27,27 @@ from psycopg2.extras import Json
 
 # ── Rating → FSRS parameter mappings ─────────────────────────────────────────
 # Based on FSRS (Free Spaced Repetition Scheduler) principles.
-# stability = ability to retain, difficulty = how hard to memorize.
+# Maps Again/Hard/Good/Easy ratings to multiplicative stability changes.
+#
+# Roadmap specifies:
+#   Again → stability × 0.5
+#   Hard  → stability × 0.9
+#   Good  → stability × 1.2
+#   Easy  → stability × 1.5
+#
+# Difficulty moves inversely (harder memories = more difficult to retain).
 
-_RATING_EFFECTS = {
-    # Again: memory was noise — drop stability significantly
-    "again": {
-        "stability_delta": -0.8,   # large negative — memory is unstable
-        "difficulty_delta": 0.15,  # harder to relearn
-    },
-    # Hard: tangentially related — stability roughly unchanged
-    "hard": {
-        "stability_delta": -0.1,
-        "difficulty_delta": 0.05,
-    },
-    # Good: directly relevant — stability increases moderately
-    "good": {
-        "stability_delta": 0.15,
-        "difficulty_delta": -0.05,
-    },
-    # Easy: core pillar — stability increases substantially
-    "easy": {
-        "stability_delta": 0.3,
-        "difficulty_delta": -0.1,
-    },
+_RATING_MULTIPLIERS = {
+    "again": {"stability_mult": 0.5,  "difficulty_delta": +0.15},  # very unstable, harder to relearn
+    "hard":  {"stability_mult": 0.9,  "difficulty_delta": +0.05},  # slightly unstable
+    "good":  {"stability_mult": 1.2,  "difficulty_delta": -0.05},  # stable
+    "easy":  {"stability_mult": 1.5,  "difficulty_delta": -0.10},  # very stable
 }
 
 # Minimum values to prevent instability
-_MIN_STABILITY = 0.1
-_MIN_DIFFICULTY = 0.1
-_MAX_DIFFICULTY = 4.0
+_MIN_STABILITY   = 0.1
+_MIN_DIFFICULTY  = 0.1
+_MAX_DIFFICULTY  = 4.0
 
 
 def _get_ai_manager():
@@ -146,7 +138,7 @@ Rate: again, hard, good, or easy (respond with ONLY the word)."""
         if not response:
             return None
         rating = response.strip().lower()
-        if rating in _RATING_EFFECTS:
+        if rating in _RATING_MULTIPLIERS:
             return rating
         # Handle common mistakes
         if "again" in rating or "fail" in rating:
@@ -169,7 +161,7 @@ def _update_fsrs_params(fact_id: int, rating: str) -> bool:
 
     Updates metadata with new stability and difficulty values.
     """
-    effects = _RATING_EFFECTS.get(rating)
+    effects = _RATING_MULTIPLIERS.get(rating)
     if not effects:
         return False
 
@@ -186,7 +178,7 @@ def _update_fsrs_params(fact_id: int, rating: str) -> bool:
         current_difficulty = meta.get("difficulty", 1.0)
 
         # Apply deltas
-        new_stability = max(current_stability + effects["stability_delta"], _MIN_STABILITY)
+        new_stability = max(current_stability * effects["stability_mult"], _MIN_STABILITY)
         new_difficulty = max(
             min(current_difficulty + effects["difficulty_delta"], _MAX_DIFFICULTY),
             _MIN_DIFFICULTY,
