@@ -113,9 +113,10 @@ def main():
 
         # Pair and update
         pairs = list(zip(ids, embeddings))
+        # (vec, row_id) pairs — vec is a raw list (no Vector object here)
         count = update_embeddings(pairs)
         updated += count
-        print(f"[reembed] Updated {count}/{len(batch)} rows (total: {updated}/{total})")
+        print(f"[reembed] Updated {count}/{len(pairs)} rows (total: {updated}/{total})")
 
         offset += args.batch_size
 
