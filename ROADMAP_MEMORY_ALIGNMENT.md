@@ -111,23 +111,23 @@ Branch: `feature/memory-system-alignment`
 ## Phase 5: Predict-Calibrate Learning (Inline)
 
 ### 5.1 — PREDICT phase
-- [ ] `predict_episode_content(existing_facts, episode_title)` — LLM call to predict episode content from known facts
-- [ ] `load_relevant_semantic_facts(conversation_id, limit=10)` — fetch top facts to feed prediction
+- [x] `predict_episode_content(existing_facts, episode_title)` — LLM call to predict episode content from known facts
+- [x] `load_relevant_semantic_facts(conversation_id, limit=10)` — fetch top facts to feed prediction
 
 ### 5.2 — CALIBRATE phase
-- [ ] `calibrate_and_extract(predicted_content, actual_messages)` — LLM call to identify gaps between prediction and reality
-- [ ] Output: list of `{fact, category, action: new|reinforce|update|invalidate}`
+- [x] `calibrate_and_extract(predicted_content, actual_messages)` — LLM call to identify gaps between prediction and reality
+- [x] Output: list of `{fact, category, action: new|reinforce|update|invalidate}`
 
 ### 5.3 — CONSOLIDATE phase
-- [ ] `consolidate_facts(extracted_facts, conversation_id)` — apply actions to DB
-- [ ] Deduplication: cosine similarity ≥ 0.95 → merge, not insert
+- [x] `consolidate_facts(extracted_facts, conversation_id)` — apply actions to DB
+- [x] Deduplication: cosine similarity ≥ 0.95 → merge, not insert
 
 ### 5.4 — Mark episode consolidated
-- [ ] Add `consolidated_at` field to episodic metadata
-- [ ] After PCL: set `consolidated_at = NOW()` on the episode
+- [x] Add `consolidated_at` field to episodic metadata
+- [x] After PCL: set `consolidated_at = NOW()` on the episode
 
 ### 5.5 — Wire into `process_messages_for_memory`
-- [ ] After episodic creation → trigger inline `run_predict_calibrate`
+- [x] After episodic creation → trigger inline `run_predict_calibrate`
 - [ ] Keep it synchronous (no background worker per Phase 0 decision)
 
 ---
