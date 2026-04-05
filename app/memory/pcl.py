@@ -21,11 +21,11 @@ __all__ = [
 
 from datetime import datetime
 from app.memory.db_memory import (
-    upsert_semantic_memory,
     invalidate_fact,
     get_fact_by_id,
     FACT_TYPE_STATIC,
 )
+from app.memory.extractor import upsert_semantic_memory
 from psycopg2.extras import Json
 
 
