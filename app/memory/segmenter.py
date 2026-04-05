@@ -198,6 +198,10 @@ def _create_segment(session_id: int, group: list, precomputed_summary: str | Non
 
     summary = precomputed_summary
 
+    # Only save if we have an actual LLM-generated summary
+    if not summary:
+        return None
+
     embedding = None
     if summary:
         try:
@@ -216,7 +220,7 @@ def _create_segment(session_id: int, group: list, precomputed_summary: str | Non
 
     save_fact(
         session_id=session_id,
-        content=summary or "",
+        content=summary,
         embedding=embedding,
         fact_type=FACT_TYPE_DYNAMIC,
         metadata={

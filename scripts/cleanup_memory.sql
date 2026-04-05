@@ -96,3 +96,35 @@ WHERE invalid_at IS NULL
     -- Short garbage segments (< 5 chars, not real content)
     OR (LENGTH(content) < 5 AND fact_type = 'dynamic')
   );
+
+-- ============================================================================
+-- CLEANUP 3: Remove garbage conversation_segments
+-- ============================================================================
+-- Rule: segments should be LLM-generated summaries (NOT raw chat, NOT tool output)
+-- Remove: ping/pong, image artifacts, empty/short, tool responses
+WITH garbage AS (
+    SELECT id FROM semantic_facts
+    WHERE fact_type = 'dynamic'
+      AND metadata->>'source_table' = 'conversation_segments'
+      AND invalid_at IS NULL
+      AND (
+          -- ping/pong
+          content ILIKE '%ping%pong%'
+          OR content ILIKE '%pong%ping%'
+          -- image tool artifacts
+          OR content ILIKE '%Generated Image%'
+          OR content ILIKE '%imagine%'
+          OR content ILIKE '%/imagine%'
+          -- short/no content
+          OR length(content) < 40
+          -- likely tool response artifacts
+          OR content ~* '^(AI|User|Assistant):'
+          OR content = '""'
+          -- empty content
+          OR trim(content) = ''
+      )
+)
+UPDATE semantic_facts f
+SET invalid_at = NOW()
+FROM garbage g
+WHERE f.id = g.id;
