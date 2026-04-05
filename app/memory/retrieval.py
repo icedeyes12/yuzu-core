@@ -123,6 +123,47 @@ def _embed_query(text: str) -> list[float] | None:
         return None
 
 
+def _rrf_merge(list_a: list[dict], list_b: list[dict], k: int = 60) -> list[dict]:
+    """
+    Reciprocal Rank Fusion — merges two ranked lists into one.
+    
+    RRF score = Σ 1.0 / (k + rank)  per list
+    Results sorted by fused score descending.
+    
+    Each input dict must have an 'id' key. Ties broken by the higher individual score.
+    """
+    if not list_a and not list_b:
+        return []
+    if not list_a:
+        return list_b
+    if not list_b:
+        return list_a
+
+    # Build a map of id -> original item
+    item_map: dict[int, dict] = {}
+    rrf_scores: dict[int, float] = {}
+
+    for lst, offset in [(list_a, 0), (list_b, len(list_a))]:
+        for rank, item in enumerate(lst, start=1):
+            item_id = item.get("id")
+            if item_id is None:
+                continue
+            # Keep the richer item dict
+            if item_id not in item_map:
+                item_map[item_id] = item
+            # Accumulate RRF score
+            rrf_scores[item_id] = rrf_scores.get(item_id, 0.0) + 1.0 / (k + rank)
+
+    # Tie-break by original score (higher first), then by id
+    fused = [
+        (item_id, rrf_scores[item_id], item_map[item_id].get("score", 0.0))
+        for item_id in item_map
+    ]
+    fused.sort(key=lambda x: (-x[1], -x[2], x[0]))
+
+    return [item_map[item_id] for item_id, _, _ in fused]
+
+
 def _score_fact(r: dict) -> float:
     """Hybrid score: similarity * 0.6 + importance * 0.2 + confidence * 0.2"""
     meta = r.get("metadata", {})
@@ -138,7 +179,6 @@ def _parse_fact_content(r: dict) -> dict:
     meta = r.get("metadata", {})
     content = r.get("content", "")
 
-    # Try to parse as "entity relation target" format
     parts = content.split(" ", 2)
     entity = meta.get("entity", parts[0] if len(parts) > 0 else "User")
     relation = meta.get("relation", parts[1] if len(parts) > 1 else "unknown")
@@ -150,6 +190,7 @@ def _parse_fact_content(r: dict) -> dict:
         "entity": entity,
         "relation": relation,
         "target": target,
+        "category": meta.get("category"),
         "confidence": meta.get("confidence", 0.5),
         "importance": meta.get("importance", 0.5),
         "score": _score_fact(r),

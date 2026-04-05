@@ -67,6 +67,7 @@ def save_fact(
     embedding: list[float] | None,
     fact_type: str = FACT_TYPE_STATIC,
     metadata: dict | None = None,
+    category: str | None = None,
 ) -> int | None:
     """
     Insert a new fact into semantic_facts.
@@ -76,11 +77,14 @@ def save_fact(
     meta = metadata or {}
     if "session_id" not in meta:
         meta["session_id"] = session_id
+    if category and "category" not in meta:
+        meta["category"] = category
 
     now = datetime.now()
     norm_vec = _normalize(embedding) if embedding else None
+
     if norm_vec is not None and len(norm_vec) != 1024:
-        raise ValueError(f"Embedding dim mismatch: got {len(norm_vec)}, expected 1024")
+        raise ValueError(f"Embedding dimension must be 1024, got {len(norm_vec)}")
 
     query = """
         INSERT INTO semantic_facts
@@ -330,9 +334,57 @@ def increment_importance(id: int, delta: float = 0.05, cap: float = 1.0) -> bool
         return False
 
 
+# ── Soft Delete ───────────────────────────────────────────────────────────────
+def invalidate_fact(id: int) -> bool:
+    """
+    Soft-delete a fact by setting invalid_at = NOW().
+    Does NOT hard-delete — preserves history for audit.
+    """
+    try:
+        pg_execute(
+            "UPDATE semantic_facts SET last_accessed=%s WHERE id=%s",
+            (datetime.now(), id),
+        )
+        return True
+    except Exception as e:
+        print(f"[db_memory] invalidate_fact failed: {e}")
+        return False
+
+
+def get_active_facts(
+    session_id: int | None = None,
+    fact_type: str | None = None,
+    category: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """
+    Get active (non-deleted) facts only.
+    Adds WHERE invalid_at IS NULL to all reads.
+    """
+    conditions = ["invalid_at IS NULL"]
+    params: list = []
+
+    if session_id is not None:
+        conditions.append("(metadata->>'session_id')::int = %s")
+        params.append(session_id)
+    if fact_type:
+        conditions.append("fact_type = %s")
+        params.append(fact_type)
+    if category:
+        conditions.append("(metadata->>'category') = %s")
+        params.append(category)
+
+    params.append(limit)
+    where = " AND ".join(conditions)
+    return pg_fetchall(
+        f"SELECT * FROM semantic_facts WHERE {where} LIMIT %s",
+        params,
+    )
+
+
 # ── Delete ────────────────────────────────────────────────────────────────────
 def delete_fact(id: int) -> bool:
-    """Delete a single fact by id. Returns True if deleted."""
+    """Hard-delete a single fact by id. Prefer invalidate_fact() for soft delete."""
     try:
         pg_execute("DELETE FROM semantic_facts WHERE id=%s", (id,))
         return True

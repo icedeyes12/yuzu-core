@@ -229,14 +229,67 @@ def _build_semantic_text(entity, relation, target) -> str:
 
 # ── Storage (using db_memory) ──────────────────────────────────────────────────
 
-def upsert_semantic_memory(session_id, entity, relation, target):
-    """Insert or update a semantic memory with embedding.
+_RELATION_TO_CATEGORY = {
+    # identity
+    "identity": "Identity",
+    "name": "Identity",
+    "profession": "Identity",
+    "location": "Identity",
+    "company": "Identity",
+    "education": "Identity",
+    "demographics": "Identity",
+    # preference
+    "preference": "Preference",
+    "likes": "Preference",
+    "dislikes": "Preference",
+    "favorites": "Preference",
+    "habit": "Preference",
+    # interest
+    "interest": "Interest",
+    "hobby": "Interest",
+    "topic": "Interest",
+    # personality
+    "personality": "Personality",
+    "communication_style": "Personality",
+    "emotional_tendency": "Personality",
+    "trait": "Personality",
+    # relationship
+    "relationship": "Relationship",
+    "shared_routine": "Relationship",
+    "inside_joke": "Relationship",
+    # experience
+    "experience": "Experience",
+    "skill": "Experience",
+    "past_event": "Experience",
+    "background": "Experience",
+    # goal
+    "goal": "Goal",
+    "aspiration": "Goal",
+    "plan": "Goal",
+    # guideline
+    "guideline": "Guideline",
+    "behavior": "Guideline",
+    "tone": "Guideline",
+}
+
+
+def _map_relation_to_category(relation: str) -> str:
+    """Map a relation keyword to one of the 8 categories."""
+    key = relation.lower().strip()
+    return _RELATION_TO_CATEGORY.get(key, "Experience")
+
+
+def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None):
+    """Insert or update a semantic memory with embedding and 8-category taxonomy.
 
     Duplicate detection: vector search for top-5 similar records;
     if any distance < 0.05, reinforce the existing record.
+    On reinforce: append to source_episodic_ids.
+    On new: initialize source_episodic_ids = [episode_id] if provided.
     """
+    category = _map_relation_to_category(relation)
     text = _build_semantic_text(entity, relation, target)
-    
+
     # Embed the text
     try:
         from app.memory.embedder import embed_text
@@ -254,28 +307,52 @@ def upsert_semantic_memory(session_id, entity, relation, target):
             limit=5,
             max_distance=0.05,
         )
-        
+
         if existing and len(existing) > 0:
             # Duplicate found — reinforce existing
-            from app.memory.db_memory import increment_importance
-            increment_importance(existing[0]["id"], delta=0.1, cap=1.0)
+            from app.memory.db_memory import increment_importance, pg_execute
+            from psycopg2.extras import Json
+            from datetime import datetime
+
+            e = existing[0]
+            increment_importance(e["id"], delta=0.1, cap=1.0)
+
+            # Append to source_episodic_ids
+            meta = e.get("metadata") or {}
+            ids = meta.get("source_episodic_ids", [])
+            if episode_id and episode_id not in ids:
+                ids.append(episode_id)
+            elif not ids:
+                ids = [episode_id] if episode_id else []
+            meta["source_episodic_ids"] = ids
+            meta["category"] = category
+            pg_execute(
+                "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
+                (datetime.now(), Json(meta), e["id"]),
+            )
             return  # done — no insert needed
 
     # No duplicate — insert new fact
+    metadata = {
+        "entity": entity,
+        "relation": relation,
+        "target": target,
+        "confidence": 0.7,
+        "importance": 0.7,
+        "category": category,
+        "source_table": "semantic_memories",
+        "session_id": session_id,
+    }
+    if episode_id:
+        metadata["source_episodic_ids"] = [episode_id]
+
     save_fact(
         session_id=session_id,
         content=f"{entity} {relation} {target}",
         embedding=vector,
         fact_type=FACT_TYPE_STATIC,
-        metadata={
-            "entity": entity,
-            "relation": relation,
-            "target": target,
-            "confidence": 0.7,
-            "importance": 0.7,
-            "source_table": "semantic_memories",
-            "session_id": session_id,
-        },
+        metadata=metadata,
+        category=category,
     )
 
 
