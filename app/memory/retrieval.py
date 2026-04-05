@@ -291,9 +291,14 @@ def retrieve_segments(session_id: int, query=None, limit: int = 10):
             fact_type=FACT_TYPE_DYNAMIC,
             limit=limit * 3,  # over-fetch, filter below
         )
+        # Filter: must be real segments (not old garbage with "No summary" content)
+        _NO_SUMMARY_PATTERNS = ("no summary found", "no summary", "tidak ada ringkasan")
         results = [
             r for r in all_dynamic
             if r.get("metadata", {}).get("source_table") == "conversation_segments"
+            and r.get("content")
+            and len(r.get("content", "")) > 15
+            and r.get("content", "").lower()[:20] not in _NO_SUMMARY_PATTERNS
         ][:limit]
 
     if not results:
