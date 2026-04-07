@@ -945,7 +945,7 @@ Rule: When executing a tool, the command MUST be the VERY FIRST line of your res
     # Both are required — do not remove either.
     # =========================
     chat_history = Database.get_chat_history_for_ai(
-        session_id=session_id, limit=50, recent=True
+        session_id=session_id, limit=80, recent=True
     )
 
     messages = [{"role": "system", "content": system_message}]
