@@ -244,6 +244,204 @@ def search_similar(
         return []
 
 
+# ── Keyword / Trigram Search ──────────────────────────────────────────────────
+def search_trgm(
+    query: str,
+    session_id: int | None = None,
+    fact_type: str | None = None,
+    limit: int = 15,
+    min_similarity: float = 0.3,
+    metadata_filter: dict | None = None,
+    category: str | None = None,
+) -> list[dict]:
+    """
+    Fuzzy keyword search via pg_trgm similarity operator.
+
+    Uses the GIN index on content (gin_trgm_ops) for fast trigram matching.
+    Ranks by similarity score descending.
+
+    Returns list of dicts: {id, content, fact_type, metadata,
+                            last_accessed, created_at, similarity}
+    """
+    if not query or not query.strip():
+        return []
+
+    conditions = ["invalid_at IS NULL"]
+    params: list = []
+
+    if session_id is not None:
+        conditions.append("(metadata->>'session_id')::int = %s")
+        params.append(session_id)
+
+    if fact_type:
+        conditions.append("fact_type = %s")
+        params.append(fact_type)
+
+    if category:
+        conditions.append("(metadata->>'category') = %s")
+        params.append(category)
+
+    if metadata_filter:
+        for key, val in metadata_filter.items():
+            conditions.append("metadata->>%s = %s")
+            params.append(key)
+            params.append(val)
+
+    cond_sql = " AND ".join(conditions)
+    params.append(min_similarity)
+    params.append(limit)
+    params.insert(1, query)
+
+    sql = f"""
+        SELECT id, fact_type, content, metadata,
+               last_accessed, created_at,
+               similarity(content, %s) AS similarity
+        FROM semantic_facts
+        WHERE {cond_sql}
+          AND similarity(content, %s) >= %s::real
+        ORDER BY similarity DESC
+        LIMIT %s
+    """
+
+    try:
+        results = pg_fetchall(sql, [query] + params)
+        return results if results else []
+    except Exception as e:
+        import traceback
+        print(f"[db_memory] search_trgm EXCEPTION: {type(e).__name__}: {e}")
+        traceback.print_exc()
+        return []
+
+
+def search_trgm_keywords(
+    keyword: str,
+    session_id: int | None = None,
+    fact_type: str | None = None,
+    limit: int = 15,
+    metadata_filter: dict | None = None,
+    category: str | None = None,
+) -> list[dict]:
+    """
+    Substring/keyword search via ILIKE — fallback when trigram similarity
+    is too loose (e.g. short keywords like "python" score low on similarity).
+
+    Uses the GIN index for fast ILIKE scans.
+
+    Returns list of dicts: {id, content, fact_type, metadata,
+                            last_accessed, created_at}
+    """
+    if not keyword or not keyword.strip():
+        return []
+
+    conditions = ["invalid_at IS NULL", "content ILIKE %s"]
+    params: list = [f"%{keyword}%"]
+
+    if session_id is not None:
+        conditions.append("(metadata->>'session_id')::int = %s")
+        params.append(session_id)
+
+    if fact_type:
+        conditions.append("fact_type = %s")
+        params.append(fact_type)
+
+    if category:
+        conditions.append("(metadata->>'category') = %s")
+        params.append(category)
+
+    if metadata_filter:
+        for key, val in metadata_filter.items():
+            conditions.append("metadata->>%s = %s")
+            params.append(key)
+            params.append(val)
+
+    cond_sql = " AND ".join(conditions)
+    params.append(limit)
+
+    sql = f"""
+        SELECT id, fact_type, content, metadata,
+               last_accessed, created_at
+        FROM semantic_facts
+        WHERE {cond_sql}
+        ORDER BY created_at DESC
+        LIMIT %s
+    """
+
+    try:
+        results = pg_fetchall(sql, params)
+        return results if results else []
+    except Exception as e:
+        print(f"[db_memory] search_trgm_keywords EXCEPTION: {type(e).__name__}: {e}")
+        return []
+
+
+# ── Full-Text Search ─────────────────────────────────────────────────────────
+def search_tsv(
+    query: str,
+    session_id: int | None = None,
+    fact_type: str | None = None,
+    limit: int = 15,
+    metadata_filter: dict | None = None,
+    category: str | None = None,
+    rank_weight: float = 0.3,
+) -> list[dict]:
+    """
+    PostgreSQL full-text search via tsvector column.
+
+    Uses the GIN index on the auto-generated tsv column for fast
+    ts_headline and ts_rank scoring.
+
+    Args:
+        query: plain-text search query (converted to tsquery internally)
+        rank_weight: how much ts_rank contributes to final score vs recency
+
+    Returns list of dicts: {id, content, fact_type, metadata,
+                            last_accessed, created_at, ts_rank}
+    """
+    if not query or not query.strip():
+        return []
+
+    conditions = ["invalid_at IS NULL", "tsv @@ plainto_tsquery('english', %s)"]
+    params: list = [query]
+
+    if session_id is not None:
+        conditions.append("(metadata->>'session_id')::int = %s")
+        params.append(session_id)
+
+    if fact_type:
+        conditions.append("fact_type = %s")
+        params.append(fact_type)
+
+    if category:
+        conditions.append("(metadata->>'category') = %s")
+        params.append(category)
+
+    if metadata_filter:
+        for key, val in metadata_filter.items():
+            conditions.append("metadata->>%s = %s")
+            params.append(key)
+            params.append(val)
+
+    cond_sql = " AND ".join(conditions)
+    params.append(limit)
+
+    sql = f"""
+        SELECT id, fact_type, content, metadata,
+               last_accessed, created_at,
+               ts_rank(tsv, plainto_tsquery('english', %s)) AS ts_rank
+        FROM semantic_facts
+        WHERE {cond_sql}
+        ORDER BY ts_rank DESC, created_at DESC
+        LIMIT %s
+    """
+
+    try:
+        results = pg_fetchall(sql, [query] + params)
+        return results if results else []
+    except Exception as e:
+        print(f"[db_memory] search_tsv EXCEPTION: {type(e).__name__}: {e}")
+        return []
+
+
 # ── Retrieval ─────────────────────────────────────────────────────────────────
 def get_fact_by_id(id: int) -> dict | None:
     return pg_fetchone(
@@ -252,7 +450,7 @@ def get_fact_by_id(id: int) -> dict | None:
 
 
 def get_facts_by_session(
-    session_id: int,
+    session_id: int | None,
     fact_type: str | None = None,
     limit: int = 100,
 ) -> list[dict]:
@@ -262,15 +460,18 @@ def get_facts_by_session(
             "SELECT * FROM semantic_facts WHERE fact_type=%s LIMIT %s",
             (fact_type, limit),
         )
-    # Dynamic facts - filter by session_id
-    params = [session_id]
-    extra = ""
+    # Dynamic facts: only filter by session_id when it is not None
+    conditions, params = [], []
+    if session_id is not None:
+        conditions.append("(metadata->>'session_id')::int = %s")
+        params.append(session_id)
     if fact_type:
-        extra = " AND fact_type = %s"
+        conditions.append("fact_type = %s")
         params.append(fact_type)
     params.append(limit)
+    where = "WHERE " + " AND ".join(conditions) if conditions else "WHERE fact_type = 'dynamic'"
     return pg_fetchall(
-        f"SELECT * FROM semantic_facts WHERE (metadata->>'session_id')::int=%s{extra} LIMIT %s",
+        f"SELECT * FROM semantic_facts {where} LIMIT %s",
         params,
     )
 

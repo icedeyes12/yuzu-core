@@ -18,9 +18,9 @@ __all__ = [
 
 from datetime import datetime
 from app.memory.db_memory import (
+    pg_fetchone,
     get_fact_by_id,
     pg_execute,
-    pg_fetchall,
 )
 from psycopg2.extras import Json
 
@@ -59,43 +59,57 @@ def _get_ai_manager():
 def mark_retrieved_as_pending_review(fact_ids: list[int], session_id: int | None = None) -> int:
     """Mark retrieved facts as pending review.
 
-    Adds `pending_review: True` and `last_reviewed_at` to metadata.
+    Uses native `pending_review` BOOLEAN column (not JSONB metadata).
+    Also updates `last_reviewed_at` in metadata.
     Returns number of facts marked.
     """
     if not fact_ids:
         return 0
 
-    marked = 0
     now = datetime.now()
-    for fid in fact_ids:
+    if len(fact_ids) == 1:
+        fid = fact_ids[0]
         try:
             row = get_fact_by_id(fid)
             if not row:
-                continue
+                return 0
             meta = row.get("metadata") or {}
-            meta["pending_review"] = True
             meta["last_reviewed_at"] = now.isoformat()
             pg_execute(
-                "UPDATE semantic_facts SET metadata=%s, last_accessed=%s WHERE id=%s",
+                "UPDATE semantic_facts SET pending_review=TRUE, metadata=%s, last_accessed=%s WHERE id=%s",
                 (Json(meta), now, fid),
             )
-            marked += 1
+            return 1
         except Exception as e:
             print(f"[review] mark_pending failed for id={fid}: {e}")
+            return 0
 
-    return marked
+    # Batch update for multiple ids
+    ph = ",".join(["%s"] * len(fact_ids))
+    try:
+# meta_batch kept for future batch metadata update
+        pass  # meta_batch = {fid: {"last_reviewed_at": now.isoformat()} for fid in fact_ids}
+        # Use batch update: set pending_review=TRUE, last_accessed=now
+        pg_execute(
+            f"UPDATE semantic_facts SET pending_review=TRUE, last_accessed=%s WHERE id IN ({ph})",
+            (now,) + tuple(fact_ids),
+        )
+        return len(fact_ids)
+    except Exception as e:
+        print(f"[review] batch mark_pending failed: {e}")
+        return 0
 
 
 def get_pending_review_count(fact_type: str | None = None) -> int:
-    """Return count of facts with pending_review=True."""
-    conditions = ["(metadata->>'pending_review')::bool = true"]
+    """Return count of facts with pending_review=TRUE (native column)."""
+    conditions = ["pending_review = TRUE"]
     params: list = []
     if fact_type:
         conditions.append("fact_type = %s")
         params.append(fact_type)
     where = "WHERE " + " AND ".join(conditions)
-    row = pg_fetchall(f"SELECT COUNT(*) AS cnt FROM semantic_facts {where}", params)
-    return row[0]["cnt"] if row else 0
+    row = pg_fetchone(f"SELECT COUNT(*) AS cnt FROM semantic_facts {where}", params)
+    return row["cnt"] if row else 0
 
 
 def _rate_fact(fact_content: str, fact_category: str | None, conversation_context: str) -> str | None:

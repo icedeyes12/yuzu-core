@@ -762,13 +762,24 @@ def _build_generation_context(profile, session_id, interface="terminal", user_me
 
     # --- Structured memory retrieval (embedding-based, replaces legacy) ---
     try:
-        from app.memory.retrieval import retrieve_memory, format_memory
-        memory_bundle = retrieve_memory(session_id, query=user_message)
-        structured_memory_text = format_memory(memory_bundle)
-        if structured_memory_text:
-            memory_context += f"\n\n{structured_memory_text}"
+        from app.memory.retrieval import retrieve_for_context
+        static_ids, memory_context_text = retrieve_for_context(session_id, query=user_message)
+        if memory_context_text:
+            memory_context += f"\n\n{memory_context_text}"
     except Exception as e:
         print(f"[WARNING] Structured memory retrieval failed: {e}")
+        static_ids = []
+
+    # --- Mark retrieved facts as pending review (Phase 8.4) ---
+    # retrieve_for_context is the "clean" context path (no pending_review internally).
+    # So we wire it here: extract static_ids → mark_retrieved_as_pending_review.
+    # Episodic facts use FSRS retrievability scoring, not pending_review.
+    if static_ids:
+        try:
+            from app.memory.memory_review import mark_retrieved_as_pending_review
+            mark_retrieved_as_pending_review(static_ids, session_id)
+        except Exception as e:
+            print(f"[WARNING] Pending review marking failed: {e}")
 
     # --- Legacy memory sources (backward compatibility fallback) ---
     session_memory = Database.get_session_memory(session_id)
