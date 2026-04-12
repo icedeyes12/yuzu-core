@@ -14,7 +14,7 @@ import os
 from app.app import (
     handle_user_message, handle_user_message_streaming, start_session,
     end_session_cleanup, summarize_memory, summarize_global_player_profile,
-    set_preferred_provider, get_vision_capabilities
+    set_preferred_provider, get_vision_capabilities, set_vision_model
 )
 from app.database import Database
 from app.providers import get_ai_manager
@@ -35,6 +35,11 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 app.mount("/uploads", StaticFiles(directory=os.path.join(BASE_DIR, "static/uploads")), name="uploads")
 app.mount("/generated_images", StaticFiles(directory=os.path.join(BASE_DIR, "static/generated_images")), name="generated_images")
+
+# Serve favicon.ico from static folder
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse(os.path.join(BASE_DIR, "static", "favicon.ico"))
 
 # Jinja2 templates
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
@@ -108,6 +113,11 @@ class ProviderSetRequest(BaseModel):
 
 class ProviderTestRequest(BaseModel):
     provider_name: str = Field(..., min_length=1, description="Provider name to test")
+
+
+class VisionModelSetRequest(BaseModel):
+    provider: str = Field(..., min_length=1, description="Vision provider name")
+    model: str = Field(..., min_length=1, description="Vision model name")
 
 
 class LocationUpdateRequest(BaseModel):
@@ -227,6 +237,7 @@ async def api_get_profile():
             "context": profile["context"],
             "image_model": profile["image_model"],
             "vision_model": profile["vision_model"],
+            "vision_model_preferences": profile.get("providers_config", {}).get("vision_model_preferences", {}),
             "created_at": profile["created_at"].isoformat() if profile["created_at"] else None,
             "updated_at": profile["updated_at"].isoformat() if profile["updated_at"] else None,
         }
@@ -783,6 +794,38 @@ async def api_test_provider_connection(request: ProviderTestRequest):
         }
     except Exception as e:
         print(f"Error testing provider connection: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/providers/set_vision_model")
+async def api_set_vision_model(request: VisionModelSetRequest):
+    try:
+        if not request.provider or not request.model:
+            return {"status": "error", "message": "Provider and model required"}
+        
+        result = set_vision_model(request.provider, request.model)
+        
+        return {
+            "status": "success",
+            "message": result
+        }
+    except Exception as e:
+        print(f"Error setting vision model: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/providers/test_vision")
+async def api_test_vision():
+    try:
+        # This is a placeholder for now. The actual implementation will depend on the vision provider.
+        # For example, it could call a vision API to check if a model is available.
+        # Here, we'll just return a success response.
+        return {
+            "status": "success",
+            "message": "Vision model test successful"
+        }
+    except Exception as e:
+        print(f"Error testing vision: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

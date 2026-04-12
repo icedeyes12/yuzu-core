@@ -668,8 +668,15 @@ class ChutesProvider(AIProvider):
         return self.available_models
     
     def send_message(self, messages: List[Dict], model: str, **kwargs) -> Optional[str]:
-        if not self.api_key:
+        """Send a message.
+        
+        log_prefix: defaults to "[CHAT]" for user-facing calls.
+                    Callers that want "[INT]" should pass log_prefix="[INT]".
+        """
+        if not self.api_key or model not in self.available_models:
             return None
+
+        log_prefix = kwargs.pop("log_prefix", "[CHAT]")
 
         # Prevent duplicate 'model' kwarg if caller passed it
         kwargs.pop('model', None)
@@ -725,9 +732,9 @@ class ChutesProvider(AIProvider):
             if status not in retryable_codes:
                 return None
 
-            print(f"[Chutes] {current_model} failed ({status}), retrying with another model...")
+            print(f"{log_prefix} {current_model} failed ({status}), retrying with another model...")
 
-        print(f"[Chutes] All models exhausted, last error: {last_error}")
+        print(f"{log_prefix} All models exhausted, last error: {last_error}")
         return None
 
     def _chutes_raw(self, model: str, messages: List[Dict], kwargs) -> tuple:
@@ -764,7 +771,8 @@ class ChutesProvider(AIProvider):
         if tools:
             payload["tools"] = tools
 
-        print(f"[Chutes] {model} | max_tokens={max_tokens}")
+        log_prefix = kwargs.pop('log_prefix', '[CHAT]')
+        print(f"{log_prefix} {model} | max_tokens={max_tokens}")
 
         try:
             response = requests.post(
@@ -774,13 +782,10 @@ class ChutesProvider(AIProvider):
                 timeout=kwargs.get('timeout', 120),
             )
             if response.status_code == 200:
-                print(f"[Chutes] OK {response.status_code}")
                 return (200, response.json()['choices'][0]['message']['content'].strip())
             else:
-                print(f"[Chutes] Error {response.status_code}: {response.text[:200]}")
                 return (response.status_code, None, response.text[:200])
         except Exception as e:
-            print(f"[Chutes] Exception: {e}")
             return (0, None, str(e))
     
     def send_message_streaming(self, messages: List[Dict], model: str, **kwargs) -> Generator[str, None, None]:
@@ -894,13 +899,10 @@ class AIProviderManager:
         start_time = time.time()
         response = provider.send_message(messages, model, **kwargs)
         response_time = time.time() - start_time
-        
         if response:
-            print(f"Response time: {response_time:.1f}s")
             return response
-        else:
-            print(f"AI service failed after {response_time:.1f}s")
-            return None
+        print(f"[ProviderManager] {provider_name} failed after {response_time:.1f}s")
+        return None
     
     def send_message_streaming(self, provider_name: str, model: str, messages: List[Dict], **kwargs) -> Generator[str, None, None]:
         if provider_name not in self.providers:
@@ -919,48 +921,6 @@ class AIProviderManager:
             
         except Exception as e:
             yield f"Streaming error: {str(e)}"
-
-    def send_message_full(self, provider_name: str, model: str, messages: List[Dict], **kwargs) -> Optional[Dict]:
-        """Send a message and return the full API response dict.
-        
-        Lets caller inspect tool_calls. Returns None on failure.
-        """
-        if provider_name not in self.providers:
-            return None
-        provider = self.providers[provider_name]
-        try:
-            import requests as _req
-            headers = {
-                "Authorization": f"Bearer {provider.api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://github.com/icedeyes12/yuzu-companion",
-                "X-Title": "Yuzu-Companion"
-            }
-            temperature = kwargs.get('temperature', 0.73)
-            max_tokens = kwargs.get('max_tokens', 4096)
-            payload = {
-                "model": model,
-                "messages": messages,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "stream": False
-            }
-            tools = kwargs.get('tools')
-            if tools:
-                payload["tools"] = tools
-            resp = _req.post(
-                provider.base_url,
-                headers=headers,
-                json=payload,
-                timeout=kwargs.get('timeout', 180),
-            )
-            if resp.status_code == 200:
-                return resp.json()
-            print(f"[send_message_full] {provider_name} error {resp.status_code}")
-            return None
-        except Exception as e:
-            print(f"[send_message_full] {provider_name} exception: {e}")
-            return None
 
     # Preferred models for internal (non-chat) LLM calls
     _PREFERRED_MODELS = [
@@ -1001,9 +961,9 @@ class AIProviderManager:
         for candidate in preference:
             if candidate in provider.available_models and candidate not in tried:
                 tried.add(candidate)
-                result = provider.send_message(messages, candidate, **kwargs)
+                result = provider.send_message(messages, candidate, log_prefix="[INT]", **kwargs)
                 if result:
-                    print(f"[internal] chutes/{candidate} OK")
+                    print(f"[INT] chutes/{candidate} OK")
                     return result
                 print(f"[internal] chutes/{candidate} FAILED")
         
@@ -1032,27 +992,27 @@ class AIProviderManager:
         # First try explicitly requested model
         if model_hint and model_hint in all_models:
             tried.add(model_hint)
-            result = provider_obj.send_message(messages, model_hint, **kwargs)
+            result = provider_obj.send_message(messages, model_hint, log_prefix="[INT]", **kwargs)
             if result:
-                print(f"[AIProviderManager] auto_send_message: chutes/{model_hint} OK")
+                print(f"[INT] auto: chutes/{model_hint} OK")
                 return result
 
         # Then try preferred models in order
         for candidate in preferred:
             if candidate in all_models and candidate not in tried:
                 tried.add(candidate)
-                result = provider_obj.send_message(messages, candidate, **kwargs)
+                result = provider_obj.send_message(messages, candidate, log_prefix="[INT]", **kwargs)
                 if result:
-                    print(f"[AIProviderManager] auto_send_message: chutes/{candidate} OK")
+                    print(f"[INT] auto: chutes/{candidate} OK")
                     return result
 
         # Then try remaining available models
         for candidate in all_models:
             if candidate not in tried:
                 tried.add(candidate)
-                result = provider_obj.send_message(messages, candidate, **kwargs)
+                result = provider_obj.send_message(messages, candidate, log_prefix="[INT]", **kwargs)
                 if result:
-                    print(f"[AIProviderManager] auto_send_message: chutes/{candidate} OK")
+                    print(f"[INT] auto: chutes/{candidate} OK")
                     return result
 
         print("[AIProviderManager] auto_send_message: all Chutes models failed")

@@ -17,10 +17,17 @@ class MultimodalTools:
     IMAGE_CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'image_cache')
 
     def __init__(self):
-        # ONLY moonshotai/kimi-k2.5 for vision (OpenRouter only)
+        # Vision models by provider
+        # Chutes: native multimodal models (Qwen VL series, Kimi K2.5 TEE)
+        # OpenRouter: moonshotai/kimi-k2.5
         self.vision_models = {
+            'chutes': [
+                "Qwen/Qwen3.5-397B-A17B-TEE",
+                "moonshotai/Kimi-K2.5-TEE",
+                "Qwen/Qwen3-VL-235B-A22B-Instruct",
+            ],
             'openrouter': [
-                "moonshotai/kimi-k2.5"  # Only this model for vision
+                "moonshotai/kimi-k2.5"
             ]
         }
         
@@ -42,21 +49,35 @@ class MultimodalTools:
         os.makedirs(self.IMAGE_CACHE_DIR, exist_ok=True)
         
     def get_available_vision_models(self, provider: str) -> List[str]:
+        """Get list of available vision models for a provider."""
         return self.vision_models.get(provider, [])
     
     def get_provider_endpoint(self, provider: str) -> Optional[str]:
         return self.provider_endpoints.get(provider)
     
     def is_vision_model(self, model_name: str, provider: str = None) -> bool:
+        """Check if a model supports vision (multimodal).
+        
+        Args:
+            model_name: Full model name (e.g., "Qwen/Qwen3.5-397B-A17B-TEE")
+            provider: Optional provider to narrow the search
+            
+        Returns:
+            True if the model supports vision/image input
+        """
         if provider:
-            return any(vision_model.lower() in model_name.lower() 
-                      for vision_model in self.vision_models.get(provider, []))
-        else:
-            for provider_models in self.vision_models.values():
-                if any(vision_model.lower() in model_name.lower() 
-                      for vision_model in provider_models):
+            # Check specific provider's vision models
+            for vision_model in self.vision_models.get(provider, []):
+                if vision_model.lower() in model_name.lower():
                     return True
-        return False
+            return False
+        else:
+            # Check ALL providers
+            for provider_models in self.vision_models.values():
+                for vision_model in provider_models:
+                    if vision_model.lower() in model_name.lower():
+                        return True
+            return False
 
     def _clean_cache(self):
         """Remove expired cache entries"""
@@ -462,21 +483,71 @@ class MultimodalTools:
             return None, "Image result parsing failed"
     
     def get_best_vision_provider(self) -> Tuple[Optional[str], Optional[str]]:
+        """Get the best available vision provider and model.
+        
+        Priority:
+        1. User's saved preference (from profile.vision_model_preferences) - if available and valid
+        2. Chutes first available vision model (default - Qwen3.5-TEE)
+        3. OpenRouter fallback
+        
+        Returns:
+            Tuple of (provider_name, model_name) or (None, None) if none available
+        """
         api_keys = Database.get_api_keys()
         
-        # ONLY check for openrouter with kimi-k2.5
+        # 1. Check user's saved preference first
+        try:
+            profile = Database.get_profile()
+            providers_config = profile.get('providers_config', {})
+            prefs = providers_config.get('vision_model_preferences', {})
+            saved_provider = prefs.get('provider')
+            saved_model = prefs.get('model')
+            
+            if saved_provider and saved_model:
+                # Validate that the saved model is still available
+                available = self.get_available_vision_models(saved_provider)
+                if saved_model in available:
+                    print(f"[Vision] Using saved preference: {saved_provider}/{saved_model}")
+                    return saved_provider, saved_model
+                else:
+                    print(f"[Vision] Saved model {saved_provider}/{saved_model} not available, using default")
+        except Exception as e:
+            print(f"[Vision] Could not load saved preference: {e}")
+        
+        # 2. Try Chutes first (preferred)
+        if 'chutes' in api_keys:
+            chutes_models = self.get_available_vision_models('chutes')
+            if chutes_models:
+                # Return the first available Chutes vision model (default)
+                return 'chutes', chutes_models[0]
+        
+        # 3. Fallback to OpenRouter
         if 'openrouter' in api_keys:
             openrouter_models = self.get_available_vision_models('openrouter')
             if openrouter_models:
-                return 'openrouter', openrouter_models[0]  # Will be "moonshotai/kimi-k2.5"
+                return 'openrouter', openrouter_models[0]
         
-        # No vision from chutes anymore - ONLY OpenRouter
         return None, None
     
     def should_use_vision(self, user_message: str, current_provider: str, current_model: str) -> bool:
+        """Determine if we should switch to a vision-capable model.
+        
+        Auto-switch logic:
+        - If message has images AND current model doesn't support vision → switch
+        - If message has images AND current model IS vision-capable → no switch needed
+        
+        Args:
+            user_message: The user's message
+            current_provider: Current provider name
+            current_model: Current model name
+            
+        Returns:
+            True if we should switch to vision model
+        """
         if not self.has_images(user_message):
             return False
         
+        # Check if message contains code-like content (not actual image)
         if ('onerror=' in user_message or 'onload=' in user_message or 
             'uploaded-image-container' in user_message or 'generated-image-container' in user_message):
             return False
@@ -484,11 +555,13 @@ class MultimodalTools:
         if self._looks_like_code(user_message):
             return False
         
-        # Check if current model is already the vision model
-        if current_model == "moonshotai/kimi-k2.5" and current_provider == "openrouter":
-            return True
+        # Check if current model already supports vision
+        if self.is_vision_model(current_model, current_provider):
+            # Current model already vision-capable, no switch needed
+            return False
         
-        # Check if we can switch to vision
+        # Current model doesn't support vision, but we have images
+        # Check if any vision provider is available
         vision_provider, vision_model = self.get_best_vision_provider()
         return vision_provider is not None
 

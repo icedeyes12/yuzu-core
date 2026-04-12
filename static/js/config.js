@@ -302,6 +302,26 @@ function setupEventListeners() {
         saveProviderBtn.addEventListener('click', saveProviderSettings);
     }
     
+    // Vision model settings
+    const visionProviderSelect = document.getElementById('vision-provider');
+    const testVisionBtn = document.getElementById('test-vision');
+    const saveVisionModelBtn = document.getElementById('save-vision-model');
+    
+    if (visionProviderSelect) {
+        visionProviderSelect.addEventListener('change', function() {
+            const selectedProvider = this.value;
+            updateVisionModelDropdown(selectedProvider);
+        });
+    }
+    
+    if (testVisionBtn) {
+        testVisionBtn.addEventListener('click', testVisionModel);
+    }
+    
+    if (saveVisionModelBtn) {
+        saveVisionModelBtn.addEventListener('click', saveVisionModel);
+    }
+    
     // Add keyboard shortcuts
     document.addEventListener('keydown', function(e) {
         // Ctrl+S to save profile (except when in textarea)
@@ -322,16 +342,187 @@ function setupEventListeners() {
     console.log('Event listeners setup complete');
 }
 
-// Load image model setting
+// Load image model on page load
 async function loadImageModel() {
     try {
         const response = await fetch('/api/get_profile');
         const data = await response.json();
+        
         const imageModel = data.image_model || 'hunyuan';
-        const select = document.getElementById('image-model');
-        if (select) select.value = imageModel;
+        document.getElementById('image-model').value = imageModel;
+        
+        console.log('Image model loaded:', imageModel);
     } catch (error) {
         console.error('Error loading image model:', error);
+    }
+}
+
+// Load vision model on page load
+async function loadVisionModel() {
+    try {
+        const response = await fetch('/api/get_profile');
+        const data = await response.json();
+        
+        // Vision model preferences stored in profile
+        const visionPrefs = data.vision_model_preferences || {};
+        const currentProvider = visionPrefs.provider || '';
+        const currentModel = visionPrefs.model || '';
+        
+        // Populate provider dropdown
+        const visionProviderSelect = document.getElementById('vision-provider');
+        visionProviderSelect.innerHTML = '';
+        
+        const visionProviders = [
+            { value: 'chutes', label: 'Chutes' },
+            { value: 'openrouter', label: 'OpenRouter' }
+        ];
+        
+        visionProviders.forEach(p => {
+            const option = document.createElement('option');
+            option.value = p.value;
+            option.textContent = p.label;
+            if (p.value === currentProvider) {
+                option.selected = true;
+            }
+            visionProviderSelect.appendChild(option);
+        });
+        
+        // Populate model dropdown based on provider
+        updateVisionModelDropdown(currentProvider, currentModel);
+        
+        // Update current display
+        if (currentProvider && currentModel) {
+            document.getElementById('current-vision-model').textContent = 
+                `${currentProvider}/${currentModel}`;
+        } else {
+            document.getElementById('current-vision-model').textContent = 
+                'Default (Chutes/Qwen3.5-TEE)';
+        }
+        
+        console.log('Vision model loaded:', currentProvider, currentModel);
+    } catch (error) {
+        console.error('Error loading vision model:', error);
+    }
+}
+
+// Update vision model dropdown based on selected provider
+function updateVisionModelDropdown(provider, currentModel = '') {
+    const modelSelect = document.getElementById('vision-model');
+    modelSelect.innerHTML = '';
+    
+    // Vision models by provider (hardcoded - matches multimodal.py)
+    const visionModelsByProvider = {
+        'chutes': [
+            { value: 'Qwen/Qwen3.5-397B-A17B-TEE', label: 'Qwen 3.5 TEE (Native Multimodal)' },
+            { value: 'Qwen/Qwen3-VL-235B-A22B-Instruct', label: 'Qwen 3 VL 235B' },
+            { value: 'moonshotai/Kimi-K2.5-TEE', label: 'Kimi K2.5 TEE' }
+        ],
+        'openrouter': [
+            { value: 'moonshotai/kimi-k2.5', label: 'Kimi K2.5' }
+        ]
+    };
+    
+    const models = visionModelsByProvider[provider] || [];
+    
+    if (models.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No vision models available';
+        modelSelect.appendChild(option);
+        return;
+    }
+    
+    models.forEach(m => {
+        const option = document.createElement('option');
+        option.value = m.value;
+        option.textContent = m.label;
+        if (m.value === currentModel) {
+            option.selected = true;
+        }
+        modelSelect.appendChild(option);
+    });
+}
+
+async function testVisionModel() {
+    const provider = document.getElementById('vision-provider').value;
+    const model = document.getElementById('vision-model').value;
+    
+    if (!provider || !model) {
+        showError('Please select both provider and model');
+        return;
+    }
+    
+    const statusElement = document.getElementById('current-vision-model');
+    statusElement.textContent = 'Testing...';
+    
+    try {
+        // Simple test: just verify the model is recognized as vision-capable
+        // Full test would require sending an actual image
+        const response = await fetch('/api/providers/test_vision', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider, model })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            statusElement.textContent = `${provider}/${model}`;
+            showSuccess('Vision model is available!');
+        } else {
+            statusElement.textContent = `${provider}/${model} (may not support vision)`;
+            showError(result.message || 'Vision model test failed');
+        }
+    } catch (error) {
+        console.error('Error testing vision model:', error);
+        statusElement.textContent = `${provider}/${model}`;
+        showError('Vision model test error');
+    }
+}
+
+async function saveVisionModel() {
+    const provider = document.getElementById('vision-provider').value;
+    const model = document.getElementById('vision-model').value;
+    
+    if (!provider) {
+        showError('Please select a vision provider');
+        return;
+    }
+    
+    if (!model) {
+        showError('Please select a vision model');
+        return;
+    }
+    
+    const saveBtn = document.getElementById('save-vision-model');
+    const originalText = saveBtn.textContent;
+    saveBtn.textContent = 'Saving...';
+    saveBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/providers/set_vision_model', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                provider: provider,
+                model: model
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            document.getElementById('current-vision-model').textContent = `${provider}/${model}`;
+            showSuccess('Vision model saved!');
+        } else {
+            showError('Failed to save vision model: ' + result.message);
+        }
+    } catch (error) {
+        console.error('Error saving vision model:', error);
+        showError('Error saving vision model');
+    } finally {
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
     }
 }
 
@@ -962,3 +1153,9 @@ function useCurrentLocation() {
 // Load location on page load
 document.addEventListener('DOMContentLoaded', loadLocation);
 window.showError = showError;
+
+// Load image model on page load
+document.addEventListener('DOMContentLoaded', loadImageModel);
+
+// Load vision model on page load
+document.addEventListener('DOMContentLoaded', loadVisionModel);
