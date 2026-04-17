@@ -11,19 +11,39 @@ from datetime import datetime
 import json
 import os
 
-from app.app import (
+# Load .env FIRST, before importing app modules
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+from dotenv import load_dotenv  # noqa: E402
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+
+from app.app import (  # noqa: E402
     handle_user_message, handle_user_message_streaming, start_session,
     end_session_cleanup, summarize_memory, summarize_global_player_profile,
     set_preferred_provider, get_vision_capabilities, set_vision_model
 )
-from app.database import Database
-from app.providers import get_ai_manager
+from app.database import Database  # noqa: E402
+from app.providers import get_ai_manager  # noqa: E402
+
+# Async database operations for web routes
+from app.db_pg_models_async import (  # noqa: E402
+    get_profile_async,
+    update_profile_async,
+    get_active_session_async,
+    get_all_sessions_async,
+    create_session_async,
+    switch_session_async,
+    rename_session_async,
+    delete_session_async,
+    get_session_memory_async,
+    get_chat_history_async,
+    add_message_async,
+    clear_session_messages_async,
+    get_api_keys_async,
+)
 
 # ---------------------------------------------------------------------------
 # FastAPI Application Setup
 # ---------------------------------------------------------------------------
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = FastAPI(
     title="Yuzu Companion",
@@ -207,10 +227,10 @@ async def serve_sidebar():
 @app.get("/api/get_profile")
 async def api_get_profile():
     try:
-        profile = Database.get_profile()
-        active_session = Database.get_active_session()
-        chat_history = Database.get_chat_history(session_id=active_session["id"], limit=None)
-        session_memory = Database.get_session_memory(active_session["id"])
+        profile = await get_profile_async()
+        active_session = await get_active_session_async()
+        chat_history = await get_chat_history_async(session_id=active_session["id"], limit=None)
+        session_memory = await get_session_memory_async(active_session["id"])
         
         ai_manager = get_ai_manager()
         available_providers = ai_manager.get_available_providers()
@@ -220,7 +240,7 @@ async def api_get_profile():
         current_provider = providers_config.get("preferred_provider", "ollama")
         current_model = providers_config.get("preferred_model", "glm-4.6:cloud")
         
-        api_keys = Database.get_api_keys()
+        api_keys = await get_api_keys_async()
         vision_capabilities = get_vision_capabilities()
         
         # Convert datetime objects to strings for JSON serialization
@@ -458,7 +478,7 @@ async def api_get_vision_capabilities():
 async def api_update_profile(request: Request):
     try:
         updates = await request.json()
-        Database.update_profile(updates)
+        await update_profile_async(updates)
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -467,10 +487,10 @@ async def api_update_profile(request: Request):
 @app.post("/api/clear_chat")
 async def api_clear_chat(request: Request):
     try:
-        active_session = Database.get_active_session()
+        active_session = await get_active_session_async()
         session_id = active_session["id"]
         
-        Database.clear_chat_history(session_id)
+        await clear_session_messages_async(session_id)
         
         # Reset session flag
         client_id = _get_session_id(request)
@@ -873,7 +893,7 @@ async def api_browser_unload(request: Request):
 @app.get("/api/sessions/list")
 async def api_list_sessions():
     try:
-        sessions = Database.get_all_sessions()
+        sessions = await get_all_sessions_async()
         return {"sessions": sessions}
     except Exception as e:
         print(f"Error listing sessions: {e}")
@@ -883,8 +903,8 @@ async def api_list_sessions():
 @app.post("/api/sessions/create")
 async def api_create_session(http_request: Request, request: SessionCreateRequest):
     try:
-        session_id = Database.create_session(request.name)
-        Database.switch_session(session_id)
+        session_id = await create_session_async(request.name)
+        await switch_session_async(session_id)
         
         # Reset session flag
         client_id = _get_session_id(http_request)
@@ -902,16 +922,16 @@ async def api_switch_session(request: SessionSwitchRequest, http_request: Reques
         if not request.session_id:
             raise HTTPException(status_code=400, detail="session_id required")
         
-        Database.switch_session(request.session_id)
+        await switch_session_async(request.session_id)
         
         # Reset session flag
         client_id = _get_session_id(http_request)
         _web_session_tracker.pop(client_id, None)
         
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-        profile = Database.get_profile()
+        profile = await get_profile_async()
         
-        all_sessions = Database.get_all_sessions()
+        all_sessions = await get_all_sessions_async()
         session_count = len(all_sessions)
         
         connection_msg = (
@@ -919,13 +939,13 @@ async def api_switch_session(request: SessionSwitchRequest, http_request: Reques
             f"Switched to session #{[s['id'] for s in all_sessions].index(request.session_id) + 1} of {session_count}*"
         )
         
-        Database.add_message("system", connection_msg, session_id=request.session_id)
+        await add_message_async(request.session_id, "system", connection_msg)
         
         # Set session flag for the new session
         _web_session_tracker[client_id] = True
         
-        chat_history = Database.get_chat_history(session_id=request.session_id)
-        session_memory = Database.get_session_memory(session_id=request.session_id)
+        chat_history = await get_chat_history_async(session_id=request.session_id)
+        session_memory = await get_session_memory_async(request.session_id)
         
         return {
             "status": "success",
@@ -944,7 +964,7 @@ async def api_rename_session(request: SessionRenameRequest):
         if not request.session_id or not request.name:
             raise HTTPException(status_code=400, detail="session_id and name required")
         
-        success = Database.rename_session(request.session_id, request.name)
+        success = await rename_session_async(request.session_id, request.name)
         
         if success:
             return {"status": "success"}
@@ -963,12 +983,12 @@ async def api_delete_session(request: SessionDeleteRequest):
         if not request.session_id:
             raise HTTPException(status_code=400, detail="session_id required")
         
-        success = Database.delete_session(request.session_id)
+        success = await delete_session_async(request.session_id)
         
         if success:
-            active_session = Database.get_active_session()
-            chat_history = Database.get_chat_history()
-            session_memory = Database.get_session_memory(active_session["id"])
+            active_session = await get_active_session_async()
+            chat_history = await get_chat_history_async()
+            session_memory = await get_session_memory_async(active_session["id"])
             
             return {
                 "status": "success",
@@ -988,7 +1008,7 @@ async def api_delete_session(request: SessionDeleteRequest):
 @app.get("/api/sessions/{session_id}/memory")
 async def api_get_session_memory(session_id: int):
     try:
-        session_memory = Database.get_session_memory(session_id)
+        session_memory = await get_session_memory_async(session_id)
         return {
             "status": "success",
             "session_id": session_id,

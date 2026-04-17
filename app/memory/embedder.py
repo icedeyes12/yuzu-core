@@ -2,7 +2,6 @@
 # DESCRIPTION: Chutes API embedding client for memory vectors
 #              PostgreSQL handles list[float] natively - no blob conversion needed
 
-import math
 import threading
 from app.db_pg_models import get_api_key
 
@@ -63,21 +62,5 @@ def embed_text(text, **kwargs):
         return None
 
 
-def cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Compute cosine similarity between two vectors."""
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(x * x for x in b))
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return dot / (norm_a * norm_b)
-
-
 # ── Vector normalization (for pgvector) ────────────────────────────────────────
 
-def normalize_vector(vec: list[float]) -> list[float]:
-    """L2-normalize a vector for pgvector cosine similarity."""
-    norm = math.sqrt(sum(x * x for x in vec))
-    if norm == 0:
-        return vec
-    return [x / norm for x in vec]

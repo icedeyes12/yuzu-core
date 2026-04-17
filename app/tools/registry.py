@@ -139,23 +139,6 @@ TOOL_ROLE_MAP = {
 }
 
 
-def build_markdown_contract(
-    tool_role: str,
-    full_command: str,
-    output_lines: list[str],
-    partner_name: str = "Yuzu",
-) -> str:
-    """Build a markdown contract string.
-
-    Note: New code should use schemas.build_tool_contract() instead.
-    This function is kept for backward compatibility with existing tools.
-    """
-    from app.tools.schemas import build_tool_contract, ToolDefinition
-
-    # Synthesize a minimal ToolDefinition for rendering
-    temp_def = ToolDefinition(name="", description="", role=tool_role)
-    return build_tool_contract(temp_def, full_command, output_lines, partner_name)
-
 
 # --------------------------------------------------------------------
 # Main dispatch
@@ -171,7 +154,7 @@ def execute_tool(tool_name: str, arguments: dict, session_id: Optional[str] = No
         {"ok": True,  "data": {...}, "markdown": "..."}
         {"ok": False, "error": "...", "markdown": "..."}
     """
-    from app.tools.schemas import error_result
+    from app.tools.schemas import error_result, build_tool_contract, ToolDefinition
 
     _collect_definitions()
 
@@ -180,8 +163,8 @@ def execute_tool(tool_name: str, arguments: dict, session_id: Optional[str] = No
         return {
             "ok": False,
             "error": f"Unknown tool: {tool_name}",
-            "markdown": build_markdown_contract(
-                f"{tool_name}_tools",
+            "markdown": build_tool_contract(
+                ToolDefinition(name="", description="", role=f"{tool_name}_tools"),
                 f"/{tool_name}",
                 ["Error: Unknown tool. Available tools: " + ", ".join(_TOOL_DEFINITIONS.keys())],
                 "Yuzu",
@@ -220,8 +203,8 @@ def execute_tool(tool_name: str, arguments: dict, session_id: Optional[str] = No
         return {
             "ok": True,
             "data": {"result": result},
-            "markdown": build_markdown_contract(
-                tool_def.role,
+            "markdown": build_tool_contract(
+                ToolDefinition(name="", description="", role=tool_def.role),
                 f"/{tool_name}",
                 [str(result)],
                 _get_partner_name(),

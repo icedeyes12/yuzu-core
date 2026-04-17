@@ -13,16 +13,14 @@ from __future__ import annotations
 __all__ = [
     "review_memory",
     "mark_retrieved_as_pending_review",
-    "get_pending_review_count",
 ]
 
 from datetime import datetime
+from psycopg.types.json import Json
 from app.memory.db_memory import (
-    pg_fetchone,
     get_fact_by_id,
     pg_execute,
 )
-from psycopg2.extras import Json
 
 
 # ── Rating → FSRS parameter mappings ─────────────────────────────────────────
@@ -100,18 +98,6 @@ def mark_retrieved_as_pending_review(fact_ids: list[int], session_id: int | None
         return 0
 
 
-def get_pending_review_count(fact_type: str | None = None) -> int:
-    """Return count of facts with pending_review=TRUE (native column)."""
-    conditions = ["pending_review = TRUE"]
-    params: list = []
-    if fact_type:
-        conditions.append("fact_type = %s")
-        params.append(fact_type)
-    where = "WHERE " + " AND ".join(conditions)
-    row = pg_fetchone(f"SELECT COUNT(*) AS cnt FROM semantic_facts {where}", params)
-    return row["cnt"] if row else 0
-
-
 def _rate_fact(fact_content: str, fact_category: str | None, conversation_context: str) -> str | None:
     """Ask LLM to rate a retrieved memory in context.
 
@@ -174,6 +160,9 @@ def _update_fsrs_params(fact_id: int, rating: str) -> bool:
     """Apply FSRS parameter update based on rating.
 
     Updates metadata with new stability and difficulty values.
+    
+    NOTE: FSRS only applies to episodic facts (source_table='episodic_memories').
+    Semantic facts use temporal validity instead and should NOT have FSRS updates.
     """
     effects = _RATING_MULTIPLIERS.get(rating)
     if not effects:
@@ -185,6 +174,15 @@ def _update_fsrs_params(fact_id: int, rating: str) -> bool:
             return False
 
         meta = row.get("metadata") or {}
+        
+        # FSRS scope check: only episodic facts get FSRS updates
+        source_table = meta.get("source_table", "")
+        fact_type = row.get("fact_type", "")
+        if source_table != "episodic_memories" and fact_type != "dynamic":
+            # Semantic/static facts don't use FSRS — skip update
+            print(f"[review] Skipping FSRS update for non-episodic fact id={fact_id} (source={source_table})")
+            return False
+        
         now = datetime.now()
 
         # Current values or defaults

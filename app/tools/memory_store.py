@@ -122,21 +122,14 @@ def execute(arguments, **kwargs):
     fact_embed_text = f"[{category}] {fact}"
     try:
         vecs = embed_texts([fact_embed_text])
-        if not vecs or len(vecs) == 0:
+        if not vecs:
             return error_result(
                 "Embedding service unavailable",
                 TOOL_DEFINITION,
                 full_command,
                 partner_name,
             )
-        if not vecs or len(vecs) == 0:
-            return error_result(
-                "Embedding service unavailable",
-                TOOL_DEFINITION,
-                full_command,
-                partner_name,
-            )
-        vector = vecs[0] if vecs and len(vecs) > 0 else None
+        vector = vecs[0]
     except Exception as e:
         print(f"[memory_store] Embed failed: {e}")
         return error_result(
@@ -155,18 +148,19 @@ def execute(arguments, **kwargs):
         max_distance=0.05,
     )
 
-    if existing and len(existing) > 0:
-        # Duplicate found — reinforce existing fact
-        from app.memory.db_memory import increment_importance
-        e = existing[0] if existing else None
-        increment_importance(e["id"], delta=0.1, cap=1.0)
-        new_confidence = e.get("metadata", {}).get("confidence", 0.7)
-        return ok_result(
-            {"status": "duplicate", "confidence": new_confidence},
-            TOOL_DEFINITION,
-            full_command,
-            partner_name,
-        )
+    if existing:
+        e = existing[0]
+        if e:
+            # Duplicate found — reinforce existing fact
+            from app.memory.db_memory import increment_importance
+            increment_importance(e["id"], delta=0.1, cap=1.0)
+            new_confidence = e.get("metadata", {}).get("confidence", 0.7)
+            return ok_result(
+                {"status": "duplicate", "confidence": new_confidence},
+                TOOL_DEFINITION,
+                full_command,
+                partner_name,
+            )
 
     # Insert new fact into semantic_facts
     fact_id = save_fact(

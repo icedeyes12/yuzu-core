@@ -7,7 +7,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from app.memory.retrieval import retrieve_memory, format_memory
 
 def main():
-    os.environ.setdefault("PGHOST", os.getenv("PGHOST", "127.0.0.1"))
+    # No default host - rely on environment or app's db_pg config
+    # os.environ.setdefault("PGHOST", os.getenv("PGHOST", ""))
 
     print("=" * 60)
     print("MEMORY CONTEXT VIEWER")

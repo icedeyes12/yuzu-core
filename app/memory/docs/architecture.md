@@ -4,6 +4,8 @@ This document defines the structure, database schema, and data flow of the long-
 
 The memory subsystem transforms raw chat logs into structured, retrievable, vector-searchable memory layers — all stored in PostgreSQL with pgvector extension.
 
+Aligned with [plast-mem](https://github.com/icedeyes12/plast-mem) patterns for temporal validity and FSRS scope.
+
 ---
 
 ## Architecture Overview
@@ -18,22 +20,26 @@ flowchart TB
 
     subgraph MemoryLayer["Memory Processing Layer"]
         EMBED["embedder.py\nChutes API (Qwen3-Embedding-0.6B)\n1024-dim vectors"]
-        SEGMENT["segmenter.py\nDual-channel segmentation\n(time-gap + LLM)"]
-        EXTRACT["extractor.py\nLLM semantic extraction\n+ PCL pipeline"]
+        PIPELINE["memory.py\nBackground thread\nMessage counter trigger"]
+        BATCH["Batch Segmentation\nSingle LLM call\n(titles + summaries + surprise)"]
+        PCL["pcl.py\nPredict-Calibrate Learning\n(new/reinforce/update/invalidate)"]
         RETRIEVE["retrieval.py\nRRF + hybrid scoring\n+ temporal search"]
         REVIEW["review.py + memory_review.py\nFSRS decay (episodic)\nLLM memory review"]
-        PCL["pcl.py\nPredict-Calibrate Learning\n(new/reinforce/update/invalidate)"]
     end
 
     USER["User Message"] --> MSG["messages table"]
-    MSG --> SEGMENT
-    SEGMENT --> EXTRACT
-    EXTRACT --> PCL
+    MSG --> COUNTER{"Message count\n>= 20?"}
+    COUNTER -->|Yes| PIPELINE
+    COUNTER -->|No| CONTINUE["Continue chat"]
+    PIPELINE --> BATCH
+    BATCH --> EPISODE["Create Episode"]
+    EPISODE --> PCL
     PCL --> EMBED
     EMBED -->|"list[float]"| PG_VECTOR
     PG_VECTOR --> RETRIEVE
     RETRIEVE --> CONTEXT["Context Builder"]
     CONTEXT --> LLM["LLM Response"]
+    REVIEW -.->|pending reviews| RETRIEVE
 ```
 
 ---
@@ -42,12 +48,12 @@ flowchart TB
 
 ### PostgreSQL + pgvector
 
-All data lives in a single PostgreSQL database (`yuzuki`) with the pgvector extension for vector similarity search.
+All data lives in a single PostgreSQL database with the pgvector extension for vector similarity search.
 
 **Key Design:**
 - No SQLite. No FAISS. No BLOB serialization.
 - Embeddings stored as native `VECTOR(1024)` columns.
-- psycopg2 handles `list[float]` directly via string interpolation of float lists.
+- psycopg v3 handles `list[float]` directly via string interpolation of float lists.
 
 ### Unified Memory Table (`semantic_facts`)
 
@@ -58,6 +64,7 @@ All data lives in a single PostgreSQL database (`yuzuki`) with the pgvector exte
 | `content` | TEXT | The memory content |
 | `embedding` | VECTOR(1024) | pgvector embedding (native, no serialization) |
 | `metadata` | JSONB | Flexible per-type fields |
+| `valid_at` | TIMESTAMP | When fact became true (plast-mem pattern) |
 | `created_at` | TIMESTAMP | Creation timestamp |
 | `last_accessed` | TIMESTAMP | Last retrieval timestamp |
 | `invalid_at` | TIMESTAMP | Soft delete — `NULL` = active, set = invalidated |
@@ -151,13 +158,6 @@ flowchart TD
     G --> A
 ```
 
-### Module: `segmenter.py`
-
-```python
-segment_session(session_id, prev_summary=None)  # Main entry, returns count
-_should_segment(messages, prev_summary)         # Dual-channel decision
-_llm_detect_boundary(messages, prev_summary)  # LLM boundary detection
-```
 
 ---
 
@@ -169,7 +169,7 @@ Semantic facts are extracted via the Predict-Calibrate Learning (PCL) pipeline, 
 
 ```mermaid
 sequenceDiagram
-    participant SEG as segmenter.py
+    participant SEG as memory.py (batch_segment)
     participant PCL as pcl.py
     participant LLM as AI Manager
     participant DB as PostgreSQL
@@ -323,16 +323,16 @@ After retrieval, facts are marked pending review. When `review_memory()` is call
 
 | Module | Purpose | Key Functions |
 |--------|---------|---------------|
+| `memory.py` | Background memory pipeline runner (now: memory.py) | `run_memory_pipeline()`, `batch_segment()`, `create_episode_and_pcl()`, `trigger_memory_pipeline_async()` |
 | `db_memory.py` | Unified CRUD over `semantic_facts` | `save_fact()`, `search_similar()`, `invalidate_fact()`, `increment_importance()`, `decay_facts()` |
 | `embedder.py` | Chutes API embedding client | `embed_text()`, `embed_texts()`, `EMBEDDING_DIM=1024` |
-| `extractor.py` | Semantic fact extraction + PCL wiring | `extract_semantic_facts()`, `upsert_semantic_memory()`, `create_episodic_memory()`, `process_messages_for_memory()` |
-| `segmenter.py` | Dual-channel conversation segmentation | `segment_session()`, `_should_segment()`, `_llm_detect_boundary()` |
+| `extractor.py` | Semantic fact extraction + PCL wiring | `extract_semantic_facts()`, `upsert_semantic_memory()`, `create_episodic_memory()` |
 | `retrieval.py` | Hybrid scoring + RRF retrieval | `retrieve_memory()`, `retrieve_static_memories()`, `retrieve_segments()`, `format_memory()` |
 | `review.py` | FSRS decay for episodic memories | `run_decay()`, `reinforce_memory()` |
 | `memory_review.py` | LLM-based memory review | `review_memory()`, `mark_retrieved_as_pending_review()` |
 | `pcl.py` | Predict-Calibrate Learning pipeline | `run_predict_calibrate()`, `consolidate_facts()` |
 
-**Deprecated:** `vector_store.py` — stub redirecting to `db_memory.py`
+**Removed:** `memory.py (batch_segment)` and `vector_store.py` — replaced by `batch_segment()` and `db_memory.py`
 
 ---
 
@@ -341,15 +341,14 @@ After retrieval, facts are marked pending review. When `review_memory()` is call
 ```
 app/memory/
 ├── __init__.py
+├── memory.py          # Background memory pipeline (same file)
 ├── db_memory.py         # Unified memory CRUD (PostgreSQL + pgvector)
 ├── embedder.py           # Chutes API embedding client (1024-dim)
 ├── extractor.py           # Semantic fact extraction + PCL wiring
-├── segmenter.py          # Dual-channel conversation segmentation
 ├── retrieval.py           # RRF + hybrid scoring retrieval
 ├── review.py             # FSRS-style decay (episodic only)
 ├── memory_review.py      # LLM-based memory review + FSRS updates
 ├── pcl.py                # Predict-Calibrate Learning pipeline
-├── vector_store.py        # DEPRECATED: stub redirecting to db_memory
 └── docs/
     └── architecture.md    # This file (single source of truth)
 ```
@@ -361,21 +360,28 @@ app/memory/
 ### app.py / web.py
 
 ```python
-from app.memory.segmenter import segment_session
+from app.memory.memory import trigger_memory_pipeline_async, enqueue_memory_pipeline
 from app.memory.review import run_decay
-from app.memory.extractor import process_messages_for_memory
-from app.memory.retrieval import retrieve_memory, format_memory
+from app.memory.retrieval import retrieve_for_context
 
-# On session start
-segment_session(session_id)
+# On session start — queue background pipeline
 run_decay(session_id)
+enqueue_memory_pipeline(session_id)
 
-# On new messages
-process_messages_for_memory(session_id, recent_messages)
+# After each turn — trigger if message count threshold met
+trigger_memory_pipeline_async(session_id, current_count)
 
-# Context building
-memories = retrieve_memory(session_id, query)
-context = format_memory(memories)
+# Context building for system prompt injection
+# retrieve_for_context returns (static_ids, context_text)
+# It does NOT mark pending_review internally
+static_ids, memory_context_text = retrieve_for_context(session_id, query=user_message)
+
+# Mark retrieved facts as pending review for later LLM-based review
+if static_ids:
+    from app.memory.memory_review import mark_retrieved_as_pending_review
+    mark_retrieved_as_pending_review(static_ids, session_id)
+
+# Inject into system_message as "Memory Context: {memory_context_text}"
 ```
 
 ---
@@ -385,8 +391,9 @@ context = format_memory(memories)
 1. **1024-dim Embeddings**: Qwen3-Embedding-0.6B via Chutes API — smaller, faster, still high quality.
 2. **Soft Delete**: Facts never hard-deleted. `invalid_at` preserves history and enables temporal queries.
 3. **PCL Pipeline**: Predict-Calibrate Learning extracts durable knowledge from episodic episodes — closes the complementary learning systems loop.
-4. **Dual-Channel Segmentation**: Time-gap fast-path + LLM refinement. No unnecessary LLM calls for obvious breaks.
-5. **RRF Merge**: Combines static and dynamic retrieval rankings without BM25 (unavailable on Termux).
-6. **FSRS Scope Restriction**: Semantic facts don't decay — they use `invalid_at` for temporal validity.
-7. **Inline/Synchronous**: No background workers. PCL and review run synchronously to keep the system simple.
-8. **Vector Literal Interpolation**: psycopg2 cannot adapt Vector objects over the wire protocol — vectors are interpolated as string literals directly in SQL.
+4. **Batch Segmentation**: Single LLM call generates all segment titles, summaries, and surprise levels at once — amortizes cost.
+5. **Background Thread**: Memory pipeline runs in daemon thread — non-blocking, chat responses return immediately.
+6. **Message Counter Trigger**: Pipeline triggers every 20 messages, force at 40 — aligned with plast-mem thresholds.
+7. **RRF Merge**: Combines static and dynamic retrieval rankings without BM25 (unavailable on Termux).
+8. **FSRS Scope Restriction**: Semantic facts don't decay — they use `invalid_at` for temporal validity.
+9. **Vector Literal Interpolation**: psycopg v3 cannot adapt Vector objects over the wire protocol — vectors are interpolated as string literals directly in SQL.

@@ -48,7 +48,7 @@ graph LR
     C --> E
     D --> E
     
-    E --> F[(Database<br/>yuzuki PostgreSQL)]
+    E --> F[(Database<br/>PostgreSQL)]
     E --> G[AI Providers<br/>Ollama/Cerebras/OpenRouter/Chutes]
     E --> H[Tools<br/>ImageGen/Search/Memory]
     E --> I[Memory System<br/>episodic + semantic]
@@ -61,6 +61,7 @@ graph LR
 ```mermaid
 graph TD
     A[app/] --> B[app.py]
+    A --> B2[visual_context.py]
     A --> C[database.py]
     A --> D[providers.py]
     A --> E[encryption.py]
@@ -68,13 +69,18 @@ graph TD
     A --> G[memory/]
     A --> H[tools/]
     
+    B2 --> B2a[Visual context buffer<br/>Thread-safe storage<br/>for follow-up image refs]
+
     G --> G1[extractor.py<br/>Semantic + Episodic extraction]
     G --> G2[segmenter.py<br/>Conversation segmentation]
     G --> G3[retrieval.py<br/>Memory retrieval pipeline]
     G --> G4[review.py<br/>FSRS decay & reinforcement]
     G --> G5[embedder.py<br/>Vector embeddings via Chutes]
     G --> G6[models.py<br/>ORM model re-exports]
-    
+    G --> G7[db_memory.py<br/>Unified PostgreSQL CRUD]
+    G --> G8[pcl.py<br/>Predict-Calibrate Learning]
+    G --> G9[memory_review.py<br/>LLM-based memory review]
+
     H --> H1[registry.py<br/>Tool execution + schema registry]
     H --> H1b[schemas.py<br/>ToolParam + ToolDefinition dataclasses]
     H --> H2[multimodal.py<br/>Vision & image caching]

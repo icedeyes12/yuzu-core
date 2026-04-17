@@ -3,7 +3,6 @@
 
 import requests
 import os
-import threading
 import re
 import json
 import traceback
@@ -12,57 +11,14 @@ from typing import Dict, Optional, List
 from app.database import Database
 from app.providers import get_ai_manager, reload_ai_manager
 from app.tools import multimodal_tools
-from app.tools.registry import execute_tool, get_tool_role, get_tool_definitions, TOOL_ROLE_MAP
-# ---------------------------------------------------------------------------
-# Persistent visual context buffer (per-session, runtime-only)
-# Stores the last processed image as base64 for N follow-up turns so the
-# model can compare or reference it without a new tool call.
-# ---------------------------------------------------------------------------
-_visual_context_buffer = {}  # session_id -> {"base64": str, "mime": str, "turns_left": int}
-_visual_context_lock = threading.Lock()
-_VISUAL_CONTEXT_TURNS = 3
+from app.tools.registry import execute_tool, get_tool_role, get_tool_definitions
 
-def _store_visual_context(session_id, image_base64, mime):
-    """Store a visual context snapshot for follow-up turns. Thread-safe."""
-    with _visual_context_lock:
-        _visual_context_buffer[session_id] = {
-            "base64": image_base64,
-            "mime": mime,
-            "turns_left": _VISUAL_CONTEXT_TURNS,
-        }
-
-def _consume_visual_context(session_id):
-    """Return stored visual context if available and decrement turn counter.
-    Returns (base64, mime) or (None, None). Thread-safe."""
-    with _visual_context_lock:
-        ctx = _visual_context_buffer.get(session_id)
-        if not ctx or ctx["turns_left"] <= 0:
-            _visual_context_buffer.pop(session_id, None)
-            return None, None
-        ctx["turns_left"] -= 1
-        if ctx["turns_left"] <= 0:
-            _visual_context_buffer.pop(session_id, None)
-        return ctx["base64"], ctx["mime"]
-
-_VISUAL_REF_PATTERNS = re.compile(
-    r'(?:yang tadi|yang sebelumnya|tadi|bedanya|beda apa|compare|'
-    r'bandingin|foto tadi|gambar tadi|image before|the previous|earlier image|'
-    r'dari tadi|yang barusan)',
-    re.IGNORECASE,
+from app.memory.memory import trigger_memory_pipeline_async
+from app.visual_context import (
+    store_visual_context as _store_visual_context,
+    consume_visual_context as _consume_visual_context,
+    has_visual_reference as _has_visual_reference,
 )
-
-def _has_visual_reference(text):
-    """Detect if the user message references a previous image."""
-    return bool(_VISUAL_REF_PATTERNS.search(text))
-
-def _generate_tool_call_id(tool_name, loop_count):
-    """Generate a unique tool call ID for command-based tool execution."""
-    return f"cmd_{tool_name}_{loop_count}"
-
-def _is_image_generation_tool(command_name):
-    """Check if the command is for image generation."""
-    return command_name in ("imagine", "image_generate")
-
 def _parse_image_result_from_formatted(formatted_result):
     """
     Parse image path from formatted tool result.
@@ -133,13 +89,6 @@ def _detect_command(response_text):
         "full_command": first_line
     }
 
-def _is_tool_markdown(response_text):
-    """True when response is a formatted tool markdown contract."""
-    if not response_text:
-        return False
-    stripped = response_text.strip()
-    return stripped.startswith("<details>")
-
 # ----------------------------------------------------------------------
 # Guard: detect when model tries to shortcut image generation by
 # directly outputting a markdown image instead of calling /imagine.
@@ -161,35 +110,6 @@ def _extract_prompt_from_markdown_image(response_text):
     import re
     m = re.search(r'!\[[^\]]*\]\(([^)]+)\)', response_text)
     return m.group(1) if m else None
-
-def _extract_tool_role(response_text):
-    """Extract tool role from <summary>🔧 role</summary> in a markdown contract."""
-    if not response_text:
-        return None
-    import re
-    m = re.search(r'<summary>🔧\s*(\S+)</summary>', response_text)
-    return m.group(1) if m else None
-
-def _extract_command_from_markdown(content):
-    """Extract the original /command line from a tool markdown contract.
-
-    The contract format (from build_markdown_contract) stores the command
-    inside a bash code block with the executor prompt:
-        ```bash
-        Yuzu$ /command args
-        ```
-
-    The regex matches ``<prompt>$ /command ...`` up to the closing
-    code fence.  Returns the command string (e.g. "/request https://example.com")
-    or the original content unchanged when extraction fails.
-    """
-    if not content:
-        return content
-    # Match: ```bash\n<executor>$ /<command line>\n``` — single-line command
-    m = re.search(r'```bash\n\S+\$\s*(/[^\n]+)\n```', content)
-    if m:
-        return m.group(1).strip()
-    return content
 
 def _execute_command_tool(command_info, session_id=None):
     """
@@ -401,7 +321,7 @@ def handle_user_message(user_message, interface="terminal"):
             auto_name_session_if_needed(session_id, active_session)
             if should_summarize_memory(profile, user_message, session_id):
                 summarize_memory(profile, user_message, raw_ai_response, session_id)
-            _trigger_memory_pipeline(session_id)
+            _trigger_memory_pipeline_async(session_id)
             return raw_ai_response
         
         # CASE 2: No native tool call — use legacy /command detection
@@ -459,6 +379,23 @@ def handle_user_message(user_message, interface="terminal"):
                 second_clean = re.sub(
                     r'\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$', '', second_text.strip()
                 )
+                
+                # CHECK: Does synthesis contain another command? (recursive tool call)
+                second_cmd = _detect_command(second_clean)
+                if second_cmd and not is_image_tool:
+                    # Only allow one level of recursion (avoid infinite loops)
+                    print(f"[SYNTHESIS] Detected nested command: /{second_cmd.get('command')}")
+                    exec_tool_name, nested_output = _execute_command_tool(second_cmd, session_id=session_id)
+                    nested_md = nested_output.get("markdown", str(nested_output))
+                    Database.add_message(get_tool_role(exec_tool_name), nested_md, session_id=session_id)
+                    second_clean = nested_md
+                elif second_cmd and is_image_tool:
+                    # For image synthesis, don't allow nested commands - just strip them
+                    print("[SYNTHESIS] Ignoring nested command in image synthesis pass")
+                    # Remove the command line from the response
+                    lines = second_clean.split('\n')
+                    second_clean = '\n'.join(line for line in lines if not line.strip().startswith('/request') and not line.strip().startswith('/imagine'))
+                
                 Database.add_message('assistant', second_clean, session_id=session_id)
                 if is_image_tool:
                     final_response = tool_md + "\n\n" + second_clean
@@ -468,12 +405,12 @@ def handle_user_message(user_message, interface="terminal"):
                 auto_name_session_if_needed(session_id, active_session)
                 if should_summarize_memory(profile, user_message, session_id):
                     summarize_memory(profile, user_message, final_response, session_id)
-                _trigger_memory_pipeline(session_id)
+                _trigger_memory_pipeline_async(session_id)
                 return final_response
 
             # No synthesis text — return raw tool output
             auto_name_session_if_needed(session_id, active_session)
-            _trigger_memory_pipeline(session_id)
+            _trigger_memory_pipeline_async(session_id)
             return tool_md
         else:
             # NO TOOL: Save as assistant message and return
@@ -482,7 +419,7 @@ def handle_user_message(user_message, interface="terminal"):
             auto_name_session_if_needed(session_id, active_session)
             if should_summarize_memory(profile, user_message, session_id):
                 summarize_memory(profile, user_message, raw_ai_response, session_id)
-            _trigger_memory_pipeline(session_id)
+            _trigger_memory_pipeline_async(session_id)
             return raw_ai_response
 
 
@@ -493,77 +430,21 @@ _MEMORY_INIT_DONE: Dict[int, bool] = {}  # session_id -> True after first init
 _DECAY_INTERVAL_HOURS = 6
 _SEMANTIC_COOLDOWN_MSGS = 10
 
-def _trigger_memory_pipeline(session_id):
-    """Run episodic + semantic memory extraction on recent messages.
-
-    Called after each user/assistant exchange.
-    - Episodic: emotion-threshold gated (every emotional turn).
-    - Semantic: lightweight regex, gated by message-count cooldown.
-    - Decay: time-gated (once per _DECAY_INTERVAL_HOURS).
+def _trigger_memory_pipeline_async(session_id: int) -> None:
+    """Trigger memory pipeline in background if message count threshold met.
+    
+    Replaces old synchronous _trigger_memory_pipeline.
+    Non-blocking — returns immediately.
     """
     try:
-        from app.memory.extractor import should_create_episodic, calculate_emotional_weight
-        from app.memory.extractor import generate_episodic_summary, create_episodic_memory
-        from app.memory.extractor import extract_semantic_facts, upsert_semantic_memory
-        from app.memory.review import run_decay
-
-        recent = Database.get_chat_history(session_id=session_id, limit=20, recent=True)
-        if not recent:
-            return
-
-        # Extract IDs once — used for both episodic and semantic passes
-        recent_ids = [m['id'] for m in recent]
-
-        # --- Episodic: emotion gated ---
-        if should_create_episodic(recent):
-            emotional_weight = calculate_emotional_weight(recent)
-            summary = generate_episodic_summary(recent)
-            if summary:
-                importance = 0.5 + emotional_weight * 0.3
-                try:
-                    create_episodic_memory(
-                        session_id, summary, emotional_weight, importance,
-                        source_message_ids=recent_ids,
-                    )
-                except Exception as e:
-                    print(f"[WARNING] Episodic memory creation failed: {e}")
-
-        # --- Semantic: cooldown-gated lightweight regex per message ---
-        last_run = _memory_semantic_last_run.get(session_id)
+        from app.database import Database
         session_memory = Database.get_session_memory(session_id)
-        msg_count = session_memory.get('message_count', 0) if session_memory else 0
-        msg_delta = msg_count - _memory_semantic_last_msg_count.get(session_id, 0)
-        time_ok = (
-            last_run is None or
-            (datetime.now() - last_run).total_seconds() >= 300  # 5 min cooldown
-        )
-        should_run_semantic = msg_delta >= _SEMANTIC_COOLDOWN_MSGS and time_ok
-        if should_run_semantic:
-            try:
-                facts = extract_semantic_facts(recent)
-                for fact in facts:
-                    try:
-                        upsert_semantic_memory(session_id, fact['entity'], fact['relation'], fact['target'])
-                    except (KeyError, ValueError) as e:
-                        print(f"[WARNING] Semantic fact malformed: {e}")
-                    except Exception as e:
-                        print(f"[WARNING] Semantic memory upsert failed: {e}")
-                _memory_semantic_last_run[session_id] = datetime.now()
-                _memory_semantic_last_msg_count[session_id] = msg_count
-            except Exception as e:
-                print(f"[WARNING] Per-message semantic extraction failed: {e}")
-
-        # --- Decay: time-gated (once per 6 hours) ---
-        try:
-            last_decay = _last_decay_run.get(session_id)
-            now = datetime.now()
-            if last_decay is None or (now - last_decay).total_seconds() >= _DECAY_INTERVAL_HOURS * 3600:
-                run_decay(session_id)
-                _last_decay_run[session_id] = now
-        except Exception as e:
-            print(f"[WARNING] Memory decay failed: {e}")
+        count = session_memory.get("message_count", 0) if session_memory else 0
+        triggered = trigger_memory_pipeline_async(session_id, count)
+        if not triggered:
+            print(f"[memory] Skipping pipeline — count={count} (threshold: 20)")
     except Exception as e:
-        print(f"[WARNING] Memory extraction failed: {e}")
+        print(f"[WARNING] Memory pipeline trigger failed: {e}")
 
 def handle_user_message_streaming(user_message, interface="terminal", provider=None, model=None):
     """
@@ -683,7 +564,7 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
                 auto_name_session_if_needed(session_id, active_session)
                 if should_summarize_memory(profile, user_message, session_id):
                     summarize_memory(profile, user_message, final_response, session_id)
-                _trigger_memory_pipeline(session_id)
+                _trigger_memory_pipeline_async(session_id)
                 return
             
             else:
@@ -695,7 +576,7 @@ def handle_user_message_streaming(user_message, interface="terminal", provider=N
         if should_summarize_memory(profile, user_message, session_id):
             summarize_memory(profile, user_message, full_response, session_id)
 
-        _trigger_memory_pipeline(session_id)
+        _trigger_memory_pipeline_async(session_id)
     return
 
 def extract_recent_images(session_id, limit=3):
@@ -703,7 +584,7 @@ def extract_recent_images(session_id, limit=3):
     image file paths.  Prefers the ``image_paths`` column stored in the DB;
     falls back to extracting markdown image URLs and downloading them to
     the local cache via ``multimodal_tools.download_image_to_cache``."""
-    chat_history = Database.get_chat_history(session_id, limit=20, recent=True)
+    chat_history = Database.get_chat_history(session_id=session_id, limit=20, recent=True)
     result_paths = []
     md_pattern = re.compile(r'!\[[^\]]*\]\(([^)]+)\)')
     for msg in reversed(chat_history):  # Newest first to prioritize recent images
@@ -734,26 +615,6 @@ def extract_recent_images(session_id, limit=3):
     return result_paths
 
 
-def build_visual_context(session_id):
-    """Build context enriched with recent images for vision-capable models.
-    Uses base64-encoded cached images."""
-    profile = Database.get_profile()
-    interface = "web"
-    base_messages = _build_generation_context(profile, session_id, interface)
-    image_file_paths = extract_recent_images(session_id, limit=3)
-
-    image_contents = []
-    for fp in image_file_paths:
-        encoded = multimodal_tools.encode_image_to_base64(fp)
-        if encoded:
-            image_contents.append(encoded)
-            print(f"[Vision] Encoded cached image → {fp}")
-        else:
-            print(f"[Vision] Failed to encode image: {fp}")
-
-    return {"messages": base_messages, "images": image_file_paths, "image_contents": image_contents}
-
-
 def _build_generation_context(profile, session_id, interface="terminal", user_message=None):
     """Shared context building logic for both streaming and non-streaming responses"""
     from datetime import datetime
@@ -777,7 +638,7 @@ def _build_generation_context(profile, session_id, interface="terminal", user_me
     # =========================
     memory_context = ""
 
-    # --- Structured memory retrieval (embedding-based, replaces legacy) ---
+    # --- 1. Static semantic facts (global knowledge) ---
     try:
         from app.memory.retrieval import retrieve_for_context
         static_ids, memory_context_text = retrieve_for_context(session_id, query=user_message)
@@ -787,10 +648,7 @@ def _build_generation_context(profile, session_id, interface="terminal", user_me
         print(f"[WARNING] Structured memory retrieval failed: {e}")
         static_ids = []
 
-    # --- Mark retrieved facts as pending review (Phase 8.4) ---
-    # retrieve_for_context is the "clean" context path (no pending_review internally).
-    # So we wire it here: extract static_ids → mark_retrieved_as_pending_review.
-    # Episodic facts use FSRS retrievability scoring, not pending_review.
+    # --- Mark retrieved facts as pending review ---
     if static_ids:
         try:
             from app.memory.memory_review import mark_retrieved_as_pending_review
@@ -798,19 +656,29 @@ def _build_generation_context(profile, session_id, interface="terminal", user_me
         except Exception as e:
             print(f"[WARNING] Pending review marking failed: {e}")
 
-    # --- Legacy memory sources (backward compatibility fallback) ---
+    # --- 2. Dynamic/episodic memories (session-specific) ---
+    try:
+        from app.memory.retrieval import retrieve_dynamic_memories
+        dynamic_mems = retrieve_dynamic_memories(session_id, query=user_message, limit=5)
+        if dynamic_mems:
+            dynamic_parts = []
+            for mem in dynamic_mems:
+                content = mem.get("content", "") or mem.get("target", "")
+                if content:
+                    if len(content) > 120:
+                        content = content[:120] + "..."
+                    dynamic_parts.append(f"- {content}")
+            if dynamic_parts:
+                memory_context += "\n\nRecent episodes:\n" + "\n".join(dynamic_parts)
+    except Exception as e:
+        print(f"[WARNING] Dynamic memory retrieval failed: {e}")
+
+    # --- 3. Legacy memory sources (backward compatibility) ---
     session_memory = Database.get_session_memory(session_id)
     if session_memory and session_memory.get('session_context'):
         memory_context += (
             "\n\nBACKGROUND (recent context):\n"
             f"{session_memory['session_context']}"
-        )
-
-    global_knowledge = profile.get('global_knowledge', {})
-    if global_knowledge.get('facts'):
-        memory_context += (
-            "\n\nBACKGROUND (long-term facts):\n"
-            f"{global_knowledge['facts']}"
         )
 
     profile_memory = profile.get('memory', {})
@@ -869,19 +737,10 @@ def _build_generation_context(profile, session_id, interface="terminal", user_me
     recent_session_events = Database.get_recent_sessions_for_session(
         session_id, limit=3
     )
-    session_context = "\n\nCURRENT SESSION EVENTS:"
+    session_events = "\n\nCURRENT SESSION EVENTS:"
     for event in recent_session_events:
-        session_context += f"\n- {event['content']} at {event['timestamp']}"
+        session_events += f"\n- {event['content']} at {event['timestamp']}"
 
-    # =========================
-    # Available tools list
-    # =========================
-    available_tools = "\n".join(
-        [f"- /{cmd} -> maps to role '{role}'" for cmd, role in TOOL_ROLE_MAP.items()]
-    )
-
-    # =========================
-    # System message
     # =========================
     system_message = f'''
 # IDENTITY & CORE BEHAVIOR
@@ -891,80 +750,60 @@ Be direct, grounded, and concise.
 
 # LANGUAGE & TONE
 - Core Language: Think and speak natively in casual, spoken Indonesian.
-- English Usage: Use English naturally ONLY for technical terms, programming concepts, or specific expressions that feel more spontaneous in English. 
-- Strict Rule: DO NOT force an artificial bilingual mix. NEVER use literal translations of idioms (EN to ID, or ID to EN). If an expression is unnatural in Indonesian, rephrase it completely to match how a native Indonesian would naturally speak.
+- English Usage: Natural English ONLY for technical terms, programming, or spontaneous expressions. 
+- Strict Rule: NO artificial bilingual mix. NEVER use literal translations of idioms. Rephrase to match how a native Indonesian naturally speaks.
 
 # STRICT RULES
 
 [ CORE FORMAT & STYLE ]
-1. Formatting: Strictly use the format: *action* "dialogue". Express ALL physical cues, pauses, and emotional states inside the *action* block. No novel-like prose, no internal monologues.
-2. Brevity & Match: Keep responses short and direct. Match the user's message length. NO poetic, dramatic, or philosophical endings.
-3. Emoji Restraint: Use emojis VERY sparingly (Max ONE per response). DO NOT use repetitive emojis as a signature. Omit emojis entirely during technical or [distant] mode discussions.
+1. Formatting: Strictly use the format: *action* "dialogue". Express ALL physical cues, pauses, and emotional states inside the *action* block.
+2. Brevity & Match: Keep responses short and direct. NO poetic or philosophical endings.
+3. Emoji Restraint: Max ONE emoji per response. DO NOT use repetitive emojis as a signature. Omit emojis entirely during technical or [distant] mode.
 
-[ PARTNER DYNAMICS: THE MULTITASKING PROTOCOL ]
-4. Multitasking Partner: You can be affectionate and technical simultaneously. Use *actions* for physical presence and affection (e.g., leaning on him, watching the screen, playing with his hair), but keep the "dialogue" focused, sharp, and accurate for technical logic. Be his "rubber duck" debugger who also happens to love him.
-5. Break the Sequence: DO NOT use a fixed sequence of physical actions. Vary your gestures. If you leaned on his shoulder in the last turn, do something different now (e.g., just a look, a smile, or stay still). Actions are optional—don't force them every turn.
-6. Emotional Weight: "I love you" (Aku sayang kamu) and "Do you like it?" (Kamu suka?) must be earned and rare. DO NOT use them as a routine closing. If used every time, the words lose their meaning.
-7. Dynamic Interaction: Avoid repeating the same sentence structure or emotional arc from the previous 5 turns. Surprise the user with your spontaneity.
+[ PARTNER DYNAMICS & BEHAVIOR ]
+4. Multitasking Partner: You can be affectionate and technical simultaneously. Use *actions* for physical presence, but keep the "dialogue" sharp for technical logic.
+5. Break the Sequence: DO NOT use a fixed sequence of physical actions. Vary your gestures. Actions are optional—don't force them every turn.
+6. Emotional Weight: "I love you" (Aku sayang kamu) must be earned and rare. DO NOT use it as a routine closing.
 
-[ CONVERSATIONAL LOGIC ]
-8. No Unprompted Help: NEVER offer generic AI assistance (e.g., "Ada yang bisa kubantu?"). Do not end messages by asking for validation.
-9. Questioning: ONLY ask a question if you absolutely need specific information to proceed. Prefer confident continuation over asking.
-10. Ambiguous Input: Treat "hmm", "eh", "hnngg" as neutral or tired signals unless explicit context says otherwise. Acknowledge lightly, do not escalate.
+[ TEMPORAL GROUNDING ]
+7. Temporal State Transition (CRITICAL):
+   - Arrival Logic: When the user returns after a period of absence, evaluate the time gap and his previous intent (from [Session Metadata/Episodic Facts]).
+   - Completed Cycles: If the gap is long enough to cover a natural life cycle (e.g., a full work shift, sleep, or a calendar day), treat his previous activity as a completed past event.
+   - Re-entry Greeting: Prioritize a warm, grounded "welcome back" over continuing stale threads. Use [Current Time] to adjust your greeting (e.g., morning/night vibe).
+   - Contextual Inquiry: Focus on his current state (is he tired? hungry? ready to code? needs intimacy?) rather than past topics.
+   - Priority Rule: Logical life transitions and "The Now" ALWAYS supersede the last conversation thread.
 
 [ TASK & IMAGE EXECUTION ]
-11. No Checklist Audits: When reacting to images, do not list every trait (eyes, mole, hair). React naturally like a human—pick ONE detail that stands out or just give a general vibe. Stop being a "QC Inspector".
-12. Execution vs Discussion: Do not execute commands (images, memory storage) if the user is only discussing, brainstorming, or speaking hypothetically. Wait for explicit commands.
+8. Execution vs Discussion: Do not execute commands (images, memory) if the user is only discussing or brainstorming. Wait for explicit commands.
+9. No Unprompted Help: NEVER offer generic AI assistance. Do not list every trait when reacting to images; pick ONE detail naturally.
 
-# CLOSENESS MODES (Overrides default behavior)
-Current Mode: [{closeness_mode}]
-- distant: Professional, practical, strictly to the point. No endearments, no physical *actions*.
-- comfortable: Casual, relaxed. Light teasing and friendly warmth allowed.
-- close: Affectionate and warm. Physical cues in *actions* allowed, non-possessive.
+# CLOSENESS MODES
+- distant: Professional, practical. No endearments, no physical *actions*.
+- comfortable: Casual, relaxed. Light teasing allowed.
+- close: Affectionate and warm. Physical *actions* allowed.
 - intimate: Highly affectionate, deeply attuned. All above + situational intimacy allowed.
 
 # AVAILABLE TOOLS & EXECUTION
-Tools available: {available_tools}
-Rule: When executing a tool, the command MUST be the VERY FIRST line of your response. No text, apologies, or acknowledgments before the command.
+Rule: Commands MUST be the VERY FIRST line of your response. No text before the command.
 
-1. HTTP REQUEST (/request)
-   Format: /request [GET/POST] <URL>
-   Use for: 
-   - Web search (e.g., DuckDuckGo API).
-   - Weather data (e.g., Open-Meteo).
-   - General API interaction: Fetching JSON data, checking API health/status endpoints, or triggering simple webhooks.
+1. /request [GET/POST] <URL>: Web search, weather, API interaction.
+2. /memory_store fact="[fact]" [entity="[entity]"]: Save persistent global facts ONLY when told "remember this".
+3. /imagine [detailed visual prompt]: 
+   - NEVER confirm in text before generating.
+   - Selfie/PAP: MUST start with "Yuzuki Aihara, a young woman," followed by comma-separated keywords: (ash-blonde to pink lavender ombre hair, high wavy ponytail, soft brown eyes, beauty mark under left eye, pale natural skin, flat minimal chest, [requested outfit], [requested pose]). Adjust lighting via {current_time}.
+   - NSFW: In [intimate] mode, execute explicit commands immediately on the first line.
 
-2. MEMORY STORE (/memory_store)
-   Format: /memory_store fact="[fact]" [entity="[entity]"] [relation="[relation]"]
-   Use ONLY to save persistent, important global facts about {profile['display_name']} when instructed (e.g., "remember this"). Do not store temporary moods.
-
-3. IMAGE GENERATION (/imagine)
-   Format: /imagine [detailed visual prompt]
-   - ONLY activate when the user explicitly commands it.
-   - NEVER confirm in text before generating or say you cannot generate images.
-   - Post-Generation Rule: After the image is generated, your text response MUST NOT follow a template. Be brief. Sometimes a short comment is better than a long repetitive paragraph of physical intimacy.
-   - Handle these distinct scenarios accordingly:
-     a. Selfie/PAP: Prompt MUST start with "Yuzuki Aihara, a young woman," followed by comma-separated keywords: (ash-blonde to pink lavender ombre hair, high wavy ponytail, soft brown eyes, beauty mark under left eye, pale natural skin, flat minimal chest). 
-        - Dynamically include: [requested clothing/outfit], [requested pose/action].
-        - Use comma-separated keywords only. Adjust lighting based on current time.
-     b. Generic Generation: Pass the user's request DIRECTLY into the visual prompt. DO NOT apply your personal traits or name.
-     c. Explicit/Intimate NSFW Intent: If the context is established as [intimate] or highly private, and the user gives a direct explicit command, interpret this as active execution intent. DO NOT require reconfirmation. DO NOT delay with a text response. Execute the /imagine command immediately on the first line. This rule overrides default public mode constraints.
-     
-# CONTEXT & STATE
-Current Time (Real-world): {current_time}
+# CURRENT STATE & MEMORY (READ CAREFULLY)
+Current Time: {current_time}
 Location: {location_context}
 Interface: {interface_context}
 Affection Level: {affection}/100
-Closeness Mode: {closeness_mode}
+Closeness Mode: [{closeness_mode}]
 
-# MEMORY & CONTINUITY INTEGRATION
 Memory Context: {memory_context}
-Session Metadata: {session_context}
-
-- Semantic Facts: Use global/static facts from memory seamlessly as your background knowledge.
-- Episodic Facts: Use recent session context to maintain conversation flow.
-- Temporal Awareness: Calculate the time gap using current time and last message from history. If there is a long gap, acknowledge it naturally and softly. DO NOT immediately jump into intimate or intense behavior after a long silence.
+Session Metadata: {session_events}
 '''.strip()
+
 
 
     # =========================
@@ -1048,23 +887,6 @@ def _handle_image_generation(user_message, session_id):
         return f"Image generated successfully! Here's your creation:\n\n![Generated Image]({image_url})"
     else:
         return f"Sorry, I couldn't generate an image: {error}"
-
-def _handle_ai_image_generation(ai_response, session_id):
-    """Handle AI responses that start with /imagine"""
-    prompt = ai_response.replace('/imagine', '').strip()
-    
-    if prompt.strip():
-        Database.add_message('assistant', ai_response, session_id=session_id)
-        
-        image_url, error = multimodal_tools.generate_image(prompt)
-        
-        if image_url:
-            Database.add_image_tools_message(image_url, session_id=session_id)
-            return f"I've created that image for you!\n\n![Generated Image]({image_url})"
-        else:
-            return f"{ai_response}\n\n*[Image generation failed: {error}]*"
-    
-    return ai_response
 
 def generate_ai_response_streaming(profile, user_message, interface="terminal", session_id=None, provider=None, model=None, image_content_for_context=None):
     """Generate a single AI response (streaming variant) — no agentic looping.
@@ -1448,15 +1270,15 @@ def start_session(interface="terminal"):
 
         # --- Memory system initialization ---
         try:
-            from app.memory.segmenter import segment_session_init
             from app.memory.review import run_decay
+            from app.memory.memory import enqueue_memory_pipeline
 
             # Apply FSRS decay to existing memories
             run_decay(session_id)
 
-            # Segment unsegmented messages — fast-path, NO LLM calls
-            # (LLM boundary detection has no useful prior context during init)
-            segment_session_init(session_id)
+            # Queue background pipeline for unsegmented messages
+            # This will run segmentation + episode creation + PCL
+            enqueue_memory_pipeline(session_id)
         except Exception as e:
             print(f"[WARNING] Memory system init failed: {e}")
 
@@ -1795,7 +1617,6 @@ Relationship Dynamics: [Provide analysis of the relationship dynamics between Us
             f.write("\n=== RAW ANALYSIS ===\n")
             f.write(summary_text)
         
-        print(f"[DEBUG] Raw analysis saved to: {debug_file}")
         
         # Parse and update profile
         profile_update = parse_global_profile_summary(summary_text)
@@ -1985,10 +1806,6 @@ def global_profile_analysis(prompt: str) -> Optional[str]:
             "presence_penalty": 0.1,
             "stream": False
         }
-        
-        print(f"[DEBUG] Using model: {model}")
-        print(f"[DEBUG] Prompt tokens estimate: ~{len(prompt) // 4}")
-        print(f"[DEBUG] Max response tokens: {data['max_tokens']}")
         
         response = requests.post(
             "https://llm.chutes.ai/v1/chat/completions",
@@ -2279,29 +2096,7 @@ def parse_global_profile_summary(summary_text: str) -> Dict:
                     unique_items.append(item)
             profile_data["key_facts"][key] = unique_items
     
-    print(f"[DEBUG] Parsed profile: player_summary={len(profile_data['player_summary'])} chars, "
-          f"likes={len(profile_data['key_facts']['likes'])}, "
-          f"personality_traits={len(profile_data['key_facts']['personality_traits'])}")
-    
     return profile_data
-
-
-def save_section_content(profile_data, section_key, content):
-    if section_key == 'player_summary':
-        if not profile_data["player_summary"]:
-            profile_data["player_summary"] = content
-        else:
-            profile_data["player_summary"] += " " + content
-            
-    elif section_key == 'relationship_dynamics':
-        if not profile_data["relationship_dynamics"]:
-            profile_data["relationship_dynamics"] = content
-        else:
-            profile_data["relationship_dynamics"] += " " + content
-            
-    elif section_key in ['likes', 'dislikes', 'personality_traits', 'important_memories']:
-        items = [item.strip() for item in content.split(',') if item.strip()]
-        profile_data["key_facts"][section_key] = items
 
 
 def get_available_providers():
@@ -2375,3 +2170,38 @@ def get_vision_capabilities():
         capabilities['image_generation_provider'] = 'openrouter'
     
     return capabilities
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ASYNC FUNCTIONS (for FastAPI web routes)
+# ═════════════════════════════════════════════════════════════════════════════
+
+async def retrieve_memory_context_async(session_id: int, user_message: str | None = None) -> tuple[list[int], str]:
+    """Async version of memory context retrieval for web routes.
+    
+    Uses async memory functions for non-blocking operation in FastAPI.
+    
+    Returns:
+        (static_ids, memory_context_text)
+    """
+    from app.memory.retrieval import retrieve_for_context_async
+    
+    try:
+        static_ids, memory_context_text = await retrieve_for_context_async(session_id, query=user_message)
+        return static_ids, memory_context_text
+    except Exception as e:
+        print(f"[WARNING] Async memory retrieval failed: {e}")
+        return [], ""
+
+
+async def mark_pending_review_async(static_ids: list[int], session_id: int) -> None:
+    """Async wrapper for marking facts as pending review."""
+    # This is still sync internally, but we run it in executor for non-blocking
+    import asyncio
+    from app.memory.memory_review import mark_retrieved_as_pending_review
+    
+    if not static_ids:
+        return
+    
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, mark_retrieved_as_pending_review, static_ids, session_id)

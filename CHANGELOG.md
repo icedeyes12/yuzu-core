@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.3.1] - 2026-04-12
+
+### Changed — Codebase Simplification
+
+- **`app/visual_context.py`** (NEW): Extracted from `app/app.py`
+  - `store_visual_context()` — thread-safe visual context buffer
+  - `consume_visual_context()` — decrementing turn counter
+  - `has_visual_reference()` — regex pattern for "yang tadi", "the previous", etc.
+  - `_VISUAL_CONTEXT_TURNS = 3` — follow-up turns before context expires
+
+- **`app/providers.py`**: Consolidated `_normalize_messages()` to `AIProvider` base class
+  - Removed duplicate implementations from `OllamaProvider` and `ChutesProvider`
+  - Single normalization logic for all providers
+
+- **`app/tools/registry.py`**: Removed `build_markdown_contract()` wrapper
+  - Now imports and uses `build_tool_contract()` from `schemas.py` directly
+  - Legacy `TOOL_ROLE_MAP` kept for backward compat
+
+- **`app/app.py`**: Removed 8 unused utility functions (99 lines)
+  - `_generate_tool_call_id` — never called
+  - `_is_image_generation_tool` — never called
+  - `_is_tool_markdown` — never called
+  - `_extract_tool_role` — never called
+  - `_extract_command_from_markdown` — never called
+  - `_handle_ai_image_generation` — never called
+  - `build_visual_context` — never called
+  - `save_section_content` — never called
+
+### Documentation
+
+- **`AGENTS.md`**: Cleaned up
+  - Removed reference to non-existent `ROADMAP_MEMORY_ALIGNMENT_V2.md`
+  - Added architecture summary table
+  - Simplified structure
+
 ## [2.3.0] - 2026-04-05
 
 ### Added — Memory System Major Upgrade (Phases 3-8)

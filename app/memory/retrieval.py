@@ -9,12 +9,15 @@ from datetime import datetime, timedelta
 from app.memory.db_memory import (
     search_similar,
     search_trgm,
-
     search_tsv,
     get_facts_by_session,
     update_last_accessed,
     FACT_TYPE_STATIC,
     FACT_TYPE_DYNAMIC,
+    # Async versions
+    search_similar_async,
+    get_facts_by_session_async,
+    update_last_accessed_async,
 )
 from app.db_pg_models import get_session_messages
 
@@ -495,7 +498,7 @@ def retrieve_memory(session_id: int, query=None):
 def _format_static_context(static: list[dict]) -> str:
     """
     Format static (semantic) memories for system prompt injection.
-    Clean output — no pending_review markers, no section headers.
+    Clean output — includes category for clarity.
     Returns empty string if no facts.
     """
     if not static:
@@ -505,7 +508,9 @@ def _format_static_context(static: list[dict]) -> str:
         entity = mem.get("entity", "User")
         relation = mem.get("relation", "unknown")
         target = mem.get("target", mem.get("content", ""))
-        parts.append(f"- {entity} {relation} {target}")
+        category = mem.get("category", "unknown")
+        # Format: "- [category] entity relation target"
+        parts.append(f"- [{category}] {entity} {relation} {target}")
     return "\n".join(parts)
 
 
@@ -560,3 +565,189 @@ def format_memory(memory_bundle):
             parts.append(f"- [{ts}] {role}: {content}")
 
     return "\n".join(parts)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ASYNC FUNCTIONS (for FastAPI routes)
+# ═════════════════════════════════════════════════════════════════════════════
+
+async def retrieve_static_memories_async(query=None, limit=15):
+    """
+    Async version of retrieve_static_memories.
+    3-channel hybrid: vector + trigram + tsvector, merged via RRF.
+    """
+    if not query:
+        results = await get_facts_by_session_async(session_id=None, fact_type=FACT_TYPE_STATIC, limit=limit)
+        parsed = [_parse_fact_content(r) for r in results]
+        parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
+        if parsed:
+            await update_last_accessed_async([m["id"] for m in parsed])
+        return parsed
+
+    query_vec = _embed_query(query)
+    keyword = query.strip()
+
+    # Channel 1: vector (pgvector)
+    vec_results = await search_similar_async(
+        embedding=query_vec,
+        fact_type=FACT_TYPE_STATIC,
+        limit=limit,
+    ) if query_vec else []
+
+    # Channel 2: trigram fuzzy (pg_trgm) - still sync, runs in thread
+    trgm_results = search_trgm(
+        query=keyword,
+        fact_type=FACT_TYPE_STATIC,
+        limit=limit,
+    )
+
+    # Channel 3: tsvector full-text - still sync
+    tsv_results = search_tsv(
+        query=keyword,
+        fact_type=FACT_TYPE_STATIC,
+        limit=limit,
+    )
+
+    # Merge via RRF
+    channels = {
+        "vector": vec_results,
+        "trigram": trgm_results,
+        "tsvector": tsv_results,
+    }
+    merged = _hybrid_rrf_merge(channels, k=60)
+
+    if not merged:
+        return []
+
+    seen, parsed = set(), []
+    for r in merged:
+        if r["id"] in seen:
+            continue
+        seen.add(r["id"])
+        parsed.append(_parse_fact_content(r))
+
+    parsed = parsed[:limit]
+
+    if parsed:
+        await update_last_accessed_async([m["id"] for m in parsed])
+
+    return parsed
+
+
+async def retrieve_dynamic_memories_async(session_id: int, query=None, limit=10):
+    """
+    Async version of retrieve_dynamic_memories.
+    3-channel hybrid: vector + trigram + tsvector, merged via RRF.
+    """
+    if not query:
+        all_dynamic = await get_facts_by_session_async(session_id=session_id, fact_type=FACT_TYPE_DYNAMIC, limit=limit * 3)
+        results = [
+            r for r in all_dynamic
+            if r.get("metadata", {}).get("source_table") == "episodic_memories"
+        ][:limit]
+        parsed = [_parse_fact_content(r) for r in results]
+        parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
+        if parsed:
+            await update_last_accessed_async([m["id"] for m in parsed])
+        return parsed
+
+    query_vec = _embed_query(query)
+    keyword = query.strip()
+
+    # Channel 1: vector (pgvector)
+    vec_results = await search_similar_async(
+        embedding=query_vec,
+        session_id=session_id,
+        fact_type=FACT_TYPE_DYNAMIC,
+        metadata_filter={"source_table": "episodic_memories"},
+        limit=limit,
+    ) if query_vec else []
+
+    # Channel 2: trigram fuzzy - still sync
+    trgm_results = search_trgm(
+        query=keyword,
+        session_id=session_id,
+        fact_type=FACT_TYPE_DYNAMIC,
+        limit=limit,
+    )
+
+    # Channel 3: tsvector full-text - still sync
+    tsv_results = search_tsv(
+        query=keyword,
+        session_id=session_id,
+        fact_type=FACT_TYPE_DYNAMIC,
+        limit=limit,
+    )
+
+    # Merge via RRF
+    channels = {
+        "vector": vec_results,
+        "trigram": trgm_results,
+        "tsvector": tsv_results,
+    }
+    merged = _hybrid_rrf_merge(channels, k=60)
+
+    if not merged:
+        return []
+
+    seen, parsed = set(), []
+    for r in merged:
+        if r["id"] in seen:
+            continue
+        seen.add(r["id"])
+        parsed.append(_parse_fact_content(r))
+
+    parsed = parsed[:limit]
+
+    if parsed:
+        await update_last_accessed_async([m["id"] for m in parsed])
+
+    return parsed
+
+
+async def retrieve_memory_async(session_id: int, query=None):
+    """
+    Async version of retrieve_memory.
+    Main retrieval entry point.
+    """
+    try:
+        static = await retrieve_static_memories_async(query=query, limit=15)
+    except Exception as e:
+        print(f"[WARNING] Static memory retrieval async failed: {e}")
+        static = []
+
+    try:
+        dynamic = await retrieve_dynamic_memories_async(session_id, query=query, limit=10)
+    except Exception as e:
+        print(f"[WARNING] Dynamic memory retrieval async failed: {e}")
+        dynamic = []
+
+    temporal_messages = []
+    if query:
+        try:
+            time_window = _detect_time_window(query)
+            if time_window:
+                start, end = time_window
+                temporal_messages = _search_temporal_messages(session_id, start, end)
+        except Exception:
+            pass
+
+    return {
+        "static": static,
+        "dynamic": dynamic,
+        "temporal_messages": temporal_messages,
+    }
+
+
+async def retrieve_for_context_async(session_id: int, query: str | None = None, limit: int = 10) -> tuple[list[int], str]:
+    """
+    Async version of retrieve_for_context.
+    Retrieve ONLY static semantic memories for pre-LLM system prompt injection.
+    """
+    try:
+        static = await retrieve_static_memories_async(query=query, limit=limit)
+    except Exception as e:
+        print(f"[WARNING] retrieve_for_context_async failed: {e}")
+        return [], ""
+    ids = [m["id"] for m in static]
+    return ids, _format_static_context(static)

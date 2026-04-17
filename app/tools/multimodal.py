@@ -7,9 +7,6 @@ import re
 import time
 import os
 import hashlib
-import shutil
-import subprocess
-from urllib.parse import unquote
 from app.database import Database
 from typing import List, Dict, Optional, Tuple
 
@@ -179,8 +176,6 @@ class MultimodalTools:
             ]):
                 image_urls.append(url)
             elif re.search(r'\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$', url.lower()):
-                image_urls.append(url)
-            elif re.search(r'/[a-z0-9]{7,}', url.lower()):
                 image_urls.append(url)
         
         return image_urls
@@ -469,7 +464,7 @@ class MultimodalTools:
                       model: str = None, size: str = "1024x1024") -> Tuple[Optional[str], Optional[str]]:
         # Image generation logic moved to tools/image_generate.py
         # This method delegates to the single source of truth.
-        from tools.image_generate import execute as _img_execute
+        from app.tools.image_generate import execute as _img_execute
         import re as _re
         result_str = _img_execute({"prompt": prompt})
         try:
@@ -578,18 +573,6 @@ class MultimodalTools:
             found_images.extend(matches)
         
         return found_images
-
-
-def preview_image_in_terminal(image_path):
-    """Preview an image in the terminal using timg."""
-    if not shutil.which("timg"):
-        return
-    image_path = unquote(image_path)
-    image_path = os.path.abspath(image_path)
-    if not os.path.isfile(image_path):
-        print(f"[DEBUG] preview_image_in_terminal: file not found: {image_path}")
-        return
-    subprocess.run(["timg", "-g", "80x40", image_path])
 
 
 multimodal_tools = MultimodalTools()

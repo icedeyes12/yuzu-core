@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
-Corrected migration script: SQLite yuzu_core.db -> PostgreSQL yuzuki
+Migration script: SQLite yuzu_core.db -> PostgreSQL
+
+CRITICAL: All connection details must be provided via environment variables.
+Set these before running:
+  - PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD
+
 Run from yuzu-companion/ directory.
 """
 import sqlite3
@@ -9,11 +14,30 @@ import json
 import os
 
 SQLITE_DB = "app/yuzu_core.db"
-PG_DBNAME = "yuzuki"
-PG_HOST   = "127.0.0.1"
-PG_PORT   = "5432"
-PG_USER   = "icedeyes12"
-PG_PASS   = "Kawaii12"
+
+# PostgreSQL connection from environment
+PG_DBNAME = os.getenv("PGDATABASE", "")
+PG_HOST = os.getenv("PGHOST", "")
+PG_PORT = os.getenv("PGPORT", "")
+PG_USER = os.getenv("PGUSER", "")
+PG_PASS = os.getenv("PGPASSWORD", "")
+
+
+def _validate_pg_config():
+    """Validate PostgreSQL configuration is set."""
+    missing = [k for k, v in {
+        "PGHOST": PG_HOST,
+        "PGPORT": PG_PORT,
+        "PGDATABASE": PG_DBNAME,
+        "PGUSER": PG_USER,
+        "PGPASSWORD": PG_PASS
+    }.items() if not v]
+    if missing:
+        print(f"[ERR] Missing required environment variables: {', '.join(missing)}")
+        print("Set them before running this migration.")
+        return False
+    return True
+
 
 def safe_json(val):
     if not val:
@@ -23,7 +47,11 @@ def safe_json(val):
     except Exception:
         return {}
 
+
 def migrate_relational():
+    if not _validate_pg_config():
+        return
+
     if not os.path.exists(SQLITE_DB):
         print(f"[ERR] SQLite DB not found: {SQLITE_DB}")
         return

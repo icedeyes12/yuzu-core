@@ -207,29 +207,6 @@ class CerebrasProvider(AIProvider):
         except Exception:
             return None
 
-    def _normalize_messages(self, messages: List[Dict]) -> List[Dict]:
-        """Normalize messages: convert custom tool roles to standard 'assistant' role."""
-        if not messages:
-            return messages
-
-        standard_roles = {'system', 'user', 'assistant', 'tool'}
-        normalized = []
-
-        for msg in messages:
-            role = msg.get('role', '')
-            if role not in standard_roles:
-                # Custom tool role - convert to assistant
-                content = msg.get('content', '')
-                normalized_content = f"[{role}]\n{content}"
-                normalized.append({
-                    'role': 'assistant',
-                    'content': normalized_content
-                })
-            else:
-                normalized.append(msg)
-
-        return normalized
-
     def get_models(self) -> List[str]:
         return self.available_models
 
@@ -599,6 +576,7 @@ class ChutesProvider(AIProvider):
         self.base_url = "https://llm.chutes.ai/v1/chat/completions"
         self.api_key = self._load_api_key()
         self.is_available = bool(self.api_key)
+        self._last_error = None  # Track last error for retry logic
         self.available_models = [
             "Qwen/Qwen3-VL-235B-A22B-Instruct",
             "Qwen/Qwen3.5-397B-A17B-TEE",
@@ -687,7 +665,7 @@ class ChutesProvider(AIProvider):
         explicit_model = model_hint and model_hint in self.available_models
 
         # Retryable error codes — try another Chutes model before giving up
-        retryable_codes = {400, 429, 500, 502, 503, 504}
+        retryable_codes = {0, 400, 429, 500, 502, 503, 504}
 
         attempt = 0
         last_error = None
@@ -724,9 +702,11 @@ class ChutesProvider(AIProvider):
             data = result[1]
 
             if status == 200:
+                self._last_error = None  # Clear error on success
                 return data
 
             last_error = result[2] if len(result) > 2 else str(status)
+            self._last_error = last_error  # Store for retry logic
 
             # Only retry on retryable errors
             if status not in retryable_codes:
@@ -741,11 +721,16 @@ class ChutesProvider(AIProvider):
         """Single Chutes API call. Returns (status_code, content_or_None, error_detail)."""
         messages = self._normalize_messages_for_chutes(list(messages))
 
-        if self.supports_vision(model) and messages:
+        if kwargs.get('skip_vision') is True:
+            pass
+        elif self.supports_vision(model) and messages:
             last_user_message = self._get_last_user_message(messages)
-            if last_user_message and multimodal_tools.has_images(last_user_message):
-                vision_messages = self.format_vision_message(last_user_message)
-                messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
+            if last_user_message:
+                has_img = multimodal_tools.has_images(last_user_message)
+                if has_img:
+                    print(f"[Vision] Triggered for message: {last_user_message[:100]}...")
+                    vision_messages = self.format_vision_message(last_user_message)
+                    messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
 
         temperature = kwargs.get('temperature', 0.73)
         max_tokens = kwargs.get('max_tokens', 4096)
@@ -767,9 +752,11 @@ class ChutesProvider(AIProvider):
             "top_k": top_k,
             "stream": stream
         }
-        tools = kwargs.get('tools')
-        if tools:
-            payload["tools"] = tools
+        # NOTE: Chutes does NOT support native tool calling.
+        # Strip tools to avoid confusing the model - rely on /command detection instead.
+        # tools = kwargs.get('tools')
+        # if tools:
+        #     payload["tools"] = tools
 
         log_prefix = kwargs.pop('log_prefix', '[CHAT]')
         print(f"{log_prefix} {model} | max_tokens={max_tokens}")
@@ -932,7 +919,11 @@ class AIProviderManager:
         """Pick the best available model for internal LLM tasks."""
         if provider not in self.providers:
             return None
-        models = self.providers[provider].get_models()
+        provider_obj = self.providers[provider]
+        models = provider_obj.get_models()
+        if not models:
+            return None
+        
         for preferred in self._PREFERRED_MODELS:
             if preferred in models:
                 return preferred
@@ -942,81 +933,75 @@ class AIProviderManager:
         """Dedicated internal LLM call for memory extractor, summarizer, etc.
         
         Uses Chutes only, with ordered model preference:
-          1. Qwen/Qwen3-Next-80B-A3B-Instruct  (primary)
-          2. Qwen/Qwen3-235B-A22B-Instruct-2507-TEE  (fallback)
+          1. Qwen/Qwen3-Next-80B-A3B-Instruct  (primary, retry 2x)
+          2. Qwen/Qwen3-235B-A22B-Instruct-2507-TEE  (fallback, retry 1x)
         
-        Logs clearly which model succeeded.
+        Retry logic:
+          - Retry only on connection errors (timeout, network issues)
+          - Do NOT retry on specific errors (rate limit, auth, 4xx)
         """
         if 'chutes' not in self.providers:
             return None
         provider = self.providers['chutes']
         
-        # Ordered preference: Next-80B first, then TEE as fallback
-        preference = [
-            "Qwen/Qwen3-Next-80B-A3B-Instruct",
-            "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE",
-        ]
-        tried = set()
+        MAIN_MODEL = "Qwen/Qwen3-Next-80B-A3B-Instruct"
+        FALLBACK_MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE"
         
-        for candidate in preference:
-            if candidate in provider.available_models and candidate not in tried:
-                tried.add(candidate)
-                result = provider.send_message(messages, candidate, log_prefix="[INT]", **kwargs)
-                if result:
-                    print(f"[INT] chutes/{candidate} OK")
-                    return result
-                print(f"[internal] chutes/{candidate} FAILED")
+        def _is_connection_error(error: Optional[str]) -> bool:
+            """Check if error is a connection/network issue (retryable)."""
+            if not error:
+                return True  # No error info, assume retryable
+            error_lower = error.lower()
+            # Connection errors are retryable
+            retryable = ['timeout', 'connection', 'network', 'refused', 'reset', 'socket', 'timed out']
+            return any(r in error_lower for r in retryable)
         
-        print("[internal] all Chutes models failed")
+        # Try main model (3 attempts: initial + 2 retries)
+        for attempt in range(3):
+            result = provider.send_message(messages, MAIN_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs)
+            if result:
+                print(f"[INT] chutes/{MAIN_MODEL} OK (attempt {attempt + 1})")
+                return result
+            
+            # Get last error from provider (if available)
+            last_error = getattr(provider, '_last_error', None)
+            if not _is_connection_error(last_error):
+                print(f"[INT] chutes/{MAIN_MODEL} failed (non-retryable error)")
+                break
+            
+            if attempt < 2:
+                print(f"[INT] chutes/{MAIN_MODEL} failed (attempt {attempt + 1}), retrying...")
+                time.sleep(0.5)
+        
+        print(f"[INT] chutes/{MAIN_MODEL} exhausted, trying fallback...")
+        
+        # Try fallback model (2 attempts: initial + 1 retry)
+        for attempt in range(2):
+            result = provider.send_message(messages, FALLBACK_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs)
+            if result:
+                print(f"[INT] chutes/{FALLBACK_MODEL} OK (attempt {attempt + 1})")
+                return result
+            
+            last_error = getattr(provider, '_last_error', None)
+            if not _is_connection_error(last_error):
+                print(f"[INT] chutes/{FALLBACK_MODEL} failed (non-retryable error)")
+                break
+            
+            if attempt < 1:
+                print(f"[INT] chutes/{FALLBACK_MODEL} failed (attempt {attempt + 1}), retrying...")
+                time.sleep(0.5)
+        
+        print("[INT] all internal models failed")
         return None
 
     def auto_send_message(self, messages: List[Dict], **kwargs) -> Optional[str]:
         """Auto-select Chutes model for internal LLM calls.
         
-        Stays within Chutes only — retries different Chutes models on failure.
-        Does NOT fall back to other providers.
+        Same logic as _internal_llm_call:
+          1. Qwen/Qwen3-Next-80B-A3B-Instruct  (retry 2x)
+          2. Qwen/Qwen3-235B-A22B-Instruct-2507-TEE  (retry 1x)
         """
-        provider = 'chutes'
-        if provider not in self.providers:
-            print("[AIProviderManager] auto_send_message: chutes not available")
-            return None
-
-        model_hint = kwargs.pop('model', None) or kwargs.pop('model_name', None)
-
-        # Build ordered model list: preferred first, then others
-        preferred = self._PREFERRED_MODELS
-        provider_obj = self.providers[provider]
-        all_models = provider_obj.get_models()
-        tried = set()
-
-        # First try explicitly requested model
-        if model_hint and model_hint in all_models:
-            tried.add(model_hint)
-            result = provider_obj.send_message(messages, model_hint, log_prefix="[INT]", **kwargs)
-            if result:
-                print(f"[INT] auto: chutes/{model_hint} OK")
-                return result
-
-        # Then try preferred models in order
-        for candidate in preferred:
-            if candidate in all_models and candidate not in tried:
-                tried.add(candidate)
-                result = provider_obj.send_message(messages, candidate, log_prefix="[INT]", **kwargs)
-                if result:
-                    print(f"[INT] auto: chutes/{candidate} OK")
-                    return result
-
-        # Then try remaining available models
-        for candidate in all_models:
-            if candidate not in tried:
-                tried.add(candidate)
-                result = provider_obj.send_message(messages, candidate, log_prefix="[INT]", **kwargs)
-                if result:
-                    print(f"[INT] auto: chutes/{candidate} OK")
-                    return result
-
-        print("[AIProviderManager] auto_send_message: all Chutes models failed")
-        return None
+        return self._internal_llm_call(messages, **kwargs)
 
 _ai_manager_instance = None
 
