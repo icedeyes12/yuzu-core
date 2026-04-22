@@ -101,14 +101,22 @@ def execute(arguments, **kwargs):
                 partner_name,
             )
 
-        images_dir = "static/generated_images"
+        images_dir = os.path.abspath(os.path.join("static", "generated_images"))
         os.makedirs(images_dir, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_prompt = "".join(c for c in prompt[:30] if c.isascii() and (c.isalnum() or c in (' ', '-', '_'))).rstrip()
+        safe_prompt = "".join(
+            c for c in prompt[:30] if c.isascii() and (c.isalnum() or c in (" ", "-", "_"))
+        ).strip()
+        if not safe_prompt:
+            safe_prompt = "image"
         ext = "jpg" if image_model == "qwen_image" else "png"
         filename = f"{timestamp}_{safe_prompt}.{ext}"
-        filepath = os.path.join(images_dir, filename)
+
+        candidate_path = os.path.join(images_dir, filename)
+        filepath = os.path.abspath(os.path.normpath(candidate_path))
+        if not filepath.startswith(images_dir + os.sep):
+            raise ValueError("Unsafe output path")
 
         with open(filepath, 'wb') as f:
             f.write(response.content)
