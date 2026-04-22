@@ -1,10 +1,13 @@
 # FILE: app/key_manager.py
-# DESCRIPTION: Encryption key management utility
+# DESCRIPTION: Encryption key management utility (CLI)
 
 import argparse
 import sys
+import logging
 from app.encryption import encryptor
 # from app.backup import BackupManager  # backup module not present
+
+logger = logging.getLogger(__name__)
 
 def main():
     parser = argparse.ArgumentParser(description="Yuzu Companion Encryption Key Manager")

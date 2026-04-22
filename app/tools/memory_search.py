@@ -1,8 +1,10 @@
 # FILE: app/tools/memory_search.py
 # DESCRIPTION: Query structured memory - semantic, episodic, and temporal
 
+import logging
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 
+logger = logging.getLogger(__name__)
 
 TOOL_DEFINITION = ToolDefinition(
     name="memory_search",
@@ -25,10 +27,10 @@ TOOL_DEFINITION = ToolDefinition(
 
 def execute(arguments, **kwargs):
     session_id = kwargs.get("session_id")
-    from app.database import Database
+    from app.db_pg_models import get_profile
     from app.memory.retrieval import retrieve_memory, format_memory
 
-    profile = Database.get_profile() or {}
+    profile = get_profile() or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     query = arguments.get("query", "") or ""
@@ -45,7 +47,7 @@ def execute(arguments, **kwargs):
     try:
         memory_bundle = retrieve_memory(session_id=session_id, query=query)
     except Exception as e:
-        print(f"[memory_search] Retrieval failed: {e}")
+        logger.warning(f"[memory_search] Retrieval failed: {e}")
         return error_result(
             "Retrieval failed. Please try again later.",
             TOOL_DEFINITION,

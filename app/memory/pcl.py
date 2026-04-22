@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+import logging
+
 __all__ = [
     "run_predict_calibrate",
     "load_relevant_semantic_facts",
@@ -27,6 +29,8 @@ from app.memory.db_memory import (
     FACT_TYPE_STATIC,
 )
 from app.memory.extractor import upsert_semantic_memory
+
+logger = logging.getLogger(__name__)
 
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -70,7 +74,7 @@ def predict_episode_content(existing_facts: list[dict], episode_summary: str) ->
         from app import get_ai_manager
         ai_manager = get_ai_manager()
     except Exception as e:
-        print(f"[PCL] AI manager unavailable: {e}")
+        logger.warning(f"AI manager unavailable: {e}")
         return None
 
     facts_context = _build_facts_context(existing_facts)
@@ -104,7 +108,7 @@ Predict what content will appear in this episode. Write as if you were the user 
         if response and isinstance(response, str) and response.strip():
             return response.strip()
     except Exception as e:
-        print(f"[PCL] PREDICT phase failed: {e}")
+        logger.warning(f"PREDICT phase failed: {e}")
 
     return None
 
@@ -164,7 +168,7 @@ def calibrate_and_extract(
         from app import get_ai_manager
         ai_manager = get_ai_manager()
     except Exception as e:
-        print(f"[PCL] AI manager unavailable: {e}")
+        logger.warning(f"AI manager unavailable: {e}")
         return []
 
     messages_context = _build_messages_context(actual_messages)
@@ -265,7 +269,7 @@ Return a JSON array of actions."""
         return cleaned
 
     except Exception as e:
-        print(f"[PCL] CALIBRATE phase failed: {e}")
+        logger.warning(f"CALIBRATE phase failed: {e}")
         return []
 
 
@@ -310,7 +314,7 @@ def consolidate_facts(extracted: list[dict], session_id: int, episode_id=None) -
                 invalidate_fact(source_id)
                 counts["invalidated"] += 1
             except Exception as e:
-                print(f"[PCL] Invalidate failed id={source_id}: {e}")
+                logger.warning(f"Invalidate failed id={source_id}: {e}")
 
         elif action == "update" and source_id:
             try:
@@ -321,7 +325,7 @@ def consolidate_facts(extracted: list[dict], session_id: int, episode_id=None) -
                 )
                 counts["updated"] += 1
             except Exception as e:
-                print(f"[PCL] Update failed id={source_id}: {e}")
+                logger.warning(f"Update failed id={source_id}: {e}")
 
         elif action == "reinforce" and source_id:
             try:
@@ -343,7 +347,7 @@ def consolidate_facts(extracted: list[dict], session_id: int, episode_id=None) -
                     )
                     counts["reinforced"] += 1
             except Exception as e:
-                print(f"[PCL] Reinforce failed id={source_id}: {e}")
+                logger.warning(f"Reinforce failed id={source_id}: {e}")
 
         else:  # action == "new"
             try:
@@ -352,7 +356,7 @@ def consolidate_facts(extracted: list[dict], session_id: int, episode_id=None) -
                 )
                 counts["new"] += 1
             except Exception as e:
-                print(f"[PCL] New fact failed: {e}")
+                logger.warning(f"New fact failed: {e}")
 
     return counts
 
@@ -383,7 +387,7 @@ def run_predict_calibrate(
         extracted = calibrate_and_extract(predicted, messages, existing)
 
         if not extracted:
-            print(f"[PCL] No knowledge gaps found — session {session_id} already aligned.")
+            logger.info(f"No knowledge gaps found — session {session_id} already aligned.")
             return {"new": 0, "reinforced": 0, "updated": 0, "invalidated": 0}
 
         # 4. CONSOLIDATE
@@ -402,11 +406,11 @@ def run_predict_calibrate(
                         (Json(meta), datetime.now(), episode_id),
                     )
             except Exception as e:
-                print(f"[PCL] Failed to mark episode {episode_id} consolidated: {e}")
+                logger.warning(f"Failed to mark episode {episode_id} consolidated: {e}")
 
-        print(f"[PCL] session={session_id} result={result}")
+        logger.info(f"session={session_id} result={result}")
         return result
 
     except Exception as e:
-        print(f"[PCL] Pipeline failed: {e}")
+        logger.error(f"Pipeline failed: {e}")
         return None

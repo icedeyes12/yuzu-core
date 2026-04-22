@@ -61,22 +61,30 @@ graph LR
 ```mermaid
 graph TD
     A[app/] --> B[app.py]
+    A --> B1[logging_config.py]
     A --> B2[visual_context.py]
-    A --> C[database.py]
+    A --> B3[commands.py]
+    A --> B4[prompts.py]
+    A --> B5[llm_client.py]
+    A --> B6[orchestrator.py]
+    A --> B7[profile_analysis.py]
+    A --> C[db_pg.py]
+    A --> C1[db_pg_models.py]
+    A --> C2[db_queries.py]
     A --> D[providers.py]
     A --> E[encryption.py]
     A --> F[key_manager.py]
     A --> G[memory/]
     A --> H[tools/]
     
-    B2 --> B2a[Visual context buffer<br/>Thread-safe storage<br/>for follow-up image refs]
+    B1 --> B1a[Centralized logging<br/>get_logger()]
 
     G --> G1[extractor.py<br/>Semantic + Episodic extraction]
-    G --> G2[segmenter.py<br/>Conversation segmentation]
+    G --> G2[memory.py<br/>Background pipeline + segmentation]
     G --> G3[retrieval.py<br/>Memory retrieval pipeline]
     G --> G4[review.py<br/>FSRS decay & reinforcement]
     G --> G5[embedder.py<br/>Vector embeddings via Chutes]
-    G --> G6[models.py<br/>ORM model re-exports]
+    G --> G6[db_memory_queries.py<br/>SQL constants + builders]
     G --> G7[db_memory.py<br/>Unified PostgreSQL CRUD]
     G --> G8[pcl.py<br/>Predict-Calibrate Learning]
     G --> G9[memory_review.py<br/>LLM-based memory review]
@@ -90,45 +98,28 @@ graph TD
     H --> H6[memory_search.py<br/>Memory retrieval]
 ```
 
+**Removed/Deprecated:**
+- `database.py` — deleted (use `db_pg_models.py` directly)
+- `memory/models.py` — deleted (no ORM layer)
+- `memory/segmenter.py` — merged into `memory.py`
+- `memory/vector_store.py` — deprecated stub
+
 ---
 
 ## Core Entry Points
 
-### `app.py` — Orchestration Core
+### `orchestrator.py` — Message Orchestration
 
-The single entry point for all user messages. Handles:
-
+The single entry point for handling user messages. Coordinates:
 1. Image caching from user messages
 2. Vision model routing when images detected
 3. **Standard tool calling** — `tool_calls` from LLM + legacy `/command` fallback
 4. Memory pipeline triggering
 5. Response generation via provider selection
-6. Markdown contract building for tool results
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant app.py
-    participant Multimodal
-    participant Memory
-    participant Provider
-    participant DB
-    
-    User->>app.py: user message
-    app.py->>Multimodal: cache images
-    app.py->>Memory: trigger extraction
-    alt images detected
-        app.py->>Provider: vision model
-    else tool command detected
-        app.py->>app.py: execute_tool()
-    else normal message
-        app.py->>Provider: generate_ai_response()
-    end
-    Provider-->>app.py: response
-    app.py->>DB: save message
-    app.py-->>User: formatted response
-```
+### `app.py` — Core Application Facade
 
+Simplified facade that delegates to `orchestrator.py` for backward compatibility.
 Key functions:
 - `handle_user_message()` — synchronous response
 - `handle_user_message_streaming()` — streaming response
@@ -160,9 +151,16 @@ REST API + templates for the web UI:
 
 ## Database Layer
 
-### `database.py`
+### `db_pg.py` — Connection Pool
 
-Hybrid Library architecture: SQLAlchemy-style ORM operations via raw psycopg2. All data in PostgreSQL (`yuzuki`).
+PostgreSQL connection management using `ThreadedConnectionPool` with context managers:
+- `PgSession` — sync context manager for database operations
+- `AsyncPgSession` — async context manager for FastAPI routes
+- `pg_fetchone`, `pg_fetchall`, `pg_execute` — convenience functions
+
+### `db_pg_models.py` — CRUD Operations
+
+Direct PostgreSQL CRUD operations using raw psycopg2. All data in PostgreSQL (`yuzuki`).
 
 ```mermaid
 erDiagram
@@ -219,10 +217,9 @@ erDiagram
   - `fact_type='static'` — semantic memories (stable facts)
   - `fact_type='dynamic'` — episodic memories and segments (decayable)
 
-**PostgreSQL Modules:**
-- `db_pg.py` — connection pool (`ThreadedConnectionPool`) + `PgSession` context manager
-- `db_pg_models.py` — CRUD for profiles, sessions, messages, API keys (raw psycopg2)
-- `db_memory.py` — unified memory layer over `semantic_facts` with vector search
+### `db_queries.py` — SQL Constants
+
+Single source of truth for SQL strings, schema DDL, and row parsers. Used by both sync and async repository layers.
 
 **Safety rules:**
 - NEVER drops tables
@@ -493,9 +490,10 @@ LIMIT 15;
 | Module | Purpose |
 |--------|---------|
 | `db_memory.py` | Unified CRUD over `semantic_facts` with pgvector search |
+| `db_memory_queries.py` | SQL constants + query builders |
 | `retrieval.py` | Hybrid scoring retrieval pipeline |
 | `extractor.py` | LLM-based semantic + episodic extraction |
-| `segmenter.py` | Conversation chunking |
+| `memory.py` | Background pipeline + batch segmentation |
 | `review.py` | FSRS-style decay and reinforcement |
 | `embedder.py` | Chutes API embedding client |
 

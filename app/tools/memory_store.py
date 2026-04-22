@@ -1,8 +1,11 @@
 # FILE: app/tools/memory_store.py
 # DESCRIPTION: Tool for storing memories to PostgreSQL vector database
 
+import logging
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 from app.memory.db_memory import save_fact, search_similar, FACT_TYPE_STATIC
+
+logger = logging.getLogger(__name__)
 
 
 TOOL_DEFINITION = ToolDefinition(
@@ -42,7 +45,7 @@ def _classify_category_llm(fact: str) -> str:
         from app import get_ai_manager
         ai_manager = get_ai_manager()
     except Exception as e:
-        print(f"[memory_store] AI manager unavailable: {e}")
+        logger.warning(f"[memory_store] AI manager unavailable: {e}")
         return "Identity"
 
     system_prompt = """You are a memory categorizer. Classify the following fact into exactly ONE category.
@@ -75,7 +78,7 @@ Respond with ONLY the category name, nothing else."""
             if category in valid:
                 return category
     except Exception as e:
-        print(f"[memory_store] LLM classification failed: {e}")
+        logger.warning(f"[memory_store] LLM classification failed: {e}")
 
     return "Identity"
 
@@ -131,7 +134,7 @@ def execute(arguments, **kwargs):
             )
         vector = vecs[0]
     except Exception as e:
-        print(f"[memory_store] Embed failed: {e}")
+        logger.warning(f"[memory_store] Embed failed: {e}")
         return error_result(
             "Embedding service unavailable",
             TOOL_DEFINITION,

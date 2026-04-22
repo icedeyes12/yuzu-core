@@ -1,9 +1,0 @@
-services:
-  yuzu-companion:
-    build: .
-    container_name: yuzu-companion
-    ports:
-      - "5000:5000"
-    environment:
-      - FLASK_ENV=production
-    restart: unless-stopped

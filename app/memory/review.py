@@ -1,11 +1,13 @@
 # FILE: app/memory/review.py
 # DESCRIPTION: FSRS-style review and decay system for memory - uses db_memory
 
+import logging
 import os
 import json
 from datetime import datetime
 from app.memory.db_memory import decay_facts, increment_importance, FACT_TYPE_DYNAMIC
 
+logger = logging.getLogger(__name__)
 
 _DECAY_STATE_FILE = os.path.join(os.path.dirname(__file__), '.decay_state.json')
 
@@ -27,7 +29,7 @@ def _set_last_decay_time():
         with open(_DECAY_STATE_FILE, 'w') as f:
             json.dump({'last_decay': datetime.now().isoformat()}, f)
     except IOError as e:
-        print(f"[WARNING] Could not write decay state: {e}")
+        logger.warning(f"Could not write decay state: {e}")
 
 
 def run_decay(session_id=None, force=False):
@@ -49,22 +51,22 @@ def run_decay(session_id=None, force=False):
                 last_dt = datetime.strptime(last, '%Y-%m-%dT%H:%M:%S.%f')
                 hours_since = (datetime.now() - last_dt).total_seconds() / 3600.0
                 if hours_since < 6.0:
-                    print(f"[decay] Skipped — ran {hours_since:.1f}h ago (min interval: 6h)")
+                    logger.debug(f"Skipped — ran {hours_since:.1f}h ago (min interval: 6h)")
                     return
             except (ValueError, TypeError):
                 pass
 
-    print("[decay] Running memory decay...")
+    logger.info("Running memory decay...")
     
     # Decay episodic memories (dynamic facts) — NOT semantic static facts
     try:
         count_episodic = decay_facts(session_id=session_id, fact_type=FACT_TYPE_DYNAMIC)
-        print(f"[decay] Decayed {count_episodic} episodic memories")
+        logger.info(f"Decayed {count_episodic} episodic memories")
     except Exception as e:
-        print(f"[WARNING] Episodic decay failed: {e}")
+        logger.warning(f"Episodic decay failed: {e}")
 
     _set_last_decay_time()
-    print("[decay] Done.")
+    logger.info("Done.")
 
 
 def reinforce_memory(memory_id, memory_type='semantic'):

@@ -12,6 +12,11 @@
 
 from __future__ import annotations
 
+import logging
+import threading
+import time
+from typing import Optional
+
 __all__ = [
     "trigger_memory_pipeline_async",
     "enqueue_memory_pipeline",
@@ -23,9 +28,7 @@ __all__ = [
     "mark_segmentation_done",
 ]
 
-import threading
-import time
-from typing import Optional
+logger = logging.getLogger(__name__)
 
 # Segmentation constants (aligned with plast-mem)
 WINDOW_BASE = 20  # trigger count
@@ -131,7 +134,7 @@ def batch_segment(messages: list[dict]) -> list[dict]:
     try:
         ai = _get_ai_manager()
     except Exception as e:
-        print(f"[memory] AI manager unavailable: {e}")
+        logger.warning(f"AI manager unavailable: {e}")
         return []
     
     system_prompt, user_prompt = _build_batch_segment_prompt(messages)
@@ -192,7 +195,7 @@ def batch_segment(messages: list[dict]) -> list[dict]:
                     continue
         
         if not isinstance(segments, list):
-            print(f"[memory] Batch segment: invalid JSON response (first 200 chars): {stripped[:200]}")
+            logger.warning(f"Batch segment: invalid JSON response (first 200 chars): {stripped[:200]}")
             return []
         
         # Validate and normalize
@@ -219,7 +222,7 @@ def batch_segment(messages: list[dict]) -> list[dict]:
         return valid
     
     except Exception as e:
-        print(f"[memory] Batch segmentation failed: {e}")
+        logger.warning(f"Batch segmentation failed: {e}")
         return []
 
 
@@ -261,7 +264,7 @@ def create_episode_and_pcl(
     try:
         embedding = embed_text(summary)
     except Exception as e:
-        print(f"[memory] Embedding failed: {e}")
+        logger.warning(f"Embedding failed: {e}")
     
     # Calculate importance and stability based on surprise
     importance = 0.5 + surprise * 0.3
@@ -295,10 +298,10 @@ def create_episode_and_pcl(
     )
     
     if not episode_id:
-        print("[memory] Episode creation failed")
+        logger.warning("Episode creation failed")
         return None
     
-    print(f"[memory] Created episode {episode_id}: {title}")
+    logger.info(f"Created episode {episode_id}: {title}")
     
     # Trigger PCL pipeline
     try:
@@ -309,9 +312,9 @@ def create_episode_and_pcl(
             episode_id=episode_id,
         )
         if pcl_result:
-            print(f"[memory] PCL result: {pcl_result}")
+            logger.debug(f"PCL result: {pcl_result}")
     except Exception as e:
-        print(f"[memory] PCL failed for episode {episode_id}: {e}")
+        logger.warning(f"PCL failed for episode {episode_id}: {e}")
     
     return episode_id
 
@@ -336,7 +339,7 @@ def run_memory_review(session_id: int) -> dict:
         ]
         
         if not pending_ids:
-            print("[memory] No facts pending review")
+            logger.debug("No facts pending review")
             return {"reviewed": 0}
         
         # Get conversation context
@@ -347,10 +350,10 @@ def run_memory_review(session_id: int) -> dict:
         ) if messages else ""
         
         result = review_memory(pending_ids, context, session_id)
-        print(f"[memory] Memory review: {result}")
+        logger.info(f"Memory review: {result}")
         return result
     except Exception as e:
-        print(f"[memory] Memory review failed: {e}")
+        logger.warning(f"Memory review failed: {e}")
         return {"reviewed": 0}
 
 
@@ -370,7 +373,7 @@ def run_memory_pipeline(session_id: int, message_count: int) -> dict:
     from app.db_pg_models import get_session_messages
     from app.memory.db_memory import get_facts_by_session, FACT_TYPE_DYNAMIC
     
-    print(f"[memory] Starting for session {session_id}, count={message_count}")
+    logger.info(f"Starting for session {session_id}, count={message_count}")
     
     # Get messages
     all_messages = get_session_messages(session_id, limit=10000)
@@ -393,16 +396,16 @@ def run_memory_pipeline(session_id: int, message_count: int) -> dict:
     ]
     
     if len(unsegmented) < MIN_MESSAGES:
-        print(f"[memory] Only {len(unsegmented)} unsegmented msgs, skipping")
+        logger.debug(f"Only {len(unsegmented)} unsegmented msgs, skipping")
         return {"segments": 0, "episodes": 0, "pcl_runs": 0}
     
     # Batch segment
     batch_result = batch_segment(unsegmented)
     if not batch_result:
-        print("[memory] No segments from batch LLM")
+        logger.debug("No segments from batch LLM")
         return {"segments": 0, "episodes": 0, "pcl_runs": 0}
     
-    print(f"[memory] Batch segmentation: {len(batch_result)} segments")
+    logger.info(f"Batch segmentation: {len(batch_result)} segments")
     
     # Create episodes + PCL
     episode_count = 0
@@ -418,7 +421,7 @@ def run_memory_pipeline(session_id: int, message_count: int) -> dict:
     try:
         run_memory_review(session_id)
     except Exception as e:
-        print(f"[memory] Memory review error: {e}")
+        logger.warning(f"Memory review error: {e}")
     
     # Mark done
     mark_segmentation_done(session_id, message_count)
@@ -451,7 +454,7 @@ def _background_worker():
                 
                 run_memory_pipeline(session_to_process, count)
             except Exception as e:
-                print(f"[memory] Background worker error: {e}")
+                logger.error(f"Background worker error: {e}")
         else:
             time.sleep(1)  # No work, wait
 
@@ -467,12 +470,12 @@ def enqueue_memory_pipeline(session_id: int) -> None:
     if _pipeline_thread is None or not _pipeline_thread.is_alive():
         _pipeline_thread = threading.Thread(target=_background_worker, daemon=True)
         _pipeline_thread.start()
-        print("[memory] Started background worker thread")
+        logger.info("Started background worker thread")
     
     with _pipeline_lock:
         _pending_sessions.add(session_id)
     
-    print(f"[memory] Queued session {session_id} for background processing")
+    logger.info(f"Queued session {session_id} for background processing")
 
 
 def trigger_memory_pipeline_async(session_id: int, current_count: int) -> bool:

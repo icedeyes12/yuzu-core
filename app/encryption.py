@@ -6,6 +6,9 @@ from Crypto.Random import get_random_bytes
 import base64
 import os
 import sys
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ModernEncryptor:
     def __init__(self, key_path="encryption.key"):
@@ -15,19 +18,19 @@ class ModernEncryptor:
     def _load_or_generate_key(self):
         # ChaCha20-Poly1305 uses a 32-byte (256-bit) key
         if os.path.exists(self.key_path):
-            print(f"Loading encryption key from {self.key_path}")
+            logger.info(f"Loading encryption key from {self.key_path}")
             with open(self.key_path, 'rb') as f:
                 key = f.read()
             if len(key) != 32:
                 raise ValueError(f"Invalid key length: {len(key)} bytes. 32 bytes required.")
             return key
         else:
-            print("Generating new 256-bit key (Quantum Resistant)...")
+            logger.info("Generating new 256-bit key (Quantum Resistant)...")
             key = get_random_bytes(32)
             with open(self.key_path, 'wb') as f:
                 f.write(key)
-            print(f"New key saved to {self.key_path}")
-            print("BACKUP THIS KEY FILE IMMEDIATELY!")
+            logger.info(f"New key saved to {self.key_path}")
+            logger.warning("BACKUP THIS KEY FILE IMMEDIATELY!")
             return key
     
     def encrypt(self, plaintext):
@@ -49,7 +52,7 @@ class ModernEncryptor:
             
             return base64.b64encode(combined).decode('utf-8')
         except Exception as e:
-            print(f"Encryption failed: {e}")
+            logger.error(f"Encryption failed: {e}")
             return plaintext
     
     def decrypt(self, encrypted_text):
@@ -78,7 +81,7 @@ class ModernEncryptor:
             
         except ValueError:
             # This happens if the key is wrong or data is corrupted/tampered
-            print("Integrity Check Failed: Data corrupted or wrong key.")
+            logger.error("Integrity Check Failed: Data corrupted or wrong key.")
             return encrypted_text
         except Exception:
             # print(f"Decryption error: {e}") # Debug only
@@ -102,18 +105,18 @@ encryptor = ModernEncryptor()
 
 if __name__ == "__main__":
     test_text = "Project Yuzu: Post-Quantum Readiness Check."
-    print("Testing ChaCha20-Poly1305 system...")
+    logger.info("Testing ChaCha20-Poly1305 system...")
     
     encrypted = encryptor.encrypt(test_text)
     decrypted = encryptor.decrypt(encrypted)
     
-    print(f"\nOriginal:  {test_text}")
-    print(f"Encrypted: {encrypted[:50]}...")
-    print(f"Decrypted: {decrypted}")
+    logger.info(f"\nOriginal:  {test_text}")
+    logger.info(f"Encrypted: {encrypted[:50]}...")
+    logger.info(f"Decrypted: {decrypted}")
     
     if test_text == decrypted:
-        print("\n✅ Encryption test PASSED!")
-        print("   Integrity Check (Poly1305): Active")
+        logger.info("\n✅ Encryption test PASSED!")
+        logger.info("   Integrity Check (Poly1305): Active")
     else:
-        print("\n❌ Encryption test FAILED!")
+        logger.error("\n❌ Encryption test FAILED!")
         sys.exit(1)

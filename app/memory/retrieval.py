@@ -4,22 +4,27 @@
 #
 # No more semantic/episodic/segments - just static and dynamic.
 
+import logging
 import math
 from datetime import datetime, timedelta
+
 from app.memory.db_memory import (
     search_similar,
     search_trgm,
     search_tsv,
     get_facts_by_session,
     update_last_accessed,
-    FACT_TYPE_STATIC,
-    FACT_TYPE_DYNAMIC,
     # Async versions
     search_similar_async,
     get_facts_by_session_async,
     update_last_accessed_async,
 )
+from app.memory.db_memory_queries import (
+    FACT_TYPE_STATIC, FACT_TYPE_DYNAMIC,
+)
 from app.db_pg_models import get_session_messages
+
+logger = logging.getLogger(__name__)
 
 
 # ── Temporal cue helpers ──────────────────────────────────────────────────────
@@ -101,7 +106,7 @@ def _search_temporal_messages(session_id, start, end, limit=200):
                 "content": content[:500],
             })
     except Exception as e:
-        print(f"[retrieval] Temporal scan failed: {e}")
+        logger.warning(f"Temporal scan failed: {e}")
     return results
 
 
@@ -175,7 +180,7 @@ def _embed_query(text: str) -> list[float] | None:
         from app.memory.embedder import embed_text
         return embed_text(text)
     except Exception as e:
-        print(f"[WARNING] Query embedding failed: {e}")
+        logger.warning(f"Query embedding failed: {e}")
         return None
 
 
@@ -462,13 +467,13 @@ def retrieve_memory(session_id: int, query=None):
     try:
         static = retrieve_static_memories(query=query, limit=15)
     except Exception as e:
-        print(f"[WARNING] Static memory retrieval failed: {e}")
+        logger.warning(f"Static memory retrieval failed: {e}")
         static = []
 
     try:
         dynamic = retrieve_dynamic_memories(session_id, query=query, limit=10)
     except Exception as e:
-        print(f"[WARNING] Dynamic memory retrieval failed: {e}")
+        logger.warning(f"Dynamic memory retrieval failed: {e}")
         dynamic = []
 
     # NOTE: pending_review is NO LONGER recorded here.
@@ -527,7 +532,7 @@ def retrieve_for_context(session_id: int, query: str | None = None, limit: int =
     try:
         static = retrieve_static_memories(query=query, limit=limit)
     except Exception as e:
-        print(f"[WARNING] retrieve_for_context failed: {e}")
+        logger.warning(f"retrieve_for_context failed: {e}")
         return [], ""
     ids = [m["id"] for m in static]
     return ids, _format_static_context(static)
@@ -713,13 +718,13 @@ async def retrieve_memory_async(session_id: int, query=None):
     try:
         static = await retrieve_static_memories_async(query=query, limit=15)
     except Exception as e:
-        print(f"[WARNING] Static memory retrieval async failed: {e}")
+        logger.warning(f"Static memory retrieval async failed: {e}")
         static = []
 
     try:
         dynamic = await retrieve_dynamic_memories_async(session_id, query=query, limit=10)
     except Exception as e:
-        print(f"[WARNING] Dynamic memory retrieval async failed: {e}")
+        logger.warning(f"Dynamic memory retrieval async failed: {e}")
         dynamic = []
 
     temporal_messages = []
@@ -747,7 +752,7 @@ async def retrieve_for_context_async(session_id: int, query: str | None = None, 
     try:
         static = await retrieve_static_memories_async(query=query, limit=limit)
     except Exception as e:
-        print(f"[WARNING] retrieve_for_context_async failed: {e}")
+        logger.warning(f"retrieve_for_context_async failed: {e}")
         return [], ""
     ids = [m["id"] for m in static]
     return ids, _format_static_context(static)

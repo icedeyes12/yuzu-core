@@ -18,17 +18,17 @@ Long-term memory architecture for persistent, evolving AI companion relationship
 ```
 Conversation History
         ↓
-Segmentation (segmenter.py) — Dual-channel: time-gap + LLM
+Segmentation (memory.py) — Batch LLM + time-gap triggers
         ↓
 Episodic Memory (extractor.py) — Summarized events
         ↓
-Semantic Extraction (extractor.py) — Facts via PCL pipeline
+Semantic Extraction (pcl.py) — Predict-Calibrate Learning
         ↓
 Retention & Decay (review.py) — FSRS for episodic only
         ↓
 Context Retrieval (retrieval.py) — RRF + hybrid scoring
         ↓
-LLM Context Builder (app.py)
+LLM Context Builder (orchestrator.py)
 ```
 
 ---
@@ -38,18 +38,23 @@ LLM Context Builder (app.py)
 ```
 memory/
 ├── __init__.py
-├── db_memory.py         # Unified CRUD over semantic_facts
-├── embedder.py          # Chutes API (Qwen3, 1024-dim)
-├── extractor.py         # Semantic + episodic + PCL wiring
-├── segmenter.py         # Dual-channel segmentation
-├── retrieval.py         # RRF + hybrid scoring
-├── review.py            # FSRS decay (episodic only)
-├── memory_review.py     # LLM-based memory review
-├── pcl.py               # Predict-Calibrate Learning
-├── vector_store.py      # DEPRECATED: stub
+├── memory.py             # Background pipeline + batch segmentation
+├── db_memory.py          # Unified CRUD over semantic_facts
+├── db_memory_queries.py  # SQL constants + query builders (NEW)
+├── embedder.py           # Chutes API (Qwen3, 1024-dim)
+├── extractor.py          # Semantic + episodic + PCL wiring
+├── retrieval.py          # RRF + hybrid scoring
+├── review.py             # FSRS decay (episodic only)
+├── memory_review.py      # LLM-based memory review
+├── pcl.py                # Predict-Calibrate Learning
 └── docs/
-    └── architecture.md  # Single source of truth
+    └── architecture.md   # Single source of truth
 ```
+
+**Removed/Deprecated:**
+- `segmenter.py` — merged into `memory.py`
+- `models.py` — deleted (no ORM layer)
+- `vector_store.py` — deprecated stub
 
 ---
 
@@ -63,9 +68,10 @@ CREATE TABLE semantic_facts (
     content TEXT,
     embedding VECTOR(1024),
     metadata JSONB,
+    valid_at TIMESTAMP,    -- When fact became true (plast-mem pattern)
     created_at TIMESTAMP,
     last_accessed TIMESTAMP,
-    invalid_at TIMESTAMP    -- Soft delete
+    invalid_at TIMESTAMP   -- Soft delete — NULL = active
 );
 ```
 
@@ -112,12 +118,15 @@ Semantic facts use `invalid_at` for temporal validity, no decay.
 
 - ✅ Database schema (PostgreSQL + pgvector)
 - ✅ Memory extraction (LLM-based)
-- ✅ Conversation segmentation (dual-channel)
+- ✅ Conversation segmentation (batch LLM)
 - ✅ Retrieval pipeline (RRF + hybrid)
 - ✅ Context builder integration
 - ✅ Review & decay system (FSRS)
 - ✅ Migration from SQLite
 - ✅ PCL pipeline + LLM review
+- ✅ SQL constants extracted (db_memory_queries.py)
+- ✅ Logging migration (all print() → logging)
+- ✅ plast-mem alignment verified
 
 ---
 
@@ -143,4 +152,6 @@ Every semantic fact assigned one category:
 1. Read `docs/architecture.md` — single source of truth
 2. Follow 8-category taxonomy
 3. Use `db_memory.py` for all memory operations
-4. Semantic = `static`, Episodic/Segments = `dynamic`
+4. SQL constants go in `db_memory_queries.py`
+5. Semantic = `static`, Episodic/Segments = `dynamic`
+6. Use `logging` module, not `print()`

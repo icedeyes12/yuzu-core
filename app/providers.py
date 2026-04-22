@@ -10,9 +10,12 @@
 import requests
 import json
 import time
+import logging
 from typing import List, Dict, Optional, Generator
 from app.database import Database
 from app.tools import multimodal_tools
+
+logger = logging.getLogger(__name__)
 
 class AIProvider:
     def __init__(self, name: str, config: Dict = None):
@@ -243,7 +246,7 @@ class CerebrasProvider(AIProvider):
             # Debug: Log summary (not full payload)
             # Count only new messages (not historical context from DB)
             sum(1 for m in messages if m.get('role') == 'user' and m == messages[-1])
-            print(f"[Cerebras] {model} | new_msg=1 | max_tokens={max_tokens}")
+            logger.debug(f"[Cerebras] {model} | new_msg=1 | max_tokens={max_tokens}")
 
             response = requests.post(
                 self.base_url,
@@ -254,9 +257,9 @@ class CerebrasProvider(AIProvider):
 
             # Debug: Log response
             if response.status_code != 200:
-                print(f"[Cerebras] Error {response.status_code}: {response.text[:200]}")
+                logger.debug(f"[Cerebras] Error {response.status_code}: {response.text[:200]}")
             else:
-                print(f"[Cerebras] OK {response.status_code}")
+                logger.debug(f"[Cerebras] OK {response.status_code}")
 
             if response.status_code == 200:
                 result = response.json()
@@ -448,7 +451,7 @@ class OpenRouterProvider(AIProvider):
                 payload["tools"] = tools
 
             # Debug: Log summary (not full payload)
-            print(f"[OpenRouter] {model} | max_tokens={max_tokens}")
+            logger.debug(f"[OpenRouter] {model} | max_tokens={max_tokens}")
 
             response = requests.post(
                 self.base_url,
@@ -459,9 +462,9 @@ class OpenRouterProvider(AIProvider):
 
             # Debug: Log response
             if response.status_code != 200:
-                print(f"[OpenRouter] Error {response.status_code}: {response.text[:200]}")
+                logger.debug(f"[OpenRouter] Error {response.status_code}: {response.text[:200]}")
             else:
-                print(f"[OpenRouter] OK {response.status_code}")
+                logger.debug(f"[OpenRouter] OK {response.status_code}")
 
             if response.status_code == 200:
                 result = response.json()
@@ -586,6 +589,7 @@ class ChutesProvider(AIProvider):
             "deepseek-ai/DeepSeek-V3.2-Exp",
             "moonshotai/Kimi-K2-Instruct-0905",
             "moonshotai/Kimi-K2.5-TEE",
+            "moonshotai/Kimi-K2.6-TEE",
             "tngtech/DeepSeek-TNG-R1T-Chimera",
             "tngtech/DeepSeek-TNG-R1T2-Chimera",
             "Qwen/Qwen3-Next-80B-A3B-Instruct",
@@ -712,9 +716,9 @@ class ChutesProvider(AIProvider):
             if status not in retryable_codes:
                 return None
 
-            print(f"{log_prefix} {current_model} failed ({status}), retrying with another model...")
+            logger.debug(f"{log_prefix} {current_model} failed ({status}), retrying with another model...")
 
-        print(f"{log_prefix} All models exhausted, last error: {last_error}")
+        logger.debug(f"{log_prefix} All models exhausted, last error: {last_error}")
         return None
 
     def _chutes_raw(self, model: str, messages: List[Dict], kwargs) -> tuple:
@@ -728,7 +732,7 @@ class ChutesProvider(AIProvider):
             if last_user_message:
                 has_img = multimodal_tools.has_images(last_user_message)
                 if has_img:
-                    print(f"[Vision] Triggered for message: {last_user_message[:100]}...")
+                    logger.debug(f"[Vision] Triggered for message: {last_user_message[:100]}...")
                     vision_messages = self.format_vision_message(last_user_message)
                     messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
 
@@ -759,7 +763,7 @@ class ChutesProvider(AIProvider):
         #     payload["tools"] = tools
 
         log_prefix = kwargs.pop('log_prefix', '[CHAT]')
-        print(f"{log_prefix} {model} | max_tokens={max_tokens}")
+        logger.debug(f"{log_prefix} {model} | max_tokens={max_tokens}")
 
         try:
             response = requests.post(
@@ -835,11 +839,11 @@ class ChutesProvider(AIProvider):
                         except (json.JSONDecodeError, KeyError):
                             continue
             else:
-                print(f"[ERROR] Chutes streaming API error {response.status_code}: {response.text}")
+                logger.error(f"[ERROR] Chutes streaming API error {response.status_code}: {response.text}")
                 yield ""
                 
         except Exception as e:
-            print(f"[ERROR] Chutes send_message_streaming exception: {str(e)}")
+            logger.error(f"[ERROR] Chutes send_message_streaming exception: {str(e)}")
             yield f"Error: {str(e)}"
 
 class AIProviderManager:
@@ -888,7 +892,7 @@ class AIProviderManager:
         response_time = time.time() - start_time
         if response:
             return response
-        print(f"[ProviderManager] {provider_name} failed after {response_time:.1f}s")
+        logger.warning(f"[ProviderManager] {provider_name} failed after {response_time:.1f}s")
         return None
     
     def send_message_streaming(self, provider_name: str, model: str, messages: List[Dict], **kwargs) -> Generator[str, None, None]:
@@ -960,38 +964,38 @@ class AIProviderManager:
         for attempt in range(3):
             result = provider.send_message(messages, MAIN_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs)
             if result:
-                print(f"[INT] chutes/{MAIN_MODEL} OK (attempt {attempt + 1})")
+                logger.debug(f"[INT] chutes/{MAIN_MODEL} OK (attempt {attempt + 1})")
                 return result
             
             # Get last error from provider (if available)
             last_error = getattr(provider, '_last_error', None)
             if not _is_connection_error(last_error):
-                print(f"[INT] chutes/{MAIN_MODEL} failed (non-retryable error)")
+                logger.debug(f"[INT] chutes/{MAIN_MODEL} failed (non-retryable error)")
                 break
             
             if attempt < 2:
-                print(f"[INT] chutes/{MAIN_MODEL} failed (attempt {attempt + 1}), retrying...")
+                logger.debug(f"[INT] chutes/{MAIN_MODEL} failed (attempt {attempt + 1}), retrying...")
                 time.sleep(0.5)
         
-        print(f"[INT] chutes/{MAIN_MODEL} exhausted, trying fallback...")
+        logger.debug(f"[INT] chutes/{MAIN_MODEL} exhausted, trying fallback...")
         
         # Try fallback model (2 attempts: initial + 1 retry)
         for attempt in range(2):
             result = provider.send_message(messages, FALLBACK_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs)
             if result:
-                print(f"[INT] chutes/{FALLBACK_MODEL} OK (attempt {attempt + 1})")
+                logger.debug(f"[INT] chutes/{FALLBACK_MODEL} OK (attempt {attempt + 1})")
                 return result
             
             last_error = getattr(provider, '_last_error', None)
             if not _is_connection_error(last_error):
-                print(f"[INT] chutes/{FALLBACK_MODEL} failed (non-retryable error)")
+                logger.debug(f"[INT] chutes/{FALLBACK_MODEL} failed (non-retryable error)")
                 break
             
             if attempt < 1:
-                print(f"[INT] chutes/{FALLBACK_MODEL} failed (attempt {attempt + 1}), retrying...")
+                logger.debug(f"[INT] chutes/{FALLBACK_MODEL} failed (attempt {attempt + 1}), retrying...")
                 time.sleep(0.5)
         
-        print("[INT] all internal models failed")
+        logger.debug("[INT] all internal models failed")
         return None
 
     def auto_send_message(self, messages: List[Dict], **kwargs) -> Optional[str]:

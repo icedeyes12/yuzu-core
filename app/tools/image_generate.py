@@ -1,10 +1,14 @@
 # FILE: app/tools/image_generate.py
 # DESCRIPTION: Image generation tool using diffusion models
 
+import logging
 import os
 import requests
 from datetime import datetime
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
+from app.db_pg_models import get_profile, get_api_keys
+
+logger = logging.getLogger(__name__)
 
 HUNYUAN_ENDPOINT = "https://chutes-hunyuan-image-3.chutes.ai/generate"
 Z_TURBO_ENDPOINT = "https://chutes-z-image-turbo.chutes.ai/generate"
@@ -29,8 +33,6 @@ TOOL_DEFINITION = ToolDefinition(
 
 
 def execute(arguments, **kwargs):
-    from app.database import Database
-
     prompt = arguments.get("prompt", "")
     if not prompt:
         return error_result(
@@ -40,11 +42,11 @@ def execute(arguments, **kwargs):
             "Yuzu",
         )
 
-    profile = Database.get_profile() or {}
+    profile = get_profile() or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     try:
-        api_keys = Database.get_api_keys()
+        api_keys = get_api_keys()
         api_key = api_keys.get('chutes')
         if not api_key:
             return error_result(
@@ -55,7 +57,7 @@ def execute(arguments, **kwargs):
             )
 
         image_model = profile.get("image_model", "hunyuan")
-        print(f"[IMAGE TOOL] Model: {image_model}")
+        logger.debug(f"[IMAGE TOOL] Model: {image_model}")
 
         if image_model == "qwen_image":
             endpoint = QWEN_IMAGE_ENDPOINT
@@ -75,8 +77,8 @@ def execute(arguments, **kwargs):
             endpoint = HUNYUAN_ENDPOINT
             payload = {"prompt": prompt}
 
-        print(f"[IMAGE TOOL] Endpoint: {endpoint}")
-        print(f"[IMAGE TOOL] Generating image (prompt length: {len(prompt)} chars)")
+        logger.debug(f"[IMAGE TOOL] Endpoint: {endpoint}")
+        logger.debug(f"[IMAGE TOOL] Generating image (prompt length: {len(prompt)} chars)")
 
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -91,7 +93,7 @@ def execute(arguments, **kwargs):
         )
 
         if response.status_code != 200:
-            print(f"[IMAGE TOOL] API error {response.status_code}")
+            logger.debug(f"[IMAGE TOOL] API error {response.status_code}")
             return error_result(
                 f"API error {response.status_code}",
                 TOOL_DEFINITION,
@@ -111,7 +113,7 @@ def execute(arguments, **kwargs):
         with open(filepath, 'wb') as f:
             f.write(response.content)
 
-        print(f"[IMAGE TOOL] Saved: {filepath}")
+        logger.debug(f"[IMAGE TOOL] Saved: {filepath}")
 
         full_command = f"/imagine {prompt}"
         return ok_result(
@@ -126,8 +128,8 @@ def execute(arguments, **kwargs):
         )
 
     except Exception as e:
-        print(f"[IMAGE TOOL] Exception: {str(e)}")
-        profile = Database.get_profile() or {}
+        logger.debug(f"[IMAGE TOOL] Exception: {str(e)}")
+        profile = get_profile() or {}
         partner_name = profile.get("partner_name", "Yuzu")
         return error_result(
             "Image generation failed. Please try again later.",

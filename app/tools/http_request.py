@@ -1,6 +1,7 @@
 # FILE: app/tools/http_request.py
 # DESCRIPTION: HTTP request tool for external API calls
 
+import logging
 import os
 import requests
 import socket
@@ -9,6 +10,8 @@ import re
 from urllib.parse import urlparse
 from datetime import datetime
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
+
+logger = logging.getLogger(__name__)
 
 MAX_BYTES = 2 * 1024 * 1024
 TIMEOUT = 90
@@ -95,9 +98,9 @@ def get_media_dir():
 
 
 def execute(arguments, **kwargs):
-    from app.database import Database
+    from app.db_pg_models import get_profile
 
-    profile = Database.get_profile() or {}
+    profile = get_profile() or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     if isinstance(arguments, dict):
@@ -199,7 +202,7 @@ def execute(arguments, **kwargs):
         )
 
     except Exception as e:
-        print(f"[request_tools] Exception during HTTP request: {e}")
+        logger.warning(f"[request_tools] Exception during HTTP request: {e}")
         return error_result(
             "Request failed. Please check the URL or try again later.",
             TOOL_DEFINITION,

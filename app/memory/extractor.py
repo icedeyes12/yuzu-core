@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import logging
+
 __all__ = [
     "upsert_semantic_memory",
     "create_episodic_memory",
@@ -17,6 +19,8 @@ from app.memory.db_memory import (
     FACT_TYPE_STATIC,
     FACT_TYPE_DYNAMIC,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ── Emotional keywords for weight calculation ─────────────────────────────────
@@ -122,7 +126,7 @@ def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None
         from app.memory.embedder import embed_text
         vector = embed_text(text)
     except Exception as e:
-        print(f"[WARNING] Embedding failed: {e}")
+        logger.warning(f"Embedding failed: {e}")
         vector = None
 
     if vector is not None:
@@ -220,7 +224,7 @@ def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance
         from app.memory.embedder import embed_text
         vector = embed_text(summary)
     except Exception as e:
-        print(f"[WARNING] Embedding failed: {e}")
+        logger.warning(f"Embedding failed: {e}")
         vector = None
 
     fact_id = save_fact(

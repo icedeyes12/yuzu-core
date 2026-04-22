@@ -2,7 +2,7 @@
 # DESCRIPTION: Central tool registry — single source of truth for dispatch.
 #
 # Architecture:
-#   - TOOL_DEFINITIONS: dict[name -> ToolDefinition] — lazily populated on first access
+#   - TOOL_DEFINITIONS: dict[name -> ToolDefinition] — lazily populated
 #   - _TOOL_MODULES: dict[name -> module] — lazy-loaded on first dispatch
 #   - execute_tool(): calls tool.execute() and returns structured result
 #   - get_tool_definitions(): returns list for LLM tools[] array
@@ -14,6 +14,9 @@
 #   3. The tool must have execute(arguments, session_id=None) -> dict
 
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Lazy-load tool modules on first dispatch
 _TOOL_MODULES: dict = {}
@@ -61,26 +64,26 @@ def _collect_definitions():
         _TOOL_DEFINITIONS["image_generate"] = image_generate.TOOL_DEFINITION
         _TOOL_DEFINITIONS["imagine"] = image_generate.TOOL_DEFINITION  # alias
     except Exception as e:
-        print(f"[registry] Failed to load image_generate definition: {e}")
+        logger.info(f"[registry] Failed to load image_generate definition: {e}")
 
     try:
         from app.tools import http_request
         _TOOL_DEFINITIONS["http_request"] = http_request.TOOL_DEFINITION
         _TOOL_DEFINITIONS["request"] = http_request.TOOL_DEFINITION  # alias
     except Exception as e:
-        print(f"[registry] Failed to load http_request definition: {e}")
+        logger.info(f"[registry] Failed to load http_request definition: {e}")
 
     try:
         from app.tools import memory_store
         _TOOL_DEFINITIONS["memory_store"] = memory_store.TOOL_DEFINITION
     except Exception as e:
-        print(f"[registry] Failed to load memory_store definition: {e}")
+        logger.info(f"[registry] Failed to load memory_store definition: {e}")
 
     try:
         from app.tools import memory_search
         _TOOL_DEFINITIONS["memory_search"] = memory_search.TOOL_DEFINITION
     except Exception as e:
-        print(f"[registry] Failed to load memory_search definition: {e}")
+        logger.info(f"[registry] Failed to load memory_search definition: {e}")
 
     _DEFINITIONS_INITIALIZED = True
 
@@ -128,15 +131,6 @@ def is_terminal_tool(tool_name: str) -> bool:
 # --------------------------------------------------------------------
 # Legacy support
 # --------------------------------------------------------------------
-
-TOOL_ROLE_MAP = {
-    "image_generate": "image_tools",
-    "imagine": "image_tools",
-    "request": "request_tools",
-    "http_request": "request_tools",
-    "memory_store": "memory_store_tools",
-    "memory_search": "memory_search_tools",
-}
 
 
 
@@ -212,7 +206,7 @@ def execute_tool(tool_name: str, arguments: dict, session_id: Optional[str] = No
         }
 
     except Exception as e:
-        print(f"[tool_error] {tool_name}: {e}")
+        logger.info(f"[tool_error] {tool_name}: {e}")
         return error_result(
             "Tool execution failed. Please try again later.",
             tool_def,
@@ -224,8 +218,8 @@ def execute_tool(tool_name: str, arguments: dict, session_id: Optional[str] = No
 def _get_partner_name() -> str:
     """Get partner name from profile for error messages."""
     try:
-        from app.database import Database
-        profile = Database.get_profile() or {}
+        from app.db_pg_models import get_profile
+        profile = get_profile() or {}
         return profile.get("partner_name", "Yuzu")
     except Exception:
         return "Yuzu"

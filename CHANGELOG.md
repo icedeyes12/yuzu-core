@@ -2,6 +2,77 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2026-04-19
+
+### Changed — Complete Codebase Refactor (Stages 1-6)
+
+This is a **major refactor** focused on simplicity, clarity, and maintainability.
+
+#### Stage 1: Foundation Modules
+- **`app/logging_config.py`** (NEW): Centralized logging setup with `get_logger()`
+- **`app/commands.py`** (NEW): `/command` detection, `StreamFilter` for streaming, markdown-image guards
+- **`app/prompts.py`** (NEW): System prompt assembly, message context building
+- **`app/llm_client.py`** (NEW): AI response generation + `chutes_chat()` helper (consolidated 3 call sites)
+- **`app/orchestrator.py`** (NEW): Message handling pipeline — image cache, vision routing, tool exec, synthesis
+- **`app/profile_analysis.py`** (NEW): Profile & memory analysis utilities
+- **`app/session_lifecycle.py`** (NEW): Session start/end logic extracted from `app.py`
+- **`app/app.py`**: Reduced from 1400 lines to thin shim (~50 lines)
+
+#### Stage 2: Database Simplification
+- **`app/database.py`**: **DELETED** — removed passthrough wrapper
+- All callers migrated to direct `db_pg_models` imports
+
+#### Stage 3: db_pg Cleanup
+- **`app/db_queries.py`** (NEW): Single source of truth for SQL constants, parsers, DDL
+- **`app/db_pg_models.py`**: Refactored to thin wrappers around `db_queries`
+- **`app/db_pg_models_async.py`**: Refactored to thin wrappers around `db_queries`
+- Fixed `pg_scalar()` bug (was returning dict instead of scalar)
+
+#### Stage 4: Memory Package Refactor
+- **`app/memory/db_memory_queries.py`** (NEW): SQL constants + query builders
+- **`app/memory/db_memory.py`**: Removed 282 lines — SQL extracted, dead code deleted
+- **Deleted dead code**: `upsert_fact()`, `search_trgm_keywords()`, `update_fact_importance()`
+- **Logging migration**: All `print()` → `logging` across memory package
+- **plast-mem alignment verified**: 11/11 features aligned with reference architecture
+
+#### Stage 5: Tools Package Refactor
+- **`app/tools/registry.py`**: Logging migration, removed legacy `TOOL_ROLE_MAP`
+- **All tool modules**: Logging migration, replaced deprecated `Database` imports
+
+#### Stage 6: Scripts Cleanup
+- Scripts already clean (CLI utilities, `print()` is appropriate)
+
+### Security
+
+All **GitHub Advanced Security alerts resolved**:
+- **ReDoS (Polynomial Regex)**: Changed unbounded quantifiers (`*`, `+`) to bounded (`{0,N}`, `{1,N}`)
+  - `app/commands.py`: `_MARKDOWN_IMAGE_PATH`, `_MARKDOWN_IMAGE_ANY`, `_GENERATED_IMAGE_SRC`
+  - `app/orchestrator.py`: `_MD_IMAGE_PATTERN`
+  - `app/tools/multimodal.py`: `extract_image_urls()`, `detect_uploaded_images()`
+  - `app/db_queries.py`: All regex patterns bounded
+- **Path Traversal (CWE-22)**: Path normalization + whitelist validation in `orchestrator.py`
+
+### Tests
+
+- **`tests/test_commands.py`** (NEW): Tests for command detection, StreamFilter
+- **`tests/test_db_queries.py`** (NEW): Tests for SQL constants, parsers
+- **`tests/test_prompts.py`** (NEW): Tests for prompt assembly
+- **`tests/test_profile_analysis.py`** (NEW): Tests for profile analysis
+- **`tests/test_stream_filter.py`** (NEW): Tests for streaming command detection
+
+### Documentation
+
+- **`AGENTS.md`**: Updated to reflect new modular architecture
+- **`ROADMAP.md`**: Added complete refactor timeline
+- **`app/memory/docs/architecture.md`**: Updated with plast-mem alignment details
+
+### Stats
+
+- **40 files changed**
+- **+5,229 lines added**
+- **-4,344 lines removed**
+- **Net -900 lines through consolidation**
+
 ## [2.3.1] - 2026-04-12
 
 ### Changed — Codebase Simplification
