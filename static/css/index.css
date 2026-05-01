@@ -29,10 +29,10 @@
   --button-text: #ffffff;
   
   /* Shadow Colors */
-  --shadow-dark: rgba(0, 0, 0, 0.4);
+  --shadow-base: rgba(0, 0, 0, 0.4);
   --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.3);
-  --shadow-pink: rgba(255, 107, 157, 0.3);
-  --shadow-lavender: rgba(179, 157, 219, 0.4);
+  --shadow-accent: rgba(255, 107, 157, 0.3);
+  --shadow-secondary: rgba(179, 157, 219, 0.4);
   
   /* Button Colors */
   --button-bg: linear-gradient(135deg, var(--accent-color), var(--accent-primary));
@@ -69,10 +69,10 @@
   --border-ai: rgba(200, 200, 230, 0.8);
   --code-border: rgba(138, 109, 233, 0.2);
   
-  --shadow-dark: rgba(0, 0, 0, 0.1);
+  --shadow-base: rgba(0, 0, 0, 0.1);
   --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.1);
-  --shadow-pink: rgba(255, 107, 157, 0.2);
-  --shadow-lavender: rgba(138, 109, 233, 0.2);
+  --shadow-accent: rgba(255, 107, 157, 0.2);
+  --shadow-secondary: rgba(138, 109, 233, 0.2);
   
   --copy-button-bg: rgba(255, 255, 255, 0.9);
   --copy-button-hover: rgba(245, 245, 250, 0.9);
@@ -123,7 +123,7 @@ body {
   backdrop-filter: var(--backdrop-blur);
   display: flex;
   flex-direction: column;
-  box-shadow: 2px 0 20px var(--shadow-dark);
+  box-shadow: 2px 0 20px var(--shadow-base);
 }
 
 .sidebar.open {
@@ -351,7 +351,7 @@ body {
 .dashboard-card:hover {
   transform: translateY(-5px);
   border-color: var(--accent-primary);
-  box-shadow: 0 10px 30px var(--shadow-pink);
+  box-shadow: 0 10px 30px var(--shadow-accent);
 }
 
 .card-header {
@@ -401,12 +401,12 @@ body {
   text-align: center;
   text-decoration: none;
   display: block;
-  box-shadow: 0 4px 15px var(--shadow-pink);
+  box-shadow: 0 4px 15px var(--shadow-accent);
 }
 
 .action-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px var(--shadow-pink);
+  box-shadow: 0 6px 20px var(--shadow-accent);
 }
 
 /* Settings Page */
@@ -515,7 +515,7 @@ input:checked + .toggle-slider:before {
 .select-dropdown:focus {
   outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px var(--shadow-pink);
+  box-shadow: 0 0 0 2px var(--shadow-accent);
 }
 
 /* Animations */

@@ -85,7 +85,7 @@
 .config-section:hover {
   transform: translateY(-2px);
   border-color: var(--accent-primary);
-  box-shadow: 0 8px 25px var(--shadow-pink);
+  box-shadow: 0 8px 25px var(--shadow-accent);
 }
 
 .config-section h2 {
@@ -131,7 +131,7 @@
 .form-select:focus {
   border-color: var(--accent-primary);
   background: var(--input-bg);
-  box-shadow: 0 0 0 3px var(--shadow-pink);
+  box-shadow: 0 0 0 3px var(--shadow-accent);
   outline: none;
 }
 
@@ -164,7 +164,7 @@ input[type="range"]::-webkit-slider-thumb {
   background: var(--accent-primary);
   cursor: pointer;
   border: 2px solid var(--header-bg);
-  box-shadow: 0 2px 6px var(--shadow-pink);
+  box-shadow: 0 2px 6px var(--shadow-accent);
 }
 
 input[type="range"]::-moz-range-thumb {
@@ -174,7 +174,7 @@ input[type="range"]::-moz-range-thumb {
   background: var(--accent-primary);
   cursor: pointer;
   border: 2px solid var(--header-bg);
-  box-shadow: 0 2px 6px var(--shadow-pink);
+  box-shadow: 0 2px 6px var(--shadow-accent);
 }
 
 /* Textarea styling */
@@ -195,7 +195,7 @@ textarea {
 textarea:focus {
   border-color: var(--accent-primary);
   background: var(--input-bg);
-  box-shadow: 0 0 0 3px var(--shadow-pink);
+  box-shadow: 0 0 0 3px var(--shadow-accent);
   outline: none;
 }
 
@@ -217,13 +217,13 @@ textarea:focus {
   background: var(--button-bg);
   color: var(--button-text);
   border-color: var(--border-primary);
-  box-shadow: 0 3px 12px var(--shadow-pink);
+  box-shadow: 0 3px 12px var(--shadow-accent);
 }
 
 .btn-primary:hover {
   background: var(--button-hover);
   transform: translateY(-2px);
-  box-shadow: 0 5px 15px var(--shadow-pink);
+  box-shadow: 0 5px 15px var(--shadow-accent);
 }
 
 .btn:active {
@@ -316,7 +316,7 @@ textarea:focus {
 
 #global-knowledge:focus {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px var(--shadow-pink);
+  box-shadow: 0 0 0 3px var(--shadow-accent);
 }
 
 /* API Keys Management */

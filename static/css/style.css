@@ -79,12 +79,12 @@ a:hover {
 .btn-primary {
   background: linear-gradient(135deg, var(--accent-color), var(--accent-primary));
   color: white;
-  box-shadow: 0 4px 15px var(--shadow-pink);
+  box-shadow: 0 4px 15px var(--shadow-accent);
 }
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px var(--shadow-pink);
+  box-shadow: 0 6px 20px var(--shadow-accent);
 }
 
 .btn-secondary {
@@ -141,7 +141,7 @@ a:hover {
 .form-select:focus {
   outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px var(--shadow-pink);
+  box-shadow: 0 0 0 3px var(--shadow-accent);
 }
 
 .form-textarea {
@@ -172,7 +172,7 @@ a:hover {
 .card:hover {
   transform: translateY(-3px);
   border-color: var(--accent-primary);
-  box-shadow: 0 10px 30px var(--shadow-pink);
+  box-shadow: 0 10px 30px var(--shadow-accent);
 }
 
 .card-header {
@@ -344,7 +344,7 @@ a:hover {
 .rounded-full { border-radius: 50%; }
 
 .shadow { box-shadow: var(--shadow-soft); }
-.shadow-lg { box-shadow: 0 10px 30px var(--shadow-dark); }
+.shadow-lg { box-shadow: 0 10px 30px var(--shadow-base); }
 .shadow-none { box-shadow: none; }
 
 .opacity-0 { opacity: 0; }

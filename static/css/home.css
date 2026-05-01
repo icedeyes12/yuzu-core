@@ -72,7 +72,7 @@
 .card:hover {
   transform: translateY(-5px);
   border-color: var(--accent-primary);
-  box-shadow: 0 10px 30px var(--shadow-pink);
+  box-shadow: 0 10px 30px var(--shadow-accent);
   text-decoration: none;
   color: var(--text-color);
 }

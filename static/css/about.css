@@ -110,7 +110,7 @@
 .content-section:hover {  
   transform: translateY(-3px);  
   border-color: var(--accent-primary);  
-  box-shadow: 0 10px 25px var(--shadow-pink);  
+  box-shadow: 0 10px 25px var(--shadow-accent);  
 }  
 
 .section-icon {  
@@ -234,7 +234,7 @@
 .philosophy-item:hover {
   transform: translateY(-2px);
   border-color: var(--accent-primary);
-  box-shadow: 0 5px 15px var(--shadow-pink);
+  box-shadow: 0 5px 15px var(--shadow-accent);
 }
 
 .philosophy-item strong {  
