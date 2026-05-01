@@ -472,11 +472,18 @@ html, body {
 
 /* ==================== TYPING INDICATOR ==================== */
 .typing-indicator {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   gap: 0.4rem;
-  padding: 1rem;
-  max-width: 60px;
-  transition: all 0.3s ease;
+  padding: 0.8rem 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  z-index: 90;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .typing-indicator span {
@@ -484,7 +491,7 @@ html, body {
   height: 8px;
   background: var(--accent-pink);
   border-radius: 50%;
-  animation: typing 1.4s infinite;
+  animation: typingBounce 1.4s infinite;
 }
 
 .typing-indicator span:nth-child(2) {
@@ -495,13 +502,13 @@ html, body {
   animation-delay: 0.4s;
 }
 
-@keyframes typing {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.7; }
-  30% { transform: translateY(-10px); opacity: 1; }
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
+  30% { transform: translateY(-8px); opacity: 1; }
 }
 
 .typing-indicator.hidden {
-  display: none;
+  display: none !important;
 }
 
 /* ==================== INPUT AREA ==================== */
