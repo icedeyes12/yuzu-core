@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yuzu Companion - Offline</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #e0e0e0;
+        }
+        
+        .container {
+            text-align: center;
+            padding: 2rem;
+            max-width: 500px;
+        }
+        
+        .icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #ff69b4;
+        }
+        
+        p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            color: #a0a0a0;
+            margin-bottom: 1.5rem;
+        }
+        
+        .code {
+            background: rgba(255, 105, 180, 0.1);
+            border: 1px solid rgba(255, 105, 180, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'Hack', 'Fira Code', monospace;
+            font-size: 0.9rem;
+            color: #ff69b4;
+            margin-bottom: 1.5rem;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 0.8rem 2rem;
+            background: #ff69b4;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        .btn:hover {
+            background: #ff1493;
+            transform: scale(1.05);
+        }
+        
+        .hint {
+            margin-top: 2rem;
+            font-size: 0.85rem;
+            color: #606060;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">⚡</div>
+        <h1>Database Offline</h1>
+        <p>Yuzu Companion can't reach the database. Make sure PostgreSQL is running and accessible.</p>
+        
+        <div class="code">
+            pg_ctl start -D ~/pgdata
+        </div>
+        
+        <p>Or if using Termux:</p>
+        <div class="code">
+            pg_ctl start -l ~/pgdata/logfile
+        </div>
+        
+        <a href="/" class="btn">Try Again</a>
+        
+        <p class="hint">Check your database connection settings in <code>.env</code></p>
+    </div>
+</body>
+</html>

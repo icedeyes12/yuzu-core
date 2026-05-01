@@ -10,6 +10,10 @@ from fastapi.templating import Jinja2Templates
 from typing import Dict
 import os
 
+# Import psycopg errors for exception handling
+from psycopg_pool import PoolTimeout
+from psycopg import OperationalError
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 from dotenv import load_dotenv  # noqa: E402
@@ -28,8 +32,49 @@ from app.api.routes import set_session_tracker  # noqa: E402
 app = FastAPI(
     title="Yuzu Companion",
     description="AI companion system with memory, multimodal, and multi-provider support",
-    version="1.0.0"
+    version="1.0.0",
+    # Disable default exception handlers for DB errors
+    exception_handlers={
+        PoolTimeout: None,  # Will be added below
+        OperationalError: None,
+    }
 )
+
+
+# ---------------------------------------------------------------------------
+# Database Offline Handler
+# ---------------------------------------------------------------------------
+
+def _render_offline_page() -> str:
+    """Read and return the offline.html template."""
+    offline_path = os.path.join(BASE_DIR, "templates", "offline.html")
+    if os.path.exists(offline_path):
+        with open(offline_path, "r") as f:
+            return f.read()
+    # Fallback inline HTML
+    return """
+    <!DOCTYPE html>
+    <html><head><title>Database Offline</title></head>
+    <body style="background:#1a1a2e;color:#e0e0e0;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;">
+    <div style="text-align:center;">
+    <h1 style="color:#ff69b4;">⚡ Database Offline</h1>
+    <p>PostgreSQL is not reachable. Start the database and try again.</p>
+    <a href="/" style="background:#ff69b4;color:white;padding:0.8rem 2rem;border-radius:25px;text-decoration:none;">Retry</a>
+    </div></body></html>
+    """
+
+
+@app.exception_handler(PoolTimeout)
+async def pool_timeout_handler(request: Request, exc: PoolTimeout):
+    """Handle database pool timeout - show offline page."""
+    return HTMLResponse(content=_render_offline_page(), status_code=503)
+
+
+@app.exception_handler(OperationalError)
+async def operational_error_handler(request: Request, exc: OperationalError):
+    """Handle database connection errors - show offline page."""
+    return HTMLResponse(content=_render_offline_page(), status_code=503)
+
 
 # Mount static directories
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
