@@ -54,6 +54,14 @@
               <span class="theme-preview light-preview"></span>
               Soft Light
             </div>
+            <div class="dropdown-option" data-value="suisei">
+              <span class="theme-preview suisei-preview"></span>
+              Stellar Night
+            </div>
+            <div class="dropdown-option" data-value="tokyonight">
+              <span class="theme-preview tokyonight-preview"></span>
+              Tokyo Night
+            </div>
             <div class="dropdown-option" data-value="lavender">
               <span class="theme-preview lavender-preview"></span>
               Pastel Lavender
@@ -70,7 +78,22 @@
               <span class="theme-preview dark-lavender-preview"></span>
               Dark Lavender
             </div>
+            <div class="dropdown-option" data-value="vanilla-orange">
+              <span class="theme-preview vanilla-orange-preview"></span>
+              Vanilla Orange
+            </div>
           </div>
+        </div>
+      </div>
+      
+      <!-- Session Management -->
+      <div class="sidebar-section" id="sessionSection">
+        <h3>Sessions</h3>
+        <button class="sidebar-btn" onclick="createNewSession()">
+          <span class="sidebar-icon add-icon"></span> New Chat
+        </button>
+        <div class="sessions-list" id="sidebarSessionsList">
+          <div class="loading">Loading sessions...</div>
         </div>
       </div>
     </div>
