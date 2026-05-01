@@ -9,12 +9,17 @@
 #   3. Memory Review → run_memory_review() updates FSRS parameters
 #
 # Trigger: After every N messages (WINDOW_BASE=20) or time-gated per session.
+#
+# Fence mechanism (aligned with plast-mem):
+#   - in_progress_fence: prevents concurrent pipeline runs for same session
+#   - fence_ttl_minutes: 120 minutes (stale job cleanup)
 
 from __future__ import annotations
 
 import logging
 import threading
 import time
+from datetime import datetime, timedelta
 from typing import Optional
 
 __all__ = [
@@ -36,16 +41,76 @@ WINDOW_MAX = 40  # force process
 MIN_MESSAGES = 5
 TIME_GAP_MINUTES = 15
 
+# Fence constants (aligned with plast-mem)
+FENCE_TTL_MINUTES = 120  # Stale job cleanup threshold
+
 # ── Background thread state ───────────────────────────────────────────────────
 
 _pipeline_thread: threading.Thread | None = None
 _pipeline_lock = threading.Lock()
 _pending_sessions: set[int] = set()  # Sessions queued for processing
 
+# ── Fence state (per-session) ─────────────────────────────────────────────────
+
+# in_progress_fence: session_id -> (fence_count, timestamp)
+# Mirrors plast-mem's in_progress_fence + in_progress_since columns
+_in_progress_fence: dict[int, tuple[int, datetime]] = {}
+_fence_lock = threading.Lock()
 
 # ── Message counter tracking (per-session) ─────────────────────────────────────
 
 _last_processed_count: dict[int, int] = {}  # session_id -> last processed count
+
+
+def _try_set_fence(session_id: int, fence_count: int) -> bool:
+    """Atomically set fence for a session if not already set.
+    
+    Mirrors plast-mem's try_set_fence():
+    - Returns True if fence was set (no existing fence)
+    - Returns False if fence already exists
+    
+    This is the CAS (Compare-And-Swap) operation that prevents concurrent jobs.
+    """
+    with _fence_lock:
+        now = datetime.now()
+        
+        # Check if fence exists
+        if session_id in _in_progress_fence:
+            existing_count, existing_since = _in_progress_fence[session_id]
+            
+            # Check if fence is stale (TTL exceeded)
+            age = now - existing_since
+            if age > timedelta(minutes=FENCE_TTL_MINUTES):
+                # Clear stale fence
+                logger.info(f"Clearing stale fence for session {session_id} (age={age})")
+                del _in_progress_fence[session_id]
+            else:
+                # Fence is active, cannot set
+                return False
+        
+        # Set new fence
+        _in_progress_fence[session_id] = (fence_count, now)
+        return True
+
+
+def _clear_fence(session_id: int) -> None:
+    """Clear the fence for a session after processing completes.
+    
+    Mirrors plast-mem's finalize_job() fence clearing.
+    """
+    with _fence_lock:
+        _in_progress_fence.pop(session_id, None)
+
+
+def _is_fence_active(session_id: int) -> bool:
+    """Check if a session has an active (non-stale) fence."""
+    with _fence_lock:
+        if session_id not in _in_progress_fence:
+            return False
+        
+        _, existing_since = _in_progress_fence[session_id]
+        age = datetime.now() - existing_since
+        return age <= timedelta(minutes=FENCE_TTL_MINUTES)
 
 
 def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
@@ -54,7 +119,13 @@ def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
     Returns True if:
     - Count reaches WINDOW_MAX (force trigger)
     - Count reaches multiple of WINDOW_BASE (periodic trigger)
+    - AND no active fence exists (prevents concurrent jobs)
     """
+    # Check fence first (like plast-mem's check())
+    if _is_fence_active(session_id):
+        logger.debug(f"Segmentation skipped for session {session_id}: fence active")
+        return False
+    
     last_count = _last_processed_count.get(session_id, 0)
     delta = current_count - last_count
     
@@ -70,7 +141,10 @@ def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
 
 
 def mark_segmentation_done(session_id: int, count: int) -> None:
-    """Mark that segmentation completed for this session at this count."""
+    """Mark that segmentation completed for this session at this count.
+    
+    Called AFTER processing completes (not before).
+    """
     _last_processed_count[session_id] = count
 
 
@@ -561,6 +635,7 @@ def run_memory_pipeline(session_id: int, message_count: int) -> dict:
       2. Batch segment (single LLM call)
       3. Create episodes + PCL per segment
       4. Run memory review if pending
+      5. Clear fence and mark done
     
     Returns summary: {segments: n, episodes: n, pcl_runs: n}
     """
@@ -569,62 +644,68 @@ def run_memory_pipeline(session_id: int, message_count: int) -> dict:
     
     logger.info(f"Starting for session {session_id}, count={message_count}")
     
-    # Get messages
-    all_messages = get_session_messages(session_id, limit=10000)
-    if not all_messages:
-        return {"segments": 0, "episodes": 0, "pcl_runs": 0}
-    
-    # Find where we left off
-    segments = get_facts_by_session(session_id, fact_type=FACT_TYPE_DYNAMIC, limit=100)
-    segments = [s for s in segments if s.get("metadata", {}).get("source_table") == "episodic_memories"]
-    
-    if segments:
-        last_end_id = max(s.get("metadata", {}).get("end_message_id", 0) for s in segments)
-    else:
-        last_end_id = 0
-    
-    # Filter to unsegmented messages
-    unsegmented = [
-        m for m in all_messages
-        if m.get("id", 0) > last_end_id and m.get("role") in ("user", "assistant")
-    ]
-    
-    if len(unsegmented) < MIN_MESSAGES:
-        logger.debug(f"Only {len(unsegmented)} unsegmented msgs, skipping")
-        return {"segments": 0, "episodes": 0, "pcl_runs": 0}
-    
-    # Batch segment
-    batch_result = batch_segment(unsegmented)
-    if not batch_result:
-        logger.debug("No segments from batch LLM")
-        return {"segments": 0, "episodes": 0, "pcl_runs": 0}
-    
-    logger.info(f"Batch segmentation: {len(batch_result)} segments")
-    
-    # Create episodes + PCL
-    episode_count = 0
-    pcl_count = 0
-    
-    for seg in batch_result:
-        episode_id = create_episode_and_pcl(session_id, unsegmented, seg)
-        if episode_id:
-            episode_count += 1
-            pcl_count += 1
-    
-    # Run memory review if there are pending reviews
     try:
-        run_memory_review(session_id)
-    except Exception as e:
-        logger.warning(f"Memory review error: {e}")
-    
-    # Mark done
-    mark_segmentation_done(session_id, message_count)
-    
-    return {
-        "segments": len(batch_result),
-        "episodes": episode_count,
-        "pcl_runs": pcl_count,
-    }
+        # Get messages
+        all_messages = get_session_messages(session_id, limit=10000)
+        if not all_messages:
+            return {"segments": 0, "episodes": 0, "pcl_runs": 0}
+        
+        # Find where we left off
+        segments = get_facts_by_session(session_id, fact_type=FACT_TYPE_DYNAMIC, limit=100)
+        segments = [s for s in segments if s.get("metadata", {}).get("source_table") == "episodic_memories"]
+        
+        if segments:
+            last_end_id = max(s.get("metadata", {}).get("end_message_id", 0) for s in segments)
+        else:
+            last_end_id = 0
+        
+        # Filter to unsegmented messages
+        unsegmented = [
+            m for m in all_messages
+            if m.get("id", 0) > last_end_id and m.get("role") in ("user", "assistant")
+        ]
+        
+        if len(unsegmented) < MIN_MESSAGES:
+            logger.debug(f"Only {len(unsegmented)} unsegmented msgs, skipping")
+            return {"segments": 0, "episodes": 0, "pcl_runs": 0}
+        
+        # Batch segment
+        batch_result = batch_segment(unsegmented)
+        if not batch_result:
+            logger.debug("No segments from batch LLM")
+            return {"segments": 0, "episodes": 0, "pcl_runs": 0}
+        
+        logger.info(f"Batch segmentation: {len(batch_result)} segments")
+        
+        # Create episodes + PCL
+        episode_count = 0
+        pcl_count = 0
+        
+        for seg in batch_result:
+            episode_id = create_episode_and_pcl(session_id, unsegmented, seg)
+            if episode_id:
+                episode_count += 1
+                pcl_count += 1
+        
+        # Run memory review if there are pending reviews
+        try:
+            run_memory_review(session_id)
+        except Exception as e:
+            logger.warning(f"Memory review error: {e}")
+        
+        # Mark done
+        mark_segmentation_done(session_id, message_count)
+        
+        return {
+            "segments": len(batch_result),
+            "episodes": episode_count,
+            "pcl_runs": pcl_count,
+        }
+    finally:
+        # Always clear fence when done (even on error)
+        # This mirrors plast-mem's finalize_job() behavior
+        _clear_fence(session_id)
+        logger.debug(f"Fence cleared for session {session_id}")
 
 
 # ── Background thread launcher ─────────────────────────────────────────────────
@@ -676,9 +757,21 @@ def trigger_memory_pipeline_async(session_id: int, current_count: int) -> bool:
     """Check and trigger memory pipeline in background if threshold met.
     
     Returns True if pipeline was triggered.
+    
+    Flow (aligned with plast-mem):
+      1. Check if thresholds met (count/time)
+      2. Try to set fence (CAS operation)
+      3. If fence set, enqueue for background processing
+      4. Fence is cleared AFTER processing completes in run_memory_pipeline
     """
     if should_trigger_segmentation(session_id, current_count):
-        mark_segmentation_done(session_id, current_count)
+        # Try to set fence - prevents concurrent jobs
+        if not _try_set_fence(session_id, current_count):
+            logger.debug(f"Could not set fence for session {session_id}")
+            return False
+        
+        # Enqueue for background processing
+        # mark_segmentation_done is called AFTER processing in run_memory_pipeline
         enqueue_memory_pipeline(session_id)
         return True
     return False

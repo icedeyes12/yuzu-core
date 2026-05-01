@@ -245,6 +245,7 @@ class MultimodalManager {
                                 accumulatedText += json.chunk;
                                 
                                 // Render immediately - real-time streaming
+                                // renderStreamChunk already does full markdown rendering
                                 this.renderStreamChunk(contentDiv, accumulatedText);
                                 scrollToBottom();
                             }
@@ -255,8 +256,8 @@ class MultimodalManager {
                 }
             }
 
-            // Final render with full markdown processing
-            this.finalizeStreamMessage(contentDiv, accumulatedText);
+            // NO finalizeStreamMessage needed - renderStreamChunk handles everything
+            // The final render is already done by the last renderStreamChunk call
 
         } catch (error) {
             console.error('Stream error:', error);
@@ -1062,33 +1063,57 @@ function addScrollLoadListener(fullHistory) {
 function initializeInputBehavior() {
     const input = document.getElementById('messageInput');
     const scrollBtn = document.getElementById('scrollToBottomBtn');
+    const chatContainer = document.getElementById('chatContainer');
     
     if (!input) return;
 
-    // Function to update scroll button position based on input area height
-    function updateScrollButtonPosition() {
+    // Function to update dynamic layout based on input area height
+    function updateDynamicLayout() {
+        const inputArea = input.closest('.input-area');
+        if (!inputArea) return;
+        
+        const inputAreaHeight = inputArea.offsetHeight;
+        
+        // Update scroll button position (10px above input area)
         if (scrollBtn) {
-            const inputArea = input.closest('.input-area');
-            if (inputArea) {
-                const inputAreaHeight = inputArea.offsetHeight;
-                // Position scroll button 10px above the input area
-                scrollBtn.style.bottom = `${inputAreaHeight + 10}px`;
-            }
+            scrollBtn.style.bottom = `${inputAreaHeight + 10}px`;
+        }
+        
+        // Update chat container padding-bottom dynamically
+        // Header height ~48px, so top padding is ~4.8rem
+        // Bottom padding should be: input area height + margin for last message visibility
+        if (chatContainer) {
+            const headerHeight = 48; // Approximate header height in px
+            const bottomMargin = 20; // Extra margin for last message visibility
+            chatContainer.style.paddingTop = `${headerHeight + 8}px`;
+            chatContainer.style.paddingBottom = `${inputAreaHeight + bottomMargin}px`;
         }
     }
 
-    // Auto-resize textarea and update scroll button position
+    // Auto-resize textarea
     input.oninput = () => {
         input.style.height = 'auto';
         input.style.height = Math.min(input.scrollHeight, 400) + 'px';
-        updateScrollButtonPosition();
+        updateDynamicLayout();
     };
     
-    // Initial position update
-    updateScrollButtonPosition();
+    // Initial layout update
+    updateDynamicLayout();
     
     // Update on window resize
-    window.addEventListener('resize', updateScrollButtonPosition);
+    window.addEventListener('resize', updateDynamicLayout);
+    
+    // Use ResizeObserver for reliable input area height detection
+    const inputArea = input.closest('.input-area');
+    if (inputArea && typeof ResizeObserver !== 'undefined') {
+        const resizeObserver = new ResizeObserver(() => {
+            updateDynamicLayout();
+        });
+        resizeObserver.observe(inputArea);
+        
+        // Also observe the input itself for height changes
+        resizeObserver.observe(input);
+    }
 }
 
 // ==================== INITIALIZATION ====================

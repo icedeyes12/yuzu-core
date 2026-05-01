@@ -129,7 +129,11 @@ html, body {
   overflow-y: auto;
   overscroll-behavior: contain;
   scroll-behavior: smooth;
-  padding: 4.8rem 0.8rem 10rem;
+  /* Dynamic padding - set via JS based on header/input heights */
+  padding-top: 56px;
+  padding-bottom: 80px;
+  padding-left: 0.8rem;
+  padding-right: 0.8rem;
   display: flex;
   flex-direction: column;
   gap: 0.8rem;

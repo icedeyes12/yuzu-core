@@ -549,31 +549,27 @@ async def api_rebuild_structured_memory():
         active_session = Database.get_active_session()
         session_id = active_session["id"]
 
-        from app.memory.extractor import process_messages_for_memory
-        from app.memory.segmenter import segment_session
-
-        recent = Database.get_chat_history(session_id=session_id, limit=50, recent=True)
-        if len(recent) < 3:
-            return {
-                "status": "error",
-                "message": "Need at least 3 conversation messages to extract memory. Continue chatting and try again."
-            }
-
-        process_messages_for_memory(session_id, recent)
-
-        segment_session(session_id)
-
+        from app.memory.memory import run_memory_pipeline
         from app.memory.db_memory import count_facts, FACT_TYPE_STATIC, FACT_TYPE_DYNAMIC
+
+        # Get message count
+        count = Database.get_session_messages_count(session_id)
+        
+        # Run the full pipeline
+        result = run_memory_pipeline(session_id, count)
+
         semantic_count = count_facts(fact_type=FACT_TYPE_STATIC, session_id=session_id)
         episodic_count = count_facts(fact_type=FACT_TYPE_DYNAMIC, session_id=session_id)
 
         return {
             "status": "success",
-            "message": f"Structured memory rebuilt: {semantic_count} facts, {episodic_count} episodes, {0} segments",
+            "message": f"Memory pipeline completed: {result.get('segments', 0)} segments, {result.get('episodes', 0)} episodes, {result.get('pcl_runs', 0)} PCL runs",
             "stats": {
                 "semantic": semantic_count,
                 "episodic": episodic_count,
-                "segments": 0,
+                "segments": result.get("segments", 0),
+                "episodes": result.get("episodes", 0),
+                "pcl_runs": result.get("pcl_runs", 0),
             }
         }
     except Exception as e:
