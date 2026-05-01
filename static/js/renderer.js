@@ -53,15 +53,30 @@ class MessageRenderer {
     }
 
     loadMarked() {
-        // Fallback to local if CDN fails
+        // Try CDN first, then fallback to local
+        const cdnUrl = 'https://cdn.jsdelivr.net/npm/marked@18.0.2/lib/marked.umd.js';
+        const localUrl = '/static/js/lib/marked.umd.js';
+        
         const script = document.createElement('script');
-        script.src = '/static/js/lib/marked.min.js';
+        script.src = cdnUrl;
         script.onload = () => {
             this.isMarkedReady = true;
             this.configureMarked();
+            console.log('marked.js v18.0.2 loaded from CDN');
         };
         script.onerror = () => {
-            console.error('Failed to load marked.js from both CDN and local fallback');
+            // Try local fallback
+            const fallbackScript = document.createElement('script');
+            fallbackScript.src = localUrl;
+            fallbackScript.onload = () => {
+                this.isMarkedReady = true;
+                this.configureMarked();
+                console.log('marked.js loaded from local fallback');
+            };
+            fallbackScript.onerror = () => {
+                console.error('Failed to load marked.js from both CDN and local fallback');
+            };
+            document.head.appendChild(fallbackScript);
         };
         document.head.appendChild(script);
     }
