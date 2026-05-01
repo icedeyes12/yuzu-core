@@ -1,24 +1,24 @@
 # FILE: app/memory/memory_review.py
-# DESCRIPTION: LLM-based memory review system — ratings drive FSRS parameter updates.
-#              Aligns with plast-mem's MemoryReviewJob.
+# DESCRIPTION: LLM-based memory review system using fsrs library.
+#              Ratings drive FSRS parameter updates via proper state transitions.
 #
 # Flow:
 #   1. retrieve_memory() marks retrieved facts as pending_review in metadata
 #   2. review_memory() is called with conversation context
 #   3. LLM rates each fact: Again/Hard/Good/Easy
-#   4. FSRS parameters (stability, difficulty) updated based on rating
+#   4. FSRS parameters (stability, difficulty) updated using fsrs library
 
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
+from psycopg.types.json import Json
 
 __all__ = [
     "review_memory",
     "mark_retrieved_as_pending_review",
 ]
 
-from datetime import datetime
-from psycopg.types.json import Json
 from app.memory.db_memory import (
     get_fact_by_id,
     pg_execute,
@@ -26,33 +26,43 @@ from app.memory.db_memory import (
 
 logger = logging.getLogger(__name__)
 
+# ── FSRS Library Integration ───────────────
+# PyPI fsrs library: https://pypi.org/project/fsrs/
+# API: Scheduler.review_card(card, rating) -> (new_card, review_log)
+try:
+    from fsrs import Scheduler, Card, Rating
+    FSRS_AVAILABLE = True
+except ImportError:
+    FSRS_AVAILABLE = False
+    Scheduler = None
+    Card = None
+    Rating = None
+    logger.warning("fsrs library not available, falling back to multipliers")
 
-# ── Rating → FSRS parameter mappings ─────────────────────────────────────────
-# Based on FSRS (Free Spaced Repetition Scheduler) principles.
-# Maps Again/Hard/Good/Easy ratings to multiplicative stability changes.
-#
-# Roadmap specifies:
-#   Again → stability × 0.5
-#   Hard  → stability × 0.9
-#   Good  → stability × 1.2
-#   Easy  → stability × 1.5
-#
-# Difficulty moves inversely (harder memories = more difficult to retain).
+# Initialize Scheduler instance (singleton)
+_scheduler_instance = None
 
+
+def _get_scheduler() -> Scheduler | None:
+    """Get or create FSRS Scheduler instance."""
+    global _scheduler_instance
+    if _scheduler_instance is None and FSRS_AVAILABLE:
+        _scheduler_instance = Scheduler()
+    return _scheduler_instance
+
+
+# ── Fallback multipliers (when fsrs not available) ─────────────────────────────
 _RATING_MULTIPLIERS = {
-    "again": {"stability_mult": 0.5,  "difficulty_delta": +0.15},  # very unstable, harder to relearn
-    "hard":  {"stability_mult": 0.9,  "difficulty_delta": +0.05},  # slightly unstable
-    "good":  {"stability_mult": 1.2,  "difficulty_delta": -0.05},  # stable
-    "easy":  {"stability_mult": 1.5,  "difficulty_delta": -0.10},  # very stable
+    "again": {"stability_mult": 0.5, "difficulty_delta": +0.15},
+    "hard":  {"stability_mult": 0.9, "difficulty_delta": +0.05},
+    "good":  {"stability_mult": 1.2, "difficulty_delta": -0.05},
+    "easy":  {"stability_mult": 1.5, "difficulty_delta": -0.10},
 }
 
-# Minimum values to prevent instability
-_MIN_STABILITY   = 0.1
-_MIN_DIFFICULTY  = 0.1
-_MAX_DIFFICULTY  = 4.0
-
-# Batch processing
-_REVIEW_BATCH_SIZE = 20  # facts per LLM call
+_MIN_STABILITY = 0.1
+_MIN_DIFFICULTY = 0.1
+_MAX_DIFFICULTY = 4.0
+_REVIEW_BATCH_SIZE = 20
 
 
 def _get_ai_manager():
@@ -92,9 +102,6 @@ def mark_retrieved_as_pending_review(fact_ids: list[int], session_id: int | None
     # Batch update for multiple ids
     ph = ",".join(["%s"] * len(fact_ids))
     try:
-        # meta_batch kept for future batch metadata update
-        pass  # meta_batch = {fid: {"last_reviewed_at": now.isoformat()} for fid in fact_ids}
-        # Use batch update: set pending_review=TRUE, last_accessed=now
         pg_execute(
             f"UPDATE semantic_facts SET pending_review=TRUE, last_accessed=%s WHERE id IN ({ph})",
             (now,) + tuple(fact_ids),
@@ -120,6 +127,9 @@ def _rate_facts_batch(
     """
     if not facts:
         return {}
+
+    import json
+    import re
 
     # Build facts list for prompt
     facts_text = "\n".join(
@@ -149,7 +159,6 @@ Facts to rate:
 Rate each fact (respond with JSON array only):"""
 
     try:
-        import json
         ai = _get_ai_manager()
         response = ai._internal_llm_call(
             messages=[
@@ -166,8 +175,6 @@ Rate each fact (respond with JSON array only):"""
         try:
             ratings = json.loads(response.strip())
         except json.JSONDecodeError:
-            # Try to extract JSON from response
-            import re
             match = re.search(r'\[.*\]', response, re.DOTALL)
             if match:
                 ratings = json.loads(match.group(0))
@@ -177,10 +184,11 @@ Rate each fact (respond with JSON array only):"""
 
         # Build result dict
         result = {}
+        valid_ratings = {"again", "hard", "good", "easy"}
         for item in ratings:
             if isinstance(item, dict) and "id" in item and "rating" in item:
                 rating = item["rating"].lower().strip()
-                if rating in _RATING_MULTIPLIERS:
+                if rating in valid_ratings:
                     result[item["id"]] = rating
 
         return result
@@ -190,115 +198,153 @@ Rate each fact (respond with JSON array only):"""
         return {}
 
 
-def _rate_fact(fact_content: str, fact_category: str | None, conversation_context: str) -> str | None:
-    """Ask LLM to rate a retrieved memory in context.
+def _update_fsrs_params_fsrs(fact_id: int, rating: str, row: dict) -> bool:
+    """Apply FSRS parameter update using the fsrs library.
 
-    Returns: "again" | "hard" | "good" | "easy" | None
+    Uses scheduler.review_card(card, rating) to get next state.
     """
-    system_prompt = """You are a memory relevance reviewer.
-
-Given a retrieved memory and the current conversation, rate how relevant this memory was to the ongoing discussion.
-
-Categories: identity, preference, interest, personality, relationship, experience, goal, guideline
-
-Rate the memory's relevance to THIS conversation:
-
-- **again**: The memory was NOT used at all — it was noise, irrelevant, or incorrect. The assistant should NOT have relied on it.
-- **hard**: The memory was tangentially related — required significant inference to connect, and the connection was weak.
-- **good**: The memory was directly relevant and visibly influenced the conversation in a helpful way.
-- **easy**: The memory was a CORE PILLAR — essential to the conversation's flow, topic, or emotional tone. It directly shaped the response.
-
-Respond with ONLY the rating word: again, hard, good, or easy. Nothing else."""
-
-    user_prompt = f"""Memory: {fact_content}
-Category: {fact_category or 'unknown'}
-Conversation context:
-{conversation_context}
-
-Rate: again, hard, good, or easy (respond with ONLY the word)."""
-
-    try:
-        ai = _get_ai_manager()
-        response = ai._internal_llm_call(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            timeout=15,
-            max_tokens=20,
-        )
-        if not response:
-            return None
-        rating = response.strip().lower()
-        if rating in _RATING_MULTIPLIERS:
-            return rating
-        # Handle common mistakes
-        if "again" in rating or "fail" in rating:
-            return "again"
-        if "hard" in rating:
-            return "hard"
-        if "good" in rating or "relevant" in rating:
-            return "good"
-        if "easy" in rating or "core" in rating or "pillar" in rating:
-            return "easy"
-        logger.warning(f"Unrecognized rating: {rating!r}")
-        return None
-    except Exception as e:
-        logger.warning(f"LLM rating failed: {e}")
-        return None
-
-
-def _update_fsrs_params(fact_id: int, rating: str) -> bool:
-    """Apply FSRS parameter update based on rating.
-
-    Updates metadata with new stability and difficulty values.
-    
-    NOTE: FSRS only applies to episodic facts (source_table='episodic_memories').
-    Semantic facts use temporal validity instead and should NOT have FSRS updates.
-    """
-    effects = _RATING_MULTIPLIERS.get(rating)
-    if not effects:
+    scheduler = _get_scheduler()
+    if scheduler is None or Card is None or Rating is None:
         return False
 
+    meta = row.get("metadata") or {}
+
+    # Current FSRS state from metadata
+    current_stability = meta.get("stability", 1.0)
+    current_difficulty = meta.get("difficulty", 1.0)
+    last_reviewed = meta.get("last_reviewed_at")
+    current_reps = meta.get("reps", 0)
+    current_lapses = meta.get("lapses", 0)
+    current_state = meta.get("state", 2)  # 2 = review state
+
+    # Calculate days since last review
+    now = datetime.now(timezone.utc)
+    if last_reviewed:
+        try:
+            last_dt = datetime.fromisoformat(last_reviewed.replace("Z", "+00:00"))
+            days_elapsed = max((now - last_dt).total_seconds() / 86400.0, 0.0)
+        except Exception:
+            days_elapsed = 0.0
+    else:
+        days_elapsed = 0.0
+
+    # Create Card with current state
+    card = Card(
+        stability=current_stability,
+        difficulty=current_difficulty,
+        elapsed_days=days_elapsed,
+        scheduled_days=current_stability,
+        reps=current_reps,
+        lapses=current_lapses,
+        state=current_state,
+        last_review=last_reviewed,
+    )
+
+    # Map rating string to Rating enum
+    rating_map = {
+        "again": Rating.Again,
+        "hard": Rating.Hard,
+        "good": Rating.Good,
+        "easy": Rating.Easy,
+    }
+
     try:
-        row = get_fact_by_id(fact_id)
-        if not row:
-            return False
+        rating_enum = rating_map[rating]
+        # Use scheduler.review_card() to get next state
+        new_card, review_log = scheduler.review_card(card, rating_enum)
 
-        meta = row.get("metadata") or {}
-        
-        # FSRS scope check: only episodic facts get FSRS updates
-        source_table = meta.get("source_table", "")
-        fact_type = row.get("fact_type", "")
-        if source_table != "episodic_memories" and fact_type != "dynamic":
-            # Semantic/static facts don't use FSRS — skip update
-            logger.debug(f"Skipping FSRS update for non-episodic fact id={fact_id} (source={source_table})")
-            return False
-        
-        now = datetime.now()
-
-        # Current values or defaults
-        current_stability = meta.get("stability", 1.0)
-        current_difficulty = meta.get("difficulty", 1.0)
-
-        # Apply deltas
-        new_stability = max(current_stability * effects["stability_mult"], _MIN_STABILITY)
-        new_difficulty = max(
-            min(current_difficulty + effects["difficulty_delta"], _MAX_DIFFICULTY),
-            _MIN_DIFFICULTY,
-        )
-
-        meta["stability"] = new_stability
-        meta["difficulty"] = new_difficulty
+        # Extract new state from returned card
+        meta["stability"] = new_card.stability
+        meta["difficulty"] = new_card.difficulty
+        meta["state"] = new_card.state
+        meta["reps"] = new_card.reps
+        meta["lapses"] = new_card.lapses
+        meta["scheduled_days"] = new_card.scheduled_days
         meta["last_reviewed_at"] = now.isoformat()
         meta["last_rating"] = rating
-        meta["pending_review"] = False  # clear pending flag
+        meta["pending_review"] = False
 
         pg_execute(
             "UPDATE semantic_facts SET metadata=%s, last_accessed=%s WHERE id=%s",
             (Json(meta), now, fact_id),
         )
         return True
+
+    except Exception as e:
+        logger.warning(f"Scheduler.review_card() failed: {e}")
+        return False
+
+
+def _update_fsrs_params_fallback(fact_id: int, rating: str, row: dict) -> bool:
+    """Apply FSRS parameter update using multiplicative multipliers.
+
+    This is the fallback when fsrs library is not available.
+    """
+    effects = _RATING_MULTIPLIERS.get(rating)
+    if not effects:
+        return False
+
+    meta = row.get("metadata") or {}
+    now = datetime.now()
+
+    # Current values or defaults
+    current_stability = meta.get("stability", 1.0)
+    current_difficulty = meta.get("difficulty", 1.0)
+
+    # Apply deltas
+    new_stability = max(current_stability * effects["stability_mult"], _MIN_STABILITY)
+    new_difficulty = max(
+        min(current_difficulty + effects["difficulty_delta"], _MAX_DIFFICULTY),
+        _MIN_DIFFICULTY,
+    )
+
+    meta["stability"] = new_stability
+    meta["difficulty"] = new_difficulty
+    meta["last_reviewed_at"] = now.isoformat()
+    meta["last_rating"] = rating
+    meta["pending_review"] = False
+
+    pg_execute(
+        "UPDATE semantic_facts SET metadata=%s, last_accessed=%s WHERE id=%s",
+        (Json(meta), now, fact_id),
+    )
+    return True
+
+
+def _update_fsrs_params(fact_id: int, rating: str) -> bool:
+    """Apply FSRS parameter update based on rating.
+
+    Uses fsrs library if available, falls back to multipliers otherwise.
+
+    NOTE: FSRS only applies to episodic facts (source_table='episodic_memories').
+    Semantic facts use temporal validity instead and should NOT have FSRS updates.
+    """
+    try:
+        row = get_fact_by_id(fact_id)
+        if not row:
+            return False
+
+        meta = row.get("metadata") or {}
+
+        # FSRS scope check: only episodic facts get FSRS updates
+        source_table = meta.get("source_table", "")
+        fact_type = row.get("fact_type", "")
+        if source_table != "episodic_memories" and fact_type != "dynamic":
+            # Semantic/static facts don't use FSRS — just clear pending
+            meta["pending_review"] = False
+            pg_execute(
+                "UPDATE semantic_facts SET pending_review=FALSE, metadata=%s WHERE id=%s",
+                (Json(meta), fact_id),
+            )
+            logger.debug(f"Skipping FSRS update for non-episodic fact id={fact_id}")
+            return True
+
+        # Try fsrs library first, fallback to multipliers
+        if FSRS_AVAILABLE:
+            return _update_fsrs_params_fsrs(fact_id, rating, row)
+        else:
+            return _update_fsrs_params_fallback(fact_id, rating, row)
+
     except Exception as e:
         logger.error(f"FSRS update failed for id={fact_id}: {e}")
         return False
@@ -332,7 +378,7 @@ def review_memory(fact_ids: list[int], conversation_context: str, session_id: in
                 # Skip semantic facts - they use temporal validity instead
                 fact_type = row.get("fact_type", "")
                 if fact_type == "static":
-                    # Clear pending_review for semantic facts, they don't need FSRS review
+                    # Clear pending_review for semantic facts
                     meta = row.get("metadata", {}) or {}
                     meta["pending_review"] = False
                     pg_execute(
@@ -340,7 +386,7 @@ def review_memory(fact_ids: list[int], conversation_context: str, session_id: in
                         (Json(meta), fid),
                     )
                     continue
-                
+
                 facts_to_rate.append({
                     "id": fid,
                     "content": row.get("content", ""),
@@ -353,23 +399,19 @@ def review_memory(fact_ids: list[int], conversation_context: str, session_id: in
     # Process in batches
     for i in range(0, len(facts_to_rate), _REVIEW_BATCH_SIZE):
         batch = facts_to_rate[i:i + _REVIEW_BATCH_SIZE]
-        
+
         # Rate batch
         ratings = _rate_facts_batch(batch, conversation_context)
-        
+
         # Update FSRS params for each fact
         for fact in batch:
             fid = fact["id"]
             rating = ratings.get(fid)
-            
-            if rating is None:
-                # Fallback to single-fact rating if batch didn't return this one
-                rating = _rate_fact(fact["content"], fact.get("category"), conversation_context)
-            
+
             if rating is None:
                 counts["failed"] += 1
                 continue
-            
+
             if _update_fsrs_params(fid, rating):
                 counts[rating] = counts.get(rating, 0) + 1
             else:

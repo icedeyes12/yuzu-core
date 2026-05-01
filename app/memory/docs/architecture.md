@@ -69,7 +69,9 @@ All data lives in a single PostgreSQL database with the pgvector extension for v
 | `last_accessed` | TIMESTAMP | Last retrieval timestamp |
 | `invalid_at` | TIMESTAMP | Soft delete — `NULL` = active, set = invalidated |
 
-**Index:** IVFFlat on `embedding` for approximate nearest neighbor (ANN) search.
+**Index:** Primary key only. Vector indexing (HNSW/IVFFlat) intentionally omitted due to SIGILL on Termux ARM environment. Using Exact Nearest Neighbor (Sequential Scan) with perfect 100% recall. Performance is stable for current scale (< 50k rows).
+
+**Text Search:** GIN on `metadata` (jsonb_path_ops) for metadata queries. pg_trgm available for fuzzy matching.
 
 ---
 
@@ -99,6 +101,8 @@ All data lives in a single PostgreSQL database with the pgvector extension for v
   "last_reviewed_at": null
 }
 ```
+
+**Note:** `source_table` values (`semantic_memories`, `episodic_memories`, `conversation_segments`) are **logical identifiers** indicating the memory's origin type, not actual table names. All data lives in the unified `semantic_facts` table.
 
 **dynamic (episodic):**
 ```json
@@ -152,7 +156,7 @@ flowchart TD
     F --> H
     H --> I{"surprise_level ≥ 0.85?"}
     I -->|Yes| J["Flashbulb boost: stability × 1.5"]
-    I -->|No| K["Normal stability"]
+    I -->|No| K["Normal stability (24h base)"]
     J --> L["Trigger PCL pipeline"]
     K --> L
     G --> A
@@ -189,7 +193,7 @@ sequenceDiagram
 | Action | When | Behavior |
 |--------|------|----------|
 | `new` | No duplicate found | Insert with embedding + source_episodic_ids |
-| `reinforce` | Duplicate (cosine < 0.05) | Append to source_episodic_ids, bump confidence |
+| `reinforce` | Duplicate (cosine distance < 0.05) | Append to source_episodic_ids, bump confidence |
 | `update` | Same fact, new nuance | Invalidate old, insert new version |
 | `invalidate` | Contradicted | Set invalid_at=NOW() on old fact |
 
@@ -227,6 +231,8 @@ consolidate_facts(extracted, session_id)                 # CONSOLIDATE phase
 ```
 score = similarity × 0.6 + importance × 0.2 + confidence × 0.2
 ```
+
+**Note:** All values are normalized 0-1. Cosine similarity from pgvector is always in range [0, 2] and is normalized by dividing by 2. `importance` and `confidence` from metadata should be stored in range [0, 1].
 
 ### RRF Merge
 
@@ -283,6 +289,38 @@ sequenceDiagram
 
 **Episodic (dynamic) facts decay via FSRS.**
 
+### Library Integration
+
+Uses `fsrs>=6.3.1` Python library for proper FSRS state transitions (aligned with plast-mem's `fsrs` crate).
+
+```python
+from fsrs import Scheduler, Card, Rating
+
+# Create scheduler instance
+scheduler = Scheduler()
+
+# Create card with current state
+card = Card(
+    stability=current_stability,
+    difficulty=current_difficulty,
+    elapsed_days=days_since_last_review,
+    scheduled_days=current_stability,
+    reps=current_reps,
+    lapses=current_lapses,
+    state=current_state,
+)
+
+# Review the card and get next state
+rating_enum = Rating.Good  # or Again/Hard/Easy
+new_card, review_log = scheduler.review_card(card, rating_enum)
+
+# Extract new FSRS parameters
+new_stability = new_card.stability
+new_difficulty = new_card.difficulty
+```
+
+**Note:** The fsrs library uses `Scheduler.review_card(card, rating)`, NOT `fsrs.repeat()`.
+
 ### Core Variables
 
 | Variable | Applies To | Description |
@@ -292,11 +330,11 @@ sequenceDiagram
 | `difficulty` | Episodic | How hard to memorize |
 | `access_count` | Both | Times retrieved |
 
-### Decay Formula
+### Decay Formula (Retrievability)
 
 ```
-importance = importance × exp(-hours_since_last_access / stability)
-stability = 24 × (1 + access_count × 0.5)
+retrievability = exp(-hours_since_last_access / stability)
+final_score = rrf_score * (0.5 + 0.5 * retrievability)
 ```
 
 ### Memory Review (LLM-based)
@@ -326,7 +364,7 @@ After retrieval, facts are marked pending review. When `review_memory()` is call
 | `memory.py` | Background memory pipeline runner (now: memory.py) | `run_memory_pipeline()`, `batch_segment()`, `create_episode_and_pcl()`, `trigger_memory_pipeline_async()` |
 | `db_memory.py` | Unified CRUD over `semantic_facts` | `save_fact()`, `search_similar()`, `invalidate_fact()`, `increment_importance()`, `decay_facts()` |
 | `embedder.py` | Chutes API embedding client | `embed_text()`, `embed_texts()`, `EMBEDDING_DIM=1024` |
-| `extractor.py` | Semantic fact extraction + PCL wiring | `extract_semantic_facts()`, `upsert_semantic_memory()`, `create_episodic_memory()` |
+| `extractor.py` | Semantic fact storage helper | `upsert_semantic_memory()` (used by PCL), `calculate_emotional_weight()` |
 | `retrieval.py` | Hybrid scoring + RRF retrieval | `retrieve_memory()`, `retrieve_static_memories()`, `retrieve_segments()`, `format_memory()` |
 | `review.py` | FSRS decay for episodic memories | `run_decay()`, `reinforce_memory()` |
 | `memory_review.py` | LLM-based memory review | `review_memory()`, `mark_retrieved_as_pending_review()` |
@@ -341,14 +379,15 @@ After retrieval, facts are marked pending review. When `review_memory()` is call
 ```
 app/memory/
 ├── __init__.py
-├── memory.py          # Background memory pipeline (same file)
-├── db_memory.py         # Unified memory CRUD (PostgreSQL + pgvector)
-├── embedder.py           # Chutes API embedding client (1024-dim)
-├── extractor.py           # Semantic fact extraction + PCL wiring
+├── memory.py              # Background memory pipeline
+├── db_memory.py           # Unified memory CRUD (PostgreSQL + pgvector)
+├── db_memory_queries.py   # SQL constants + query builders
+├── embedder.py            # Chutes API embedding client (1024-dim)
+├── extractor.py           # Semantic fact storage (upsert_semantic_memory)
 ├── retrieval.py           # RRF + hybrid scoring retrieval
-├── review.py             # FSRS-style decay (episodic only)
-├── memory_review.py      # LLM-based memory review + FSRS updates
-├── pcl.py                # Predict-Calibrate Learning pipeline
+├── review.py              # FSRS-style decay (episodic only)
+├── memory_review.py       # LLM-based memory review + FSRS updates
+├── pcl.py                 # Predict-Calibrate Learning pipeline
 └── docs/
     └── architecture.md    # This file (single source of truth)
 ```

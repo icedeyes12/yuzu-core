@@ -1,5 +1,7 @@
+from __future__ import annotations
 # FILE: app/tools/image_generate.py
 # DESCRIPTION: Image generation tool using diffusion models
+
 
 import logging
 import os

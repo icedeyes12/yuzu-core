@@ -1,50 +1,56 @@
 # ==========================================================
 # [FILE]        : requirements.txt
-# [VERSION]     : 2.0.0
-# [DATE]        : 2026-03-29
-# [PROJECT]     : HKKM - Yuzu Companion
-# [DESCRIPTION] : Project dependencies and requirements
-# [AUTHOR]      : Project Lead: Bani Baskara
-# [TEAM]        : Deepseek, GPT, Qwen, Gemini, Aihara
-# [REPOSITORY]  : https://guthib.com/icedeyes12
+# [VERSION]     : 2.2.0
+# [DATE]        : 2026-04-25
+# [PROJECT]     : Yuzu Companion
+# [DESCRIPTION] : Project dependencies - based on actual imports
+# [PYTHON]      : 3.12+ (3.13 compatible)
+# [AUTHOR]      : Bani Baskara
+# [REPOSITORY]  : https://github.com/icedeyes12/yuzu-companion
 # [LICENSE]     : MIT
 # ==========================================================
 
-# CORE DEPENDENCIES
+# Core Dependencies
 # -----------------
-# Python >= 3.9
-# pip (latest version recommended)
+# PostgreSQL adapter (psycopg v3) with pgvector support
+psycopg[binary,pool]>=3.1
+# ChaCha20-Poly1305 encryption for API keys
+pycryptodome>=3.20.0
+# Environment variable loading (.env)
+python-dotenv>=1.0.0
+# Free Spaced Repetition Scheduler for memory decay
+fsrs>=6.3.1
 
-# DATABASE & ENCRYPTION
-# ---------------------
-SQLAlchemy>=2.0.0           # Database ORM and session management
-pycryptodome>=3.20.0        # ChaCha20-Poly1305 encryption for API keys
-psycopg[binary,pool] >= 3.1  # PostgreSQL async adapter (psycopg v3)
-
-# WEB INTERFACE (FastAPI)
+# Web Framework (FastAPI)
 # -----------------------
-fastapi>=0.115.0            # Modern, fast web framework for building APIs
-uvicorn[standard]>=0.30.0  # ASGI server for running FastAPI applications
-pydantic>=2.8.0             # Data validation and settings management using Python type hints
-python-multipart>=0.0.9     # Multi-part form parser for file uploads
-jinja2>=3.1.0               # Template engine (still used by FastAPI for HTML templates)
+# Modern async web framework
+fastapi>=0.115.0
+# ASGI server for running FastAPI applications
+uvicorn[standard]>=0.30.0
+# Data validation and settings management
+pydantic>=2.8.0
+# Multi-part form parser for file uploads
+python-multipart>=0.0.9
+# Template engine for HTML rendering
+Jinja2>=3.1.0
 
-# TERMINAL UI & INTERACTION
-# -------------------------
-rich>=13.0.0                # Beautiful terminal formatting (panels, tables, markdown)
-prompt-toolkit>=3.0.0       # Advanced terminal input with history and completion
+# Terminal UI
+# -----------
+# Terminal formatting (panels, tables, markdown)
+rich>=13.0.0
+# Advanced terminal input with history and completion
+prompt-toolkit>=3.0.0
 
-# NETWORKING & API
-# ----------------
-requests>=2.33.0            # HTTP requests for AI providers and image downloads
-beautifulsoup4>=4.12.0      # HTML parsing for DuckDuckGo web search
+# Networking
+# ----------
+# HTTP requests for AI providers and image downloads
+requests>=2.33.0
 
-# IMAGE PROCESSING (Optional)
-# ---------------------------
-# Pillow>=10.0.0              # Image handling for future enhancements
-
-# DEVELOPMENT TOOLS (Optional)
+# Development Tools (optional)
 # ----------------------------
-black>=23.0.0               # Code formatting
-pytest>=7.0.0               # Testing framework
-mypy>=1.0.0                 # Type checking
+# Code formatting
+black>=23.0.0
+# Testing framework
+pytest>=7.0.0
+# Type checking
+mypy>=1.0.0

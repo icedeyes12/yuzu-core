@@ -2,6 +2,56 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.1] - 2026-04-25
+
+### Changed — Python 3.13 Compatibility Upgrade
+
+This release modernizes the codebase for Python 3.13 while maintaining backward compatibility with Python 3.12+.
+
+#### Type Annotation Modernization
+
+- **PEP 585/604 Syntax**: All legacy `typing` imports converted to modern syntax
+  - `List[X]` → `list[X]`
+  - `Dict[K, V]` → `dict[K, V]`
+  - `Optional[X]` → `X | None`
+  - `Union[A, B]` → `A | B`
+
+- **`from __future__ import annotations`**: Added to 34 Python files
+  - Enables lazy evaluation of annotations
+  - Allows forward references without quotes
+  - Required for PEP 585 syntax in class bodies
+
+#### Files Modified
+
+| Category | Files |
+|----------|-------|
+| Core | `app/app.py`, `app/providers.py`, `app/database.py`, `web.py`, `main.py` |
+| Tools | All `app/tools/*.py` (7 files) |
+| Memory | All `app/memory/*.py` (10 files) |
+| API | `app/api/routes.py`, `app/api/__init__.py` |
+| Models | `app/db_pg_models.py`, `app/db_pg_models_async.py`, `app/db_queries.py` |
+| Other | `app/encryption.py`, `app/key_manager.py`, `app/visual_context.py`, `app/__init__.py` |
+
+#### Documentation
+
+- **`requirements.txt`**: Added `[PYTHON]: 3.12+ (3.13 compatible)` header
+- **`AGENTS.md`**: Updated Tech Stack to show `Python 3.12+ (3.13 compatible)`
+- **`README.md`**: Added `**Python 3.12+ (3.13 compatible)**` under project title
+
+#### Dependencies
+
+- No new dependencies added
+- All existing dependencies verified compatible with Python 3.13:
+  - `psycopg[binary,pool]>=3.1` — pre-compiled wheels available
+  - `pydantic>=2.8.0` — pydantic-core has pre-compiled `aarch64` wheels
+  - `fsrs>=6.3.1` — pure Python, no Rust dependency
+
+#### Verification
+
+- All Python files pass `python3 -m py_compile` syntax validation
+- Ruff linting passes with no errors
+- No legacy `typing.List`, `typing.Dict`, `typing.Optional`, `typing.Union` patterns remain
+
 ## [3.0.0] - 2026-04-19
 
 ### Changed — Complete Codebase Refactor (Stages 1-6)
@@ -41,6 +91,32 @@ This is a **major refactor** focused on simplicity, clarity, and maintainability
 
 #### Stage 6: Scripts Cleanup
 - Scripts already clean (CLI utilities, `print()` is appropriate)
+
+#### Stage 7: API Routing Decomposition (NEW)
+
+**Added:**
+- `app/api/` package with extracted API routes from `web.py`
+- `app/api/__init__.py` — Package init
+- `app/api/routes.py` — All `/api/*` endpoints
+- `GET /api/config` — Frontend configuration endpoint (provider/model info, vision capabilities)
+- `fsrs>=6.3.1` dependency for proper FSRS state transitions
+
+**Changed:**
+- `web.py` — Reduced to minimal entry point (~50 lines), imports router from `app/api/`
+- `requirements.txt` — Added `fsrs>=6.3.1` for FSRS library integration
+- Memory pipeline trigger — Now uses actual message count instead of session_memory dict
+- PCL (Predict-Calibrate Learning) — Enhanced with segment context and temporal contradiction guidance
+- Documentation — Updated `AGENTS.md`, `app/README.md`, `app/memory/README.md`, `app/memory/docs/architecture.md` for FSRS library integration
+- **Chat responses** — Removed `max_tokens=4096` limit; models now use their natural response length
+
+**Fixed:**
+- Memory pipeline now triggers correctly (was using wrong field for message count)
+- FSRS integration uses proper `Scheduler` class and `Card` objects
+- Documentation clarified: distance threshold is `<= 0.05` (not `< 0.05`)
+- Termux ARM limitation documented — IVFFlat/HNSW indexes require SIMD instructions not available on ARM
+
+**Security:**
+- Dependencies cleaned — Removed unused packages (beautifulsoup4, numpy, scipy, SQLAlchemy)
 
 ### Security
 

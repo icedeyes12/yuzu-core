@@ -1,6 +1,8 @@
+from __future__ import annotations
 # FILE: app/tools/schemas.py
 # DESCRIPTION: Standard tool definition schema for function calling.
 # All tools MUST expose a TOOL_DEFINITION and implement execute(arguments, session_id=None).
+
 
 from dataclasses import dataclass, field
 from typing import Any
@@ -75,6 +77,7 @@ class ToolDefinition:
 #
 # markdown is the rendered output stored in DB and shown in UI.
 # --------------------------------------------------------------------
+
 
 
 def build_tool_contract(

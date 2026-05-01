@@ -1,3 +1,4 @@
+from __future__ import annotations
 # FILE: app/tools/registry.py
 # DESCRIPTION: Central tool registry — single source of truth for dispatch.
 #
@@ -13,6 +14,7 @@
 #   2. Import it in _collect_definitions() below (at the bottom of this file)
 #   3. The tool must have execute(arguments, session_id=None) -> dict
 
+
 from typing import Optional
 import logging
 
@@ -21,9 +23,11 @@ logger = logging.getLogger(__name__)
 # Lazy-load tool modules on first dispatch
 _TOOL_MODULES: dict = {}
 
+
 # Lazily populated on first get_tool_definitions() call
 _TOOL_DEFINITIONS: dict = {}
 _DEFINITIONS_INITIALIZED = False
+
 
 
 def _load_tool_module(tool_name: str):
@@ -92,6 +96,7 @@ def _collect_definitions():
 # Public API
 # --------------------------------------------------------------------
 
+
 def get_tool_definitions() -> list:
     """Return all tool definitions for LLM tools[] array."""
     _collect_definitions()
@@ -134,9 +139,11 @@ def is_terminal_tool(tool_name: str) -> bool:
 
 
 
+
 # --------------------------------------------------------------------
 # Main dispatch
 # --------------------------------------------------------------------
+
 
 def execute_tool(tool_name: str, arguments: dict, session_id: Optional[str] = None) -> dict:
     """Dispatch a tool call and return a structured result dict.

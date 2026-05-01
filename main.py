@@ -1,5 +1,7 @@
+from __future__ import annotations
 # FILE: main.py
 # DESCRIPTION: CLI entrypoint for the bot
+
 
 # [DESCRIPTION] : Complete CLI with all menu methods implemented
 # [AUTHOR]      : Project Lead: Bani Baskara
@@ -7,6 +9,7 @@
 # [REPOSITORY]  : https://guthib.com/icedeyes12
 # [LICENSE]     : MIT
 # ==========================================================
+
 
 from app.app import handle_user_message, handle_user_message_streaming, start_session, end_session_cleanup, summarize_memory, summarize_global_player_profile
 from app.app import get_available_providers, get_all_models, set_preferred_provider, get_vision_capabilities

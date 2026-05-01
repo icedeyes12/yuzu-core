@@ -1,5 +1,7 @@
 # [PROJECT: HKKM - Yuzu Companion]
 
+**Python 3.12+ (3.13 compatible)**
+
 ---
 
 ## What Even Is This?

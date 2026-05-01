@@ -1,15 +1,38 @@
 // FILE: static/js/config.js
 // DESCRIPTION: Configuration page functionality
+
+// Global config state (populated from /api/config)
+let appConfig = null;
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Config page loaded - initializing...');
-    loadProfileData();
-    loadAPIKeys();
-    loadGlobalKnowledge();
-    loadProviderSettings();
-    loadImageModel();
-    setupEventListeners();
-    initializeConfigAnimations();
+    loadAppConfig().then(() => {
+        loadProfileData();
+        loadAPIKeys();
+        loadGlobalKnowledge();
+        loadProviderSettings();
+        loadImageModel();
+        setupEventListeners();
+        initializeConfigAnimations();
+    });
 });
+
+// Load application configuration from backend (SSOT)
+async function loadAppConfig() {
+    try {
+        const response = await fetch('/api/config');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            appConfig = data;
+            console.log('App config loaded:', appConfig);
+        } else {
+            console.error('Failed to load app config:', data);
+        }
+    } catch (error) {
+        console.error('Error loading app config:', error);
+    }
+}
 
 // Load profile data with proper global profile display
 async function loadProfileData() {
@@ -359,88 +382,75 @@ async function loadImageModel() {
 
 // Load vision model on page load
 async function loadVisionModel() {
-    try {
-        const response = await fetch('/api/get_profile');
-        const data = await response.json();
-        
-        // Vision model preferences stored in profile
-        const visionPrefs = data.vision_model_preferences || {};
-        const currentProvider = visionPrefs.provider || '';
-        const currentModel = visionPrefs.model || '';
-        
-        // Populate provider dropdown
-        const visionProviderSelect = document.getElementById('vision-provider');
-        visionProviderSelect.innerHTML = '';
-        
-        const visionProviders = [
-            { value: 'chutes', label: 'Chutes' },
-            { value: 'openrouter', label: 'OpenRouter' }
-        ];
-        
-        visionProviders.forEach(p => {
-            const option = document.createElement('option');
-            option.value = p.value;
-            option.textContent = p.label;
-            if (p.value === currentProvider) {
-                option.selected = true;
-            }
-            visionProviderSelect.appendChild(option);
-        });
-        
-        // Populate model dropdown based on provider
-        updateVisionModelDropdown(currentProvider, currentModel);
-        
-        // Update current display
-        if (currentProvider && currentModel) {
-            document.getElementById('current-vision-model').textContent = 
-                `${currentProvider}/${currentModel}`;
-        } else {
-            document.getElementById('current-vision-model').textContent = 
-                'Default (Chutes/Qwen3.5-TEE)';
-        }
-        
-        console.log('Vision model loaded:', currentProvider, currentModel);
-    } catch (error) {
-        console.error('Error loading vision model:', error);
+    // Wait for appConfig if not yet loaded
+    if (!appConfig) {
+        await loadAppConfig();
     }
+    
+    // Use appConfig as SSOT for vision configuration
+    const visionConfig = appConfig?.vision || {};
+    const currentProvider = visionConfig.current_provider || '';
+    const currentModel = visionConfig.current_model || '';
+    
+    // Populate provider dropdown from config
+    const visionProviderSelect = document.getElementById('vision-provider');
+    visionProviderSelect.innerHTML = '';
+    
+    const visionProviders = Object.keys(visionConfig.models_by_provider || {});
+    
+    if (visionProviders.length === 0) {
+        visionProviders.push('chutes', 'openrouter');
+    }
+    
+    visionProviders.forEach(provider => {
+        const option = document.createElement('option');
+        option.value = provider;
+        option.textContent = provider.charAt(0).toUpperCase() + provider.slice(1);
+        if (provider === currentProvider) {
+            option.selected = true;
+        }
+        visionProviderSelect.appendChild(option);
+    });
+    
+    // Populate model dropdown based on provider
+    updateVisionModelDropdown(currentProvider, currentModel);
+    
+    // Update current display
+    if (currentProvider && currentModel) {
+        document.getElementById('current-vision-model').textContent = 
+            `${currentProvider}/${currentModel}`;
+    }
+    
+    console.log('Vision model loaded from config');
 }
 
 // Update vision model dropdown based on selected provider
 function updateVisionModelDropdown(provider, currentModel = '') {
-    const modelSelect = document.getElementById('vision-model');
-    modelSelect.innerHTML = '';
+    const visionModelSelect = document.getElementById('vision-model');
+    visionModelSelect.innerHTML = '';
     
-    // Vision models by provider (hardcoded - matches multimodal.py)
-    const visionModelsByProvider = {
-        'chutes': [
-            { value: 'Qwen/Qwen3.5-397B-A17B-TEE', label: 'Qwen 3.5 TEE (Native Multimodal)' },
-            { value: 'Qwen/Qwen3-VL-235B-A22B-Instruct', label: 'Qwen 3 VL 235B' },
-            { value: 'moonshotai/Kimi-K2.5-TEE', label: 'Kimi K2.5 TEE' }
-        ],
-        'openrouter': [
-            { value: 'moonshotai/kimi-k2.5', label: 'Kimi K2.5' }
-        ]
-    };
-    
-    const models = visionModelsByProvider[provider] || [];
+    // Use appConfig as SSOT for vision models
+    const models = appConfig?.vision?.models_by_provider?.[provider] || [];
     
     if (models.length === 0) {
         const option = document.createElement('option');
         option.value = '';
         option.textContent = 'No vision models available';
-        modelSelect.appendChild(option);
+        visionModelSelect.appendChild(option);
         return;
     }
     
-    models.forEach(m => {
+    models.forEach(model => {
         const option = document.createElement('option');
-        option.value = m.value;
-        option.textContent = m.label;
-        if (m.value === currentModel) {
+        option.value = model;
+        option.textContent = model;
+        if (model === currentModel) {
             option.selected = true;
         }
-        modelSelect.appendChild(option);
+        visionModelSelect.appendChild(option);
     });
+    
+    console.log(`Updated vision model dropdown for ${provider}: ${models.length} models`);
 }
 
 async function testVisionModel() {
@@ -521,6 +531,7 @@ async function saveVisionModel() {
         console.error('Error saving vision model:', error);
         showError('Error saving vision model');
     } finally {
+        // Restore button state
         saveBtn.textContent = originalText;
         saveBtn.disabled = false;
     }
@@ -551,6 +562,7 @@ async function saveImageModel() {
         console.error('Error saving image model:', error);
         showError('Error saving image model');
     } finally {
+        // Restore button state
         btn.textContent = originalText;
         btn.disabled = false;
     }

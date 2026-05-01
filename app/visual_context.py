@@ -1,12 +1,15 @@
+from __future__ import annotations
 # FILE: app/visual_context.py
 # DESCRIPTION: Persistent visual context buffer for follow-up image references.
 #              Stores the last processed image as base64 for N follow-up turns
 #              so the model can compare or reference it without a new tool call.
 
+
 import threading
 import re
 
 # ── Visual Context Buffer ─────────────────────────────────────────────────────
+
 
 _visual_context_buffer: dict = {}  # session_id -> {"base64": str, "mime": str, "turns_left": int}
 _visual_context_lock = threading.Lock()
@@ -40,6 +43,7 @@ def consume_visual_context(session_id: int) -> tuple[str | None, str | None]:
 
 
 # ── Visual Reference Detection ───────────────────────────────────────────────
+
 
 _VISUAL_REF_PATTERNS = re.compile(
     r'(?:yang tadi|yang sebelumnya|tadi|bedanya|beda apa|compare|'

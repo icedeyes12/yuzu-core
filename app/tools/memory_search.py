@@ -1,5 +1,7 @@
+from __future__ import annotations
 # FILE: app/tools/memory_search.py
 # DESCRIPTION: Query structured memory - semantic, episodic, and temporal
+
 
 import logging
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result

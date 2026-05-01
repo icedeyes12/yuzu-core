@@ -1,6 +1,8 @@
+from __future__ import annotations
 # FILE: app/memory/embedder.py
 # DESCRIPTION: Chutes API embedding client for memory vectors
 #              PostgreSQL handles list[float] natively - no blob conversion needed
+
 
 import threading
 from app.db_pg_models import get_api_key
@@ -63,4 +65,5 @@ def embed_text(text, **kwargs):
 
 
 # ── Vector normalization (for pgvector) ────────────────────────────────────────
+
 

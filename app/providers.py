@@ -1,32 +1,29 @@
 # FILE: app/providers.py
 # DESCRIPTION: AI provider configuration and client management
 
-# [AUTHOR]      : Project Lead: Bani Baskara
-# [TEAM]        : Deepseek, GPT, Qwen, Gemini
-# [REPOSITORY]  : https://guthib.com/icedeyes12
-# [LICENSE]     : MIT
-# ==========================================================
+from __future__ import annotations
 
 import requests
 import json
 import time
 import logging
-from typing import List, Dict, Optional, Generator
+from typing import Generator
+
 from app.database import Database
 from app.tools import multimodal_tools
 
 logger = logging.getLogger(__name__)
 
 class AIProvider:
-    def __init__(self, name: str, config: Dict = None):
+    def __init__(self, name: str, config: dict | None = None):
         self.name = name
         self.config = config or {}
         self.is_available = True
     
-    def get_models(self) -> List[str]:
+    def get_models(self) -> list[str]:
         raise NotImplementedError
     
-    def send_message(self, messages: List[Dict], model: str, **kwargs) -> Optional[str]:
+    def send_message(self, messages: list[dict], model: str, **kwargs) -> str | None:
         """Send a message. Supports tools=[] kwarg for function calling.
         
         Returns:
@@ -35,10 +32,10 @@ class AIProvider:
         """
         raise NotImplementedError
     
-    def send_message_streaming(self, messages: List[Dict], model: str, **kwargs) -> Generator[str, None, None]:
+    def send_message_streaming(self, messages: list[dict], model: str, **kwargs) -> Generator[str, None, None]:
         raise NotImplementedError
     
-    def parse_tool_calls(self, raw_response) -> List[Dict]:
+    def parse_tool_calls(self, raw_response) -> list[dict]:
         """Parse tool_calls from a provider-specific response object.
 
         Returns list of {"name": str, "arguments": dict, "id": str} or empty list.
@@ -56,17 +53,17 @@ class AIProvider:
     def supports_vision(self, model: str) -> bool:
         return multimodal_tools.is_vision_model(model, self.name)
     
-    def format_vision_message(self, user_message: str) -> List[Dict]:
+    def format_vision_message(self, user_message: str) -> list[dict]:
         return multimodal_tools.format_vision_message(user_message, self.name)
     
-    def _get_last_user_message(self, messages: List[Dict]) -> Optional[str]:
+    def _get_last_user_message(self, messages: list[dict]) -> str | None:
         """Get the last user message from messages list"""
         for msg in reversed(messages):
             if msg['role'] == 'user':
                 return msg['content'] if isinstance(msg['content'], str) else None
         return None
     
-    def _replace_last_user_message(self, messages: List[Dict], old_message: str, new_messages: List[Dict]) -> List[Dict]:
+    def _replace_last_user_message(self, messages: list[dict], old_message: str, new_messages: list[dict]) -> list[dict]:
         """Replace the last user message with new vision-formatted messages"""
         new_message_list = []
         replaced = False
@@ -81,7 +78,7 @@ class AIProvider:
         return new_message_list
 
 class OllamaProvider(AIProvider):
-    def __init__(self, config: Dict = None):
+    def __init__(self, config: dict | None = None):
         super().__init__("ollama", config)
         self.base_url = self.config.get('base_url', "http://127.0.0.1:11434")
         self.available_models = [
@@ -97,10 +94,10 @@ class OllamaProvider(AIProvider):
             "deepseek-v3.1:671b-cloud"
         ]
     
-    def get_models(self) -> List[str]:
+    def get_models(self) -> list[str]:
         return self.available_models
     
-    def send_message(self, messages: List[Dict], model: str, **kwargs) -> Optional[str]:
+    def send_message(self, messages: list[dict], model: str, **kwargs) -> str | None:
         if model not in self.available_models:
             return None
             
@@ -139,7 +136,7 @@ class OllamaProvider(AIProvider):
         except Exception:
             return None
     
-    def send_message_streaming(self, messages: List[Dict], model: str, **kwargs) -> Generator[str, None, None]:
+    def send_message_streaming(self, messages: list[dict], model: str, **kwargs) -> Generator[str, None, None]:
         if model not in self.available_models:
             yield ""
             return
@@ -187,7 +184,7 @@ class OllamaProvider(AIProvider):
             yield f"Error: {str(e)}"
 
 class CerebrasProvider(AIProvider):
-    def __init__(self, config: Dict = None):
+    def __init__(self, config: dict | None = None):
         super().__init__("cerebras", config)
         self.base_url = "https://api.cerebras.ai/v1/chat/completions"
         self.api_key = self._load_api_key()
@@ -210,10 +207,10 @@ class CerebrasProvider(AIProvider):
         except Exception:
             return None
 
-    def get_models(self) -> List[str]:
+    def get_models(self) -> list[str]:
         return self.available_models
 
-    def send_message(self, messages: List[Dict], model: str, **kwargs) -> Optional[str]:
+    def send_message(self, messages: list[dict], model: str, **kwargs) -> str | None:
         if not self.api_key or model not in self.available_models:
             return None
 
@@ -222,7 +219,7 @@ class CerebrasProvider(AIProvider):
             messages = self._normalize_messages(messages)
 
             temperature = kwargs.get('temperature', 0.69)
-            max_tokens = kwargs.get('max_tokens', 4096)
+            max_tokens = kwargs.get('max_tokens')
             top_p = kwargs.get('top_p', 0.7)
             top_k = kwargs.get('top_k', 40)
             typical_p = kwargs.get('typical_p', 0.8)
@@ -246,7 +243,7 @@ class CerebrasProvider(AIProvider):
             # Debug: Log summary (not full payload)
             # Count only new messages (not historical context from DB)
             sum(1 for m in messages if m.get('role') == 'user' and m == messages[-1])
-            logger.debug(f"[Cerebras] {model} | new_msg=1 | max_tokens={max_tokens}")
+            logger.debug(f"[Cerebras] {model} | new_msg=1 | max_tokens={max_tokens or 'unlimited'}")
 
             response = requests.post(
                 self.base_url,
@@ -270,7 +267,7 @@ class CerebrasProvider(AIProvider):
         except Exception:
             return None
     
-    def send_message_streaming(self, messages: List[Dict], model: str, **kwargs) -> Generator[str, None, None]:
+    def send_message_streaming(self, messages: list[dict], model: str, **kwargs) -> Generator[str, None, None]:
         if not self.api_key or model not in self.available_models:
             yield ""
             return
@@ -280,7 +277,7 @@ class CerebrasProvider(AIProvider):
             messages = self._normalize_messages(messages)
 
             temperature = kwargs.get('temperature', 0.69)
-            max_tokens = kwargs.get('max_tokens', 4096)
+            max_tokens = kwargs.get('max_tokens')
             top_p = kwargs.get('top_p', 0.7)
             top_k = kwargs.get('top_k', 40)
             typical_p = kwargs.get('typical_p', 0.8)
@@ -328,7 +325,7 @@ class CerebrasProvider(AIProvider):
             yield f"Error: {str(e)}"
 
 class OpenRouterProvider(AIProvider):
-    def __init__(self, config: Dict = None):
+    def __init__(self, config: dict | None = None):
         super().__init__("openrouter", config)
         self.base_url = "https://openrouter.ai/api/v1/chat/completions"
         self.api_key = self._load_api_key()
@@ -377,7 +374,7 @@ class OpenRouterProvider(AIProvider):
         except Exception:
             return None
 
-    def _normalize_messages(self, messages: List[Dict]) -> List[Dict]:
+    def _normalize_messages(self, messages: list[dict]) -> list[dict]:
         """Normalize messages: convert custom tool roles to standard 'assistant' role."""
         if not messages:
             return messages
@@ -400,10 +397,10 @@ class OpenRouterProvider(AIProvider):
 
         return normalized
 
-    def get_models(self) -> List[str]:
+    def get_models(self) -> list[str]:
         return self.available_models
 
-    def send_message(self, messages: List[Dict], model: str, **kwargs) -> Optional[str]:
+    def send_message(self, messages: list[dict], model: str, **kwargs) -> str | None:
         if not self.api_key or model not in self.available_models:
             return None
 
@@ -418,7 +415,7 @@ class OpenRouterProvider(AIProvider):
                     messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
             
             temperature = kwargs.get('temperature', 0.73)
-            max_tokens = kwargs.get('max_tokens', 4096)
+            max_tokens = kwargs.get('max_tokens')
             top_p = kwargs.get('top_p', 0.9)
             top_k = kwargs.get('top_k', 40)
             typical_p = kwargs.get('typical_p', 0.8)
@@ -451,7 +448,7 @@ class OpenRouterProvider(AIProvider):
                 payload["tools"] = tools
 
             # Debug: Log summary (not full payload)
-            logger.debug(f"[OpenRouter] {model} | max_tokens={max_tokens}")
+            logger.debug(f"[OpenRouter] {model} | max_tokens={max_tokens or 'unlimited'}")
 
             response = requests.post(
                 self.base_url,
@@ -482,7 +479,7 @@ class OpenRouterProvider(AIProvider):
         except Exception:
             return None
     
-    def send_message_streaming(self, messages: List[Dict], model: str, **kwargs) -> Generator[str, None, None]:
+    def send_message_streaming(self, messages: list[dict], model: str, **kwargs) -> Generator[str, None, None]:
         if not self.api_key or model not in self.available_models:
             yield ""
             return
@@ -495,7 +492,7 @@ class OpenRouterProvider(AIProvider):
                     messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
             
             temperature = kwargs.get('temperature', 0.73)
-            max_tokens = kwargs.get('max_tokens', 4096)
+            max_tokens = kwargs.get('max_tokens')
             top_p = kwargs.get('top_p', 0.9)
             top_k = kwargs.get('top_k', 40)
             typical_p = kwargs.get('typical_p', 0.8)
@@ -551,7 +548,7 @@ class OpenRouterProvider(AIProvider):
         except Exception as e:
             yield f"Error: {str(e)}"
 
-    def parse_tool_calls(self, raw_response) -> List[Dict]:
+    def parse_tool_calls(self, raw_response) -> list[dict]:
         """Parse tool_calls from OpenRouter API response.
         
         Returns list of {"name": str, "arguments": dict, "id": str}.
@@ -574,7 +571,7 @@ class OpenRouterProvider(AIProvider):
             return []
 
 class ChutesProvider(AIProvider):
-    def __init__(self, config: Dict = None):
+    def __init__(self, config: dict | None = None):
         super().__init__("chutes", config)
         self.base_url = "https://llm.chutes.ai/v1/chat/completions"
         self.api_key = self._load_api_key()
@@ -602,7 +599,7 @@ class ChutesProvider(AIProvider):
             "deepseek-ai/DeepSeek-R1"
         ]
     
-    def _normalize_messages_for_chutes(self, messages: List[Dict]) -> List[Dict]:
+    def _normalize_messages_for_chutes(self, messages: list[dict]) -> list[dict]:
         """Normalize messages for Chutes API: ensure single system message at the beginning
         and convert custom tool roles to standard 'assistant' role."""
         if not messages:
@@ -646,10 +643,10 @@ class ChutesProvider(AIProvider):
         except Exception:
             return None
     
-    def get_models(self) -> List[str]:
+    def get_models(self) -> list[str]:
         return self.available_models
     
-    def send_message(self, messages: List[Dict], model: str, **kwargs) -> Optional[str]:
+    def send_message(self, messages: list[dict], model: str, **kwargs) -> str | None:
         """Send a message.
         
         log_prefix: defaults to "[CHAT]" for user-facing calls.
@@ -721,7 +718,7 @@ class ChutesProvider(AIProvider):
         logger.debug(f"{log_prefix} All models exhausted, last error: {last_error}")
         return None
 
-    def _chutes_raw(self, model: str, messages: List[Dict], kwargs) -> tuple:
+    def _chutes_raw(self, model: str, messages: list[dict], kwargs) -> tuple:
         """Single Chutes API call. Returns (status_code, content_or_None, error_detail)."""
         messages = self._normalize_messages_for_chutes(list(messages))
 
@@ -737,7 +734,7 @@ class ChutesProvider(AIProvider):
                     messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
 
         temperature = kwargs.get('temperature', 0.73)
-        max_tokens = kwargs.get('max_tokens', 4096)
+        max_tokens = kwargs.get('max_tokens')
         top_p = kwargs.get('top_p', 0.9)
         top_k = kwargs.get('top_k', 45)
         stream = kwargs.get('stream', False)
@@ -763,7 +760,7 @@ class ChutesProvider(AIProvider):
         #     payload["tools"] = tools
 
         log_prefix = kwargs.pop('log_prefix', '[CHAT]')
-        logger.debug(f"{log_prefix} {model} | max_tokens={max_tokens}")
+        logger.debug(f"{log_prefix} {model} | max_tokens={max_tokens or 'unlimited'}")
 
         try:
             response = requests.post(
@@ -779,7 +776,7 @@ class ChutesProvider(AIProvider):
         except Exception as e:
             return (0, None, str(e))
     
-    def send_message_streaming(self, messages: List[Dict], model: str, **kwargs) -> Generator[str, None, None]:
+    def send_message_streaming(self, messages: list[dict], model: str, **kwargs) -> Generator[str, None, None]:
         if not self.api_key or model not in self.available_models:
             yield ""
             return
@@ -795,7 +792,7 @@ class ChutesProvider(AIProvider):
                     messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
             
             temperature = kwargs.get('temperature', 0.73)
-            max_tokens = kwargs.get('max_tokens', 4096)
+            max_tokens = kwargs.get('max_tokens')
             top_p = kwargs.get('top_p', 0.9)
             top_k = kwargs.get('top_k', 45)
             typical_p = kwargs.get('typical_p', 0.85)
@@ -868,21 +865,21 @@ class AIProviderManager:
         if chutes.is_available:
             self.providers["chutes"] = chutes
     
-    def get_available_providers(self) -> List[str]:
+    def get_available_providers(self) -> list[str]:
         return list(self.providers.keys())
     
-    def get_provider_models(self, provider_name: str) -> List[str]:
+    def get_provider_models(self, provider_name: str) -> list[str]:
         if provider_name in self.providers:
             return self.providers[provider_name].get_models()
         return []
     
-    def get_all_models(self) -> Dict[str, List[str]]:
+    def get_all_models(self) -> dict[str, list[str]]:
         all_models = {}
         for provider_name, provider in self.providers.items():
             all_models[provider_name] = provider.get_models()
         return all_models
     
-    def send_message(self, provider_name: str, model: str, messages: List[Dict], **kwargs) -> Optional[str]:
+    def send_message(self, provider_name: str, model: str, messages: list[dict], **kwargs) -> str | None:
         if provider_name not in self.providers:
             return None
         
@@ -895,7 +892,7 @@ class AIProviderManager:
         logger.warning(f"[ProviderManager] {provider_name} failed after {response_time:.1f}s")
         return None
     
-    def send_message_streaming(self, provider_name: str, model: str, messages: List[Dict], **kwargs) -> Generator[str, None, None]:
+    def send_message_streaming(self, provider_name: str, model: str, messages: list[dict], **kwargs) -> Generator[str, None, None]:
         if provider_name not in self.providers:
             yield ""
             return
@@ -919,7 +916,7 @@ class AIProviderManager:
         "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE",
     ]
 
-    def _best_model(self, provider: str) -> Optional[str]:
+    def _best_model(self, provider: str) -> str | None:
         """Pick the best available model for internal LLM tasks."""
         if provider not in self.providers:
             return None
@@ -933,7 +930,7 @@ class AIProviderManager:
                 return preferred
         return models[0] if models else None
 
-    def _internal_llm_call(self, messages: List[Dict], **kwargs) -> Optional[str]:
+    def _internal_llm_call(self, messages: list[dict], **kwargs) -> str | None:
         """Dedicated internal LLM call for memory extractor, summarizer, etc.
         
         Uses Chutes only, with ordered model preference:
@@ -951,7 +948,7 @@ class AIProviderManager:
         MAIN_MODEL = "Qwen/Qwen3-Next-80B-A3B-Instruct"
         FALLBACK_MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE"
         
-        def _is_connection_error(error: Optional[str]) -> bool:
+        def _is_connection_error(error: str | None) -> bool:
             """Check if error is a connection/network issue (retryable)."""
             if not error:
                 return True  # No error info, assume retryable
@@ -998,7 +995,7 @@ class AIProviderManager:
         logger.debug("[INT] all internal models failed")
         return None
 
-    def auto_send_message(self, messages: List[Dict], **kwargs) -> Optional[str]:
+    def auto_send_message(self, messages: list[dict], **kwargs) -> str | None:
         """Auto-select Chutes model for internal LLM calls.
         
         Same logic as _internal_llm_call:

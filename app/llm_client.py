@@ -227,7 +227,7 @@ def _send_to_provider(
     started = time.time()
     try:
         response = ai_manager.send_message(
-            provider, model, messages, timeout=180, max_tokens=4096, tools=schemas
+            provider, model, messages, timeout=180, tools=schemas
         )
     except Exception as e:  # noqa: BLE001
         log.error("send_message exception (%s/%s): %s", provider, model, e)
@@ -308,7 +308,7 @@ def _stream_from_provider(
     received = 0
     try:
         for chunk in ai_manager.send_message_streaming(
-            provider, model, messages, timeout=180, max_tokens=4096
+            provider, model, messages, timeout=180
         ):
             if chunk:
                 received += len(chunk)

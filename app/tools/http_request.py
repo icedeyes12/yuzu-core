@@ -1,5 +1,7 @@
+from __future__ import annotations
 # FILE: app/tools/http_request.py
 # DESCRIPTION: HTTP request tool for external API calls
+
 
 import logging
 import os

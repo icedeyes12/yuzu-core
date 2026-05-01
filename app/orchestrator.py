@@ -286,8 +286,7 @@ def _post_turn(
 def _trigger_memory_pipeline(session_id: int) -> None:
     try:
         from app.memory.memory import trigger_memory_pipeline_async
-        session_memory = Database.get_session_memory(session_id) or {}
-        count = session_memory.get("message_count", 0)
+        count = Database.get_session_messages_count(session_id)
         if not trigger_memory_pipeline_async(session_id, count):
             log.info("memory pipeline skipped (count=%s)", count)
     except Exception as e:  # noqa: BLE001

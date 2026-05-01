@@ -1,11 +1,14 @@
+from __future__ import annotations
 # FILE: app/key_manager.py
 # DESCRIPTION: Encryption key management utility (CLI)
+
 
 import argparse
 import sys
 import logging
 from app.encryption import encryptor
 # from app.backup import BackupManager  # backup module not present
+
 
 logger = logging.getLogger(__name__)
 

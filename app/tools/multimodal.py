@@ -1,5 +1,7 @@
+from __future__ import annotations
 # FILE: app/tools/multimodal.py
 # DESCRIPTION: Multimodal tools with image caching and vision support
+
 
 import logging
 import requests
@@ -498,23 +500,28 @@ class MultimodalTools:
             saved_provider = prefs.get('provider')
             saved_model = prefs.get('model')
             
+            logger.debug(f"[Vision] Checking saved preference: provider={saved_provider}, model={saved_model}")
+            
             if saved_provider and saved_model:
-                # Validate that the saved model is still available
                 available = self.get_available_vision_models(saved_provider)
+                logger.debug(f"[Vision] Available models for {saved_provider}: {available}")
+                logger.debug(f"[Vision] Exact match check: '{saved_model}' in {available} = {saved_model in available}")
+                
                 if saved_model in available:
                     logger.debug(f"[Vision] Using saved preference: {saved_provider}/{saved_model}")
                     return saved_provider, saved_model
                 else:
-                    logger.debug(f"[Vision] Saved model {saved_provider}/{saved_model} not available, using default")
+                    logger.warning(f"[Vision] Saved model '{saved_model}' not in available list, using default")
         except Exception as e:
-            logger.debug(f"[Vision] Could not load saved preference: {e}")
+            logger.warning(f"[Vision] Could not load saved preference: {e}")
         
         # 2. Try Chutes first (preferred)
         if 'chutes' in api_keys:
             chutes_models = self.get_available_vision_models('chutes')
             if chutes_models:
-                # Return the first available Chutes vision model (default)
-                return 'chutes', chutes_models[0]
+                default_model = chutes_models[0]
+                logger.debug(f"[Vision] Using default Chutes vision model: {default_model}")
+                return 'chutes', default_model
         
         # 3. Fallback to OpenRouter
         if 'openrouter' in api_keys:

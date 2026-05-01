@@ -105,9 +105,15 @@ RRF_score = Σ 1.0 / (k + rank), k=60
 
 ## FSRS Retention (Episodic Only)
 
-```
-importance = importance × exp(-hours_since_last_access / stability)
-stability = 24 × (1 + access_count × 0.5)
+**Library**: `fsrs>=6.3.1` — Free Spaced Repetition Scheduler
+
+```python
+from fsrs import FSRS, Card, Rating
+
+# FSRS state transitions (aligned with plast-mem)
+fsrs = FSRS(w=DEFAULT_PARAMETERS)
+card = Card(stability=current_stability, difficulty=current_difficulty)
+next_card, _ = fsrs.repeat(card, rating)
 ```
 
 Semantic facts use `invalid_at` for temporal validity, no decay.
@@ -118,15 +124,18 @@ Semantic facts use `invalid_at` for temporal validity, no decay.
 
 - ✅ Database schema (PostgreSQL + pgvector)
 - ✅ Memory extraction (LLM-based)
-- ✅ Conversation segmentation (batch LLM)
+- ✅ Conversation segmentation (batch LLM + temporal fast-path)
 - ✅ Retrieval pipeline (RRF + hybrid)
 - ✅ Context builder integration
-- ✅ Review & decay system (FSRS)
+- ✅ Review & decay system (FSRS library)
 - ✅ Migration from SQLite
 - ✅ PCL pipeline + LLM review
 - ✅ SQL constants extracted (db_memory_queries.py)
 - ✅ Logging migration (all print() → logging)
 - ✅ plast-mem alignment verified
+- ✅ **FSRS library integration** (fsrs>=6.3.1)
+- ✅ **Temporal fast-path segmentation**
+- ✅ **Flashbulb memory boost**
 
 ---
 
@@ -155,3 +164,10 @@ Every semantic fact assigned one category:
 4. SQL constants go in `db_memory_queries.py`
 5. Semantic = `static`, Episodic/Segments = `dynamic`
 6. Use `logging` module, not `print()`
+
+### Performance
+
+- **Vector Search**: Exact Nearest Neighbor (Sequential Scan) — no HNSW/IVFFlat index due to SIGILL on Termux ARM
+- **Current Scale**: 3,500+ rows, ~36ms query time (acceptable for real-time chat)
+- **Max Scale**: ~50,000 rows before performance degradation
+- **Recall**: 100% perfect (no approximation from ANN index)

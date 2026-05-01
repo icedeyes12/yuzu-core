@@ -65,7 +65,7 @@ def _build_facts_context(facts: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def predict_episode_content(existing_facts: list[dict], episode_summary: str) -> str | None:
+def predict_episode_content(existing_facts: list[dict], episode_summary: str, segment_messages: list[dict] = None) -> str | None:
     """PREDICT: Generate a prediction of what the episode contains, based on known facts.
 
     Returns predicted episode content as a string, or None on failure.
@@ -381,7 +381,7 @@ def run_predict_calibrate(
         existing = load_relevant_semantic_facts(session_id)
 
         # 2. PREDICT
-        predicted = predict_episode_content(existing, episode_summary)
+        predicted = predict_episode_content(existing, episode_summary, segment_messages=messages)
 
         # 3. CALIBRATE
         extracted = calibrate_and_extract(predicted, messages, existing)
