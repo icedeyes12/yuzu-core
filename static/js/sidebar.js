@@ -103,6 +103,8 @@ function switchTheme(theme) {
     // Save preference
     localStorage.setItem('yuzu-theme', theme);
     
+    renderer.reinitializeMermaid();
+    
     console.log(`Switched to ${theme} theme`);
 }
 

@@ -269,32 +269,32 @@ html, body {
 }
 
 .message-content .callout-note {
-  border-color: #6aa9ff;
+  border-color: var(--accent-primary, #6aa9ff);
   background: rgba(106, 169, 255, 0.08);
 }
 
 .message-content .callout-info {
-  border-color: #6aa9ff;
+  border-color: var(--accent-primary, #6aa9ff);
   background: rgba(106, 169, 255, 0.08);
 }
 
 .message-content .callout-tip {
-  border-color: #4caf50;
+  border-color: var(--accent-tertiary, #4caf50);
   background: rgba(76, 175, 80, 0.08);
 }
 
 .message-content .callout-warning {
-  border-color: #ffb347;
+  border-color: var(--accent-secondary, #ffb347);
   background: rgba(255, 179, 71, 0.08);
 }
 
 .message-content .callout-caution {
-  border-color: #ff6b6b;
+  border-color: var(--tool-error, #ff6b6b);
   background: rgba(255, 107, 107, 0.08);
 }
 
 .message-content .callout-important {
-  border-color: #9b59b6;
+  border-color: var(--accent-primary, #9b59b6);
   background: rgba(155, 89, 182, 0.08);
 }
 
@@ -344,9 +344,9 @@ html, body {
 }
 
 .copy-table-btn.copied {
-  background: #4caf50;
+  background: var(--accent-tertiary, #4caf50);
   color: white;
-  border-color: #4caf50;
+  border-color: var(--accent-tertiary, #4caf50);
 }
 
 .message-content .table-container table {
@@ -402,7 +402,7 @@ html, body {
   border-radius: 8px;
   background: rgba(255, 69, 58, 0.1);
   border: 1px solid rgba(255, 69, 58, 0.3);
-  color: #ff453a;
+  color: var(--tool-error, #ff453a);
   font-size: 0.9rem;
   display: flex;
   align-items: center;
@@ -466,9 +466,9 @@ html, body {
 }
 
 .copy-code-btn.copied {
-  background: #4caf50;
+  background: var(--accent-tertiary, #4caf50);
   color: white;
-  border-color: #4caf50;
+  border-color: var(--accent-tertiary, #4caf50);
 }
 
 .code-block-container pre {
@@ -648,7 +648,7 @@ html, body {
 }
 
 #sendButton:hover {
-  background: #ff1493;
+  background: var(--accent-primary, #ff1493);
   transform: scale(1.05);
 }
 
@@ -705,7 +705,7 @@ html, body {
   right: -5px;
   width: 20px;
   height: 20px;
-  background: #ff4444;
+  background: var(--tool-error, #ff4444);
   color: white;
   border-radius: 50%;
   font-size: 0.7rem;
@@ -806,7 +806,7 @@ html, body {
 }
 
 .upload-btn:hover {
-  background: #ff1493;
+  background: var(--accent-primary, #ff1493);
 }
 
 .image-previews-header {
@@ -819,7 +819,7 @@ html, body {
 
 .clear-all-btn {
   font-size: 0.75rem;
-  color: #ff4444;
+  color: var(--tool-error, #ff4444);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -852,7 +852,7 @@ html, body {
   right: -5px;
   width: 20px;
   height: 20px;
-  background: #ff4444;
+  background: var(--tool-error, #ff4444);
   color: white;
   border: none;
   border-radius: 50%;
@@ -1020,11 +1020,11 @@ html, body {
     transition: all 0.2s ease;
 }
 .preview-btn:hover {
-    background: #ff1493;
+    background: var(--accent-primary, #ff1493);
     transform: scale(1.02);
 }
 .preview-btn.active {
-    background: #4caf50;
+    background: var(--accent-tertiary, #4caf50);
 }
 .preview-btn svg {
     width: 14px;
@@ -1050,7 +1050,7 @@ html, body {
 }
 .preview-error {
     padding: 1rem;
-    color: #ff453a;
+    color: var(--tool-error, #ff453a);
     font-size: 0.85rem;
 }
 
@@ -1152,8 +1152,8 @@ html, body {
 }
 .html-modal-btn.active {
     background: rgba(255, 105, 180, 0.2);
-    color: #ff69b4;
-    border-color: #ff69b4;
+    color: var(--accent-primary, #ff69b4);
+    border-color: var(--accent-primary, #ff69b4);
 }
 /* Fullscreen mode */
 #html-preview-modal.fullscreen .html-modal-content {
@@ -1170,16 +1170,16 @@ html, body {
 }
 /* Theme variants for iframe bg */
 .preview-body-light {
-    background: #f5f5f5;
+    background: var(--bg-color, #f5f5f5);
 }
 .preview-body-dark iframe {
-    background: #1a1a1a;
+    background: var(--bg-color, #1a1a1a);
 }
 
 /* === CONSOLE PANEL === */
 .console-panel {
-  border-top: 1px solid #30363d;
-  background: #0d1117;
+  border-top: 1px solid var(--border-color, #30363d);
+  background: var(--bg-color, #0d1117);
   max-height: 100px;
   overflow-y: auto;
   font-family: 'Hack', 'Fira Code', 'Consolas', monospace;

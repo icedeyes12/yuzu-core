@@ -27,9 +27,11 @@ class MessageRenderer {
 
         // Initialize mermaid.js
         if (typeof mermaid !== 'undefined') {
+            const themeVariables = this._getMermaidThemeVariables();
             mermaid.initialize({
                 startOnLoad: false,
-                theme: 'dark',
+                theme: 'base',
+                themeVariables: themeVariables,
                 securityLevel: 'loose',
                 flowchart: { 
                     useMaxWidth: true, 
@@ -688,6 +690,45 @@ class MessageRenderer {
         if (!modal || !btn) return;
         const isFull = modal.classList.toggle('fullscreen');
         btn.classList.toggle('active', isFull);
+    }
+
+    // Get theme variables for mermaid based on current theme
+    _getMermaidThemeVariables() {
+        const bodyTheme = document.body.getAttribute('data-theme') || 'suisei';
+        const style = getComputedStyle(document.body);
+        const darkThemes = ['dark', 'suisei', 'tokyonight', 'dark-lavender'];
+        const isDark = darkThemes.includes(bodyTheme);
+        
+        return {
+            darkMode: isDark,
+            background: style.getPropertyValue('--code-bg').trim() || '#0d1117',
+            primaryColor: style.getPropertyValue('--accent-primary').trim() || '#58a6ff',
+            primaryTextColor: style.getPropertyValue('--text-color').trim() || '#f0f6fc',
+            primaryBorderColor: style.getPropertyValue('--border-primary').trim() || '#388bfd',
+            lineColor: style.getPropertyValue('--border-secondary').trim() || '#388bfd',
+            secondaryColor: style.getPropertyValue('--accent-secondary').trim() || '#388bfd',
+            tertiaryColor: style.getPropertyValue('--accent-tertiary').trim() || '#39d353',
+            edgeLabelBackground: style.getPropertyValue('--code-bg').trim() || '#0d1117',
+            nodeBorder: style.getPropertyValue('--border-primary').trim() || '#388bfd',
+            fontFamily: 'inherit'
+        };
+    }
+    
+    // Reinitialize mermaid when theme changes
+    reinitializeMermaid() {
+        if (typeof mermaid === 'undefined') return;
+        const themeVariables = this._getMermaidThemeVariables();
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'base',
+            themeVariables: themeVariables,
+            securityLevel: 'loose',
+            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+            sequence: { useMaxWidth: true, wrap: true },
+            gantt: { useMaxWidth: true },
+            er: { useMaxWidth: true }
+        });
+        console.log('[Renderer] Mermaid reinitialized with new theme');
     }
 
 }
