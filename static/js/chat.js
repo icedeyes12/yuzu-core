@@ -9,9 +9,6 @@ const MESSAGES_PER_PAGE = 30;
 
 // ==================== STREAMING STATE ====================
 let currentStreamMessage = null;
-let streamBuffer = '';
-let streamRenderTimeout = null;
-const STREAM_RENDER_DEBOUNCE_MS = 50;
 
 // ==================== MULTIMODAL MANAGER ====================
 class MultimodalManager {
@@ -156,14 +153,14 @@ class MultimodalManager {
             return;
         }
 
-        // Create AI message element immediately (empty, will be filled during streaming)
+        // Create AI message element immediately
         currentStreamMessage = this.createStreamingMessageElement('ai');
         chatContainer.appendChild(currentStreamMessage);
         
         const contentDiv = currentStreamMessage.querySelector('.message-content');
-        streamBuffer = '';
+        let accumulatedText = '';
         
-        // Show typing indicator initially
+        // Show typing indicator until first chunk arrives
         if (typingIndicator) typingIndicator.classList.remove('hidden');
         
         try {
@@ -179,7 +176,7 @@ class MultimodalManager {
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
-            let accumulatedText = '';
+            let firstChunk = true;
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -193,30 +190,50 @@ class MultimodalManager {
                         try {
                             const json = JSON.parse(line.slice(6));
                             if (json.chunk) {
+                                // Hide typing indicator on first real content
+                                if (firstChunk && typingIndicator) {
+                                    typingIndicator.classList.add('hidden');
+                                    firstChunk = false;
+                                }
+                                
+                                // Immediately append and render - NO debounce
                                 accumulatedText += json.chunk;
-                                streamBuffer = accumulatedText;
-                                this.scheduleStreamRender(contentDiv);
+                                
+                                // Render immediately - real-time streaming
+                                this.renderStreamChunk(contentDiv, accumulatedText);
+                                scrollToBottom();
                             }
                         } catch (e) {
-                            // Ignore parse errors for malformed JSON
+                            // Ignore parse errors
                         }
                     }
                 }
             }
 
-            // Final render
+            // Final render with full markdown processing
             this.finalizeStreamMessage(contentDiv, accumulatedText);
 
         } catch (error) {
             console.error('Stream error:', error);
             if (contentDiv) {
-                contentDiv.innerHTML = renderer.render('Sorry, I encountered an error processing your message.');
+                contentDiv.textContent = 'Sorry, I encountered an error processing your message.';
             }
         } finally {
             if (typingIndicator) typingIndicator.classList.add('hidden');
             this.cleanupStreamState();
             isProcessingMessage = false;
             this.isSending = false;
+        }
+    }
+
+    renderStreamChunk(contentDiv, text) {
+        // For streaming: render markdown incrementally
+        // This gives real-time typing effect
+        if (typeof renderer !== 'undefined' && renderer.isMarkedReady) {
+            contentDiv.innerHTML = renderer.render(text);
+        } else {
+            // Fallback: just show raw text
+            contentDiv.textContent = text;
         }
     }
 
@@ -227,11 +244,11 @@ class MultimodalManager {
 
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-        contentDiv.innerHTML = '<span class="streaming-cursor">▊</span>';
+        // Empty content - will be filled by streaming
 
         msg.appendChild(contentDiv);
 
-        // Add footer for timestamp
+        // Add footer for timestamp and copy button
         const footer = document.createElement('div');
         footer.className = 'message-footer';
 
@@ -258,51 +275,10 @@ class MultimodalManager {
         return msg;
     }
 
-    scheduleStreamRender(contentDiv) {
-        if (streamRenderTimeout) {
-            clearTimeout(streamRenderTimeout);
-        }
-
-        streamRenderTimeout = setTimeout(() => {
-            this.renderStreamContent(contentDiv);
-            scrollToBottom();
-        }, STREAM_RENDER_DEBOUNCE_MS);
-    }
-
-    renderStreamContent(contentDiv) {
-        if (!contentDiv || !streamBuffer) return;
-
-        // Reuse existing renderer for incremental partial markdown
-        contentDiv.innerHTML = renderer.render(streamBuffer);
-
-        // Add streaming cursor for visual feedback
-        const cursor = document.createElement('span');
-        cursor.className = 'streaming-cursor';
-        cursor.textContent = '▊';
-        contentDiv.appendChild(cursor);
-
-        // Re-highlight any new code blocks
-        if (typeof hljs !== 'undefined') {
-            contentDiv.querySelectorAll('pre code:not(.hljs)').forEach(block => {
-                hljs.highlightElement(block);
-            });
-        }
-
-        // Re-initialize mermaid diagrams
-        if (renderer.isMermaidReady) {
-            renderer.initializeMermaidDiagrams(contentDiv);
-        }
-    }
-
     finalizeStreamMessage(contentDiv, finalContent) {
-        if (streamRenderTimeout) {
-            clearTimeout(streamRenderTimeout);
-            streamRenderTimeout = null;
-        }
-
         if (!contentDiv) return;
 
-        // Final render without cursor
+        // Final render with full markdown processing
         contentDiv.innerHTML = renderer.render(finalContent);
 
         // Final highlight pass
@@ -335,11 +311,6 @@ class MultimodalManager {
 
     cleanupStreamState() {
         currentStreamMessage = null;
-        streamBuffer = '';
-        if (streamRenderTimeout) {
-            clearTimeout(streamRenderTimeout);
-            streamRenderTimeout = null;
-        }
     }
 
     async handleImageGeneration(prompt) {
