@@ -163,7 +163,18 @@ class MessageRenderer {
         const renderer = new marked.Renderer();
 
         // Custom code block renderer
-        renderer.code = (code, language) => {
+        // Marked v18 passes an object {text, lang} instead of (code, language)
+        renderer.code = (codeOrToken, languageOrUndefined) => {
+            // Handle both v18 (object) and legacy (string) API
+            let code, language;
+            if (typeof codeOrToken === 'object' && codeOrToken !== null) {
+                code = codeOrToken.text || '';
+                language = codeOrToken.lang || '';
+            } else {
+                code = codeOrToken || '';
+                language = languageOrUndefined || '';
+            }
+            
             const originalLabel = language ? language.trim() : '';
             const normalizedLang = this.normalizeLanguageAlias(language);
             
