@@ -470,28 +470,73 @@ html, body {
   pointer-events: none;
 }
 
-/* ==================== TYPING INDICATOR ==================== */
+/* ==================== TYPING INDICATOR MESSAGE (in-flow) ==================== */
+.typing-indicator-message {
+  align-self: flex-start;
+  background: var(--message-ai-bg, #21262d);
+  border: 1px solid var(--border-ai, rgba(56, 139, 253, 0.3));
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  animation: fadeIn 0.3s ease;
+  max-width: 60px;
+}
+
+.typing-dots {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0;
+}
+
+.typing-dots span {
+  width: 8px;
+  height: 8px;
+  background: var(--accent-primary, #58a6ff);
+  border-radius: 50%;
+  animation: typingPulse 1.4s infinite;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* Subtle pulse animation - not bouncing */
+@keyframes typingPulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+/* ==================== FIXED TYPING INDICATOR (fallback) ==================== */
 .typing-indicator {
   position: fixed;
   bottom: 100px;
   left: 50%;
   transform: translateX(-50%);
-  display: flex;
+  display: none; /* Hidden by default */
   gap: 0.4rem;
   padding: 0.8rem 1rem;
-  background: var(--bg-secondary);
+  background: var(--header-bg);
   border: 1px solid var(--border-color);
   border-radius: 20px;
   z-index: 90;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
+.typing-indicator.active {
+  display: flex;
+}
+
 .typing-indicator span {
   width: 8px;
   height: 8px;
-  background: var(--accent-pink);
+  background: var(--accent-primary);
   border-radius: 50%;
-  animation: typingBounce 1.4s infinite;
+  animation: typingPulse 1.4s infinite;
 }
 
 .typing-indicator span:nth-child(2) {
@@ -500,11 +545,6 @@ html, body {
 
 .typing-indicator span:nth-child(3) {
   animation-delay: 0.4s;
-}
-
-@keyframes typingBounce {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
-  30% { transform: translateY(-8px); opacity: 1; }
 }
 
 .typing-indicator.hidden {

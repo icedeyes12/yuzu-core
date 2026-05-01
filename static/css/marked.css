@@ -1,118 +1,140 @@
 /* FILE: static/css/marked.css */
-/* DESCRIPTION: Markdown rendering styles extracted from chat.css
- *              Provides consistent styling for rendered markdown content
- *              including code blocks, tables, blockquotes, and mermaid diagrams.
- * 
- * Theme-aware via CSS variables defined in theme.css
+/* DESCRIPTION: Styling for marked.js markdown content
+ *              All markdown element styling extracted from chat.css
+ *              Includes: code blocks, tables, lists, headers, links, images
  */
 
-/* ==================== ROOT VARIABLES ==================== */
-:root {
-  /* Code block backgrounds - Tomorrow Night Blue inspired */
-  --code-block-bg: #002451;
-  --inline-code-bg: rgba(0, 36, 81, 0.5);
-  --code-border-color: rgba(0, 100, 200, 0.3);
-  
-  /* Mermaid diagram styling */
-  --mermaid-bg: #002451;
-  --mermaid-error-bg: rgba(255, 69, 58, 0.1);
-  --mermaid-error-border: rgba(255, 69, 58, 0.3);
+/* ========================================
+   MARKDOWN CONTENT BASE
+   ======================================== */
+
+.message-content {
+  color: var(--text-color);
+  line-height: 1.6;
+  font-size: 0.95rem;
 }
 
-/* ==================== TYPOGRAPHY ==================== */
-.message-content h1,
-.message-content h2,
-.message-content h3,
-.message-content h4,
-.message-content h5,
-.message-content h6 {
+/* ========================================
+   HEADERS
+   ======================================== */
+
+.message-content h1, .message-content h2, .message-content h3,
+.message-content h4, .message-content h5, .message-content h6 {
   color: var(--text-color);
   margin: 1rem 0 0.5rem;
   font-weight: 600;
-  line-height: 1.3;
 }
 
-.message-content h1 { font-size: 1.8rem; border-bottom: 1px solid var(--border-secondary); padding-bottom: 0.3rem; }
-.message-content h2 { font-size: 1.5rem; border-bottom: 1px solid var(--border-secondary); padding-bottom: 0.2rem; }
+.message-content h1 { font-size: 1.8rem; }
+.message-content h2 { font-size: 1.5rem; }
 .message-content h3 { font-size: 1.3rem; }
 .message-content h4 { font-size: 1.1rem; }
 .message-content h5 { font-size: 1rem; }
-.message-content h6 { font-size: 0.9rem; color: var(--text-secondary); }
+.message-content h6 { font-size: 0.9rem; }
+
+.message-content h1,
+.message-content h2,
+.message-content h3 {
+  margin: 1rem 0 0.5rem;
+  color: var(--text-color);
+}
+
+.message-content h1 { font-size: 1.4em; }
+.message-content h2 { font-size: 1.2em; }
+.message-content h3 { font-size: 1.1em; }
+
+/* ========================================
+   PARAGRAPHS
+   ======================================== */
 
 .message-content p {
   margin: 0.5rem 0;
-  line-height: 1.7;
 }
 
-/* ==================== LISTS ==================== */
-.message-content ul,
-.message-content ol {
+/* ========================================
+   LISTS
+   ======================================== */
+
+.message-content ul, .message-content ol {
   margin: 0.5rem 0;
   padding-left: 1.5rem;
 }
 
+.message-content ul {
+  list-style-type: disc;
+}
+
+.message-content ol {
+  list-style-type: decimal;
+}
+
 .message-content li {
   margin: 0.3rem 0;
-  line-height: 1.6;
 }
 
-.message-content ul > li::marker {
-  color: var(--accent-primary);
-}
-
-.message-content ol > li::marker {
-  color: var(--accent-primary);
-  font-weight: 600;
-}
-
-/* Nested lists */
+/* Nested unordered lists */
 .message-content ul ul,
-.message-content ol ol,
-.message-content ul ol,
 .message-content ol ul {
-  margin: 0.2rem 0;
+  list-style-type: circle;
+  margin-top: 0.25rem;
 }
 
-/* ==================== LINKS ==================== */
-.message-content a {
-  color: var(--accent-primary);
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-  transition: all 0.2s ease;
+.message-content ul ul ul,
+.message-content ol ul ul {
+  list-style-type: square;
 }
 
-.message-content a:hover {
-  color: var(--accent-secondary);
-  border-bottom-color: var(--accent-secondary);
+/* Nested ordered lists */
+.message-content ol ol {
+  list-style-type: lower-alpha;
 }
 
-.message-content a[href^="http"]::after {
-  content: " ↗";
-  font-size: 0.8em;
-  opacity: 0.6;
+.message-content ol ol ol {
+  list-style-type: lower-roman;
 }
 
-/* ==================== BLOCKQUOTES ==================== */
+/* Nested list item spacing */
+.message-content li > ul,
+.message-content li > ol {
+  margin: 0.25rem 0 0.25rem 0.5rem;
+}
+
+/* Tight nested lists */
+.message-content ul.tight-list,
+.message-content ol.tight-list {
+  margin: 0.25rem 0;
+}
+
+/* ========================================
+   BLOCKQUOTES & CALLOUTS
+   ======================================== */
+
 .message-content blockquote {
   border-left: 4px solid var(--accent-primary);
   margin: 0.8rem 0;
-  padding: 0.6rem 1rem;
-  background: var(--code-block-bg);
-  border-radius: 0 6px 6px 0;
+  padding: 0.5rem 1rem;
+  background: var(--bg-secondary);
+  border-radius: 4px;
   font-style: italic;
-  color: var(--text-secondary);
 }
 
-.message-content blockquote p {
-  margin: 0.3rem 0;
+/* Blockquote - dynamic from hljs theme */
+.message-content blockquote {
+  border-left: 4px solid #7285b7;
+  background: var(--hljs-bg, #002451);
+  border-radius: 4px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.85);
 }
 
+/* Nested blockquotes */
 .message-content blockquote blockquote {
-  margin: 0.5rem 0;
-  border-left-color: var(--accent-secondary);
+  margin-left: 0.5rem;
+  border-left-color: #7285b7;
+  opacity: 0.9;
 }
 
-/* ==================== CALLOUT BLOCKS ==================== */
+/* Callout blocks */
 .message-content .callout {
   border-left: 4px solid;
   padding: 0.6rem 0.8rem;
@@ -123,46 +145,71 @@
 
 .message-content .callout-note {
   border-color: #6aa9ff;
-  background: rgba(106, 169, 255, 0.1);
+  background: rgba(106, 169, 255, 0.08);
 }
 
 .message-content .callout-info {
   border-color: #6aa9ff;
-  background: rgba(106, 169, 255, 0.1);
+  background: rgba(106, 169, 255, 0.08);
 }
 
 .message-content .callout-tip {
   border-color: #4caf50;
-  background: rgba(76, 175, 80, 0.1);
+  background: rgba(76, 175, 80, 0.08);
 }
 
 .message-content .callout-warning {
   border-color: #ffb347;
-  background: rgba(255, 179, 71, 0.1);
+  background: rgba(255, 179, 71, 0.08);
 }
 
 .message-content .callout-caution {
   border-color: #ff6b6b;
-  background: rgba(255, 107, 107, 0.1);
+  background: rgba(255, 107, 107, 0.08);
 }
 
 .message-content .callout-important {
-  border-color: #bb9af7;
-  background: rgba(187, 154, 247, 0.1);
+  border-color: #9b59b6;
+  background: rgba(155, 89, 182, 0.08);
 }
 
-/* ==================== TABLES ==================== */
+/* Callout variants */
+.message-content .callout-note {
+  border-color: var(--accent-secondary);
+  background: rgba(147, 165, 255, 0.1);
+}
+
+.message-content .callout-warning {
+  border-color: var(--accent-primary);
+  background: rgba(255, 133, 161, 0.1);
+}
+
+.message-content .callout-tip {
+  border-color: var(--accent-tertiary);
+  background: rgba(184, 225, 221, 0.1);
+}
+
+.message-content .callout-important {
+  border-color: var(--accent-color);
+  background: rgba(138, 109, 233, 0.1);
+}
+
+/* ========================================
+   TABLES
+   ======================================== */
+
+/* Table container for horizontal scroll */
 .message-content .table-container {
   overflow-x: auto;
   margin: 0.8rem 0;
-  border-radius: 8px;
-  border: 1px solid var(--border-secondary);
-  background: var(--code-block-bg);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
 }
 
 .message-content .table-container table {
   margin: 0;
   border: none;
+  border-radius: 0;
   width: 100%;
   display: table;
 }
@@ -171,250 +218,109 @@
   border-collapse: collapse;
   width: 100%;
   margin: 1rem 0;
-  background: var(--code-block-bg);
-  border-radius: 8px;
+}
+
+.message-content th, .message-content td {
+  border: 1px solid var(--border-color);
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.message-content th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+}
+
+/* Table - dynamic from hljs theme */
+.message-content table {
+  font-size: 0.9em;
+  background: var(--hljs-bg, #002451);
+  border-radius: 6px;
   overflow: hidden;
 }
 
 .message-content th,
 .message-content td {
-  border: 1px solid var(--border-secondary);
-  padding: 0.6rem 0.8rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(114, 133, 183, 0.3);
   text-align: left;
 }
 
 .message-content th {
-  background: rgba(0, 36, 81, 0.8);
+  background: rgba(0, 0, 0, 0.25);
   font-weight: 600;
-  color: var(--text-color);
+  color: #ffffff;
 }
 
 .message-content tr:nth-child(even) {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.15);
 }
 
-.message-content tr:hover {
-  background: rgba(0, 100, 200, 0.1);
+/* Table container for horizontal scroll */
+.message-content .table-container {
+  overflow-x: auto;
+  margin: 0.8rem 0;
+  border-radius: 6px;
+  border: 1px solid rgba(114, 133, 183, 0.3);
+  background: var(--hljs-bg, #002451);
 }
 
-/* ==================== INLINE CODE ==================== */
-.message-content code:not([class*="language-"]) {
-  background: var(--inline-code-bg);
-  color: var(--accent-primary);
-  padding: 0.2em 0.4em;
-  border-radius: 4px;
-  font-family: 'Hack', 'Fira Code', 'Consolas', 'Monaco', monospace;
-  font-size: 0.9em;
-  border: 1px solid var(--code-border-color);
-}
-
-/* ==================== CODE BLOCKS ==================== */
-.code-block-container {
-  margin: 1rem 0;
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--code-block-bg);
-  border: 1px solid var(--code-border-color);
-}
-
-.code-block-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 1rem;
-  background: rgba(0, 0, 0, 0.3);
-  border-bottom: 1px solid var(--code-border-color);
-}
-
-.code-language {
-  font-size: 0.75rem;
-  color: var(--accent-primary);
-  text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-}
-
-.code-header-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.copy-code-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  background: transparent;
-  border: 1px solid var(--border-secondary);
-  border-radius: 4px;
-  padding: 0.3rem 0.6rem;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.copy-code-btn:hover {
-  background: var(--accent-primary);
-  color: white;
-  border-color: var(--accent-primary);
-}
-
-.copy-code-btn.copied {
-  background: #4caf50;
-  color: white;
-  border-color: #4caf50;
-}
-
-.preview-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.3rem 0.6rem;
-  background: var(--accent-primary);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.preview-btn:hover {
-  background: var(--accent-secondary);
-  transform: scale(1.02);
-}
-
-.preview-btn.active {
-  background: #4caf50;
-}
-
-.preview-btn svg,
-.copy-code-btn svg {
-  width: 14px;
-  height: 14px;
-}
-
-.code-block-container pre {
+.message-content .table-container table {
   margin: 0;
-  padding: 1rem;
-  overflow-x: auto;
-  background: transparent;
+  border: none;
+  border-radius: 0;
+  width: 100%;
+  display: table;
 }
 
-.code-block-container code {
-  font-family: 'Hack', 'Fira Code', 'Consolas', 'Monaco', monospace;
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: var(--text-color);
-}
+/* ========================================
+   DETAILS/SUMMARY
+   ======================================== */
 
-/* ==================== MERMAID DIAGRAMS ==================== */
-.mermaid-container {
-  margin: 1rem 0;
-  padding: 1rem;
-  background: var(--mermaid-bg);
-  border: 1px solid var(--code-border-color);
-  border-radius: 8px;
-  overflow-x: auto;
-  text-align: center;
-}
-
-.mermaid-container .mermaid {
-  display: flex;
-  justify-content: center;
-  background: transparent;
-}
-
-.mermaid-container svg {
-  max-width: 100%;
-  height: auto;
-}
-
-.mermaid-error {
-  padding: 1rem;
+.message-content details {
   margin: 0.5rem 0;
   border-radius: 8px;
-  background: var(--mermaid-error-bg);
-  border: 1px solid var(--mermaid-error-border);
-  color: #ff453a;
-  font-family: 'Hack', 'Fira Code', 'Consolas', monospace;
-  font-size: 0.85rem;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* Mermaid theme override for dark themes */
-.mermaid .node rect,
-.mermaid .node circle,
-.mermaid .node ellipse,
-.mermaid .node polygon,
-.mermaid .node path {
-  fill: rgba(0, 100, 200, 0.2) !important;
-  stroke: var(--accent-primary) !important;
-}
-
-.mermaid .edgePath .path {
-  stroke: var(--accent-secondary) !important;
-}
-
-.mermaid .edgeLabel {
-  background-color: var(--code-block-bg) !important;
-  color: var(--text-color) !important;
-}
-
-.mermaid .label {
-  color: var(--text-color) !important;
-}
-
-.mermaid .cluster rect {
-  fill: rgba(0, 50, 100, 0.3) !important;
-  stroke: var(--border-secondary) !important;
-}
-
-/* ==================== DETAILS / SUMMARY ==================== */
-.message-content details {
-  margin: 0.8rem 0;
-  padding: 0.5rem;
-  border: 1px solid var(--border-secondary);
-  border-radius: 8px;
-  background: var(--code-block-bg);
+  background: var(--code-bg);
+  border: 1px solid var(--border-ai);
+  overflow: hidden;
 }
 
 .message-content summary {
+  padding: 0.5rem 1rem;
   cursor: pointer;
-  font-weight: 600;
-  padding: 0.3rem 0.5rem;
-  color: var(--accent-primary);
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.message-content summary::before {
-  content: "▶";
-  font-size: 0.7em;
-  transition: transform 0.2s ease;
-}
-
-.message-content details[open] summary::before {
-  transform: rotate(90deg);
+  font-weight: 500;
+  background: rgba(168, 200, 255, 0.05);
 }
 
 .message-content summary:hover {
-  color: var(--accent-secondary);
+  background: rgba(168, 200, 255, 0.1);
 }
 
-/* ==================== IMAGES ==================== */
-.message-content img,
-.markdown-image {
+.message-content details[open] summary {
+  border-bottom: 1px solid var(--border-ai);
+}
+
+.message-content details > *:not(summary) {
+  padding: 0.75rem 1rem;
+}
+
+/* ========================================
+   IMAGES
+   ======================================== */
+
+.message-content img, .markdown-image {
   max-width: 100%;
   height: auto;
   border-radius: 8px;
   margin: 0.8rem 0;
   display: block;
-  border: 1px solid var(--border-secondary);
+}
+
+.message-content img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 0.5rem 0;
+  box-shadow: var(--shadow-soft);
 }
 
 .image-error {
@@ -430,6 +336,157 @@
   gap: 0.5rem;
 }
 
+/* ========================================
+   CODE BLOCKS
+   ======================================== */
+
+/* Code block container - dynamic, inherits from hljs theme */
+.code-block-container {
+  margin: 1rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #002451 !important;  /* Force background */
+  border: 1px solid rgba(114, 133, 183, 0.3);
+}
+
+.code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid rgba(114, 133, 183, 0.3);
+  backdrop-filter: blur(4px);
+}
+
+.code-language {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.copy-code-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.copy-code-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+
+.copy-code-btn.copied {
+  background: #4caf50;
+  color: white;
+  border-color: #4caf50;
+}
+
+.code-block-container pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  background: transparent;
+}
+
+.code-block-container code {
+  display: block;
+  padding: 1rem;
+  font-family: 'Hack', 'Fira Code', 'Consolas', 'Monaco', monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+/* hljs theme handles its own background */
+.code-block-container pre code.hljs {
+  display: block;
+  padding: 1rem;
+  /* background comes from hljs theme CSS */
+}
+
+/* ========================================
+   INLINE CODE
+   ======================================== */
+
+/* Inline code - use hljs-bg for ALL messages */
+.message-content code:not(pre code) {
+  background: var(--hljs-bg, #002451);
+  color: #ffffff;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  border: 1px solid rgba(114, 133, 183, 0.3);
+  word-break: break-word;
+}
+
+/* ========================================
+   INLINE STYLES
+   ======================================== */
+
+/* Bold - clearly different */
+.message-content strong {
+  color: var(--text-color);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Italic */
+.message-content em {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Strikethrough */
+.message-content del {
+  color: var(--text-secondary);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+/* ========================================
+   LINKS
+   ======================================== */
+
+.message-content a {
+  color: var(--accent-secondary);
+  text-decoration: underline;
+  text-decoration-color: rgba(168, 200, 255, 0.4);
+  text-underline-offset: 2px;
+  transition: all 0.2s ease;
+}
+
+.message-content a:hover {
+  color: var(--accent-primary);
+  text-decoration-color: var(--accent-primary);
+}
+
+/* ========================================
+   HORIZONTAL RULE
+   ======================================== */
+
+.message-content hr {
+  border: none;
+  border-top: 2px solid var(--accent-color);
+  margin: 1.5rem 0;
+  opacity: 0.6;
+}
+
+/* ========================================
+   RENDER ERROR
+   ======================================== */
+
 .render-error {
   margin: 0.5rem 0;
   padding: 0.75rem;
@@ -441,409 +498,188 @@
   word-break: break-word;
 }
 
-/* Generated/uploaded images in chat */
-.generated-image-container,
-.uploaded-image-container {
-  margin: 0.5rem 0;
-}
+/* ========================================
+   HTML PREVIEW BUTTON
+   ======================================== */
 
-.generated-image,
-.uploaded-image {
-  max-width: 100%;
-  height: auto;
-  border-radius: 8px;
-  border: 1px solid var(--border-secondary);
-}
-
-.image-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.image-action-btn {
+.preview-btn {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.5rem 0.8rem;
-  background: var(--code-block-bg);
-  border: 1px solid var(--border-secondary);
+  padding: 0.3rem 0.7rem;
+  background: var(--accent-primary);
+  color: white;
+  border: none;
   border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
-  font-size: 0.85rem;
-  color: var(--text-color);
   transition: all 0.2s ease;
 }
 
-.image-action-btn:hover {
-  background: var(--accent-primary);
-  color: white;
-  border-color: var(--accent-primary);
+.preview-btn:hover {
+  background: #ff1493;
+  transform: scale(1.02);
 }
 
-.image-caption {
-  margin-top: 0.5rem;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  font-style: italic;
+.preview-btn.active {
+  background: #4caf50;
 }
 
-/* ==================== HORIZONTAL RULE ==================== */
-.message-content hr {
-  border: none;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--border-secondary), transparent);
-  margin: 1.5rem 0;
+.preview-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
-/* ==================== FOOTNOTES ==================== */
-.message-content .footnotes {
-  margin-top: 2rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border-secondary);
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-}
+/* ==================== TASK LISTS (GFM) ==================== */
 
-.message-content .footnote-ref {
-  font-size: 0.8em;
-  vertical-align: super;
-}
-
-/* ==================== DEFINITION LISTS ==================== */
-.message-content dl {
-  margin: 1rem 0;
-}
-
-.message-content dt {
-  font-weight: 600;
-  color: var(--accent-primary);
-  margin-top: 0.5rem;
-}
-
-.message-content dd {
-  margin-left: 1.5rem;
-  color: var(--text-secondary);
-}
-
-/* ==================== STRIKETHROUGH ==================== */
-.message-content s,
-.message-content del {
-  color: var(--text-secondary);
-  text-decoration: line-through;
-}
-
-/* ==================== MARK / HIGHLIGHT ==================== */
-.message-content mark {
-  background: rgba(255, 215, 0, 0.3);
-  color: var(--text-color);
-  padding: 0.1em 0.3em;
-  border-radius: 3px;
-}
-
-/* ==================== KEYBOARD KEYS ==================== */
-.message-content kbd {
-  background: var(--code-block-bg);
-  border: 1px solid var(--border-secondary);
-  border-radius: 4px;
-  padding: 0.1em 0.4em;
-  font-family: 'Hack', 'Fira Code', 'Consolas', monospace;
-  font-size: 0.85em;
-  box-shadow: 0 2px 0 var(--border-secondary);
-}
-
-/* ==================== ABBREVIATIONS ==================== */
-.message-content abbr[title] {
-  border-bottom: 1px dotted var(--accent-primary);
-  cursor: help;
-}
-
-/* ==================== RESPONSIVE ADJUSTMENTS ==================== */
-@media (max-width: 768px) {
-  .code-block-container {
-    font-size: 0.85rem;
-  }
-  
-  .code-block-container pre {
-    padding: 0.75rem;
-  }
-  
-  .message-content table {
-    font-size: 0.9rem;
-  }
-  
-  .message-content th,
-  .message-content td {
-    padding: 0.4rem 0.6rem;
-  }
-  
-  .mermaid-container {
-    padding: 0.75rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .code-block-header {
-    padding: 0.4rem 0.75rem;
-  }
-  
-  .code-language {
-    font-size: 0.7rem;
-  }
-  
-  .copy-code-btn,
-  .preview-btn {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.7rem;
-  }
-  
-  .message-content h1 { font-size: 1.5rem; }
-  .message-content h2 { font-size: 1.3rem; }
-  .message-content h3 { font-size: 1.1rem; }
-}
-
-/* ==================== STREAMING CURSOR ==================== */
-.streaming-cursor {
-    display: inline-block;
-    color: var(--accent-primary);
-    animation: cursorBlink 0.8s infinite;
-    margin-left: 2px;
-    font-weight: bold;
-}
-
-@keyframes cursorBlink {
-    0%, 50% { opacity: 1; }
-    51%, 100% { opacity: 0; }
-}
-
-/* Message being streamed */
-.message[data-streaming="true"] {
-    animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.85; }
-}
-
-/* ==================== PRINT STYLES ==================== */
-@media print {
-  .code-block-header {
-    display: none;
-  }
-  
-  .code-block-container {
-    border: 1px solid #ccc;
-    background: #f5f5f5;
-  }
-  
-  .message-content a[href^="http"]::after {
-    content: " (" attr(href) ")";
-    font-size: 0.8em;
-    color: #666;
-  }
-  
-  .mermaid-container {
-    page-break-inside: avoid;
-  }
-}
-
-/* ========================================
-   MISSING MARKDOWN ELEMENTS (from feat/frontend-vanilla-optimization)
-   ======================================== */
-
-/* ==================== HORIZONTAL RULE ==================== */
-.message-content hr {
-  border: none;
-  border-top: 2px solid var(--accent-color, var(--accent-primary));
-  margin: 1.5rem 0;
-  opacity: 0.6;
-}
-
-/* ==================== NESTED LISTS ==================== */
-.message-content ul ul,
-.message-content ol ol {
-  margin: 0.25rem 0;
-}
-
-.message-content ul ul {
-  list-style-type: circle;
-}
-
-.message-content ul ul ul {
-  list-style-type: square;
-}
-
-.message-content ol ol {
-  list-style-type: lower-alpha;
-}
-
-.message-content ol ol ol {
-  list-style-type: lower-roman;
-}
-
-/* ==================== TIGHT LISTS ==================== */
-.message-content ul.tight-list,
-.message-content ol.tight-list {
-  margin: 0.25rem 0;
-}
-
-.message-content ul.tight-list li,
-.message-content ol.tight-list li {
-  margin: 0.1rem 0;
-}
-
-/* ==================== NESTED BLOCKQUOTES ==================== */
-.message-content blockquote blockquote {
-  margin-left: 0.5rem;
-  opacity: 0.9;
-  border-left-color: var(--accent-tertiary, var(--accent-secondary));
-}
-
-/* ==================== STRIKETHROUGH ==================== */
-.message-content del {
-  color: var(--text-secondary);
-  text-decoration: line-through;
-  opacity: 0.7;
-}
-
-/* ==================== MARK / HIGHLIGHT ==================== */
-.message-content mark {
-  background: rgba(255, 215, 0, 0.3);
-  color: var(--text-color);
-  padding: 0.1em 0.3em;
-  border-radius: 3px;
-}
-
-/* ==================== TASK LISTS (GFM Checkboxes) ==================== */
+/* Task list checkboxes */
 .message-content input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
   width: 1em;
   height: 1em;
-  border: 2px solid var(--accent-primary, var(--accent-color));
+  border: 2px solid var(--text-secondary, rgba(240, 244, 255, 0.5));
   border-radius: 3px;
-  margin-right: 0.5em;
+  background: transparent;
   cursor: pointer;
+  margin-right: 0.5em;
   vertical-align: middle;
   position: relative;
 }
 
 .message-content input[type="checkbox"]:checked {
-  background: var(--accent-primary, var(--accent-color));
-  border-color: var(--accent-primary, var(--accent-color));
+  background: var(--accent-primary, #ff69b4);
+  border-color: var(--accent-primary, #ff69b4);
 }
 
 .message-content input[type="checkbox"]:checked::after {
-  content: "✓";
+  content: '✓';
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   color: white;
-  font-size: 0.7em;
+  font-size: 0.8em;
   font-weight: bold;
 }
 
-/* Task list item styling */
+/* Task list styling */
+.message-content ul.contains-task-list {
+  list-style: none;
+  padding-left: 0;
+}
+
 .message-content li.task-list-item {
   list-style: none;
   margin-left: -1.5em;
 }
 
+/* Strikethrough for completed tasks */
 .message-content li.task-list-item:has(input:checked) {
   opacity: 0.7;
+}
+
+.message-content li.task-list-item:has(input:checked) {
   text-decoration: line-through;
   color: var(--text-secondary);
 }
 
+/* ==================== TASK LISTS (GFM Checkboxes) ==================== */
+/* Gemini noted: task list styling missing */
+
+.message-content input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 1em;
+    height: 1em;
+    border: 2px solid var(--border-color, rgba(168, 200, 255, 0.5));
+    border-radius: 3px;
+    margin-right: 0.5em;
+    margin-left: -1.5em;
+    vertical-align: middle;
+    cursor: pointer;
+    position: relative;
+    background: var(--bg-secondary, transparent);
+    transition: all 0.2s ease;
+}
+
+.message-content input[type="checkbox"]:checked {
+    background: var(--accent-primary, #ff69b4);
+    border-color: var(--accent-primary, #ff69b4);
+}
+
+.message-content input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 0.8em;
+    font-weight: bold;
+}
+
+.message-content input[type="checkbox"]:checked + li,
+.message-content input[type="checkbox"]:checked ~ * {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
 /* Task list container */
 .message-content ul.contains-task-list {
-  list-style: none;
-  padding-left: 1.5em;
+    list-style: none;
+    padding-left: 1.5em;
 }
 
-/* ==================== TABLE ZEBRA STRIPING ==================== */
-.message-content table tr:nth-child(even) {
-  background: rgba(0, 0, 0, 0.15);
+.message-content li.task-list-item {
+    list-style: none;
+    margin-left: 0;
 }
 
-[data-theme="light"] .message-content table tr:nth-child(even) {
-  background: rgba(0, 0, 0, 0.05);
+/* ==================== NESTED BLOCKQUOTES ==================== */
+/* Gemini noted: nested quote >> not rendered */
+
+.message-content blockquote {
+    border-left: 4px solid var(--accent-primary, #ff69b4);
+    margin: 0.8rem 0;
+    padding: 0.5rem 1rem;
+    background: var(--hljs-bg, #002451);
+    border-radius: 4px;
+    color: rgba(255, 255, 255, 0.85);
+    font-style: italic;
 }
 
-/* ==================== EXTERNAL LINK INDICATOR ==================== */
-.message-content a[href^="http"]::after {
-  content: " ↗";
-  font-size: 0.8em;
-  opacity: 0.6;
+/* Nested blockquotes - progressively lighter */
+.message-content blockquote blockquote {
+    border-left-color: color-mix(in srgb, var(--accent-primary, #ff69b4) 70%, transparent);
+    margin-left: 1rem;
+    background: color-mix(in srgb, var(--hljs-bg, #002451) 95%, white);
 }
 
-/* ==================== DETAILS / SUMMARY ==================== */
-.message-content details {
-  margin: 0.8rem 0;
-  padding: 0.5rem;
-  border: 1px solid var(--border-color, var(--border-primary));
-  border-radius: 6px;
-  background: var(--bg-secondary, var(--ai-bubble));
+.message-content blockquote blockquote blockquote {
+    border-left-color: color-mix(in srgb, var(--accent-primary, #ff69b4) 50%, transparent);
+    background: color-mix(in srgb, var(--hljs-bg, #002451) 90%, white);
 }
 
-.message-content details[open] {
-  padding-bottom: 0.8rem;
+.message-content blockquote blockquote blockquote blockquote {
+    border-left-color: color-mix(in srgb, var(--accent-primary, #ff69b4) 30%, transparent);
+    background: color-mix(in srgb, var(--hljs-bg, #002451) 85%, white);
 }
 
-.message-content details[open] summary {
-  border-bottom: 1px solid var(--border-color, var(--border-primary));
-  padding-bottom: 0.5rem;
-  margin-bottom: 0.5rem;
+/* ==================== STREAMING CURSOR ==================== */
+
+.streaming-cursor {
+    display: inline-block;
+    animation: blink 1s step-end infinite;
+    color: var(--accent-primary, #ff69b4);
+    font-weight: bold;
 }
 
-.message-content summary {
-  cursor: pointer;
-  font-weight: 600;
-  padding: 0.3rem;
-  user-select: none;
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
 }
 
-.message-content summary::-webkit-details-marker {
-  margin-right: 0.5rem;
-}
-
-.message-content summary::marker {
-  color: var(--accent-primary, var(--accent-color));
-}
-
-/* ==================== KEYBOARD SHORTCUTS ==================== */
-.message-content kbd {
-  background: var(--bg-secondary, #eee);
-  border: 1px solid var(--border-color, #ccc);
-  border-radius: 3px;
-  padding: 0.1em 0.4em;
-  font-family: var(--font-mono, monospace);
-  font-size: 0.85em;
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
-}
-
-/* ==================== ABBREVIATIONS ==================== */
-.message-content abbr[title] {
-  text-decoration: underline dotted;
-  cursor: help;
-}
-
-/* ==================== SUBSCRIPT / SUPERSCRIPT ==================== */
-.message-content sub,
-.message-content sup {
-  font-size: 0.75em;
-  line-height: 0;
-  position: relative;
-  vertical-align: baseline;
-}
-
-.message-content sup {
-  top: -0.5em;
-}
-
-.message-content sub {
-  bottom: -0.25em;
-}

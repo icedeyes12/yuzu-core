@@ -10,6 +10,49 @@ const MESSAGES_PER_PAGE = 30;
 // ==================== STREAMING STATE ====================
 let currentStreamMessage = null;
 
+
+
+// ==================== TYPING INDICATOR FUNCTIONS ====================
+let typingIndicatorMessage = null;
+
+function showTypingIndicator() {
+    const chatContainer = document.getElementById('chatContainer');
+    if (!chatContainer) return null;
+    
+    // Remove any existing typing indicator
+    hideTypingIndicator();
+    
+    // Create in-flow typing indicator message
+    typingIndicatorMessage = document.createElement('div');
+    typingIndicatorMessage.className = 'message ai typing-indicator-message';
+    typingIndicatorMessage.innerHTML = `
+        <div class="typing-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    `;
+    
+    chatContainer.appendChild(typingIndicatorMessage);
+    scrollToBottom();
+    
+    return typingIndicatorMessage;
+}
+
+function hideTypingIndicator() {
+    if (typingIndicatorMessage && typingIndicatorMessage.parentNode) {
+        typingIndicatorMessage.parentNode.removeChild(typingIndicatorMessage);
+    }
+    typingIndicatorMessage = null;
+    
+    // Also hide fixed indicator if present
+    const fixedIndicator = document.getElementById('typingIndicator');
+    if (fixedIndicator) {
+        fixedIndicator.classList.add('hidden');
+        fixedIndicator.classList.remove('active');
+    }
+}
+
 // ==================== MULTIMODAL MANAGER ====================
 class MultimodalManager {
     constructor() {
@@ -990,7 +1033,15 @@ function addScrollLoadListener(fullHistory) {
                             hljs.highlightElement(block);
                         });
                     }
-                }, 0);
+                    
+                    // Initialize mermaid diagrams in newly loaded messages
+                    if (typeof renderer !== 'undefined' && renderer.isMermaidReady) {
+                        const newMermaid = chatContainer.querySelectorAll('.mermaid:not([data-processed])');
+                        if (newMermaid.length > 0) {
+                            renderer.initializeMermaidDiagrams(chatContainer);
+                        }
+                    }
+                }, 100);
                 
                 // Restore scroll position
                 const scrollHeightAfter = chatContainer.scrollHeight;
