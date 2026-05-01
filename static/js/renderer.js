@@ -260,6 +260,81 @@ class MessageRenderer {
         }
     }
 
+    initializeTableCopyButtons(container) {
+        // Find all tables that don't already have a copy button
+        const tables = container.querySelectorAll('table:not([data-copy-btn])');
+        
+        tables.forEach(table => {
+            // Mark as processed
+            table.setAttribute('data-copy-btn', 'true');
+            
+            // Create wrapper if not already wrapped
+            const existingWrapper = table.closest('.table-container');
+            if (existingWrapper) {
+                // Already wrapped, add button to header if not present
+                const existingHeader = existingWrapper.querySelector('.table-header');
+                if (existingHeader && !existingHeader.querySelector('.copy-table-btn')) {
+                    const copyBtn = document.createElement('button');
+                    copyBtn.className = 'copy-table-btn';
+                    copyBtn.title = 'Copy table';
+                    copyBtn.innerHTML = `
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        Copy
+                    `;
+                    copyBtn.onclick = (e) => {
+                        e.preventDefault();
+                        this.copyTable(table);
+                    };
+                    existingHeader.appendChild(copyBtn);
+                }
+            }
+        });
+    }
+
+    copyTable(table) {
+        // Convert table to TSV (tab-separated values)
+        const rows = table.querySelectorAll('tr');
+        const tsvLines = [];
+        
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('th, td');
+            const cellTexts = Array.from(cells).map(cell => {
+                // Get text content, replace newlines with spaces
+                return cell.textContent.trim().replace(/\n/g, ' ');
+            });
+            tsvLines.push(cellTexts.join('\t'));
+        });
+        
+        const tsv = tsvLines.join('\n');
+        
+        navigator.clipboard.writeText(tsv).then(() => {
+            // Show success feedback
+            const wrapper = table.closest('.table-container');
+            if (wrapper) {
+                const copyBtn = wrapper.querySelector('.copy-table-btn');
+                if (copyBtn) {
+                    const originalHTML = copyBtn.innerHTML;
+                    copyBtn.innerHTML = `
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        Copied!
+                    `;
+                    copyBtn.classList.add('copied');
+                    setTimeout(() => {
+                        copyBtn.innerHTML = originalHTML;
+                        copyBtn.classList.remove('copied');
+                    }, 2000);
+                }
+            }
+        }).catch(err => {
+            console.error('Failed to copy table:', err);
+        });
+    }
+
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
@@ -451,12 +526,28 @@ class MessageRenderer {
         const temp = document.createElement('div');
         temp.innerHTML = html;
         
-        // 1. Wrap tables in scrollable containers
+        // 1. Wrap tables in scrollable containers with header
         const tables = temp.querySelectorAll('table');
         tables.forEach(table => {
             if (!table.parentElement.classList.contains('table-container')) {
                 const wrapper = document.createElement('div');
                 wrapper.className = 'table-container';
+                
+                // Add header with copy button
+                const header = document.createElement('div');
+                header.className = 'table-header';
+                header.innerHTML = `
+                    <span class="table-label">Table</span>
+                    <button class="copy-table-btn" onclick="renderer.copyTable(this.closest('.table-container').querySelector('table'))">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        Copy
+                    </button>
+                `;
+                wrapper.appendChild(header);
+                
                 table.parentNode.insertBefore(wrapper, table);
                 wrapper.appendChild(table);
             }

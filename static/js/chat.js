@@ -256,8 +256,30 @@ class MultimodalManager {
                 }
             }
 
-            // NO finalizeStreamMessage needed - renderStreamChunk handles everything
-            // The final render is already done by the last renderStreamChunk call
+            // Final processing after stream completes
+            // Update copy button handler with full content
+            if (currentStreamMessage) {
+                const copyBtn = currentStreamMessage.querySelector('.copy-message-btn');
+                if (copyBtn) {
+                    copyBtn.onclick = () => {
+                        navigator.clipboard.writeText(accumulatedText).then(() => {
+                            copyBtn.innerHTML = `
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                            `;
+                            setTimeout(() => {
+                                copyBtn.innerHTML = `
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                `;
+                            }, 2000);
+                        }).catch(err => console.error('Copy failed:', err));
+                    };
+                }
+            }
 
         } catch (error) {
             console.error('Stream error:', error);
@@ -277,6 +299,16 @@ class MultimodalManager {
         // This gives real-time typing effect
         if (typeof renderer !== 'undefined' && renderer.isMarkedReady) {
             contentDiv.innerHTML = renderer.render(text);
+            
+            // Initialize mermaid diagrams during streaming (debounced)
+            if (renderer.isMermaidReady) {
+                renderer.initializeMermaidDiagrams(contentDiv);
+            }
+            
+            // Initialize table copy buttons during streaming
+            if (typeof renderer !== 'undefined') {
+                renderer.initializeTableCopyButtons(contentDiv);
+            }
         } else {
             // Fallback: just show raw text
             contentDiv.textContent = text;

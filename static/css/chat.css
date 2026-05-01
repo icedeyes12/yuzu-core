@@ -304,6 +304,49 @@ html, body {
   margin: 0.8rem 0;
   border-radius: 6px;
   border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.table-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.copy-table-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  color: var(--text-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.copy-table-btn:hover {
+  background: var(--accent-pink);
+  color: white;
+  border-color: var(--accent-pink);
+}
+
+.copy-table-btn.copied {
+  background: #4caf50;
+  color: white;
+  border-color: #4caf50;
 }
 
 .message-content .table-container table {
