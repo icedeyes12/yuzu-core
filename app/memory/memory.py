@@ -59,8 +59,6 @@ _fence_lock = threading.Lock()
 
 # ── Message counter tracking (per-session) ─────────────────────────────────────
 
-_last_processed_count: dict[int, int] = {}  # session_id -> last processed count
-
 
 def _try_set_fence(session_id: int, fence_count: int) -> bool:
     """Atomically set fence for a session if not already set.
@@ -126,15 +124,12 @@ def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
         logger.debug(f"Segmentation skipped for session {session_id}: fence active")
         return False
     
-    last_count = _last_processed_count.get(session_id, 0)
-    delta = current_count - last_count
-    
     # Force trigger at WINDOW_MAX
-    if current_count >= WINDOW_MAX and delta >= WINDOW_MAX:
+    if current_count >= WINDOW_MAX:
         return True
     
     # Periodic trigger every WINDOW_BASE
-    if delta >= WINDOW_BASE:
+    if current_count >= WINDOW_BASE:
         return True
     
     return False
@@ -145,7 +140,7 @@ def mark_segmentation_done(session_id: int, count: int) -> None:
     
     Called AFTER processing completes (not before).
     """
-    _last_processed_count[session_id] = count
+    pass
 
 
 # ── Batch segmentation (single LLM call) ───────────────────────────────────────

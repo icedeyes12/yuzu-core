@@ -17,9 +17,7 @@ function toggleSidebar() {
         hamburger.classList.add('active');
         
         // Load sessions if on chat page
-        if (window.location.pathname === '/chat') {
-            loadSidebarSessions();
-        }
+        loadSidebarSessions();
     }
 }
 
