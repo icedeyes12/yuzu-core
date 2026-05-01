@@ -36,7 +36,8 @@ class MessageRenderer {
                 flowchart: { 
                     useMaxWidth: true, 
                     htmlLabels: true,
-                    curve: 'basis'
+                    curve: 'basis',
+                    wrap: false
                 },
                 sequence: { 
                     useMaxWidth: true,
@@ -725,7 +726,7 @@ class MessageRenderer {
             theme: 'base',
             themeVariables: themeVariables,
             securityLevel: 'loose',
-            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis', wrap: false },
             sequence: { useMaxWidth: true, wrap: false },
             gantt: { useMaxWidth: true, wrap: false },
             er: { useMaxWidth: true, wrap: false }
