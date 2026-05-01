@@ -181,11 +181,19 @@ class MessageRenderer {
             // Mermaid diagram detection - render as mermaid container
             if (normalizedLang === 'mermaid' && this.isMermaidReady) {
                 const id = `mermaid-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+                const mermaidCode = this.escapeHtml(code);
                 return `<div class="mermaid-container" data-mermaid-id="${id}">
                     <div class="code-block-header">
                         <span class="code-language">mermaid</span>
+                        <button class="copy-code-btn" onclick="navigator.clipboard.writeText(decodeURIComponent('${encodeURIComponent(code)}')).then(() => { this.innerHTML='<svg width=\\'16\\' height=\\'16\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><polyline points=\\'20 6 9 17 4 12\\'></polyline></svg>Copied!'; this.classList.add('copied'); setTimeout(() => { this.innerHTML='<svg width=\\'16\\' height=\\'16\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><rect x=\\'9\\' y=\\'9\\' width=\\'13\\' height=\\'13\\' rx=\\'2\\' ry=\\'2\\'></rect><path d=\\'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\\'></path></svg>Copy'; this.classList.remove('copied'); }, 2000); })">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            Copy
+                        </button>
                     </div>
-                    <pre class="mermaid" id="${id}">${this.escapeHtml(code)}</pre>
+                    <pre class="mermaid" id="${id}">${mermaidCode}</pre>
                 </div>`;
             }
             
@@ -260,10 +268,34 @@ class MessageRenderer {
 
     _isHtmlCode(code) {
         const trimmed = (code || '').trim();
-        return trimmed.startsWith('<!DOCTYPE') ||
-               trimmed.startsWith('<html') ||
-               (trimmed.startsWith('<head') && trimmed.includes('<body')) ||
-               trimmed.includes('<html') && trimmed.includes('<body');
+        // Check for full HTML documents
+        if (trimmed.startsWith('<!DOCTYPE') ||
+            trimmed.startsWith('<html') ||
+            (trimmed.startsWith('<head') && trimmed.includes('<body'))) {
+            return true;
+        }
+        // Check for common HTML patterns that indicate HTML content
+        const htmlPatterns = [
+            /<html[\s>]/i,
+            /<head[\s>]/i,
+            /<body[\s>]/i,
+            /<div[\s>]/i,
+            /<style[\s>]/i,
+            /<script[\s>]/i,
+            /<link[\s]/i,
+            /<meta[\s]/i,
+            /<span[\s>]/i,
+            /<p[\s>]/i,
+            /<h[1-6][\s>]/i,
+            /<img[\s]/i,
+            /<a[\s]+href/i,
+            /<table[\s>]/i,
+            /<form[\s>]/i,
+            /<input[\s]/i,
+            /<button[\s>]/i
+        ];
+        // Return true if any HTML pattern matches
+        return htmlPatterns.some(pattern => pattern.test(trimmed));
     }
 
     toggleHtmlPreview(btn) {

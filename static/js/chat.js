@@ -938,6 +938,10 @@ async function loadChatHistory() {
                         hljs.highlightElement(block);
                     });
                 }
+                // Initialize mermaid diagrams from history
+                if (typeof renderer !== 'undefined' && renderer.isMermaidReady) {
+                    renderer.initializeMermaidDiagrams(chatContainer);
+                }
                 scrollToBottom();
             }, 100);
             
