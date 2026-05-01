@@ -35,7 +35,7 @@
   font-size: 2.5rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
-  background: linear-gradient(135deg, var(--accent-color), var(--accent-pink));
+  background: linear-gradient(135deg, var(--accent-color), var(--accent-primary));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -71,7 +71,7 @@
 
 .card:hover {
   transform: translateY(-5px);
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
   box-shadow: 0 10px 30px var(--shadow-pink);
   text-decoration: none;
   color: var(--text-color);
@@ -80,7 +80,7 @@
 .card h2 {
   font-size: 1.5rem;
   margin-bottom: 0.5rem;
-  color: var(--accent-lavender);
+  color: var(--accent-secondary);
 }
 
 .card p {
@@ -96,7 +96,7 @@
   text-align: center;
   padding: 1rem;
   background: var(--header-bg);
-  border-top: 1.5px solid var(--accent-lavender);
+  border-top: 1.5px solid var(--accent-secondary);
   backdrop-filter: var(--backdrop-blur);
   z-index: 90;
 }
@@ -114,8 +114,8 @@
 
 .footer-link:hover {
   background: rgba(255, 255, 255, 0.1);
-  text-decoration-color: var(--accent-pink);
-  color: var(--accent-pink);
+  text-decoration-color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 
 /* Mobile Responsive */

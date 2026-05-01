@@ -12,19 +12,14 @@
   
   /* Accent Colors */
   --accent-color: #8a6de9;
-  --accent-pink: #ff6b9d;
-  --accent-lavender: #b39ddb;
   --accent-cyan: #6be5ff;
   
   /* RGB Values for Opacity */
-  --accent-lavender-rgb: 179, 157, 219;
-  --accent-pink-rgb: 255, 107, 157;
   
   /* Border Colors */
   --border-lavender: rgba(179, 157, 219, 0.3);
   --border-user: rgba(138, 109, 233, 0.5);
   --border-ai: rgba(64, 64, 128, 0.4);
-  --border-pink: rgba(255, 107, 157, 0.4);
   --code-border: rgba(179, 157, 219, 0.2);
   
   /* Text Colors */
@@ -40,7 +35,7 @@
   --shadow-lavender: rgba(179, 157, 219, 0.4);
   
   /* Button Colors */
-  --button-bg: linear-gradient(135deg, var(--accent-color), var(--accent-pink));
+  --button-bg: linear-gradient(135deg, var(--accent-color), var(--accent-primary));
   --button-hover: linear-gradient(135deg, #9a7df5, #ff7ba8);
   --copy-button-bg: rgba(30, 30, 60, 0.9);
   --copy-button-hover: rgba(50, 50, 90, 0.9);
@@ -146,7 +141,7 @@ body {
 .sidebar-title {
   font-size: 1.3rem;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--accent-color), var(--accent-pink));
+  background: linear-gradient(135deg, var(--accent-color), var(--accent-primary));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -195,7 +190,7 @@ body {
 
 .nav-item:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-right: 3px solid var(--accent-pink);
+  border-right: 3px solid var(--accent-primary);
 }
 
 .nav-item.active {
@@ -272,7 +267,7 @@ body {
 .app-title {
   font-size: 1.4rem;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--accent-color), var(--accent-pink));
+  background: linear-gradient(135deg, var(--accent-color), var(--accent-primary));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -318,7 +313,7 @@ body {
   font-size: 2.5rem;
   font-weight: 700;
   margin-bottom: 2rem;
-  background: linear-gradient(135deg, var(--accent-color), var(--accent-pink));
+  background: linear-gradient(135deg, var(--accent-color), var(--accent-primary));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -355,7 +350,7 @@ body {
 
 .dashboard-card:hover {
   transform: translateY(-5px);
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
   box-shadow: 0 10px 30px var(--shadow-pink);
 }
 
@@ -368,7 +363,7 @@ body {
 
 .card-icon {
   font-size: 1.5rem;
-  background: linear-gradient(135deg, var(--accent-color), var(--accent-pink));
+  background: linear-gradient(135deg, var(--accent-color), var(--accent-primary));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -519,7 +514,7 @@ input:checked + .toggle-slider:before {
 
 .select-dropdown:focus {
   outline: none;
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
   box-shadow: 0 0 0 2px var(--shadow-pink);
 }
 
@@ -652,7 +647,7 @@ input:checked + .toggle-slider:before {
 button:focus-visible,
 .nav-item:focus-visible,
 .select-dropdown:focus-visible {
-  outline: 2px solid var(--accent-pink);
+  outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
 }
 

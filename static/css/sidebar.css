@@ -7,7 +7,7 @@
     width: 320px;
     height: 100vh;
     background: var(--header-bg);
-    border-right: 1.5px solid var(--accent-lavender);
+    border-right: 1.5px solid var(--accent-secondary);
     z-index: 10001;
     transition: left 0.3s ease;
     display: flex;
@@ -42,14 +42,14 @@
     align-items: center;
     justify-content: space-between;
     padding: 1.2rem;
-    border-bottom: 1.5px solid var(--accent-lavender);
+    border-bottom: 1.5px solid var(--accent-secondary);
     background: var(--header-bg);
 }
 
 .sidebar-header h2 {
     margin: 0;
     font-size: 1.3rem;
-    color: var(--accent-lavender);
+    color: var(--accent-secondary);
     font-weight: 700;
 }
 
@@ -86,7 +86,7 @@
 .sidebar-section h3 {
     margin: 0 0 1rem 0;
     font-size: 1rem;
-    color: var(--accent-pink);
+    color: var(--accent-primary);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -111,7 +111,7 @@
 
 .sidebar-link.active {
     background: linear-gradient(135deg, rgba(255, 182, 193, 0.2), rgba(221, 160, 221, 0.2));
-    border: 1px solid var(--accent-pink);
+    border: 1px solid var(--accent-primary);
 }
 
 .sidebar-icon {
@@ -230,7 +230,7 @@
 .sidebar-btn {
     width: 100%;
     padding: 0.8rem;
-    border: 1.5px solid var(--border-pink);
+    border: 1.5px solid var(--border-primary);
     border-radius: 8px;
     background: var(--button-bg);
     color: var(--button-text);
@@ -269,7 +269,7 @@
 
 .sidebar-session-item.active {
     background: linear-gradient(135deg, rgba(255, 182, 193, 0.2), rgba(221, 160, 221, 0.2));
-    border-color: var(--accent-pink);
+    border-color: var(--accent-primary);
 }
 
 .session-content {
@@ -325,7 +325,7 @@
 }
 
 .session-action-btn.rename-btn:hover {
-    color: var(--accent-lavender);
+    color: var(--accent-secondary);
 }
 
 .session-action-btn.delete-btn:hover {
@@ -405,7 +405,7 @@
 .hamburger-menu {
     position: static;
     background: var(--header-bg);
-    border: 1.5px solid var(--accent-lavender);
+    border: 1.5px solid var(--accent-secondary);
     border-radius: 6px;
     width: 36px;
     height: 36px;
@@ -429,13 +429,13 @@
 
 .hamburger-menu:hover {
     transform: scale(1.05);
-    border-color: var(--accent-pink);
+    border-color: var(--accent-primary);
 }
 
 /* Active state for when sidebar is open */
 .hamburger-menu.active {
-    background: var(--accent-lavender);
-    border-color: var(--accent-pink);
+    background: var(--accent-secondary);
+    border-color: var(--accent-primary);
 }
 
 .hamburger-menu.active span {

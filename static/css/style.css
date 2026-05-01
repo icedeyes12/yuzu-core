@@ -49,7 +49,7 @@ a {
 }
 
 a:hover {
-  color: var(--accent-pink, #ff6b9d);
+  color: var(--accent-primary);
   text-decoration: underline;
 }
 
@@ -72,12 +72,12 @@ a:hover {
 }
 
 .btn:focus-visible {
-  outline: 2px solid var(--accent-pink);
+  outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-color), var(--accent-pink));
+  background: linear-gradient(135deg, var(--accent-color), var(--accent-primary));
   color: white;
   box-shadow: 0 4px 15px var(--shadow-pink);
 }
@@ -95,7 +95,7 @@ a:hover {
 
 .btn-secondary:hover {
   background: rgba(255, 255, 255, 0.1);
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
   transform: translateY(-1px);
 }
 
@@ -140,7 +140,7 @@ a:hover {
 .form-textarea:focus,
 .form-select:focus {
   outline: none;
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
   box-shadow: 0 0 0 3px var(--shadow-pink);
 }
 
@@ -171,7 +171,7 @@ a:hover {
 
 .card:hover {
   transform: translateY(-3px);
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
   box-shadow: 0 10px 30px var(--shadow-pink);
 }
 
@@ -399,14 +399,14 @@ a:hover {
   height: 20px;
   margin: -10px 0 0 -10px;
   border: 2px solid transparent;
-  border-top: 2px solid var(--accent-pink);
+  border-top: 2px solid var(--accent-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
 
 /* Focus Management */
 .focus-trap {
-  outline: 2px solid var(--accent-pink);
+  outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
 }
 

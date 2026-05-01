@@ -21,7 +21,7 @@
   padding: 1rem;
   background: var(--header-bg);
   backdrop-filter: var(--backdrop-blur);
-  border-bottom: 1.5px solid var(--accent-lavender);
+  border-bottom: 1.5px solid var(--accent-secondary);
   transition: all 0.3s ease;
 }
 
@@ -46,13 +46,13 @@
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--accent-lavender);
+  color: var(--accent-secondary);
   transition: all 0.3s ease;
 }
 
 .config-header p {
   margin: 0.3rem 0 0 0;
-  color: var(--accent-pink);
+  color: var(--accent-primary);
   font-weight: 500;
   font-size: 0.9rem;
   transition: all 0.3s ease;
@@ -84,7 +84,7 @@
 
 .config-section:hover {
   transform: translateY(-2px);
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
   box-shadow: 0 8px 25px var(--shadow-pink);
 }
 
@@ -92,7 +92,7 @@
   margin: 0 0 0.8rem 0;
   font-size: 1.2rem;
   font-weight: 700;
-  color: var(--accent-lavender);
+  color: var(--accent-secondary);
   border-bottom: 1.5px solid var(--border-lavender);
   padding-bottom: 0.5rem;
   transition: all 0.3s ease;
@@ -108,7 +108,7 @@
   display: block;
   margin-bottom: 0.3rem;
   font-weight: 600;
-  color: var(--accent-pink);
+  color: var(--accent-primary);
   font-size: 0.9rem;
   transition: all 0.3s ease;
 }
@@ -129,7 +129,7 @@
 
 .form-group input:focus,
 .form-select:focus {
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
   background: var(--input-bg);
   box-shadow: 0 0 0 3px var(--shadow-pink);
   outline: none;
@@ -161,7 +161,7 @@ input[type="range"]::-webkit-slider-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--accent-pink);
+  background: var(--accent-primary);
   cursor: pointer;
   border: 2px solid var(--header-bg);
   box-shadow: 0 2px 6px var(--shadow-pink);
@@ -171,7 +171,7 @@ input[type="range"]::-moz-range-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--accent-pink);
+  background: var(--accent-primary);
   cursor: pointer;
   border: 2px solid var(--header-bg);
   box-shadow: 0 2px 6px var(--shadow-pink);
@@ -193,7 +193,7 @@ textarea {
 }
 
 textarea:focus {
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
   background: var(--input-bg);
   box-shadow: 0 0 0 3px var(--shadow-pink);
   outline: none;
@@ -216,7 +216,7 @@ textarea:focus {
 .btn-primary {
   background: var(--button-bg);
   color: var(--button-text);
-  border-color: var(--border-pink);
+  border-color: var(--border-primary);
   box-shadow: 0 3px 12px var(--shadow-pink);
 }
 
@@ -299,7 +299,7 @@ textarea:focus {
 }
 
 .memory-stats strong {
-  color: var(--accent-pink);
+  color: var(--accent-primary);
 }
 
 /* Global knowledge textarea */
@@ -315,7 +315,7 @@ textarea:focus {
 }
 
 #global-knowledge:focus {
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
   box-shadow: 0 0 0 3px var(--shadow-pink);
 }
 
@@ -341,7 +341,7 @@ textarea:focus {
 
 #keys-list li:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
 }
 
 #keys-list .btn {
@@ -458,7 +458,7 @@ textarea:focus {
 .form-select:focus,
 textarea:focus,
 .btn:focus {
-  outline: 2px solid var(--accent-lavender);
+  outline: 2px solid var(--accent-secondary);
   outline-offset: 2px;
 }
 
@@ -472,7 +472,7 @@ textarea:focus,
 
 /* Error states */
 .error {
-  color: var(--accent-pink);
+  color: var(--accent-primary);
   text-align: center;
   padding: 1rem;
   background: rgba(239, 68, 68, 0.1);
@@ -500,7 +500,7 @@ textarea:focus,
   text-align: center;
   padding: 0.8rem;
   background: var(--header-bg);
-  border-top: 1.5px solid var(--accent-lavender);
+  border-top: 1.5px solid var(--accent-secondary);
   backdrop-filter: var(--backdrop-blur);
   transition: all 0.3s ease;
 }
@@ -518,6 +518,6 @@ textarea:focus,
 
 .footer-link:hover {
   background: rgba(255, 255, 255, 0.1);
-  text-decoration-color: var(--accent-pink);
-  color: var(--accent-pink);
+  text-decoration-color: var(--accent-primary);
+  color: var(--accent-primary);
 }

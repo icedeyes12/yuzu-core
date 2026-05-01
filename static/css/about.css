@@ -46,7 +46,7 @@
   margin: 0;  
   font-size: 1.8rem;  
   font-weight: 700;  
-  background: linear-gradient(135deg, var(--accent-color), var(--accent-pink));  
+  background: linear-gradient(135deg, var(--accent-color), var(--accent-primary));  
   -webkit-background-clip: text;  
   -webkit-text-fill-color: transparent;  
   background-clip: text;  
@@ -55,7 +55,7 @@
 
 .subtitle {  
   margin: 0.3rem 0 0 0;  
-  color: var(--accent-pink);
+  color: var(--accent-primary);
   font-weight: 500;
   font-size: 0.9rem;
   transition: all 0.3s ease;
@@ -83,7 +83,7 @@
 .hero-content h2 {  
   font-size: 2.2rem;  
   margin: 0 0 0.8rem 0;  
-  background: linear-gradient(135deg, var(--accent-color), var(--accent-pink));  
+  background: linear-gradient(135deg, var(--accent-color), var(--accent-primary));  
   -webkit-background-clip: text;  
   -webkit-text-fill-color: transparent;  
   background-clip: text;  
@@ -109,7 +109,7 @@
 
 .content-section:hover {  
   transform: translateY(-3px);  
-  border-color: var(--accent-pink);  
+  border-color: var(--accent-primary);  
   box-shadow: 0 10px 25px var(--shadow-pink);  
 }  
 
@@ -137,8 +137,8 @@
 
 .highlight-text {  
   background: linear-gradient(135deg, 
-    rgba(var(--accent-lavender-rgb), 0.2), 
-    rgba(var(--accent-pink-rgb), 0.2)
+    color-mix(in srgb, var(--accent-secondary) 20%, transparent), 
+    color-mix(in srgb, var(--accent-primary) 20%, transparent)
   );  
   padding: 1rem 1.5rem;  
   border-radius: 1rem;  
@@ -166,9 +166,9 @@
 }  
 
 .tech-card:hover {  
-  background: rgba(var(--accent-lavender-rgb), 0.1);  
+  background: color-mix(in srgb, var(--accent-secondary) 10%, transparent);  
   transform: translateY(-3px);  
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
 }  
 
 .tech-icon {  
@@ -233,7 +233,7 @@
 
 .philosophy-item:hover {
   transform: translateY(-2px);
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
   box-shadow: 0 5px 15px var(--shadow-pink);
 }
 
@@ -291,8 +291,8 @@
 
 .footer-link:hover {  
   background: rgba(255, 255, 255, 0.1);  
-  text-decoration-color: var(--accent-pink);  
-  color: var(--accent-pink);  
+  text-decoration-color: var(--accent-primary);  
+  color: var(--accent-primary);  
 }  
 
 .content-section {  

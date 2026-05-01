@@ -217,9 +217,9 @@ html, body {
 }
 
 .copy-message-btn:hover {
-  background: var(--accent-pink);
+  background: var(--accent-primary);
   color: white;
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
 }
 
 /* ==================== MARKDOWN CONTENT ==================== */
@@ -251,7 +251,7 @@ html, body {
 }
 
 .message-content blockquote {
-  border-left: 4px solid var(--accent-pink);
+  border-left: 4px solid var(--accent-primary);
   margin: 0.8rem 0;
   padding: 0.5rem 1rem;
   background: var(--bg-secondary);
@@ -338,9 +338,9 @@ html, body {
 }
 
 .copy-table-btn:hover {
-  background: var(--accent-pink);
+  background: var(--accent-primary);
   color: white;
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
 }
 
 .copy-table-btn.copied {
@@ -460,9 +460,9 @@ html, body {
 }
 
 .copy-code-btn:hover {
-  background: var(--accent-pink);
+  background: var(--accent-primary);
   color: white;
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
 }
 
 .copy-code-btn.copied {
@@ -492,7 +492,7 @@ html, body {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: var(--accent-pink);
+  background: var(--accent-primary);
   color: white;
   border: none;
   cursor: pointer;
@@ -631,13 +631,13 @@ html, body {
 
 #messageInput:focus {
   outline: none;
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
 }
 
 #sendButton {
   min-width: 70px;
   height: 42px;
-  background: var(--accent-pink);
+  background: var(--accent-primary);
   color: white;
   border: none;
   border-radius: 20px;
@@ -677,9 +677,9 @@ html, body {
 }
 
 .multimodal-toggle-btn:hover {
-  background: var(--accent-pink);
+  background: var(--accent-primary);
   color: white;
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
 }
 
 .mode-indicator {
@@ -688,7 +688,7 @@ html, body {
   right: -2px;
   width: 18px;
   height: 18px;
-  background: var(--accent-pink);
+  background: var(--accent-primary);
   color: white;
   border-radius: 50%;
   font-size: 0.7rem;
@@ -748,7 +748,7 @@ html, body {
 }
 
 .multimodal-option.active {
-  background: var(--accent-pink);
+  background: var(--accent-primary);
   color: white;
 }
 
@@ -796,7 +796,7 @@ html, body {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.7rem;
-  background: var(--accent-pink);
+  background: var(--accent-primary);
   color: white;
   border: none;
   border-radius: 8px;
@@ -895,9 +895,9 @@ html, body {
 }
 
 .image-action-btn:hover {
-  background: var(--accent-pink);
+  background: var(--accent-primary);
   color: white;
-  border-color: var(--accent-pink);
+  border-color: var(--accent-primary);
 }
 
 .image-caption {
@@ -1010,7 +1010,7 @@ html, body {
     align-items: center;
     gap: 0.3rem;
     padding: 0.3rem 0.7rem;
-    background: var(--accent-pink);
+    background: var(--accent-primary);
     color: white;
     border: none;
     border-radius: 6px;
