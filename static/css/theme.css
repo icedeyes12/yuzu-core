@@ -51,9 +51,9 @@
   --bg-deepest: #050a1a;
   
   /* Message Bubbles */
-  --user-bubble: #9b7ff4;
+  --user-bubble: #3a6bbf;
   --ai-bubble: transparent;
-  --message-user-bg: #9b7ff4;
+  --message-user-bg: #3a6bbf;
   --message-ai-bg: transparent;
   
   /* Buttons & UI */

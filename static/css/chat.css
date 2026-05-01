@@ -389,7 +389,7 @@ html, body {
 }
 
 .message-content img, .markdown-image {
-  max-width: 100%;
+  max-width: none;
   height: auto;
   border-radius: 8px;
   margin: 0.8rem 0;
@@ -869,7 +869,7 @@ html, body {
 }
 
 .generated-image, .uploaded-image {
-  max-width: 100%;
+  max-width: none;
   height: auto;
   border-radius: 8px;
   border: 1px solid var(--border-color);
@@ -1326,6 +1326,6 @@ html, body {
 
 /* Mermaid SVG styling - inherit theme colors */
 .mermaid-container svg {
-  max-width: 100%;
+  max-width: none;
   height: auto;
 }

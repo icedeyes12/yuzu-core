@@ -43,10 +43,12 @@ class MessageRenderer {
                     wrap: false
                 },
                 gantt: {
-                    useMaxWidth: true
+                    useMaxWidth: true,
+                    wrap: false
                 },
                 er: {
-                    useMaxWidth: true
+                    useMaxWidth: true,
+                    wrap: false
                 }
             });
             this.isMermaidReady = true;
@@ -725,8 +727,8 @@ class MessageRenderer {
             securityLevel: 'loose',
             flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
             sequence: { useMaxWidth: true, wrap: false },
-            gantt: { useMaxWidth: true },
-            er: { useMaxWidth: true }
+            gantt: { useMaxWidth: true, wrap: false },
+            er: { useMaxWidth: true, wrap: false }
         });
         console.log('[Renderer] Mermaid reinitialized with new theme');
     }
