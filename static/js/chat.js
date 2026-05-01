@@ -7,6 +7,12 @@ let isProcessingMessage = false;
 let currentPage = 0;
 const MESSAGES_PER_PAGE = 30;
 
+// ==================== STREAMING STATE ====================
+let currentStreamMessage = null;
+let streamBuffer = '';
+let streamRenderTimeout = null;
+const STREAM_RENDER_DEBOUNCE_MS = 50;
+
 // ==================== MULTIMODAL MANAGER ====================
 class MultimodalManager {
     constructor() {
@@ -136,38 +142,203 @@ class MultimodalManager {
         addMessage("user", text);
         this.clearInput();
         
-        const typingIndicator = document.getElementById('typingIndicator');
-        if (typingIndicator) typingIndicator.classList.remove("hidden");
+        // Use streaming endpoint for real-time rendering
+        await this.sendMessageStreaming(text);
+    }
 
+    async sendMessageStreaming(message) {
+        const typingIndicator = document.getElementById('typingIndicator');
+        const chatContainer = document.getElementById('chatContainer');
+        
+        if (!chatContainer) {
+            console.error('Chat container not found');
+            isProcessingMessage = false;
+            return;
+        }
+
+        // Create AI message element immediately (empty, will be filled during streaming)
+        currentStreamMessage = this.createStreamingMessageElement('ai');
+        chatContainer.appendChild(currentStreamMessage);
+        
+        const contentDiv = currentStreamMessage.querySelector('.message-content');
+        streamBuffer = '';
+        
+        // Show typing indicator initially
+        if (typingIndicator) typingIndicator.classList.remove('hidden');
+        
         try {
-            const response = await fetch("/api/send_message", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: text }),
+            const response = await fetch('/api/send_message_stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message })
             });
-            
-            const data = await response.json();
-            
-            if (typingIndicator) typingIndicator.classList.add("hidden");
-            
-            if (data.reply) {
-                // Detect tool markdown contract — render as tool message
-                const reply = String(data.reply);
-                if (reply.trimStart().startsWith("<details>")) {
-                    addMessage("tool", reply);
-                } else {
-                    addMessage("ai", reply);
-                }
-            } else {
-                addMessage("ai", "No response from server");
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let accumulatedText = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const json = JSON.parse(line.slice(6));
+                            if (json.chunk) {
+                                accumulatedText += json.chunk;
+                                streamBuffer = accumulatedText;
+                                this.scheduleStreamRender(contentDiv);
+                            }
+                        } catch (e) {
+                            // Ignore parse errors for malformed JSON
+                        }
+                    }
+                }
+            }
+
+            // Final render
+            this.finalizeStreamMessage(contentDiv, accumulatedText);
+
         } catch (error) {
-            console.error("Error sending message:", error);
-            if (typingIndicator) typingIndicator.classList.add("hidden");
-            addMessage("ai", "Connection error. Please try again.");
+            console.error('Stream error:', error);
+            if (contentDiv) {
+                contentDiv.innerHTML = renderer.render('Sorry, I encountered an error processing your message.');
+            }
         } finally {
+            if (typingIndicator) typingIndicator.classList.add('hidden');
+            this.cleanupStreamState();
             isProcessingMessage = false;
             this.isSending = false;
+        }
+    }
+
+    createStreamingMessageElement(role) {
+        const msg = document.createElement('div');
+        msg.className = `message ${role}`;
+        msg.setAttribute('data-streaming', 'true');
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        contentDiv.innerHTML = '<span class="streaming-cursor">▊</span>';
+
+        msg.appendChild(contentDiv);
+
+        // Add footer for timestamp
+        const footer = document.createElement('div');
+        footer.className = 'message-footer';
+
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'timestamp';
+        timeDiv.textContent = this.getCurrentTime();
+        footer.appendChild(timeDiv);
+
+        // Add copy button for assistant messages
+        if (role === 'ai') {
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'copy-message-btn';
+            copyBtn.title = 'Copy full message';
+            copyBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+            `;
+            footer.appendChild(copyBtn);
+        }
+
+        msg.appendChild(footer);
+        return msg;
+    }
+
+    scheduleStreamRender(contentDiv) {
+        if (streamRenderTimeout) {
+            clearTimeout(streamRenderTimeout);
+        }
+
+        streamRenderTimeout = setTimeout(() => {
+            this.renderStreamContent(contentDiv);
+            scrollToBottom();
+        }, STREAM_RENDER_DEBOUNCE_MS);
+    }
+
+    renderStreamContent(contentDiv) {
+        if (!contentDiv || !streamBuffer) return;
+
+        // Reuse existing renderer for incremental partial markdown
+        contentDiv.innerHTML = renderer.render(streamBuffer);
+
+        // Add streaming cursor for visual feedback
+        const cursor = document.createElement('span');
+        cursor.className = 'streaming-cursor';
+        cursor.textContent = '▊';
+        contentDiv.appendChild(cursor);
+
+        // Re-highlight any new code blocks
+        if (typeof hljs !== 'undefined') {
+            contentDiv.querySelectorAll('pre code:not(.hljs)').forEach(block => {
+                hljs.highlightElement(block);
+            });
+        }
+
+        // Re-initialize mermaid diagrams
+        if (renderer.isMermaidReady) {
+            renderer.initializeMermaidDiagrams(contentDiv);
+        }
+    }
+
+    finalizeStreamMessage(contentDiv, finalContent) {
+        if (streamRenderTimeout) {
+            clearTimeout(streamRenderTimeout);
+            streamRenderTimeout = null;
+        }
+
+        if (!contentDiv) return;
+
+        // Final render without cursor
+        contentDiv.innerHTML = renderer.render(finalContent);
+
+        // Final highlight pass
+        if (typeof hljs !== 'undefined') {
+            contentDiv.querySelectorAll('pre code:not(.hljs)').forEach(block => {
+                hljs.highlightElement(block);
+            });
+        }
+
+        // Final mermaid initialization
+        if (renderer.isMermaidReady) {
+            renderer.initializeMermaidDiagrams(contentDiv);
+        }
+
+        // Update copy button handler
+        if (currentStreamMessage) {
+            const copyBtn = currentStreamMessage.querySelector('.copy-message-btn');
+            if (copyBtn) {
+                copyBtn.onclick = () => {
+                    navigator.clipboard.writeText(finalContent).then(() => {
+                        console.log('Message copied to clipboard');
+                    }).catch(err => {
+                        console.error('Failed to copy message:', err);
+                    });
+                };
+            }
+            currentStreamMessage.removeAttribute('data-streaming');
+        }
+    }
+
+    cleanupStreamState() {
+        currentStreamMessage = null;
+        streamBuffer = '';
+        if (streamRenderTimeout) {
+            clearTimeout(streamRenderTimeout);
+            streamRenderTimeout = null;
         }
     }
 

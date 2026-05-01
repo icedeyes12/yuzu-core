@@ -2,6 +2,7 @@
 // DESCRIPTION: Markdown renderer using marked.js with syntax highlighting
 class MessageRenderer {
     constructor() {
+        this.isMermaidReady = false;
         this.isMarkedReady = false;
         this.isHighlightReady = false;
         this.initializeLibraries();
@@ -22,6 +23,32 @@ class MessageRenderer {
             this.isHighlightReady = true;
         } else {
             console.warn('highlight.js not loaded');
+        }
+
+        // Initialize mermaid.js
+        if (typeof mermaid !== 'undefined') {
+            mermaid.initialize({
+                startOnLoad: false,
+                theme: 'dark',
+                securityLevel: 'loose',
+                flowchart: { 
+                    useMaxWidth: true, 
+                    htmlLabels: true,
+                    curve: 'basis'
+                },
+                sequence: { 
+                    useMaxWidth: true,
+                    wrap: true
+                },
+                gantt: {
+                    useMaxWidth: true
+                },
+                er: {
+                    useMaxWidth: true
+                }
+            });
+            this.isMermaidReady = true;
+            console.log('Mermaid initialized successfully');
         }
     }
 
@@ -124,6 +151,18 @@ class MessageRenderer {
         renderer.code = (code, language) => {
             const originalLabel = language ? language.trim() : '';
             const normalizedLang = this.normalizeLanguageAlias(language);
+            
+            // Mermaid diagram detection - render as mermaid container
+            if (normalizedLang === 'mermaid' && this.isMermaidReady) {
+                const id = `mermaid-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+                return `<div class="mermaid-container" data-mermaid-id="${id}">
+                    <div class="code-block-header">
+                        <span class="code-language">mermaid</span>
+                    </div>
+                    <pre class="mermaid" id="${id}">${this.escapeHtml(code)}</pre>
+                </div>`;
+            }
+            
             const fallbackLang = 'markdown';
             let highlightLang = fallbackLang;
             // Also keep xml for html content so preview button shows
@@ -164,6 +203,27 @@ class MessageRenderer {
             headerIds: true,
             mangle: false
         });
+    }
+
+    async initializeMermaidDiagrams(container) {
+        if (!this.isMermaidReady) return;
+        
+        const mermaidElements = container.querySelectorAll('.mermaid:not([data-processed])');
+        if (mermaidElements.length === 0) return;
+        
+        console.log(`Initializing ${mermaidElements.length} mermaid diagram(s)`);
+        
+        for (const el of mermaidElements) {
+            try {
+                await mermaid.run({ nodes: [el] });
+                el.setAttribute('data-processed', 'true');
+            } catch (error) {
+                console.error('Mermaid render error:', error);
+                const errorMsg = error.message || 'Unknown error';
+                el.innerHTML = `<pre class="mermaid-error">Mermaid Error: ${this.escapeHtml(errorMsg)}\n\n${this.escapeHtml(el.textContent)}</pre>`;
+                el.setAttribute('data-processed', 'true');
+            }
+        }
     }
 
     escapeHtml(text) {

@@ -13,12 +13,13 @@
     <!-- CSS Imports -->
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/chat.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/marked.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/sidebar.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/multimodal.css') }}">
     
-    <!-- Highlight.js CSS -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+    <!-- Highlight.js CSS - Tomorrow Night Blue theme -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/tomorrow-night-blue.min.css">
 </head>
 <body>
     <!-- Unified Sidebar -->
@@ -62,6 +63,14 @@
               <div class="dropdown-option" data-value="light">
                 <span class="theme-preview light-preview"></span>
                 Soft Light
+              </div>
+              <div class="dropdown-option" data-value="suisei">
+                <span class="theme-preview suisei-preview"></span>
+                Stellar Night
+              </div>
+              <div class="dropdown-option" data-value="tokyonight">
+                <span class="theme-preview tokyonight-preview"></span>
+                Tokyo Night
               </div>
               <div class="dropdown-option" data-value="lavender">
                 <span class="theme-preview lavender-preview"></span>
@@ -151,8 +160,11 @@
         </div>
     </div>
     
-    <!-- Load marked.js for markdown rendering -->
-    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <!-- Load marked.js v18.0.2 for markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@18.0.2/marked.min.js"></script>
+    
+    <!-- Load Mermaid.js v11.4.0 for diagram rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.min.js"></script>
     
     <!-- Load Highlight.js (full build with all common languages) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
