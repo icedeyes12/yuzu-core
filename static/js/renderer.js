@@ -694,9 +694,9 @@ class MessageRenderer {
 
     // Get theme variables for mermaid based on current theme
     _getMermaidThemeVariables() {
-        const bodyTheme = document.body.getAttribute('data-theme') || 'suisei';
+        const bodyTheme = document.body.getAttribute('data-theme') || 'stellar-night-suisei';
         const style = getComputedStyle(document.body);
-        const darkThemes = ['dark', 'suisei', 'tokyonight', 'dark-lavender'];
+        const darkThemes = ['dark', 'stellar-night-suisei', 'tokyonight', 'dark-lavender'];
         const isDark = darkThemes.includes(bodyTheme);
         
         return {

@@ -1,6 +1,6 @@
 // FILE: static/js/sidebar.js
 // DESCRIPTION: Unified sidebar management with session actions
-let currentTheme = 'dark';
+let currentTheme = 'stellar-night-suisei';
 
 function toggleSidebar() {
     const sidebar = document.getElementById('mainSidebar');
@@ -361,7 +361,7 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('Initializing sidebar...');
     
     // Get saved theme or default to dark
-    const savedTheme = localStorage.getItem('yuzu-theme') || 'dark';
+    const savedTheme = localStorage.getItem('yuzu-theme') || 'stellar-night-suisei';
     console.log('Saved theme:', savedTheme);
     
     // Apply the theme immediately

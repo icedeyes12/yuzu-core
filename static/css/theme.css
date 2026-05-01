@@ -40,7 +40,7 @@
    Blue-gray palette with white accents
    ======================================== */
 :root,
-[data-theme="suisei"],
+[data-theme="stellar-night-suisei"],
 [data-theme=""] {
   /* Core Colors - Blue-gray base */
   --bg-color: #0d1117;
@@ -556,7 +556,7 @@ body {
 }
 
 /* Suisei preview */
-[data-theme="suisei"] .theme-preview.suisei-preview,
+[data-theme="stellar-night-suisei"] .theme-preview.suisei-preview,
 [data-theme=""] .theme-preview.suisei-preview { 
   background: linear-gradient(135deg, #0d1117, #1f6feb); 
 }
