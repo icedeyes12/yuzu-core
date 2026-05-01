@@ -144,7 +144,6 @@ class MultimodalManager {
     }
 
     async sendMessageStreaming(message) {
-        const typingIndicator = document.getElementById('typingIndicator');
         const chatContainer = document.getElementById('chatContainer');
         
         if (!chatContainer) {
@@ -153,15 +152,16 @@ class MultimodalManager {
             return;
         }
 
-        // Create AI message element immediately
+        // Show typing indicator as in-flow message
+        const typingMsg = showTypingIndicator();
+        
+        // Create AI message element (hidden until first chunk)
         currentStreamMessage = this.createStreamingMessageElement('ai');
+        currentStreamMessage.style.display = 'none';
         chatContainer.appendChild(currentStreamMessage);
         
         const contentDiv = currentStreamMessage.querySelector('.message-content');
         let accumulatedText = '';
-        
-        // Show typing indicator until first chunk arrives
-        if (typingIndicator) typingIndicator.classList.remove('hidden');
         
         try {
             const response = await fetch('/api/send_message_stream', {
@@ -190,9 +190,10 @@ class MultimodalManager {
                         try {
                             const json = JSON.parse(line.slice(6));
                             if (json.chunk) {
-                                // Hide typing indicator on first real content
-                                if (firstChunk && typingIndicator) {
-                                    typingIndicator.classList.add('hidden');
+                                // Hide typing indicator and show message on first real content
+                                if (firstChunk) {
+                                    hideTypingIndicator();
+                                    currentStreamMessage.style.display = '';
                                     firstChunk = false;
                                 }
                                 
@@ -219,7 +220,7 @@ class MultimodalManager {
                 contentDiv.textContent = 'Sorry, I encountered an error processing your message.';
             }
         } finally {
-            if (typingIndicator) typingIndicator.classList.add('hidden');
+            hideTypingIndicator();
             this.cleanupStreamState();
             isProcessingMessage = false;
             this.isSending = false;
@@ -1058,6 +1059,56 @@ function initializeChat() {
     window.multimodal.init();
     
     console.log("Clean chat system ready!");
+}
+
+
+// ==================== TYPING INDICATOR (in-flow message) ====================
+let _typingIndicatorElement = null;
+let _typingIndicatorShownAt = 0;
+const TYPING_INDICATOR_MIN_DURATION_MS = 300;
+
+function showTypingIndicator() {
+    // Remove any existing indicator
+    hideTypingIndicator(true);
+    
+    const chatContainer = document.getElementById('chatContainer');
+    if (!chatContainer) return null;
+    
+    const msg = document.createElement('div');
+    msg.className = 'message ai typing-indicator-message';
+    msg.id = 'typingIndicatorMessage';
+    
+    const dots = document.createElement('div');
+    dots.className = 'typing-dots';
+    dots.innerHTML = '<span></span><span></span><span></span>';
+    msg.appendChild(dots);
+    
+    chatContainer.appendChild(msg);
+    _typingIndicatorElement = msg;
+    _typingIndicatorShownAt = Date.now();
+    
+    scrollToBottom();
+    return msg;
+}
+
+function hideTypingIndicator(force = false) {
+    if (!_typingIndicatorElement) return;
+    
+    const elapsed = Date.now() - _typingIndicatorShownAt;
+    const remaining = TYPING_INDICATOR_MIN_DURATION_MS - elapsed;
+    
+    if (force || remaining <= 0) {
+        _typingIndicatorElement.remove();
+        _typingIndicatorElement = null;
+    } else {
+        // Ensure minimum visibility
+        setTimeout(() => {
+            if (_typingIndicatorElement) {
+                _typingIndicatorElement.remove();
+                _typingIndicatorElement = null;
+            }
+        }, remaining);
+    }
 }
 
 // Start when page loads

@@ -647,3 +647,203 @@
     page-break-inside: avoid;
   }
 }
+
+/* ========================================
+   MISSING MARKDOWN ELEMENTS (from feat/frontend-vanilla-optimization)
+   ======================================== */
+
+/* ==================== HORIZONTAL RULE ==================== */
+.message-content hr {
+  border: none;
+  border-top: 2px solid var(--accent-color, var(--accent-primary));
+  margin: 1.5rem 0;
+  opacity: 0.6;
+}
+
+/* ==================== NESTED LISTS ==================== */
+.message-content ul ul,
+.message-content ol ol {
+  margin: 0.25rem 0;
+}
+
+.message-content ul ul {
+  list-style-type: circle;
+}
+
+.message-content ul ul ul {
+  list-style-type: square;
+}
+
+.message-content ol ol {
+  list-style-type: lower-alpha;
+}
+
+.message-content ol ol ol {
+  list-style-type: lower-roman;
+}
+
+/* ==================== TIGHT LISTS ==================== */
+.message-content ul.tight-list,
+.message-content ol.tight-list {
+  margin: 0.25rem 0;
+}
+
+.message-content ul.tight-list li,
+.message-content ol.tight-list li {
+  margin: 0.1rem 0;
+}
+
+/* ==================== NESTED BLOCKQUOTES ==================== */
+.message-content blockquote blockquote {
+  margin-left: 0.5rem;
+  opacity: 0.9;
+  border-left-color: var(--accent-tertiary, var(--accent-secondary));
+}
+
+/* ==================== STRIKETHROUGH ==================== */
+.message-content del {
+  color: var(--text-secondary);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+/* ==================== MARK / HIGHLIGHT ==================== */
+.message-content mark {
+  background: rgba(255, 215, 0, 0.3);
+  color: var(--text-color);
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
+/* ==================== TASK LISTS (GFM Checkboxes) ==================== */
+.message-content input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 1em;
+  height: 1em;
+  border: 2px solid var(--accent-primary, var(--accent-color));
+  border-radius: 3px;
+  margin-right: 0.5em;
+  cursor: pointer;
+  vertical-align: middle;
+  position: relative;
+}
+
+.message-content input[type="checkbox"]:checked {
+  background: var(--accent-primary, var(--accent-color));
+  border-color: var(--accent-primary, var(--accent-color));
+}
+
+.message-content input[type="checkbox"]:checked::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 0.7em;
+  font-weight: bold;
+}
+
+/* Task list item styling */
+.message-content li.task-list-item {
+  list-style: none;
+  margin-left: -1.5em;
+}
+
+.message-content li.task-list-item:has(input:checked) {
+  opacity: 0.7;
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+/* Task list container */
+.message-content ul.contains-task-list {
+  list-style: none;
+  padding-left: 1.5em;
+}
+
+/* ==================== TABLE ZEBRA STRIPING ==================== */
+.message-content table tr:nth-child(even) {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .message-content table tr:nth-child(even) {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* ==================== EXTERNAL LINK INDICATOR ==================== */
+.message-content a[href^="http"]::after {
+  content: " ↗";
+  font-size: 0.8em;
+  opacity: 0.6;
+}
+
+/* ==================== DETAILS / SUMMARY ==================== */
+.message-content details {
+  margin: 0.8rem 0;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color, var(--border-primary));
+  border-radius: 6px;
+  background: var(--bg-secondary, var(--ai-bubble));
+}
+
+.message-content details[open] {
+  padding-bottom: 0.8rem;
+}
+
+.message-content details[open] summary {
+  border-bottom: 1px solid var(--border-color, var(--border-primary));
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.message-content summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.3rem;
+  user-select: none;
+}
+
+.message-content summary::-webkit-details-marker {
+  margin-right: 0.5rem;
+}
+
+.message-content summary::marker {
+  color: var(--accent-primary, var(--accent-color));
+}
+
+/* ==================== KEYBOARD SHORTCUTS ==================== */
+.message-content kbd {
+  background: var(--bg-secondary, #eee);
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 3px;
+  padding: 0.1em 0.4em;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85em;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+}
+
+/* ==================== ABBREVIATIONS ==================== */
+.message-content abbr[title] {
+  text-decoration: underline dotted;
+  cursor: help;
+}
+
+/* ==================== SUBSCRIPT / SUPERSCRIPT ==================== */
+.message-content sub,
+.message-content sup {
+  font-size: 0.75em;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+.message-content sup {
+  top: -0.5em;
+}
+
+.message-content sub {
+  bottom: -0.25em;
+}

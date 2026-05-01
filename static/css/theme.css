@@ -296,46 +296,77 @@
   --code-bg: #201a15;
 }
 
-/* ==================== SUISEI THEME (Stellar Night) - NEW ==================== */
-[data-theme="suisei"] {
-  /* Deep midnight blue with stellar cyan accents */
-  --bg-color: #0a1628;
-  --bg-secondary: rgba(13, 30, 54, 0.8);
-  --header-bg: rgba(10, 22, 40, 0.95);
-  --card-bg: rgba(13, 30, 54, 0.7);
-  --input-bg: rgba(13, 30, 54, 0.6);
+/* ========================================
+   SUISEI THEME (DEFAULT)
+   Inspired by Suisei Hoshimachi
+   Blue-gray palette with white accents
+   ======================================== */
+:root,
+[data-theme="suisei"],
+[data-theme=""] {
+  /* Core Colors - Blue-gray base */
+  --bg-color: #0d1117;
+  --bg-secondary: #161b22;
+  --header-bg: #161b22;
+  --card-bg: #161b22;
+  --input-bg: #0d1117;
   
-  --message-user-bg: rgba(26, 58, 92, 0.4);
-  --message-ai-bg: transparent;
+  /* Message Bubbles */
+  --user-bubble: #1f6feb;
+  --ai-bubble: #21262d;
+  --message-user-bg: #1f6feb;
+  --message-ai-bg: #21262d;
   
-  /* Stellar cyan as primary */
-  --accent-primary: #00d4ff;
-  --accent-secondary: #4a90d9;
-  --accent-tertiary: #6eb5ff;
-  --accent-muted: rgba(0, 212, 255, 0.15);
+  /* Buttons & UI */
+  --button-bg: #388bfd;
+  --button-hover: #58a6ff;
+  --button-text: #f0f6fc;
   
-  --text-color: #e8f4ff;
-  --text-secondary: rgba(232, 244, 255, 0.7);
-  --text-muted: rgba(232, 244, 255, 0.5);
+  /* Text Colors */
+  --text-color: #f0f6fc;
+  --timestamp-color: rgba(240, 246, 252, 0.7);
+  --text-secondary: rgba(240, 246, 252, 0.8);
+  --text-muted: rgba(240, 246, 252, 0.6);
   
-  --border-color: rgba(74, 144, 217, 0.3);
-  --border-primary: rgba(0, 212, 255, 0.4);
-  --border-secondary: rgba(74, 144, 217, 0.3);
+  /* Accent Colors - Cyan/Blue */
+  --accent-primary: #58a6ff;
+  --accent-tertiary: #39d353;
+  --accent-secondary: #388bfd;
+  --accent-color: #58a6ff;
+  --accent-muted: rgba(56, 139, 253, 0.15);
   
-  --shadow-dark: rgba(0, 20, 40, 0.5);
-  --shadow-soft: 0 4px 20px rgba(0, 20, 40, 0.4);
-  --shadow-primary: rgba(0, 212, 255, 0.3);
-  --shadow-secondary: rgba(74, 144, 217, 0.4);
+  /* Border Colors */
+  --border-secondary: rgba(56, 139, 253, 0.4);
+  --border-primary: rgba(31, 111, 235, 0.6);
+  --border-ai: rgba(56, 139, 253, 0.3);
+  --border-user: rgba(31, 111, 235, 0.6);
+  --border-color: rgba(56, 139, 253, 0.3);
   
-  --code-bg: #061020;
-  --code-border: rgba(0, 212, 255, 0.2);
+  /* Shadow Colors */
+  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.4);
+  --shadow-pink: rgba(31, 111, 235, 0.25);
+  --shadow-lavender: rgba(56, 139, 253, 0.25);
+  --shadow-dark: rgba(13, 17, 23, 0.6);
+  --shadow-primary: rgba(56, 139, 253, 0.3);
   
-  /* Button gradient - stellar cyan to comet silver */
-  --button-bg: linear-gradient(135deg, #00d4ff, #4a90d9);
-  --button-hover: linear-gradient(135deg, #33dfff, #5a9de9);
+  /* Code Colors */
+  --code-bg: #0d1117;
+  --code-border: rgba(56, 139, 253, 0.2);
+  --copy-button-bg: rgba(56, 139, 253, 0.15);
+  --copy-button-hover: rgba(56, 139, 253, 0.25);
+  --hljs-bg: #002451;
+  
+  /* Agentic Loop Colors */
+  --brain-box-bg: rgba(22, 27, 34, 0.95);
+  --brain-box-border: rgba(56, 139, 253, 0.4);
+  --brain-box-text: #58a6ff;
+  --tool-execution-bg: rgba(22, 27, 34, 0.9);
+  --tool-success: #39d353;
+  --tool-error: #f85149;
+  --status-bar-bg: #161b22;
 }
 
-/* ==================== TOKYO NIGHT THEME - NEW ==================== */
+/* ==================== TOKYO NIGHT THEME - NEW ==================== */ */
 [data-theme="tokyonight"] {
   /* Tokyo Night color palette */
   --bg-color: #1a1b26;
