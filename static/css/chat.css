@@ -118,7 +118,7 @@ html, body {
 
 .affection-fill {
   height: 100%;
-  background: linear-gradient(90deg, #ff69b4, #ff1493);
+  background: linear-gradient(90deg);
   border-radius: 10px;
   transition: width 0.3s ease;
 }
@@ -269,32 +269,32 @@ html, body {
 }
 
 .message-content .callout-note {
-  border-color: var(--accent-primary, #6aa9ff);
+  border-color: var(--accent-primary);
   background: rgba(106, 169, 255, 0.08);
 }
 
 .message-content .callout-info {
-  border-color: var(--accent-primary, #6aa9ff);
+  border-color: var(--accent-primary);
   background: rgba(106, 169, 255, 0.08);
 }
 
 .message-content .callout-tip {
-  border-color: var(--accent-tertiary, #4caf50);
+  border-color: var(--accent-tertiary);
   background: rgba(76, 175, 80, 0.08);
 }
 
 .message-content .callout-warning {
-  border-color: var(--accent-secondary, #ffb347);
+  border-color: var(--accent-secondary);
   background: rgba(255, 179, 71, 0.08);
 }
 
 .message-content .callout-caution {
-  border-color: var(--tool-error, #ff6b6b);
+  border-color: var(--tool-error);
   background: rgba(255, 107, 107, 0.08);
 }
 
 .message-content .callout-important {
-  border-color: var(--accent-primary, #9b59b6);
+  border-color: var(--accent-primary);
   background: rgba(155, 89, 182, 0.08);
 }
 
@@ -344,9 +344,9 @@ html, body {
 }
 
 .copy-table-btn.copied {
-  background: var(--accent-tertiary, #4caf50);
+  background: var(--accent-tertiary);
   color: white;
-  border-color: var(--accent-tertiary, #4caf50);
+  border-color: var(--accent-tertiary);
 }
 
 .message-content .table-container table {
@@ -402,7 +402,7 @@ html, body {
   border-radius: 8px;
   background: rgba(255, 69, 58, 0.1);
   border: 1px solid rgba(255, 69, 58, 0.3);
-  color: var(--tool-error, #ff453a);
+  color: var(--tool-error);
   font-size: 0.9rem;
   display: flex;
   align-items: center;
@@ -425,7 +425,7 @@ html, body {
   margin: 1rem 0;
   border-radius: 8px;
   overflow: hidden;
-  background: var(--code-bg, #1e1e1e);
+  background: var(--code-bg);
   border: 1px solid var(--border-color);
 }
 
@@ -466,9 +466,9 @@ html, body {
 }
 
 .copy-code-btn.copied {
-  background: var(--accent-tertiary, #4caf50);
+  background: var(--accent-tertiary);
   color: white;
-  border-color: var(--accent-tertiary, #4caf50);
+  border-color: var(--accent-tertiary);
 }
 
 .code-block-container pre {
@@ -520,7 +520,7 @@ html, body {
 /* ==================== TYPING INDICATOR MESSAGE (in-flow) ==================== */
 .typing-indicator-message {
   align-self: flex-start;
-  background: var(--message-ai-bg, #21262d);
+  background: var(--message-ai-bg);
   border: 1px solid var(--border-ai, rgba(56, 139, 253, 0.3));
   padding: 0.8rem 1rem;
   border-radius: 12px;
@@ -539,7 +539,7 @@ html, body {
 .typing-dots span {
   width: 8px;
   height: 8px;
-  background: var(--accent-primary, #58a6ff);
+  background: var(--accent-primary);
   border-radius: 50%;
   animation: typingPulse 1.4s infinite;
 }
@@ -648,7 +648,7 @@ html, body {
 }
 
 #sendButton:hover {
-  background: var(--accent-primary, #ff1493);
+  background: var(--accent-primary);
   transform: scale(1.05);
 }
 
@@ -705,7 +705,7 @@ html, body {
   right: -5px;
   width: 20px;
   height: 20px;
-  background: var(--tool-error, #ff4444);
+  background: var(--tool-error);
   color: white;
   border-radius: 50%;
   font-size: 0.7rem;
@@ -806,7 +806,7 @@ html, body {
 }
 
 .upload-btn:hover {
-  background: var(--accent-primary, #ff1493);
+  background: var(--accent-primary);
 }
 
 .image-previews-header {
@@ -819,7 +819,7 @@ html, body {
 
 .clear-all-btn {
   font-size: 0.75rem;
-  color: var(--tool-error, #ff4444);
+  color: var(--tool-error);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -852,7 +852,7 @@ html, body {
   right: -5px;
   width: 20px;
   height: 20px;
-  background: var(--tool-error, #ff4444);
+  background: var(--tool-error);
   color: white;
   border: none;
   border-radius: 50%;
@@ -1020,11 +1020,11 @@ html, body {
     transition: all 0.2s ease;
 }
 .preview-btn:hover {
-    background: var(--accent-primary, #ff1493);
+    background: var(--accent-primary);
     transform: scale(1.02);
 }
 .preview-btn.active {
-    background: var(--accent-tertiary, #4caf50);
+    background: var(--accent-tertiary);
 }
 .preview-btn svg {
     width: 14px;
@@ -1050,7 +1050,7 @@ html, body {
 }
 .preview-error {
     padding: 1rem;
-    color: var(--tool-error, #ff453a);
+    color: var(--tool-error);
     font-size: 0.85rem;
 }
 
@@ -1078,7 +1078,7 @@ html, body {
     height: 85vh;
     max-height: 90vh;
   max-height: 80vh;
-  background: var(--bg-color, #1a1a2e);
+  background: var(--bg-color);
   border: 1px solid var(--border-color, #333);
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.5);
@@ -1098,7 +1098,7 @@ html, body {
 .html-modal-title {
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--text-color, #e0e0e0);
+  color: var(--text-color);
 }
 .html-modal-close {
   background: transparent;
@@ -1147,13 +1147,13 @@ html, body {
 }
 .html-modal-btn:hover {
     background: rgba(255,255,255,0.1);
-    color: var(--text-color, #e0e0e0);
+    color: var(--text-color);
     border-color: var(--text-secondary, #888);
 }
 .html-modal-btn.active {
     background: rgba(255, 105, 180, 0.2);
-    color: var(--accent-primary, #ff69b4);
-    border-color: var(--accent-primary, #ff69b4);
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
 }
 /* Fullscreen mode */
 #html-preview-modal.fullscreen .html-modal-content {
@@ -1170,16 +1170,16 @@ html, body {
 }
 /* Theme variants for iframe bg */
 .preview-body-light {
-    background: var(--bg-color, #f5f5f5);
+    background: var(--bg-color);
 }
 .preview-body-dark iframe {
-    background: var(--bg-color, #1a1a1a);
+    background: var(--bg-color);
 }
 
 /* === CONSOLE PANEL === */
 .console-panel {
-  border-top: 1px solid var(--border-color, #30363d);
-  background: var(--bg-color, #0d1117);
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-color);
   max-height: 100px;
   overflow-y: auto;
   font-family: 'Hack', 'Fira Code', 'Consolas', monospace;
@@ -1230,7 +1230,7 @@ html, body {
 /* ==================== TYPING INDICATOR MESSAGE (in-flow) ==================== */
 .typing-indicator-message {
   align-self: flex-start;
-  background: var(--message-ai-bg, var(--ai-bubble, #21262d));
+  background: var(--message-ai-bg, var(--ai-bubble));
   border: 1px solid var(--border-ai, var(--border-color, rgba(56, 139, 253, 0.3)));
   padding: 0.8rem 1rem;
   border-radius: 12px;
@@ -1248,7 +1248,7 @@ html, body {
 .typing-indicator-message .typing-dots span {
   width: 8px;
   height: 8px;
-  background: var(--accent-primary, var(--accent-color, #58a6ff));
+  background: var(--accent-primary, var(--accent-color));
   border-radius: 50%;
   animation: typingBounce 1.4s infinite ease-in-out;
 }
@@ -1293,7 +1293,7 @@ html, body {
   margin: 1rem 0;
   border-radius: 8px;
   overflow: hidden;
-  background: var(--code-bg, #1e1e1e);
+  background: var(--code-bg);
   border: 1px solid var(--border-color);
 }
 

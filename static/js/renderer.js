@@ -40,7 +40,7 @@ class MessageRenderer {
                 },
                 sequence: { 
                     useMaxWidth: true,
-                    wrap: true
+                    wrap: false
                 },
                 gantt: {
                     useMaxWidth: true
@@ -701,15 +701,15 @@ class MessageRenderer {
         
         return {
             darkMode: isDark,
-            background: style.getPropertyValue('--code-bg').trim() || '#0d1117',
-            primaryColor: style.getPropertyValue('--accent-primary').trim() || '#58a6ff',
-            primaryTextColor: style.getPropertyValue('--text-color').trim() || '#f0f6fc',
-            primaryBorderColor: style.getPropertyValue('--border-primary').trim() || '#388bfd',
-            lineColor: style.getPropertyValue('--border-secondary').trim() || '#388bfd',
-            secondaryColor: style.getPropertyValue('--accent-secondary').trim() || '#388bfd',
-            tertiaryColor: style.getPropertyValue('--accent-tertiary').trim() || '#39d353',
-            edgeLabelBackground: style.getPropertyValue('--code-bg').trim() || '#0d1117',
-            nodeBorder: style.getPropertyValue('--border-primary').trim() || '#388bfd',
+            background: style.getPropertyValue('--code-bg').trim(),
+            primaryColor: style.getPropertyValue('--accent-primary').trim(),
+            primaryTextColor: style.getPropertyValue('--text-color').trim(),
+            primaryBorderColor: style.getPropertyValue('--border-primary').trim(),
+            lineColor: style.getPropertyValue('--border-secondary').trim(),
+            secondaryColor: style.getPropertyValue('--accent-secondary').trim(),
+            tertiaryColor: style.getPropertyValue('--accent-tertiary').trim(),
+            edgeLabelBackground: style.getPropertyValue('--code-bg').trim(),
+            nodeBorder: style.getPropertyValue('--border-primary').trim(),
             fontFamily: 'inherit'
         };
     }
@@ -724,7 +724,7 @@ class MessageRenderer {
             themeVariables: themeVariables,
             securityLevel: 'loose',
             flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
-            sequence: { useMaxWidth: true, wrap: true },
+            sequence: { useMaxWidth: true, wrap: false },
             gantt: { useMaxWidth: true },
             er: { useMaxWidth: true }
         });
