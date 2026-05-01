@@ -683,3 +683,74 @@
     51%, 100% { opacity: 0; }
 }
 
+
+/* ========================================
+   MERMAID DIAGRAM STYLING
+   ======================================== */
+.mermaid-diagram {
+  background: var(--hljs-bg, var(--card-bg, #24283d));
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  overflow-x: auto;
+  text-align: center;
+}
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+.mermaid-error {
+  background: rgba(255, 100, 100, 0.1);
+  border: 1px solid rgba(255, 100, 100, 0.3);
+  color: #ff6464;
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
+/* Mermaid container with header */
+.mermaid-container {
+  background: var(--hljs-bg, #002451) !important;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 1rem 0;
+  border: 1px solid rgba(114, 133, 183, 0.3);
+}
+.mermaid-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid rgba(114, 133, 183, 0.3);
+  backdrop-filter: blur(4px);
+}
+.mermaid-container pre.mermaid {
+  background: transparent;
+  margin: 0;
+  padding: 1rem;
+}
+.copy-mermaid-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.copy-mermaid-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+.copy-mermaid-btn.copied {
+  background: #4caf50;
+  color: white;
+  border-color: #4caf50;
+}

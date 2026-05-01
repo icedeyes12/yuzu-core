@@ -1289,30 +1289,6 @@ html, body {
 }
 
 /* ==================== MERMAID DIAGRAMS ==================== */
-.mermaid-container {
-  margin: 1rem 0;
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--code-bg);
-  border: 1px solid var(--border-color);
-}
-
-.mermaid-container .code-block-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 1rem;
-  background: rgba(0, 0, 0, 0.2);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.mermaid-container pre.mermaid {
-  margin: 0;
-  padding: 1rem;
-  overflow-x: auto;
-  background: transparent;
-}
-
 .mermaid-error {
   margin: 0.5rem 0;
   padding: 0.75rem;
@@ -1325,7 +1301,3 @@ html, body {
 }
 
 /* Mermaid SVG styling - inherit theme colors */
-.mermaid-container svg {
-  max-width: none;
-  height: auto;
-}

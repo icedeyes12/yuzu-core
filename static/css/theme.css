@@ -42,18 +42,17 @@
 :root,
 [data-theme="stellar-night-suisei"],
 [data-theme=""] {
-  /* Core Colors - Stellar Night palette */
-  --bg-color: #0a1128;
-  --header-bg: #0f1d44;
-  --card-bg: #0d1836;
-  --input-bg: #0a1128;
-  --bg-secondary: #0d1836;
-  --bg-deepest: #050a1a;
+  /* Core Colors - Blue-gray base */
+  --bg-color: #0d1117;
+  --header-bg: #161b22;
+  --card-bg: #161b22;
+  --input-bg: #0d1117;
+  
   
   /* Message Bubbles */
-  --user-bubble: #3a6bbf;
+  --user-bubble: #1f6feb;
   --ai-bubble: transparent;
-  --message-user-bg: #3a6bbf;
+  --message-user-bg: #1f6feb;
   --message-ai-bg: transparent;
   
   /* Buttons & UI */
@@ -64,33 +63,33 @@
   /* Text Colors */
   --text-color: #f5faff;
   --timestamp-color: rgba(245, 250, 255, 0.7);
-  --text-secondary: #c9b8ff;
+  --text-secondary: rgba(240, 246, 252, 0.8);
   
   /* Accent Colors - Cyan/Blue */
-  --accent-primary: #00c8e0;
-  --accent-tertiary: #38e8ff;
-  --accent-secondary: #6a4fcf;
+  --accent-primary: #58a6ff;
+  --accent-tertiary: #39d353;
+  --accent-secondary: #388bfd;
   --accent-color: #00c8e0;
   --accent-highlight: #38e8ff;
   
   /* Border Colors */
   --border-secondary: rgba(56, 232, 255, 0.3);
-  --border-primary: rgba(56, 232, 255, 0.4);
-  --border-ai: rgba(155, 127, 244, 0.3);
-  --border-user: rgba(56, 232, 255, 0.5);
+  --border-primary: rgba(31, 111, 235, 0.6);
+  --border-ai: rgba(56, 139, 253, 0.3);
+  --border-user: rgba(31, 111, 235, 0.6);
   --border-color: rgba(56, 232, 255, 0.3);
   
   /* Shadow Colors */
-  --shadow-soft: 0 4px 20px rgba(0, 200, 224, 0.15);
+  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.4);
   --shadow-accent: rgba(56, 232, 255, 0.2);
   --shadow-secondary: rgba(155, 127, 244, 0.2);
   --shadow-base: rgba(5, 10, 26, 0.6);
   
   /* Code Colors */
   --code-bg: #050a1a;
-  --code-border: rgba(56, 232, 255, 0.2);
-  --copy-button-bg: rgba(56, 232, 255, 0.1);
-  --copy-button-hover: rgba(56, 232, 255, 0.2);
+  --code-border: rgba(56, 139, 253, 0.2);
+  --copy-button-bg: rgba(56, 139, 253, 0.15);
+  --copy-button-hover: rgba(56, 139, 253, 0.25);
   
   /* Backdrop */
   --backdrop-blur: blur(12px);
