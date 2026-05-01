@@ -196,9 +196,10 @@ class MultimodalManager {
         }
 
         // Show typing indicator as in-flow message
-        const typingMsg = showTypingIndicator();
+        showTypingIndicator();
         
-        // Create AI message element (hidden until first chunk)
+        // Create streaming message (hidden until first chunk - typing indicator still visible)
+        // Create AI message element
         currentStreamMessage = this.createStreamingMessageElement('ai');
         currentStreamMessage.style.display = 'none';
         chatContainer.appendChild(currentStreamMessage);
@@ -285,6 +286,7 @@ class MultimodalManager {
         const msg = document.createElement('div');
         msg.className = `message ${role}`;
         msg.setAttribute('data-streaming', 'true');
+        // No animation for streaming - CSS handles this
 
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';

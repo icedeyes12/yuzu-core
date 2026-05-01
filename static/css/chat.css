@@ -1234,3 +1234,9 @@ html, body {
   background: var(--message-ai-bg, rgba(200, 200, 230, 0.6));
   border-color: var(--border-ai, rgba(138, 109, 233, 0.3));
 }
+
+
+/* ==================== STREAMING MESSAGE (no animation) ==================== */
+.message[data-streaming="true"] {
+    animation: none !important;
+}
