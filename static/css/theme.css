@@ -42,60 +42,68 @@
 :root,
 [data-theme="stellar-night-suisei"],
 [data-theme=""] {
-  /* Core Colors - Blue-gray base */
-  --bg-color: #0d1117;
-  --header-bg: #161b22;
-  --card-bg: #161b22;
-  --input-bg: #0d1117;
+  /* Core Colors - Stellar Night palette */
+  --bg-color: #0a1128;
+  --header-bg: #0f1d44;
+  --card-bg: #0d1836;
+  --input-bg: #0a1128;
+  --bg-secondary: #0d1836;
   
   /* Message Bubbles */
-  --user-bubble: #1f6feb;
-  --ai-bubble: #21262d;
-  --message-user-bg: #1f6feb;
-  --message-ai-bg: #21262d;
+  --user-bubble: #38e8ff;
+  --ai-bubble: transparent;
+  --message-user-bg: #38e8ff;
+  --message-ai-bg: transparent;
   
   /* Buttons & UI */
-  --button-bg: #388bfd;
-  --button-hover: #58a6ff;
-  --button-text: #f0f6fc;
+  --button-bg: #38e8ff;
+  --button-hover: #00c8e0;
+  --button-text: #0a1128;
   
   /* Text Colors */
-  --text-color: #f0f6fc;
-  --timestamp-color: rgba(240, 246, 252, 0.7);
-  --text-secondary: rgba(240, 246, 252, 0.8);
+  --text-color: #f5faff;
+  --timestamp-color: rgba(245, 250, 255, 0.7);
+  --text-secondary: #c9b8ff;
   
   /* Accent Colors - Cyan/Blue */
-  --accent-primary: #58a6ff;
-  --accent-tertiary: #39d353;
-  --accent-secondary: #388bfd;
-  --accent-color: #58a6ff;
+  --accent-primary: #00c8e0;
+  --accent-tertiary: #38e8ff;
+  --accent-secondary: #9b7ff4;
+  --accent-color: #00c8e0;
+  --accent-pink: #38e8ff;
+  --accent-lavender: #9b7ff4;
   
   /* Border Colors */
-  --border-secondary: rgba(56, 139, 253, 0.4);
-  --border-primary: rgba(31, 111, 235, 0.6);
-  --border-ai: rgba(56, 139, 253, 0.3);
-  --border-user: rgba(31, 111, 235, 0.6);
+  --border-secondary: rgba(56, 232, 255, 0.3);
+  --border-primary: rgba(56, 232, 255, 0.4);
+  --border-ai: rgba(155, 127, 244, 0.3);
+  --border-user: rgba(56, 232, 255, 0.5);
+  --border-color: rgba(56, 232, 255, 0.3);
+  --border-pink: rgba(56, 232, 255, 0.4);
   
   /* Shadow Colors */
-  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.4);
-  --shadow-pink: rgba(31, 111, 235, 0.25);
-  --shadow-lavender: rgba(56, 139, 253, 0.25);
-  --shadow-dark: rgba(13, 17, 23, 0.6);
+  --shadow-soft: 0 4px 20px rgba(0, 200, 224, 0.15);
+  --shadow-pink: rgba(56, 232, 255, 0.2);
+  --shadow-lavender: rgba(155, 127, 244, 0.2);
+  --shadow-dark: rgba(5, 10, 26, 0.6);
   
   /* Code Colors */
-  --code-bg: #0d1117;
-  --code-border: rgba(56, 139, 253, 0.2);
-  --copy-button-bg: rgba(56, 139, 253, 0.15);
-  --copy-button-hover: rgba(56, 139, 253, 0.25);
+  --code-bg: #050a1a;
+  --code-border: rgba(56, 232, 255, 0.2);
+  --copy-button-bg: rgba(56, 232, 255, 0.1);
+  --copy-button-hover: rgba(56, 232, 255, 0.2);
+  
+  /* Backdrop */
+  --backdrop-blur: blur(12px);
   
   /* Agentic Loop Colors */
-  --brain-box-bg: rgba(22, 27, 34, 0.95);
-  --brain-box-border: rgba(56, 139, 253, 0.4);
-  --brain-box-text: #58a6ff;
-  --tool-execution-bg: rgba(22, 27, 34, 0.9);
-  --tool-success: #39d353;
-  --tool-error: #f85149;
-  --status-bar-bg: #161b22;
+  --brain-box-bg: rgba(15, 29, 68, 0.95);
+  --brain-box-border: rgba(56, 232, 255, 0.4);
+  --brain-box-text: #38e8ff;
+  --tool-execution-bg: rgba(15, 29, 68, 0.9);
+  --tool-success: #38e8ff;
+  --tool-error: #ff6b9d;
+  --status-bar-bg: #0f1d44;
 }
 
 /* ========================================
@@ -109,12 +117,13 @@
   --header-bg: #24283b;
   --card-bg: #24283b;
   --input-bg: #1a1b26;
+  --bg-secondary: #16161e;
   
   /* Message Bubbles */
   --user-bubble: #7aa2f7;
-  --ai-bubble: #292e42;
+  --ai-bubble: transparent;
   --message-user-bg: #7aa2f7;
-  --message-ai-bg: #292e42;
+  --message-ai-bg: transparent;
   
   /* Buttons & UI */
   --button-bg: #7aa2f7;
@@ -131,12 +140,16 @@
   --accent-tertiary: #9ece6a;
   --accent-secondary: #bb9af7;
   --accent-color: #7aa2f7;
+  --accent-pink: #ff9e64;
+  --accent-lavender: #bb9af7;
   
   /* Border Colors */
   --border-secondary: rgba(187, 154, 247, 0.4);
   --border-primary: rgba(255, 158, 100, 0.4);
   --border-ai: rgba(122, 162, 247, 0.3);
   --border-user: rgba(122, 162, 247, 0.5);
+  --border-color: rgba(187, 154, 247, 0.3);
+  --border-pink: rgba(255, 158, 100, 0.4);
   
   /* Shadow Colors */
   --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.4);
@@ -149,6 +162,9 @@
   --code-border: rgba(122, 162, 247, 0.2);
   --copy-button-bg: rgba(122, 162, 247, 0.15);
   --copy-button-hover: rgba(122, 162, 247, 0.25);
+  
+  /* Backdrop */
+  --backdrop-blur: blur(12px);
   
   /* Agentic Loop Colors */
   --brain-box-bg: rgba(36, 40, 59, 0.95);
@@ -169,12 +185,13 @@
   --header-bg: #24283d;
   --card-bg: #24283d;
   --input-bg: #24283d;  
+  --bg-secondary: var(--card-bg);
   
   /* Message Bubbles */
   --user-bubble: #d46a7e;
-  --ai-bubble: #3a4568;
+  --ai-bubble: transparent;
   --message-user-bg: #d46a7e;
-  --message-ai-bg: #3a4568;
+  --message-ai-bg: transparent;
   
   /* Buttons & UI */
   --button-bg: #e8b4bc;
@@ -191,12 +208,16 @@
   --accent-tertiary: #b8e1dd;
   --accent-secondary: #a8c8ff;
   --accent-color: #a8c8ff;
+  --accent-pink: var(--accent-primary);
+  --accent-lavender: var(--accent-secondary);
   
   /* Border Colors */
   --border-secondary: rgba(168, 200, 255, 0.4);
   --border-primary: rgba(212, 106, 126, 0.6);
   --border-ai: rgba(168, 200, 255, 0.3);
   --border-user: rgba(212, 106, 126, 0.6);
+  --border-color: var(--border-secondary);
+  --border-pink: var(--border-primary);
   
   /* Shadow Colors */
   --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.25);
@@ -205,6 +226,7 @@
   --shadow-dark: rgba(36, 40, 61, 0.4);
   
   /* Code Colors */
+  --backdrop-blur: blur(12px);  
   --code-bg: #1e2235;
   --code-border: rgba(168, 200, 255, 0.15);
   --copy-button-bg: rgba(168, 200, 255, 0.15);
@@ -220,12 +242,13 @@
   --header-bg: #ffffff;
   --card-bg: #ffffff;
   --input-bg: #ffffff;
+  --bg-secondary: var(--card-bg);
   
   /* Message Bubbles */
   --user-bubble: #ff9eb5;
-  --ai-bubble: #e9ecef;
+  --ai-bubble: transparent;
   --message-user-bg: #ff9eb5;
-  --message-ai-bg: #e9ecef;
+  --message-ai-bg: transparent;
   
   /* Buttons & UI */
   --button-bg: #ffb3c8;
@@ -242,12 +265,16 @@
   --accent-tertiary: #8ac6b8;
   --accent-secondary: #93a5ff;
   --accent-color: #93a5ff;
+  --accent-pink: var(--accent-primary);
+  --accent-lavender: var(--accent-secondary);
   
   /* Border Colors */
   --border-secondary: rgba(147, 165, 255, 0.3);
   --border-primary: rgba(255, 133, 161, 0.4);
   --border-ai: rgba(147, 165, 255, 0.2);
   --border-user: rgba(255, 133, 161, 0.4);
+  --border-color: var(--border-secondary);
+  --border-pink: var(--border-primary);
   
   /* Shadow Colors */
   --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.1);
@@ -256,6 +283,7 @@
   --shadow-dark: rgba(0, 0, 0, 0.1);
   
   /* Code Colors */
+  --backdrop-blur: blur(12px);  
   --code-bg: #f1f3f5;
   --code-border: rgba(147, 165, 255, 0.2);
   --copy-button-bg: rgba(147, 165, 255, 0.1);
@@ -271,12 +299,13 @@
   --header-bg: #ffffff;
   --card-bg: #ffffff;
   --input-bg: #ffffff;
+  --bg-secondary: var(--card-bg);
   
   /* Message Bubbles */
   --user-bubble: #d8b4fe;
-  --ai-bubble: #f3f0ff;
+  --ai-bubble: transparent;
   --message-user-bg: #d8b4fe;
-  --message-ai-bg: #f3f0ff;
+  --message-ai-bg: transparent;
   
   /* Buttons & UI */
   --button-bg: #e9d5ff;
@@ -293,12 +322,16 @@
   --accent-tertiary: #a5b4fc;
   --accent-secondary: #a78bfa;
   --accent-color: #a78bfa;
+  --accent-pink: var(--accent-primary);
+  --accent-lavender: var(--accent-secondary);
   
   /* Border Colors */
   --border-secondary: rgba(167, 139, 250, 0.4);
   --border-primary: rgba(192, 132, 252, 0.4);
   --border-ai: rgba(167, 139, 250, 0.3);
   --border-user: rgba(192, 132, 252, 0.4);
+  --border-color: var(--border-secondary);
+  --border-pink: var(--border-primary);
   
   /* Shadow Colors */
   --shadow-soft: 0 4px 20px rgba(167, 139, 250, 0.15);
@@ -307,6 +340,7 @@
   --shadow-dark: rgba(167, 139, 250, 0.1);
   
   /* Code Colors */
+  --backdrop-blur: blur(12px);  
   --code-bg: #faf5ff;
   --code-border: rgba(167, 139, 250, 0.2);
   --copy-button-bg: rgba(167, 139, 250, 0.1);
@@ -322,12 +356,13 @@
   --header-bg: #ffffff;
   --card-bg: #ffffff;
   --input-bg: #ffffff;
+  --bg-secondary: var(--card-bg);
   
   /* Message Bubbles */
   --user-bubble: #99f6e4;
-  --ai-bubble: #ecfdf5;
+  --ai-bubble: transparent;
   --message-user-bg: #99f6e4;
-  --message-ai-bg: #ecfdf5;
+  --message-ai-bg: transparent;
   
   /* Buttons & UI */
   --button-bg: #a7f3d0;
@@ -344,12 +379,16 @@
   --accent-tertiary: #2dd4bf;
   --accent-secondary: #34d399;
   --accent-color: #34d399;
+  --accent-pink: var(--accent-primary);
+  --accent-lavender: var(--accent-secondary);
   
   /* Border Colors */
   --border-secondary: rgba(52, 211, 153, 0.4);
   --border-primary: rgba(94, 234, 212, 0.4);
   --border-ai: rgba(52, 211, 153, 0.3);
   --border-user: rgba(94, 234, 212, 0.4);
+  --border-color: var(--border-secondary);
+  --border-pink: var(--border-primary);
   
   /* Shadow Colors */
   --shadow-soft: 0 4px 20px rgba(52, 211, 153, 0.15);
@@ -358,6 +397,7 @@
   --shadow-dark: rgba(52, 211, 153, 0.1);
   
   /* Code Colors */
+  --backdrop-blur: blur(12px);  
   --code-bg: #f0fdfa;
   --code-border: rgba(52, 211, 153, 0.2);
   --copy-button-bg: rgba(52, 211, 153, 0.1);
@@ -373,12 +413,13 @@
   --header-bg: #ffffff;
   --card-bg: #ffffff;
   --input-bg: #ffffff;
+  --bg-secondary: var(--card-bg);
   
   /* Message Bubbles */
   --user-bubble: #fdba74;
-  --ai-bubble: #fffbeb;
+  --ai-bubble: transparent;
   --message-user-bg: #fdba74;
-  --message-ai-bg: #fffbeb;
+  --message-ai-bg: transparent;
   
   /* Buttons & UI */
   --button-bg: #fed7aa;
@@ -395,12 +436,16 @@
   --accent-tertiary: #fbbf24;
   --accent-secondary: #f97316;
   --accent-color: #f97316;
+  --accent-pink: var(--accent-primary);
+  --accent-lavender: var(--accent-secondary);
   
   /* Border Colors */
   --border-secondary: rgba(249, 115, 22, 0.4);
   --border-primary: rgba(251, 146, 60, 0.4);
   --border-ai: rgba(249, 115, 22, 0.3);
   --border-user: rgba(251, 146, 60, 0.4);
+  --border-color: var(--border-secondary);
+  --border-pink: var(--border-primary);
   
   /* Shadow Colors */
   --shadow-soft: 0 4px 20px rgba(249, 115, 22, 0.15);
@@ -409,6 +454,7 @@
   --shadow-dark: rgba(249, 115, 22, 0.1);
   
   /* Code Colors */
+  --backdrop-blur: blur(12px);  
   --code-bg: #fff7ed;
   --code-border: rgba(249, 115, 22, 0.2);
   --copy-button-bg: rgba(249, 115, 22, 0.1);
@@ -424,12 +470,13 @@
   --header-bg: #2d2640;
   --card-bg: #2d2640;
   --input-bg: #2d2640;
+  --bg-secondary: var(--card-bg);
   
   /* Message Bubbles */
   --user-bubble: #c4b5fd;
-  --ai-bubble: #3e3667;
+  --ai-bubble: transparent;
   --message-user-bg: #c4b5fd;
-  --message-ai-bg: #3e3667;
+  --message-ai-bg: transparent;
   
   /* Buttons & UI */
   --button-bg: #ddd6fe;
@@ -446,12 +493,16 @@
   --accent-tertiary: #8b5cf6;
   --accent-secondary: #c4b5fd;
   --accent-color: #c4b5fd;
+  --accent-pink: var(--accent-primary);
+  --accent-lavender: var(--accent-secondary);
   
   /* Border Colors */
   --border-secondary: rgba(196, 181, 253, 0.4);
   --border-primary: rgba(167, 139, 250, 0.4);
   --border-ai: rgba(196, 181, 253, 0.3);
   --border-user: rgba(167, 139, 250, 0.4);
+  --border-color: var(--border-secondary);
+  --border-pink: var(--border-primary);
   
   /* Shadow Colors */
   --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.3);
@@ -460,6 +511,7 @@
   --shadow-dark: rgba(45, 38, 64, 0.4);
   
   /* Code Colors */
+  --backdrop-blur: blur(12px);  
   --code-bg: #2a2342;
   --code-border: rgba(196, 181, 253, 0.15);
   --copy-button-bg: rgba(196, 181, 253, 0.15);
@@ -475,12 +527,13 @@
   --header-bg: #fffdfa;
   --card-bg: #fffdfa;
   --input-bg: #fffdfa;
+  --bg-secondary: var(--card-bg);
   
   /* Message Bubbles */
   --user-bubble: #ffd8a8;
-  --ai-bubble: #fff5e8;
+  --ai-bubble: transparent;
   --message-user-bg: #ffd8a8;
-  --message-ai-bg: #fff5e8;
+  --message-ai-bg: transparent;
   
   /* Buttons & UI */
   --button-bg: #ffe0b5;
@@ -497,12 +550,16 @@
   --accent-tertiary: #ffd8a8;
   --accent-secondary: #ffb366;
   --accent-color: #ffb366;
+  --accent-pink: var(--accent-primary);
+  --accent-lavender: var(--accent-secondary);
   
   /* Border Colors */
   --border-secondary: rgba(255, 179, 102, 0.4);
   --border-primary: rgba(255, 194, 133, 0.4);
   --border-ai: rgba(255, 179, 102, 0.3);
   --border-user: rgba(255, 194, 133, 0.4);
+  --border-color: var(--border-secondary);
+  --border-pink: var(--border-primary);
   
   /* Shadow Colors */
   --shadow-soft: 0 4px 20px rgba(255, 179, 102, 0.15);
@@ -511,6 +568,7 @@
   --shadow-dark: rgba(255, 179, 102, 0.1);
   
   /* Code Colors */
+  --backdrop-blur: blur(12px);  
   --code-bg: #fffaf0;
   --code-border: rgba(255, 179, 102, 0.2);
   --copy-button-bg: rgba(255, 179, 102, 0.1);
