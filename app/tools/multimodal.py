@@ -11,7 +11,7 @@ import time
 import os
 import hashlib
 from typing import List, Dict, Optional, Tuple
-from app.db_pg_models import get_profile, get_api_keys
+from app.database import get_profile, get_api_keys
 
 logger = logging.getLogger(__name__)
 

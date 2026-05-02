@@ -591,7 +591,7 @@ def run_memory_review(session_id: int) -> dict:
     """
     from app.memory.memory_review import review_memory
     from app.memory.db_memory import get_facts_by_session, FACT_TYPE_STATIC
-    from app.db_pg_models import get_session_messages
+    from app.database import get_session_messages
     
     try:
         # Get facts pending review
@@ -634,7 +634,7 @@ def run_memory_pipeline(session_id: int, message_count: int) -> dict:
     
     Returns summary: {segments: n, episodes: n, pcl_runs: n}
     """
-    from app.db_pg_models import get_session_messages
+    from app.database import get_session_messages
     from app.memory.db_memory import get_facts_by_session, FACT_TYPE_DYNAMIC
     
     logger.info(f"Starting for session {session_id}, count={message_count}")

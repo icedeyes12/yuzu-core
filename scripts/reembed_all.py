@@ -20,7 +20,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.memory.embedder import embed_texts, EMBEDDING_DIM
-from app.db_pg import PgSession
+from app.database import PgSession
 
 
 def get_total_count():

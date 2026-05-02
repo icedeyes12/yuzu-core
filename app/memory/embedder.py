@@ -5,7 +5,7 @@ from __future__ import annotations
 
 
 import threading
-from app.db_pg_models import get_api_key
+from app.database import get_api_key
 
 
 CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-0-6b.chutes.ai/v1/embeddings"

@@ -29,7 +29,7 @@ TOOL_DEFINITION = ToolDefinition(
 
 def execute(arguments, **kwargs):
     session_id = kwargs.get("session_id")
-    from app.db_pg_models import get_profile
+    from app.database import get_profile
     from app.memory.retrieval import retrieve_memory, format_memory
 
     profile = get_profile() or {}

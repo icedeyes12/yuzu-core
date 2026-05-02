@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 from app.memory.db_memory import save_fact, search_similar, FACT_TYPE_STATIC
+from app.database import get_profile
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,6 @@ Respond with ONLY the category name, nothing else."""
 
 def execute(arguments, **kwargs):
     session_id = kwargs.get("session_id")
-    from app.db_pg_models import get_profile
     from app.memory.embedder import embed_texts
 
     profile = get_profile() or {}

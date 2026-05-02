@@ -13,7 +13,7 @@ import json
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from app.db_pg import pg_fetchone, pg_fetchall, pg_execute
+from app.database import pg_fetchone, pg_fetchall, pg_execute
 from app.memory.embedder import embed_texts
 
 BATCH_SIZE = 32

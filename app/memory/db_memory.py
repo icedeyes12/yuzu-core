@@ -40,7 +40,7 @@ from datetime import datetime
 
 from psycopg.types.json import Json
 
-from app.db_pg import (
+from app.database import (
     PgSession, pg_fetchone, pg_fetchall, pg_execute,
     # Async versions
     AsyncPgSession, pg_fetchone_async, pg_fetchall_async, pg_execute_async,

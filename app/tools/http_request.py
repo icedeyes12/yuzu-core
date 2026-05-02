@@ -100,7 +100,7 @@ def get_media_dir():
 
 
 def execute(arguments, **kwargs):
-    from app.db_pg_models import get_profile
+    from app.database import get_profile
 
     profile = get_profile() or {}
     partner_name = profile.get("partner_name", "Yuzu")
