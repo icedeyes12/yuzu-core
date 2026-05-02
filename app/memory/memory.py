@@ -112,35 +112,69 @@ def _is_fence_active(session_id: int) -> bool:
 
 
 def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
-    """Check if segmentation should trigger based on message count.
+    """Check if segmentation should trigger based on message count delta.
     
     Returns True if:
-    - Count reaches WINDOW_MAX (force trigger)
-    - Count reaches multiple of WINDOW_BASE (periodic trigger)
+    - Delta from last_segmented_count >= WINDOW_BASE (periodic trigger)
+    - OR current_count >= WINDOW_MAX (force trigger)
     - AND no active fence exists (prevents concurrent jobs)
+    - AND enough time has passed since last segmentation (time gap)
     """
+    from app.database import get_pipeline_state
+    
     # Check fence first (like plast-mem's check())
     if _is_fence_active(session_id):
         logger.debug(f"Segmentation skipped for session {session_id}: fence active")
         return False
     
-    # Force trigger at WINDOW_MAX
+    # Get last segmented count from persisted state
+    state = get_pipeline_state(session_id)
+    last_count = state.get("last_segmented_count", 0)
+    last_segmented_at = state.get("last_segmented_at")
+    
+    # Calculate delta
+    delta = current_count - last_count
+    
+    # Not enough new messages
+    if delta < WINDOW_BASE:
+        logger.debug(f"Segmentation skipped: delta={delta} < WINDOW_BASE={WINDOW_BASE}")
+        return False
+    
+    # Check time gap (minimum TIME_GAP_MINUTES since last segmentation)
+    if last_segmented_at:
+        try:
+            from datetime import datetime
+            last_dt = datetime.fromisoformat(last_segmented_at)
+            age = datetime.now() - last_dt
+            if age < timedelta(minutes=TIME_GAP_MINUTES):
+                logger.debug(f"Segmentation skipped: time gap {age} < {TIME_GAP_MINUTES}min")
+                return False
+        except (ValueError, TypeError):
+            pass  # Invalid timestamp, proceed
+    
+    # Force trigger at WINDOW_MAX (overrides time check)
     if current_count >= WINDOW_MAX:
+        logger.info(f"Force trigger: current_count={current_count} >= WINDOW_MAX={WINDOW_MAX}")
         return True
     
-    # Periodic trigger every WINDOW_BASE
-    if current_count >= WINDOW_BASE:
-        return True
-    
-    return False
+    # Periodic trigger: delta >= WINDOW_BASE
+    logger.info(f"Trigger: delta={delta} >= WINDOW_BASE={WINDOW_BASE}")
+    return True
 
 
 def mark_segmentation_done(session_id: int, count: int) -> None:
     """Mark that segmentation completed for this session at this count.
     
+    Persists last_segmented_count and last_segmented_at to session's memory_json.
     Called AFTER processing completes (not before).
     """
-    pass
+    from app.database import update_pipeline_state
+    
+    update_pipeline_state(session_id, {
+        "last_segmented_count": count,
+        "last_segmented_at": datetime.now().isoformat(),
+    })
+    logger.info(f"Marked segmentation done: session={session_id}, count={count}")
 
 
 # ── Batch segmentation (single LLM call) ───────────────────────────────────────
