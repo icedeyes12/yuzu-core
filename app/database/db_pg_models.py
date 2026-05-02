@@ -144,7 +144,7 @@ def update_memory(memory_dict: dict) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def get_pipeline_state(session_id: int) -> dict:
+def get_memory_state(session_id: int) -> dict:
     """Get pipeline state from session's memory_json.
     
     Returns dict with:
@@ -160,13 +160,13 @@ def get_pipeline_state(session_id: int) -> dict:
         return {"last_segmented_count": 0}
 
 
-def update_pipeline_state(session_id: int, state: dict) -> bool:
+def update_memory_state(session_id: int, state: dict) -> bool:
     """Update pipeline state in session's memory_json.
     
     Merges with existing state.
     """
     try:
-        existing = get_pipeline_state(session_id)
+        existing = get_memory_state(session_id)
         existing.update(state)
         pg_execute(
             "UPDATE chat_sessions SET memory_json = %s, updated_at = %s WHERE id = %s",
@@ -174,7 +174,7 @@ def update_pipeline_state(session_id: int, state: dict) -> bool:
         )
         return True
     except Exception as e:
-        log.error("update_pipeline_state failed: %s", e)
+        log.error("update_memory_state failed: %s", e)
         return False
 
 
@@ -500,7 +500,7 @@ __all__ = [
     "switch_session", "rename_session", "delete_session",
     "get_session_memory", "update_session_memory", "increment_message_count",
     # Pipeline state
-    "get_pipeline_state", "update_pipeline_state",
+    "get_memory_state", "update_memory_state",
     # API keys
     "get_api_keys", "get_api_key", "add_api_key", "remove_api_key",
     # Messages

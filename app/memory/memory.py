@@ -120,7 +120,7 @@ def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
     - AND no active fence exists (prevents concurrent jobs)
     - AND enough time has passed since last segmentation (time gap)
     """
-    from app.database import get_pipeline_state
+    from app.database import get_memory_state
     
     # Check fence first (like plast-mem's check())
     if _is_fence_active(session_id):
@@ -128,7 +128,7 @@ def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
         return False
     
     # Get last segmented count from persisted state
-    state = get_pipeline_state(session_id)
+    state = get_memory_state(session_id)
     last_count = state.get("last_segmented_count", 0)
     last_segmented_at = state.get("last_segmented_at")
     
@@ -168,9 +168,9 @@ def mark_segmentation_done(session_id: int, count: int) -> None:
     Persists last_segmented_count and last_segmented_at to session's memory_json.
     Called AFTER processing completes (not before).
     """
-    from app.database import update_pipeline_state
+    from app.database import update_memory_state
     
-    update_pipeline_state(session_id, {
+    update_memory_state(session_id, {
         "last_segmented_count": count,
         "last_segmented_at": datetime.now().isoformat(),
     })

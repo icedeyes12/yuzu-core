@@ -129,8 +129,8 @@ from app.database.db_pg_models import (
     update_session_memory,
     increment_message_count,
     # Pipeline state
-    get_pipeline_state,
-    update_pipeline_state,
+    get_memory_state,
+    update_memory_state,
     # API keys
     get_api_keys,
     get_api_key,
@@ -389,8 +389,8 @@ __all__ = [
     "get_all_encrypted_messages_async",
     "batch_decrypt_messages_async",
     # Pipeline state
-    "get_pipeline_state",
-    "update_pipeline_state",
+    "get_memory_state",
+    "update_memory_state",
     # Facade
     "Database",
     "init_db",
