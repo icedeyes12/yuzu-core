@@ -34,21 +34,21 @@ class MessageRenderer {
                 themeVariables: themeVariables,
                 securityLevel: 'loose',
                 flowchart: { 
-                    useMaxWidth: true, 
+                    useMaxWidth: false, 
                     htmlLabels: true,
                     curve: 'basis',
                     wrap: false
                 },
                 sequence: { 
-                    useMaxWidth: true,
+                    useMaxWidth: false,
                     wrap: false
                 },
                 gantt: {
-                    useMaxWidth: true,
+                    useMaxWidth: false,
                     wrap: false
                 },
                 er: {
-                    useMaxWidth: true,
+                    useMaxWidth: false,
                     wrap: false
                 }
             });
@@ -726,10 +726,10 @@ class MessageRenderer {
             theme: 'base',
             themeVariables: themeVariables,
             securityLevel: 'loose',
-            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis', wrap: false },
-            sequence: { useMaxWidth: true, wrap: false },
-            gantt: { useMaxWidth: true, wrap: false },
-            er: { useMaxWidth: true, wrap: false }
+            flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis', wrap: false },
+            sequence: { useMaxWidth: false, wrap: false },
+            gantt: { useMaxWidth: false, wrap: false },
+            er: { useMaxWidth: false, wrap: false }
         });
         console.log('[Renderer] Mermaid reinitialized with new theme');
     }

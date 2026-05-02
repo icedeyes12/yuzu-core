@@ -697,6 +697,7 @@
 }
 .mermaid-diagram svg {
   height: auto;
+  overflow-x: auto;
 }
 .mermaid-error {
   background: rgba(255, 100, 100, 0.1);
