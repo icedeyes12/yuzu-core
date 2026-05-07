@@ -752,9 +752,11 @@ def _background_worker():
         
         if session_to_process:
             try:
-                from app.database import Database
-                session_memory = Database.get_session_memory(session_to_process)
-                count = session_memory.get("message_count", 0) if session_memory else 0
+                # Retrieve count from fence dict (set by _try_set_fence)
+                # Thread-safe read under fence lock
+                with _fence_lock:
+                    fence_data = _in_progress_fence.get(session_to_process)
+                    count = fence_data[0] if fence_data else 0
                 
                 run_memory_pipeline(session_to_process, count)
             except Exception as e:
