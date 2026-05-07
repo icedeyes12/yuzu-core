@@ -52,63 +52,79 @@ _pending_sessions: set[int] = set()  # Sessions queued for processing
 
 # ── Fence state (per-session) ─────────────────────────────────────────────────
 
-# in_progress_fence: session_id -> (fence_count, timestamp)
-# Mirrors plast-mem's in_progress_fence + in_progress_since columns
-_in_progress_fence: dict[int, tuple[int, datetime]] = {}
-_fence_lock = threading.Lock()
+# Fence is now persisted to DB (memory_json) for crash safety.
+# Fields: in_progress_fence_count, in_progress_fence_since
 
-# ── Message counter tracking (per-session) ─────────────────────────────────────
+_fence_lock = threading.Lock()
 
 
 def _try_set_fence(session_id: int, fence_count: int) -> bool:
     """Atomically set fence for a session if not already set.
     
-    Mirrors plast-mem's try_set_fence():
-    - Returns True if fence was set (no existing fence)
-    - Returns False if fence already exists
-    
-    This is the CAS (Compare-And-Swap) operation that prevents concurrent jobs.
+    Persists fence to DB for crash safety.
+    Returns True if fence was set (no existing fence).
     """
+    from app.database import get_memory_state, update_memory_state
+    
     with _fence_lock:
         now = datetime.now()
+        state = get_memory_state(session_id)
         
         # Check if fence exists
-        if session_id in _in_progress_fence:
-            existing_count, existing_since = _in_progress_fence[session_id]
-            
-            # Check if fence is stale (TTL exceeded)
-            age = now - existing_since
-            if age > timedelta(minutes=FENCE_TTL_MINUTES):
-                # Clear stale fence
-                logger.info(f"Clearing stale fence for session {session_id} (age={age})")
-                del _in_progress_fence[session_id]
-            else:
-                # Fence is active, cannot set
-                return False
+        existing_count = state.get("in_progress_fence_count")
+        existing_since = state.get("in_progress_fence_since")
         
-        # Set new fence
-        _in_progress_fence[session_id] = (fence_count, now)
+        if existing_count is not None and existing_since is not None:
+            # Check if fence is stale (TTL exceeded)
+            try:
+                existing_dt = datetime.fromisoformat(existing_since)
+                age = now - existing_dt
+                if age > timedelta(minutes=FENCE_TTL_MINUTES):
+                    # Clear stale fence
+                    logger.info(f"Clearing stale fence for session {session_id} (age={age})")
+                else:
+                    # Fence is active, cannot set
+                    return False
+            except (ValueError, TypeError):
+                pass  # Invalid timestamp, proceed to overwrite
+        
+        # Set new fence in DB
+        update_memory_state(session_id, {
+            "in_progress_fence_count": fence_count,
+            "in_progress_fence_since": now.isoformat(),
+        })
         return True
 
 
 def _clear_fence(session_id: int) -> None:
-    """Clear the fence for a session after processing completes.
+    """Clear the fence for a session after processing completes."""
+    from app.database import update_memory_state
     
-    Mirrors plast-mem's finalize_job() fence clearing.
-    """
     with _fence_lock:
-        _in_progress_fence.pop(session_id, None)
+        update_memory_state(session_id, {
+            "in_progress_fence_count": None,
+            "in_progress_fence_since": None,
+        })
 
 
 def _is_fence_active(session_id: int) -> bool:
     """Check if a session has an active (non-stale) fence."""
+    from app.database import get_memory_state
+    
     with _fence_lock:
-        if session_id not in _in_progress_fence:
+        state = get_memory_state(session_id)
+        existing_count = state.get("in_progress_fence_count")
+        existing_since = state.get("in_progress_fence_since")
+        
+        if existing_count is None or existing_since is None:
             return False
         
-        _, existing_since = _in_progress_fence[session_id]
-        age = datetime.now() - existing_since
-        return age <= timedelta(minutes=FENCE_TTL_MINUTES)
+        try:
+            existing_dt = datetime.fromisoformat(existing_since)
+            age = datetime.now() - existing_dt
+            return age <= timedelta(minutes=FENCE_TTL_MINUTES)
+        except (ValueError, TypeError):
+            return False
 
 
 def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
@@ -752,11 +768,10 @@ def _background_worker():
         
         if session_to_process:
             try:
-                # Retrieve count from fence dict (set by _try_set_fence)
-                # Thread-safe read under fence lock
-                with _fence_lock:
-                    fence_data = _in_progress_fence.get(session_to_process)
-                    count = fence_data[0] if fence_data else 0
+                # Retrieve count from DB-persisted fence
+                from app.database import get_memory_state
+                state = get_memory_state(session_to_process)
+                count = state.get("in_progress_fence_count", 0) or 0
                 
                 run_memory_pipeline(session_to_process, count)
             except Exception as e:
