@@ -74,6 +74,8 @@ def _try_set_fence(session_id: int, fence_count: int) -> bool:
         existing_count = state.get("in_progress_fence_count")
         existing_since = state.get("in_progress_fence_since")
         
+        logger.debug(f"_try_set_fence: session={session_id}, fence_count={fence_count}, existing_count={existing_count}, existing_since={existing_since}")
+        
         if existing_count is not None and existing_since is not None:
             # Check if fence is stale (TTL exceeded)
             try:
@@ -127,12 +129,10 @@ def _is_fence_active(session_id: int) -> bool:
             return False
 
 
-def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
+def should_trigger_segmentation(session_id: int, current_count: int) -> tuple[bool, int]:
     """Check if segmentation should trigger based on unsegmented message count.
     
-    Returns True if:
-    - Count of messages after last episode's end_message_id >= WINDOW_BASE
-    - AND no active fence exists (prevents concurrent jobs)
+    Returns (should_trigger, unsegmented_count).
     
     Note: current_count is ignored - we count actual unsegmented messages.
     """
@@ -142,12 +142,12 @@ def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
     # Check fence first
     if _is_fence_active(session_id):
         logger.debug(f"Segmentation skipped for session {session_id}: fence active")
-        return False
+        return False, 0
     
     # Get all messages
     all_messages = get_session_messages(session_id, limit=10000)
     if not all_messages:
-        return False
+        return False, 0
     
     # Find last episode's end_message_id
     segments = get_facts_by_session(session_id, fact_type=FACT_TYPE_DYNAMIC, limit=100)
@@ -167,10 +167,10 @@ def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
     # Not enough new messages
     if unsegmented_count < WINDOW_BASE:
         logger.debug(f"Segmentation skipped: unsegmented={unsegmented_count} < WINDOW_BASE={WINDOW_BASE}")
-        return False
+        return False, unsegmented_count
     
     logger.info(f"Trigger: unsegmented={unsegmented_count} >= WINDOW_BASE={WINDOW_BASE}")
-    return True
+    return True, unsegmented_count
 
 
 def mark_segmentation_done(session_id: int, count: int) -> None:
@@ -798,21 +798,15 @@ def trigger_memory_pipeline_async(session_id: int, current_count: int) -> bool:
     """Check and trigger memory pipeline in background if threshold met.
     
     Returns True if pipeline was triggered.
-    
-    Flow (aligned with plast-mem):
-      1. Check if thresholds met (count/time)
-      2. Try to set fence (CAS operation)
-      3. If fence set, enqueue for background processing
-      4. Fence is cleared AFTER processing completes in run_memory_pipeline
     """
-    if should_trigger_segmentation(session_id, current_count):
-        # Try to set fence - prevents concurrent jobs
-        if not _try_set_fence(session_id, current_count):
+    should_trigger, unsegmented_count = should_trigger_segmentation(session_id, current_count)
+    
+    if should_trigger:
+        # Try to set fence with unsegmented count
+        if not _try_set_fence(session_id, unsegmented_count):
             logger.debug(f"Could not set fence for session {session_id}")
             return False
         
-        # Enqueue for background processing
-        # mark_segmentation_done is called AFTER processing in run_memory_pipeline
         enqueue_memory_pipeline(session_id)
         return True
     return False
