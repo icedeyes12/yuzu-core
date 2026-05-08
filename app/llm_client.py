@@ -177,18 +177,9 @@ def _unique_tool_schemas() -> list[dict[str, Any]]:
 # Direct /imagine handling (used by both response variants)
 # ---------------------------------------------------------------------------
 
-
-def _handle_imagine_command(user_message: str, session_id: int) -> str:
-    prompt = user_message.replace("/imagine", "", 1).strip()
-    if not prompt:
-        return "Please provide a prompt after /imagine. Example: /imagine a cute anime cat"
-
-    Database.add_message("user", user_message, session_id=session_id)
-    image_url, error = multimodal_tools.generate_image(prompt)
-    if image_url:
-        Database.add_image_tools_message(image_url, session_id=session_id)
-        return f"Image generated successfully! Here's your creation:\n\n![Generated Image]({image_url})"
-    return f"Sorry, I couldn't generate an image: {error}"
+# REMOVED: _handle_imagine_command was a duplicate image-generation path
+# that bypassed the tool registry. All /imagine handling now goes through
+# the orchestrator -> detect_command -> execute_command -> execute_tool.
 
 
 # ---------------------------------------------------------------------------
@@ -212,8 +203,8 @@ def _send_to_provider(
     messages: list[dict[str, Any]],
     *,
     image_context: list[dict[str, Any]] | None,
-) -> str | None:
-    """Single LLM dispatch with timing log. Returns text or None."""
+) -> tuple[str | None, dict[str, Any] | None]:
+    """Single LLM dispatch with timing log. Returns (text, raw_response)."""
     ai_manager = get_ai_manager()
     schemas = _unique_tool_schemas()
 
@@ -225,24 +216,36 @@ def _send_to_provider(
             schemas = []  # vision models don't accept tool schemas
 
     started = time.time()
+    raw_response: dict[str, Any] | None = None
     try:
-        response = ai_manager.send_message(
+        raw_response = ai_manager.send_message_raw(
             provider, model, messages, timeout=180, tools=schemas
         )
     except Exception as e:  # noqa: BLE001
         log.error("send_message exception (%s/%s): %s", provider, model, e)
-        return None
+        return None, None
 
     duration = time.time() - started
-    if response and response.strip():
+    if raw_response is None:
+        log.warning("chat %s/%s returned empty (%.1fs)", provider, model, duration)
+        return None, None
+
+    # Extract text content from the raw response
+    try:
+        text = raw_response["choices"][0]["message"].get("content") or ""
+        text = text.strip()
+    except (KeyError, IndexError):
+        text = ""
+
+    if text:
         log.info(
             "chat %s/%s | tools=%d | %.1fs ok",
             provider, model, len(schemas), duration,
         )
-        return response.strip()
+        return text, raw_response
 
     log.warning("chat %s/%s returned empty (%.1fs)", provider, model, duration)
-    return None
+    return text, raw_response
 
 
 def generate_ai_response(
@@ -252,16 +255,13 @@ def generate_ai_response(
     session_id: int | None = None,
     image_content_for_context: list[dict[str, Any]] | None = None,
 ) -> tuple[str | None, dict[str, Any] | None]:
-    """Single (text, tool_result) AI generation pass.
+    """Single (text, raw_response) AI generation pass.
 
-    tool_result is reserved for future native tool-call integration; today
-    legacy /command detection lives in the orchestrator.
+    raw_response is the full API response dict, used for tool-call parsing.
+    Legacy /command detection lives in the orchestrator.
     """
     if session_id is None:
         session_id = Database.get_active_session()["id"]
-
-    if user_message.strip().startswith("/imagine"):
-        return _handle_imagine_command(user_message, session_id), None
 
     provider, model = _resolve_provider(profile, None, None)
     messages = build_messages(profile, session_id, interface, user_message)
@@ -277,10 +277,10 @@ def generate_ai_response(
         messages.append({"role": "user", "content": image_content_for_context})
         log.info("injected base64 image context for second pass")
 
-    text = _send_to_provider(
+    text, raw = _send_to_provider(
         provider, model, messages, image_context=image_content_for_context
     )
-    return text, None
+    return text, raw
 
 
 def _stream_from_provider(
@@ -290,12 +290,7 @@ def _stream_from_provider(
     *,
     image_context: list[dict[str, Any]] | None,
 ) -> Iterator[str]:
-    """Yield raw chunks from the provider's streaming API.
-
-    Honors the same vision-routing override as the non-streaming path:
-    when an image context is present we force-switch to the best vision
-    provider and strip tool schemas (vision endpoints typically reject them).
-    """
+    """Yield raw chunks from the provider's streaming API."""
     ai_manager = get_ai_manager()
 
     if image_context and provider in ai_manager.providers:
@@ -339,16 +334,9 @@ def generate_ai_response_streaming(
     non-streaming variant, then dispatches via the provider's streaming
     API. Yields raw provider chunks; the orchestrator is responsible for
     filtering /command preambles and post-processing.
-
-    The /imagine fast path returns a single chunk because image
-    generation is a synchronous blocking call.
     """
     if session_id is None:
         session_id = Database.get_active_session()["id"]
-
-    if user_message.strip().startswith("/imagine"):
-        yield _handle_imagine_command(user_message, session_id)
-        return
 
     resolved_provider, resolved_model = _resolve_provider(profile, provider, model)
     messages = build_messages(profile, session_id, interface, user_message)

@@ -21,8 +21,10 @@ _STRING_ARG_TOOLS: dict[str, str] = {
 }
 
 # Aliases the model uses for tool routing.
+# These map /command names to registry tool names.
 _TOOL_ALIASES: dict[str, str] = {
     "imagine": "image_generate",
+    "image_generate": "image_generate",
 }
 
 _MARKDOWN_IMAGE_PATH = re.compile(

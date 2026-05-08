@@ -75,3 +75,64 @@ class TestParseImagePath:
     def test_returns_none_when_no_image(self):
         assert parse_image_path("<details>no image</details>") is None
         assert parse_image_path("") is None
+
+
+class TestToolAliases:
+    def test_imagine_maps_to_image_generate(self):
+        from app.commands import _TOOL_ALIASES
+        assert _TOOL_ALIASES["imagine"] == "image_generate"
+
+    def test_image_generate_maps_to_self(self):
+        from app.commands import _TOOL_ALIASES
+        assert _TOOL_ALIASES["image_generate"] == "image_generate"
+
+
+class TestNativeToolCallParsing:
+    def test_parse_raw_tool_calls_none(self):
+        from app.orchestrator import _parse_raw_tool_calls
+        assert _parse_raw_tool_calls("chutes", None) == []
+
+    def test_parse_raw_tool_calls_empty(self):
+        from app.orchestrator import _parse_raw_tool_calls
+        assert _parse_raw_tool_calls("chutes", {}) == []
+
+    def test_parse_raw_tool_calls_unknown_provider(self):
+        from app.orchestrator import _parse_raw_tool_calls
+        import json
+        args_str = json.dumps({"prompt": "cat"})
+        raw = {"choices": [{"message": {"content": "", "tool_calls": [{"id": "1", "function": {"name": "image_generate", "arguments": args_str}}]}}]}
+        assert _parse_raw_tool_calls("nonexistent", raw) == []
+
+    def test_parse_raw_tool_calls_with_mock_provider(self):
+        """Test _parse_raw_tool_calls with a mocked provider that supports tool calls."""
+        from app.orchestrator import _parse_raw_tool_calls
+        from unittest.mock import MagicMock, patch
+        import json
+
+        args_str = json.dumps({"prompt": "a fluffy cat"})
+        raw = {"choices": [{"message": {"content": "", "tool_calls": [{"id": "call_1", "function": {"name": "image_generate", "arguments": args_str}}]}}]}
+
+        mock_provider = MagicMock()
+        mock_provider.parse_tool_calls.return_value = [
+            {"id": "call_1", "name": "image_generate", "arguments": {"prompt": "a fluffy cat"}}
+        ]
+        mock_manager = MagicMock()
+        mock_manager.providers.get.return_value = mock_provider
+
+        with patch("app.providers.get_ai_manager", return_value=mock_manager):
+            result = _parse_raw_tool_calls("any_provider", raw)
+
+        assert len(result) == 1
+        assert result[0]["name"] == "image_generate"
+        assert result[0]["arguments"]["prompt"] == "a fluffy cat"
+
+    def test_parse_raw_tool_calls_no_tool_calls(self):
+        from app.orchestrator import _parse_raw_tool_calls
+        raw = {"choices": [{"message": {"content": "just text", "tool_calls": []}}]}
+        assert _parse_raw_tool_calls("openrouter", raw) == []
+
+    def test_parse_raw_tool_calls_chutes_returns_empty(self):
+        from app.orchestrator import _parse_raw_tool_calls
+        raw = {"choices": [{"message": {"content": "/imagine cat"}}]}
+        # Chutes doesn't support native tool calls, so parse returns empty
+        assert _parse_raw_tool_calls("chutes", raw) == []

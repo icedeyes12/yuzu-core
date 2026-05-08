@@ -78,6 +78,51 @@ def _cache_uploaded_images(message: str) -> list[str]:
     return paths
 
 
+# ---------------------------------------------------------------------------
+# Native tool-call helpers
+# ---------------------------------------------------------------------------
+
+def _parse_raw_tool_calls(
+    provider_name: str, raw_response: dict | None
+) -> list[dict]:
+    """Parse tool_calls from a raw provider API response.
+
+    Returns list of {"name": str, "arguments": dict} for each tool call.
+    """
+    if not raw_response:
+        return []
+    try:
+        from app.providers import get_ai_manager
+        manager = get_ai_manager()
+        provider = manager.providers.get(provider_name)
+        if not provider:
+            return []
+        calls = provider.parse_tool_calls(raw_response)
+        return [{"name": c["name"], "arguments": c["arguments"]} for c in calls if c.get("name")]
+    except Exception:
+        return []
+
+
+def _execute_tool_calls(
+    tool_calls: list[dict], session_id: int
+) -> list[tuple[str, dict]]:
+    """Execute a list of tool calls and return results."""
+    from app.commands import _TOOL_ALIASES
+    from app.tools.registry import execute_tool, is_terminal_tool
+
+    results: list[tuple[str, dict]] = []
+    for tc in tool_calls:
+        raw_name = tc["name"]
+        tool_name = _TOOL_ALIASES.get(raw_name, raw_name)
+        arguments = tc.get("arguments", {})
+        log.info("native tool_call: %s %s", tool_name, arguments)
+        result = execute_tool(tool_name, arguments, session_id=session_id)
+        results.append((tool_name, result))
+        if is_terminal_tool(tool_name) and result.get("ok"):
+            break  # terminal tool succeeded, stop processing
+    return results
+
+
 def _cache_images_from_message(message: str) -> list[str]:
     """Resolve any image references in *message* to local cache paths, with validation."""
     import os
@@ -316,8 +361,10 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
     session_id = active_session["id"]
     cached_images = _cache_images_from_message(user_message)
 
+    provider_name = (profile.get("providers_config") or {}).get("preferred_provider", "ollama")
+
     try:
-        raw_response, _ = generate_ai_response(
+        text_response, raw_api_response = generate_ai_response(
             profile, user_message, interface, session_id
         )
     except Exception:
@@ -326,45 +373,74 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
 
     _persist_user(user_message, session_id, cached_images)
 
-    if raw_response is None:
+    if text_response is None:
         log.error("AI provider returned None")
         return ""
 
-    raw_response = _clean(raw_response) or _EMPTY_RESPONSE_FALLBACK
+    text_response = _clean(text_response) or _EMPTY_RESPONSE_FALLBACK
 
-    if is_markdown_image_shortcut(raw_response):
+    if is_markdown_image_shortcut(text_response):
         log.warning(
             "intercepted markdown image shortcut: %s",
-            extract_markdown_image_path(raw_response),
+            extract_markdown_image_path(text_response),
         )
         return IMAGE_SHORTCUT_WARNING
 
-    cmd_info = detect_command(raw_response)
-    if not cmd_info:
-        Database.add_message("assistant", raw_response, session_id=session_id)
-        _post_turn(profile, user_message, raw_response, session_id, active_session)
-        return raw_response
+    # Try native tool-call execution first (for providers that support it)
+    native_tool_executed = False
+    tool_results: list[tuple[str, dict]] = []
+    tool_calls = _parse_raw_tool_calls(provider_name, raw_api_response)
+    if tool_calls:
+        tool_results = _execute_tool_calls(tool_calls, session_id)
+        if tool_results:
+            native_tool_executed = True
+            tool_name, tool_result = tool_results[0]
+            tool_markdown = tool_result.get("markdown", str(tool_result))
+            _persist_tool_result(tool_name, tool_markdown, session_id)
 
-    # Tool path
-    tool_name, tool_result = execute_command(cmd_info, session_id=session_id)
-    tool_markdown = tool_result.get("markdown", str(tool_result))
-    _persist_tool_result(tool_name, tool_markdown, session_id)
+            is_image_tool = parse_image_path(tool_markdown) is not None
+            synthesis = _run_synthesis(
+                profile, session_id, interface, tool_markdown, is_image_tool
+            )
 
-    is_image_tool = parse_image_path(tool_markdown) is not None
-    synthesis = _run_synthesis(
-        profile, session_id, interface, tool_markdown, is_image_tool
-    )
+            if synthesis:
+                Database.add_message("assistant", synthesis, session_id=session_id)
+                final_response = (
+                    f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
+                )
+                _post_turn(profile, user_message, final_response, session_id, active_session)
+                return final_response
 
-    if synthesis:
-        Database.add_message("assistant", synthesis, session_id=session_id)
-        final_response = (
-            f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
+            _post_turn(profile, user_message, tool_markdown, session_id, active_session)
+            return tool_markdown
+
+    if not native_tool_executed:
+        cmd_info = detect_command(text_response)
+        if not cmd_info:
+            Database.add_message("assistant", text_response, session_id=session_id)
+            _post_turn(profile, user_message, text_response, session_id, active_session)
+            return text_response
+
+        # /command path
+        tool_name, tool_result = execute_command(cmd_info, session_id=session_id)
+        tool_markdown = tool_result.get("markdown", str(tool_result))
+        _persist_tool_result(tool_name, tool_markdown, session_id)
+
+        is_image_tool = parse_image_path(tool_markdown) is not None
+        synthesis = _run_synthesis(
+            profile, session_id, interface, tool_markdown, is_image_tool
         )
-        _post_turn(profile, user_message, final_response, session_id, active_session)
-        return final_response
 
-    _post_turn(profile, user_message, tool_markdown, session_id, active_session)
-    return tool_markdown
+        if synthesis:
+            Database.add_message("assistant", synthesis, session_id=session_id)
+            final_response = (
+                f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
+            )
+            _post_turn(profile, user_message, final_response, session_id, active_session)
+            return final_response
+
+        _post_turn(profile, user_message, tool_markdown, session_id, active_session)
+        return tool_markdown
 
 
 def handle_user_message_streaming(

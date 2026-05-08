@@ -464,20 +464,15 @@ class MultimodalTools:
     
     def generate_image(self, prompt: str, provider: str = "chutes", 
                       model: str = None, size: str = "1024x1024") -> Tuple[Optional[str], Optional[str]]:
-        # Image generation logic moved to tools/image_generate.py
-        # This method delegates to the single source of truth.
-        from app.tools.image_generate import execute as _img_execute
-        import re as _re
-        result_str = _img_execute({"prompt": prompt})
-        try:
-            m = _re.search(r'src="(static/generated_images/[^"]{1,200})"', result_str)
-            if m:
-                return m.group(1), None
-            return None, "No image in result"
-        except Exception as e:
-            # Log the parsing error but return a generic message
-            logger.debug(f"[multimodal] Failed to parse image generation result: {e}")
-            return None, "Image result parsing failed"
+        """Generate an image using the tool registry (single source of truth)."""
+        from app.tools.registry import execute_tool
+        result = execute_tool("image_generate", {"prompt": prompt})
+        if result.get("ok"):
+            image_path = result.get("data", {}).get("image_path")
+            if image_path:
+                return image_path, None
+            return None, "No image path in result"
+        return None, result.get("error", "Image generation failed")
     
     def get_best_vision_provider(self) -> Tuple[Optional[str], Optional[str]]:
         """Get the best available vision provider and model.
