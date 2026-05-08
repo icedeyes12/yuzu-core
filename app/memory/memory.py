@@ -132,9 +132,11 @@ def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
     
     Returns True if:
     - Delta from last_segmented_count >= WINDOW_BASE (periodic trigger)
-    - OR current_count >= WINDOW_MAX (force trigger)
     - AND no active fence exists (prevents concurrent jobs)
     - AND enough time has passed since last segmentation (time gap)
+    
+    Note: Force trigger removed - yuzu-companion tracks unsegmented via
+    end_message_id, not queue length like plast-mem.
     """
     from app.database import get_memory_state
     
@@ -148,7 +150,7 @@ def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
     last_count = state.get("last_segmented_count", 0)
     last_segmented_at = state.get("last_segmented_at")
     
-    # Calculate delta
+    # Calculate delta (unsegmented message count)
     delta = current_count - last_count
     
     # Not enough new messages
@@ -167,11 +169,6 @@ def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
                 return False
         except (ValueError, TypeError):
             pass  # Invalid timestamp, proceed
-    
-    # Force trigger at WINDOW_MAX (overrides time check)
-    if current_count >= WINDOW_MAX:
-        logger.info(f"Force trigger: current_count={current_count} >= WINDOW_MAX={WINDOW_MAX}")
-        return True
     
     # Periodic trigger: delta >= WINDOW_BASE
     logger.info(f"Trigger: delta={delta} >= WINDOW_BASE={WINDOW_BASE}")
