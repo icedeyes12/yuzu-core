@@ -580,6 +580,8 @@ class ChutesProvider(AIProvider):
         self.available_models = [
             "Qwen/Qwen3-VL-235B-A22B-Instruct",
             "Qwen/Qwen3.5-397B-A17B-TEE",
+            "Qwen/Qwen3.6-27B-TEE",
+            "google/gemma-4-31B-turbo-TEE",
             "deepseek-ai/DeepSeek-V3-0324",
             "deepseek-ai/DeepSeek-V3.1",
             "deepseek-ai/DeepSeek-V3.1-Terminus",
@@ -912,7 +914,7 @@ class AIProviderManager:
 
     # Preferred models for internal (non-chat) LLM calls
     _PREFERRED_MODELS = [
-        "Qwen/Qwen3-Next-80B-A3B-Instruct",
+        "Qwen/Qwen3.6-27B-TEE",
         "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE",
     ]
 
