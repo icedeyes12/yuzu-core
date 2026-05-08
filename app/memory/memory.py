@@ -129,22 +129,34 @@ def _is_fence_active(session_id: int) -> bool:
             return False
 
 
-def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
-    """Check if segmentation should trigger.
+def should_trigger_segmentation(session_id: int, current_count: int) -> tuple[bool, int]:
+    """Check if segmentation should trigger based on delta from last segmented.
     
-    Simple plast-mem aligned logic: trigger every WINDOW_BASE messages.
+    Returns (should_trigger, unsegmented_count) tuple.
+    
+    Logic: trigger when current_count - last_segmented_count >= WINDOW_BASE
     """
+    from app.database import get_memory_state
+    
     # Check fence first
     if _is_fence_active(session_id):
         logger.debug("Segmentation skipped: fence active")
-        return False
+        return False, 0
     
-    # Trigger every N messages (WINDOW_BASE=20)
-    if current_count > 0 and current_count % WINDOW_BASE == 0:
-        logger.info(f"Trigger: message_count={current_count} is multiple of {WINDOW_BASE}")
-        return True
+    # Get last segmented count from persisted state
+    state = get_memory_state(session_id)
+    last_count = state.get("last_segmented_count", 0) or 0
     
-    return False
+    # Calculate delta (new unsegmented messages)
+    delta = current_count - last_count
+    
+    # Not enough new messages
+    if delta < WINDOW_BASE:
+        logger.debug(f"Segmentation skipped: delta={delta} < WINDOW_BASE={WINDOW_BASE}")
+        return False, delta
+    
+    logger.info(f"Trigger: delta={delta} >= WINDOW_BASE={WINDOW_BASE}")
+    return True, delta
 
 
 def mark_segmentation_done(session_id: int, count: int) -> None:
@@ -653,10 +665,15 @@ def run_memory_pipeline(session_id: int, message_count: int) -> dict:
     
     Returns summary: {segments: n, episodes: n, pcl_runs: n}
     """
-    from app.database import get_session_messages
+    from app.database import get_session_messages, get_memory_state
     from app.memory.db_memory import get_facts_by_session, FACT_TYPE_DYNAMIC
     
     logger.info(f"Starting for session {session_id}, count={message_count}")
+    
+    # Get current total count for marking done
+    state = get_memory_state(session_id)
+    last_count = state.get("last_segmented_count", 0) or 0
+    current_total = last_count  # Will be updated below
     
     try:
         # Get messages
@@ -679,14 +696,22 @@ def run_memory_pipeline(session_id: int, message_count: int) -> dict:
             if m.get("id", 0) > last_end_id and m.get("role") in ("user", "assistant")
         ]
         
-        if len(unsegmented) < MIN_MESSAGES:
-            logger.debug(f"Only {len(unsegmented)} unsegmented msgs, skipping")
+        # Get actual count of unsegmented messages for marking
+        unsegmented_count = len(unsegmented)
+        current_total = last_count + unsegmented_count
+        
+        if unsegmented_count < MIN_MESSAGES:
+            logger.debug(f"Only {unsegmented_count} unsegmented msgs, skipping")
+            # Still mark done with current total so we don't re-check these
+            mark_segmentation_done(session_id, current_total)
             return {"segments": 0, "episodes": 0, "pcl_runs": 0}
         
         # Batch segment
         batch_result = batch_segment(unsegmented)
         if not batch_result:
             logger.debug("No segments from batch LLM")
+            # Still mark done with current total
+            mark_segmentation_done(session_id, current_total)
             return {"segments": 0, "episodes": 0, "pcl_runs": 0}
         
         logger.info(f"Batch segmentation: {len(batch_result)} segments")
@@ -707,8 +732,8 @@ def run_memory_pipeline(session_id: int, message_count: int) -> dict:
         except Exception as e:
             logger.warning(f"Memory review error: {e}")
         
-        # No need to call mark_segmentation_done - end_message_id from episodes
-        # is the single source of truth for what's been segmented
+        # Mark done - update last_segmented_count for next trigger calculation
+        mark_segmentation_done(session_id, current_total)
         
         return {
             "segments": len(batch_result),
@@ -773,12 +798,15 @@ def trigger_memory_pipeline_async(session_id: int, current_count: int) -> bool:
     
     Returns True if pipeline was triggered.
     """
-    if should_trigger_segmentation(session_id, current_count):
-        # Try to set fence with unsegmented count
-        if not _try_set_fence(session_id, current_count):
-            logger.debug(f"Could not set fence for session {session_id}")
-            return False
-        
-        enqueue_memory_pipeline(session_id)
-        return True
-    return False
+    should_trigger, delta = should_trigger_segmentation(session_id, current_count)
+    
+    if not should_trigger:
+        return False
+    
+    # Try to set fence with current_count (total messages at trigger time)
+    if not _try_set_fence(session_id, current_count):
+        logger.debug(f"Could not set fence for session {session_id}")
+        return False
+    
+    enqueue_memory_pipeline(session_id)
+    return True
