@@ -153,28 +153,12 @@ def detect_command(response_text: str | None) -> dict[str, str] | None:
     """Return command info if response begins with a /command line, else None.
 
     Returned dict shape: {"command": str, "args": str, "full_command": str}.
-    
-    Does NOT trigger if:
-    - First line starts with ``` (codeblock) 
-    - Command is inside a codeblock
     """
     if not response_text or not response_text.strip():
         return None
-    
-    # Skip if first non-whitespace is ``` (markdown codeblock)
-    stripped = response_text.lstrip()
-    if stripped.startswith("```"):
-        return None
-    
     first_line = response_text.split("\n", 1)[0].strip()
-    
-    # Skip if line is inside a codeblock marker
-    if first_line.startswith("```") or first_line.endswith("```"):
-        return None
-    
     if not first_line.startswith("/"):
         return None
-    
     parts = first_line.split(None, 1)
     return {
         "command": parts[0][1:],
