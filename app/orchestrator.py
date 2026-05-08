@@ -361,6 +361,24 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
     session_id = active_session["id"]
     cached_images = _cache_images_from_message(user_message)
 
+    # Fast-path: user typed /imagine directly — execute tool without LLM round-trip
+    stripped = user_message.strip()
+    if stripped.startswith("/imagine"):
+        prompt = stripped[len("/imagine"):].strip()
+        if prompt:
+            from app.commands import _TOOL_ALIASES, _parse_args
+            from app.tools.registry import execute_tool
+            raw_name = "imagine"
+            tool_name = _TOOL_ALIASES.get(raw_name, raw_name)
+            args = _parse_args(raw_name, prompt)
+            tool_result = execute_tool(tool_name, args, session_id=session_id)
+            tool_markdown = tool_result.get("markdown", str(tool_result))
+            _persist_tool_result(tool_name, tool_markdown, session_id)
+            _post_turn(profile, user_message, tool_markdown, session_id, active_session)
+            return tool_markdown
+        else:
+            return "Please provide a prompt after /imagine. Example: /imagine a cute anime cat"
+
     provider_name = (profile.get("providers_config") or {}).get("preferred_provider", "ollama")
 
     try:
@@ -452,8 +470,9 @@ def handle_user_message_streaming(
     """Streaming entrypoint with true incremental chunk delivery.
 
     Behavior:
-      - Buffers chunks only until a leading /command can be ruled out
-        (typically the first 1-3 chunks).
+      - If user message starts with /imagine: execute tool directly, stream result.
+      - Buffers chunks only until a leading /command on the first
+        line can be confirmed or ruled out.
       - When NO command: streams every subsequent chunk live.
       - When a /command IS detected: suppresses the command line, executes
         the tool, emits the tool result, then streams the synthesis pass
@@ -467,6 +486,26 @@ def handle_user_message_streaming(
     active_session = Database.get_active_session()
     session_id = active_session["id"]
     cached_images = _cache_images_from_message(user_message)
+
+    # Fast-path: user typed /imagine directly — execute tool without LLM round-trip
+    stripped = user_message.strip()
+    if stripped.startswith("/imagine"):
+        prompt = stripped[len("/imagine"):].strip()
+        if prompt:
+            from app.commands import _TOOL_ALIASES, _parse_args
+            from app.tools.registry import execute_tool
+            raw_name = "imagine"
+            tool_name = _TOOL_ALIASES.get(raw_name, raw_name)
+            args = _parse_args(raw_name, prompt)
+            tool_result = execute_tool(tool_name, args, session_id=session_id)
+            tool_markdown = tool_result.get("markdown", str(tool_result))
+            _persist_tool_result(tool_name, tool_markdown, session_id)
+            yield tool_markdown
+            _post_turn(profile, user_message, tool_markdown, session_id, active_session)
+            return
+        else:
+            yield "Please provide a prompt after /imagine. Example: /imagine a cute anime cat"
+            return
 
     sf = StreamFilter()
     visible_chunks: list[str] = []
