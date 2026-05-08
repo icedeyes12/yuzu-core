@@ -167,32 +167,6 @@ def detect_command(response_text: str | None) -> dict[str, str] | None:
     }
 
 
-def detect_command_in_text(response_text: str | None) -> dict[str, str] | None:
-    """Look for /command anywhere in the text, not just at the start.
-
-    This is a fallback for streaming where the LLM might prepend some
-    narration before the /command.  We search line-by-line and return
-    the first line that contains a /command token.
-
-    Returned dict shape: {"command": str, "args": str, "full_command": str}.
-    """
-    if not response_text or not response_text.strip():
-        return None
-    for line in response_text.split("\n"):
-        stripped = line.strip()
-        for cmd in ("/imagine", "/request", "/memory_store"):
-            idx = stripped.find(cmd)
-            if idx >= 0:
-                after_cmd = stripped[idx:]
-                parts = after_cmd.split(None, 1)
-                return {
-                    "command": parts[0][1:],
-                    "args": parts[1] if len(parts) > 1 else "",
-                    "full_command": after_cmd,
-                }
-    return None
-
-
 def _parse_args(tool_name: str, args_str: str) -> dict[str, Any]:
     """Parse a /command argument string into a kwargs dict for the tool."""
     if not args_str:

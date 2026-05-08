@@ -11,7 +11,6 @@ from app.commands import (
     IMAGE_SHORTCUT_WARNING,
     StreamFilter,
     detect_command,
-    detect_command_in_text,
     execute_command,
     extract_markdown_image_path,
     is_markdown_image_shortcut,
@@ -540,16 +539,10 @@ def handle_user_message_streaming(
         yield IMAGE_SHORTCUT_WARNING
         return
 
-    # Fallback: even if StreamFilter didn't detect a command (e.g. the LLM
-    # prepended narration before /imagine), check the full text for /commands
-    # anywhere in the text, not just at the start.
+    # Fallback: check if first line is a command
     cmd_info = sf.command
     if not cmd_info:
         cmd_info = detect_command(full_response)
-        if not cmd_info:
-            cmd_info = detect_command_in_text(full_response)
-        if cmd_info:
-            log.info("[stream] fallback detect found: %s", cmd_info["command"])
 
     if not cmd_info:
         # Plain response - already streamed live. Persist and finish.
