@@ -128,50 +128,48 @@ def _is_fence_active(session_id: int) -> bool:
 
 
 def should_trigger_segmentation(session_id: int, current_count: int) -> bool:
-    """Check if segmentation should trigger based on message count delta.
+    """Check if segmentation should trigger based on unsegmented message count.
     
     Returns True if:
-    - Delta from last_segmented_count >= WINDOW_BASE (periodic trigger)
+    - Count of messages after last episode's end_message_id >= WINDOW_BASE
     - AND no active fence exists (prevents concurrent jobs)
-    - AND enough time has passed since last segmentation (time gap)
     
-    Note: Force trigger removed - yuzu-companion tracks unsegmented via
-    end_message_id, not queue length like plast-mem.
+    Note: current_count is ignored - we count actual unsegmented messages.
     """
-    from app.database import get_memory_state
+    from app.database import get_session_messages
+    from app.memory.db_memory import get_facts_by_session, FACT_TYPE_DYNAMIC
     
-    # Check fence first (like plast-mem's check())
+    # Check fence first
     if _is_fence_active(session_id):
         logger.debug(f"Segmentation skipped for session {session_id}: fence active")
         return False
     
-    # Get last segmented count from persisted state
-    state = get_memory_state(session_id)
-    last_count = state.get("last_segmented_count", 0)
-    last_segmented_at = state.get("last_segmented_at")
-    
-    # Calculate delta (unsegmented message count)
-    delta = current_count - last_count
-    
-    # Not enough new messages
-    if delta < WINDOW_BASE:
-        logger.debug(f"Segmentation skipped: delta={delta} < WINDOW_BASE={WINDOW_BASE}")
+    # Get all messages
+    all_messages = get_session_messages(session_id, limit=10000)
+    if not all_messages:
         return False
     
-    # Check time gap (minimum TIME_GAP_MINUTES since last segmentation)
-    if last_segmented_at:
-        try:
-            from datetime import datetime
-            last_dt = datetime.fromisoformat(last_segmented_at)
-            age = datetime.now() - last_dt
-            if age < timedelta(minutes=TIME_GAP_MINUTES):
-                logger.debug(f"Segmentation skipped: time gap {age} < {TIME_GAP_MINUTES}min")
-                return False
-        except (ValueError, TypeError):
-            pass  # Invalid timestamp, proceed
+    # Find last episode's end_message_id
+    segments = get_facts_by_session(session_id, fact_type=FACT_TYPE_DYNAMIC, limit=100)
+    segments = [s for s in segments if s.get("metadata", {}).get("source_table") == "episodic_memories"]
     
-    # Periodic trigger: delta >= WINDOW_BASE
-    logger.info(f"Trigger: delta={delta} >= WINDOW_BASE={WINDOW_BASE}")
+    if segments:
+        last_end_id = max(s.get("metadata", {}).get("end_message_id", 0) for s in segments)
+    else:
+        last_end_id = 0
+    
+    # Count unsegmented messages (after last episode)
+    unsegmented_count = sum(
+        1 for m in all_messages
+        if m.get("id", 0) > last_end_id and m.get("role") in ("user", "assistant")
+    )
+    
+    # Not enough new messages
+    if unsegmented_count < WINDOW_BASE:
+        logger.debug(f"Segmentation skipped: unsegmented={unsegmented_count} < WINDOW_BASE={WINDOW_BASE}")
+        return False
+    
+    logger.info(f"Trigger: unsegmented={unsegmented_count} >= WINDOW_BASE={WINDOW_BASE}")
     return True
 
 
@@ -735,8 +733,8 @@ def run_memory_pipeline(session_id: int, message_count: int) -> dict:
         except Exception as e:
             logger.warning(f"Memory review error: {e}")
         
-        # Mark done
-        mark_segmentation_done(session_id, message_count)
+        # No need to call mark_segmentation_done - end_message_id from episodes
+        # is the single source of truth for what's been segmented
         
         return {
             "segments": len(batch_result),
