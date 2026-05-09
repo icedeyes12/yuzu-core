@@ -484,7 +484,7 @@ class MessageRenderer {
 				err.className = "preview-error";
 				previewWrap.appendChild(err);
 			}
-			err.textContent = "Error: " + e.message;
+			err.textContent = `Error: ${e.message}`;
 		}
 	}
 	_extractInlineStyles(html) {
@@ -643,7 +643,7 @@ class MessageRenderer {
 		const blockquotes = temp.querySelectorAll("blockquote");
 		blockquotes.forEach((blockquote) => {
 			const firstChild = blockquote.firstElementChild;
-			if (firstChild && firstChild.textContent) {
+			if (firstChild?.textContent) {
 				const text = firstChild.textContent.trim();
 				const calloutMatch = text.match(
 					/^\[!(NOTE|WARNING|INFO|TIP|IMPORTANT|CAUTION)\]/i,
@@ -682,7 +682,7 @@ class MessageRenderer {
 
 			html = html.replace(
 				/!\s*\[([^\]]*)\]\s*\(([^)]+)\)/g,
-				(match, alt, src) => {
+				(_match, alt, src) => {
 					const normalizedHref = this.normalizeImagePath(src);
 					const safeAlt = this.escapeHtml(alt || "Image");
 					const safeSrc = this.escapeHtml(normalizedHref);
@@ -726,7 +726,7 @@ class MessageRenderer {
 			});
 	}
 
-	renderMessage(content, isUser = false) {
+	renderMessage(content, _isUser = false) {
 		return this.render(content);
 	}
 
@@ -778,7 +778,7 @@ class MessageRenderer {
 		const isLight = body.classList.toggle("preview-body-light");
 		btn.classList.toggle("active", isLight);
 		const iframe = document.getElementById("preview-iframe");
-		if (iframe && iframe.contentWindow) {
+		if (iframe?.contentWindow) {
 			iframe.contentWindow.postMessage(isLight ? "light" : "dark", "*");
 		}
 	}
@@ -851,6 +851,6 @@ document.addEventListener("click", (e) => {
 	var rawCode = btn.getAttribute("data-code") || "";
 	try {
 		rawCode = decodeURIComponent(rawCode);
-	} catch (err) {}
+	} catch (_err) {}
 	if (rawCode) renderer.showHtmlPreviewModal(rawCode);
 });

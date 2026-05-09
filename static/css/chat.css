@@ -1255,7 +1255,7 @@ body {
 
 /* ==================== STREAMING MESSAGE (no animation) ==================== */
 .message[data-streaming="true"] {
-	animation: none !important;
+	animation: none;
 }
 
 /* ==================== MERMAID DIAGRAMS ==================== */

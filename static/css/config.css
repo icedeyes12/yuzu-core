@@ -326,8 +326,8 @@ textarea:focus {
 }
 
 #keys-list li {
-	padding: 0.4rem 0.6rem !important;
-	margin-bottom: 0.3rem !important;
+	padding: 0.4rem 0.6rem;
+	margin-bottom: 0.3rem;
 	font-size: 0.85rem;
 	background: var(--input-bg);
 	border-radius: 6px;
@@ -344,8 +344,8 @@ textarea:focus {
 }
 
 #keys-list .btn {
-	padding: 0.2rem 0.5rem !important;
-	font-size: 0.8rem !important;
+	padding: 0.2rem 0.5rem;
+	font-size: 0.8rem;
 	background: #ef4444;
 	color: white;
 	border: none;

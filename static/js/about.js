@@ -96,7 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
 		// Escape key closes sidebar if open
 		if (e.key === "Escape") {
 			const sidebar = document.getElementById("mainSidebar");
-			if (sidebar && sidebar.classList.contains("open")) {
+			if (sidebar?.classList.contains("open")) {
 				toggleSidebar();
 			}
 		}
@@ -111,7 +111,7 @@ document.addEventListener("DOMContentLoaded", () => {
 				"peach",
 				"dark-lavender",
 			];
-			const themeIndex = parseInt(e.key) - 1;
+			const themeIndex = parseInt(e.key, 10) - 1;
 			if (themes[themeIndex]) {
 				switchTheme(themes[themeIndex]);
 			}

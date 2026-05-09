@@ -384,7 +384,7 @@ function setupEventListeners() {
 		// Escape to close sidebar
 		if (e.key === "Escape") {
 			const sidebar = document.getElementById("mainSidebar");
-			if (sidebar && sidebar.classList.contains("open")) {
+			if (sidebar?.classList.contains("open")) {
 				toggleSidebar();
 			}
 		}
@@ -556,7 +556,7 @@ async function saveVisionModel() {
 				`${provider}/${model}`;
 			showSuccess("Vision model saved!");
 		} else {
-			showError("Failed to save vision model: " + result.message);
+			showError(`Failed to save vision model: ${result.message}`);
 		}
 	} catch (error) {
 		console.error("Error saving vision model:", error);
@@ -645,7 +645,7 @@ async function saveProviderSettings() {
 			// Test the new connection
 			testProviderConnection(providerName);
 		} else {
-			showError("Failed to save provider settings: " + result.message);
+			showError(`Failed to save provider settings: ${result.message}`);
 		}
 	} catch (error) {
 		console.error("Error saving provider settings:", error);
@@ -688,7 +688,7 @@ async function saveProfileSettings() {
 			body: JSON.stringify({
 				display_name: displayName,
 				partner_name: partnerName,
-				affection: parseInt(affection),
+				affection: parseInt(affection, 10),
 			}),
 		});
 
@@ -779,7 +779,7 @@ async function addAPIKey() {
 			// Reload provider settings to reflect new key availability
 			loadProviderSettings();
 		} else {
-			showError("Failed to add API key: " + result.message);
+			showError(`Failed to add API key: ${result.message}`);
 		}
 	} catch (error) {
 		console.error("Error adding API key:", error);
@@ -813,7 +813,7 @@ async function removeAPIKey(keyName) {
 			// Reload provider settings to reflect key removal
 			loadProviderSettings();
 		} else {
-			showError("Failed to remove API key: " + result.message);
+			showError(`Failed to remove API key: ${result.message}`);
 		}
 	} catch (error) {
 		console.error("Error removing API key:", error);
@@ -876,9 +876,7 @@ async function rebuildStructuredMemory() {
 			showSuccess(result.message);
 			loadMemoryStats();
 		} else {
-			showError(
-				"Failed to rebuild memory: " + (result.message || result.error),
-			);
+			showError(`Failed to rebuild memory: ${result.message || result.error}`);
 		}
 	} catch (error) {
 		console.error("Error rebuilding structured memory:", error);
@@ -914,7 +912,7 @@ async function runMemoryDecay() {
 			showSuccess(result.message);
 			loadMemoryStats();
 		} else {
-			showError("Failed to run decay: " + (result.message || result.error));
+			showError(`Failed to run decay: ${result.message || result.error}`);
 		}
 	} catch (error) {
 		console.error("Error running memory decay:", error);
@@ -950,13 +948,13 @@ async function updateGlobalProfile() {
 		if (result.status === "success") {
 			showSuccess("Global player profile updated from ALL sessions!");
 			// Use the returned profile data directly
-			if (result.profile && result.profile.memory) {
+			if (result.profile?.memory) {
 				updateGlobalProfileDisplay(result.profile.memory);
 			} else {
 				loadProfileData(); // Fallback to reload
 			}
 		} else {
-			showError("Failed to update global profile: " + result.message);
+			showError(`Failed to update global profile: ${result.message}`);
 		}
 	} catch (error) {
 		console.error("Error updating global profile:", error);
@@ -1238,7 +1236,7 @@ function useCurrentLocation() {
 			document.getElementById("location-lat").value = lat;
 			document.getElementById("location-lon").value = lon;
 		},
-		(err) => {
+		(_err) => {
 			alert("Location permission denied or unavailable.");
 		},
 	);

@@ -43,7 +43,7 @@ function initializeHomePage() {
 		// Escape to close sidebar
 		if (e.key === "Escape") {
 			const sidebar = document.getElementById("mainSidebar");
-			if (sidebar && sidebar.classList.contains("open")) {
+			if (sidebar?.classList.contains("open")) {
 				toggleSidebar();
 			}
 		}

@@ -676,17 +676,17 @@ a:hover {
 /* Print Styles */
 @media print {
 	.no-print {
-		display: none !important;
+		display: none;
 	}
 
 	body {
-		background: white !important;
-		color: black !important;
+		background: white;
+		color: black;
 	}
 
 	.card {
-		border: 1px solid #ccc !important;
-		box-shadow: none !important;
+		border: 1px solid #ccc;
+		box-shadow: none;
 	}
 }
 
@@ -703,10 +703,10 @@ a:hover {
 	*,
 	*::before,
 	*::after {
-		animation-duration: 0.01ms !important;
-		animation-iteration-count: 1 !important;
-		transition-duration: 0.01ms !important;
-		scroll-behavior: auto !important;
+		animation-duration: 0.01ms;
+		animation-iteration-count: 1;
+		transition-duration: 0.01ms;
+		scroll-behavior: auto;
 	}
 }
 

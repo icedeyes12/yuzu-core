@@ -1,6 +1,6 @@
 // FILE: static/js/sidebar.js
 // DESCRIPTION: Unified sidebar management with session actions
-let currentTheme = "stellar-night-suisei";
+let _currentTheme = "stellar-night-suisei";
 
 function toggleSidebar() {
 	const sidebar = document.getElementById("mainSidebar");
@@ -81,7 +81,7 @@ function initCustomDropdown() {
 
 // Theme switching function
 function switchTheme(theme) {
-	currentTheme = theme;
+	_currentTheme = theme;
 
 	// Apply theme to body
 	document.body.setAttribute("data-theme", theme);
@@ -195,7 +195,7 @@ function loadSidebarSessions() {
 // Rename session functionality
 function renameSessionPrompt(sessionId, currentName) {
 	const newName = prompt("Enter new session name:", currentName);
-	if (newName && newName.trim() && newName !== currentName) {
+	if (newName?.trim() && newName !== currentName) {
 		renameSession(sessionId, newName.trim());
 	}
 }
@@ -322,7 +322,7 @@ function switchSession(sessionId) {
 }
 
 // Helper functions
-function escapeHtml(text) {
+function _escapeHtml(text) {
 	const div = document.createElement("div");
 	div.textContent = text;
 	return div.innerHTML;
@@ -378,7 +378,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 	// Apply the theme immediately
 	document.body.setAttribute("data-theme", savedTheme);
-	currentTheme = savedTheme;
+	_currentTheme = savedTheme;
 
 	// Initialize custom dropdown
 	initCustomDropdown();

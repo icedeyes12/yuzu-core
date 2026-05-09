@@ -4,7 +4,7 @@ console.log("Starting clean chat rebuild...");
 
 // ==================== GLOBAL STATE ====================
 let isProcessingMessage = false;
-const currentPage = 0;
+const _currentPage = 0;
 const MESSAGES_PER_PAGE = 30;
 
 // ==================== STREAMING STATE ====================
@@ -207,7 +207,7 @@ class MultimodalManager {
 								this.renderStreamChunk(contentDiv, accumulatedText);
 								scrollToBottom();
 							}
-						} catch (e) {
+						} catch (_e) {
 							// Ignore parse errors
 						}
 					}
@@ -418,8 +418,8 @@ class MultimodalManager {
 		try {
 			// Build a single unified message containing text + images
 			let combinedMarkdown = "";
-			if (text && text.trim()) {
-				combinedMarkdown += text.trim() + "\n\n";
+			if (text?.trim()) {
+				combinedMarkdown += `${text.trim()}\n\n`;
 			}
 			this.selectedImages.forEach((image) => {
 				const imageUrl = URL.createObjectURL(image);
@@ -462,7 +462,7 @@ class MultimodalManager {
 		}
 	}
 
-	displayGeneratedImage(imageUrl, prompt) {
+	displayGeneratedImage(imageUrl, _prompt) {
 		const generatedMarkdown = /!\s*\[[^\]]*\]\s*\n?\s*\([^)]+\)/.test(
 			String(imageUrl),
 		)
@@ -922,8 +922,8 @@ function formatTimestamp(timestamp) {
 		let hours = dbDate.getHours();
 		let minutes = dbDate.getMinutes();
 
-		hours = hours < 10 ? "0" + hours : hours;
-		minutes = minutes < 10 ? "0" + minutes : minutes;
+		hours = hours < 10 ? `0${hours}` : hours;
+		minutes = minutes < 10 ? `0${minutes}` : minutes;
 
 		return `${hours}:${minutes}`;
 	} catch (e) {
@@ -936,8 +936,8 @@ function getCurrentTime24h() {
 	const now = new Date();
 	let hours = now.getHours();
 	let minutes = now.getMinutes();
-	hours = hours < 10 ? "0" + hours : hours;
-	minutes = minutes < 10 ? "0" + minutes : minutes;
+	hours = hours < 10 ? `0${hours}` : hours;
+	minutes = minutes < 10 ? `0${minutes}` : minutes;
 	return `${hours}:${minutes}`;
 }
 
@@ -1163,7 +1163,7 @@ function initializeInputBehavior() {
 	// Auto-resize textarea
 	input.oninput = () => {
 		input.style.height = "auto";
-		input.style.height = Math.min(input.scrollHeight, 400) + "px";
+		input.style.height = `${Math.min(input.scrollHeight, 400)}px`;
 		updateDynamicLayout();
 	};
 
