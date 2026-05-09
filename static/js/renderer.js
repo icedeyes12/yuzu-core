@@ -497,7 +497,6 @@ class MessageRenderer {
 		do {
 			previous = current;
 			current = current
-				.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
 				.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "")
 				.replace(/<!DOCTYPE[^>]*>/gi, "")
 				.replace(/<html[^>]*>/gi, "")
@@ -505,7 +504,7 @@ class MessageRenderer {
 				.replace(/<body[^>]*>/gi, "")
 				.replace(/<\/body>/gi, "");
 		} while (current !== previous);
-		return current.trim();
+		return current.replace(/<|>/g, "").trim();
 	}
 	_sanitizeHtml(html) {
 		// Only strip dangerous attributes, preserve scripts (iframe is sandboxed)
