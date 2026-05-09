@@ -371,8 +371,8 @@ class MultimodalManager {
 
 			addMessage("user", prompt);
 
-			const typingIndicator = document.getElementById("typingIndicator");
-			if (typingIndicator) typingIndicator.classList.remove("hidden");
+			// Use dynamic typing indicator
+			showTypingIndicator();
 
 			// Route through unified send_message pipeline
 			const response = await fetch("/api/send_message", {
@@ -382,7 +382,9 @@ class MultimodalManager {
 			});
 
 			const data = await response.json();
-			if (typingIndicator) typingIndicator.classList.add("hidden");
+
+			// Hide dynamic typing indicator
+			hideTypingIndicator();
 
 			if (data.reply) {
 				const reply = String(data.reply);
