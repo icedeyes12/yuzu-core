@@ -511,7 +511,7 @@ class MessageRenderer {
 		// Only strip dangerous attributes, preserve scripts (iframe is sandboxed)
 		return html
 			.replace(/on\w+\s*=/gi, "data-disabled-")
-			.replace(/javascript:/gi, "");
+			.replace(/(?:javascript|data|vbscript):/gi, "");
 	}
 
 	normalizeImagePath(path) {
