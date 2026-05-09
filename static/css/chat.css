@@ -1194,9 +1194,8 @@ body {
 /* ==================== TYPING INDICATOR MESSAGE (in-flow) ==================== */
 .typing-indicator-message {
 	align-self: flex-start;
-	background: var(--card-bg, var(--bg-secondary));
-	border: 1px solid
-		var(--border-ai, var(--border-color, rgba(56, 139, 253, 0.3)));
+	background: var(--message-ai-bg);
+	border: 1px solid var(--border-ai);
 	padding: 0.8rem 1rem;
 	border-radius: 12px;
 	max-width: 60px;
@@ -1215,7 +1214,7 @@ body {
 	height: 8px;
 	background: var(--accent-primary, var(--accent-color));
 	border-radius: 50%;
-	animation: typingBounce 1.4s infinite ease-in-out;
+	animation: typing 1.4s infinite ease-in-out;
 }
 
 .typing-indicator-message .typing-dots span:nth-child(1) {
@@ -1230,7 +1229,7 @@ body {
 	animation-delay: 0.4s;
 }
 
-@keyframes typingBounce {
+@keyframes typing {
 	0%,
 	60%,
 	100% {
@@ -1245,8 +1244,8 @@ body {
 
 /* Light theme adjustment */
 [data-theme="light"] .typing-indicator-message {
-	background: var(--card-bg, rgba(200, 200, 230, 0.6));
-	border-color: var(--border-ai, rgba(138, 109, 233, 0.3));
+	background: var(--message-ai-bg);
+	border-color: var(--border-ai);
 }
 
 /* ==================== STREAMING MESSAGE (no animation) ==================== */

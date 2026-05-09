@@ -34,22 +34,18 @@ class MessageRenderer {
 				themeVariables: themeVariables,
 				securityLevel: "loose",
 				flowchart: {
-					useMaxWidth: false,
+					useMaxWidth: true,
 					htmlLabels: true,
 					curve: "basis",
-					wrap: false,
 				},
 				sequence: {
-					useMaxWidth: false,
-					wrap: false,
+					useMaxWidth: true,
 				},
 				gantt: {
-					useMaxWidth: false,
-					wrap: false,
+					useMaxWidth: true,
 				},
 				er: {
-					useMaxWidth: false,
-					wrap: false,
+					useMaxWidth: true,
 				},
 			});
 			this.isMermaidReady = true;
@@ -814,7 +810,7 @@ class MessageRenderer {
 			tertiaryColor: style.getPropertyValue("--accent-tertiary").trim(),
 			edgeLabelBackground: style.getPropertyValue("--code-bg").trim(),
 			nodeBorder: style.getPropertyValue("--border-primary").trim(),
-			fontFamily: "inherit",
+			fontFamily: "JetBrains Mono, monospace",
 		};
 	}
 
@@ -828,14 +824,13 @@ class MessageRenderer {
 			themeVariables: themeVariables,
 			securityLevel: "loose",
 			flowchart: {
-				useMaxWidth: false,
+				useMaxWidth: true,
 				htmlLabels: true,
 				curve: "basis",
-				wrap: false,
 			},
-			sequence: { useMaxWidth: false, wrap: false },
-			gantt: { useMaxWidth: false, wrap: false },
-			er: { useMaxWidth: false, wrap: false },
+			sequence: { useMaxWidth: true },
+			gantt: { useMaxWidth: true },
+			er: { useMaxWidth: true },
 		});
 		console.log("[Renderer] Mermaid reinitialized with new theme");
 	}
