@@ -58,7 +58,9 @@ function initCustomDropdown() {
 			selected.querySelector(".selected-text").textContent = text;
 
 			// Update active states
-			optionItems.forEach((opt) => opt.classList.remove("active"));
+			optionItems.forEach((opt) => {
+				opt.classList.remove("active");
+			});
 			this.classList.add("active");
 
 			// Close dropdown
