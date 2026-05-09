@@ -1108,14 +1108,25 @@ function showNotification(message, type = "info") {
 	const existingNotifications = document.querySelectorAll(
 		".config-notification",
 	);
-	existingNotifications.forEach((notification) => notification.remove());
+	existingNotifications.forEach((notification) => {
+		notification.remove();
+	});
+
+	// Escape HTML to prevent XSS
+	const escapeHtml = (text) => {
+		const div = document.createElement("div");
+		div.textContent = text;
+		return div.innerHTML;
+	};
+
+	const escapedMessage = escapeHtml(message);
 
 	const notification = document.createElement("div");
 	notification.className = `config-notification ${type}`;
 	notification.innerHTML = `
         <div class="notification-content">
             <span class="notification-icon">${type === "success" ? "✓" : type === "error" ? "✗" : "ℹ"}</span>
-            <span class="notification-message">${message}</span>
+            <span class="notification-message">${escapedMessage}</span>
             <button class="notification-close" onclick="this.parentElement.parentElement.remove()">×</button>
         </div>
     `;
