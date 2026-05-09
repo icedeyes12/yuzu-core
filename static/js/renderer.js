@@ -756,10 +756,10 @@ class MessageRenderer {
 		const code = rawCode
 			.replace(/&lt;/g, "<")
 			.replace(/&gt;/g, ">")
-			.replace(/&amp;/g, "&")
 			.replace(/&quot;/g, '"')
 			.replace(/&#39;/g, "'")
-			.replace(/&#x27;/g, "'");
+			.replace(/&#x27;/g, "'")
+			.replace(/&amp;/g, "&");
 		// Allow srcdoc to handle the rest (don't over-unescape)
 		modal.classList.add("active");
 		document.body.style.overflow = "hidden";
