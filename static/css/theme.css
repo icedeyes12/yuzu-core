@@ -588,6 +588,35 @@ body {
 	vertical-align: middle;
 }
 
+/* Fallback previews for cross-theme display - must come before themed selectors */
+.theme-preview.suisei-preview {
+	background: linear-gradient(135deg, #0d1117, #1f6feb);
+}
+.theme-preview.tokyonight-preview {
+	background: linear-gradient(135deg, #1a1b26, #7aa2f7);
+}
+.theme-preview.dark-preview {
+	background: linear-gradient(135deg, #1a1f2e, #24283d);
+}
+.theme-preview.light-preview {
+	background: linear-gradient(135deg, #f8f9fa, #ffffff);
+}
+.theme-preview.lavender-preview {
+	background: linear-gradient(135deg, #f5f3ff, #d8b4fe);
+}
+.theme-preview.mint-preview {
+	background: linear-gradient(135deg, #f0fdf9, #99f6e4);
+}
+.theme-preview.peach-preview {
+	background: linear-gradient(135deg, #fff7ed, #fdba74);
+}
+.theme-preview.dark-lavender-preview {
+	background: linear-gradient(135deg, #1e1b2e, #c4b5fd);
+}
+.theme-preview.vanilla-orange-preview {
+	background: linear-gradient(135deg, #fff9f0, #ffd8a8);
+}
+
 /* Suisei preview */
 [data-theme="stellar-night-suisei"] .theme-preview.suisei-preview,
 [data-theme=""] .theme-preview.suisei-preview {
@@ -624,34 +653,5 @@ body {
 }
 
 [data-theme="vanilla-orange"] .theme-preview.vanilla-orange-preview {
-	background: linear-gradient(135deg, #fff9f0, #ffd8a8);
-}
-
-/* Fallback previews for cross-theme display */
-.theme-preview.suisei-preview {
-	background: linear-gradient(135deg, #0d1117, #1f6feb);
-}
-.theme-preview.tokyonight-preview {
-	background: linear-gradient(135deg, #1a1b26, #7aa2f7);
-}
-.theme-preview.dark-preview {
-	background: linear-gradient(135deg, #1a1f2e, #24283d);
-}
-.theme-preview.light-preview {
-	background: linear-gradient(135deg, #f8f9fa, #ffffff);
-}
-.theme-preview.lavender-preview {
-	background: linear-gradient(135deg, #f5f3ff, #d8b4fe);
-}
-.theme-preview.mint-preview {
-	background: linear-gradient(135deg, #f0fdf9, #99f6e4);
-}
-.theme-preview.peach-preview {
-	background: linear-gradient(135deg, #fff7ed, #fdba74);
-}
-.theme-preview.dark-lavender-preview {
-	background: linear-gradient(135deg, #1e1b2e, #c4b5fd);
-}
-.theme-preview.vanilla-orange-preview {
 	background: linear-gradient(135deg, #fff9f0, #ffd8a8);
 }

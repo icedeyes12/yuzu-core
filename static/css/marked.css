@@ -221,42 +221,11 @@
    TABLES
    ======================================== */
 
-/* Table container for horizontal scroll */
-.message-content .table-container {
-	overflow-x: auto;
-	margin: 0.8rem 0;
-	border-radius: 6px;
-	border: 1px solid var(--border-color);
-}
-
-.message-content .table-container table {
-	margin: 0;
-	border: none;
-	border-radius: 0;
-	width: 100%;
-	display: table;
-}
-
+/* Table - base styles (lower specificity, must come first) */
 .message-content table {
 	border-collapse: collapse;
 	width: 100%;
 	margin: 1rem 0;
-}
-
-.message-content th,
-.message-content td {
-	border: 1px solid var(--border-color);
-	padding: 0.5rem;
-	text-align: left;
-}
-
-.message-content th {
-	background: var(--bg-secondary);
-	font-weight: 600;
-}
-
-/* Table - dynamic from hljs theme */
-.message-content table {
 	font-size: 0.9em;
 	background: var(--hljs-bg, #002451);
 	border-radius: 6px;
@@ -280,7 +249,7 @@
 	background: rgba(0, 0, 0, 0.15);
 }
 
-/* Table container for horizontal scroll */
+/* Table container (higher specificity, overrides base) */
 .message-content .table-container {
 	overflow-x: auto;
 	margin: 0.8rem 0;

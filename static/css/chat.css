@@ -383,11 +383,7 @@ body {
 	display: table;
 }
 
-.message-content table {
-	border-collapse: collapse;
-	width: 100%;
-	margin: 1rem 0;
-}
+/* Message th, td inherited from marked.css */
 
 .message-content th,
 .message-content td {
