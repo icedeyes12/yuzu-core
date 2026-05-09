@@ -492,15 +492,20 @@ class MessageRenderer {
 		return match ? match[1] : "";
 	}
 	_stripHtmlOuter(html) {
-		return html
-			.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-			.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "")
-			.replace(/<!DOCTYPE[^>]*>/gi, "")
-			.replace(/<html[^>]*>/gi, "")
-			.replace(/<\/html>/gi, "")
-			.replace(/<body[^>]*>/gi, "")
-			.replace(/<\/body>/gi, "")
-			.trim();
+		let previous;
+		let current = html;
+		do {
+			previous = current;
+			current = current
+				.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+				.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "")
+				.replace(/<!DOCTYPE[^>]*>/gi, "")
+				.replace(/<html[^>]*>/gi, "")
+				.replace(/<\/html>/gi, "")
+				.replace(/<body[^>]*>/gi, "")
+				.replace(/<\/body>/gi, "");
+		} while (current !== previous);
+		return current.trim();
 	}
 	_sanitizeHtml(html) {
 		// Only strip dangerous attributes, preserve scripts (iframe is sandboxed)
