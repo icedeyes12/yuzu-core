@@ -9,100 +9,123 @@
    ======================================== */
 
 .message-content {
-  color: var(--text-color);
-  line-height: 1.6;
-  font-size: 0.95rem;
+	color: var(--text-color);
+	line-height: 1.6;
+	font-size: 0.95rem;
 }
 
 /* ========================================
    HEADERS
    ======================================== */
 
-.message-content h1, .message-content h2, .message-content h3,
-.message-content h4, .message-content h5, .message-content h6 {
-  color: var(--text-color);
-  margin: 1rem 0 0.5rem;
-  font-weight: 600;
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4,
+.message-content h5,
+.message-content h6 {
+	color: var(--text-color);
+	margin: 1rem 0 0.5rem;
+	font-weight: 600;
 }
 
-.message-content h1 { font-size: 1.8rem; }
-.message-content h2 { font-size: 1.5rem; }
-.message-content h3 { font-size: 1.3rem; }
-.message-content h4 { font-size: 1.1rem; }
-.message-content h5 { font-size: 1rem; }
-.message-content h6 { font-size: 0.9rem; }
+.message-content h1 {
+	font-size: 1.8rem;
+}
+.message-content h2 {
+	font-size: 1.5rem;
+}
+.message-content h3 {
+	font-size: 1.3rem;
+}
+.message-content h4 {
+	font-size: 1.1rem;
+}
+.message-content h5 {
+	font-size: 1rem;
+}
+.message-content h6 {
+	font-size: 0.9rem;
+}
 
 .message-content h1,
 .message-content h2,
 .message-content h3 {
-  margin: 1rem 0 0.5rem;
-  color: var(--text-color);
+	margin: 1rem 0 0.5rem;
+	color: var(--text-color);
 }
 
-.message-content h1 { font-size: 1.4em; }
-.message-content h2 { font-size: 1.2em; }
-.message-content h3 { font-size: 1.1em; }
+.message-content h1 {
+	font-size: 1.4em;
+}
+.message-content h2 {
+	font-size: 1.2em;
+}
+.message-content h3 {
+	font-size: 1.1em;
+}
 
 /* ========================================
    PARAGRAPHS
    ======================================== */
 
 .message-content p {
-  margin: 0.5rem 0;
+	margin: 0.5rem 0;
 }
 
 /* ========================================
    LISTS
    ======================================== */
 
-.message-content ul, .message-content ol {
-  margin: 0.5rem 0;
-  padding-left: 1.5rem;
+.message-content ul,
+.message-content ol {
+	margin: 0.5rem 0;
+	padding-left: 1.5rem;
 }
 
 .message-content ul {
-  list-style-type: disc;
+	list-style-type: disc;
 }
 
 .message-content ol {
-  list-style-type: decimal;
+	list-style-type: decimal;
 }
 
 .message-content li {
-  margin: 0.3rem 0;
+	margin: 0.3rem 0;
 }
 
 /* Nested unordered lists */
 .message-content ul ul,
 .message-content ol ul {
-  list-style-type: circle;
-  margin-top: 0.25rem;
+	list-style-type: circle;
+	margin-top: 0.25rem;
 }
 
 .message-content ul ul ul,
 .message-content ol ul ul {
-  list-style-type: square;
+	list-style-type: square;
 }
 
 /* Nested ordered lists */
 .message-content ol ol {
-  list-style-type: lower-alpha;
+	list-style-type: lower-alpha;
 }
 
 .message-content ol ol ol {
-  list-style-type: lower-roman;
+	list-style-type: lower-roman;
 }
 
 /* Nested list item spacing */
 .message-content li > ul,
 .message-content li > ol {
-  margin: 0.25rem 0 0.25rem 0.5rem;
+	margin: 0.25rem 0 0.25rem 0.5rem;
 }
 
 /* Tight nested lists */
 .message-content ul.tight-list,
 .message-content ol.tight-list {
-  margin: 0.25rem 0;
+	margin: 0.25rem 0;
 }
 
 /* ========================================
@@ -110,88 +133,88 @@
    ======================================== */
 
 .message-content blockquote {
-  border-left: 4px solid var(--accent-primary);
-  margin: 0.8rem 0;
-  padding: 0.5rem 1rem;
-  background: var(--bg-secondary);
-  border-radius: 4px;
-  font-style: italic;
+	border-left: 4px solid var(--accent-primary);
+	margin: 0.8rem 0;
+	padding: 0.5rem 1rem;
+	background: var(--bg-secondary);
+	border-radius: 4px;
+	font-style: italic;
 }
 
 /* Blockquote - dynamic from hljs theme */
 .message-content blockquote {
-  border-left: 4px solid #7285b7;
-  background: var(--hljs-bg, #002451);
-  border-radius: 4px;
-  font-style: italic;
-  color: rgba(255, 255, 255, 0.85);
+	border-left: 4px solid #7285b7;
+	background: var(--hljs-bg, #002451);
+	border-radius: 4px;
+	font-style: italic;
+	color: rgba(255, 255, 255, 0.85);
 }
 
 /* Nested blockquotes */
 .message-content blockquote blockquote {
-  margin-left: 0.5rem;
-  border-left-color: #7285b7;
-  opacity: 0.9;
+	margin-left: 0.5rem;
+	border-left-color: #7285b7;
+	opacity: 0.9;
 }
 
 /* Callout blocks */
 .message-content .callout {
-  border-left: 4px solid;
-  padding: 0.6rem 0.8rem;
-  border-radius: 6px;
-  margin: 0.6rem 0;
-  font-style: normal;
+	border-left: 4px solid;
+	padding: 0.6rem 0.8rem;
+	border-radius: 6px;
+	margin: 0.6rem 0;
+	font-style: normal;
 }
 
 .message-content .callout-note {
-  border-color: #6aa9ff;
-  background: rgba(106, 169, 255, 0.08);
+	border-color: #6aa9ff;
+	background: rgba(106, 169, 255, 0.08);
 }
 
 .message-content .callout-info {
-  border-color: #6aa9ff;
-  background: rgba(106, 169, 255, 0.08);
+	border-color: #6aa9ff;
+	background: rgba(106, 169, 255, 0.08);
 }
 
 .message-content .callout-tip {
-  border-color: #4caf50;
-  background: rgba(76, 175, 80, 0.08);
+	border-color: #4caf50;
+	background: rgba(76, 175, 80, 0.08);
 }
 
 .message-content .callout-warning {
-  border-color: #ffb347;
-  background: rgba(255, 179, 71, 0.08);
+	border-color: #ffb347;
+	background: rgba(255, 179, 71, 0.08);
 }
 
 .message-content .callout-caution {
-  border-color: #ff6b6b;
-  background: rgba(255, 107, 107, 0.08);
+	border-color: #ff6b6b;
+	background: rgba(255, 107, 107, 0.08);
 }
 
 .message-content .callout-important {
-  border-color: #9b59b6;
-  background: rgba(155, 89, 182, 0.08);
+	border-color: #9b59b6;
+	background: rgba(155, 89, 182, 0.08);
 }
 
 /* Callout variants */
 .message-content .callout-note {
-  border-color: var(--accent-secondary);
-  background: rgba(147, 165, 255, 0.1);
+	border-color: var(--accent-secondary);
+	background: rgba(147, 165, 255, 0.1);
 }
 
 .message-content .callout-warning {
-  border-color: var(--accent-primary);
-  background: rgba(255, 133, 161, 0.1);
+	border-color: var(--accent-primary);
+	background: rgba(255, 133, 161, 0.1);
 }
 
 .message-content .callout-tip {
-  border-color: var(--accent-tertiary);
-  background: rgba(184, 225, 221, 0.1);
+	border-color: var(--accent-tertiary);
+	background: rgba(184, 225, 221, 0.1);
 }
 
 .message-content .callout-important {
-  border-color: var(--accent-color);
-  background: rgba(138, 109, 233, 0.1);
+	border-color: var(--accent-color);
+	background: rgba(138, 109, 233, 0.1);
 }
 
 /* ========================================
@@ -200,77 +223,78 @@
 
 /* Table container for horizontal scroll */
 .message-content .table-container {
-  overflow-x: auto;
-  margin: 0.8rem 0;
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
+	overflow-x: auto;
+	margin: 0.8rem 0;
+	border-radius: 6px;
+	border: 1px solid var(--border-color);
 }
 
 .message-content .table-container table {
-  margin: 0;
-  border: none;
-  border-radius: 0;
-  width: 100%;
-  display: table;
+	margin: 0;
+	border: none;
+	border-radius: 0;
+	width: 100%;
+	display: table;
 }
 
 .message-content table {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 1rem 0;
-}
-
-.message-content th, .message-content td {
-  border: 1px solid var(--border-color);
-  padding: 0.5rem;
-  text-align: left;
-}
-
-.message-content th {
-  background: var(--bg-secondary);
-  font-weight: 600;
-}
-
-/* Table - dynamic from hljs theme */
-.message-content table {
-  font-size: 0.9em;
-  background: var(--hljs-bg, #002451);
-  border-radius: 6px;
-  overflow: hidden;
+	border-collapse: collapse;
+	width: 100%;
+	margin: 1rem 0;
 }
 
 .message-content th,
 .message-content td {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid rgba(114, 133, 183, 0.3);
-  text-align: left;
+	border: 1px solid var(--border-color);
+	padding: 0.5rem;
+	text-align: left;
 }
 
 .message-content th {
-  background: rgba(0, 0, 0, 0.25);
-  font-weight: 600;
-  color: #ffffff;
+	background: var(--bg-secondary);
+	font-weight: 600;
+}
+
+/* Table - dynamic from hljs theme */
+.message-content table {
+	font-size: 0.9em;
+	background: var(--hljs-bg, #002451);
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.message-content th,
+.message-content td {
+	padding: 0.5rem 0.75rem;
+	border: 1px solid rgba(114, 133, 183, 0.3);
+	text-align: left;
+}
+
+.message-content th {
+	background: rgba(0, 0, 0, 0.25);
+	font-weight: 600;
+	color: #ffffff;
 }
 
 .message-content tr:nth-child(even) {
-  background: rgba(0, 0, 0, 0.15);
+	background: rgba(0, 0, 0, 0.15);
 }
 
 /* Table container for horizontal scroll */
 .message-content .table-container {
-  overflow-x: auto;
-  margin: 0.8rem 0;
-  border-radius: 6px;
-  border: 1px solid rgba(114, 133, 183, 0.3);
-  background: var(--hljs-bg, #002451);
+	overflow-x: auto;
+	margin: 0.8rem 0;
+	border-radius: 6px;
+	border: 1px solid rgba(114, 133, 183, 0.3);
+	background: var(--hljs-bg, #002451);
 }
 
 .message-content .table-container table {
-  margin: 0;
-  border: none;
-  border-radius: 0;
-  width: 100%;
-  display: table;
+	margin: 0;
+	border: none;
+	border-radius: 0;
+	width: 100%;
+	display: table;
 }
 
 /* ========================================
@@ -278,62 +302,63 @@
    ======================================== */
 
 .message-content details {
-  margin: 0.5rem 0;
-  border-radius: 8px;
-  background: var(--code-bg);
-  border: 1px solid var(--border-ai);
-  overflow: hidden;
+	margin: 0.5rem 0;
+	border-radius: 8px;
+	background: var(--code-bg);
+	border: 1px solid var(--border-ai);
+	overflow: hidden;
 }
 
 .message-content summary {
-  padding: 0.5rem 1rem;
-  cursor: pointer;
-  font-weight: 500;
-  background: rgba(168, 200, 255, 0.05);
+	padding: 0.5rem 1rem;
+	cursor: pointer;
+	font-weight: 500;
+	background: rgba(168, 200, 255, 0.05);
 }
 
 .message-content summary:hover {
-  background: rgba(168, 200, 255, 0.1);
+	background: rgba(168, 200, 255, 0.1);
 }
 
 .message-content details[open] summary {
-  border-bottom: 1px solid var(--border-ai);
+	border-bottom: 1px solid var(--border-ai);
 }
 
 .message-content details > *:not(summary) {
-  padding: 0.75rem 1rem;
+	padding: 0.75rem 1rem;
 }
 
 /* ========================================
    IMAGES
    ======================================== */
 
-.message-content img, .markdown-image {
-  max-width: 100%;
-  height: auto;
-  border-radius: 8px;
-  margin: 0.8rem 0;
-  display: block;
+.message-content img,
+.markdown-image {
+	max-width: 100%;
+	height: auto;
+	border-radius: 8px;
+	margin: 0.8rem 0;
+	display: block;
 }
 
 .message-content img {
-  max-width: 100%;
-  border-radius: 8px;
-  margin: 0.5rem 0;
-  box-shadow: var(--shadow-soft);
+	max-width: 100%;
+	border-radius: 8px;
+	margin: 0.5rem 0;
+	box-shadow: var(--shadow-soft);
 }
 
 .image-error {
-  padding: 1rem;
-  margin: 0.8rem 0;
-  border-radius: 8px;
-  background: rgba(255, 69, 58, 0.1);
-  border: 1px solid rgba(255, 69, 58, 0.3);
-  color: #ff453a;
-  font-size: 0.9rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+	padding: 1rem;
+	margin: 0.8rem 0;
+	border-radius: 8px;
+	background: rgba(255, 69, 58, 0.1);
+	border: 1px solid rgba(255, 69, 58, 0.3);
+	color: #ff453a;
+	font-size: 0.9rem;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
 }
 
 /* ========================================
@@ -342,77 +367,77 @@
 
 /* Code block container - dynamic, inherits from hljs theme */
 .code-block-container {
-  margin: 1rem 0;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #002451 !important;  /* Force background */
-  border: 1px solid rgba(114, 133, 183, 0.3);
+	margin: 1rem 0;
+	border-radius: 8px;
+	overflow: hidden;
+	background: #002451 !important; /* Force background */
+	border: 1px solid rgba(114, 133, 183, 0.3);
 }
 
 .code-block-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 1rem;
-  background: rgba(0, 0, 0, 0.25);
-  border-bottom: 1px solid rgba(114, 133, 183, 0.3);
-  backdrop-filter: blur(4px);
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 0.5rem 1rem;
+	background: rgba(0, 0, 0, 0.25);
+	border-bottom: 1px solid rgba(114, 133, 183, 0.3);
+	backdrop-filter: blur(4px);
 }
 
 .code-language {
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.7);
-  text-transform: uppercase;
-  font-weight: 600;
+	font-size: 0.75rem;
+	color: rgba(255, 255, 255, 0.7);
+	text-transform: uppercase;
+	font-weight: 600;
 }
 
 .copy-code-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  padding: 0.3rem 0.6rem;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.85);
-  cursor: pointer;
-  transition: all 0.2s ease;
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	background: rgba(255, 255, 255, 0.1);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 4px;
+	padding: 0.3rem 0.6rem;
+	font-size: 0.75rem;
+	color: rgba(255, 255, 255, 0.85);
+	cursor: pointer;
+	transition: all 0.2s ease;
 }
 
 .copy-code-btn:hover {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.35);
-  color: #fff;
+	background: rgba(255, 255, 255, 0.18);
+	border-color: rgba(255, 255, 255, 0.35);
+	color: #fff;
 }
 
 .copy-code-btn.copied {
-  background: #4caf50;
-  color: white;
-  border-color: #4caf50;
+	background: #4caf50;
+	color: white;
+	border-color: #4caf50;
 }
 
 .code-block-container pre {
-  margin: 0;
-  padding: 0;
-  overflow-x: auto;
-  background: transparent;
+	margin: 0;
+	padding: 0;
+	overflow-x: auto;
+	background: transparent;
 }
 
 .code-block-container code {
-  display: block;
-  padding: 1rem;
-  font-family: 'Hack', 'Fira Code', 'Consolas', 'Monaco', monospace;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  overflow-x: auto;
+	display: block;
+	padding: 1rem;
+	font-family: "Hack", "Fira Code", "Consolas", "Monaco", monospace;
+	font-size: 0.9rem;
+	line-height: 1.5;
+	overflow-x: auto;
 }
 
 /* hljs theme handles its own background */
 .code-block-container pre code.hljs {
-  display: block;
-  padding: 1rem;
-  /* background comes from hljs theme CSS */
+	display: block;
+	padding: 1rem;
+	/* background comes from hljs theme CSS */
 }
 
 /* ========================================
@@ -421,14 +446,14 @@
 
 /* Inline code - use hljs-bg for ALL messages */
 .message-content code:not(pre code) {
-  background: var(--hljs-bg, #002451);
-  color: #ffffff;
-  padding: 0.15em 0.4em;
-  border-radius: 4px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.85em;
-  border: 1px solid rgba(114, 133, 183, 0.3);
-  word-break: break-word;
+	background: var(--hljs-bg, #002451);
+	color: #ffffff;
+	padding: 0.15em 0.4em;
+	border-radius: 4px;
+	font-family: "JetBrains Mono", "Fira Code", monospace;
+	font-size: 0.85em;
+	border: 1px solid rgba(114, 133, 183, 0.3);
+	word-break: break-word;
 }
 
 /* ========================================
@@ -437,22 +462,22 @@
 
 /* Bold - clearly different */
 .message-content strong {
-  color: var(--text-color);
-  font-weight: 700;
-  letter-spacing: 0.02em;
+	color: var(--text-color);
+	font-weight: 700;
+	letter-spacing: 0.02em;
 }
 
 /* Italic */
 .message-content em {
-  color: var(--text-secondary);
-  font-style: italic;
+	color: var(--text-secondary);
+	font-style: italic;
 }
 
 /* Strikethrough */
 .message-content del {
-  color: var(--text-secondary);
-  text-decoration: line-through;
-  opacity: 0.7;
+	color: var(--text-secondary);
+	text-decoration: line-through;
+	opacity: 0.7;
 }
 
 /* ========================================
@@ -460,16 +485,16 @@
    ======================================== */
 
 .message-content a {
-  color: var(--accent-secondary);
-  text-decoration: underline;
-  text-decoration-color: rgba(168, 200, 255, 0.4);
-  text-underline-offset: 2px;
-  transition: all 0.2s ease;
+	color: var(--accent-secondary);
+	text-decoration: underline;
+	text-decoration-color: rgba(168, 200, 255, 0.4);
+	text-underline-offset: 2px;
+	transition: all 0.2s ease;
 }
 
 .message-content a:hover {
-  color: var(--accent-primary);
-  text-decoration-color: var(--accent-primary);
+	color: var(--accent-primary);
+	text-decoration-color: var(--accent-primary);
 }
 
 /* ========================================
@@ -477,10 +502,10 @@
    ======================================== */
 
 .message-content hr {
-  border: none;
-  border-top: 2px solid var(--accent-color);
-  margin: 1.5rem 0;
-  opacity: 0.6;
+	border: none;
+	border-top: 2px solid var(--accent-color);
+	margin: 1.5rem 0;
+	opacity: 0.6;
 }
 
 /* ========================================
@@ -488,14 +513,14 @@
    ======================================== */
 
 .render-error {
-  margin: 0.5rem 0;
-  padding: 0.75rem;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 69, 58, 0.3);
-  background: rgba(255, 69, 58, 0.1);
-  color: var(--text-color);
-  white-space: pre-wrap;
-  word-break: break-word;
+	margin: 0.5rem 0;
+	padding: 0.75rem;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 69, 58, 0.3);
+	background: rgba(255, 69, 58, 0.1);
+	color: var(--text-color);
+	white-space: pre-wrap;
+	word-break: break-word;
 }
 
 /* ========================================
@@ -503,254 +528,360 @@
    ======================================== */
 
 .preview-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.3rem 0.7rem;
-  background: var(--accent-primary);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	padding: 0.3rem 0.7rem;
+	background: var(--accent-primary);
+	color: white;
+	border: none;
+	border-radius: 6px;
+	font-size: 0.8rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.2s ease;
 }
 
 .preview-btn:hover {
-  background: #ff1493;
-  transform: scale(1.02);
+	background: #ff1493;
+	transform: scale(1.02);
 }
 
 .preview-btn.active {
-  background: #4caf50;
+	background: #4caf50;
 }
 
 .preview-btn svg {
-  width: 14px;
-  height: 14px;
+	width: 14px;
+	height: 14px;
 }
 
 /* ==================== TASK LISTS (GFM) ==================== */
 
 /* Task list checkboxes */
 .message-content input[type="checkbox"] {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  width: 1em;
-  height: 1em;
-  border: 2px solid var(--text-secondary, rgba(240, 244, 255, 0.5));
-  border-radius: 3px;
-  background: transparent;
-  cursor: pointer;
-  margin-right: 0.5em;
-  vertical-align: middle;
-  position: relative;
+	appearance: none;
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	width: 1em;
+	height: 1em;
+	border: 2px solid var(--text-secondary, rgba(240, 244, 255, 0.5));
+	border-radius: 3px;
+	background: transparent;
+	cursor: pointer;
+	margin-right: 0.5em;
+	vertical-align: middle;
+	position: relative;
 }
 
 .message-content input[type="checkbox"]:checked {
-  background: var(--accent-primary, #ff69b4);
-  border-color: var(--accent-primary, #ff69b4);
+	background: var(--accent-primary, #ff69b4);
+	border-color: var(--accent-primary, #ff69b4);
 }
 
 .message-content input[type="checkbox"]:checked::after {
-  content: '✓';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: white;
-  font-size: 0.8em;
-  font-weight: bold;
+	content: "✓";
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	color: white;
+	font-size: 0.8em;
+	font-weight: bold;
 }
 
 /* Task list styling */
 .message-content ul.contains-task-list {
-  list-style: none;
-  padding-left: 0;
+	list-style: none;
+	padding-left: 0;
 }
 
 .message-content li.task-list-item {
-  list-style: none;
-  margin-left: -1.5em;
+	list-style: none;
+	margin-left: -1.5em;
 }
 
 /* Strikethrough for completed tasks */
 .message-content li.task-list-item:has(input:checked) {
-  opacity: 0.7;
+	opacity: 0.7;
 }
 
 .message-content li.task-list-item:has(input:checked) {
-  text-decoration: line-through;
-  color: var(--text-secondary);
+	text-decoration: line-through;
+	color: var(--text-secondary);
 }
 
 /* ==================== TASK LISTS (GFM Checkboxes) ==================== */
 /* Gemini noted: task list styling missing */
 
 .message-content input[type="checkbox"] {
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    width: 1em;
-    height: 1em;
-    border: 2px solid var(--border-color, rgba(168, 200, 255, 0.5));
-    border-radius: 3px;
-    margin-right: 0.5em;
-    margin-left: -1.5em;
-    vertical-align: middle;
-    cursor: pointer;
-    position: relative;
-    background: var(--bg-secondary, transparent);
-    transition: all 0.2s ease;
+	appearance: none;
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	width: 1em;
+	height: 1em;
+	border: 2px solid var(--border-color, rgba(168, 200, 255, 0.5));
+	border-radius: 3px;
+	margin-right: 0.5em;
+	margin-left: -1.5em;
+	vertical-align: middle;
+	cursor: pointer;
+	position: relative;
+	background: var(--bg-secondary, transparent);
+	transition: all 0.2s ease;
 }
 
 .message-content input[type="checkbox"]:checked {
-    background: var(--accent-primary, #ff69b4);
-    border-color: var(--accent-primary, #ff69b4);
+	background: var(--accent-primary, #ff69b4);
+	border-color: var(--accent-primary, #ff69b4);
 }
 
 .message-content input[type="checkbox"]:checked::after {
-    content: '✓';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    font-size: 0.8em;
-    font-weight: bold;
+	content: "✓";
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	color: white;
+	font-size: 0.8em;
+	font-weight: bold;
 }
 
 .message-content input[type="checkbox"]:checked + li,
 .message-content input[type="checkbox"]:checked ~ * {
-    text-decoration: line-through;
-    opacity: 0.6;
+	text-decoration: line-through;
+	opacity: 0.6;
 }
 
 /* Task list container */
 .message-content ul.contains-task-list {
-    list-style: none;
-    padding-left: 1.5em;
+	list-style: none;
+	padding-left: 1.5em;
 }
 
 .message-content li.task-list-item {
-    list-style: none;
-    margin-left: 0;
+	list-style: none;
+	margin-left: 0;
 }
 
 /* ==================== NESTED BLOCKQUOTES ==================== */
 /* Gemini noted: nested quote >> not rendered */
 
 .message-content blockquote {
-    border-left: 4px solid var(--accent-primary, #ff69b4);
-    margin: 0.8rem 0;
-    padding: 0.5rem 1rem;
-    background: var(--hljs-bg, #002451);
-    border-radius: 4px;
-    color: rgba(255, 255, 255, 0.85);
-    font-style: italic;
+	border-left: 4px solid var(--accent-primary, #ff69b4);
+	margin: 0.8rem 0;
+	padding: 0.5rem 1rem;
+	background: var(--hljs-bg, #002451);
+	border-radius: 4px;
+	color: rgba(255, 255, 255, 0.85);
+	font-style: italic;
 }
 
 /* Nested blockquotes - progressively lighter */
 .message-content blockquote blockquote {
-    border-left-color: color-mix(in srgb, var(--accent-primary, #ff69b4) 70%, transparent);
-    margin-left: 1rem;
-    background: color-mix(in srgb, var(--hljs-bg, #002451) 95%, white);
+	border-left-color: color-mix(
+		in srgb,
+		var(--accent-primary, #ff69b4) 70%,
+		transparent
+	);
+	margin-left: 1rem;
+	background: color-mix(in srgb, var(--hljs-bg, #002451) 95%, white);
 }
 
 .message-content blockquote blockquote blockquote {
-    border-left-color: color-mix(in srgb, var(--accent-primary, #ff69b4) 50%, transparent);
-    background: color-mix(in srgb, var(--hljs-bg, #002451) 90%, white);
+	border-left-color: color-mix(
+		in srgb,
+		var(--accent-primary, #ff69b4) 50%,
+		transparent
+	);
+	background: color-mix(in srgb, var(--hljs-bg, #002451) 90%, white);
 }
 
 .message-content blockquote blockquote blockquote blockquote {
-    border-left-color: color-mix(in srgb, var(--accent-primary, #ff69b4) 30%, transparent);
-    background: color-mix(in srgb, var(--hljs-bg, #002451) 85%, white);
+	border-left-color: color-mix(
+		in srgb,
+		var(--accent-primary, #ff69b4) 30%,
+		transparent
+	);
+	background: color-mix(in srgb, var(--hljs-bg, #002451) 85%, white);
 }
 
 /* ==================== STREAMING CURSOR ==================== */
 
 .streaming-cursor {
-    display: inline-block;
-    animation: blink 1s step-end infinite;
-    color: var(--accent-primary, #ff69b4);
-    font-weight: bold;
+	display: inline-block;
+	animation: blink 1s step-end infinite;
+	color: var(--accent-primary, #ff69b4);
+	font-weight: bold;
 }
 
 @keyframes blink {
-    0%, 50% { opacity: 1; }
-    51%, 100% { opacity: 0; }
+	0%,
+	50% {
+		opacity: 1;
+	}
+	51%,
+	100% {
+		opacity: 0;
+	}
 }
-
 
 /* ========================================
    MERMAID DIAGRAM STYLING
    ======================================== */
 .mermaid-diagram {
-  background: var(--hljs-bg, var(--card-bg, #24283d));
-  border-radius: 8px;
-  padding: 1rem;
-  margin: 1rem 0;
-  overflow-x: auto;
-  text-align: center;
+	background: var(--hljs-bg, var(--card-bg, #24283d));
+	border-radius: 8px;
+	padding: 1rem;
+	margin: 1rem 0;
+	overflow-x: auto;
+	text-align: center;
 }
 .mermaid-diagram svg {
-  height: auto;
-  overflow-x: auto;
+	height: auto;
+	overflow-x: auto;
 }
 .mermaid-error {
-  background: rgba(255, 100, 100, 0.1);
-  border: 1px solid rgba(255, 100, 100, 0.3);
-  color: #ff6464;
-  padding: 0.5rem;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.85rem;
+	background: rgba(255, 100, 100, 0.1);
+	border: 1px solid rgba(255, 100, 100, 0.3);
+	color: #ff6464;
+	padding: 0.5rem;
+	border-radius: 4px;
+	font-family: monospace;
+	font-size: 0.85rem;
 }
 
 /* Mermaid container with header */
 .mermaid-container {
-  background: var(--hljs-bg, #002451) !important;
-  border-radius: 8px;
-  overflow: hidden;
-  margin: 1rem 0;
-  border: 1px solid rgba(114, 133, 183, 0.3);
+	background: var(--hljs-bg, #002451) !important;
+	border-radius: 8px;
+	overflow: hidden;
+	margin: 1rem 0;
+	border: 1px solid rgba(114, 133, 183, 0.3);
 }
 .mermaid-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 1rem;
-  background: rgba(0, 0, 0, 0.25);
-  border-bottom: 1px solid rgba(114, 133, 183, 0.3);
-  backdrop-filter: blur(4px);
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 0.5rem 1rem;
+	background: rgba(0, 0, 0, 0.25);
+	border-bottom: 1px solid rgba(114, 133, 183, 0.3);
+	backdrop-filter: blur(4px);
 }
 .mermaid-container pre.mermaid {
-  background: transparent;
-  margin: 0;
-  padding: 1rem;
+	background: transparent;
+	margin: 0;
+	padding: 1rem;
 }
 .copy-mermaid-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  padding: 0.3rem 0.6rem;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.85);
-  cursor: pointer;
-  transition: all 0.2s ease;
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	background: rgba(255, 255, 255, 0.1);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 4px;
+	padding: 0.3rem 0.6rem;
+	font-size: 0.75rem;
+	color: rgba(255, 255, 255, 0.85);
+	cursor: pointer;
+	transition: all 0.2s ease;
 }
 .copy-mermaid-btn:hover {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.35);
-  color: #fff;
+	background: rgba(255, 255, 255, 0.18);
+	border-color: rgba(255, 255, 255, 0.35);
+	color: #fff;
 }
 .copy-mermaid-btn.copied {
-  background: #4caf50;
-  color: white;
-  border-color: #4caf50;
+	background: #4caf50;
+	color: white;
+	border-color: #4caf50;
+}
+
+/* ========================================
+   MERMAID DIAGRAM SVG STYLING (from feat)
+   ======================================== */
+
+/* Ensure Mermaid SVG scales properly and doesn't overflow */
+.mermaid-diagram svg,
+.mermaid-container svg {
+	max-width: 100%;
+	height: auto;
+	overflow-x: auto;
+}
+
+/* Mermaid diagram wrapper with proper padding */
+.mermaid-diagram {
+	background: var(--hljs-bg, var(--card-bg, #24283d));
+	border-radius: 8px;
+	padding: 1rem;
+	margin: 1rem 0;
+	overflow-x: auto;
+	text-align: center;
+}
+
+/* Mermaid container - consistent with code block styling */
+.mermaid-container {
+	background: var(--hljs-bg, #002451) !important;
+	border-radius: 8px;
+	overflow: hidden;
+	margin: 1rem 0;
+	border: 1px solid rgba(114, 133, 183, 0.3);
+}
+
+.mermaid-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 0.5rem 1rem;
+	background: rgba(0, 0, 0, 0.25);
+	border-bottom: 1px solid rgba(114, 133, 183, 0.3);
+	backdrop-filter: blur(4px);
+}
+
+.mermaid-container pre.mermaid {
+	background: transparent;
+	margin: 0;
+	padding: 1rem;
+	overflow-x: auto;
+}
+
+/* Mermaid error display */
+.mermaid-error {
+	background: rgba(255, 100, 100, 0.1);
+	border: 1px solid rgba(255, 100, 100, 0.3);
+	color: var(--tool-error, #ff6464);
+	padding: 0.75rem;
+	border-radius: 8px;
+	font-family: "Hack", "Fira Code", monospace;
+	font-size: 0.85rem;
+	margin: 0.5rem 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+/* Copy mermaid source button */
+.copy-mermaid-btn {
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	background: rgba(255, 255, 255, 0.1);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 4px;
+	padding: 0.3rem 0.6rem;
+	font-size: 0.75rem;
+	color: rgba(255, 255, 255, 0.85);
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.copy-mermaid-btn:hover {
+	background: rgba(255, 255, 255, 0.18);
+	border-color: rgba(255, 255, 255, 0.35);
+	color: #fff;
+}
+
+.copy-mermaid-btn.copied {
+	background: #4caf50;
+	color: white;
+	border-color: #4caf50;
 }
