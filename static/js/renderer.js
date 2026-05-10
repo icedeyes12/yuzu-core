@@ -731,6 +731,131 @@ class MessageRenderer {
 		return /!\s*\[[^\]]*\]\s*\n?\s*\([^)]+\)/.test(String(content));
 	}
 
+	// ==================== STREAMING-AWARE RENDERING ====================
+
+	/**
+	 * Detects incomplete fenced code blocks using stack-based parsing
+	 * @param {string} text - Raw markdown text
+	 * @returns {{ hasIncomplete: boolean, incompleteBlocks: Array<{lang: string, line: number, startIndex: number}> }}
+	 */
+	detectIncompleteCodeBlocks(text) {
+		const lines = text.split("\n");
+		const stack = [];
+
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			const match = line.match(/^```(\w*)?\s*$/);
+
+			if (!match) continue;
+
+			// If stack has open fence, this line is a closing fence
+			if (stack.length > 0) {
+				stack.pop();
+			} else {
+				// This is an opening fence
+				// Calculate startIndex in original text
+				let startIndex = 0;
+				for (let j = 0; j < i; j++) {
+					startIndex += lines[j].length + 1; // +1 for newline
+				}
+				stack.push({
+					lang: (match[1] || "").toLowerCase(),
+					line: i,
+					startIndex: startIndex,
+				});
+			}
+		}
+
+		return {
+			hasIncomplete: stack.length > 0,
+			incompleteBlocks: stack,
+		};
+	}
+
+	/**
+	 * Render markdown for streaming - handles incomplete mermaid blocks with placeholders
+	 * @param {string} text - Accumulated stream text
+	 * @param {boolean} isStreaming - Whether stream is still active
+	 * @returns {string} HTML output
+	 */
+	renderStreaming(text, isStreaming = true) {
+		if (!isStreaming) {
+			return this.render(text); // Normal render for completed streams
+		}
+
+		const detection = this.detectIncompleteCodeBlocks(text);
+
+		if (!detection.hasIncomplete) {
+			return this.render(text); // No incomplete blocks, render normally
+		}
+
+		// Check if any incomplete block is mermaid
+		const hasIncompleteMermaid = detection.incompleteBlocks.some(
+			(block) => block.lang === "mermaid",
+		);
+
+		if (!hasIncompleteMermaid) {
+			return this.render(text); // Incomplete blocks are not mermaid, render normally
+		}
+
+		// Process: replace incomplete mermaid blocks with placeholders
+		let processedText = text;
+
+		// Sort blocks by startIndex descending to replace from end to start
+		// (avoids index shifting issues)
+		const sortedBlocks = [...detection.incompleteBlocks]
+			.filter((block) => block.lang === "mermaid")
+			.sort((a, b) => b.startIndex - a.startIndex);
+
+		for (const block of sortedBlocks) {
+			processedText = this._replaceIncompleteMermaidWithPlaceholder(
+				processedText,
+				block.startIndex,
+			);
+		}
+
+		return this.render(processedText);
+	}
+
+	/**
+	 * Replaces incomplete mermaid block with placeholder HTML
+	 * @param {string} text - Full text
+	 * @param {number} startIndex - Start index of ```mermaid fence
+	 * @returns {string} Text with placeholder replacing incomplete block
+	 */
+	_replaceIncompleteMermaidWithPlaceholder(text, startIndex) {
+		// Find the end of the incomplete block content (end of text)
+		const mermaidFence = "```mermaid";
+		const fenceIndex = text.indexOf(mermaidFence, startIndex);
+
+		if (fenceIndex === -1) return text;
+
+		// Extract the incomplete mermaid code (for potential debugging)
+		const _afterFence = text.substring(fenceIndex + mermaidFence.length);
+
+		// Create placeholder HTML
+		const placeholder = `<div class="mermaid-container mermaid-placeholder">
+	<div class="code-block-header">
+		<span class="code-language">mermaid</span>
+		<span class="mermaid-status">generating...</span>
+	</div>
+	<div class="mermaid-placeholder-content">
+		<div class="mermaid-loader">
+			<svg class="mermaid-loader-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+			</svg>
+			<div class="mermaid-loader-dots">
+				<span></span><span></span><span></span>
+			</div>
+		</div>
+		<span class="mermaid-placeholder-text">Generating diagram...</span>
+	</div>
+</div>`;
+
+		// Replace from fence start to end of text with placeholder
+		return text.substring(0, fenceIndex) + placeholder;
+	}
+
 	resolveImageToken(href, title = "", text = "") {
 		if (href && typeof href === "object") {
 			return {

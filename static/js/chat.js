@@ -215,6 +215,9 @@ class MultimodalManager {
 			}
 
 			// Final processing after stream completes
+			// Render final content with isComplete=true to ensure all mermaid blocks render
+			this.renderStreamChunk(contentDiv, accumulatedText, true);
+
 			// Update copy button handler with full content
 			if (currentStreamMessage) {
 				const copyBtn = currentStreamMessage.querySelector(".copy-message-btn");
@@ -255,13 +258,16 @@ class MultimodalManager {
 		}
 	}
 
-	renderStreamChunk(contentDiv, text) {
+	renderStreamChunk(contentDiv, text, isComplete = false) {
 		// For streaming: render markdown incrementally
-		// This gives real-time typing effect
+		// Use streaming-aware render to handle incomplete mermaid blocks
 		if (typeof renderer !== "undefined" && renderer.isMarkedReady) {
-			contentDiv.innerHTML = renderer.render(text);
+			// Use streaming render for incomplete, normal render for complete
+			contentDiv.innerHTML = isComplete
+				? renderer.render(text)
+				: renderer.renderStreaming(text, true);
 
-			// Initialize mermaid diagrams during streaming (debounced)
+			// Initialize mermaid diagrams (placeholders are skipped automatically)
 			if (renderer.isMermaidReady) {
 				renderer.initializeMermaidDiagrams(contentDiv);
 			}

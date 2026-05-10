@@ -854,3 +854,98 @@
 	color: white;
 	border-color: #4caf50;
 }
+
+/* ========================================
+   MERMAID PLACEHOLDER (streaming)
+   ======================================== */
+
+.mermaid-container.mermaid-placeholder {
+	min-height: 120px;
+	display: flex;
+	flex-direction: column;
+}
+
+.mermaid-placeholder .code-block-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 0.5rem 1rem;
+	background: rgba(0, 0, 0, 0.25);
+	border-bottom: 1px solid rgba(114, 133, 183, 0.3);
+}
+
+.mermaid-placeholder .mermaid-status {
+	font-size: 0.75rem;
+	color: var(--accent-primary);
+	opacity: 0.8;
+}
+
+.mermaid-placeholder-content {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 1.5rem;
+	gap: 1rem;
+}
+
+.mermaid-loader {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.mermaid-loader-icon {
+	width: 32px;
+	height: 32px;
+	color: var(--accent-primary);
+	opacity: 0.7;
+	animation: mermaidPulse 1.5s ease-in-out infinite;
+}
+
+.mermaid-loader-dots {
+	display: flex;
+	gap: 0.4rem;
+}
+
+.mermaid-loader-dots span {
+	width: 8px;
+	height: 8px;
+	background: var(--accent-primary);
+	border-radius: 50%;
+	animation: mermaidDotPulse 1.4s ease-in-out infinite;
+}
+
+.mermaid-loader-dots span:nth-child(1) { animation-delay: 0s; }
+.mermaid-loader-dots span:nth-child(2) { animation-delay: 0.2s; }
+.mermaid-loader-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes mermaidPulse {
+	0%, 100% { opacity: 0.5; transform: scale(0.95); }
+	50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes mermaidDotPulse {
+	0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+	40% { transform: scale(1); opacity: 1; }
+}
+
+.mermaid-placeholder-text {
+	font-size: 0.85rem;
+	color: var(--text-muted, #888);
+	font-style: italic;
+}
+
+/* Light theme */
+[data-theme="light"] .mermaid-container.mermaid-placeholder {
+	background: var(--hljs-bg, #f5f5f5);
+}
+
+[data-theme="light"] .mermaid-placeholder .mermaid-status {
+	color: var(--accent-primary);
+}
+
+[data-theme="light"] .mermaid-placeholder-text {
+	color: var(--text-muted, #666);
+}
