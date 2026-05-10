@@ -336,8 +336,15 @@ def add_message(
         return None
 
 
-def get_session_messages(session_id: int, limit: int = 100) -> list[dict]:
-    rows = pg_fetchall(SQL_MESSAGE_SELECT_ASC_LIMIT, (session_id, limit))
+def get_session_messages(session_id: int, limit: int = 100, order: str = "ASC") -> list[dict]:
+    """Fetch messages by session_id.
+
+    order: "ASC" (oldest first) or "DESC" (newest first).
+    """
+    if order.upper() == "DESC":
+        rows = pg_fetchall(SQL_MESSAGE_SELECT_DESC_LIMIT, (session_id, limit))
+    else:
+        rows = pg_fetchall(SQL_MESSAGE_SELECT_ASC_LIMIT, (session_id, limit))
     return [parse_message_row(r) for r in rows]
 
 

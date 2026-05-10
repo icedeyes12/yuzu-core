@@ -8,7 +8,14 @@
 #   2. PCL → create_episode_and_pcl() extracts semantic facts
 #   3. Memory Review → run_memory_review() updates FSRS parameters
 #
-# Trigger: After every N messages (WINDOW_BASE=20) or time-gated per session.
+# Trigger gates (all must pass):
+#   - delta >= WINDOW_BASE (40) AND session idle >= IDLE_GATE_HOURS (3h), OR
+#   - delta >= WINDOW_MAX (50) — force trigger regardless of idle
+#
+# Episode creation gates:
+#   - Segment must have >= MIN_SEGMENT_MESSAGES (8) messages (small segments merged)
+#   - Episode importance must be >= MIN_EPISODE_IMPORTANCE (0.45) — low-surprise
+#     segments are skipped to prevent semantic-fact noise
 #
 # Fence mechanism (aligned with plast-mem):
 #   - in_progress_fence: prevents concurrent pipeline runs for same session
@@ -36,10 +43,15 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 # Segmentation constants (aligned with plast-mem)
-WINDOW_BASE = 20  # trigger count
-WINDOW_MAX = 40  # force process
-MIN_MESSAGES = 5
-TIME_GAP_MINUTES = 15
+# WINDOW_BASE: trigger when delta >= this AND idle > 3 min
+# WINDOW_MAX: force trigger regardless of idle
+WINDOW_BASE = 40
+WINDOW_MAX = 50
+MIN_MESSAGES = 10
+TIME_GAP_MINUTES = 30
+MIN_SEGMENT_MESSAGES = 8  # minimum messages per segment before merging
+MIN_EPISODE_IMPORTANCE = 0.45  # skip episodes with importance below this
+IDLE_GATE_HOURS = 3.0  # session must be idle this long before triggering (unless WINDOW_MAX)
 
 # Fence constants (aligned with plast-mem)
 FENCE_TTL_MINUTES = 120  # Stale job cleanup threshold
@@ -129,12 +141,30 @@ def _is_fence_active(session_id: int) -> bool:
             return False
 
 
+def _get_session_idle_hours(session_id: int) -> float | None:
+    """Get hours since last message in session. Returns None if no messages."""
+    from app.database import get_session_messages
+    messages = get_session_messages(session_id, limit=1, order="DESC")
+    if not messages:
+        return None
+    last_ts = messages[0].get("timestamp")
+    if not last_ts:
+        return None
+    try:
+        last_dt = datetime.fromisoformat(last_ts.replace("Z", "+00:00").replace("+00:00", ""))
+        return (datetime.now() - last_dt).total_seconds() / 3600.0
+    except Exception:
+        return None
+
+
 def should_trigger_segmentation(session_id: int, current_count: int) -> tuple[bool, int]:
     """Check if segmentation should trigger based on delta from last segmented.
     
     Returns (should_trigger, unsegmented_count) tuple.
     
-    Logic: trigger when current_count - last_segmented_count >= WINDOW_BASE
+    Logic: trigger when:
+      - delta >= WINDOW_BASE AND session has been idle >= IDLE_GATE_HOURS, OR
+      - delta >= WINDOW_MAX (force trigger regardless of idle)
     """
     from app.database import get_memory_state
     
@@ -150,12 +180,23 @@ def should_trigger_segmentation(session_id: int, current_count: int) -> tuple[bo
     # Calculate delta (new unsegmented messages)
     delta = current_count - last_count
     
+    # Force trigger regardless of idle
+    if delta >= WINDOW_MAX:
+        logger.info(f"Trigger: delta={delta} >= WINDOW_MAX={WINDOW_MAX} (force)")
+        return True, delta
+    
     # Not enough new messages
     if delta < WINDOW_BASE:
         logger.debug(f"Segmentation skipped: delta={delta} < WINDOW_BASE={WINDOW_BASE}")
         return False, delta
     
-    logger.info(f"Trigger: delta={delta} >= WINDOW_BASE={WINDOW_BASE}")
+    # Gate: require session to be idle for IDLE_GATE_HOURS before processing
+    idle_hours = _get_session_idle_hours(session_id)
+    if idle_hours is not None and idle_hours < IDLE_GATE_HOURS:
+        logger.debug(f"Segmentation skipped: idle={idle_hours:.1f}h < IDLE_GATE_HOURS={IDLE_GATE_HOURS}h")
+        return False, delta
+    
+    logger.info(f"Trigger: delta={delta} >= WINDOW_BASE={WINDOW_BASE}, idle={idle_hours:.1f}h")
     return True, delta
 
 
@@ -520,6 +561,36 @@ Conversation:
     return enhanced
 
 
+def _merge_small_segments(segments: list[dict]) -> list[dict]:
+    """Merge segments smaller than MIN_SEGMENT_MESSAGES into adjacent larger segments.
+
+    This prevents trivial micro-segments (e.g. 3 messages) from each creating
+    noisy episodes and generating low-value semantic facts.
+    """
+    if not segments:
+        return []
+
+    # First pass: mark tiny segments for absorption
+    merged: list[dict] = []
+    for seg in segments:
+        size = seg["end_idx"] - seg["start_idx"]
+        if size < MIN_SEGMENT_MESSAGES and merged:
+            # Absorb into previous segment
+            merged[-1]["end_idx"] = seg["end_idx"]
+            # Keep the higher surprise_level of the two
+            prev_surprise = merged[-1].get("surprise_level", 0.2)
+            curr_surprise = seg.get("surprise_level", 0.2)
+            merged[-1]["surprise_level"] = max(prev_surprise, curr_surprise)
+            logger.debug(f"Merged tiny segment ({size} msgs) into previous")
+        elif size >= MIN_SEGMENT_MESSAGES:
+            merged.append(seg)
+        else:
+            # Very first segment is tiny and there's nothing to merge into yet — keep it
+            merged.append(seg)
+
+    return merged
+
+
 # ── Episode creation with PCL trigger ──────────────────────────────────────────
 
 FLASHBULB_THRESHOLD = 0.85
@@ -532,46 +603,53 @@ def create_episode_and_pcl(
     segment: dict,
 ) -> Optional[int]:
     """Create an episode from a segment and trigger PCL pipeline.
-    
-    Returns episode ID or None on failure.
+
+    Returns episode ID or None on failure (e.g. segment skipped for low importance).
     """
     from app.memory.db_memory import save_fact, FACT_TYPE_DYNAMIC
     from app.memory.embedder import embed_text
     from app.memory.pcl import run_predict_calibrate
-    
+
     start_idx = segment.get("start_idx", 0)
     end_idx = segment.get("end_idx", len(messages))
     segment_msgs = messages[start_idx:end_idx]
-    
+
     if not segment_msgs:
         return None
-    
+
     title = segment.get("title", "Untitled")
     summary = segment.get("summary", "")
     surprise = segment.get("surprise_level", 0.2)
-    
+
     if not summary:
         summary = title  # Fallback to title if no summary
-    
+
+    # Calculate importance and skip low-importance segments
+    importance = 0.5 + surprise * 0.3
+
+    if importance < MIN_EPISODE_IMPORTANCE:
+        logger.debug(
+            f"Skipping episode '{title}': importance={importance:.2f} < MIN_EPISODE_IMPORTANCE={MIN_EPISODE_IMPORTANCE}"
+        )
+        return None
+
     # Embed the summary
     embedding = None
     try:
         embedding = embed_text(summary)
     except Exception as e:
         logger.warning(f"Embedding failed: {e}")
-    
-    # Calculate importance and stability based on surprise
-    importance = 0.5 + surprise * 0.3
+
     stability = BASE_STABILITY
-    
+
     # Flashbulb boost
     if surprise >= FLASHBULB_THRESHOLD:
         stability *= 1.5
         importance = min(importance + 0.1, 1.0)
-    
+
     start_id = segment_msgs[0].get("id")
     end_id = segment_msgs[-1].get("id")
-    
+
     # Create episode
     episode_id = save_fact(
         session_id=session_id,
@@ -590,13 +668,13 @@ def create_episode_and_pcl(
             "session_id": session_id,
         },
     )
-    
+
     if not episode_id:
         logger.warning("Episode creation failed")
         return None
-    
-    logger.info(f"Created episode {episode_id}: {title}")
-    
+
+    logger.info(f"Created episode {episode_id}: {title} (importance={importance:.2f})")
+
     # Trigger PCL pipeline
     try:
         pcl_result = run_predict_calibrate(
@@ -609,7 +687,7 @@ def create_episode_and_pcl(
             logger.debug(f"PCL result: {pcl_result}")
     except Exception as e:
         logger.warning(f"PCL failed for episode {episode_id}: {e}")
-    
+
     return episode_id
 
 
@@ -715,6 +793,9 @@ def run_memory_pipeline(session_id: int, message_count: int) -> dict:
             return {"segments": 0, "episodes": 0, "pcl_runs": 0}
         
         logger.info(f"Batch segmentation: {len(batch_result)} segments")
+        
+        # Merge small segments
+        batch_result = _merge_small_segments(batch_result)
         
         # Create episodes + PCL
         episode_count = 0

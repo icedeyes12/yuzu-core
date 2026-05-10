@@ -35,8 +35,21 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-DEDUPE_THRESHOLD = 0.05  # cosine distance — lower = more similar
+DEDUPE_THRESHOLD = 0.03  # cosine distance — lower = stricter dedup (was 0.05)
 MAX_FACTS_FOR_PREDICTION = 10
+
+# Per-category caps: prevent any single category from dominating the memory store.
+# When a category is at cap, new facts in that category are skipped during consolidation.
+_CATEGORY_CAPS = {
+    "Identity": 20,
+    "Preference": 30,
+    "Interest": 20,
+    "Personality": 15,
+    "Experience": 50,
+    "Goal": 10,
+    "Guideline": 10,
+    "Relationship": 20,
+}
 
 
 # ── 1. Load relevant facts ────────────────────────────────────────────────────
@@ -290,12 +303,30 @@ def _map_category_to_relation(category: str) -> str:
     return mapping.get(category, "experience")
 
 
+def _get_category_counts(session_id: int) -> dict[str, int]:
+    """Count existing facts per category for the session (global static facts)."""
+    from app.memory.db_memory import get_facts_by_session, FACT_TYPE_STATIC
+    facts = get_facts_by_session(session_id=None, fact_type=FACT_TYPE_STATIC, limit=500)
+    counts: dict[str, int] = {}
+    for f in facts:
+        cat = f.get("metadata", {}).get("category", "Experience")
+        counts[cat] = counts.get(cat, 0) + 1
+    return counts
+
+
 def consolidate_facts(extracted: list[dict], session_id: int, episode_id=None) -> dict:
     """Apply extracted knowledge actions to the DB.
+
+    Per-category caps (_CATEGORY_CAPS) are enforced: facts in categories
+    already at their cap are skipped (not inserted but reinforce/update/invalidate
+    actions on existing facts still proceed).
 
     Returns summary: {new: n, reinforced: n, updated: n, invalidated: n}
     """
     counts = {"new": 0, "reinforced": 0, "updated": 0, "invalidated": 0}
+
+    # Pre-count existing facts per category to enforce caps
+    category_counts = _get_category_counts(session_id)
 
     for item in extracted:
         fact_text = item.get("fact", "")
@@ -305,6 +336,16 @@ def consolidate_facts(extracted: list[dict], session_id: int, episode_id=None) -
 
         if not fact_text or len(fact_text) < 3:
             continue
+
+        # Enforce category cap for new facts only
+        if action == "new":
+            cap = _CATEGORY_CAPS.get(category, 20)
+            if category_counts.get(category, 0) >= cap:
+                logger.debug(
+                    f"Skipping new '{category}' fact (at cap {cap}): {fact_text[:50]}"
+                )
+                continue
+            category_counts[category] = category_counts.get(category, 0) + 1
 
         relation = _map_category_to_relation(category)
         entity = "User"

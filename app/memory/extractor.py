@@ -103,6 +103,9 @@ _RELATION_TO_CATEGORY = {
     "tone": "Guideline",
 }
 
+# Stricter dedup: was 0.05, tightened to 0.03 to reduce noise
+_EXTRACTOR_DEDUP_THRESHOLD = 0.03
+
 
 def _map_relation_to_category(relation: str) -> str:
     """Map a relation keyword to one of the 8 categories."""
@@ -130,13 +133,13 @@ def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None
         vector = None
 
     if vector is not None:
-        # Check for duplicates
+        # Check for duplicates using stricter threshold
         existing = search_similar(
             embedding=vector,
             session_id=session_id,
             fact_type=FACT_TYPE_STATIC,
             limit=5,
-            max_distance=0.05,
+            max_distance=_EXTRACTOR_DEDUP_THRESHOLD,
         )
 
         # FALLBACK: text-level dedupe (in case embedding failed)
