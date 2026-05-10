@@ -760,9 +760,13 @@ function scrollToBottom() {
 	const chatContainer = document.getElementById("chatContainer");
 	if (!chatContainer) return;
 
-	chatContainer.scroll({
-		top: chatContainer.scrollHeight,
-		behavior: "smooth",
+	// Use requestAnimationFrame to ensure scroll happens after layout calculations
+	// This prevents race conditions when mermaid diagrams render asynchronously
+	requestAnimationFrame(() => {
+		chatContainer.scroll({
+			top: chatContainer.scrollHeight,
+			behavior: "smooth",
+		});
 	});
 
 	const scrollBtn = document.getElementById("scrollToBottomBtn");
