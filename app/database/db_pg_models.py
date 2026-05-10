@@ -154,8 +154,20 @@ def get_memory_state(session_id: int) -> dict:
     row = pg_fetchone("SELECT memory_json FROM chat_sessions WHERE id = %s", (session_id,))
     if not row:
         return {"last_segmented_count": 0}
+    
+    mj = row.get("memory_json")
+    if not mj:
+        return {"last_segmented_count": 0}
+    
+    # psycopg v3 auto-parses JSON columns to dict
+    # Handle both dict (auto-parsed) and str (raw)
     try:
-        return json.loads(row.get("memory_json", "{}"))
+        if isinstance(mj, dict):
+            return mj
+        elif isinstance(mj, str):
+            return json.loads(mj)
+        else:
+            return {"last_segmented_count": 0}
     except (json.JSONDecodeError, TypeError):
         return {"last_segmented_count": 0}
 

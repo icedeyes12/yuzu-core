@@ -31,6 +31,9 @@ Fixed broken FSRS (Free Spaced Repetition Scheduler) implementation that was cra
 - Retrievability decays correctly over time (fresh 0.994 → 30 days 0.884)
 - Edge cases handled without crash
 
+### Fixed
+- **Memory pipeline tracking**
+
 ### Changed — Memory System Models
 
 - Memory LLM calls now use:
