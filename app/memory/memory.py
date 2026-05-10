@@ -206,14 +206,21 @@ def mark_segmentation_done(session_id: int, count: int) -> None:
     
     Persists last_segmented_count and last_segmented_at to session's memory_json.
     Called AFTER processing completes (not before).
+    
+    count should be the total conversation message count (user+assistant)
+    at the time of marking. We re-read it from the DB to be safe since the
+    fence's in_progress_fence_count may not reflect the true total.
     """
-    from app.database import update_memory_state
+    from app.database import get_message_count, update_memory_state
+    
+    # Re-read actual current total from DB — fence count may be stale or 0
+    actual_total = get_message_count(session_id)
     
     update_memory_state(session_id, {
-        "last_segmented_count": count,
+        "last_segmented_count": actual_total,
         "last_segmented_at": datetime.now().isoformat(),
     })
-    logger.info(f"Marked segmentation done: session={session_id}, count={count}")
+    logger.info(f"Marked segmentation done: session={session_id}, count={actual_total}")
 
 
 # ── Batch segmentation (single LLM call) ───────────────────────────────────────
