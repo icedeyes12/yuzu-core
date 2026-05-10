@@ -4,6 +4,7 @@ This document defines the structure, database schema, and data flow of the long-
 
 The memory subsystem transforms raw chat logs into structured, retrievable, vector-searchable memory layers — all stored in PostgreSQL with pgvector extension.
 
+
 **Inspired by [plast-mem](https://github.com/moeru-ai/plast-mem)** patterns for temporal validity and FSRS scope — a reference implementation for persistent AI memory systems.
 
 ---
