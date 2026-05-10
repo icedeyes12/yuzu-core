@@ -56,6 +56,70 @@ Reduced per-turn API calls by 70-80% through request-scoped caching and throttle
 - Ruff linting passes with no errors
 - No architectural drift from documentation
 
+### Fixed — Typing Indicator Architecture Consolidation
+
+Consolidated two competing typing indicator systems into a single, clean dynamic implementation.
+
+#### Problem
+
+The codebase had **two overlapping systems**:
+1. **Legacy static**: `<div id="typingIndicator">` in HTML, toggled via `classList.add/remove("hidden")`
+2. **Dynamic**: JS-created `.typing-indicator-message` appended to chat container
+
+The legacy element had no CSS styling (invisible) and caused confusion about which system was active.
+
+#### Solution
+
+- **Removed** legacy static `#typingIndicator` HTML element from `templates/chat.html`
+- **Removed** legacy classList toggling pattern from `static/js/chat.js`
+- **Standardized** on dynamic in-flow message system with proper styling
+
+#### Files Modified
+
+| File | Change |
+|------|--------|
+| `templates/chat.html` | Removed `<div id="typingIndicator">` element |
+| `static/js/chat.js` | Replaced classList toggling with `showTypingIndicator()`/`hideTypingIndicator()` calls; increased `bottomMargin` from 20px to 60px |
+| `static/css/chat.css` | Removed hardcoded `min-height` and mobile media query padding override |
+
+#### Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│  .chat-container (flex-column, gap: 0.8rem) │
+│  ┌─────────────────────────────────────┐   │
+│  │ .message.user                       │   │
+│  └─────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────┐   │
+│  │ .message.ai                         │   │
+│  └─────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────┐   │
+│  │ .typing-indicator-message ← DYNAMIC │   │
+│  │   (appended via JS, in-flow)        │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  ↓ padding-bottom (dynamic via JS)          │
+├─────────────────────────────────────────────┤
+│  .input-area (position: fixed, bottom: 0)   │
+└─────────────────────────────────────────────┘
+```
+
+#### Dynamic Layout System
+
+The `updateDynamicLayout()` function calculates:
+- `paddingTop` = header height (48px) + margin
+- `paddingBottom` = input area height + 60px margin
+
+Triggered by:
+- Initial page load
+- Textarea input (auto-resize)
+- Window resize
+- ResizeObserver on input area
+
+#### Browser Compatibility Note
+
+Some mobile browsers (e.g., Queta) may require fullscreen mode for correct viewport calculation. Kiwi Browser handles this correctly in all modes.
+
 ## [3.0.1] - 2026-04-25
 
 ### Changed — Python 3.13 Compatibility Upgrade

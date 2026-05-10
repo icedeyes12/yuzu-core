@@ -163,6 +163,197 @@ const STREAM_RENDER_DEBOUNCE_MS = 50;
 
 ---
 
+## Phase 4: Typing Indicator System
+
+### 4.1 Architecture Overview
+
+The typing indicator is implemented as a **dynamic in-flow message element**, not a static overlay.
+
+```
+┌─────────────────────────────────────────────┐
+│  .chat-container (flex-column, gap: 0.8rem) │
+│  ┌─────────────────────────────────────┐   │
+│  │ .message.user                       │   │
+│  └─────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────┐   │
+│  │ .message.ai                         │   │
+│  └─────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────┐   │
+│  │ .typing-indicator-message ← DYNAMIC │   │
+│  │   (appended via JS, in-flow)        │   │
+│  └─────────────────────────────────────┘   │
+│                                             │
+│  ↓ padding-bottom (dynamic via JS)          │
+├─────────────────────────────────────────────┤
+│  .input-area (position: fixed, bottom: 0)   │
+└─────────────────────────────────────────────┘
+```
+
+### 4.2 Implementation Details
+
+**File: `static/js/chat.js`**
+
+```javascript
+// Global state
+let _typingIndicatorElement = null;
+let _typingIndicatorShownAt = 0;
+const TYPING_INDICATOR_MIN_DURATION_MS = 300;
+
+function showTypingIndicator() {
+    // Remove any existing indicator first
+    hideTypingIndicator(true);
+
+    // Ensure layout is up-to-date before appending
+    if (typeof window.updateDynamicLayout === "function") {
+        window.updateDynamicLayout();
+    }
+
+    const chatContainer = document.getElementById("chatContainer");
+    const msg = document.createElement("div");
+    msg.className = "message ai typing-indicator-message";
+    msg.id = "typingIndicatorMessage";
+
+    const dots = document.createElement("div");
+    dots.className = "typing-dots";
+    dots.innerHTML = "<span></span><span></span><span></span>";
+    msg.appendChild(dots);
+
+    chatContainer.appendChild(msg);
+    _typingIndicatorElement = msg;
+    _typingIndicatorShownAt = Date.now();
+
+    scrollToBottom();
+}
+
+function hideTypingIndicator(force = false) {
+    if (!_typingIndicatorElement) return;
+
+    const elapsed = Date.now() - _typingIndicatorShownAt;
+    const remaining = TYPING_INDICATOR_MIN_DURATION_MS - elapsed;
+
+    if (force || remaining <= 0) {
+        _typingIndicatorElement.remove();
+        _typingIndicatorElement = null;
+    } else {
+        setTimeout(() => {
+            if (_typingIndicatorElement) {
+                _typingIndicatorElement.remove();
+                _typingIndicatorElement = null;
+            }
+        }, remaining);
+    }
+}
+```
+
+### 4.3 CSS Styling
+
+**File: `static/css/chat.css`**
+
+```css
+/* ==================== TYPING INDICATOR MESSAGE (in-flow) ==================== */
+.typing-indicator-message {
+    align-self: flex-start;
+    margin-bottom: 0.5rem;
+    background: var(--message-ai-bg);
+    border: 1px solid var(--border-ai);
+    padding: 0.8rem 1rem;
+    border-radius: 12px;
+    max-width: 60px;
+    animation: fadeIn 0.3s ease;
+}
+
+.typing-indicator-message .typing-dots {
+    display: flex;
+    gap: 0.4rem;
+    justify-content: center;
+    align-items: center;
+}
+
+.typing-indicator-message .typing-dots span {
+    width: 8px;
+    height: 8px;
+    background: var(--accent-primary, var(--accent-color));
+    border-radius: 50%;
+    animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-indicator-message .typing-dots span:nth-child(1) { animation-delay: 0s; }
+.typing-indicator-message .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator-message .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.7; }
+    30% { transform: translateY(-10px); opacity: 1; }
+}
+```
+
+### 4.4 Dynamic Layout System
+
+**Why dynamic?** The input area height changes based on:
+- Textarea content (auto-resize)
+- Multimodal toggle button presence
+- Mobile vs desktop viewport
+
+**File: `static/js/chat.js`**
+
+```javascript
+function initializeInputBehavior() {
+    const input = document.getElementById("messageInput");
+    const chatContainer = document.getElementById("chatContainer");
+
+    function updateDynamicLayout() {
+        const inputArea = input.closest(".input-area");
+        const inputAreaHeight = inputArea.offsetHeight;
+
+        if (chatContainer) {
+            const headerHeight = 48;
+            const bottomMargin = 60; // Extra margin for visibility
+            chatContainer.style.paddingTop = `${headerHeight + 8}px`;
+            chatContainer.style.paddingBottom = `${inputAreaHeight + bottomMargin}px`;
+        }
+    }
+
+    // Initial call
+    updateDynamicLayout();
+
+    // Triggers
+    input.oninput = () => { updateDynamicLayout(); };
+    window.addEventListener("resize", updateDynamicLayout);
+
+    const inputArea = input.closest(".input-area");
+    new ResizeObserver(() => updateDynamicLayout()).observe(inputArea);
+
+    window.updateDynamicLayout = updateDynamicLayout;
+}
+```
+
+### 4.5 Lifecycle Integration
+
+| Event | Action |
+|-------|--------|
+| User sends message | `showTypingIndicator()` called immediately |
+| First SSE chunk received | `hideTypingIndicator()` called, streaming message displayed |
+| Stream error | `hideTypingIndicator()` in `finally` block |
+| `/imagine` command | `showTypingIndicator()` → fetch → `hideTypingIndicator()` |
+
+### 4.6 Common Pitfalls (Historical)
+
+1. **Two competing systems**: Legacy static `#typingIndicator` HTML + dynamic JS. Fixed by removing legacy.
+2. **Hardcoded padding**: CSS media query `@media (max-width: 768px)` overrode dynamic JS padding. Fixed by removing hardcoded padding from media query.
+3. **`margin-top: auto`**: Pushed element to bottom edge behind input area. Fixed by removing.
+4. **Hardcoded `min-height`**: Legacy `calc(100vh - 48px - 192px)` conflicted with dynamic padding. Fixed by removing.
+5. **Browser quirks**: Some mobile browsers (Queta) require fullscreen for correct viewport calculation. Kiwi Browser works correctly.
+
+### 4.7 Files Summary
+
+| File | Role |
+|------|------|
+| `templates/chat.html` | No static typing indicator element (removed) |
+| `static/js/chat.js` | `showTypingIndicator()`, `hideTypingIndicator()`, `updateDynamicLayout()` |
+| `static/css/chat.css` | `.typing-indicator-message` styling, `@keyframes typing` |
+
+---
+
 ## File Changes Summary
 
 | File | Action | Lines Changed |
