@@ -144,6 +144,7 @@ def _is_fence_active(session_id: int) -> bool:
 def _get_session_idle_hours(session_id: int) -> float | None:
     """Get hours since last message in session. Returns None if no messages."""
     from app.database import get_session_messages
+    # Need newest message — use DESC order
     messages = get_session_messages(session_id, limit=1, order="DESC")
     if not messages:
         return None

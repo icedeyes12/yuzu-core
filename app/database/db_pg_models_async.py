@@ -315,11 +315,15 @@ async def add_message_async(
 async def get_session_messages_async(
     session_id: int, limit: int = 100, order: str = "ASC"
 ) -> list[dict]:
-    """Fetch messages by session_id. order: "ASC" (oldest first) or "DESC" (newest first)."""
-    if order.upper() == "DESC":
-        rows = await pg_fetchall_async(SQL_MESSAGE_SELECT_DESC_LIMIT, (session_id, limit))
+    """Fetch messages for a session in chronological order.
+
+    order: "ASC" (oldest first) or "DESC" (newest first).
+    """
+    if order == "DESC":
+        query = SQL_MESSAGE_SELECT_DESC_LIMIT
     else:
-        rows = await pg_fetchall_async(SQL_MESSAGE_SELECT_ASC_LIMIT, (session_id, limit))
+        query = SQL_MESSAGE_SELECT_ASC_LIMIT
+    rows = await pg_fetchall_async(query, (session_id, limit))
     return [parse_message_row(r) for r in rows]
 
 
