@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import math
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.memory.db_memory import (
     search_similar,
@@ -178,47 +178,64 @@ def _fsrs_retrievability(r: dict) -> float:
 
     # Try fsrs library first
     try:
-        from fsrs import Card
+        from fsrs import Card, State as FsrsState
         fsrs_available = True
     except ImportError:
         fsrs_available = False
 
     if fsrs_available:
-        from fsrs import Card
+        from fsrs import Card, State as FsrsState
         from app.memory.memory_review import _get_scheduler
 
         fsrs = _get_scheduler()
         if fsrs:
             stability = meta.get("stability", 1.0)
             difficulty = meta.get("difficulty", 1.0)
-            last_reviewed = meta.get("last_reviewed_at")
+            last_reviewed = meta.get("last_reviewed_at") or meta.get("last_reviewed")
             state = meta.get("state", 2)  # default to review state
-            reps = meta.get("reps", 0)
-            lapses = meta.get("lapses", 0)
 
-            now = datetime.now()
+            # === EDGE CASE PROTECTION ===
+            # Ensure stability and difficulty have valid values
+            if not stability or stability <= 0:
+                stability = 1.0  # Minimum stable stability
+            if not difficulty or difficulty < 0:
+                difficulty = 3.0  # Default medium difficulty
+
+            # Map state int to State enum (handle invalid values)
+            state_enum = FsrsState(state) if state in (1, 2, 3) else FsrsState.Review
+
+            # Calculate due date from stability (use timezone-aware datetime)
+            now = datetime.now(timezone.utc)
+            due = now + timedelta(days=stability)
+
+            # Parse last_review (ensure timezone-aware)
+            last_review_dt = None
             if last_reviewed:
                 try:
-                    last_dt = datetime.fromisoformat(last_reviewed.replace("Z", "+00:00").replace("+00:00", ""))
-                    days_elapsed = max((now - last_dt).total_seconds() / 86400.0, 0.0)
-                except Exception:
-                    days_elapsed = 0.0
-            else:
-                days_elapsed = 0.0
+                    # Handle various ISO formats
+                    last_reviewed_str = last_reviewed.replace("Z", "+00:00")
+                    if "+" not in last_reviewed_str and "-" not in last_reviewed_str[-6:]:
+                        # No timezone, add UTC
+                        last_reviewed_str += "+00:00"
+                    last_review_dt = datetime.fromisoformat(last_reviewed_str)
+                    # Ensure it's timezone-aware
+                    if last_review_dt.tzinfo is None:
+                        last_review_dt = last_review_dt.replace(tzinfo=timezone.utc)
+                except Exception as parse_err:
+                    logger.debug(f"Failed to parse last_reviewed: {parse_err}")
+                    pass
 
             try:
                 card = Card(
                     stability=stability,
                     difficulty=difficulty,
-                    elapsed_days=days_elapsed,
-                    scheduled_days=stability,
-                    reps=reps,
-                    lapses=lapses,
-                    state=state,
-                    last_review=last_reviewed,
+                    state=state_enum,
+                    due=due,
+                    last_review=last_review_dt,
                 )
-                # Get retrievability from fsrs
-                retrievability = fsrs.retrievability(card, days_elapsed)
+                
+                # Get retrievability using correct API
+                retrievability = fsrs.get_card_retrievability(card)
                 return max(retrievability, 0.1)
             except Exception as e:
                 logger.debug(f"FSRS retrievability calculation failed: {e}")

@@ -30,13 +30,14 @@ logger = logging.getLogger(__name__)
 # PyPI fsrs library: https://pypi.org/project/fsrs/
 # API: Scheduler.review_card(card, rating) -> (new_card, review_log)
 try:
-    from fsrs import Scheduler, Card, Rating
+    from fsrs import Scheduler, Card, Rating, State
     FSRS_AVAILABLE = True
 except ImportError:
     FSRS_AVAILABLE = False
     Scheduler = None
     Card = None
     Rating = None
+    State = None
     logger.warning("fsrs library not available, falling back to multipliers")
 
 # Initialize Scheduler instance (singleton)
@@ -204,7 +205,7 @@ def _update_fsrs_params_fsrs(fact_id: int, rating: str, row: dict) -> bool:
     Uses scheduler.review_card(card, rating) to get next state.
     """
     scheduler = _get_scheduler()
-    if scheduler is None or Card is None or Rating is None:
+    if scheduler is None or Card is None or Rating is None or State is None:
         return False
 
     meta = row.get("metadata") or {}
@@ -213,31 +214,42 @@ def _update_fsrs_params_fsrs(fact_id: int, rating: str, row: dict) -> bool:
     current_stability = meta.get("stability", 1.0)
     current_difficulty = meta.get("difficulty", 1.0)
     last_reviewed = meta.get("last_reviewed_at")
-    current_reps = meta.get("reps", 0)
-    current_lapses = meta.get("lapses", 0)
     current_state = meta.get("state", 2)  # 2 = review state
 
-    # Calculate days since last review
+    # === EDGE CASE PROTECTION ===
+    # Ensure stability and difficulty have valid values
+    if not current_stability or current_stability <= 0:
+        current_stability = 1.0  # Minimum stable stability (1 day)
+    if not current_difficulty or current_difficulty < 0:
+        current_difficulty = 3.0  # Default medium difficulty
+
+    # Calculate days since last review for logging
     now = datetime.now(timezone.utc)
+    last_dt = None
     if last_reviewed:
         try:
             last_dt = datetime.fromisoformat(last_reviewed.replace("Z", "+00:00"))
-            days_elapsed = max((now - last_dt).total_seconds() / 86400.0, 0.0)
         except Exception:
-            days_elapsed = 0.0
-    else:
-        days_elapsed = 0.0
+            pass
 
-    # Create Card with current state
+    # Map state int to State enum (handle invalid values)
+    try:
+        state_enum = State(current_state) if current_state in (1, 2, 3) else State.Review
+    except ValueError:
+        state_enum = State.Review
+
+    # Calculate due date from stability
+    from datetime import timedelta
+    due = now + timedelta(days=current_stability)
+
+    # Create Card with correct fsrs v6.3.1 API
+    # Card only accepts: card_id, state, step, stability, difficulty, due, last_review
     card = Card(
         stability=current_stability,
         difficulty=current_difficulty,
-        elapsed_days=days_elapsed,
-        scheduled_days=current_stability,
-        reps=current_reps,
-        lapses=current_lapses,
-        state=current_state,
-        last_review=last_reviewed,
+        state=state_enum,
+        due=due,
+        last_review=last_dt,
     )
 
     # Map rating string to Rating enum
@@ -253,14 +265,12 @@ def _update_fsrs_params_fsrs(fact_id: int, rating: str, row: dict) -> bool:
         # Use scheduler.review_card() to get next state
         new_card, review_log = scheduler.review_card(card, rating_enum)
 
-        # Extract new state from returned card
+        # Extract new state from returned card (correct attributes)
         meta["stability"] = new_card.stability
         meta["difficulty"] = new_card.difficulty
-        meta["state"] = new_card.state
-        meta["reps"] = new_card.reps
-        meta["lapses"] = new_card.lapses
-        meta["scheduled_days"] = new_card.scheduled_days
-        meta["last_reviewed_at"] = now.isoformat()
+        meta["state"] = new_card.state.value  # Store as int for JSON
+        meta["due"] = new_card.due.isoformat() if new_card.due else None
+        meta["last_review"] = new_card.last_review.isoformat() if new_card.last_review else None
         meta["last_rating"] = rating
         meta["pending_review"] = False
 
@@ -268,6 +278,8 @@ def _update_fsrs_params_fsrs(fact_id: int, rating: str, row: dict) -> bool:
             "UPDATE semantic_facts SET metadata=%s, last_accessed=%s WHERE id=%s",
             (Json(meta), now, fact_id),
         )
+        
+        logger.info(f"FSRS review: fact={fact_id}, rating={rating}, S={current_stability:.1f}→{new_card.stability:.1f}, D={current_difficulty:.1f}→{new_card.difficulty:.1f}")
         return True
 
     except Exception as e:

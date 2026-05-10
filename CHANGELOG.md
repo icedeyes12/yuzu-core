@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.3] - 2026-05-10
+
+### Fixed — FSRS Implementation Corrected
+
+Fixed broken FSRS (Free Spaced Repetition Scheduler) implementation that was crashing and always falling back to simple multipliers.
+
+**Root Cause**: Card constructor used invalid parameters (`elapsed_days`, `scheduled_days`, `reps`, `lapses`) that don't exist in fsrs v6.3.1 API.
+
+**Files Changed**:
+- `app/memory/memory_review.py` — Fixed Card constructor, state extraction, added State import
+- `app/memory/retrieval.py` — Fixed retrievability calculation, added timezone-aware datetime handling
+
+**Changes**:
+- Added `State` import from fsrs library
+- Fixed Card constructor to use correct v6.3.1 API (`stability`, `difficulty`, `state`, `due`, `last_review`)
+- Fixed state extraction after `review_card()` call
+- Added edge case protection for None/zero stability and invalid state values
+- Fixed timezone awareness in retrievability calculation
+- Added logging for FSRS review operations
+
+**Verification**:
+- FSRS Good rating now correctly increases stability (24 → 918.6 days)
+- FSRS Again rating now correctly decreases stability (100 → 17 days)
+- Retrievability decays correctly over time (fresh 0.994 → 30 days 0.884)
+- Edge cases handled without crash
+
 ## [3.0.2] - 2026-05-10
 
 ### Changed — Memory System Performance Optimization
