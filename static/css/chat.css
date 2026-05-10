@@ -1192,21 +1192,16 @@ body {
 }
 
 /* ==================== TYPING INDICATOR MESSAGE (in-flow) ==================== */
-/* BRUTE-FORCE VISIBILITY TEST */
 .typing-indicator-message {
-	align-self: flex-start !important;
-	background: red !important;
-	border: 3px solid yellow !important;
-	padding: 1rem 1.5rem !important;
-	border-radius: 12px !important;
-	max-width: 120px !important;
-	min-width: 80px !important;
-	display: block !important;
-	visibility: visible !important;
-	opacity: 1 !important;
-	z-index: 9999 !important;
-	position: relative !important;
-	animation: none !important;
+	align-self: flex-start;
+	margin-top: auto;
+	margin-bottom: 0.5rem;
+	background: var(--message-ai-bg);
+	border: 1px solid var(--border-ai);
+	padding: 0.8rem 1rem;
+	border-radius: 12px;
+	max-width: 60px;
+	animation: fadeIn 0.3s ease;
 }
 
 .typing-indicator-message .typing-dots {
