@@ -860,7 +860,9 @@ body {
 /* ==================== MOBILE RESPONSIVE ==================== */
 @media (max-width: 768px) {
 	.chat-container {
-		padding: 4.5rem 0.5rem 7rem;
+		/* Padding handled dynamically by JS - only override horizontal */
+		padding-left: 0.5rem;
+		padding-right: 0.5rem;
 	}
 
 	.message {
