@@ -1045,8 +1045,8 @@ class AIProviderManager:
             return None
         provider = self.providers['chutes']
         
-        MAIN_MODEL = "Qwen/Qwen3-Next-80B-A3B-Instruct"
-        FALLBACK_MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE"
+        MAIN_MODEL = "google/gemma-4-31B-turbo-TEE"
+        FALLBACK_MODEL = "Qwen/Qwen3.6-27B-TEE"
         
         def _is_connection_error(error: str | None) -> bool:
             """Check if error is a connection/network issue (retryable)."""

@@ -24,7 +24,7 @@ _IMPORTANT_KEYWORDS = (
 _IDLE_THRESHOLD_HOURS = 1
 _SUMMARY_TRIGGER_INTERVAL = 100
 
-_SUMMARY_MODEL = "Qwen/Qwen3.6-27B-TEE"
+_SUMMARY_MODEL = "google/gemma-4-31B-turbo-TEE"
 _SUMMARY_FALLBACKS = ("Qwen/Qwen3-235B-A22B-Instruct-2507-TEE",)
 _GLOBAL_FREE_FALLBACKS = (
     "google/gemini-2.0-flash-exp:free",
