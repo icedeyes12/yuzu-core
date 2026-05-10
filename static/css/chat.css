@@ -134,7 +134,7 @@ body {
 	scroll-behavior: smooth;
 	/* Dynamic padding - set via JS based on header/input heights */
 	padding-top: 56px;
-	padding-bottom: 12rem;
+	padding-bottom: 7rem;
 	padding-left: 0.8rem;
 	padding-right: 0.8rem;
 	display: flex;
