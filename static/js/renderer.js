@@ -778,62 +778,83 @@ class MessageRenderer {
 	 * @param {boolean} isStreaming - Whether stream is still active
 	 * @returns {string} HTML output
 	 */
+	/**
+	 * Detects ALL mermaid blocks (complete and incomplete) in text
+	 * @param {string} text - Raw markdown text
+	 * @returns {Array<{startIndex: number, endIndex: number, complete: boolean}>}
+	 */
+	detectAllMermaidBlocks(text) {
+		const blocks = [];
+		const lines = text.split("\n");
+		let currentBlock = null;
+		let charIndex = 0;
+
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			const mermaidOpen = line.match(/^```mermaid\s*$/);
+
+			if (mermaidOpen && !currentBlock) {
+				// Start of mermaid block
+				currentBlock = { startIndex: charIndex, endIndex: -1, complete: false };
+			} else if (currentBlock && line.match(/^```\s*$/)) {
+				// End of mermaid block (complete)
+				currentBlock.endIndex = charIndex + line.length;
+				currentBlock.complete = true;
+				blocks.push(currentBlock);
+				currentBlock = null;
+			}
+
+			charIndex += line.length + 1; // +1 for newline
+		}
+
+		// If we still have an open block, it's incomplete
+		if (currentBlock) {
+			currentBlock.endIndex = text.length; // End of text
+			currentBlock.complete = false;
+			blocks.push(currentBlock);
+		}
+
+		return blocks;
+	}
+
+	/**
+	 * Render markdown for streaming - shows placeholder for ALL mermaid blocks during streaming
+	 * @param {string} text - Accumulated stream text
+	 * @param {boolean} isStreaming - Whether stream is still active
+	 * @returns {string} HTML output
+	 */
 	renderStreaming(text, isStreaming = true) {
 		if (!isStreaming) {
 			return this.render(text); // Normal render for completed streams
 		}
 
-		const detection = this.detectIncompleteCodeBlocks(text);
+		// During streaming: replace ALL mermaid blocks with placeholders
+		const mermaidBlocks = this.detectAllMermaidBlocks(text);
 
-		if (!detection.hasIncomplete) {
-			return this.render(text); // No incomplete blocks, render normally
+		if (mermaidBlocks.length === 0) {
+			return this.render(text); // No mermaid blocks, render normally
 		}
 
-		// Check if any incomplete block is mermaid
-		const hasIncompleteMermaid = detection.incompleteBlocks.some(
-			(block) => block.lang === "mermaid",
+		// Replace from end to start to avoid index shifting
+		let processedText = text;
+		const sortedBlocks = [...mermaidBlocks].sort(
+			(a, b) => b.startIndex - a.startIndex,
 		);
 
-		if (!hasIncompleteMermaid) {
-			return this.render(text); // Incomplete blocks are not mermaid, render normally
-		}
-
-		// Process: replace incomplete mermaid blocks with placeholders
-		let processedText = text;
-
-		// Sort blocks by startIndex descending to replace from end to start
-		// (avoids index shifting issues)
-		const sortedBlocks = [...detection.incompleteBlocks]
-			.filter((block) => block.lang === "mermaid")
-			.sort((a, b) => b.startIndex - a.startIndex);
-
 		for (const block of sortedBlocks) {
-			processedText = this._replaceIncompleteMermaidWithPlaceholder(
-				processedText,
-				block.startIndex,
-			);
+			processedText = this._replaceMermaidWithPlaceholder(processedText, block);
 		}
 
 		return this.render(processedText);
 	}
 
 	/**
-	 * Replaces incomplete mermaid block with placeholder HTML
+	 * Replaces any mermaid block with placeholder HTML
 	 * @param {string} text - Full text
-	 * @param {number} startIndex - Start index of ```mermaid fence
-	 * @returns {string} Text with placeholder replacing incomplete block
+	 * @param {{startIndex: number, endIndex: number, complete: boolean}} block
+	 * @returns {string} Text with placeholder
 	 */
-	_replaceIncompleteMermaidWithPlaceholder(text, startIndex) {
-		// Find the end of the incomplete block content (end of text)
-		const mermaidFence = "```mermaid";
-		const fenceIndex = text.indexOf(mermaidFence, startIndex);
-
-		if (fenceIndex === -1) return text;
-
-		// Extract the incomplete mermaid code (for potential debugging)
-		const _afterFence = text.substring(fenceIndex + mermaidFence.length);
-
-		// Create placeholder HTML
+	_replaceMermaidWithPlaceholder(text, block) {
 		const placeholder = `<div class="mermaid-container mermaid-placeholder">
 	<div class="code-block-header">
 		<span class="code-language">mermaid</span>
@@ -852,10 +873,12 @@ class MessageRenderer {
 	</div>
 </div>`;
 
-		// Replace from fence start to end of text with placeholder
-		return text.substring(0, fenceIndex) + placeholder;
+		return (
+			text.substring(0, block.startIndex) +
+			placeholder +
+			text.substring(block.endIndex)
+		);
 	}
-
 	resolveImageToken(href, title = "", text = "") {
 		if (href && typeof href === "object") {
 			return {
