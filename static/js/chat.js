@@ -1156,7 +1156,7 @@ function initializeInputBehavior() {
 		// Bottom padding should be: input area height + margin for last message visibility
 		if (chatContainer) {
 			const headerHeight = 48; // Approximate header height in px
-			const bottomMargin = 20; // Extra margin for last message visibility
+			const bottomMargin = 60; // Extra margin for last message visibility (increased for safety)
 			chatContainer.style.paddingTop = `${headerHeight + 8}px`;
 			chatContainer.style.paddingBottom = `${inputAreaHeight + bottomMargin}px`;
 		}
@@ -1222,6 +1222,11 @@ const TYPING_INDICATOR_MIN_DURATION_MS = 300;
 function showTypingIndicator() {
 	// Remove any existing indicator
 	hideTypingIndicator(true);
+
+	// Ensure layout is up-to-date before showing indicator
+	if (typeof window.updateDynamicLayout === "function") {
+		window.updateDynamicLayout();
+	}
 
 	const chatContainer = document.getElementById("chatContainer");
 	if (!chatContainer) return null;
