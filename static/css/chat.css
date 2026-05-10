@@ -142,7 +142,6 @@ body {
 	gap: 0.8rem;
 	background: var(--bg-color);
 	-webkit-overflow-scrolling: touch;
-	min-height: calc(100vh - 48px - 192px);
 	box-sizing: border-box;
 }
 
