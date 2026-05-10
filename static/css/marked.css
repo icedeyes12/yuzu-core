@@ -900,35 +900,16 @@
 	width: 32px;
 	height: 32px;
 	color: var(--accent-primary);
-	opacity: 0.7;
-	animation: mermaidPulse 1.5s ease-in-out infinite;
+	animation: mermaidSpin 1s linear infinite;
+}
+
+@keyframes mermaidSpin {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
 }
 
 .mermaid-loader-dots {
-	display: flex;
-	gap: 0.4rem;
-}
-
-.mermaid-loader-dots span {
-	width: 8px;
-	height: 8px;
-	background: var(--accent-primary);
-	border-radius: 50%;
-	animation: mermaidDotPulse 1.4s ease-in-out infinite;
-}
-
-.mermaid-loader-dots span:nth-child(1) { animation-delay: 0s; }
-.mermaid-loader-dots span:nth-child(2) { animation-delay: 0.2s; }
-.mermaid-loader-dots span:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes mermaidPulse {
-	0%, 100% { opacity: 0.5; transform: scale(0.95); }
-	50% { opacity: 1; transform: scale(1); }
-}
-
-@keyframes mermaidDotPulse {
-	0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
-	40% { transform: scale(1); opacity: 1; }
+	display: none;
 }
 
 .mermaid-placeholder-text {
