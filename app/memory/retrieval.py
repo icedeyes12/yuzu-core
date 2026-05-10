@@ -185,9 +185,9 @@ def _fsrs_retrievability(r: dict) -> float:
 
     if fsrs_available:
         from fsrs import Card
-        from app.memory.memory_review import _get_fsrs
+        from app.memory.memory_review import _get_scheduler
 
-        fsrs = _get_fsrs()
+        fsrs = _get_scheduler()
         if fsrs:
             stability = meta.get("stability", 1.0)
             difficulty = meta.get("difficulty", 1.0)
