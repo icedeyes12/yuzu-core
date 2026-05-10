@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [3.0.3] - 2026-05-10
+## \[3.0.3\] - 2026-05-10
 
 ### Fixed — FSRS Implementation Corrected
 
@@ -11,10 +11,12 @@ Fixed broken FSRS (Free Spaced Repetition Scheduler) implementation that was cra
 **Root Cause**: Card constructor used invalid parameters (`elapsed_days`, `scheduled_days`, `reps`, `lapses`) that don't exist in fsrs v6.3.1 API.
 
 **Files Changed**:
-- `app/memory/memory_review.py` — Fixed Card constructor, state extraction, added State import
-- `app/memory/retrieval.py` — Fixed retrievability calculation, added timezone-aware datetime handling
+
+- `file app/memory/memory_review.py` — Fixed Card constructor, state extraction, added State import
+- `file app/memory/retrieval.py` — Fixed retrievability calculation, added timezone-aware datetime handling
 
 **Changes**:
+
 - Added `State` import from fsrs library
 - Fixed Card constructor to use correct v6.3.1 API (`stability`, `difficulty`, `state`, `due`, `last_review`)
 - Fixed state extraction after `review_card()` call
@@ -23,12 +25,13 @@ Fixed broken FSRS (Free Spaced Repetition Scheduler) implementation that was cra
 - Added logging for FSRS review operations
 
 **Verification**:
+
 - FSRS Good rating now correctly increases stability (24 → 918.6 days)
 - FSRS Again rating now correctly decreases stability (100 → 17 days)
 - Retrievability decays correctly over time (fresh 0.994 → 30 days 0.884)
 - Edge cases handled without crash
 
-## [3.0.2] - 2026-05-10
+## \[3.0.2\] - 2026-05-10
 
 ### Changed — Memory System Performance Optimization
 
@@ -37,44 +40,47 @@ Reduced per-turn API calls by 70-80% through request-scoped caching and throttle
 #### Performance Impact
 
 | Metric | Before | After |
-|--------|--------|-------|
+| --- | --- | --- |
 | Embeddings/turn | 2 | 0-1 |
 | LLM calls/turn | 1-3 | 1 |
-| DB queries/turn | ~10 | ~3 |
+| DB queries/turn | \~10 | \~3 |
 | Pipeline gate checks | Every turn | Every 5th turn |
 
 #### Changes
 
-**Throttled Pipeline Checks (`orchestrator.py`):**
+**Throttled Pipeline Checks (`file orchestrator.py`):**
+
 - Pipeline gate check now runs every 5th turn instead of every turn
 - Reduces DB queries from 4 per turn to 2 per turn (cached)
 - Gate thresholds corrected: WINDOW_BASE=40, WINDOW_MAX=50, IDLE_GATE_HOURS=3.0
 
 **Request-Scoped Caching:**
-- `memory.py`: `_request_cache` (thread-local) caches memory state per-request
-- `retrieval.py`: `_embedding_cache` (thread-local) caches query embeddings
-- Caches cleared at turn end via `_clear_request_cache()` + `_clear_embedding_cache()`
-- Short query skip: queries < 4 chars skip embedding entirely
 
-**Combined Retrieval (`retrieval.py`):**
+- `file memory.py`: `_request_cache` (thread-local) caches memory state per-request
+- `file retrieval.py`: `_embedding_cache` (thread-local) caches query embeddings
+- Caches cleared at turn end via `_clear_request_cache()` + `_clear_embedding_cache()`
+- Short query skip: queries &lt; 4 chars skip embedding entirely
+
+**Combined Retrieval (`file retrieval.py`):**
+
 - New `retrieve_memories_combined()` fetches static + dynamic in single embedding call
-- `prompts.py` updated to use combined retrieval
+- `file prompts.py` updated to use combined retrieval
 - Reduces embedding calls from 2 to 1 per turn
 
 #### Files Modified
 
 | File | Changes |
-|------|---------|
-| `app/memory/memory.py` | Added `_request_cache`, `_get_cached_memory_state()`, `_clear_request_cache()` |
-| `app/memory/retrieval.py` | Added `_embedding_cache`, `_get_cached_embedding()`, `_clear_embedding_cache()`, `retrieve_memories_combined()`, `_MIN_QUERY_LEN_FOR_EMBEDDING` |
-| `app/orchestrator.py` | Added `_PIPELINE_CHECK_INTERVAL=5`, throttled check in `_post_turn()`, cache clearing |
-| `app/prompts.py` | Added `_retrieve_memories()` combined retrieval, updated `build_system_message()` |
+| --- | --- |
+|  | Added `_request_cache`, `_get_cached_memory_state()`, `_clear_request_cache()` |
+|  | Added `_embedding_cache`, `_get_cached_embedding()`, `_clear_embedding_cache()`, `retrieve_memories_combined()`, `_MIN_QUERY_LEN_FOR_EMBEDDING` |
+|  | Added `_PIPELINE_CHECK_INTERVAL=5`, throttled check in `_post_turn()`, cache clearing |
+|  | Added `_retrieve_memories()` combined retrieval, updated `build_system_message()` |
 
 #### Documentation Updated
 
-- `app/memory/docs/architecture.md` — Architecture diagram, Request Caching section, Integration Points, Key Design Decisions
-- `app/README.md` — Memory System section, Architecture Principles #7
-- `app/memory/README.md` — Performance Optimizations section, Pipeline Triggers table, Implementation Status
+- `file app/memory/docs/architecture.md` — Architecture diagram, Request Caching section, Integration Points, Key Design Decisions
+- `file app/README.md` — Memory System section, Architecture Principles #7
+- `file app/memory/README.md` — Performance Optimizations section, Pipeline Triggers table, Implementation Status
 
 #### Verification
 
@@ -89,6 +95,7 @@ Consolidated two competing typing indicator systems into a single, clean dynamic
 #### Problem
 
 The codebase had **two overlapping systems**:
+
 1. **Legacy static**: `<div id="typingIndicator">` in HTML, toggled via `classList.add/remove("hidden")`
 2. **Dynamic**: JS-created `.typing-indicator-message` appended to chat container
 
@@ -96,21 +103,21 @@ The legacy element had no CSS styling (invisible) and caused confusion about whi
 
 #### Solution
 
-- **Removed** legacy static `#typingIndicator` HTML element from `templates/chat.html`
-- **Removed** legacy classList toggling pattern from `static/js/chat.js`
+- **Removed** legacy static `#typingIndicator` HTML element from `file templates/chat.html`
+- **Removed** legacy classList toggling pattern from `file static/js/chat.js`
 - **Standardized** on dynamic in-flow message system with proper styling
 
 #### Files Modified
 
 | File | Change |
-|------|--------|
-| `templates/chat.html` | Removed `<div id="typingIndicator">` element |
-| `static/js/chat.js` | Replaced classList toggling with `showTypingIndicator()`/`hideTypingIndicator()` calls; increased `bottomMargin` from 20px to 60px |
-| `static/css/chat.css` | Removed hardcoded `min-height` and mobile media query padding override |
+| --- | --- |
+|  | Removed `<div id="typingIndicator">` element |
+|  | Replaced classList toggling with `showTypingIndicator()`/`hideTypingIndicator()` calls; increased `bottomMargin` from 20px to 60px |
+|  | Removed hardcoded `min-height` and mobile media query padding override |
 
 #### Architecture
 
-```
+```markdown
 ┌─────────────────────────────────────────────┐
 │  .chat-container (flex-column, gap: 0.8rem) │
 │  ┌─────────────────────────────────────┐   │
@@ -133,10 +140,12 @@ The legacy element had no CSS styling (invisible) and caused confusion about whi
 #### Dynamic Layout System
 
 The `updateDynamicLayout()` function calculates:
+
 - `paddingTop` = header height (48px) + margin
 - `paddingBottom` = input area height + 60px margin
 
 Triggered by:
+
 - Initial page load
 - Textarea input (auto-resize)
 - Window resize
@@ -146,7 +155,7 @@ Triggered by:
 
 Some mobile browsers (e.g., Queta) may require fullscreen mode for correct viewport calculation. Kiwi Browser handles this correctly in all modes.
 
-## [3.0.1] - 2026-04-25
+## \[3.0.1\] - 2026-04-25
 
 ### Changed — Python 3.13 Compatibility Upgrade
 
@@ -198,7 +207,7 @@ This release modernizes the codebase for Python 3.13 while maintaining backward 
 - Ruff linting passes with no errors
 - No legacy `typing.List`, `typing.Dict`, `typing.Optional`, `typing.Union` patterns remain
 
-## [3.0.0] - 2026-04-19
+## \[3.0.0\] - 2026-04-19
 
 ### Changed — Complete Codebase Refactor (Stages 1-6)
 
@@ -306,7 +315,7 @@ All **GitHub Advanced Security alerts resolved**:
 - **-4,344 lines removed**
 - **Net -900 lines through consolidation**
 
-## [2.3.1] - 2026-04-12
+## \[2.3.1\] - 2026-04-12
 
 ### Changed — Codebase Simplification
 
@@ -345,7 +354,7 @@ All **GitHub Advanced Security alerts resolved**:
   - Added architecture summary table
   - Simplified structure
 
-## [2.3.0] - 2026-04-05
+## \[2.3.0\] - 2026-04-05
 
 ### Added — Memory System Major Upgrade (Phases 3-8)
 
@@ -429,7 +438,7 @@ All **GitHub Advanced Security alerts resolved**:
   - All Mermaid diagrams updated
   - Core Modules Summary now includes `file pcl.py` and `file memory_review.py`
 
-## [2.2.0] - 2026-04-03
+## \[2.2.0\] - 2026-04-03
 
 ### Changed — Database Architecture (Breaking)
 
@@ -518,7 +527,7 @@ All **GitHub Advanced Security alerts resolved**:
 - Data migrated via `file a.py` and `file b.py` scripts (already run)
 - All SQLite → PostgreSQL migration code removed (migration complete)
 
-## [2.1.0] - 2026-03-30
+## \[2.1.0\] - 2026-03-30
 
 ### Added — Standard Tool Calling System
 
@@ -562,7 +571,7 @@ All **GitHub Advanced Security alerts resolved**:
 | `memory_search` | `memory_search_tools` | `query` (str, required) |
 | `memory_store` | `memory_store_tools` | `fact` (str, required), `category` (str, optional) |
 
-## [2.0.0] - 2026-03-29
+## \[2.0.0\] - 2026-03-29
 
 ### Changed — Architecture (Breaking)
 
@@ -613,7 +622,7 @@ All **GitHub Advanced Security alerts resolved**:
 - **P4**: Datetime serialization error — fixed `api_get_profile` datetime → ISO string conversion
 - **P5**: Missing Database methods — added `add_image_tools_message`, `add_tool_result`, `add_system_note`, `add_memory_note`
 
-## [1.0.69.29] - 2026-03-27
+## \[1.0.69.29\] - 2026-03-27
 
 ### Fixed — Memory System (Critical)
 
@@ -640,7 +649,7 @@ All **GitHub Advanced Security alerts resolved**:
 - `app.memory.extractor`: `__all__` exported for clean import surface
 - `app.memory.segmenter`: `__all__` exported (`segment_session`, `_detect_boundaries`, `_create_segment`)
 
-## [1.0.69.28v4] - 2026-03-24
+## \[1.0.69.28v4\] - 2026-03-24
 
 ### Added
 

@@ -317,7 +317,7 @@ sequenceDiagram
 Uses `fsrs>=6.3.1` Python library for proper FSRS state transitions (aligned with plast-mem's `fsrs` crate).
 
 ```python
-from fsrs import Scheduler, Card, Rating
+from fsrs import Scheduler, Card, Rating, State
 
 # Create scheduler instance
 scheduler = Scheduler()
@@ -326,11 +326,9 @@ scheduler = Scheduler()
 card = Card(
     stability=current_stability,
     difficulty=current_difficulty,
-    elapsed_days=days_since_last_review,
-    scheduled_days=current_stability,
-    reps=current_reps,
-    lapses=current_lapses,
     state=current_state,
+    due=current_due,
+    last_review=current_last_review,
 )
 
 # Review the card and get next state

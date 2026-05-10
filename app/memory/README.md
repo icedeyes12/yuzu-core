@@ -152,12 +152,12 @@ RRF_score = Σ 1.0 / (k + rank), k=60
 **Library**: `fsrs>=6.3.1` — Free Spaced Repetition Scheduler
 
 ```python
-from fsrs import FSRS, Card, Rating
+from fsrs import Scheduler, Card, Rating, State
 
 # FSRS state transitions (aligned with plast-mem)
-fsrs = FSRS(w=DEFAULT_PARAMETERS)
-card = Card(stability=current_stability, difficulty=current_difficulty)
-next_card, _ = fsrs.repeat(card, rating)
+scheduler = Scheduler(w=DEFAULT_PARAMETERS)
+card = Card(stability=current_stability, difficulty=current_difficulty, state=State.Learned, due=current_due, last_review=current_last_review)
+next_card, _ = scheduler.review_card(card, rating)
 ```
 
 Semantic facts use `invalid_at` for temporal validity, no decay.
