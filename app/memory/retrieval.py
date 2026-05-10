@@ -225,6 +225,28 @@ def _fsrs_retrievability(r: dict) -> float:
                     logger.debug(f"Failed to parse last_reviewed: {parse_err}")
                     pass
 
+            # FALLBACK: Use last_accessed from DB row as last_review
+            if last_review_dt is None:
+                la = r.get("last_accessed")
+                if la:
+                    try:
+                        # PostgreSQL format: 'YYYY-MM-DD HH:MM:SS.mmmmmm'
+                        if isinstance(la, str):
+                            # Try ISO format first (with T separator)
+                            if 'T' in la:
+                                last_review_dt = datetime.fromisoformat(la.replace('Z', '+00:00'))
+                            else:
+                                # PostgreSQL format - use strptime
+                                try:
+                                    last_review_dt = datetime.strptime(la, '%Y-%m-%d %H:%M:%S.%f')
+                                except ValueError:
+                                    last_review_dt = datetime.strptime(la, '%Y-%m-%d %H:%M:%S')
+                                last_review_dt = last_review_dt.replace(tzinfo=timezone.utc)
+                        elif isinstance(la, datetime):
+                            last_review_dt = la.replace(tzinfo=timezone.utc) if la.tzinfo is None else la
+                    except Exception:
+                        pass
+
             try:
                 card = Card(
                     stability=stability,
