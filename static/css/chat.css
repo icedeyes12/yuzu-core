@@ -1194,8 +1194,6 @@ body {
 /* ==================== TYPING INDICATOR MESSAGE (in-flow) ==================== */
 .typing-indicator-message {
 	align-self: flex-start;
-	margin-top: auto;
-	margin-bottom: 0.5rem;
 	background: var(--message-ai-bg);
 	border: 1px solid var(--border-ai);
 	padding: 0.8rem 1rem;
