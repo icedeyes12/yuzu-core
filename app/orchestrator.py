@@ -307,6 +307,9 @@ def _stream_synthesis(
 # Per-turn side effects
 # ---------------------------------------------------------------------------
 
+# Throttle: only check pipeline every Nth message (reduces gate checks by 80%)
+_PIPELINE_CHECK_INTERVAL = 5
+
 
 def _post_turn(
     profile: dict[str, Any],
@@ -325,7 +328,23 @@ def _post_turn(
     auto_name_session_if_needed(session_id, active_session)
     if should_summarize_memory(profile, user_message, session_id):
         summarize_memory(profile, user_message, final_response, session_id)
-    _trigger_memory_pipeline(session_id)
+    
+    # Throttle: only check pipeline every Nth message
+    msg_count = Database.get_session_messages_count(session_id)
+    if msg_count % _PIPELINE_CHECK_INTERVAL == 0:
+        _trigger_memory_pipeline(session_id)
+    
+    # Clear request-scoped caches
+    try:
+        from app.memory.memory import _clear_request_cache
+        _clear_request_cache(session_id)
+    except Exception:
+        pass
+    try:
+        from app.memory.retrieval import _clear_embedding_cache
+        _clear_embedding_cache()
+    except Exception:
+        pass
 
 
 def _trigger_memory_pipeline(session_id: int) -> None:

@@ -38,6 +38,7 @@ __all__ = [
     "create_episode_and_pcl",
     "should_trigger_segmentation",
     "mark_segmentation_done",
+    "_clear_request_cache",  # Exported for orchestrator to call at end of request
 ]
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,38 @@ _pending_sessions: set[int] = set()  # Sessions queued for processing
 
 _fence_lock = threading.Lock()
 
+# ── Request-scoped cache ───────────────────────────────────────────────────────
+
+_request_cache = threading.local()
+
+
+def _get_cached_memory_state(session_id: int) -> dict:
+    """Get memory state with request-scoped cache.
+    
+    Prevents multiple DB calls for same session within single request.
+    """
+    cache_key = f"memory_state_{session_id}"
+    if hasattr(_request_cache, cache_key):
+        return getattr(_request_cache, cache_key)
+    
+    from app.database import get_memory_state
+    state = get_memory_state(session_id)
+    setattr(_request_cache, cache_key, state)
+    return state
+
+
+def _clear_request_cache(session_id: int | None = None) -> None:
+    """Clear request-scoped cache at end of request."""
+    if session_id is not None:
+        key = f"memory_state_{session_id}"
+        if hasattr(_request_cache, key):
+            delattr(_request_cache, key)
+    else:
+        # Clear all memory_state_* attributes
+        for attr in list(dir(_request_cache)):
+            if attr.startswith("memory_state_"):
+                delattr(_request_cache, attr)
+
 
 def _try_set_fence(session_id: int, fence_count: int) -> bool:
     """Atomically set fence for a session if not already set.
@@ -76,11 +109,11 @@ def _try_set_fence(session_id: int, fence_count: int) -> bool:
     Persists fence to DB for crash safety.
     Returns True if fence was set (no existing fence).
     """
-    from app.database import get_memory_state, update_memory_state
+    from app.database import update_memory_state
     
     with _fence_lock:
         now = datetime.now()
-        state = get_memory_state(session_id)
+        state = _get_cached_memory_state(session_id)
         
         # Check if fence exists
         existing_count = state.get("in_progress_fence_count")
@@ -119,14 +152,14 @@ def _clear_fence(session_id: int) -> None:
             "in_progress_fence_count": None,
             "in_progress_fence_since": None,
         })
+        # Invalidate cache since we just modified state
+        _clear_request_cache(session_id)
 
 
 def _is_fence_active(session_id: int) -> bool:
     """Check if a session has an active (non-stale) fence."""
-    from app.database import get_memory_state
-    
     with _fence_lock:
-        state = get_memory_state(session_id)
+        state = _get_cached_memory_state(session_id)
         existing_count = state.get("in_progress_fence_count")
         existing_since = state.get("in_progress_fence_since")
         
@@ -167,15 +200,13 @@ def should_trigger_segmentation(session_id: int, current_count: int) -> tuple[bo
       - delta >= WINDOW_BASE AND session has been idle >= IDLE_GATE_HOURS, OR
       - delta >= WINDOW_MAX (force trigger regardless of idle)
     """
-    from app.database import get_memory_state
-    
     # Check fence first
     if _is_fence_active(session_id):
         logger.debug("Segmentation skipped: fence active")
         return False, 0
     
-    # Get last segmented count from persisted state
-    state = get_memory_state(session_id)
+    # Get last segmented count from persisted state (cached)
+    state = _get_cached_memory_state(session_id)
     last_count = state.get("last_segmented_count", 0) or 0
     
     # Calculate delta (new unsegmented messages)

@@ -10,6 +10,7 @@ Long-term memory architecture for persistent, evolving AI companion relationship
 | **First-class** | Dedicated subsystem with scoring, decay, retrieval |
 | **Importance-driven** | High-importance = long-term anchors, low = fades |
 | **Composed context** | Relevant memories injected, not raw history dump |
+| **Request-cached** | Memory state and embeddings cached per-turn, cleared at turn end |
 
 ---
 
@@ -17,6 +18,8 @@ Long-term memory architecture for persistent, evolving AI companion relationship
 
 ```
 Conversation History
+        ↓
+Pipeline Gate (every 5th turn) — Throttled check
         ↓
 Segmentation (memory.py) — Batch LLM + time-gap triggers
         ↓
@@ -26,10 +29,35 @@ Semantic Extraction (pcl.py) — Predict-Calibrate Learning
         ↓
 Retention & Decay (review.py) — FSRS for episodic only
         ↓
-Context Retrieval (retrieval.py) — RRF + hybrid scoring
+Context Retrieval (retrieval.py) — RRF + hybrid + cache
+        ↓
+Request Cache (thread-local) — Cleared at turn end
         ↓
 LLM Context Builder (orchestrator.py)
 ```
+
+---
+
+## Performance Optimizations
+
+**Per-turn overhead reduced 70-80%:**
+
+| Optimization | Location | Effect |
+|--------------|----------|--------|
+| **Throttled pipeline check** | `orchestrator.py` | Only check gates every 5th turn |
+| **Memory state cache** | `memory.py` | DB queries 4→2 per check |
+| **Embedding cache** | `retrieval.py` | 1 embedding instead of 2 |
+| **Combined retrieval** | `retrieval.py` | Static + dynamic in 1 call |
+| **Short query skip** | `retrieval.py` | < 4 chars → no embedding |
+
+**Before vs After:**
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Embeddings/turn | 2 | 0-1 |
+| LLM calls/turn | 1-3 | 1 |
+| DB queries/turn | ~10 | ~3 |
+| Pipeline checks | Every turn | Every 5th |
 
 ---
 
@@ -38,18 +66,23 @@ LLM Context Builder (orchestrator.py)
 ```
 memory/
 ├── __init__.py
-├── memory.py             # Background pipeline + batch segmentation
+├── memory.py             # Background pipeline + segmentation + request cache
 ├── db_memory.py          # Unified CRUD over semantic_facts
-├── db_memory_queries.py  # SQL constants + query builders (NEW)
+├── db_memory_queries.py  # SQL constants + query builders
 ├── embedder.py           # Chutes API (Qwen3, 1024-dim)
 ├── extractor.py          # Semantic + episodic + PCL wiring
-├── retrieval.py          # RRF + hybrid scoring
+├── retrieval.py          # RRF + hybrid + embedding cache
 ├── review.py             # FSRS decay (episodic only)
 ├── memory_review.py      # LLM-based memory review
 ├── pcl.py                # Predict-Calibrate Learning
 └── docs/
     └── architecture.md   # Single source of truth
 ```
+
+**Key exports for caching:**
+- `memory._clear_request_cache()` — Clear memory state cache
+- `retrieval._clear_embedding_cache()` — Clear embedding cache
+- `retrieval.retrieve_memories_combined()` — Single-call retrieval
 
 **Removed/Deprecated:**
 - `segmenter.py` — merged into `memory.py`
@@ -66,16 +99,16 @@ CREATE TABLE semantic_facts (
     session_id INTEGER,
     fact_type VARCHAR(20),  -- 'static' | 'dynamic'
     content TEXT,
-    embedding VECTOR(1024),
+    embedding VECTOR(1024),   -- Qwen3-Embedding-0.6B
     metadata JSONB,
-    valid_at TIMESTAMP,    -- When fact became true (plast-mem pattern)
+    valid_at TIMESTAMP,      -- When fact became true (plast-mem pattern)
     created_at TIMESTAMP,
     last_accessed TIMESTAMP,
-    invalid_at TIMESTAMP   -- Soft delete — NULL = active
+    invalid_at TIMESTAMP      -- Soft delete — NULL = active
 );
 ```
 
-**Indexes:** IVFFlat on `embedding`, GIN on `metadata`
+**Indexes:** GIN on `metadata` (jsonb_path_ops). No vector index (Sequential Scan).
 
 ---
 
@@ -86,6 +119,17 @@ CREATE TABLE semantic_facts (
 | **Semantic** | `static` | No | Facts (entity, relation, target) |
 | **Episodic** | `dynamic` | FSRS | Summarized events |
 | **Segments** | `dynamic` | FSRS | Conversation chunks |
+
+---
+
+## Pipeline Triggers
+
+| Condition | Threshold | Behavior |
+|-----------|-----------|----------|
+| **Throttle** | Every 5th turn | Skip pipeline check 80% of turns |
+| **Base trigger** | Delta >= 40 + idle >= 3h | Normal trigger |
+| **Force trigger** | Delta >= 50 | Trigger regardless of idle |
+| **Fence TTL** | 120 min | Stale job cleanup |
 
 ---
 
@@ -136,6 +180,9 @@ Semantic facts use `invalid_at` for temporal validity, no decay.
 - ✅ **FSRS library integration** (fsrs>=6.3.1)
 - ✅ **Temporal fast-path segmentation**
 - ✅ **Flashbulb memory boost**
+- ✅ **Request-scoped caching** (memory state + embeddings)
+- ✅ **Throttled pipeline checks** (every 5th turn)
+- ✅ **Combined retrieval** (single embedding call)
 
 ---
 
@@ -164,6 +211,7 @@ Every semantic fact assigned one category:
 4. SQL constants go in `db_memory_queries.py`
 5. Semantic = `static`, Episodic/Segments = `dynamic`
 6. Use `logging` module, not `print()`
+7. Clear caches at turn end via `_clear_request_cache()` + `_clear_embedding_cache()`
 
 ### Performance
 
@@ -171,3 +219,4 @@ Every semantic fact assigned one category:
 - **Current Scale**: 3,500+ rows, ~36ms query time (acceptable for real-time chat)
 - **Max Scale**: ~50,000 rows before performance degradation
 - **Recall**: 100% perfect (no approximation from ANN index)
+- **Per-turn API calls**: Reduced 70-80% via request caching

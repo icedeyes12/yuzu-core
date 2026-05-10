@@ -33,16 +33,42 @@ def _truncate(text: str, limit: int = 120) -> str:
     return text if len(text) <= limit else text[:limit] + "..."
 
 
+def _retrieve_memories(
+    session_id: int, user_message: str | None
+) -> tuple[list[int], str, str]:
+    """Combined retrieval with single embedding call.
+    
+    Optimized to compute embedding once for both static and dynamic retrieval.
+    
+    Returns:
+        (static_ids, static_context, dynamic_context) tuple
+    """
+    try:
+        from app.memory.retrieval import (
+            retrieve_memories_combined,
+            _format_static_context,
+            _format_dynamic_context,
+        )
+        static, dynamic = retrieve_memories_combined(
+            session_id, query=user_message, static_limit=10, dynamic_limit=5
+        )
+        
+        ids = [m["id"] for m in static]
+        static_text = _format_static_context(static)
+        dynamic_text = _format_dynamic_context(dynamic)
+        
+        return ids, static_text, dynamic_text
+    except Exception as e:  # noqa: BLE001
+        log.warning("combined memory retrieval failed: %s", e)
+        return [], "", ""
+
+
 def _retrieve_static_memory(
     session_id: int, user_message: str | None
 ) -> tuple[list[int], str]:
-    try:
-        from app.memory.retrieval import retrieve_for_context
-        ids, text = retrieve_for_context(session_id, query=user_message)
-        return ids or [], (f"\n\n{text}" if text else "")
-    except Exception as e:  # noqa: BLE001  (defensive: pipeline may be partial)
-        log.warning("static memory retrieval failed: %s", e)
-        return [], ""
+    """Legacy wrapper for backward compat. Uses combined retrieval internally."""
+    ids, static_text, _ = _retrieve_memories(session_id, user_message)
+    return ids, (f"\n\n{static_text}" if static_text else "")
 
 
 def _mark_facts_pending(static_ids: list[int], session_id: int) -> None:
@@ -56,18 +82,9 @@ def _mark_facts_pending(static_ids: list[int], session_id: int) -> None:
 
 
 def _retrieve_dynamic_memory(session_id: int, user_message: str | None) -> str:
-    try:
-        from app.memory.retrieval import retrieve_dynamic_memories
-        memories = retrieve_dynamic_memories(session_id, query=user_message, limit=5)
-    except Exception as e:  # noqa: BLE001
-        log.warning("dynamic memory retrieval failed: %s", e)
-        return ""
-    parts = [
-        f"- {_truncate(m.get('content') or m.get('target') or '')}"
-        for m in (memories or [])
-        if m.get("content") or m.get("target")
-    ]
-    return "\n\nRecent episodes:\n" + "\n".join(parts) if parts else ""
+    """Legacy wrapper for backward compat. Uses combined retrieval internally."""
+    _, _, dynamic_text = _retrieve_memories(session_id, user_message)
+    return dynamic_text
 
 
 def _legacy_memory_block(profile: dict[str, Any], session_id: int) -> str:
@@ -142,9 +159,10 @@ def build_system_message(
     affection = profile.get("affection", 50)
     mode = closeness_mode(affection)
 
-    static_ids, memory_block = _retrieve_static_memory(session_id, user_message)
+    # Combined retrieval - single embedding call for both static and dynamic
+    static_ids, static_context, dynamic_context = _retrieve_memories(session_id, user_message)
     _mark_facts_pending(static_ids, session_id)
-    memory_block += _retrieve_dynamic_memory(session_id, user_message)
+    memory_block = (f"\n\n{static_context}" if static_context else "") + dynamic_context
     memory_block += _legacy_memory_block(profile, session_id)
 
     return f"""# IDENTITY & CORE BEHAVIOR

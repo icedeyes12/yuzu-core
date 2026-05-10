@@ -472,23 +472,38 @@ Each tool module exports a `TOOL_DEFINITION` dict alongside its `execute()` func
 
 The memory subsystem lives in `app/memory/` and provides long-term, structured memory with human-inspired retention dynamics.
 
+**Performance Optimizations:**
+- Request-scoped caching for memory state and embeddings
+- Throttled pipeline checks (every 5th turn, not every turn)
+- Combined retrieval (single embedding for static + dynamic)
+- Short query skip (< 4 chars → no embedding)
+
 ```mermaid
 flowchart LR
     A[User Message] --> B[messages table]
-    B --> C[segmenter.py<br/>Split by time/size]
-    C --> D[semantic_facts<br/>fact_type=dynamic<br/>source_table=segments]
-    B --> E[extractor.py<br/>Semantic facts]
-    E --> F[semantic_facts<br/>fact_type=static]
-    B --> E
-    E --> G[semantic_facts<br/>fact_type=dynamic<br/>source_table=episodic]
-    D --> H[retrieval.py<br/>pgvector search]
-    F --> H
-    G --> H
-    H --> I[Context for LLM]
-    I --> J[LLM Response]
-    H --> K[review.py<br/>FSRS decay]
-    K -.-> F
-    K -.-> G
+    B --> C{Every 5th turn?}
+    C -->|Yes| D[Check pipeline gates]
+    C -->|No| E[Skip pipeline check]
+    D --> F{Delta >= 40?}
+    F -->|Yes + idle>=3h| G[segmenter.py<br/>Split by time/size]
+    F -->|Delta >= 50| H[Force trigger<br/>ignore idle]
+    F -->|No| E
+    H --> G
+    G --> I[semantic_facts<br/>fact_type=dynamic<br/>source_table=segments]
+    B --> J[extractor.py<br/>Semantic facts]
+    J --> K[semantic_facts<br/>fact_type=static]
+    B --> J
+    J --> L[semantic_facts<br/>fact_type=dynamic<br/>source_table=episodic]
+    I --> M[retrieval.py<br/>pgvector search]
+    K --> M
+    L --> M
+    M --> N[Request Cache<br/>thread-local]
+    N --> O[Context for LLM]
+    O --> P[LLM Response]
+    M --> Q[review.py<br/>FSRS decay]
+    Q -.-> K
+    Q -.-> L
+    E --> O
 ```
 
 ### Memory Layers
@@ -498,6 +513,26 @@ flowchart LR
 | **Semantic** | `static` | — | Stable facts as (entity, relation, target) triples |
 | **Episodic** | `dynamic` | `episodic_memories` | Summarized interaction events with emotional weight |
 | **Segments** | `dynamic` | `conversation_segments` | Chunked conversation windows for summarization |
+
+### Pipeline Triggers
+
+| Condition | Threshold | Behavior |
+| --- | --- | --- |
+| **Throttle** | Every 5th turn | Skip pipeline check 80% of turns |
+| **Base trigger** | Delta >= 40 messages + idle >= 3 hours | Normal trigger |
+| **Force trigger** | Delta >= 50 messages | Trigger regardless of idle |
+| **Fence TTL** | 120 minutes | Stale job cleanup |
+
+### Request Caching
+
+Two thread-local caches reduce per-turn overhead:
+
+| Cache | Location | What it Caches |
+| --- | --- | --- |
+| **Memory state** | `memory.py` | `get_memory_state()` results |
+| **Embedding** | `retrieval.py` | Query embeddings for combined retrieval |
+
+Both cleared at end of each turn via `_clear_request_cache()`.
 
 ### Unified `semantic_facts` Table
 
@@ -509,10 +544,12 @@ CREATE TABLE semantic_facts (
     session_id INTEGER,
     fact_type VARCHAR(20),  -- 'static' | 'dynamic'
     content TEXT,
-    embedding VECTOR(4096),
-    metadata JSONB,         -- confidence, importance, source_table, etc.
+    embedding VECTOR(1024),   -- Qwen3-Embedding-0.6B
+    metadata JSONB,           -- confidence, importance, source_table, etc.
+    valid_at TIMESTAMP,       -- When fact became true
     created_at TIMESTAMP,
-    last_accessed TIMESTAMP
+    last_accessed TIMESTAMP,
+    invalid_at TIMESTAMP      -- Soft delete (NULL = active)
 );
 ```
 
@@ -539,17 +576,17 @@ LIMIT 15;
 
 ### Key Modules
 
-| Module | Purpose |
-| --- | --- |
-|  | Unified CRUD over `semantic_facts` with pgvector search |
-|  | SQL constants + query builders |
-|  | Hybrid scoring retrieval pipeline |
-|  | LLM-based semantic + episodic extraction |
-|  | Background pipeline + batch segmentation |
-|  | FSRS-style decay and reinforcement |
-|  | Chutes API embedding client |
+| Module | Purpose | Key Exports |
+| --- | --- | --- |
+| `db_memory.py` | Unified CRUD over `semantic_facts` with pgvector search | `save_fact()`, `search_similar()`, `invalidate_fact()` |
+| `db_memory_queries.py` | SQL constants + query builders | `FACT_TYPE_STATIC`, `FACT_TYPE_DYNAMIC` |
+| `retrieval.py` | Hybrid scoring retrieval pipeline | `retrieve_memories_combined()`, `_clear_embedding_cache()` |
+| `extractor.py` | LLM-based semantic + episodic extraction | `upsert_semantic_memory()` |
+| `memory.py` | Background pipeline + batch segmentation | `trigger_memory_pipeline_async()`, `_clear_request_cache()` |
+| `review.py` | FSRS-style decay and reinforcement | `run_decay()`, `reinforce_memory()` |
+| `embedder.py` | Chutes API embedding client | `embed_text()`, `EMBEDDING_DIM=1024` |
 
-See `file memory/README.md` for full documentation.
+See `file memory/docs/architecture.md` for full documentation.
 
 ---
 
@@ -745,3 +782,4 @@ mypy>=1.0.0       # Type checking
 4. **Provider abstraction** — `AIProviderManager` hides provider differences
 5. **Safe migrations** — database never drops tables, only adds columns
 6. **No heuristic detection** — LLM determines responses, not hardcoded rules
+7. **Request-scoped caching** — memory state and embeddings cached per-turn, cleared at turn end to minimize API calls

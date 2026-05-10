@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import math
+import threading
 from datetime import datetime, timedelta
 
 from app.memory.db_memory import (
@@ -27,6 +28,37 @@ from app.memory.db_memory_queries import (
 from app.database import get_session_messages
 
 logger = logging.getLogger(__name__)
+
+
+# ── Request-scoped embedding cache ────────────────────────────────────────────
+
+_embedding_cache = threading.local()
+_MIN_QUERY_LEN_FOR_EMBEDDING = 4  # Skip embedding for queries shorter than this
+
+
+def _get_cached_embedding(query: str) -> list[float] | None:
+    """Get embedding with request-scoped cache.
+    
+    Prevents duplicate embedding calls for same query within single request.
+    Returns None for queries shorter than _MIN_QUERY_LEN_FOR_EMBEDDING.
+    """
+    if len(query.strip()) < _MIN_QUERY_LEN_FOR_EMBEDDING:
+        return None  # Skip embedding for short queries
+    
+    cache_key = f"embedding_{hash(query)}"
+    if hasattr(_embedding_cache, cache_key):
+        return getattr(_embedding_cache, cache_key)
+    
+    vec = _embed_query(query)
+    setattr(_embedding_cache, cache_key, vec)
+    return vec
+
+
+def _clear_embedding_cache() -> None:
+    """Clear embedding cache at end of request."""
+    for attr in list(dir(_embedding_cache)):
+        if attr.startswith("embedding_"):
+            delattr(_embedding_cache, attr)
 
 
 # ── Temporal cue helpers ──────────────────────────────────────────────────────
@@ -336,7 +368,7 @@ def retrieve_static_memories(query=None, limit=15):
             update_last_accessed([m["id"] for m in parsed])
         return parsed
 
-    query_vec = _embed_query(query)
+    query_vec = _get_cached_embedding(query)  # CACHED
     keyword = query.strip()
 
     # Channel 1: vector (pgvector)
@@ -404,7 +436,7 @@ def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
             update_last_accessed([m["id"] for m in parsed])
         return parsed
 
-    query_vec = _embed_query(query)
+    query_vec = _get_cached_embedding(query)  # CACHED - reuses same embedding
     keyword = query.strip()
 
     # Channel 1: vector (pgvector)
@@ -457,6 +489,116 @@ def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
         update_last_accessed([m["id"] for m in parsed])
 
     return parsed
+
+
+# ── Combined retrieval (single embedding call for both static + dynamic) ───────
+
+def retrieve_memories_combined(
+    session_id: int,
+    query: str | None = None,
+    static_limit: int = 10,
+    dynamic_limit: int = 5,
+) -> tuple[list[dict], list[dict]]:
+    """Retrieve static and dynamic memories with single embedding call.
+    
+    Optimized for per-turn retrieval: computes embedding once and reuses
+    for both static and dynamic searches.
+    
+    Returns:
+        (static_memories, dynamic_memories) tuple
+    """
+    # No query = no embedding needed
+    if not query:
+        static = retrieve_static_memories(query=None, limit=static_limit)
+        dynamic = retrieve_dynamic_memories(session_id, query=None, limit=dynamic_limit)
+        return static, dynamic
+    
+    # Short query = skip embedding, use trigram only
+    query_len = len(query.strip())
+    if query_len < _MIN_QUERY_LEN_FOR_EMBEDDING:
+        # Fall back to individual functions which handle no-embedding case
+        static = retrieve_static_memories(query=query, limit=static_limit)
+        dynamic = retrieve_dynamic_memories(session_id, query=query, limit=dynamic_limit)
+        return static, dynamic
+    
+    # Single embedding for both retrievals
+    query_vec = _get_cached_embedding(query)
+    keyword = query.strip()
+    
+    # Static channels
+    vec_results_static = search_similar(
+        embedding=query_vec,
+        fact_type=FACT_TYPE_STATIC,
+        limit=static_limit,
+    ) if query_vec else []
+    trgm_results_static = search_trgm(
+        query=keyword,
+        fact_type=FACT_TYPE_STATIC,
+        limit=static_limit,
+    )
+    tsv_results_static = search_tsv(
+        query=keyword,
+        fact_type=FACT_TYPE_STATIC,
+        limit=static_limit,
+    )
+    
+    # Dynamic channels
+    vec_results_dynamic = search_similar(
+        embedding=query_vec,
+        session_id=session_id,
+        fact_type=FACT_TYPE_DYNAMIC,
+        metadata_filter={"source_table": "episodic_memories"},
+        limit=dynamic_limit,
+    ) if query_vec else []
+    trgm_results_dynamic = search_trgm(
+        query=keyword,
+        session_id=session_id,
+        fact_type=FACT_TYPE_DYNAMIC,
+        limit=dynamic_limit,
+    )
+    tsv_results_dynamic = search_tsv(
+        query=keyword,
+        session_id=session_id,
+        fact_type=FACT_TYPE_DYNAMIC,
+        limit=dynamic_limit,
+    )
+    
+    # Merge via RRF
+    static_merged = _hybrid_rrf_merge({
+        "vector": vec_results_static,
+        "trigram": trgm_results_static,
+        "tsvector": tsv_results_static,
+    }, k=60)
+    dynamic_merged = _hybrid_rrf_merge({
+        "vector": vec_results_dynamic,
+        "trigram": trgm_results_dynamic,
+        "tsvector": tsv_results_dynamic,
+    }, k=60)
+    
+    # Parse and deduplicate
+    seen_static, static_parsed = set(), []
+    for r in static_merged:
+        if r["id"] in seen_static:
+            continue
+        seen_static.add(r["id"])
+        static_parsed.append(_parse_fact_content(r))
+    static_parsed = static_parsed[:static_limit]
+    
+    seen_dynamic, dynamic_parsed = set(), []
+    for r in dynamic_merged:
+        if r["id"] in seen_dynamic:
+            continue
+        seen_dynamic.add(r["id"])
+        dynamic_parsed.append(_parse_fact_content(r))
+    dynamic_parsed = dynamic_parsed[:dynamic_limit]
+    
+    # Update last accessed
+    if static_parsed:
+        update_last_accessed([m["id"] for m in static_parsed])
+    if dynamic_parsed:
+        update_last_accessed([m["id"] for m in dynamic_parsed])
+    
+    return static_parsed, dynamic_parsed
 
 
 # Legacy aliases for backward compat
@@ -590,6 +732,19 @@ def retrieve_for_context(session_id: int, query: str | None = None, limit: int =
         return [], ""
     ids = [m["id"] for m in static]
     return ids, _format_static_context(static)
+
+
+def _format_dynamic_context(dynamic: list[dict]) -> str:
+    """Format dynamic memories for system prompt."""
+    if not dynamic:
+        return ""
+    parts = []
+    for mem in dynamic[:5]:
+        content = mem.get("content") or mem.get("target") or ""
+        if len(content) > 150:
+            content = content[:150] + "..."
+        parts.append(f"- {content}")
+    return "\n\nRecent episodes:\n" + "\n".join(parts) if parts else ""
 
 
 def format_memory(memory_bundle):
