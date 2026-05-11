@@ -117,7 +117,7 @@ flowchart TB
 │              │ psycopg v3 (raw SQL, no ORM)                    │
 │              │ ThreadedConnectionPool                          │
 ├──────────────┼──────────────────────────────────────────────────┤
-│ LLM          │ Ollama (local)                                  │
+│ LLM          │ Ollama (local/cloud)                                  │
 │              │ Cerebras (cloud)                                │
 │              │ OpenRouter (cloud)                              │
 │              │ Chutes (cloud)                                  │

@@ -352,15 +352,10 @@ python3 -m pytest tests/ -v
 
 ### Branching
 
-- **Never work directly on `master` or `dev`**
+- **Never work directly on `master`**
 - Create feature/fix branches for all changes
 - Keep branches focused and short-lived
 
-### Commits
-
-- **Always use `git co-author`** — adds `Co-authored-by: Yuzu-ai` trailer
-- Pattern: `git add . && git co-author "descriptive message"`
-- Commit messages should be clear and reference the specific change
 
 ### Rollback
 
