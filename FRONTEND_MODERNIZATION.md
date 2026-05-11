@@ -169,7 +169,7 @@ const STREAM_RENDER_DEBOUNCE_MS = 50;
 
 The typing indicator is implemented as a **dynamic in-flow message element**, not a static overlay.
 
-```
+```markdown
 ┌─────────────────────────────────────────────┐
 │  .chat-container (flex-column, gap: 0.8rem) │
 │  ┌─────────────────────────────────────┐   │
@@ -191,7 +191,7 @@ The typing indicator is implemented as a **dynamic in-flow message element**, no
 
 ### 4.2 Implementation Details
 
-**File: `static/js/chat.js`**
+**File: `file static/js/chat.js`**
 
 ```javascript
 // Global state
@@ -247,7 +247,7 @@ function hideTypingIndicator(force = false) {
 
 ### 4.3 CSS Styling
 
-**File: `static/css/chat.css`**
+**File: `file static/css/chat.css`**
 
 ```css
 /* ==================== TYPING INDICATOR MESSAGE (in-flow) ==================== */
@@ -290,11 +290,12 @@ function hideTypingIndicator(force = false) {
 ### 4.4 Dynamic Layout System
 
 **Why dynamic?** The input area height changes based on:
+
 - Textarea content (auto-resize)
 - Multimodal toggle button presence
 - Mobile vs desktop viewport
 
-**File: `static/js/chat.js`**
+**File: `file static/js/chat.js`**
 
 ```javascript
 function initializeInputBehavior() {
@@ -330,7 +331,7 @@ function initializeInputBehavior() {
 ### 4.5 Lifecycle Integration
 
 | Event | Action |
-|-------|--------|
+| --- | --- |
 | User sends message | `showTypingIndicator()` called immediately |
 | First SSE chunk received | `hideTypingIndicator()` called, streaming message displayed |
 | Stream error | `hideTypingIndicator()` in `finally` block |
@@ -340,17 +341,17 @@ function initializeInputBehavior() {
 
 1. **Two competing systems**: Legacy static `#typingIndicator` HTML + dynamic JS. Fixed by removing legacy.
 2. **Hardcoded padding**: CSS media query `@media (max-width: 768px)` overrode dynamic JS padding. Fixed by removing hardcoded padding from media query.
-3. **`margin-top: auto`**: Pushed element to bottom edge behind input area. Fixed by removing.
-4. **Hardcoded `min-height`**: Legacy `calc(100vh - 48px - 192px)` conflicted with dynamic padding. Fixed by removing.
+3. `margin-top: auto`: Pushed element to bottom edge behind input area. Fixed by removing.
+4. **Hardcoded** `min-height`: Legacy `calc(100vh - 48px - 192px)` conflicted with dynamic padding. Fixed by removing.
 5. **Browser quirks**: Some mobile browsers (Queta) require fullscreen for correct viewport calculation. Kiwi Browser works correctly.
 
 ### 4.7 Files Summary
 
 | File | Role |
-|------|------|
-| `templates/chat.html` | No static typing indicator element (removed) |
-| `static/js/chat.js` | `showTypingIndicator()`, `hideTypingIndicator()`, `updateDynamicLayout()` |
-| `static/css/chat.css` | `.typing-indicator-message` styling, `@keyframes typing` |
+| --- | --- |
+|  | No static typing indicator element (removed) |
+|  | `showTypingIndicator()`, `hideTypingIndicator()`, `updateDynamicLayout()` |
+|  | `.typing-indicator-message` styling, `@keyframes typing` |
 
 ---
 
@@ -368,21 +369,21 @@ function initializeInputBehavior() {
 
 ## Testing Checklist
 
-- [ ] Theme switching works for all 9 themes
+- [ ]  Theme switching works for all 9 themes
 
-- [ ] Mermaid diagrams render correctly
+- [ ]  Mermaid diagrams render correctly
 
-- [ ] Code blocks have Tomorrow Night Blue theme
+- [ ]  Code blocks have Tomorrow Night Blue theme
 
-- [ ] SSE streaming shows incremental text
+- [ ]  SSE streaming shows incremental text
 
-- [ ] Streaming cursor blinks during response
+- [ ]  Streaming cursor blinks during response
 
-- [ ] Code highlighting works during and after streaming
+- [ ]  Code highlighting works during and after streaming
 
-- [ ] Copy buttons work on finalized messages
+- [ ]  Copy buttons work on finalized messages
 
-- [ ] Mobile responsive design intact
+- [ ]  Mobile responsive design intact
 
 ---
 
