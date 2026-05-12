@@ -24,13 +24,14 @@ class MultimodalTools:
         # OpenRouter: moonshotai/kimi-k2.5
         self.vision_models = {
             'chutes': [
-                "Qwen/Qwen3.5-397B-A17B-TEE",
+                "google/gemma-4-31B-turbo-TEE",
                 "moonshotai/Kimi-K2.5-TEE",
                 "moonshotai/Kimi-K2.6-TEE",
+                "Qwen/Qwen3.5-397B-A17B-TEE",
                 "Qwen/Qwen3-VL-235B-A22B-Instruct",
             ],
             'openrouter': [
-                "moonshotai/kimi-k2.5"
+                "moonshotai/kimi-k2.6"
             ]
         }
         

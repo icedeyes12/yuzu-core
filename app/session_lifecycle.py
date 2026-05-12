@@ -14,7 +14,7 @@ log = get_logger(__name__)
 
 _AUTO_NAME_TRIGGER_COUNT = 10
 _AUTO_NAME_TRUNCATE = 40
-_AUTO_NAME_MODEL = "tngtech/deepseek-r1t2-chimera:free"
+_AUTO_NAME_MODEL = "google/gemma-4-31B-turbo-TEE"
 
 
 class _NoopContext:
