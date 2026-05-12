@@ -298,10 +298,17 @@ def _episodic_score_adjustment(r: dict) -> float:
 
 
 def _embed_query(text: str) -> list[float] | None:
-    """Embed a query string via Chutes API."""
+    """Embed a query string via Chutes API with hard timeout protection.
+    
+    Returns None on failure (embedding unavailable, will fall back to trigram search).
+    Never blocks longer than 35 seconds.
+    """
     try:
         from app.memory.embedder import embed_text
-        return embed_text(text)
+        return embed_text(text, timeout=30)
+    except TimeoutError:
+        logger.warning("Embedding timed out after 30s - falling back to trigram search")
+        return None
     except Exception as e:
         logger.warning(f"Query embedding failed: {e}")
         return None
