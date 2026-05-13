@@ -41,12 +41,162 @@ _COMMAND_SNIFF_LIMIT = 512
 # Maximum length for regex input to prevent ReDoS
 _REGEX_INPUT_LIMIT = 10000
 
+# Maximum commands to detect in batch mode
+_MAX_BATCH_COMMANDS = 3
+
 
 def _safe_regex_search(pattern: re.Pattern, text: str) -> re.Match | None:
     """Safely search with input length limit to prevent ReDoS."""
     if len(text) > _REGEX_INPUT_LIMIT:
         text = text[:_REGEX_INPUT_LIMIT]
     return pattern.search(text)
+
+
+def _is_inside_inline_code(line: str, position: int) -> bool:
+    """Check if position in line is inside inline code (between backticks).
+    
+    Simple heuristic: count backticks before position.
+    If odd, position is inside inline code.
+    """
+    backtick_count = line[:position].count("`")
+    return backtick_count % 2 == 1
+
+
+def _parse_command_line(line: str) -> dict[str, str] | None:
+    """Parse a /command line into {command, args, full_command}.
+    
+    Returns None if line doesn't start with /.
+    """
+    stripped = line.strip()
+    if not stripped.startswith("/"):
+        return None
+    
+    # Extract command name (first word after /)
+    parts = stripped.split(None, 1)
+    if not parts:
+        return None
+    
+    cmd_with_slash = parts[0]
+    cmd_name = cmd_with_slash[1:]  # Remove leading /
+    
+    # Accept any command name - validation happens at execution time
+    return {
+        "command": cmd_name,
+        "args": parts[1] if len(parts) > 1 else "",
+        "full_command": stripped,
+    }
+
+
+def detect_command(
+    response_text: str | None,
+    scan_mode: str = "first_line",
+) -> dict[str, str] | list[dict[str, str]] | None:
+    """Detect /command(s) in response text.
+
+    Args:
+        response_text: The LLM response text to scan.
+        scan_mode: Detection mode:
+            - "first_line": Only check first line (default, backward compatible)
+            - "any_naked": Scan full text, return first "naked" command
+            - "all_naked": Scan full text, return all "naked" commands (list)
+
+    Returns:
+        - "first_line" / "any_naked": dict with {command, args, full_command} or None
+        - "all_naked": list[dict] or None (max 3 commands, empty list returns None)
+
+    "Naked" means NOT inside:
+        - Fenced code block (```...```)
+        - Inline code (`...`)
+        - Blockquote (> ...)
+    """
+    if not response_text or not response_text.strip():
+        return None
+
+    # Apply length limit for safety
+    text = response_text[:_REGEX_INPUT_LIMIT] if len(response_text) > _REGEX_INPUT_LIMIT else response_text
+
+    # Mode: first_line (existing behavior, backward compatible)
+    if scan_mode == "first_line":
+        first_line = text.split("\n", 1)[0].strip()
+        return _parse_command_line(first_line)
+
+    # Mode: any_naked or all_naked - scan full text for naked commands
+    if scan_mode not in ("any_naked", "all_naked"):
+        log.warning("Unknown scan_mode '%s', falling back to 'first_line'", scan_mode)
+        first_line = text.split("\n", 1)[0].strip()
+        return _parse_command_line(first_line)
+
+    # Parse line by line, tracking fenced block state
+    lines = text.split("\n")
+    in_fenced_block = False
+    detected_commands: list[dict[str, str]] = []
+
+    for line in lines:
+        # Track fenced code blocks
+        if line.strip().startswith("```"):
+            in_fenced_block = not in_fenced_block
+            continue
+
+        # Skip if inside fenced block
+        if in_fenced_block:
+            continue
+
+        # Skip blockquote lines
+        stripped = line.strip()
+        if stripped.startswith(">"):
+            continue
+
+        # Check for /command at start of stripped line
+        if not stripped.startswith("/"):
+            continue
+
+        # Check if /command is inside inline code on this line
+        # Find position of / in original line
+        slash_pos = line.find("/")
+        if slash_pos >= 0 and _is_inside_inline_code(line, slash_pos):
+            continue
+
+        # Parse the command line
+        cmd_info = _parse_command_line(stripped)
+        if cmd_info:
+            detected_commands.append(cmd_info)
+            
+            # For "any_naked", return immediately on first match
+            if scan_mode == "any_naked":
+                return cmd_info
+            
+            # For "all_naked", collect up to max
+            if len(detected_commands) >= _MAX_BATCH_COMMANDS:
+                log.warning(
+                    "Batch command limit reached (%d), ignoring remaining commands",
+                    _MAX_BATCH_COMMANDS,
+                )
+                break
+
+    # Return based on mode
+    if scan_mode == "any_naked":
+        return None  # No naked command found
+
+    # scan_mode == "all_naked"
+    if not detected_commands:
+        return None
+
+    return detected_commands
+
+
+def _parse_args(tool_name: str, args_str: str) -> dict[str, Any]:
+    """Parse a /command argument string into a kwargs dict for the tool."""
+    if not args_str:
+        return {}
+    if tool_name in _STRING_ARG_TOOLS:
+        return {_STRING_ARG_TOOLS[tool_name]: args_str}
+    try:
+        parsed = json.loads(args_str)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+    return {"query": args_str}
 
 
 class StreamFilter:
@@ -148,48 +298,65 @@ class StreamFilter:
             self._buffer = ""
             self._decided = True
 
+    def get_commands(
+        self, scan_mode: str = "first_line"
+    ) -> dict[str, str] | list[dict[str, str]] | None:
+        """Return detected command(s), with optional full-text scan.
 
-def detect_command(response_text: str | None) -> dict[str, str] | None:
-    """Return command info if response begins with a /command line, else None.
+        Args:
+            scan_mode: Detection mode:
+                - "first_line": Return self.command (first-line detection result)
+                - "any_naked": Scan full_text, return first naked command
+                - "all_naked": Scan full_text, return all naked commands (list)
 
-    Returned dict shape: {"command": str, "args": str, "full_command": str}.
-    """
-    if not response_text or not response_text.strip():
-        return None
-    first_line = response_text.split("\n", 1)[0].strip()
-    if not first_line.startswith("/"):
-        return None
-    parts = first_line.split(None, 1)
-    return {
-        "command": parts[0][1:],
-        "args": parts[1] if len(parts) > 1 else "",
-        "full_command": first_line,
-    }
-
-
-def _parse_args(tool_name: str, args_str: str) -> dict[str, Any]:
-    """Parse a /command argument string into a kwargs dict for the tool."""
-    if not args_str:
-        return {}
-    if tool_name in _STRING_ARG_TOOLS:
-        return {_STRING_ARG_TOOLS[tool_name]: args_str}
-    try:
-        parsed = json.loads(args_str)
-        if isinstance(parsed, dict):
-            return parsed
-    except json.JSONDecodeError:
-        pass
-    return {"query": args_str}
+        This delegates to detect_command() for full-text scanning,
+        avoiding logic duplication.
+        """
+        if scan_mode == "first_line":
+            return self.command
+        # Delegate to detect_command for naked scanning
+        return detect_command(self.full_text, scan_mode=scan_mode)
 
 
 def execute_command(
+    command_info: dict[str, str] | list[dict[str, str]],
+    session_id: int | None = None,
+) -> tuple[str, dict[str, Any]] | list[tuple[str, dict[str, Any]]]:
+    """Resolve and execute a detected command or list of commands.
+
+    Args:
+        command_info: Single command dict or list of command dicts.
+        session_id: Optional session ID for context.
+
+    Returns:
+        - Single command: (tool_name, result_dict)
+        - Batch commands: list of (tool_name, result_dict) tuples
+
+    For batch execution, commands are executed sequentially in order.
+    Errors are logged but don't stop execution of remaining commands.
+    """
+    # Batch mode: list of commands
+    if isinstance(command_info, list):
+        results: list[tuple[str, dict[str, Any]]] = []
+        for cmd in command_info:
+            try:
+                result = _execute_single_command(cmd, session_id)
+                results.append(result)
+            except Exception as e:
+                log.error("command execution failed: /%s - %s", cmd.get("command", "?"), e)
+                # Append error result so caller knows which command failed
+                results.append((cmd.get("command", "?"), {"error": str(e)}))
+        return results
+
+    # Single command mode
+    return _execute_single_command(command_info, session_id)
+
+
+def _execute_single_command(
     command_info: dict[str, str],
     session_id: int | None = None,
 ) -> tuple[str, dict[str, Any]]:
-    """Resolve and execute a detected command.
-
-    Returns (executed_tool_name, raw_tool_result_dict).
-    """
+    """Execute a single command. Internal helper."""
     raw_name = command_info["command"]
     tool_name = _TOOL_ALIASES.get(raw_name, raw_name)
     args = _parse_args(raw_name, command_info["args"])

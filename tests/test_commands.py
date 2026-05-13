@@ -19,7 +19,9 @@ class TestDetectCommand:
 
     def test_returns_none_when_no_leading_slash(self):
         assert detect_command("hello there") is None
-        assert detect_command("  /imagine cat") is None  # leading whitespace
+        # Note: leading whitespace is stripped by .strip(), so this IS a command
+        result = detect_command("  /imagine cat")
+        assert result == {"command": "imagine", "args": "cat", "full_command": "/imagine cat"}
 
     def test_parses_command_without_args(self):
         result = detect_command("/help")

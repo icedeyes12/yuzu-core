@@ -206,6 +206,24 @@ def _strip_command_line(text: str, cmd_info: dict[str, str]) -> str:
     return "\n".join(lines).strip()
 
 
+def _strip_all_command_lines(text: str, commands: list[dict[str, str]]) -> str:
+    """Remove all /command lines from response, return narration text.
+    
+    Used for batch command execution to extract narration before commands.
+    """
+    if not text or not commands:
+        return text or ""
+    
+    # Collect all full_command strings to remove
+    full_cmds = {cmd.get("full_command", "") for cmd in commands if cmd.get("full_command")}
+    
+    # Filter out lines that match any command
+    lines = text.split("\n")
+    filtered = [line for line in lines if line.strip() not in full_cmds]
+    
+    return "\n".join(filtered).strip()
+
+
 def _clean(text: str) -> str:
     return _TIMESTAMP_SUFFIX.sub("", text).strip()
 
@@ -470,36 +488,57 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
             return tool_markdown
 
     if not native_tool_executed:
-        cmd_info = detect_command(text_response)
+        # Detect commands with full-text scan for naked commands
+        cmd_info = detect_command(text_response, scan_mode="all_naked")
         if not cmd_info:
             Database.add_message("assistant", text_response, session_id=session_id)
             _post_turn(profile, user_message, text_response, session_id, active_session)
             return text_response
 
+        # Check if batch (list) or single (dict)
+        is_batch = isinstance(cmd_info, list)
+        commands = cmd_info if is_batch else [cmd_info]
+
         # /command path - persist narration BEFORE tool execution
-        narration = _strip_command_line(text_response, cmd_info)
+        narration = _strip_all_command_lines(text_response, commands) if is_batch else _strip_command_line(text_response, cmd_info)
         if narration:
             Database.add_message("assistant", narration, session_id=session_id)
 
-        tool_name, tool_result = execute_command(cmd_info, session_id=session_id)
-        tool_markdown = tool_result.get("markdown", str(tool_result))
-        _persist_tool_result(tool_name, tool_markdown, session_id)
+        # Execute all commands in batch
+        tool_results_raw = execute_command(cmd_info, session_id=session_id)
+        
+        # Normalize to list for consistent processing
+        if not is_batch:
+            tool_results_raw = [tool_results_raw]
+        
+        # Process all tool results
+        tool_markdowns: list[str] = []
+        any_image_tool = False
+        for tool_name, tool_result in tool_results_raw:
+            tool_markdown = tool_result.get("markdown", str(tool_result))
+            tool_markdowns.append(tool_markdown)
+            _persist_tool_result(tool_name, tool_markdown, session_id)
+            if parse_image_path(tool_markdown) is not None:
+                any_image_tool = True
 
-        is_image_tool = parse_image_path(tool_markdown) is not None
+        # Combine all tool markdowns
+        combined_tool_markdown = "\n\n".join(tool_markdowns)
+
+        # Single synthesis with all results combined
         synthesis = _run_synthesis(
-            profile, session_id, interface, tool_markdown, is_image_tool
+            profile, session_id, interface, combined_tool_markdown, any_image_tool
         )
 
         if synthesis:
             Database.add_message("assistant", synthesis, session_id=session_id)
             final_response = (
-                f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
+                f"{combined_tool_markdown}\n\n{synthesis}" if any_image_tool else synthesis
             )
             _post_turn(profile, user_message, final_response, session_id, active_session)
             return final_response
 
-        _post_turn(profile, user_message, tool_markdown, session_id, active_session)
-        return tool_markdown
+        _post_turn(profile, user_message, combined_tool_markdown, session_id, active_session)
+        return combined_tool_markdown
 
 
 def handle_user_message_streaming(
@@ -580,10 +619,10 @@ def handle_user_message_streaming(
         yield IMAGE_SHORTCUT_WARNING
         return
 
-    # Fallback: check if first line is a command
-    cmd_info = sf.command
+    # Fallback: detect commands with full-text scan for naked commands
+    cmd_info = sf.get_commands(scan_mode="all_naked")
     if not cmd_info:
-        cmd_info = detect_command(full_response)
+        cmd_info = sf.command
 
     if not cmd_info:
         # Plain response - already streamed live. Persist and finish.
@@ -592,29 +631,55 @@ def handle_user_message_streaming(
         _post_turn(profile, user_message, text, session_id, active_session)
         return
 
-    # Tool path - persist narration BEFORE executing the detected command.
-    # visible_response already has command line stripped by StreamFilter.
-    narration = visible_response.strip() if visible_response else ""
+    # Check if batch (list) or single (dict)
+    is_batch = isinstance(cmd_info, list)
+    commands = cmd_info if is_batch else [cmd_info]
+
+    # Tool path - persist narration BEFORE executing the detected command(s).
+    # visible_response has first command line stripped by StreamFilter (if on first line).
+    # For batch commands found mid-text, strip all command lines.
+    if is_batch:
+        narration = _strip_all_command_lines(full_response, commands)
+    else:
+        narration = visible_response.strip() if visible_response else ""
+    
     if narration:
         Database.add_message("assistant", narration, session_id=session_id)
 
-    tool_name, tool_result = execute_command(cmd_info, session_id=session_id)
-    tool_markdown = tool_result.get("markdown", str(tool_result))
-    _persist_tool_result(tool_name, tool_markdown, session_id)
-    yield "\n\n" + tool_markdown
+    # Execute all commands in batch
+    tool_results_raw = execute_command(cmd_info, session_id=session_id)
+    
+    # Normalize to list for consistent processing
+    if not is_batch:
+        tool_results_raw = [tool_results_raw]
+    
+    # Process all tool results and yield each
+    tool_markdowns: list[str] = []
+    any_image_tool = False
+    for tool_name, tool_result in tool_results_raw:
+        tool_markdown = tool_result.get("markdown", str(tool_result))
+        tool_markdowns.append(tool_markdown)
+        _persist_tool_result(tool_name, tool_markdown, session_id)
+        if parse_image_path(tool_markdown) is not None:
+            any_image_tool = True
+        # Yield each tool result
+        yield "\n\n" + tool_markdown
 
-    is_image_tool = parse_image_path(tool_markdown) is not None
+    # Combine all tool markdowns for synthesis
+    combined_tool_markdown = "\n\n".join(tool_markdowns)
+
+    # Single synthesis with all results combined
     synthesis_chunks: list[str] = []
     full_synthesis = ""
     yielded_synthesis_header = False
     try:
         for chunk, full in _stream_synthesis(
-            profile, session_id, interface, tool_markdown, is_image_tool
+            profile, session_id, interface, combined_tool_markdown, any_image_tool
         ):
             synthesis_chunks.append(chunk)
             full_synthesis = full
             if not yielded_synthesis_header:
-                yield "\n\n" + chunk if is_image_tool else chunk
+                yield "\n\n" + chunk if any_image_tool else chunk
                 yielded_synthesis_header = True
             else:
                 yield chunk
@@ -626,8 +691,8 @@ def handle_user_message_streaming(
     if synthesis:
         Database.add_message("assistant", synthesis, session_id=session_id)
         final_response = (
-            f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
+            f"{combined_tool_markdown}\n\n{synthesis}" if any_image_tool else synthesis
         )
         _post_turn(profile, user_message, final_response, session_id, active_session)
     else:
-        _post_turn(profile, user_message, tool_markdown, session_id, active_session)
+        _post_turn(profile, user_message, combined_tool_markdown, session_id, active_session)
