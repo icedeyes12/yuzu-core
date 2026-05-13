@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.5] - 2026-05-13
+
+### Changed
+- **BREAKING**: Rename all `*_json` columns to remove `_json` suffix
+  - `profiles.memory_json` → `memory_state` (JSONB)
+  - `profiles.session_history_json` → `session_history` (JSONB)
+  - `profiles.providers_config_json` → `providers_config` (JSONB)
+  - `profiles.context` now JSONB (was TEXT)
+  - `chat_sessions.memory_json` → `memory_state` (JSONB)
+- Fix DDL to match actual schema (all JSON columns are JSONB, not TEXT)
+- Remove redundant `parse_json()` calls for JSONB columns (psycopg v3 auto-parses)
+- Add `global_knowledge` feature: persistent knowledge injected into every turn
+  - Stores user facts that don't fit in semantic memory
+  - Survives session/chat boundaries
+  - 26 initial facts loaded for Bani
+
+### Fixed
+- FSRS implementation bugs:
+  - Wrong function name (`_get_fsrs` → `_get_scheduler`)
+  - Missing `State` import
+  - PostgreSQL timestamp format parsing
+  - `last_review` fallback for retrievability
+- Pipeline re-segmentation bug:
+  - `get_memory_state()` was re-parsing already-parsed JSONB
+  - Sessions now correctly track `last_segmented_count`
+  - Fixed 14 sessions with corrupted pipeline state
+
 ## [3.0.4] - 2026-05-13
 
 ### Added

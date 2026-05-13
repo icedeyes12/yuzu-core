@@ -140,40 +140,34 @@ def update_memory(memory_dict: dict) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Pipeline state (stored in memory_json)
+# Pipeline state (stored in memory_state)
 # ---------------------------------------------------------------------------
 
 
 def get_memory_state(session_id: int) -> dict:
-    """Get pipeline state from session's memory_json.
+    """Get pipeline state from session's memory_state.
     
     Returns dict with:
         - last_segmented_count: int
         - last_segmented_at: ISO timestamp
     """
-    row = pg_fetchone("SELECT memory_json FROM chat_sessions WHERE id = %s", (session_id,))
+    row = pg_fetchone("SELECT memory_state FROM chat_sessions WHERE id = %s", (session_id,))
     if not row:
         return {"last_segmented_count": 0}
     
-    mj = row.get("memory_json")
-    if not mj:
+    ms = row.get("memory_state")
+    if not ms:
         return {"last_segmented_count": 0}
     
-    # psycopg v3 auto-parses JSON columns to dict
-    # Handle both dict (auto-parsed) and str (raw)
-    try:
-        if isinstance(mj, dict):
-            return mj
-        elif isinstance(mj, str):
-            return json.loads(mj)
-        else:
-            return {"last_segmented_count": 0}
-    except (json.JSONDecodeError, TypeError):
+    # JSONB column - already dict from psycopg v3
+    if isinstance(ms, dict):
+        return ms
+    else:
         return {"last_segmented_count": 0}
 
 
 def update_memory_state(session_id: int, state: dict) -> bool:
-    """Update pipeline state in session's memory_json.
+    """Update pipeline state in session's memory_state.
     
     Merges with existing state.
     """
@@ -181,7 +175,7 @@ def update_memory_state(session_id: int, state: dict) -> bool:
         existing = get_memory_state(session_id)
         existing.update(state)
         pg_execute(
-            "UPDATE chat_sessions SET memory_json = %s, updated_at = %s WHERE id = %s",
+            "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s",
             (json.dumps(existing), datetime.now(), session_id),
         )
         return True

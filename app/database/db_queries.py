@@ -72,11 +72,11 @@ SCHEMA_DDL: tuple[str, ...] = (
         partner_name VARCHAR(255) NOT NULL DEFAULT '',
         affection INTEGER NOT NULL DEFAULT 50,
         theme VARCHAR(255) NOT NULL DEFAULT 'default',
-        memory_json TEXT NOT NULL DEFAULT '{}',
-        session_history_json TEXT NOT NULL DEFAULT '{}',
+        memory_state JSONB NOT NULL DEFAULT '{}',
+        session_history JSONB NOT NULL DEFAULT '{}',
         global_knowledge JSONB NOT NULL DEFAULT '{}',
-        providers_config_json TEXT NOT NULL DEFAULT '{}',
-        context TEXT NOT NULL DEFAULT '{}',
+        providers_config JSONB NOT NULL DEFAULT '{}',
+        context JSONB NOT NULL DEFAULT '{}',
         image_model VARCHAR(50) NOT NULL DEFAULT 'hunyuan',
         vision_model VARCHAR(100) NOT NULL DEFAULT 'moonshotai/kimi-k2.5',
         timestamp TIMESTAMP DEFAULT NOW(),
@@ -89,7 +89,7 @@ SCHEMA_DDL: tuple[str, ...] = (
         name VARCHAR(255) NOT NULL DEFAULT 'New Chat',
         is_active BOOLEAN NOT NULL DEFAULT FALSE,
         message_count INTEGER NOT NULL DEFAULT 0,
-        memory_json TEXT NOT NULL DEFAULT '{}',
+        memory_state JSONB NOT NULL DEFAULT '{}',
         timestamp TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW(),
         deleted_at TIMESTAMP DEFAULT NULL
@@ -133,8 +133,8 @@ SQL_PROFILE_SELECT_FIRST = "SELECT * FROM profiles LIMIT 1"
 
 SQL_PROFILE_INSERT_DEFAULT = """
 INSERT INTO profiles (display_name, partner_name, affection, theme,
-                      memory_json, session_history_json, global_knowledge,
-                      providers_config_json, context, timestamp, updated_at)
+                      memory_state, session_history, global_knowledge,
+                      providers_config, context, timestamp, updated_at)
 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
 
@@ -154,20 +154,17 @@ def build_profile_update(updates: dict[str, Any]) -> tuple[str, list[Any]] | Non
     Returns None when there are no recognized fields to update. Always
     appends `updated_at` to the SET clause when at least one field changes.
     
-    Note: global_knowledge is JSONB (no _json suffix), other JSON fields use _json suffix.
+    Note: All JSON fields are JSONB columns (no _json suffix).
     """
     set_parts: list[str] = []
     params: list[Any] = []
 
     for key, value in updates.items():
-        if key == "global_knowledge":
-            # JSONB column - no _json suffix
-            set_parts.append("global_knowledge = %s")
+        if key in _PROFILE_JSON_FIELDS:
+            # JSONB columns - no _json suffix
+            col_name = "memory_state" if key == "memory" else key
+            set_parts.append(f"{col_name} = %s")
             params.append(json.dumps(value) if isinstance(value, dict) else value)
-        elif key in _PROFILE_JSON_FIELDS:
-            # TEXT columns with _json suffix
-            set_parts.append(f"{key}_json = %s")
-            params.append(json.dumps(value) if isinstance(value, dict) else str(value))
         elif key in _PROFILE_TEXT_FIELDS:
             set_parts.append(f"{key} = %s")
             params.append(str(value))
@@ -184,7 +181,10 @@ def build_profile_update(updates: dict[str, Any]) -> tuple[str, list[Any]] | Non
 
 
 def parse_profile_row(row: dict | None) -> dict:
-    """Convert a raw profile row into the public dict shape."""
+    """Convert a raw profile row into the public dict shape.
+    
+    All JSON columns are JSONB, so they're already dict - no parse_json needed.
+    """
     if not row:
         return {}
     return {
@@ -193,11 +193,11 @@ def parse_profile_row(row: dict | None) -> dict:
         "partner_name": row.get("partner_name", ""),
         "affection": row.get("affection", 50),
         "theme": row.get("theme", "default"),
-        "memory": parse_json(row.get("memory_json", "{}")),
-        "session_history": parse_json(row.get("session_history_json", "{}")),
-        "global_knowledge": row.get("global_knowledge") or {},  # JSONB - already dict
-        "providers_config": parse_json(row.get("providers_config_json", "{}")),
-        "context": parse_json(row.get("context", "{}")),
+        "memory": row.get("memory_state") or {},  # JSONB - already dict
+        "session_history": row.get("session_history") or {},  # JSONB
+        "global_knowledge": row.get("global_knowledge") or {},  # JSONB
+        "providers_config": row.get("providers_config") or {},  # JSONB
+        "context": row.get("context") or {},  # JSONB
         "image_model": row.get("image_model", "hunyuan"),
         "vision_model": row.get("vision_model", "moonshotai/kimi-k2.5"),
         "created_at": row.get("created_at"),
@@ -213,7 +213,7 @@ SQL_SESSION_SELECT_ACTIVE = \
     "SELECT * FROM chat_sessions WHERE is_active = TRUE AND deleted_at IS NULL LIMIT 1"
 
 SQL_SESSION_INSERT = """
-INSERT INTO chat_sessions (name, is_active, message_count, memory_json, created_at, updated_at)
+INSERT INTO chat_sessions (name, is_active, message_count, memory_state, created_at, updated_at)
 VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
 """
 
@@ -232,7 +232,7 @@ SQL_SESSION_RENAME = \
 SQL_SESSION_DELETE = "UPDATE chat_sessions SET deleted_at = NOW() WHERE id = %s"
 
 SQL_SESSION_UPDATE_MEMORY = \
-    "UPDATE chat_sessions SET memory_json = %s, updated_at = %s WHERE id = %s"
+    "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s"
 
 SQL_SESSION_INCREMENT_COUNT = (
     "UPDATE chat_sessions SET message_count = message_count + 1, "
@@ -240,13 +240,16 @@ SQL_SESSION_INCREMENT_COUNT = (
 )
 
 SQL_SESSION_RESET_COUNT_AND_MEMORY = (
-    "UPDATE chat_sessions SET message_count = 0, memory_json = '{}', "
+    "UPDATE chat_sessions SET message_count = 0, memory_state = '{}', "
     "updated_at = %s WHERE id = %s"
 )
 
 
 def parse_session_row(row: dict | None) -> dict:
-    """Convert a raw chat_sessions row into the public dict shape."""
+    """Convert a raw chat_sessions row into the public dict shape.
+    
+    memory_state is JSONB, so it's already dict - no parse_json needed.
+    """
     if not row:
         return {}
     return {
@@ -254,7 +257,7 @@ def parse_session_row(row: dict | None) -> dict:
         "name": row.get("name", "New Chat"),
         "is_active": row.get("is_active", False),
         "message_count": row.get("message_count", 0),
-        "memory": parse_json(row.get("memory_json", "{}")),
+        "memory": row.get("memory_state") or {},  # JSONB - already dict
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
         "timestamp": row.get("timestamp"),
