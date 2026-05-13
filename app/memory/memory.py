@@ -65,7 +65,7 @@ _pending_sessions: set[int] = set()  # Sessions queued for processing
 
 # ── Fence state (per-session) ─────────────────────────────────────────────────
 
-# Fence is now persisted to DB (memory_json) for crash safety.
+# Fence is now persisted to DB (memo) for crash safety.
 # Fields: in_progress_fence_count, in_progress_fence_since
 
 _fence_lock = threading.Lock()
@@ -235,7 +235,7 @@ def should_trigger_segmentation(session_id: int, current_count: int) -> tuple[bo
 def mark_segmentation_done(session_id: int, count: int) -> None:
     """Mark that segmentation completed for this session at this count.
     
-    Persists last_segmented_count and last_segmented_at to session's memory_json.
+    Persists last_segmented_count and last_segmented_at to session's memory_state.
     Called AFTER processing completes (not before).
     
     count should be the total conversation message count (user+assistant)
