@@ -5,11 +5,22 @@ All notable changes to this project will be documented in this file.
 ## [3.0.4] - 2026-05-13
 
 ### Added
-- `global_knowledge` injection to system prompt - persistent knowledge about the user that is always present regardless of session or retrieval context
-- `_global_knowledge_block()` function in prompts.py for formatting global knowledge
+- `global_knowledge` JSONB field for persistent cross-session user knowledge
+- `_global_knowledge_block()` in prompts.py to inject knowledge into system prompt
+- API endpoint `/global_knowledge/update` for updating knowledge via frontend
 
 ### Changed
-- `global_knowledge_json` column in profiles table is now actively used (was dead code before)
+- **BREAKING**: Renamed `global_knowledge_json` (TEXT) to `global_knowledge` (JSONB)
+- Schema DDL now uses JSONB type for `global_knowledge` column
+- `build_profile_update()` handles `global_knowledge` as JSONB (no `_json` suffix)
+- `parse_profile_row()` returns `global_knowledge` directly (already dict from JSONB)
+- LLM models for memory system: primary `google/gemma-4-31B-turbo-TEE`, fallback `Qwen/Qwen3.6-27B-TEE`
+
+### Fixed
+- FSRS implementation: correct `Card()` constructor, state extraction, retrievability calculation
+- PostgreSQL timestamp format parsing for `last_accessed` fallback
+- Pipeline trigger tracking: `get_memory_state()` now returns correct value
+- `last_segmented_count` recalculated for all sessions (prevents duplicate episodes)
 
 ## [3.0.3] - 2026-05-10
 

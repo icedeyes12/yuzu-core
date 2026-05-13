@@ -149,11 +149,11 @@ def _session_events_block(session_id: int) -> str:
 
 
 def _global_knowledge_block(profile: dict[str, Any]) -> str:
-    """Persistent knowledge about the user - always injected, never retrieved.
-    
-    This is static knowledge that should ALWAYS be present regardless of
-    session, context, or retrieval. Use for core identity, preferences,
-    and instructions that must never be forgotten.
+    """Persistent cross-session knowledge about the user.
+
+    Uses `global_knowledge` JSONB column from profiles table.
+    Contains identity, preferences, and facts that persist across all sessions.
+    Independent from per-session memory (semantic_facts, episodes).
     """
     global_knowledge = profile.get("global_knowledge") or {}
     if isinstance(global_knowledge, str):

@@ -74,7 +74,7 @@ SCHEMA_DDL: tuple[str, ...] = (
         theme VARCHAR(255) NOT NULL DEFAULT 'default',
         memory_json TEXT NOT NULL DEFAULT '{}',
         session_history_json TEXT NOT NULL DEFAULT '{}',
-        global_knowledge_json TEXT NOT NULL DEFAULT '{}',
+        global_knowledge JSONB NOT NULL DEFAULT '{}',
         providers_config_json TEXT NOT NULL DEFAULT '{}',
         context TEXT NOT NULL DEFAULT '{}',
         image_model VARCHAR(50) NOT NULL DEFAULT 'hunyuan',
@@ -133,12 +133,12 @@ SQL_PROFILE_SELECT_FIRST = "SELECT * FROM profiles LIMIT 1"
 
 SQL_PROFILE_INSERT_DEFAULT = """
 INSERT INTO profiles (display_name, partner_name, affection, theme,
-                      memory_json, session_history_json, global_knowledge_json,
+                      memory_json, session_history_json, global_knowledge,
                       providers_config_json, context, timestamp, updated_at)
 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
 
-DEFAULT_PROFILE_PARAMS = ("", "", 50, "default", "{}", "{}", "{}", "{}", "{}")
+DEFAULT_PROFILE_PARAMS = ("", "", 50, "default", "{}", "{}", "{}", "{}", "{}", datetime.now(), datetime.now())
 
 _PROFILE_JSON_FIELDS = (
     "memory", "session_history", "global_knowledge", "providers_config", "context",
@@ -153,12 +153,19 @@ def build_profile_update(updates: dict[str, Any]) -> tuple[str, list[Any]] | Non
 
     Returns None when there are no recognized fields to update. Always
     appends `updated_at` to the SET clause when at least one field changes.
+    
+    Note: global_knowledge is JSONB (no _json suffix), other JSON fields use _json suffix.
     """
     set_parts: list[str] = []
     params: list[Any] = []
 
     for key, value in updates.items():
-        if key in _PROFILE_JSON_FIELDS:
+        if key == "global_knowledge":
+            # JSONB column - no _json suffix
+            set_parts.append("global_knowledge = %s")
+            params.append(json.dumps(value) if isinstance(value, dict) else value)
+        elif key in _PROFILE_JSON_FIELDS:
+            # TEXT columns with _json suffix
             set_parts.append(f"{key}_json = %s")
             params.append(json.dumps(value) if isinstance(value, dict) else str(value))
         elif key in _PROFILE_TEXT_FIELDS:
@@ -188,7 +195,7 @@ def parse_profile_row(row: dict | None) -> dict:
         "theme": row.get("theme", "default"),
         "memory": parse_json(row.get("memory_json", "{}")),
         "session_history": parse_json(row.get("session_history_json", "{}")),
-        "global_knowledge": parse_json(row.get("global_knowledge_json", "{}")),
+        "global_knowledge": row.get("global_knowledge") or {},  # JSONB - already dict
         "providers_config": parse_json(row.get("providers_config_json", "{}")),
         "context": parse_json(row.get("context", "{}")),
         "image_model": row.get("image_model", "hunyuan"),
