@@ -7,15 +7,15 @@
 
 ## Table of Contents
 
-1. [Codebase Orientation](#1-codebase-orientation)
-2. [Safety Rules](#2-safety-rules)
-3. [Development Workflow](#3-development-workflow)
-4. [Architecture Constraints](#4-architecture-constraints)
-5. [Module Interaction Map](#5-module-interaction-map)
-6. [Database Rules](#6-database-rules)
-7. [Memory System Rules](#7-memory-system-rules)
-8. [Tool System Rules](#8-tool-system-rules)
-9. [Frontend Rules](#9-frontend-rules)
+ 1. [Codebase Orientation](#1-codebase-orientation)
+ 2. [Safety Rules](#2-safety-rules)
+ 3. [Development Workflow](#3-development-workflow)
+ 4. [Architecture Constraints](#4-architecture-constraints)
+ 5. [Module Interaction Map](#5-module-interaction-map)
+ 6. [Database Rules](#6-database-rules)
+ 7. [Memory System Rules](#7-memory-system-rules)
+ 8. [Tool System Rules](#8-tool-system-rules)
+ 9. [Frontend Rules](#9-frontend-rules)
 10. [Testing & Validation](#10-testing--validation)
 11. [Git Workflow](#11-git-workflow)
 12. [Common Patterns & Anti-Patterns](#12-common-patterns--anti-patterns)
@@ -30,26 +30,26 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 - **No SQLite** — PostgreSQL only, with pgvector extension for vector search.
 - **No build step** — Frontend is vanilla JS/ESM, no bundler, no npm.
 - **No Flask** — FastAPI only (migrated in v2.0.0).
-- **Pluggable LLM providers** — Ollama, Cerebras, OpenRouter, Chutes via `providers.py`.
+- **Pluggable LLM providers** — Ollama, Cerebras, OpenRouter, Chutes via `file providers.py`.
 - **Memory is first-class** — The memory subsystem (`app/memory/`) is not an afterthought; it's a core architectural layer.
 
 ### Key Files at a Glance
 
 | File | Role |
-|---|---|
-| `app/orchestrator.py` | **Single entry point** for all user messages |
-| `app/llm_client.py` | LLM dispatch, vision routing, `chutes_chat()` helper |
-| `app/prompts.py` | System prompt assembly, message context building |
-| `app/commands.py` | `/command` detection, `StreamFilter`, image guards |
-| `app/providers.py` | AI provider hierarchy + `AIProviderManager` singleton |
-| `app/tools/registry.py` | Central tool dispatch — **only** place tools are executed |
+| --- | --- |
+|  | **Single entry point** for all user messages |
+|  | LLM dispatch, vision routing, `chutes_chat()` helper |
+|  | System prompt assembly, message context building |
+|  | `/command` detection, `StreamFilter`, image guards |
+|  | AI provider hierarchy + `AIProviderManager` singleton |
+|  | Central tool dispatch — **only** place tools are executed |
 | `app/memory/` | Full memory pipeline (extraction, embedding, retrieval, retention) |
-| `app/database/facade.py` | `Database` class — stable API over raw psycopg2 |
-| `app/database/db_queries.py` | **Single source of truth** for all SQL strings |
-| `web.py` | FastAPI entry point (~130 lines, minimal) |
-| `main.py` | CLI entry point (Rich TUI) |
-| `static/js/chat.js` | Chat UI, SSE streaming, typing indicator |
-| `static/js/renderer.js` | Marked.js v18 + Mermaid rendering |
+|  | `Database` class — stable API over raw psycopg2 |
+|  | **Single source of truth** for all SQL strings |
+|  | FastAPI entry point (\~130 lines, minimal) |
+|  | CLI entry point (Rich TUI) |
+|  | Chat UI, SSE streaming, typing indicator |
+|  | Marked.js v18 + Mermaid rendering |
 
 ---
 
@@ -58,25 +58,25 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 ### Database Safety
 
 1. **NEVER drop tables.** Only add columns or create new tables.
-2. **NEVER use `DELETE` on `semantic_facts`.** Use `invalid_at` (soft delete) only.
+2. **NEVER use** `DELETE` **on** `semantic_facts`**.** Use `invalid_at` (soft delete) only.
 3. **NEVER use raw string interpolation for user input in SQL.** Use parameterized queries.
-4. **ALWAYS use `db_queries.py`** for SQL strings — never inline SQL in business logic.
-5. **ALWAYS use the `Database` facade** (`app/database/facade.py`) — never import `db_pg_models` directly from outside the database package.
+4. **ALWAYS use `file db_queries.py`** for SQL strings — never inline SQL in business logic.
+5. **ALWAYS use the** `Database` **facade** (`file app/database/facade.py`) — never import `db_pg_models` directly from outside the database package.
 
 ### Code Safety
 
-6. **NEVER add `print()` statements.** Use `get_logger(__name__)` from `logging_config.py`.
-7. **NEVER add new dependencies** without explicit approval. The dependency surface is intentionally minimal.
-8. **NEVER modify `web.py`** unless the change is about routing or static mounts. Business logic lives in `app/`.
-9. **NEVER add new streaming pipelines or files** when fixing streaming issues. Fix existing code.
-10. **ALWAYS use `from __future__ import annotations`** at the top of every Python file.
+ 6. **NEVER add** `print()` **statements.** Use `get_logger(__name__)` from `file logging_config.py`.
+ 7. **NEVER add new dependencies** without explicit approval. The dependency surface is intentionally minimal.
+ 8. **NEVER modify `file web.py`** unless the change is about routing or static mounts. Business logic lives in `app/`.
+ 9. **NEVER add new streaming pipelines or files** when fixing streaming issues. Fix existing code.
+10. **ALWAYS use** `from __future__ import annotations` at the top of every Python file.
 11. **ALWAYS use modern type syntax** (`list[X]`, `X | None`) — never `typing.List`, `typing.Optional`.
 
 ### Security
 
 12. **NEVER expose secrets** — API keys are encrypted at rest via ChaCha20-Poly1305.
 13. **ALWAYS validate file paths** — Path traversal protection in `_cache_uploaded_images()` and `_cache_images_from_message()`.
-14. **ALWAYS bound regex input** — ReDoS protection via `_REGEX_INPUT_LIMIT` in `commands.py`.
+14. **ALWAYS bound regex input** — ReDoS protection via `_REGEX_INPUT_LIMIT` in `file commands.py`.
 
 ---
 
@@ -85,8 +85,8 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 ### Before Making Changes
 
 1. **Read the relevant module** — Understand the current implementation before modifying.
-2. **Check `app/database/db_queries.py`** — If touching DB logic, verify SQL constants are there.
-3. **Check `app/tools/registry.py`** — If touching tool logic, verify dispatch goes through registry.
+2. **Check `file app/database/db_queries.py`** — If touching DB logic, verify SQL constants are there.
+3. **Check `file app/tools/registry.py`** — If touching tool logic, verify dispatch goes through registry.
 4. **Plan before executing** — For complex changes, present a structured plan first.
 
 ### After Making Changes
@@ -94,7 +94,7 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 1. **Lint**: `ruff check .` (Python) or `npx @biomejs/biome check .` (JS)
 2. **Compile check**: `python3 -m py_compile <changed_files>`
 3. **NEVER push if lint fails** — Fix errors first.
-4. **Use `git co-author`** instead of `git commit -m` — This adds the `Co-authored-by: Yuzuki-ai` trailer.
+4. **Use** `git co-author` instead of `git commit -m` — This adds the `Co-authored-by: Yuzuki-ai` trailer.
 
 ### Validation Commands
 
@@ -116,32 +116,33 @@ python3 -m pytest tests/ -v
 
 ### Structural Invariants
 
-1. **`orchestrator.py` is the single entry point** — All user messages flow through `handle_user_message()` or `handle_user_message_streaming()`. No bypass.
-2. **`tools/registry.py` is the single dispatch point** — All tool execution goes through `execute_tool()`. No direct tool module calls from business logic.
-3. **`Database` facade is the only DB surface** — No raw `db_pg_models` imports outside the database package.
-4. **`db_queries.py` owns all SQL** — No SQL strings in business logic modules.
-5. **`AIProviderManager` is a singleton** — Accessed via `get_ai_manager()`, never instantiated directly.
+1. **`file orchestrator.py` is the single entry point** — All user messages flow through `handle_user_message()` or `handle_user_message_streaming()`. No bypass.
+2. **`file tools/registry.py` is the single dispatch point** — All tool execution goes through `execute_tool()`. No direct tool module calls from business logic.
+3. `Database` **facade is the only DB surface** — No raw `db_pg_models` imports outside the database package.
+4. **`file db_queries.py` owns all SQL** — No SQL strings in business logic modules.
+5. `AIProviderManager` **is a singleton** — Accessed via `get_ai_manager()`, never instantiated directly.
 
 ### Data Flow Invariants
 
-6. **One primary LLM call per turn** — Plus at most one synthesis pass. No unbounded LLM chains.
-7. **At most one tool execution per turn** — Terminal tools stop processing; non-terminal tools trigger synthesis.
-8. **Memory pipeline is throttled** — Pipeline gate check runs every 5th turn, not every turn.
-9. **Request caches are cleared at turn end** — Memory state cache and embedding cache must not leak across turns.
-10. **Tool results use markdown contracts** — All tool output wrapped in `<details>` blocks.
+ 6. **One primary LLM call per turn** — Plus at most one synthesis pass. No unbounded LLM chains.
+ 7. **At most one tool execution per turn** — Terminal tools stop processing; non-terminal tools trigger synthesis.
+ 8. **Memory pipeline is throttled** — Pipeline gate check runs every 5th turn, not every turn.
+ 9. **Request caches are cleared at turn end** — Memory state cache and embedding cache must not leak across turns.
+10. **Tool results use markdown contracts** — All tool output wrapped in \`\`\`\`html-details
+    \` blocks.
 
 ### What NOT to Change
 
-11. **Don't add new streaming pipelines** — The SSE streaming in `chat.js` and `handle_user_message_streaming()` is the only streaming path.
-12. **Don't add new LLM call sites** — All LLM calls go through `llm_client.py` (`generate_ai_response`, `generate_ai_response_streaming`, `chutes_chat`).
+11. **Don't add new streaming pipelines** — The SSE streaming in `file chat.js` and `handle_user_message_streaming()` is the only streaming path.
+12. **Don't add new LLM call sites** — All LLM calls go through `file llm_client.py` (`generate_ai_response`, `generate_ai_response_streaming`, `chutes_chat`).
 13. **Don't modify the frontend buildless architecture** — No bundlers, no npm, no framework. Vanilla JS/ESM only.
-14. **Don't change the `semantic_facts` schema** without a migration plan — This table is the unified memory store.
+14. **Don't change the** `semantic_facts` **schema** without a migration plan — This table is the unified memory store.
 
 ---
 
 ## 5. Module Interaction Map
 
-```
+```markdown
 User Message
     │
     ▼
@@ -191,22 +192,22 @@ User Message
 ### Key Interactions
 
 | Caller | Callee | Purpose |
-|---|---|---|
-| `orchestrator.py` | `commands.py` | Detect `/command` in LLM response |
-| `orchestrator.py` | `llm_client.py` | Generate AI response (sync + stream) |
-| `orchestrator.py` | `tools/registry.py` | Execute detected tools |
-| `orchestrator.py` | `session_lifecycle.py` | Auto-name, summarize, pipeline trigger |
-| `llm_client.py` | `providers.py` | Dispatch to selected provider |
-| `llm_client.py` | `prompts.py` | Build system message + context |
-| `llm_client.py` | `tools/multimodal.py` | Vision routing, image caching |
-| `llm_client.py` | `visual_context.py` | Persistent visual context |
-| `prompts.py` | `memory/retrieval.py` | Combined memory retrieval |
-| `prompts.py` | `Database` facade | Profile, history, session data |
-| `tools/registry.py` | `tools/*.py` | Lazy-load and dispatch tool modules |
-| `memory/retrieval.py` | `memory/embedder.py` | Query embedding |
-| `memory/embedder.py` | `providers.py` (Chutes) | Embedding API call |
-| `memory/pcl.py` | `memory/db_memory.py` | Fact consolidation CRUD |
-| `memory/review.py` | `memory/db_memory.py` | FSRS decay updates |
+| --- | --- | --- |
+|  |  | Detect `/command` in LLM response |
+|  |  | Generate AI response (sync + stream) |
+|  |  | Execute detected tools |
+|  |  | Auto-name, summarize, pipeline trigger |
+|  |  | Dispatch to selected provider |
+|  |  | Build system message + context |
+|  |  | Vision routing, image caching |
+|  |  | Persistent visual context |
+|  |  | Combined memory retrieval |
+|  | `Database` facade | Profile, history, session data |
+|  |  | Lazy-load and dispatch tool modules |
+|  |  | Query embedding |
+|  | `file providers.py` (Chutes) | Embedding API call |
+|  |  | Fact consolidation CRUD |
+|  |  | FSRS decay updates |
 
 ---
 
@@ -214,27 +215,27 @@ User Message
 
 ### Connection Management
 
-- **Pool**: `ThreadedConnectionPool` in `db_pg.py`
+- **Pool**: `ThreadedConnectionPool` in `file db_pg.py`
 - **Sync access**: `PgSession` context manager or `pg_fetchone()`/`pg_fetchall()` helpers
-- **Async access**: `AsyncPgSession` for FastAPI routes (via `db_pg_models_async.py`)
+- **Async access**: `AsyncPgSession` for FastAPI routes (via `file db_pg_models_async.py`)
 - **Environment config**: `PG_HOST`, `PG_PORT`, `PG_DBNAME`, `PG_USER`, `PG_PASSWORD`
 
 ### Table Ownership
 
 | Table | Accessed Via | Never Access Via |
-|---|---|---|
+| --- | --- | --- |
 | `profiles` | `Database.get_profile()`, `Database.update_profile()` | Direct SQL from business logic |
 | `chat_sessions` | `Database.create_session()`, `Database.get_active_session()` | Direct SQL from business logic |
 | `messages` | `Database.add_message()`, `Database.get_chat_history()` | Direct SQL from business logic |
 | `api_keys` | `Database.get_api_keys()`, `Database.add_api_key()` | Direct SQL from business logic |
-| `semantic_facts` | `db_memory.py` functions | Direct SQL from outside `memory/` |
+| `semantic_facts` | `file db_memory.py` functions | Direct SQL from outside `memory/` |
 
 ### Migration Rules
 
 - Add columns only, never drop
 - Use `IF NOT EXISTS` for table creation
 - Abort on corruption detection
-- All DDL lives in `db_queries.py`
+- All DDL lives in `file db_queries.py`
 
 ---
 
@@ -256,9 +257,9 @@ User Message
 
 ### Caching Rules
 
-9. **Memory state cache** (`memory.py`): Thread-local, cleared at turn end via `_clear_request_cache()`
-10. **Embedding cache** (`retrieval.py`): Thread-local, cleared at turn end via `_clear_embedding_cache()`
-11. **Short query skip**: Queries < 4 chars skip embedding entirely
+ 9. **Memory state cache** (`file memory.py`): Thread-local, cleared at turn end via `_clear_request_cache()`
+10. **Embedding cache** (`file retrieval.py`): Thread-local, cleared at turn end via `_clear_embedding_cache()`
+11. **Short query skip**: Queries &lt; 4 chars skip embedding entirely
 12. **Combined retrieval**: `retrieve_memories_combined()` uses single embedding for both static + dynamic
 
 ### PCL Pipeline Rules
@@ -273,11 +274,31 @@ User Message
 
 ### Dispatch Rules
 
-1. **Single entry point**: `execute_tool(name, arguments, session_id)` in `registry.py`
+1. **Single entry point**: `execute_tool(name, arguments, session_id)` in `file registry.py`
 2. **Lazy loading**: Tool modules imported on first dispatch
 3. **Alias resolution**: `imagine` → `image_generate`, `request` → `http_request`
 4. **Terminal tools**: `image_generate` is terminal — no synthesis pass on success
 5. **Non-terminal tools**: Trigger synthesis pass (2nd LLM call)
+
+### Message Persistence Flow (NEW)
+
+When LLM invokes a tool via `/command`:
+
+1. **Narration first**: Strip command line from LLM response, persist narration as `assistant` message
+2. **Tool result**: Execute tool, persist result via `get_tool_role()` as separate message
+3. **Synthesis**: Run 2nd LLM pass, persist synthesis as `assistant` message
+
+Example DB messages for `/imagine cute cat`:
+
+```markdown
+user:        "buatin gambar kucing"
+assistant:   "baik saya akan buatkan"        ← narration (command stripped)
+tool:        <details>[image result]
+```
+
+assistant:   "gimana lucu kan gambarnya"     ← synthesis
+
+```markdown
 
 ### Contract Rules
 
@@ -344,7 +365,6 @@ python3 -m pytest tests/ -v
 2. `python3 -m py_compile` on changed files — must pass
 3. `npx @biomejs/biome check static/js/` — for JS changes
 4. Tests pass (if applicable)
-5. Use `git co-author "message"` not `git commit -m`
 
 ---
 
@@ -352,10 +372,9 @@ python3 -m pytest tests/ -v
 
 ### Branching
 
-- **Never work directly on `master`**
+- **Never work directly on** `master`
 - Create feature/fix branches for all changes
 - Keep branches focused and short-lived
-
 
 ### Rollback
 
@@ -371,7 +390,7 @@ python3 -m pytest tests/ -v
 - Use `get_logger(__name__)` for all logging
 - Use `Database` facade for all DB access
 - Use `execute_tool()` for all tool dispatch
-- Use `db_queries.py` for SQL strings
+- Use `file db_queries.py` for SQL strings
 - Use `from __future__ import annotations` + modern type syntax
 - Use parameterized queries for user input
 - Clear request caches at turn end
@@ -385,10 +404,10 @@ python3 -m pytest tests/ -v
 - Don't inline SQL in business logic
 - Don't use `typing.List`, `typing.Dict`, `typing.Optional`
 - Don't add new streaming pipelines
-- Don't add new LLM call sites outside `llm_client.py`
+- Don't add new LLM call sites outside `file llm_client.py`
 - Don't drop tables or hard-delete facts
 - Don't add npm/bundler to the frontend
-- Don't modify `web.py` for business logic
+- Don't modify `file web.py` for business logic
 
 ---
 

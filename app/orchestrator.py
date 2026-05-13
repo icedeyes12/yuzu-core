@@ -188,6 +188,24 @@ def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
 # ---------------------------------------------------------------------------
 
 
+def _strip_command_line(text: str, cmd_info: dict[str, str]) -> str:
+    """Remove the first /command line from response, return narration text.
+    
+    Used to separate the LLM's narration/acknowledgment from its tool invocation.
+    """
+    if not text or not cmd_info:
+        return text or ""
+    
+    lines = text.split("\n")
+    full_cmd = cmd_info.get("full_command", "")
+    
+    # Remove first line if it matches the command
+    if lines and lines[0].strip() == full_cmd:
+        lines = lines[1:]
+    
+    return "\n".join(lines).strip()
+
+
 def _clean(text: str) -> str:
     return _TIMESTAMP_SUFFIX.sub("", text).strip()
 
@@ -458,7 +476,11 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
             _post_turn(profile, user_message, text_response, session_id, active_session)
             return text_response
 
-        # /command path
+        # /command path - persist narration BEFORE tool execution
+        narration = _strip_command_line(text_response, cmd_info)
+        if narration:
+            Database.add_message("assistant", narration, session_id=session_id)
+
         tool_name, tool_result = execute_command(cmd_info, session_id=session_id)
         tool_markdown = tool_result.get("markdown", str(tool_result))
         _persist_tool_result(tool_name, tool_markdown, session_id)
@@ -570,7 +592,12 @@ def handle_user_message_streaming(
         _post_turn(profile, user_message, text, session_id, active_session)
         return
 
-    # Tool path - execute the detected command.
+    # Tool path - persist narration BEFORE executing the detected command.
+    # visible_response already has command line stripped by StreamFilter.
+    narration = visible_response.strip() if visible_response else ""
+    if narration:
+        Database.add_message("assistant", narration, session_id=session_id)
+
     tool_name, tool_result = execute_command(cmd_info, session_id=session_id)
     tool_markdown = tool_result.get("markdown", str(tool_result))
     _persist_tool_result(tool_name, tool_markdown, session_id)
