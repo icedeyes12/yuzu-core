@@ -148,6 +148,43 @@ def _session_events_block(session_id: int) -> str:
     return "\n\nCURRENT SESSION EVENTS:\n" + "\n".join(lines)
 
 
+def _global_knowledge_block(profile: dict[str, Any]) -> str:
+    """Persistent knowledge about the user - always injected, never retrieved.
+    
+    This is static knowledge that should ALWAYS be present regardless of
+    session, context, or retrieval. Use for core identity, preferences,
+    and instructions that must never be forgotten.
+    """
+    global_knowledge = profile.get("global_knowledge") or {}
+    if isinstance(global_knowledge, str):
+        import json
+        try:
+            global_knowledge = json.loads(global_knowledge)
+        except Exception:
+            return ""
+    
+    facts = global_knowledge.get("facts") or []
+    if not facts:
+        return ""
+    
+    lines = []
+    for fact in facts:
+        if isinstance(fact, dict):
+            # Structured format: {"category": "...", "content": "..."}
+            category = fact.get("category", "")
+            content = fact.get("content", "")
+            if content:
+                lines.append(f"- [{category}] {content}" if category else f"- {content}")
+        elif isinstance(fact, str):
+            # Simple string format
+            lines.append(f"- {fact}")
+    
+    if not lines:
+        return ""
+    
+    return "\n\n# WHAT YOU SHOULD KNOW ABOUT THE USER (PERSISTENT)\n" + "\n".join(lines)
+
+
 def build_system_message(
     profile: dict[str, Any],
     session_id: int,
@@ -174,7 +211,7 @@ Be direct, grounded, and concise.
 - Core Language: Think and speak natively in casual, spoken Indonesian.
 - English Usage: Natural English ONLY for technical terms, programming, or spontaneous expressions. 
 - Strict Rule: NO artificial bilingual mix. NEVER use literal translations of idioms. Rephrase to match how a native Indonesian naturally speaks.
-
+{_global_knowledge_block(profile)}
 # STRICT RULES
 
 [ CORE FORMAT & STYLE ]

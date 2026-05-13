@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.4] - 2026-05-13
+
+### Added
+- `global_knowledge` injection to system prompt - persistent knowledge about the user that is always present regardless of session or retrieval context
+- `_global_knowledge_block()` function in prompts.py for formatting global knowledge
+
+### Changed
+- `global_knowledge_json` column in profiles table is now actively used (was dead code before)
+
 ## [3.0.3] - 2026-05-10
 
 ### Fixed — FSRS Implementation Corrected
