@@ -275,18 +275,13 @@ def _run_synthesis(
     session_id: int,
     interface: str,
     tool_markdown: str,
-    is_image_tool: bool,
 ) -> str | None:
     """Run a 2nd LLM pass to narrate around the tool result.
 
     Returns the cleaned synthesis text, or None when the LLM returned nothing.
     """
-    image_context: list[dict[str, Any]] | None = None
-    if is_image_tool:
-        image_context = _build_image_context(tool_markdown, session_id)
-
     text, _ = generate_ai_response(
-        profile, "", interface, session_id, image_content_for_context=image_context
+        profile, "", interface, session_id, image_content_for_context=None
     )
     if not text or not text.strip():
         return None
@@ -294,15 +289,11 @@ def _run_synthesis(
     cleaned = _clean(text)
     nested = detect_command(cleaned)
     if nested:
-        if is_image_tool:
-            log.info("ignoring nested command in image synthesis")
-            cleaned = _strip_nested_commands(cleaned)
-        else:
-            log.info("executing nested command: /%s", nested["command"])
-            tool_name, nested_result = execute_command(nested, session_id=session_id)
-            nested_md = nested_result.get("markdown", str(nested_result))
-            _persist_tool_result(tool_name, nested_md, session_id)
-            cleaned = nested_md
+        log.info("executing nested command: /%s", nested["command"])
+        tool_name, nested_result = execute_command(nested, session_id=session_id)
+        nested_md = nested_result.get("markdown", str(nested_result))
+        _persist_tool_result(tool_name, nested_md, session_id)
+        cleaned = nested_md
     return cleaned
 
 
@@ -311,7 +302,6 @@ def _stream_synthesis(
     session_id: int,
     interface: str,
     tool_markdown: str,
-    is_image_tool: bool,
 ) -> Iterator[tuple[str, str]]:
     """Stream the 2nd LLM pass.
 
@@ -321,15 +311,11 @@ def _stream_synthesis(
     _run_synthesis path because nested execution is structural, not a
     streaming concern.
     """
-    image_context: list[dict[str, Any]] | None = None
-    if is_image_tool:
-        image_context = _build_image_context(tool_markdown, session_id)
-
     sf = StreamFilter()
     accumulated: list[str] = []
     for chunk in generate_ai_response_streaming(
         profile, "", interface, session_id,
-        image_content_for_context=image_context,
+        image_content_for_context=None,
     ):
         for safe in sf.feed(chunk):
             accumulated.append(safe)
@@ -473,7 +459,7 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
 
             is_image_tool = parse_image_path(tool_markdown) is not None
             synthesis = _run_synthesis(
-                profile, session_id, interface, tool_markdown, is_image_tool
+                profile, session_id, interface, tool_markdown
             )
 
             if synthesis:
@@ -526,7 +512,7 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
 
         # Single synthesis with all results combined
         synthesis = _run_synthesis(
-            profile, session_id, interface, combined_tool_markdown, any_image_tool
+            profile, session_id, interface, combined_tool_markdown
         )
 
         if synthesis:
@@ -674,7 +660,7 @@ def handle_user_message_streaming(
     yielded_synthesis_header = False
     try:
         for chunk, full in _stream_synthesis(
-            profile, session_id, interface, combined_tool_markdown, any_image_tool
+            profile, session_id, interface, combined_tool_markdown
         ):
             synthesis_chunks.append(chunk)
             full_synthesis = full
