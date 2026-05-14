@@ -49,11 +49,11 @@ def get_total_count(active_only=True):
     with PgSession() as s:
         if active_only:
             return s.fetchone(
-                "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE embedding IS NOT NULL AND invalid_at IS NULL"
+                "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE invalid_at IS NULL"
             )["cnt"]
         else:
             return s.fetchone(
-                "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE embedding IS NOT NULL"
+                "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE 1=1"
             )["cnt"]
 
 
@@ -63,14 +63,14 @@ def fetch_batch(offset, batch_size, active_only=True):
         if active_only:
             return s.fetchall(
                 "SELECT id, content FROM semantic_facts "
-                "WHERE embedding IS NOT NULL AND invalid_at IS NULL "
+                "WHERE invalid_at IS NULL "
                 "ORDER BY id LIMIT %s OFFSET %s",
                 (batch_size, offset),
             )
         else:
             return s.fetchall(
                 "SELECT id, content FROM semantic_facts "
-                "WHERE embedding IS NOT NULL "
+                "WHERE 1=1 "
                 "ORDER BY id LIMIT %s OFFSET %s",
                 (batch_size, offset),
             )
@@ -123,12 +123,12 @@ def migrate_column():
 
         # 4. Informational: count active rows to re-embed
         count_row = s.fetchone(
-            "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE embedding IS NOT NULL AND invalid_at IS NULL"
+            "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE invalid_at IS NULL"
         )
         print(f"[migrate] {count_row['cnt']} ACTIVE rows need re-embedding.")
         
         total_row = s.fetchone(
-            "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE embedding IS NOT NULL"
+            "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE 1=1"
         )
         print(f"[migrate] {total_row['cnt']} total rows (including invalidated).")
 
