@@ -134,11 +134,11 @@ def migrate_column():
 
 
 def reembed_into_new_column(batch_size=50, active_only=True):
-    """Re-embed memories into the new 4096-dim column.
-    
+    """Re-embed all facts into new column with tracking.
+
     Args:
-        batch_size: Number of rows per batch
-        active_only: If True, only re-embed facts where invalid_at IS NULL
+        batch_size: Number of rows per batch (default: 50)
+        active_only: Only re-embed active facts (default: True)
     
     Safe: fetches from original embedding column, writes to new column.
     If the new column doesn't exist yet, aborts.
@@ -264,18 +264,27 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage:")
         print(f"  python3 scripts/reembed_all.py --migrate          # add new {NEW_EMBEDDING_DIM}-dim column")
-        print("  python3 scripts/reembed_all.py --reembed         # reembed ACTIVE facts into new column")
-        print("  python3 scripts/reembed_all.py --reembed-all     # reembed ALL facts (including invalidated)")
+        print("  python3 scripts/reembed_all.py --reembed [--batch N]  # reembed ACTIVE facts")
+        print("  python3 scripts/reembed_all.py --reembed-all [--batch N]  # reembed ALL facts")
         print("  python3 scripts/reembed_all.py --finalize        # swap columns after reembed")
         sys.exit(1)
 
     cmd = sys.argv[1]
+    batch_size = 50  # default
+    
+    # Parse --batch N argument
+    if "--batch" in sys.argv:
+        idx = sys.argv.index("--batch")
+        if idx + 1 < len(sys.argv):
+            batch_size = int(sys.argv[idx + 1])
+            print(f"Using batch size: {batch_size}")
+    
     if cmd == "--migrate":
         migrate_column()
     elif cmd == "--reembed":
-        reembed_into_new_column(active_only=True)
+        reembed_into_new_column(batch_size=batch_size, active_only=True)
     elif cmd == "--reembed-all":
-        reembed_into_new_column(active_only=False)
+        reembed_into_new_column(batch_size=batch_size, active_only=False)
     elif cmd == "--finalize":
         finalize_migration()
     else:
