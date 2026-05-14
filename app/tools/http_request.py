@@ -45,14 +45,19 @@ TOOL_DEFINITION = ToolDefinition(
 )
 
 
-def is_safe_public_url(url: str) -> bool:
+def is_safe_public_url(url: str) -> tuple[bool, str]:
+    """Validate URL is safe public HTTPS endpoint.
+    
+    Returns:
+        (is_safe, reason) tuple. Reason is empty string if valid.
+    """
     parsed = urlparse(url)
 
     if parsed.scheme != "https":
-        return False
+        return False, "URL must use HTTPS scheme"
 
     if not parsed.hostname:
-        return False
+        return False, "Invalid URL - missing hostname"
 
     try:
         ip = socket.gethostbyname(parsed.hostname)
@@ -64,11 +69,11 @@ def is_safe_public_url(url: str) -> bool:
             or ip_obj.is_link_local
             or ip_obj.is_reserved
         ):
-            return False
+            return False, f"IP address is private/unsafe: {ip}"
     except Exception:
-        return False
+        return False, f"DNS resolution failed - domain '{parsed.hostname}' may not exist or is down"
 
-    return True
+    return True, ""
 
 
 def _extract_url(args_str: str) -> tuple:
@@ -127,9 +132,10 @@ def execute(arguments, **kwargs):
             partner_name,
         )
 
-    if not is_safe_public_url(url):
+    is_safe, reason = is_safe_public_url(url)
+    if not is_safe:
         return error_result(
-            "Unsafe or invalid URL (HTTPS public endpoints only)",
+            f"Request failed: {reason}",
             TOOL_DEFINITION,
             f"/request {args_str}",
             partner_name,
