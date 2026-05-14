@@ -9,7 +9,7 @@
 #     session_id     INTEGER,
 #     fact_type      VARCHAR(20)  -- 'static' | 'dynamic'
 #     content        TEXT,
-#     embedding      VECTOR(1024), -- pgvector, NULL allowed
+#     embedding      VECTOR(4096), -- pgvector, NULL allowed
 #     metadata       JSONB,        -- carries per-type fields
 #     valid_at       TIMESTAMP,    -- when fact became true (plast-mem pattern)
 #     invalid_at     TIMESTAMP,    -- when fact became false (soft delete)

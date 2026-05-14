@@ -28,8 +28,8 @@ from typing import Any
 FACT_TYPE_STATIC = "static"
 FACT_TYPE_DYNAMIC = "dynamic"
 
-# Embedding dimension expected by the schema.
-EMBEDDING_DIM = 1024
+# Embedding dimension expected by the schema (Qwen3-Embedding-8B).
+EMBEDDING_DIM = 4096
 
 
 # ---------------------------------------------------------------------------
