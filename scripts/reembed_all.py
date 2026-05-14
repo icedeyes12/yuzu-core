@@ -22,6 +22,20 @@ import os
 # Add parent dir to path so we can import app modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Load env vars from .env file if exists
+from pathlib import Path
+env_file = Path(__file__).parent.parent / ".env"
+if env_file.exists():
+    with open(env_file) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, val = line.split("=", 1)
+                os.environ.setdefault(key.strip(), val.strip())
+    print(f"✓ Loaded env from {env_file}")
+else:
+    print(f"⚠ No .env file found at {env_file}")
+
 from app.memory.embedder import embed_texts
 from app.database import PgSession
 
