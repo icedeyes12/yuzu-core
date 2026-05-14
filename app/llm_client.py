@@ -273,6 +273,9 @@ def generate_ai_response(
     )
     _inject_persistent_visual(messages, user_message, session_id)
 
+    import json as _json
+    log.info("[SYNTHESIS_MSG] %s", _json.dumps(messages, default=str, ensure_ascii=False))
+
     text, raw = _send_to_provider(
         provider, model, messages, image_context=image_content_for_context
     )
@@ -343,6 +346,9 @@ def generate_ai_response_streaming(
         messages, user_message, resolved_provider, resolved_model, image_content_for_context
     )
     _inject_persistent_visual(messages, user_message, session_id)
+
+    import json as _json
+    log.info("[SYNTHESIS_MSG_STREAM] %s", _json.dumps(messages, default=str, ensure_ascii=False))
 
     yield from _stream_from_provider(
         resolved_provider,
