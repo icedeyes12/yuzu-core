@@ -273,10 +273,6 @@ def generate_ai_response(
     )
     _inject_persistent_visual(messages, user_message, session_id)
 
-    if image_content_for_context:
-        messages.append({"role": "user", "content": image_content_for_context})
-        log.info("injected base64 image context for second pass")
-
     text, raw = _send_to_provider(
         provider, model, messages, image_context=image_content_for_context
     )
@@ -347,9 +343,6 @@ def generate_ai_response_streaming(
         messages, user_message, resolved_provider, resolved_model, image_content_for_context
     )
     _inject_persistent_visual(messages, user_message, session_id)
-
-    if image_content_for_context:
-        messages.append({"role": "user", "content": image_content_for_context})
 
     yield from _stream_from_provider(
         resolved_provider,
