@@ -4,13 +4,14 @@ from __future__ import annotations
 #              PostgreSQL handles list[float] natively - no blob conversion needed
 
 
+import os
 import threading
 from app.database import get_api_key
 
 
-CHUTES_EMBED_ENDPOINT = "https://llm.chutes.ai/v1/embeddings"
-DEFAULT_MODEL = "Qwen/Qwen3-Embedding-0.6B"
-EMBEDDING_DIM = 1024  # Qwen3-Embedding-0.6B output dimension
+CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-8b-tee.chutes.ai/v1/embeddings"
+DEFAULT_MODEL = None  # Endpoint is model-specific, no model param needed
+EMBEDDING_DIM = 4096  # Qwen3-Embedding-8B output dimension
 
 _thread_local = threading.local()
 
@@ -18,7 +19,8 @@ _thread_local = threading.local()
 def _get_session():
     """Get or create a thread-local requests session."""
     if not hasattr(_thread_local, "session") or _thread_local.session is None:
-        api_key = get_api_key("chutes")
+        # Try Zo secret env var first (more reliable), fallback to DB
+        api_key = os.environ.get("CHUTES_API_KEY") or get_api_key("chutes")
         if not api_key:
             return None
         _thread_local.session = __import__("requests").Session()
@@ -34,8 +36,8 @@ def embed_texts(texts, model=None, dimensions=None, encoding_format="float", tim
     
     Args:
         texts: String or list of strings to embed
-        model: Model name (default: Qwen/Qwen3-Embedding-0.6B)
-        dimensions: Optional output dimensions
+        model: Ignored (endpoint is model-specific)
+        dimensions: Optional output dimensions (not supported by this endpoint)
         encoding_format: Output format (default: "float")
         timeout: Request timeout in seconds (default: 30, was 60)
     
@@ -52,10 +54,9 @@ def embed_texts(texts, model=None, dimensions=None, encoding_format="float", tim
 
     payload = {
         "input": texts,
-        "model": model or DEFAULT_MODEL,
+        "model": None,  # Required by endpoint, but ignored
     }
-    if dimensions:
-        payload["dimensions"] = dimensions
+    # Note: dimensions param not supported by this endpoint
     payload["encoding_format"] = encoding_format
 
     # Hard timeout with exception propagation
@@ -105,5 +106,3 @@ def embed_text(text, timeout=30, **kwargs):
 
 
 # ── Vector normalization (for pgvector) ────────────────────────────────────────
-
-
