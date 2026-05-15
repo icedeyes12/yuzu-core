@@ -14,6 +14,10 @@ from psycopg_pool import AsyncConnectionPool, ConnectionPool
 
 from app.logging_config import get_logger
 
+# Load .env file so os.getenv() picks up PGHOST, PGPORT, etc.
+from dotenv import load_dotenv
+load_dotenv("/home/workspace/yuzu-companion/.env")
+
 log = get_logger(__name__)
 
 # ── Connection settings (env-driven) ──────────────────────────────────────────
@@ -164,7 +168,7 @@ class PgSession:
         with self.conn.cursor() as cur:
             cur.execute(query, params)
             row = cur.fetchone()
-            return row[0] if row else None
+            return list(row.values())[0] if row else None
 
     def execute_returning(self, query: str, params: tuple | dict | None = None) -> dict | None:
         """Execute INSERT/UPDATE ... RETURNING * and return the row dict."""
@@ -241,7 +245,7 @@ class AsyncPgSession:
         async with self.conn.cursor() as cur:
             await cur.execute(query, params)
             row = await cur.fetchone()
-            return row[0] if row else None
+            return list(row.values())[0] if row else None
 
     async def execute_returning(self, query: str, params: tuple | dict | None = None) -> dict | None:
         """Execute INSERT/UPDATE ... RETURNING * and return the row dict."""
