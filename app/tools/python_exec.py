@@ -1,0 +1,281 @@
+# FILE: app/tools/python_exec.py
+# DESCRIPTION: Python code execution for Termux environment
+#              Allows running Python code via /python command
+
+from __future__ import annotations
+
+import subprocess
+import tempfile
+import os
+import re
+
+from app.logging_config import get_logger
+from app.tools.schemas import ToolDefinition, error_result, ok_result, build_tool_control_block
+
+log = get_logger(__name__)
+
+# --------------------------------------------------------------------
+# Constants
+# --------------------------------------------------------------------
+
+TOOL_NAME = "python"
+TOOL_PYTHON = "python"
+
+# Security limits
+MAX_OUTPUT_SIZE = 50000  # 50KB max output
+MAX_CODE_SIZE = 100000   # 100KB max code
+TIMEOUT_SECONDS = 60     # 60 second timeout
+
+# Blocked imports (dangerous operations)
+BLOCKED_IMPORTS = {
+    "os.system",
+    "subprocess.Popen",
+    "subprocess.call",
+    "subprocess.run",
+    "subprocess.check_output",
+    "eval",
+    "exec",
+    "compile",
+    "__import__",
+    "importlib",
+    "pickle.loads",
+    "marshal.loads",
+    "shutil.rmtree",
+}
+
+# --------------------------------------------------------------------
+# Tool Definition
+# --------------------------------------------------------------------
+
+TOOL_DEFINITION = ToolDefinition(
+    name=TOOL_NAME,
+    description="Execute Python code in Termux environment. Use for calculations, data processing, or quick scripts. Output limited to 50KB, timeout 60 seconds.",
+    parameters={
+        "code": {
+            "type": "string",
+            "description": "Python code to execute. Can be single line or multi-line code block.",
+            "required": True,
+        }
+    },
+    is_terminal=False,
+    examples=[
+        "/python print(2+2)",
+        "/python import os; print(os.getcwd())",
+    ],
+)
+
+
+# --------------------------------------------------------------------
+# Helper Functions
+# --------------------------------------------------------------------
+
+def _extract_code_block(text: str) -> str:
+    """Extract code from fenced code block if present.
+    
+    Supports:
+    - ```python\ncode\n```
+    - ```\ncode\n```
+    - plain code
+    """
+    # Check for fenced code block
+    fenced_match = re.match(
+        r"```(?:python)?\s*\n(.*?)\n```",
+        text.strip(),
+        re.DOTALL
+    )
+    if fenced_match:
+        return fenced_match.group(1).strip()
+    
+    # Check for single backtick
+    if text.strip().startswith("`") and text.strip().endswith("`"):
+        return text.strip()[1:-1].strip()
+    
+    return text.strip()
+
+
+def _check_security(code: str) -> tuple[bool, str]:
+    """Check code for dangerous patterns.
+    
+    Returns:
+        (is_safe, error_message)
+    """
+    # Check code size
+    if len(code) > MAX_CODE_SIZE:
+        return False, f"Code too large ({len(code)} chars). Maximum: {MAX_CODE_SIZE}"
+    
+    # Check for blocked imports/operations
+    code_lower = code.lower()
+    for blocked in BLOCKED_IMPORTS:
+        if blocked.lower() in code_lower:
+            return False, f"Blocked operation detected: {blocked}"
+    
+    # Check for file operations outside allowed paths
+    if "open(" in code and ("'w'" in code or '"w"' in code):
+        # Allow file writes but log warning
+        log.warning("[python] File write operation detected")
+    
+    return True, ""
+
+
+def _execute_python(code: str) -> tuple[bool, str, str, int]:
+    """Execute Python code and return results.
+    
+    Returns:
+        (success, stdout, stderr, duration_ms)
+    """
+    import time
+    
+    start_time = time.time()
+    
+    # Create temp file for code execution
+    with tempfile.NamedTemporaryFile(
+        mode='w',
+        suffix='.py',
+        delete=False
+    ) as f:
+        f.write(code)
+        temp_path = f.name
+    
+    try:
+        result = subprocess.run(
+            ["python3", temp_path],
+            capture_output=True,
+            text=True,
+            timeout=TIMEOUT_SECONDS,
+            cwd=os.path.expanduser("~/workspace"),
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        )
+        
+        duration_ms = int((time.time() - start_time) * 1000)
+        
+        stdout = result.stdout
+        stderr = result.stderr
+        
+        # Truncate output if too large
+        if len(stdout) > MAX_OUTPUT_SIZE:
+            stdout = stdout[:MAX_OUTPUT_SIZE] + f"\n... [truncated, {len(result.stdout)} total chars]"
+        
+        if len(stderr) > MAX_OUTPUT_SIZE:
+            stderr = stderr[:MAX_OUTPUT_SIZE] + f"\n... [truncated, {len(result.stderr)} total chars]"
+        
+        success = result.returncode == 0
+        return success, stdout, stderr, duration_ms
+        
+    except subprocess.TimeoutExpired:
+        duration_ms = int((time.time() - start_time) * 1000)
+        return False, "", f"Timeout: code execution exceeded {TIMEOUT_SECONDS} seconds", duration_ms
+        
+    except Exception as e:
+        duration_ms = int((time.time() - start_time) * 1000)
+        return False, "", str(e), duration_ms
+        
+    finally:
+        # Cleanup temp file
+        try:
+            os.unlink(temp_path)
+        except Exception:
+            pass
+
+
+# --------------------------------------------------------------------
+# Main Execute Function
+# --------------------------------------------------------------------
+
+def execute(arguments: dict, session_id: int | None = None, tool_name: str = TOOL_NAME) -> dict:
+    """Execute Python code and return result dict.
+    
+    Args:
+        arguments: Dict with 'code' key containing Python code
+        session_id: Session ID for logging
+        tool_name: Tool name for logging
+        
+    Returns:
+        Result dict with ok, data, markdown fields
+    """
+    code_raw = arguments.get("code", "").strip()
+    
+    if not code_raw:
+        return error_result(
+            "No code provided",
+            TOOL_NAME,
+            "/python <code>",
+            _get_partner_name(),
+        )
+    
+    # Extract code from code block if present
+    code = _extract_code_block(code_raw)
+    
+    # Security check
+    is_safe, error_msg = _check_security(code)
+    if not is_safe:
+        log.warning("[python] Security check failed: %s", error_msg)
+        return error_result(
+            error_msg,
+            TOOL_NAME,
+            "/python <code>",
+            _get_partner_name(),
+        )
+    
+    log.info("[python] Executing code (%d chars)", len(code))
+    
+    # Execute
+    success, stdout, stderr, duration_ms = _execute_python(code)
+    
+    # Build result
+    if success:
+        output = stdout if stdout else "(no output)"
+        markdown = build_tool_control_block(
+            {
+                "code": code[:500] + "..." if len(code) > 500 else code,
+                "output": output,
+                "duration_ms": duration_ms,
+            },
+            TOOL_NAME,
+            f"/python {code[:50]}{'...' if len(code) > 50 else ''}",
+            _get_partner_name(),
+            success=True,
+        )
+        
+        return ok_result(
+            {
+                "code": code,
+                "output": stdout,
+                "stderr": stderr,
+                "duration_ms": duration_ms,
+            },
+            markdown,
+            TOOL_NAME,
+            f"/python {code[:50]}{'...' if len(code) > 50 else ''}",
+            _get_partner_name(),
+        )
+    else:
+        error_output = stderr if stderr else stdout
+        markdown = build_tool_control_block(
+            {
+                "code": code[:500] + "..." if len(code) > 500 else code,
+                "error": error_output,
+                "duration_ms": duration_ms,
+            },
+            TOOL_NAME,
+            f"/python {code[:50]}{'...' if len(code) > 50 else ''}",
+            _get_partner_name(),
+            success=False,
+        )
+        
+        return error_result(
+            error_output,
+            TOOL_NAME,
+            f"/python {code[:50]}{'...' if len(code) > 50 else ''}",
+            _get_partner_name(),
+            markdown=markdown,
+        )
+
+
+def _get_partner_name() -> str:
+    """Get partner name from profile."""
+    try:
+        from app.database import Database
+        profile = Database.get_profile()
+        return profile.get("partner_name", "Yuzu")
+    except Exception:
+        return "Yuzu"

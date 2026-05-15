@@ -356,25 +356,28 @@ TOOL_ROLES: dict[str, str] = {
 
 ### PHASE 3: Termux API Integration
 
-- [ ] **Task 3.1: Buat `app/tools/python_exec.py`**
-  - [ ] Sub-task 3.1.1: Implement `TOOL_DEFINITION` untuk `/python`
-  - [ ] Sub-task 3.1.2: Implement `execute()` dengan `subprocess.run()` ke `python -c`
-  - [ ] Sub-task 3.1.3: Support multi-line code blocks (```python ... ```)
-  - [ ] Sub-task 3.1.4: Timeout protection (max 60s)
-  - [ ] Sub-task 3.1.5: Output capture (stdout + stderr)
-  - [ ] Sub-task 3.1.6: Security: restricted imports check
+- [x] **Task 3.1: Buat `app/tools/python_exec.py`**
+  - [x] Sub-task 3.1.1: Implement `TOOL_DEFINITION` untuk `/python`
+  - [x] Sub-task 3.1.2: Implement `execute()` dengan `subprocess.run()` ke `python -c`
+  - [x] Sub-task 3.1.3: Support multi-line code blocks (```python ... ```)
+  - [x] Sub-task 3.1.4: Timeout protection (max 60s)
+  - [x] Sub-task 3.1.5: Output capture (stdout + stderr)
+  - [x] Sub-task 3.1.6: Security: restricted imports check
 
-- [ ] **Task 3.2: Register di `registry.py` dan `commands.py`**
-  - [ ] Sub-task 3.2.1: Tambah import di `_collect_definitions()` dan `_load_tool_module()`
-  - [ ] Sub-task 3.2.2: Tambah `"python"` di `_STRING_ARG_TOOLS`
+- [x] **Task 3.2: Register di `registry.py` dan `commands.py`**
+  - [x] Sub-task 3.2.1: Tambah import di `_collect_definitions()` dan `_load_tool_module()`
+  - [x] Sub-task 3.2.2: Tambah `"python"` di `_STRING_ARG_TOOLS`
 
-- [ ] **Task 3.3: Update system prompt**
-  - [ ] Sub-task 3.3.1: Tambah dokumentasi `/python` dengan contoh
+- [x] **Task 3.3: Update system prompt**
+  - [x] Sub-task 3.3.1: Tambah dokumentasi `/python` dengan contoh
 
-- [ ] **Task 3.4: Validasi**
-  - [ ] Sub-task 3.4.1: `ruff check app/tools/python_exec.py`
-  - [ ] Sub-task 3.4.2: `python3 -m py_compile app/tools/python_exec.py`
-  - [ ] Sub-task 3.4.3: Test manual: `/python print('hello')`, `/python 2+2`
+- [x] **Task 3.4: Update TOOL_ROLES**
+  - [x] Sub-task 3.4.1: Add python to TOOL_ROLES in db_queries.py
+
+- [ ] **Task 3.5: Validasi**
+  - [ ] Sub-task 3.5.1: `ruff check app/tools/python_exec.py` ✓
+  - [ ] Sub-task 3.5.2: `python3 -m py_compile app/tools/python_exec.py` ✓
+  - [ ] Sub-task 3.5.3: Test manual: `/python print('hello')`, `/python 2+2`
 
 ---
 

@@ -59,6 +59,9 @@ def _load_tool_module(tool_name: str):
         elif tool_name == "bash":
             from app.tools import shell_exec
             _TOOL_MODULES[tool_name] = shell_exec
+        elif tool_name == "python":
+            from app.tools import python_exec
+            _TOOL_MODULES[tool_name] = python_exec
         else:
             return None
     return _TOOL_MODULES.get(tool_name)
@@ -105,12 +108,22 @@ def _collect_definitions():
     except Exception as e:
         logger.info(f"[registry] Failed to load fs_operations definitions: {e}")
 
+    # Shell execution tool
     try:
         from app.tools import shell_exec
-        _TOOL_DEFINITIONS["bash"] = shell_exec.TOOL_BASH
+        for name, defn in shell_exec.TOOLS.items():
+            _TOOL_DEFINITIONS[name] = defn
         _TOOL_MODULES["shell_exec"] = shell_exec
     except Exception as e:
         logger.info(f"[registry] Failed to load shell_exec definition: {e}")
+
+    # Python execution tool
+    try:
+        from app.tools import python_exec
+        _TOOL_DEFINITIONS["python"] = python_exec.TOOL_DEFINITION
+        _TOOL_MODULES["python_exec"] = python_exec
+    except Exception as e:
+        logger.info(f"[registry] Failed to load python_exec definition: {e}")
 
     _DEFINITIONS_INITIALIZED = True
 

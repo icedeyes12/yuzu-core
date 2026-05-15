@@ -28,15 +28,25 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 TOOL_ROLES: dict[str, str] = {
+    # Image generation
     "image_generate": "image_tools",
     "imagine": "image_tools",
+    # HTTP requests
+    "http_request": "request_tools",
     "request": "request_tools",
+    # Memory tools
+    "memory_store": "memory_tools",
+    "memory_search": "memory_tools",
+    # File system tools
     "read": "fs_tools",
     "write": "fs_tools",
     "ls": "fs_tools",
     "mkdir": "fs_tools",
     "rm": "fs_tools",
+    # Shell execution
     "bash": "fs_tools",
+    # Python execution
+    "python": "fs_tools",
 }
 ALL_TOOL_ROLES: list[str] = sorted(set(TOOL_ROLES.values()))
 
