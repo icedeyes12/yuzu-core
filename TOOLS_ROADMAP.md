@@ -326,7 +326,7 @@ def _run_synthesis(...):
 
 ---
 
-## Debug Session: Synthesis Bug Fix
+## Debug Session: Tool Output Formatting
 
 **Problem:** `/ls` tool results not reaching synthesis LLM
 
