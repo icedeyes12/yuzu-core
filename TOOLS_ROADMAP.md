@@ -306,25 +306,25 @@ def _run_synthesis(...):
 
 ### PHASE 2: Shell Execution Tool
 
-- [ ] **Task 2.1: Buat `app/tools/shell_exec.py`**
-  - [ ] Sub-task 2.1.1: Implement `TOOL_DEFINITION` untuk `/bash`
-  - [ ] Sub-task 2.1.2: Implement `execute()` dengan `subprocess.run()`
-  - [ ] Sub-task 2.1.3: Timeout protection (max 30s)
-  - [ ] Sub-task 2.1.4: Output truncation (max 10KB)
-  - [ ] Sub-task 2.1.5: Security: implement blocklist untuk dangerous commands
-  - [ ] Sub-task 2.1.6: Support heredoc untuk multi-line scripts
+- [x] **Task 2.1: Buat `app/tools/shell_exec.py`**
+  - [x] Sub-task 2.1.1: Implement `TOOL_DEFINITION` untuk `/bash`
+  - [x] Sub-task 2.1.2: Implement `execute()` dengan `subprocess.run()`
+  - [x] Sub-task 2.1.3: Timeout protection (max 30s)
+  - [x] Sub-task 2.1.4: Output truncation (max 10KB)
+  - [x] Sub-task 2.1.5: Security: implement blocklist untuk dangerous commands
+  - [ ] Sub-task 2.1.6: Support heredoc untuk multi-line scripts (Phase 5)
 
-- [ ] **Task 2.2: Register di `registry.py` dan `commands.py`**
-  - [ ] Sub-task 2.2.1: Tambah import di `_collect_definitions()` dan `_load_tool_module()`
-  - [ ] Sub-task 2.2.2: Tambah `"bash"` di `_STRING_ARG_TOOLS`
+- [x] **Task 2.2: Register di `registry.py` dan `commands.py`**
+  - [x] Sub-task 2.2.1: Tambah import di `_collect_definitions()` dan `_load_tool_module()`
+  - [x] Sub-task 2.2.2: Tambah `"bash"` di `_STRING_ARG_TOOLS`
 
-- [ ] **Task 2.3: Update system prompt**
-  - [ ] Sub-task 2.3.1: Tambah dokumentasi `/bash` dengan contoh
+- [x] **Task 2.3: Update system prompt**
+  - [x] Sub-task 2.3.1: Tambah dokumentasi `/bash` dengan contoh
 
 - [ ] **Task 2.4: Validasi**
-  - [ ] Sub-task 2.4.1: `ruff check app/tools/shell_exec.py`
-  - [ ] Sub-task 2.4.2: `python3 -m py_compile app/tools/shell_exec.py`
-  - [ ] Sub-task 2.4.3: Test manual: `/bash ls -la`, `/bash pwd`
+  - [x] Sub-task 2.4.1: `ruff check app/tools/shell_exec.py` ✓
+  - [x] Sub-task 2.4.2: `python3 -m py_compile app/tools/shell_exec.py` ✓
+  - [ ] Sub-task 2.4.3: Test manual: `/bash ls -la`, `/bash pwd` (requires Termux restart)
 
 ---
 

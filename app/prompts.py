@@ -283,6 +283,11 @@ File System Commands (Termux):
 8. /mkdir <path>: Create directory (like mkdir -p). Example: /mkdir ~/projects/new
 9. /rm <path>: Delete file or empty directory. Example: /rm old_file.txt
 
+SHELL COMMAND:
+- /bash <command> — Execute bash command in Termux. Example: /bash ls -la ~/workspace
+  - Timeout: 30 seconds. Output limited to 10KB.
+  - Dangerous commands blocked: rm -rf /, mkfs, dd if=/dev/zero, fork bombs, shutdown/reboot.
+
 # CURRENT STATE & MEMORY (READ CAREFULLY)
 Current Time: {current_time}
 Location: {_location_block()}

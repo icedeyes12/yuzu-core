@@ -23,6 +23,7 @@ _STRING_ARG_TOOLS: dict[str, str] = {
     "ls": "path",
     "mkdir": "path",
     "rm": "path",
+    "bash": "command",
     # write is handled specially in _parse_args (path + content)
 }
 

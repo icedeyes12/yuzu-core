@@ -56,6 +56,9 @@ def _load_tool_module(tool_name: str):
         elif tool_name in ("read", "write", "ls", "mkdir", "rm"):
             from app.tools import fs_operations
             _TOOL_MODULES[tool_name] = fs_operations
+        elif tool_name == "bash":
+            from app.tools import shell_exec
+            _TOOL_MODULES[tool_name] = shell_exec
         else:
             return None
     return _TOOL_MODULES.get(tool_name)
@@ -96,13 +99,18 @@ def _collect_definitions():
     # File system tools
     try:
         from app.tools import fs_operations
-        _TOOL_DEFINITIONS["read"] = fs_operations.TOOL_READ
-        _TOOL_DEFINITIONS["write"] = fs_operations.TOOL_WRITE
-        _TOOL_DEFINITIONS["ls"] = fs_operations.TOOL_LS
-        _TOOL_DEFINITIONS["mkdir"] = fs_operations.TOOL_MKDIR
-        _TOOL_DEFINITIONS["rm"] = fs_operations.TOOL_RM
+        for name in ["read", "write", "ls", "mkdir", "rm"]:
+            _TOOL_DEFINITIONS[name] = getattr(fs_operations, f"TOOL_{name.upper()}")
+        _TOOL_MODULES["fs_operations"] = fs_operations
     except Exception as e:
         logger.info(f"[registry] Failed to load fs_operations definitions: {e}")
+
+    try:
+        from app.tools import shell_exec
+        _TOOL_DEFINITIONS["bash"] = shell_exec.TOOL_BASH
+        _TOOL_MODULES["shell_exec"] = shell_exec
+    except Exception as e:
+        logger.info(f"[registry] Failed to load shell_exec definition: {e}")
 
     _DEFINITIONS_INITIALIZED = True
 
