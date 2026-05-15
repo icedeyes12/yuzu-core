@@ -170,7 +170,7 @@ def execute(arguments, **kwargs):
     # Insert new fact into semantic_facts
     fact_id = save_fact(
         session_id=session_id,
-        content=f"{category} {fact}",  # Store as "category fact" for searchability
+        content=fact,
         embedding=vector,
         fact_type=FACT_TYPE_STATIC,
         metadata={
@@ -180,8 +180,9 @@ def execute(arguments, **kwargs):
             "target": fact,
             "confidence": 0.7,
             "importance": 0.6,
-            "source_table": "semantic_memories",
+            "source_table": "semantic_facts",
             "session_id": session_id,
+            "access_count": 0,
         },
     )
 
