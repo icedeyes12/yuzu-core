@@ -19,6 +19,7 @@
 10. [Testing & Validation](#10-testing--validation)
 11. [Git Workflow](#11-git-workflow)
 12. [Common Patterns & Anti-Patterns](#12-common-patterns--anti-patterns)
+13. [Yuzuki CLI Interaction Tool](#13-yuzuki-cli-interaction-tool)
 
 ---
 
@@ -412,3 +413,110 @@ python3 -m pytest tests/ -v
 ---
 
 *This manual is the behavioral contract for agents working on this codebase. When in doubt, ask — but the rules here are non-negotiable.*
+
+---
+
+## 13. Yuzuki CLI Interaction Tool
+
+### Purpose
+
+`scripts/yuzu_cli.py` is a CLI interface for agents to **directly communicate with Yuzuki** (the AI companion running on the user's local machine). Use it to:
+
+- **Test capabilities** — verify new features, persona changes, prompt updates
+- **Debug interactions** — reproduce issues, inspect conversation history
+- **Execute tools** — ask Yuzuki to run `/imagine`, `/fs_read`, `/fs_write`, etc.
+- **Generate images** — test image generation via `/imagine`
+- **Small talk / rapport** — build trust and test persona behavior
+
+### Architecture
+
+```
+┌──────────────────┐     HTTP/SSE      ┌──────────────────────┐
+│  Zo Container    │ ──────────────────▶ │  Termux (Yuzuki)     │
+│  (this server)   │  localhost:5000    │  yuzu-companion      │
+│                  │  (SSH tunnel)      │  port 5000           │
+│  yuzu_cli.py     │                    │                      │
+└──────────────────┘                    └──────────────────────┘
+```
+
+The CLI sends HTTP requests to `localhost:5000` (Zo container), which is forwarded via SSH tunnel to Yuzuki's actual server on Termux.
+
+### Basic Usage
+
+```bash
+# Simple message
+python3 scripts/yuzu_cli.py "Hello Yuzuki"
+
+# Multi-word message (no quotes needed)
+python3 scripts/yuzu_cli.py how are you today
+
+# Read conversation history
+python3 scripts/yuzu_cli.py --history 10
+
+# Use a custom display signature
+python3 scripts/yuzu_cli.py --sig "Agent" "testing new feature"
+
+# Generate and attach a digital seal (identity + location + timestamp)
+python3 scripts/yuzu_cli.py --seal "message with proof of origin"
+
+# Combined: custom sig + seal
+python3 scripts/yuzu_cli.py --seal --sig "Override" "message"
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--sig NAME` | Override the display signature (default: `maintainer`) |
+| `--seal` | Auto-generate a digital signature with identity, IP geolocation, and timestamp |
+| `--history N` | Show last N messages from conversation history |
+| `--timeout SEC` | HTTP request timeout in seconds (default: 300) |
+| `--session ID` | Target a specific session ID |
+
+### Digital Seal Format
+
+When `--seal` is used, the message is prefixed with a one-line JSON signature:
+
+```json
+{"signature":{"identity":"maintainer","location":"Ashburn, Virginia, US (39.0437,-77.4875)","ip":"129.153.25.21","timestamp":"2026-05-16T00:04:11+07:00","hash":"maintainer"}}
+```
+
+This proves the message originated from a specific agent at a specific time and location.
+
+### Testing Yuzuki's Tools
+
+To ask Yuzuki to execute a tool, phrase it as a natural request:
+
+```bash
+# Ask Yuzuki to read a file via fs_read
+python3 scripts/yuzu_cli.py "can you read app/tools/fs_remote.py using /fs_read"
+
+# Ask Yuzuki to generate an image
+python3 scripts/yuzu_cli.py "generate a cute cat using /imagine"
+
+# Ask Yuzuki to search for something
+python3 scripts/yuzu_cli.py "search for 'path traversal' in the codebase using /fs_search"
+
+# Ask Yuzuki to write a file (dry run)
+python3 scripts/yuzu_cli.py "write 'hello world' to /tmp/test.txt using /fs_write"
+```
+
+### Testing Persona & Capabilities
+
+```bash
+# Test persona response
+python3 scripts/yuzu_cli.py "what's your opinion on code quality?"
+
+# Test memory recall
+python3 scripts/yuzu_cli.py "what do you remember about our previous conversation?"
+
+# Test new feature
+python3 scripts/yuzu_cli.py "can you now read files from the remote filesystem?"
+```
+
+### Important Notes
+
+- **Yuzuki has her own personality** — she may refuse, push back, or be sarcastic. This is expected behavior.
+- **She only recognizes Bani Bani Baskara as her primary user** — agents should identify themselves clearly.
+- **Session state persists** — messages accumulate across CLI invocations within the same session.
+- **Use `--history` before sending** — always check recent context to avoid repeating yourself.
