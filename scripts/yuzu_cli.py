@@ -5,46 +5,75 @@ Usage:
     yuzu "hai apa kabar"           # send message, show reply
     yuzu -h 10                      # show last 10 messages
     yuzu -s 37 "hai"                # use specific session (default: 37)
+    yuzu --seal "hai"               # send with digital signature
+    yuzu --seal --sig "custom"      # seal + custom signature
 """
 
 import argparse
 import requests
+import json
+import datetime
 
 DEFAULT_URL = "http://localhost:5000"
 DEFAULT_SESSION = 37
 DEFAULT_TIMEOUT_GET = 10
 DEFAULT_TIMEOUT_POST = 120
+SEAL_HASH = "maintainer"
+
+
+def get_seal() -> str:
+    """Generate one-line JSON digital signature with dynamic location."""
+    try:
+        info = requests.get("https://ipinfo.io/json", timeout=5).json()
+        city = info.get("city", "?")
+        region = info.get("region", "?")
+        country = info.get("country", "?")
+        loc = info.get("loc", "?,?")
+        ip = info.get("ip", "?")
+    except Exception:
+        city = region = country = "?"
+        loc = "?,?"
+        ip = "?"
+
+    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7)))
+    timestamp = now.strftime("%Y-%m-%dT%H:%M:%S+07:00")
+
+    seal = {
+        "signature": {
+            "identity": "maintainer",
+            "location": f"{city}, {region}, {country} ({loc})",
+            "ip": ip,
+            "timestamp": timestamp,
+            "hash": SEAL_HASH
+        }
+    }
+    return json.dumps(seal, separators=(",", ":"))
 
 
 def get_history(session_id: int, limit: int = 20, url: str = DEFAULT_URL, timeout: int = DEFAULT_TIMEOUT_GET) -> list[dict]:
     """Get last N messages from session."""
-    # Switch to session first, then get profile (which includes history)
     requests.post(f"{url}/api/sessions/switch", json={"session_id": session_id}, timeout=timeout)
     resp = requests.get(f"{url}/api/get_profile", timeout=timeout)
     data = resp.json()
     history = data.get("chat_history", [])
-    # Filter out system messages first, then apply limit
     history = [m for m in history if m.get("role") != "system"]
     return history[-limit:] if limit else history
 
 
-def send_message(session_id: int, message: str, url: str = DEFAULT_URL, 
+def send_message(session_id: int, message: str, url: str = DEFAULT_URL,
                  signature: str = "", timeout: int = DEFAULT_TIMEOUT_POST,
                  interface: str = "Maintenance Terminal") -> str:
     """Send message to yuzu-companion."""
-    # Prepend signature if provided
     if signature:
         message = f"[{signature}] {message}"
-    
-    # Switch session first
+
     requests.post(f"{url}/api/sessions/switch", json={"session_id": session_id}, timeout=timeout)
-    
-    # Send message with interface
+
     payload = {
         "message": message,
         "interface": interface
     }
-    
+
     resp = requests.post(
         f"{url}/api/send_message",
         json=payload,
@@ -60,7 +89,6 @@ def format_history(history: list[dict], max_len: int = 0) -> str:
     for msg in history:
         role = msg.get("role", "?")
         content = msg.get("content", "")
-        # Skip system messages (connection notifications, etc)
         if role == "system":
             continue
         if max_len > 0 and len(content) > max_len:
@@ -76,9 +104,16 @@ def main():
     parser.add_argument("-H", "--history", type=int, metavar="N", help="Show last N messages")
     parser.add_argument("-u", "--url", default=DEFAULT_URL, help="API URL")
     parser.add_argument("--sig", "--signature", dest="signature", default="", help="Add [signature] prefix to message")
+    parser.add_argument("--seal", action="store_true", help="Generate and prepend digital signature JSON")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_GET, help="Timeout for GET requests (history)")
     parser.add_argument("--post-timeout", type=int, default=DEFAULT_TIMEOUT_POST, help="Timeout for POST requests (send message)")
     args = parser.parse_args()
+
+    # Build signature
+    signature = args.signature
+    if args.seal:
+        seal = get_seal()
+        signature = seal
 
     # Show history mode
     if args.history:
@@ -86,25 +121,23 @@ def main():
         if not history:
             print("(no history)")
             return
-        print(format_history(history))  # no truncation
+        print(format_history(history))
         return
 
     # Send message mode
     if args.message:
-        # Show last 5 messages for context first
         history = get_history(args.session, 5, args.url, args.timeout)
         if history:
             print("=== Last 5 messages ===")
-            print(format_history(history))  # no truncation
+            print(format_history(history))
             print()
 
-        # Send message
-        sig_display = f"[{args.signature}] " if args.signature else ""
+        sig_display = f"[{signature}] " if signature else ""
         print(f"=== Sending to session {args.session} ===")
         print(f"[user] {sig_display}{args.message}")
         print()
 
-        reply = send_message(args.session, args.message, args.url, args.signature, args.post_timeout)
+        reply = send_message(args.session, args.message, args.url, signature, args.post_timeout)
         print(f"[yuzu] {reply}")
         return
 
