@@ -856,7 +856,11 @@ class ChutesProvider(AIProvider):
                 timeout=kwargs.get('timeout', 120),
             )
             if response.status_code == 200:
-                return (200, response.json()['choices'][0]['message']['content'].strip())
+                data = response.json()
+                msg = data['choices'][0]['message']
+                # Handle thinking models: use reasoning if content is null
+                content = msg.get('content') or msg.get('reasoning') or ''
+                return (200, content.strip())
             else:
                 return (response.status_code, None, response.text[:200])
         except Exception as e:
