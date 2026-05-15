@@ -283,7 +283,7 @@ def execute_read(arguments: dict, session_id: int | None = None) -> dict:
             "path": resolved,
             "size": size,
             "lines": len(lines),
-            "content_preview": content[:500] + ("..." if len(content) > 500 else ""),
+            "content": content,
         },
         TOOL_READ,
         full_command,
@@ -398,12 +398,6 @@ def execute_ls(arguments: dict, session_id: int | None = None) -> dict:
             partner_name,
         )
     
-    # Format output
-    lines = []
-    lines.append(f"Directory: {resolved}")
-    lines.append(f"Total: {len(entries)} items")
-    lines.append("")
-    
     # Sort: directories first, then files
     dirs = []
     files = []
@@ -420,12 +414,18 @@ def execute_ls(arguments: dict, session_id: int | None = None) -> dict:
     dirs.sort()
     files.sort()
     
+    # Build output lines for markdown
+    lines = [f"Directory: {resolved}"]
+    lines.append(f"Total: {len(entries)} items ({len(dirs)} dirs, {len(files)} files)")
+    lines.append("")
+    
     # Format directories
-    for d in dirs:
+    for d in dirs[:MAX_LS_LINES]:
         lines.append(f"📁 {d}/")
     
     # Format files with size
-    for f in files[:MAX_LS_LINES - len(dirs) - 5]:
+    remaining = MAX_LS_LINES - len(dirs)
+    for f in files[:remaining]:
         full_path = os.path.join(resolved, f)
         try:
             size = os.path.getsize(full_path)
@@ -434,13 +434,15 @@ def execute_ls(arguments: dict, session_id: int | None = None) -> dict:
         except OSError:
             lines.append(f"📄 {f}")
     
-    if len(files) > MAX_LS_LINES:
-        lines.append(f"... and {len(files) - MAX_LS_LINES + len(dirs) + 5} more files")
+    if len(files) > remaining:
+        lines.append(f"... and {len(files) - remaining} more files")
     
+    # Return with listing in markdown
     return ok_result(
         {
             "path": resolved,
-            "total_items": len(entries),
+            "listing": "\n".join(lines),
+            "total": len(entries),
             "directories": len(dirs),
             "files": len(files),
         },
