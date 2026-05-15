@@ -31,6 +31,12 @@ TOOL_ROLES: dict[str, str] = {
     "image_generate": "image_tools",
     "imagine": "image_tools",
     "request": "request_tools",
+    "read": "fs_tools",
+    "write": "fs_tools",
+    "ls": "fs_tools",
+    "mkdir": "fs_tools",
+    "rm": "fs_tools",
+    "bash": "fs_tools",
 }
 ALL_TOOL_ROLES: list[str] = sorted(set(TOOL_ROLES.values()))
 
