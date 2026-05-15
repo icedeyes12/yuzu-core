@@ -152,18 +152,73 @@ def error_result(
     }
 
 
+# Language hints for common file extensions
+LANG_HINTS = {
+    ".py": "python",
+    ".js": "javascript",
+    ".ts": "typescript",
+    ".go": "go",
+    ".rs": "rust",
+    ".java": "java",
+    ".c": "c",
+    ".cpp": "cpp",
+    ".h": "c",
+    ".hpp": "cpp",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".zsh": "bash",
+    ".json": "json",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".toml": "toml",
+    ".sql": "sql",
+    ".html": "html",
+    ".css": "css",
+    ".scss": "scss",
+    ".xml": "xml",
+    ".lua": "lua",
+    ".rb": "ruby",
+    ".php": "php",
+    ".swift": "swift",
+    ".kt": "kotlin",
+    ".scala": "scala",
+    ".r": "r",
+    ".ex": "elixir",
+    ".exs": "elixir",
+    ".erl": "erlang",
+    ".hs": "haskell",
+    ".clj": "clojure",
+    ".vim": "vim",
+    ".dockerfile": "dockerfile",
+    ".makefile": "makefile",
+}
+
+
 def _flatten_lines(data: dict) -> list[str]:
     """Flatten a result dict into displayable lines."""
     lines = []
+    file_ext = data.get("file_ext", "")
+    
     for key, value in data.items():
-        if isinstance(value, str) and value.startswith("<"):
+        if key == "file_ext":
+            # Skip, already extracted
+            continue
+        elif isinstance(value, str) and value.startswith("<"):
             lines.append(value)
         elif key == "content" and isinstance(value, str) and "\n" in value:
-            # Wrap multi-line content in code fence
+            # Add newline after "content:" label
             lines.append(f"{key}:")
-            lines.append("```")
-            lines.append(value)
-            lines.append("```")
+            lines.append("")
+            
+            # Check if markdown file - don't fence, render directly
+            if file_ext == ".md":
+                lines.append(value)
+            else:
+                # Wrap in code fence with language hint
+                lang = LANG_HINTS.get(file_ext, "")
+                lines.append(f"```{lang}")
+                lines.append(value)
+                lines.append("```")
         else:
             lines.append(f"{key}: {value}")
     return lines

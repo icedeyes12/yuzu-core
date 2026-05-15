@@ -272,11 +272,11 @@ def execute_read(arguments: dict, session_id: int | None = None) -> dict:
             partner_name,
         )
     
+    # Get file extension for syntax highlighting
+    _, file_ext = os.path.splitext(resolved)
+    
     # Format output with line numbers
     lines = content.split("\n")
-    numbered = []
-    for i, line in enumerate(lines, 1):
-        numbered.append(f"{i:4d} | {line}")
     
     return ok_result(
         {
@@ -284,6 +284,7 @@ def execute_read(arguments: dict, session_id: int | None = None) -> dict:
             "size": size,
             "lines": len(lines),
             "content": content,
+            "file_ext": file_ext.lower(),
         },
         TOOL_READ,
         full_command,
