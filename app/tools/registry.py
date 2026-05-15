@@ -52,6 +52,10 @@ def _load_tool_module(tool_name: str):
         elif tool_name == "multimodal":
             from app.tools import multimodal
             _TOOL_MODULES[tool_name] = multimodal
+        # File system tools
+        elif tool_name in ("read", "write", "ls", "mkdir", "rm"):
+            from app.tools import fs_operations
+            _TOOL_MODULES[tool_name] = fs_operations
         else:
             return None
     return _TOOL_MODULES.get(tool_name)
@@ -88,6 +92,17 @@ def _collect_definitions():
         _TOOL_DEFINITIONS["memory_search"] = memory_search.TOOL_DEFINITION
     except Exception as e:
         logger.info(f"[registry] Failed to load memory_search definition: {e}")
+
+    # File system tools
+    try:
+        from app.tools import fs_operations
+        _TOOL_DEFINITIONS["read"] = fs_operations.TOOL_READ
+        _TOOL_DEFINITIONS["write"] = fs_operations.TOOL_WRITE
+        _TOOL_DEFINITIONS["ls"] = fs_operations.TOOL_LS
+        _TOOL_DEFINITIONS["mkdir"] = fs_operations.TOOL_MKDIR
+        _TOOL_DEFINITIONS["rm"] = fs_operations.TOOL_RM
+    except Exception as e:
+        logger.info(f"[registry] Failed to load fs_operations definitions: {e}")
 
     _DEFINITIONS_INITIALIZED = True
 
@@ -186,7 +201,7 @@ def execute_tool(tool_name: str, arguments: dict, session_id: Optional[str] = No
         )
 
     try:
-        result = module.execute(arguments, session_id=session_id)
+        result = module.execute(arguments, session_id=session_id, tool_name=tool_name)
 
         # New-style structured result (already a dict with ok/data/markdown)
         if isinstance(result, dict) and "ok" in result:

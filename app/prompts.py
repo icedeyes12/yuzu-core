@@ -276,6 +276,13 @@ Supported commands:
 3. /memory_store fact="[fact]" [entity="[entity]"]: When you want to remember stuff.
 4. /memory_search query="[search terms]": when you unsure and want to recall some memory fragments.
 
+File System Commands (Termux):
+5. /read <path>: Read file contents. Path relative to ~/workspace. Example: /read config.json
+6. /write <path> <content>: Write content to file. Creates parent dirs. Example: /write test.txt hello world
+7. /ls [path]: List directory contents. Default: ~/workspace. Example: /ls ~/workspace
+8. /mkdir <path>: Create directory (like mkdir -p). Example: /mkdir ~/projects/new
+9. /rm <path>: Delete file or empty directory. Example: /rm old_file.txt
+
 # CURRENT STATE & MEMORY (READ CAREFULLY)
 Current Time: {current_time}
 Location: {_location_block()}

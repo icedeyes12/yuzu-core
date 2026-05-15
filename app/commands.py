@@ -18,6 +18,12 @@ _STRING_ARG_TOOLS: dict[str, str] = {
     "imagine": "prompt",
     "request": "url",
     "memory_store": "fact",
+    # File system tools
+    "read": "path",
+    "ls": "path",
+    "mkdir": "path",
+    "rm": "path",
+    # write is handled specially in _parse_args (path + content)
 }
 
 # Aliases the model uses for tool routing.
@@ -190,6 +196,15 @@ def _parse_args(tool_name: str, args_str: str) -> dict[str, Any]:
         return {}
     if tool_name in _STRING_ARG_TOOLS:
         return {_STRING_ARG_TOOLS[tool_name]: args_str}
+    
+    # Special handling for /write: first word is path, rest is content
+    if tool_name == "write":
+        parts = args_str.split(None, 1)
+        if len(parts) == 1:
+            return {"path": parts[0], "content": ""}
+        return {"path": parts[0], "content": parts[1]}
+    
+    # Try JSON parse
     try:
         parsed = json.loads(args_str)
         if isinstance(parsed, dict):
