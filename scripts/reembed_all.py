@@ -41,7 +41,7 @@ from app.database import PgSession  # noqa: E402
 
 # New embedding dimension (Qwen3-Embedding-8B)
 NEW_EMBEDDING_DIM = 4096
-NEW_COL = "embedding_4096"
+NEW_COL = "embedding"
 
 
 def get_total_count(active_only=True):
