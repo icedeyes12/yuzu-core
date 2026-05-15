@@ -57,10 +57,12 @@ def _get_session_id(request: Request) -> str:
 
 class MessageRequest(BaseModel):
     message: str = Field(..., min_length=1, description="User message text")
+    interface: str = Field(default="web", description="Interface source identifier")
 
 
 class StreamMessageRequest(BaseModel):
     message: str = Field(..., min_length=1, description="User message text")
+    interface: str = Field(default="web", description="Interface source identifier")
     provider: str | None = Field(None, description="AI provider to use")
     model: str | None = Field(None, description="AI model to use")
 
@@ -226,12 +228,13 @@ async def api_send_message(request: MessageRequest):
         if not user_message:
             return {"reply": "Please type a message!"}
         
-        print(f"Web message: {user_message[:200]}...")
+        interface = request.interface  # from request payload
+        print(f"[{interface}] message: {user_message[:200]}...")
         
         active_session = Database.get_active_session()
         _ = active_session["id"]
         
-        ai_reply = handle_user_message(user_message, interface="web")
+        ai_reply = handle_user_message(user_message, interface=interface)  # DYNAMIC
         
         print(f"AI reply: {ai_reply}")
         
@@ -254,11 +257,12 @@ async def api_send_message_stream(request: StreamMessageRequest):
                 yield 'data: {"chunk": "Please type a message!"}\n\n'
             return StreamingResponse(empty_generator(), media_type="text/event-stream")
         
-        print(f"Streaming message: {user_message[:200]}...")
+        interface = request.interface  # from request payload
+        print(f"[{interface}] streaming message: {user_message[:200]}...")
         
         response_generator = handle_user_message_streaming(
             user_message,
-            interface="web",
+            interface=interface,  # DYNAMIC
             provider=request.provider,
             model=request.model
         )
