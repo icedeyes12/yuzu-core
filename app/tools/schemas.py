@@ -93,12 +93,22 @@ def build_tool_contract(
     """
     quoted = []
     raw = []
+    in_code_fence = False
+    
     for line in output_lines:
-        if line.startswith("<img ") or line.startswith("<video "):
+        if line.strip() == "```":
+            in_code_fence = not in_code_fence
+            raw.append(line)
+        elif in_code_fence:
+            raw.append(line)
+        elif line.startswith("<img ") or line.startswith("<video "):
             raw.append(line)
         else:
             quoted.append(f"> {line}")
-    formatted_output = "\n".join(quoted) + ("\n\n" + "\n".join(raw) if raw else "")
+    
+    formatted_output = "\n".join(quoted)
+    if raw:
+        formatted_output += "\n\n" + "\n".join(raw)
 
     return (
         f"<details>\n"
@@ -148,6 +158,12 @@ def _flatten_lines(data: dict) -> list[str]:
     for key, value in data.items():
         if isinstance(value, str) and value.startswith("<"):
             lines.append(value)
+        elif key == "content" and isinstance(value, str) and "\n" in value:
+            # Wrap multi-line content in code fence
+            lines.append(f"{key}:")
+            lines.append("```")
+            lines.append(value)
+            lines.append("```")
         else:
             lines.append(f"{key}: {value}")
     return lines
