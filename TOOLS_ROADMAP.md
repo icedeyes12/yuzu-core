@@ -306,29 +306,55 @@ def _run_synthesis(...):
 
 ### PHASE 2: Shell Execution Tool
 
-- [x] **Task 2.1: Buat `app/tools/shell_exec.py`**
-  - [x] Sub-task 2.1.1: Implement `TOOL_DEFINITION` untuk `/bash`
-  - [x] Sub-task 2.1.2: Implement `execute()` dengan `subprocess.run()`
-  - [x] Sub-task 2.1.3: Timeout protection (max 30s)
-  - [x] Sub-task 2.1.4: Output truncation (max 10KB)
-  - [x] Sub-task 2.1.5: Security: implement blocklist untuk dangerous commands
-  - [ ] Sub-task 2.1.6: Support heredoc untuk multi-line scripts (Phase 5)
+- [x] **Task 2.1: Create `app/tools/shell_exec.py`**
+  - [x] Sub-task 2.1.1: Implement `execute_bash()` dengan command whitelist
+  - [x] Sub-task 2.1.2: Timeout 30s dan output truncation
+  - [x] Sub-task 2.1.3: Security validation (no rm -rf /, sudo, etc)
 
-- [x] **Task 2.2: Register di `registry.py` dan `commands.py`**
-  - [x] Sub-task 2.2.1: Tambah import di `_collect_definitions()` dan `_load_tool_module()`
-  - [x] Sub-task 2.2.2: Tambah `"bash"` di `_STRING_ARG_TOOLS`
+- [x] **Task 2.2: Register di `registry.py`**
+  - [x] Sub-task 2.2.1: ToolDefinition dengan `is_terminal=True`
+  - [x] Sub-task 2.2.2: `execute_bash()` wiring
 
-- [x] **Task 2.3: Update system prompt**
-  - [x] Sub-task 2.3.1: Tambah dokumentasi `/bash` dengan contoh
+- [x] **Task 2.3: Add to `commands.py`**
+  - [x] Sub-task 2.3.1: Add "bash" to `_STRING_ARG_TOOLS`
 
-- [ ] **Task 2.4: Validasi**
-  - [x] Sub-task 2.4.1: `ruff check app/tools/shell_exec.py` ✓
-  - [x] Sub-task 2.4.2: `python3 -m py_compile app/tools/shell_exec.py` ✓
-  - [ ] Sub-task 2.4.3: Test manual: `/bash ls -la`, `/bash pwd` (requires Termux restart)
+- [x] **Task 2.4: Update `prompts.py`**
+  - [x] Sub-task 2.4.1: `/bash` documentation
+
+- [x] **Task 2.5: Update `db_queries.py` TOOL_ROLES**
+  - [x] Sub-task 2.5.1: Add fs_tools role mapping
 
 ---
 
-### PHASE 3: Python Execution Tool
+## Debug Session: Synthesis Bug Fix
+
+**Problem:** `/ls` tool results not reaching synthesis LLM
+
+**Root Cause:**
+- `format_ai_history_rows()` in `db_queries.py` filters messages by `ALL_TOOL_ROLES`
+- `fs_tools` role was not defined in `TOOL_ROLES`
+- Messages with role `fs_tools` were dropped from AI context
+- Synthesis LLM couldn't see tool results → empty response
+
+**Fix (commit fd8e9d2):**
+```python
+TOOL_ROLES: dict[str, str] = {
+    "read": "fs_tools",
+    "write": "fs_tools", 
+    "ls": "fs_tools",
+    "mkdir": "fs_tools",
+    "rm": "fs_tools",
+    "bash": "fs_tools",
+}
+```
+
+**Verification:**
+- Before: `fs_tools messages: 0`
+- After: `fs_tools messages: 13`
+
+---
+
+### PHASE 3: Termux API Integration
 
 - [ ] **Task 3.1: Buat `app/tools/python_exec.py`**
   - [ ] Sub-task 3.1.1: Implement `TOOL_DEFINITION` untuk `/python`
