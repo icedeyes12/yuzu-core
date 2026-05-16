@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import logging
+import time
 
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 
@@ -140,6 +141,8 @@ def execute(arguments: dict, session_id: int | None = None, tool_name: str = "ba
 
     # Execute command
     try:
+        start_time = time.time()
+        
         result = subprocess.run(
             ["bash", "-c", command],
             capture_output=True,
@@ -147,6 +150,8 @@ def execute(arguments: dict, session_id: int | None = None, tool_name: str = "ba
             timeout=DEFAULT_TIMEOUT,
             cwd=os.path.expanduser("~/workspace"),  # Run in workspace
         )
+
+        duration_ms = int((time.time() - start_time) * 1000)
 
         stdout = result.stdout or ""
         stderr = result.stderr or ""
@@ -165,18 +170,6 @@ def execute(arguments: dict, session_id: int | None = None, tool_name: str = "ba
 
         combined_output = "\n".join(output_parts) if output_parts else "(no output)"
 
-        # Format markdown
-        status = "✓" if exit_code == 0 else "✗"
-        markdown = f"""<details>
-<summary>🔧 Shell{status}: {command[:50]}{'...' if len(command) > 50 else ''}</summary>
-
-```bash
-{combined_output}
-```
-
-> exit_code: {exit_code}
-</details>"""
-
         # Success result (even if exit_code != 0, we executed successfully)
         return ok_result(
             {
@@ -185,11 +178,11 @@ def execute(arguments: dict, session_id: int | None = None, tool_name: str = "ba
                 "stdout": stdout,
                 "stderr": stderr,
                 "output": combined_output,
+                "duration_ms": duration_ms,
             },
             TOOL_BASH,
             full_command,
             partner_name,
-            markdown=markdown,
         )
 
     except subprocess.TimeoutExpired:
