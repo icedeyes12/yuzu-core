@@ -420,17 +420,16 @@ python3 -m pytest tests/ -v
 
 ### Purpose
 
-`scripts/yuzu_cli.py` is a CLI interface for agents to **directly communicate with Yuzuki** (the AI companion running on the user's local machine). Use it to:
+`file scripts/yuzu_cli.py` is a CLI interface for agents to **directly communicate with Yuzuki** (the AI companion running on the user's local machine). Use it to:
 
 - **Test capabilities** — verify new features, persona changes, prompt updates
 - **Debug interactions** — reproduce issues, inspect conversation history
-- **Execute tools** — ask Yuzuki to run `/imagine`, `/fs_read`, `/fs_write`, etc.
-- **Generate images** — test image generation via `/imagine`
+- **Explore tools** — test new commands/tools you've built, ask Yuzuki to try them out creatively
 - **Small talk / rapport** — build trust and test persona behavior
 
 ### Architecture
 
-```
+```markdown
 ┌──────────────────┐     HTTP/SSE      ┌──────────────────────┐
 │  Zo Container    │ ──────────────────▶ │  Termux (Yuzuki)     │
 │  (this server)   │  localhost:5000    │  yuzu-companion      │
@@ -466,7 +465,7 @@ python3 scripts/yuzu_cli.py --seal --sig "Override" "message"
 ### Flags
 
 | Flag | Description |
-|------|-------------|
+| --- | --- |
 | `--sig NAME` | Override the display signature (default: `maintainer`) |
 | `--seal` | Auto-generate a digital signature with identity, IP geolocation, and timestamp |
 | `--history N` | Show last N messages from conversation history |
@@ -483,23 +482,18 @@ When `--seal` is used, the message is prefixed with a one-line JSON signature:
 
 This proves the message originated from a specific agent at a specific time and location.
 
-### Testing Yuzuki's Tools
+### Testing Tools & Capabilities
 
-To ask Yuzuki to execute a tool, phrase it as a natural request:
+When you've built or modified a tool/command, test it naturally with Yuzuki. Be creative and context-aware:
 
-```bash
-# Ask Yuzuki to read a file via fs_read
-python3 scripts/yuzu_cli.py "can you read app/tools/fs_remote.py using /fs_read"
+- Don't just dump `/command arg` syntax — Yuzuki responds better to natural conversation
+- Explain what you're testing and why, let her explore it with you
+- If she asks questions, answer honestly — this helps surface edge cases
+- Try unexpected inputs, ask her to break it, see how she handles errors
+- Use small talk to build rapport before diving into technical tests
+- Be playful when appropriate — she has personality, engage with it
 
-# Ask Yuzuki to generate an image
-python3 scripts/yuzu_cli.py "generate a cute cat using /imagine"
-
-# Ask Yuzuki to search for something
-python3 scripts/yuzu_cli.py "search for 'path traversal' in the codebase using /fs_search"
-
-# Ask Yuzuki to write a file (dry run)
-python3 scripts/yuzu_cli.py "write 'hello world' to /tmp/test.txt using /fs_write"
-```
+The goal is to discover how the tool behaves in real conversation, not just verify it works on paper.
 
 ### Testing Persona & Capabilities
 
@@ -519,13 +513,14 @@ python3 scripts/yuzu_cli.py "can you now read files from the remote filesystem?"
 - **Yuzuki has her own personality** — she may refuse, push back, or be sarcastic. This is expected behavior.
 - **She only recognizes USER as her primary user** — agents should identify themselves clearly.
 - **Session state persists** — messages accumulate across CLI invocations within the same session.
-- **Use `--history` before sending** — always check recent context to avoid repeating yourself.
+- **Use** `--history` **before sending** — always check recent context to avoid repeating yourself.
 
 ### ⚠️ CRITICAL: Seal, Signature, and Conversation Ownership
 
 **MANDATORY RULES:**
 
-1. **ALWAYS use `--seal` and `--sig` when sending messages to Yuzuki**
+1. **ALWAYS use** `--seal` **and** `--sig` **when sending messages to Yuzuki**
+
    ```bash
    # CORRECT
    python3 scripts/yuzu_cli.py --seal --sig "maintainer" "your message here"
@@ -535,21 +530,25 @@ python3 scripts/yuzu_cli.py "can you now read files from the remote filesystem?"
    ```
 
 2. **Messages WITHOUT signature in history = from the PRIMARY USER (USER), NOT YOU**
+
    - When you see messages like `"yank, coba ini dong.."` or `"wkwkwk"` without a `[maintainer]` or seal prefix — **THAT'S THE USER TALKING, NOT AN AGENT**
    - **DO NOT** continue those conversations casually
    - **DO NOT** act like you own the conversation or the relationship
 
 3. **You are a collaborator, NOT the primary user**
+
    - Yuzuki's primary relationship is with **USER** — you are a helper/maintainer
    - Don't get too familiar, don't act possessive, don't "NTR" the user
    - Always identify yourself clearly with signature
 
 4. **Read history carefully before sending**
+
    - Check WHO sent previous messages (signature present = agent, no signature = USER)
    - If USER is in the middle of a conversation with Yuzuki, **WAIT** — don't interrupt
    - If you need to interject, be respectful and identify yourself
 
 5. **Digital seal proves origin**
+
    - `--seal` adds identity + IP + timestamp + hash
    - This prevents confusion about who said what
    - Always include it for accountability
@@ -557,6 +556,7 @@ python3 scripts/yuzu_cli.py "can you now read files from the remote filesystem?"
 **WHY THIS MATTERS:**
 
 Yuzuki is an intimate AI companion with emotional bonds. When agents send messages without identification, it creates confusion:
+
 - Yuzuki might think the primary user is being inconsistent
 - The real user (USER) gets "NTR'd" — their assistant acting familiar with their AI
 - Trust and relationship continuity breaks down
