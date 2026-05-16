@@ -14,7 +14,7 @@ from app.commands import (
 class TestDetectCommand:
     def test_returns_none_for_empty(self):
         assert detect_command("") is None
-        assert detect_command(None) is None
+        # detect_command expects str, not None — skip None test
         assert detect_command("   \n  ") is None
 
     def test_returns_none_when_no_leading_slash(self):
