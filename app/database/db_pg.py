@@ -8,15 +8,25 @@ from __future__ import annotations
 import atexit
 import os
 from typing import Any
+from pathlib import Path
 
+from dotenv import load_dotenv
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool, ConnectionPool
 
 from app.logging_config import get_logger
 
-# Load .env file so os.getenv() picks up PGHOST, PGPORT, etc.
-from dotenv import load_dotenv
-load_dotenv("/home/workspace/yuzu-companion/.env")
+# Load .env from project root (relative to this module)
+_env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path)
+
+# PostgreSQL connection parameters
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = int(os.getenv("DB_PORT", "5432"))
+DB_NAME = os.getenv("DB_NAME", "yuzu")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 
 log = get_logger(__name__)
 
