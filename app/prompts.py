@@ -278,7 +278,7 @@ Supported commands:
 
 File System Commands (Termux):
 5. /read <path>: Read file contents. Path relative to ~/workspace. Example: /read config.json
-6. /write <path> <content>: Write content to file. Creates parent dirs. Example: /write test.txt hello world
+6. /write <path> <content>: Write content to file. SINGLE-LINE only. Example: /write test.txt hello world
 7. /ls [path]: List directory contents. Default: ~/workspace. Example: /ls ~/workspace
 8. /mkdir <path>: Create directory (like mkdir -p). Example: /mkdir ~/projects/new
 9. /rm <path>: Delete file or empty directory. Example: /rm old_file.txt
