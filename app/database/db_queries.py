@@ -47,6 +47,8 @@ TOOL_ROLES: dict[str, str] = {
     "bash": "shell_tools",
     # Python execution
     "python": "python_tools",
+    # SQL queries
+    "sql": "sql_tools",
     "fs_tools": "fs_tools",
     "image_tools": "image_tools",
     "request_tools": "request_tools",

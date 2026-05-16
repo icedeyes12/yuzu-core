@@ -9,7 +9,7 @@ import subprocess
 import re
 
 from app.logging_config import get_logger
-from app.tools.schemas import ToolDefinition, error_result, ok_result, build_tool_contract
+from app.tools.schemas import ToolDefinition, error_result, ok_result, ToolParam
 
 log = get_logger(__name__)
 
@@ -36,18 +36,14 @@ QUERY_TIMEOUT = 30
 TOOL_DEFINITION = ToolDefinition(
     name=TOOL_NAME,
     description="Execute SQL queries on the PostgreSQL database. READ-ONLY by default. Use --write flag for INSERT/UPDATE/DELETE.",
+    role="sql_tools",
     parameters=[
-        {
-            "name": "query",
-            "type": "string",
-            "description": "SQL query to execute. Use --write prefix for mutations.",
-            "required": True,
-        },
-    ],
-    examples=[
-        "/sql SELECT * FROM profiles LIMIT 5",
-        "/sql --write INSERT INTO logs (message) VALUES ('test')",
-        "/sql ```sql\nSELECT name, COUNT(*) FROM items GROUP BY name;\n```",
+        ToolParam(
+            name="query",
+            type="string",
+            description="SQL query to execute. Use --write prefix for mutations.",
+            required=True,
+        ),
     ],
     is_terminal=False,
 )
@@ -204,8 +200,9 @@ def execute(arguments: dict, session_id: int | None = None) -> dict:
     if not query_arg:
         return error_result(
             "Empty query. Provide a SQL query.",
-            TOOL_NAME,
-            "Please provide a SQL query to execute.",
+            TOOL_DEFINITION,
+            "/sql",
+            _get_partner_name(),
         )
     
     # Check for --write flag
@@ -226,7 +223,7 @@ def execute(arguments: dict, session_id: int | None = None) -> dict:
     if not valid:
         return error_result(
             error_msg,
-            TOOL_NAME,
+            TOOL_DEFINITION,
             query[:100],
         )
     
@@ -249,7 +246,7 @@ def execute(arguments: dict, session_id: int | None = None) -> dict:
         if exit_code != 0:
             return error_result(
                 f"Query failed: {stderr}",
-                TOOL_NAME,
+                TOOL_DEFINITION,
                 query[:100],
             )
         
@@ -276,25 +273,17 @@ def execute(arguments: dict, session_id: int | None = None) -> dict:
         # Build output
         table_md = _format_table(rows, columns)
         
-        markdown = build_tool_contract(
-            TOOL_DEFINITION,
-            f"--write {query}" if write_mode else query,
-            _get_partner_name(),
-            tool_role="sql_tools",
-        )
-        
-        # Add results to markdown
-        mode_str = "WRITE mode" if write_mode else "READ-ONLY"
-        markdown += f"\n\n**{mode_str}**\n\n{table_md}"
+        result_data = {
+            "query": query,
+            "write_mode": write_mode,
+            "rows": rows,
+            "row_count": len(rows),
+            "columns": columns,
+            "output": table_md,
+        }
         
         return ok_result(
-            {
-                "query": query,
-                "write_mode": write_mode,
-                "rows": rows,
-                "row_count": len(rows),
-                "columns": columns,
-            },
+            result_data,
             TOOL_DEFINITION,
             f"/sql {'--write ' if write_mode else ''}{query[:50]}{'...' if len(query) > 50 else ''}",
             _get_partner_name(),
@@ -303,20 +292,20 @@ def execute(arguments: dict, session_id: int | None = None) -> dict:
     except subprocess.TimeoutExpired:
         return error_result(
             f"Query timed out after {QUERY_TIMEOUT}s",
-            TOOL_NAME,
+            TOOL_DEFINITION,
             query[:100],
         )
     except FileNotFoundError:
         return error_result(
             "psql not found. Please install postgresql-client.",
-            TOOL_NAME,
+            TOOL_DEFINITION,
             query[:100],
         )
     except Exception as e:
         log.error(f"[sql] Execution error: {e}")
         return error_result(
             f"Execution error: {str(e)}",
-            TOOL_NAME,
+            TOOL_DEFINITION,
             query[:100],
         )
 
