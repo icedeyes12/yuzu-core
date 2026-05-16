@@ -76,6 +76,7 @@ def _build_psql_command(query: str, write_mode: bool = False) -> list[str]:
         "-t",  # Tuple-only output
         "-A",  # Unaligned output
         "-F,",  # Field separator
+        "-X",  # Skip .psqlrc and suppress config noise
         "-c", query,
     ]
     
