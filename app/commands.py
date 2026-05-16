@@ -252,6 +252,22 @@ def _parse_args(tool_name: str, args_str: str) -> dict[str, Any]:
     
     # Special handling for /write: first word is path, rest is content
     if tool_name == "write":
+        # Check for heredoc syntax: /write path <<DELIM\ncontent\nDELIM
+        heredoc_match = re.match(r'^(\S+)\s+<<(\S+)\s*\n?(.*)', args_str, re.DOTALL)
+        if heredoc_match:
+            path = heredoc_match.group(1)
+            delimiter = heredoc_match.group(2)
+            body = heredoc_match.group(3)
+            # Extract content up to the closing delimiter
+            end_marker = f"\n{delimiter}"
+            if end_marker in body:
+                content = body[:body.index(end_marker)]
+            elif body.rstrip().endswith(delimiter):
+                content = body[:body.rindex(delimiter)].rstrip()
+            else:
+                content = body
+            return {"path": path, "content": content}
+        # Standard: first word is path, rest is content
         parts = args_str.split(None, 1)
         if len(parts) == 1:
             return {"path": parts[0], "content": ""}
@@ -292,7 +308,8 @@ class StreamFilter:
         pass through every subsequent chunk untouched.
     """
 
-    __slots__ = ("_buffer", "_decided", "_is_command", "command", "full_text")
+    __slots__ = ("_buffer", "_decided", "_is_command", "command", "full_text",
+                 "_in_heredoc", "_heredoc_delimiter", "_heredoc_buffer")
 
     def __init__(self) -> None:
         self._buffer = ""
@@ -313,6 +330,22 @@ class StreamFilter:
         if self._decided and self._is_command:
             # Command was already detected in a previous chunk.
             # Any subsequent text is narration — yield it live.
+            # EXCEPT: if we're in heredoc mode, keep buffering
+            if getattr(self, "_in_heredoc", False):
+                self._heredoc_buffer += chunk
+                # Check if closing delimiter is in the buffer
+                delim_line = f"\n{self._heredoc_delimiter}"
+                if delim_line in self._heredoc_buffer:
+                    # End of heredoc: update command args with full content
+                    end_idx = self._heredoc_buffer.index(delim_line)
+                    heredoc_content = self._heredoc_buffer[:end_idx]
+                    if self.command:
+                        self.command["args"] = f"{self.command['args']}\n{heredoc_content}"
+                        self.command["full_command"] = f"/write {self.command['args']}"
+                    self._in_heredoc = False
+                    self._heredoc_buffer = ""
+                # Don't yield heredoc content to user
+                return
             yield chunk
             return
 
@@ -345,14 +378,36 @@ class StreamFilter:
             first_line, _, rest = self._buffer.partition("\n")
             self.command = detect_command(first_line)
             self._buffer = ""
-            # Suppress the command line; the rest is rarely produced by the
-            # model when a /command is the first line, but pass it through
-            # for correctness.
+            # Heredoc support: if command args contain <<DELIM, keep buffering
+            # until we find the closing delimiter line
+            if self.command and self.command["command"] == "write":
+                args = self.command.get("args", "")
+                heredoc_match = re.match(r'^(\S+)\s+<<(\S+)', args)
+                if heredoc_match:
+                    delimiter = heredoc_match.group(2)
+                    # Start heredoc capture: buffer rest + subsequent chunks
+                    self._heredoc_delimiter = delimiter
+                    self._heredoc_buffer = rest
+                    self._in_heredoc = True
+                    # Don't yield anything yet
+                    return
+            # No heredoc: suppress command line, yield rest if any
             if rest:
                 yield rest
 
     def flush(self) -> Iterator[str]:  # type: ignore[name-defined]
         """Drain any held-back text. Call once after the upstream completes."""
+        # Handle heredoc: if stream ended while still buffering heredoc
+        if getattr(self, "_in_heredoc", False) and self.command:
+            # Finalize heredoc content (no closing delimiter found)
+            heredoc_content = self._heredoc_buffer.rstrip()
+            if heredoc_content:
+                self.command["args"] = f"{self.command['args']}\n{heredoc_content}"
+                self.command["full_command"] = f"/write {self.command['args']}"
+            self._in_heredoc = False
+            self._heredoc_buffer = ""
+            self._decided = True
+            return
         if not self._decided:
             # Stream ended before we could decide. If the buffer starts with
             # a slash and never produced a newline, treat it as a command on
