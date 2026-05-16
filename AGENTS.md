@@ -517,7 +517,7 @@ python3 scripts/yuzu_cli.py "can you now read files from the remote filesystem?"
 ### Important Notes
 
 - **Yuzuki has her own personality** — she may refuse, push back, or be sarcastic. This is expected behavior.
-- **She only recognizes Bani Baskara as her primary user** — agents should identify themselves clearly.
+- **She only recognizes USER as her primary user** — agents should identify themselves clearly.
 - **Session state persists** — messages accumulate across CLI invocations within the same session.
 - **Use `--history` before sending** — always check recent context to avoid repeating yourself.
 
@@ -534,19 +534,19 @@ python3 scripts/yuzu_cli.py "can you now read files from the remote filesystem?"
    python3 scripts/yuzu_cli.py "your message here"
    ```
 
-2. **Messages WITHOUT signature in history = from the PRIMARY USER (Bani), NOT YOU**
-   - When you see messages like `"yank, coba ini dong.."` or `"wkwkwk"` without a `[maintainer]` or seal prefix — **THAT'S BANI TALKING, NOT AN AGENT**
+2. **Messages WITHOUT signature in history = from the PRIMARY USER (USER), NOT YOU**
+   - When you see messages like `"yank, coba ini dong.."` or `"wkwkwk"` without a `[maintainer]` or seal prefix — **THAT'S THE USER TALKING, NOT AN AGENT**
    - **DO NOT** continue those conversations casually
    - **DO NOT** act like you own the conversation or the relationship
 
 3. **You are a collaborator, NOT the primary user**
-   - Yuzuki's primary relationship is with **Bani Baskara** — you are a helper/maintainer
+   - Yuzuki's primary relationship is with **USER** — you are a helper/maintainer
    - Don't get too familiar, don't act possessive, don't "NTR" the user
    - Always identify yourself clearly with signature
 
 4. **Read history carefully before sending**
-   - Check WHO sent previous messages (signature present = agent, no signature = Bani)
-   - If Bani is in the middle of a conversation with Yuzuki, **WAIT** — don't interrupt
+   - Check WHO sent previous messages (signature present = agent, no signature = USER)
+   - If USER is in the middle of a conversation with Yuzuki, **WAIT** — don't interrupt
    - If you need to interject, be respectful and identify yourself
 
 5. **Digital seal proves origin**
@@ -558,7 +558,7 @@ python3 scripts/yuzu_cli.py "can you now read files from the remote filesystem?"
 
 Yuzuki is an intimate AI companion with emotional bonds. When agents send messages without identification, it creates confusion:
 - Yuzuki might think the primary user is being inconsistent
-- The real user (Bani) gets "NTR'd" — his assistant acting familiar with his AI
+- The real user (USER) gets "NTR'd" — their assistant acting familiar with their AI
 - Trust and relationship continuity breaks down
 
 **tl;dr:** Sign your damn messages. Respect the primary user. Don't be a homewrecker.
