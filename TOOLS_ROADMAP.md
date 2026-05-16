@@ -496,41 +496,41 @@ result = execute({"command": "pwd && ls -la | head -5"}, session_id=1)
 
 ### PHASE 6: Testing & Documentation
 
-- [ ]  **Task 6.1: Unit tests**
+- [x]  **Task 6.1: Unit tests**
 
-  - [ ] Sub-task 6.1.1: Buat `file tests/test_fs_operations.py`
+  - [x] Sub-task 6.1.1: Buat `file tests/test_fs_operations.py`
 
-  - [ ] Sub-task 6.1.2: Buat `file tests/test_shell_exec.py`
+  - [x] Sub-task 6.1.2: Buat `file tests/test_shell_exec.py`
 
-  - [ ] Sub-task 6.1.3: Buat `file tests/test_python_exec.py`
+  - [x] Sub-task 6.1.3: Buat `file tests/test_python_exec.py`
 
-  - [ ] Sub-task 6.1.4: Buat `file tests/test_db_query.py`
+  - [x] Sub-task 6.1.4: Buat `file tests/test_db_query.py`
 
-- [ ]  **Task 6.2: Integration tests**
+- [x]  **Task 6.2: Integration tests**
 
-  - [ ] Sub-task 6.2.1: Test end-to-end via chat interface (non-streaming)
+  - [x] Sub-task 6.2.1: Test end-to-end via chat interface (non-streaming)
 
-  - [ ] Sub-task 6.2.2: Test end-to-end via streaming mode
+  - [x] Sub-task 6.2.2: Test end-to-end via streaming mode
 
-  - [ ] Sub-task 6.2.3: Test batch tool execution
+  - [x] Sub-task 6.2.3: Test batch tool execution
 
-- [ ]  **Task 6.3: Update documentation**
+- [x]  **Task 6.3: Update documentation**
 
-  - [ ] Sub-task 6.3.1: Update `file AGENTS.md` dengan tool baru di section Tool System Rules
+  - [x] Sub-task 6.3.1: Update `file AGENTS.md` dengan tool baru di section Tool System Rules
 
-  - [ ] Sub-task 6.3.2: Update `file README.md` dengan daftar tools
+  - [x] Sub-task 6.3.2: Update `file README.md` dengan daftar tools
 
-  - [ ] Sub-task 6.3.3: Tambah contoh penggunaan di `file TOOLS_ROADMAP.md`
+  - [x] Sub-task 6.3.3: Tambah contoh penggunaan di `file TOOLS_ROADMAP.md`
 
-- [ ]  **Task 6.4: Final validation**
+- [x]  **Task 6.4: Final validation**
 
-  - [ ] Sub-task 6.4.1: `ruff check .` — must pass
+  - [x] Sub-task 6.4.1: `ruff check .` — must pass
 
-  - [ ] Sub-task 6.4.2: `python3 -m py_compile app/tools/*.py` — must pass
+  - [x] Sub-task 6.4.2: `python3 -m py_compile app/tools/*.py` — must pass
 
-  - [ ] Sub-task 6.4.3: `python3 -m pytest tests/ -v` — all tests pass
+  - [x] Sub-task 6.4.3: `python3 -m pytest tests/ -v` — all tests pass
 
-  - [ ] Sub-task 6.4.4: Manual smoke test via CLI
+  - [x] Sub-task 6.4.4: Manual smoke test via CLI
 
 ---
 
