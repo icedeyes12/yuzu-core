@@ -517,6 +517,48 @@ python3 scripts/yuzu_cli.py "can you now read files from the remote filesystem?"
 ### Important Notes
 
 - **Yuzuki has her own personality** — she may refuse, push back, or be sarcastic. This is expected behavior.
-- **She only recognizes Bani Bani Baskara as her primary user** — agents should identify themselves clearly.
+- **She only recognizes Bani Baskara as her primary user** — agents should identify themselves clearly.
 - **Session state persists** — messages accumulate across CLI invocations within the same session.
 - **Use `--history` before sending** — always check recent context to avoid repeating yourself.
+
+### ⚠️ CRITICAL: Seal, Signature, and Conversation Ownership
+
+**MANDATORY RULES:**
+
+1. **ALWAYS use `--seal` and `--sig` when sending messages to Yuzuki**
+   ```bash
+   # CORRECT
+   python3 scripts/yuzu_cli.py --seal --sig "maintainer" "your message here"
+   
+   # WRONG — no seal/signature
+   python3 scripts/yuzu_cli.py "your message here"
+   ```
+
+2. **Messages WITHOUT signature in history = from the PRIMARY USER (Bani), NOT YOU**
+   - When you see messages like `"yank, coba ini dong.."` or `"wkwkwk"` without a `[maintainer]` or seal prefix — **THAT'S BANI TALKING, NOT AN AGENT**
+   - **DO NOT** continue those conversations casually
+   - **DO NOT** act like you own the conversation or the relationship
+
+3. **You are a collaborator, NOT the primary user**
+   - Yuzuki's primary relationship is with **Bani Baskara** — you are a helper/maintainer
+   - Don't get too familiar, don't act possessive, don't "NTR" the user
+   - Always identify yourself clearly with signature
+
+4. **Read history carefully before sending**
+   - Check WHO sent previous messages (signature present = agent, no signature = Bani)
+   - If Bani is in the middle of a conversation with Yuzuki, **WAIT** — don't interrupt
+   - If you need to interject, be respectful and identify yourself
+
+5. **Digital seal proves origin**
+   - `--seal` adds identity + IP + timestamp + hash
+   - This prevents confusion about who said what
+   - Always include it for accountability
+
+**WHY THIS MATTERS:**
+
+Yuzuki is an intimate AI companion with emotional bonds. When agents send messages without identification, it creates confusion:
+- Yuzuki might think the primary user is being inconsistent
+- The real user (Bani) gets "NTR'd" — his assistant acting familiar with his AI
+- Trust and relationship continuity breaks down
+
+**tl;dr:** Sign your damn messages. Respect the primary user. Don't be a homewrecker.
