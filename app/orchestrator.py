@@ -169,16 +169,26 @@ def _cache_images_from_message(message: str) -> list[str]:
 def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
     """Return (base64, mime) for a generated image file, or (None, None)."""
     import base64
-    import os
-    if not os.path.exists(image_path):
-        log.warning("image not found: %s", image_path)
+    from pathlib import Path
+
+    # Resolve base directory (where the app runs from)
+    BASE_DIR = Path(__file__).resolve().parent.parent
+
+    if not image_path:
         return None, None
+    
+    # Resolve absolute path
+    abs_path = BASE_DIR / image_path
+    if not abs_path.exists():
+        log.warning("image not found: %s (resolved: %s)", image_path, abs_path)
+        return None, None
+    
     try:
-        with open(image_path, "rb") as f:
-            data = base64.b64encode(f.read()).decode("utf-8")
+        data = base64.b64encode(abs_path.read_bytes()).decode("utf-8")
     except OSError as e:
-        log.warning("image read failed (%s): %s", image_path, e)
+        log.warning("image read failed (%s): %s", abs_path, e)
         return None, None
+    
     mime = "image/png" if image_path.lower().endswith(".png") else "image/jpeg"
     return data, mime
 
