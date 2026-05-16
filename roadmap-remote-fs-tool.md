@@ -243,3 +243,45 @@ yuzu-companion/
 | Phase 5 | 2-3 hours | Phase 4 |
 
 **Total:** ~8-13 hours
+
+---
+
+## CLI Usage (yuzu_cli.py)
+
+### Basic Usage
+
+```bash
+# Send message to Yuzuki
+python3 scripts/yuzu_cli.py --session 37 "your message here"
+
+# Show last N messages
+python3 scripts/yuzu_cli.py --session 37 -H 10
+```
+
+### Signature & Seal
+
+```bash
+# With signature prefix [maintainer]
+python3 scripts/yuzu_cli.py --session 37 --sig "maintainer" "message"
+
+# With signature + digital seal (IP, location, timestamp)
+python3 scripts/yuzu_cli.py --session 37 --sig "maintainer" --seal "message"
+```
+
+**Important:**
+- Don't include `[signature]` in the message content if using `--sig` flag (will duplicate)
+- `--seal` appends JSON with dynamic IP geolocation at the end
+
+### Format Output
+
+Message format with both flags:
+```
+[signature] message content {"signature":{"identity":"...","location":"...","ip":"...","timestamp":"...","hash":"..."}}
+```
+
+### Timeout Options
+
+```bash
+# Custom timeout for GET (history) and POST (send message)
+python3 scripts/yuzu_cli.py --session 37 --timeout 30 --post-timeout 120 "message"
+```
