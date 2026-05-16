@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import os
 import re
+import time
 
 from app.logging_config import get_logger
 from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
@@ -42,6 +43,9 @@ BLOCKED_IMPORTS = {
     "marshal.loads",
     "shutil.rmtree",
 }
+
+# Default working directory - use HOME env var with Termux fallback
+DEFAULT_CWD = os.environ.get("HOME", "/data/data/com.termux/files/home")
 
 # --------------------------------------------------------------------
 # Tool Definition
@@ -122,7 +126,6 @@ def _execute_python(code: str) -> tuple[bool, str, str, int]:
     Returns:
         (success, stdout, stderr, duration_ms)
     """
-    import time
     
     start_time = time.time()
     
@@ -141,7 +144,7 @@ def _execute_python(code: str) -> tuple[bool, str, str, int]:
             capture_output=True,
             text=True,
             timeout=TIMEOUT_SECONDS,
-            cwd="/tmp",
+            cwd=DEFAULT_CWD,
             env={**os.environ, "PYTHONIOENCODING": "utf-8"},
         )
         

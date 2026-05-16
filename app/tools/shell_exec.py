@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import logging
@@ -58,6 +59,9 @@ DANGEROUS_PATTERNS = [
 ]
 
 DANGEROUS_REGEX = re.compile("|".join(DANGEROUS_PATTERNS), re.IGNORECASE)
+
+# Default working directory - use HOME env var with Termux fallback
+DEFAULT_CWD = os.environ.get("HOME", "/data/data/com.termux/files/home")
 
 
 # --------------------------------------------------------------------
@@ -147,7 +151,7 @@ def execute(arguments: dict, session_id: int | None = None, tool_name: str = "ba
             capture_output=True,
             text=True,
             timeout=DEFAULT_TIMEOUT,
-            cwd="/tmp",
+            cwd=DEFAULT_CWD,
         )
 
         duration_ms = int((time.time() - start_time) * 1000)
