@@ -406,25 +406,9 @@ result = execute({"command": "pwd && ls -la | head -5"}, session_id=1)
 
 ### PHASE 5: Heredoc & Multi-line Support
 
-- [x] **Task 5.1: Extend command parser untuk heredoc**
-  - [ ] Sub-task 5.1.1: Parse heredoc syntax di `_parse_args()` atau new helper function
-  - [ ] Sub-task 5.1.2: Support format: `/write path <<EOF\ncontent\nEOF`
-  - [ ] Sub-task 5.1.3: Support code block format: `/python ```python\ncode\n``` `
-  - [ ] Sub-task 5.1.4: Support SQL block format: `/sql ```sql\nquery\n``` `
-
-- [ ] **Task 5.2: Update tools untuk handle multi-line input**
-  - [ ] Sub-task 5.2.1: `fs_operations.write` handle heredoc content
-  - [ ] Sub-task 5.2.2: `python_exec` handle code block input
-  - [ ] Sub-task 5.2.3: `db_query` handle multi-line SQL
-  - [ ] Sub-task 5.2.4: `shell_exec` handle multi-line scripts
-
-- [ ] **Task 5.3: Update system prompt**
-  - [ ] Sub-task 5.3.1: Dokumentasikan heredoc syntax untuk setiap tool
-
-- [ ] **Task 5.4: Validasi**
-  - [ ] Sub-task 5.4.1: Test heredoc parsing dengan berbagai format
-  - [ ] Sub-task 5.4.2: Test multi-line code blocks
-  - [ ] Sub-task 5.4.3: Test edge cases (empty content, special chars)
+- [x] **Task 5.1: Heredoc parsing** — Parse heredoc syntax in _parse_args for /write
+- [x] **Task 5.2: StreamFilter heredoc** — Update StreamFilter to buffer heredoc content during streaming
+- [x] **Task 5.3: Flush heredoc** — Handle heredoc cleanup in flush()
 
 ---
 
