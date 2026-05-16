@@ -99,10 +99,10 @@ def _parse_command_line(line: str) -> dict[str, str] | None:
 def detect_command(
     response_text: str,
     scan_mode: str = "first_line",
-) -> list[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Detect inline /command calls in model output.
 
-    Returns a list of dicts, each with keys:
+    Returns a dict with keys:
         command: str   — tool name without the leading /
         args: str      — raw argument string
         full_command: str — the full matched line
@@ -133,14 +133,13 @@ def detect_command(
                         if remainder:
                             result["args"] = remainder
                             result["full_command"] = f"/{cmd} {remainder}"
-            return [result]
-        return []
+            return result
+        return None
 
-    # Full scan mode
-    results = []
+    # Full scan mode — return first match only for backwards compatibility
     for match in _find_naked_commands_in_line(response_text):
-        pass
-    return results
+        return match
+    return None
 
 
 def _find_naked_commands_in_line(line: str) -> list[dict[str, str]]:
@@ -374,7 +373,7 @@ class StreamFilter:
             self._buffer = ""
             # Heredoc support: if command args contain <<DELIM, keep buffering
             # until we find the closing delimiter line
-            if self.command and self.command["command"] == "write":
+            if self.command and self.command.get("command") == "write":
                 args = self.command.get("args", "")
                 heredoc_match = re.match(r'^(\S+)\s+<<(\S+)', args)
                 if heredoc_match:

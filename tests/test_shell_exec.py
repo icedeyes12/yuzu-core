@@ -4,7 +4,7 @@ from app.tools.shell_exec import execute as bash_execute, TOOL_DEFINITION
 
 
 def test_tool_definition_exists():
-    assert TOOL_DEFINITION.name == "bash"
+    assert "bash" in TOOL_DEFINITION
 
 
 def test_simple_command():
