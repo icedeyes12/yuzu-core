@@ -22,11 +22,11 @@ if _env_path.exists():
     load_dotenv(_env_path)
 
 # PostgreSQL connection parameters
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = int(os.getenv("DB_PORT", "5432"))
-DB_NAME = os.getenv("DB_NAME", "yuzu")
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+DB_HOST = os.getenv("DB_HOST", os.getenv("PGHOST", "localhost"))
+DB_PORT = int(os.getenv("DB_PORT", os.getenv("PGPORT", "5432")))
+DB_NAME = os.getenv("DB_NAME", os.getenv("PGDATABASE", "yuzu"))
+DB_USER = os.getenv("DB_USER", os.getenv("PGUSER", "postgres"))
+DB_PASSWORD = os.getenv("DB_PASSWORD", os.getenv("PGPASSWORD", ""))
 
 log = get_logger(__name__)
 
