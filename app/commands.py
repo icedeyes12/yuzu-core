@@ -116,6 +116,8 @@ def detect_command(
         - Fenced code block (```...```)
         - Inline code (`...`)
         - Blockquote (> ...)
+        - Quotes ("..." or '...')
+        - Table (lines with | separators)
     """
     if not response_text or not response_text.strip():
         return None
@@ -149,37 +151,29 @@ def detect_command(
         if in_fenced_block:
             continue
 
-        # Skip blockquote lines
+        # Skip blockquote lines (entire line is quote)
         stripped = line.strip()
         if stripped.startswith(">"):
             continue
 
-        # Check for /command at start of stripped line
-        if not stripped.startswith("/"):
+        # Skip table lines (contain | separators)
+        if "|" in stripped and stripped.count("|") >= 2:
             continue
 
-        # Check if /command is inside inline code on this line
-        # Find position of / in original line
-        slash_pos = line.find("/")
-        if slash_pos >= 0 and _is_inside_inline_code(line, slash_pos):
-            continue
+        # Find ALL /command patterns in this line
+        detected_commands.extend(_find_naked_commands_in_line(line))
 
-        # Parse the command line
-        cmd_info = _parse_command_line(stripped)
-        if cmd_info:
-            detected_commands.append(cmd_info)
-            
-            # For "any_naked", return immediately on first match
-            if scan_mode == "any_naked":
-                return cmd_info
-            
-            # For "all_naked", collect up to max
-            if len(detected_commands) >= _MAX_BATCH_COMMANDS:
-                log.warning(
-                    "Batch command limit reached (%d), ignoring remaining commands",
-                    _MAX_BATCH_COMMANDS,
-                )
-                break
+        # For "any_naked", return immediately on first match
+        if scan_mode == "any_naked" and detected_commands:
+            return detected_commands[0]
+        
+        # For "all_naked", collect up to max
+        if len(detected_commands) >= _MAX_BATCH_COMMANDS:
+            log.warning(
+                "Batch command limit reached (%d), ignoring remaining commands",
+                _MAX_BATCH_COMMANDS,
+            )
+            break
 
     # Return based on mode
     if scan_mode == "any_naked":
@@ -190,6 +184,62 @@ def detect_command(
         return None
 
     return detected_commands
+
+
+def _find_naked_commands_in_line(line: str) -> list[dict[str, str]]:
+    """Find all naked /command occurrences in a line.
+    
+    A command is "naked" if NOT inside:
+    - Inline code (`...`)
+    - Quotes ("..." or '...')
+    
+    Returns list of {command, args, full_command} dicts.
+    """
+    results = []
+    
+    # Pattern: /word followed by optional args (until end of line or next wrapper)
+    # Command must be preceded by start of line, whitespace, or certain punctuation
+    pattern = re.compile(r'(?:^|[\s\-–—\(])(/[a-zA-Z_][a-zA-Z0-9_]*)')
+    
+    for match in pattern.finditer(line):
+        slash_pos = match.start(1)  # Position of the / in the match
+        
+        # Check if inside inline code
+        if _is_inside_inline_code(line, slash_pos):
+            continue
+        
+        # Check if inside quotes
+        if _is_inside_quotes(line, slash_pos):
+            continue
+        
+        # Extract the full command from this position
+        remainder = line[slash_pos:]
+        cmd_info = _parse_command_line(remainder)
+        if cmd_info:
+            results.append(cmd_info)
+    
+    return results
+
+
+def _is_inside_quotes(line: str, position: int) -> bool:
+    """Check if position in line is inside quotes ("..." or '...').
+    
+    Simple heuristic: count unescaped quotes before position.
+    If odd for either type, position is inside that quote type.
+    """
+    prefix = line[:position]
+    
+    # Count unescaped double quotes
+    double_count = prefix.count('"') - prefix.count('\\"')
+    if double_count % 2 == 1:
+        return True
+    
+    # Count unescaped single quotes  
+    single_count = prefix.count("'") - prefix.count("\\'")
+    if single_count % 2 == 1:
+        return True
+    
+    return False
 
 
 def _parse_args(tool_name: str, args_str: str) -> dict[str, Any]:
