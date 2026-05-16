@@ -372,10 +372,10 @@ result = execute({"command": "pwd && ls -la | head -5"}, session_id=1)
 - [x] **Task 3.4: Update TOOL_ROLES**
   - [x] Sub-task 3.4.1: Add python to TOOL_ROLES in db_queries.py
 
-- [ ] **Task 3.5: Validasi**
-  - [ ] Sub-task 3.5.1: `ruff check app/tools/python_exec.py` ✓
-  - [ ] Sub-task 3.5.2: `python3 -m py_compile app/tools/python_exec.py` ✓
-  - [ ] Sub-task 3.5.3: Test manual: `/python print('hello')`, `/python 2+2`
+- [x] **Task 3.5: Validasi**
+  - [x] Sub-task 3.5.1: `ruff check app/tools/python_exec.py` ✓
+  - [x] Sub-task 3.5.2: `python3 -m py_compile app/tools/python_exec.py` ✓
+  - [x] Sub-task 3.5.3: Test manual: `/python print('hello')`, `/python 2+2`
 
 ---
 
@@ -397,10 +397,10 @@ result = execute({"command": "pwd && ls -la | head -5"}, session_id=1)
 - [x] **Task 4.3: Update system prompt**
   - [x] Sub-task 4.3.1: Tambah dokumentasi `/sql` dengan contoh dan security notes
 
-- [ ] **Task 4.4: Validasi**
-  - [ ] Sub-task 4.4.1: `ruff check app/tools/db_query.py`
-  - [ ] Sub-task 4.4.2: `python3 -m py_compile app/tools/db_query.py`
-  - [ ] Sub-task 4.4.3: Test manual: `/sql SELECT 1`, `/sql SELECT * FROM profiles LIMIT 1`
+- [x] **Task 4.4: Validasi**
+  - [x] Sub-task 4.4.1: `ruff check app/tools/db_query.py`
+  - [x] Sub-task 4.4.2: `python3 -m py_compile app/tools/db_query.py`
+  - [x] Sub-task 4.4.3: Test manual: `/sql SELECT 1`, `/sql SELECT * FROM profiles LIMIT 1`
 
 ---
 
