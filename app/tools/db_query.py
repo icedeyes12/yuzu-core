@@ -185,7 +185,7 @@ def _parse_psql_output(output: str, columns: list[str] | None = None) -> tuple[l
 # Main Execution
 # ------------------------------------------------------------
 
-def execute(arguments: dict, session_id: int | None = None) -> dict:
+def execute(arguments: dict, session_id: int | None = None, tool_name: str = "sql") -> dict:
     """Execute SQL query and return structured result.
     
     Args:
