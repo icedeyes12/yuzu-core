@@ -55,11 +55,11 @@ TOOL_DEFINITION = ToolDefinition(
 def _get_db_connection_params() -> dict[str, str]:
     """Get database connection parameters from environment."""
     return {
-        "host": os.environ.get("PG_HOST", "localhost"),
-        "port": os.environ.get("PG_PORT", "5432"),
-        "dbname": os.environ.get("PG_DBNAME", "yuzu"),
-        "user": os.environ.get("PG_USER", "postgres"),
-        "password": os.environ.get("PG_PASSWORD", ""),
+        "host": os.environ.get("PGHOST", os.environ.get("PG_HOST", "localhost")),
+        "port": os.environ.get("PGPORT", os.environ.get("PG_PORT", "5432")),
+        "dbname": os.environ.get("PGDATABASE", os.environ.get("PG_DBNAME", "yuzu")),
+        "user": os.environ.get("PGUSER", os.environ.get("PG_USER", "postgres")),
+        "password": os.environ.get("PGPASSWORD", os.environ.get("PG_PASSWORD", "")),
     }
 
 
