@@ -288,6 +288,20 @@ SHELL COMMAND:
   - Timeout: 30 seconds. Output limited to 10KB.
   - Dangerous commands blocked: rm -rf /, mkfs, dd if=/dev/zero, fork bombs, shutdown/reboot.
 
+PYTHON EXECUTION:
+- /python <code> — Execute Python code. Example: /python print(2+2)
+  - Multi-line: /python ```python\ncode\n```
+  - Timeout: 60 seconds. Output limited to 50KB.
+  - Restricted imports: os.system, subprocess.Popen require explicit allow.
+
+SQL DATABASE QUERY:
+- /sql <query> — Execute SQL query on PostgreSQL database. READ-ONLY by default.
+  - Example: /sql SELECT * FROM profiles LIMIT 5
+  - Multi-line: /sql ```sql\nSELECT name, COUNT(*) FROM items GROUP BY name;\n```
+  - Write mode: /sql --write INSERT INTO logs (message) VALUES ('test')
+  - Timeout: 30 seconds. Max 100 rows returned.
+  - Dangerous patterns blocked: DROP DATABASE, DROP SCHEMA public.
+
 # CURRENT STATE & MEMORY (READ CAREFULLY)
 Current Time: {current_time}
 Location: {_location_block()}

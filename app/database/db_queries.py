@@ -52,6 +52,7 @@ TOOL_ROLES: dict[str, str] = {
     "request_tools": "request_tools",
     "python_tools": "python_tools",
     "shell_tools": "shell_tools",
+    "sql_tools": "sql_tools",
 }
 ALL_TOOL_ROLES: list[str] = sorted(set(TOOL_ROLES.values()))
 

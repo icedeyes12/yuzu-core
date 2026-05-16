@@ -25,6 +25,7 @@ _STRING_ARG_TOOLS: dict[str, str] = {
     "rm": "path",
     "bash": "code",
     "python": "code",
+    "sql": "sql",
     # write is handled specially in _parse_args (path + content)
 }
 

@@ -62,6 +62,9 @@ def _load_tool_module(tool_name: str):
         elif tool_name == "python":
             from app.tools import python_exec
             _TOOL_MODULES[tool_name] = python_exec
+        elif tool_name == "sql":
+            from app.tools import db_query
+            _TOOL_MODULES[tool_name] = db_query
         else:
             return None
     return _TOOL_MODULES.get(tool_name)
@@ -124,6 +127,14 @@ def _collect_definitions():
         _TOOL_MODULES["python_exec"] = python_exec
     except Exception as e:
         logger.info(f"[registry] Failed to load python_exec definition: {e}")
+
+    # SQL query tool
+    try:
+        from app.tools import db_query
+        _TOOL_DEFINITIONS["sql"] = db_query.TOOL_DEFINITION
+        _TOOL_MODULES["db_query"] = db_query
+    except Exception as e:
+        logger.info(f"[registry] Failed to load db_query definition: {e}")
 
     _DEFINITIONS_INITIALIZED = True
 
