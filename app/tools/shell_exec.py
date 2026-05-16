@@ -140,12 +140,20 @@ def execute(arguments: dict, session_id: int | None = None, tool_name: str = "ba
 
     # Execute command
     try:
+        # Determine working directory
+        # Priority: environment > /home/workspace > ~/workspace
+        workdir = os.environ.get("YUZU_WORKSPACE") or "/home/workspace"
+        if not os.path.isdir(workdir):
+            workdir = os.path.expanduser("~/workspace")
+        if not os.path.isdir(workdir):
+            workdir = os.getcwd()
+        
         result = subprocess.run(
             ["bash", "-c", command],
             capture_output=True,
             text=True,
             timeout=DEFAULT_TIMEOUT,
-            cwd=os.path.expanduser("~/workspace"),  # Run in workspace
+            cwd=workdir,
         )
 
         stdout = result.stdout or ""
@@ -165,18 +173,6 @@ def execute(arguments: dict, session_id: int | None = None, tool_name: str = "ba
 
         combined_output = "\n".join(output_parts) if output_parts else "(no output)"
 
-        # Format markdown
-        status = "✓" if exit_code == 0 else "✗"
-        markdown = f"""<details>
-<summary>🔧 Shell{status}: {command[:50]}{'...' if len(command) > 50 else ''}</summary>
-
-```bash
-{combined_output}
-```
-
-> exit_code: {exit_code}
-</details>"""
-
         # Success result (even if exit_code != 0, we executed successfully)
         return ok_result(
             {
@@ -189,7 +185,6 @@ def execute(arguments: dict, session_id: int | None = None, tool_name: str = "ba
             TOOL_BASH,
             full_command,
             partner_name,
-            markdown=markdown,
         )
 
     except subprocess.TimeoutExpired:
