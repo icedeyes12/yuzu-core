@@ -10,7 +10,7 @@ import os
 import re
 
 from app.logging_config import get_logger
-from app.tools.schemas import ToolDefinition, error_result, ok_result, build_tool_control_block
+from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
 
 log = get_logger(__name__)
 
@@ -50,18 +50,17 @@ BLOCKED_IMPORTS = {
 TOOL_DEFINITION = ToolDefinition(
     name=TOOL_NAME,
     description="Execute Python code in Termux environment. Use for calculations, data processing, or quick scripts. Output limited to 50KB, timeout 60 seconds.",
-    parameters={
-        "code": {
-            "type": "string",
-            "description": "Python code to execute. Can be single line or multi-line code block.",
-            "required": True,
-        }
-    },
-    is_terminal=False,
-    examples=[
-        "/python print(2+2)",
-        "/python import os; print(os.getcwd())",
+    role="python_tools",
+    parameters=[
+        ToolParam(
+            name="code",
+            description="Python code to execute. Can be single line or multi-line code block.",
+            type="string",
+            required=True,
+        ),
     ],
+    is_terminal=False,
+    needs_session=False,
 )
 
 
@@ -193,12 +192,13 @@ def execute(arguments: dict, session_id: int | None = None, tool_name: str = TOO
         Result dict with ok, data, markdown fields
     """
     code_raw = arguments.get("code", "").strip()
+    full_command = f"/python {code_raw[:50]}{'...' if len(code_raw) > 50 else ''}"
     
     if not code_raw:
         return error_result(
             "No code provided",
-            TOOL_NAME,
-            "/python <code>",
+            TOOL_DEFINITION,
+            full_command,
             _get_partner_name(),
         )
     
@@ -211,8 +211,8 @@ def execute(arguments: dict, session_id: int | None = None, tool_name: str = TOO
         log.warning("[python] Security check failed: %s", error_msg)
         return error_result(
             error_msg,
-            TOOL_NAME,
-            "/python <code>",
+            TOOL_DEFINITION,
+            full_command,
             _get_partner_name(),
         )
     
@@ -223,51 +223,23 @@ def execute(arguments: dict, session_id: int | None = None, tool_name: str = TOO
     
     # Build result
     if success:
-        output = stdout if stdout else "(no output)"
-        markdown = build_tool_control_block(
-            {
-                "code": code[:500] + "..." if len(code) > 500 else code,
-                "output": output,
-                "duration_ms": duration_ms,
-            },
-            TOOL_NAME,
-            f"/python {code[:50]}{'...' if len(code) > 50 else ''}",
-            _get_partner_name(),
-            success=True,
-        )
-        
         return ok_result(
             {
-                "code": code,
-                "output": stdout,
+                "code": code[:500] + "..." if len(code) > 500 else code,
+                "output": stdout or "(no output)",
                 "stderr": stderr,
                 "duration_ms": duration_ms,
             },
-            markdown,
-            TOOL_NAME,
-            f"/python {code[:50]}{'...' if len(code) > 50 else ''}",
+            TOOL_DEFINITION,
+            full_command,
             _get_partner_name(),
         )
     else:
-        error_output = stderr if stderr else stdout
-        markdown = build_tool_control_block(
-            {
-                "code": code[:500] + "..." if len(code) > 500 else code,
-                "error": error_output,
-                "duration_ms": duration_ms,
-            },
-            TOOL_NAME,
-            f"/python {code[:50]}{'...' if len(code) > 50 else ''}",
-            _get_partner_name(),
-            success=False,
-        )
-        
         return error_result(
-            error_output,
-            TOOL_NAME,
-            f"/python {code[:50]}{'...' if len(code) > 50 else ''}",
+            stderr or stdout or "Execution failed",
+            TOOL_DEFINITION,
+            full_command,
             _get_partner_name(),
-            markdown=markdown,
         )
 
 

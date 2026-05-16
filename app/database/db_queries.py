@@ -44,9 +44,14 @@ TOOL_ROLES: dict[str, str] = {
     "mkdir": "fs_tools",
     "rm": "fs_tools",
     # Shell execution
-    "bash": "fs_tools",
+    "bash": "shell_tools",
     # Python execution
-    "python": "fs_tools",
+    "python": "python_tools",
+    "fs_tools": "fs_tools",
+    "image_tools": "image_tools",
+    "request_tools": "request_tools",
+    "python_tools": "python_tools",
+    "shell_tools": "shell_tools",
 }
 ALL_TOOL_ROLES: list[str] = sorted(set(TOOL_ROLES.values()))
 

@@ -111,7 +111,7 @@ def _collect_definitions():
     # Shell execution tool
     try:
         from app.tools import shell_exec
-        for name, defn in shell_exec.TOOLS.items():
+        for name, defn in shell_exec.TOOL_DEFINITION.items():
             _TOOL_DEFINITIONS[name] = defn
         _TOOL_MODULES["shell_exec"] = shell_exec
     except Exception as e:
