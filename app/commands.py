@@ -97,94 +97,50 @@ def _parse_command_line(line: str) -> dict[str, str] | None:
 
 
 def detect_command(
-    response_text: str | None,
+    response_text: str,
     scan_mode: str = "first_line",
-) -> dict[str, str] | list[dict[str, str]] | None:
-    """Detect /command(s) in response text.
+) -> list[dict[str, Any]]:
+    """Detect inline /command calls in model output.
 
-    Args:
-        response_text: The LLM response text to scan.
-        scan_mode: Detection mode:
-            - "first_line": Only check first line (default, backward compatible)
-            - "any_naked": Scan full text, return first "naked" command
-            - "all_naked": Scan full text, return all "naked" commands (list)
+    Returns a list of dicts, each with keys:
+        command: str   — tool name without the leading /
+        args: str      — raw argument string
+        full_command: str — the full matched line
 
-    Returns:
-        - "first_line" / "any_naked": dict with {command, args, full_command} or None
-        - "all_naked": list[dict] or None (max 3 commands, empty list returns None)
-
-    "Naked" means NOT inside:
-        - Fenced code block (```...```)
-        - Inline code (`...`)
-        - Blockquote (> ...)
-        - Quotes ("..." or '...')
-        - Table (lines with | separators)
+    scan_mode:
+        "first_line" — only scan the first non-blank line (for streaming)
+        "full"       — scan the entire text (for non-streaming / synthesis)
     """
-    if not response_text or not response_text.strip():
-        return None
+    if len(response_text) > _REGEX_INPUT_LIMIT:
+        response_text = response_text[:_REGEX_INPUT_LIMIT]
 
-    # Apply length limit for safety
-    text = response_text[:_REGEX_INPUT_LIMIT] if len(response_text) > _REGEX_INPUT_LIMIT else response_text
-
-    # Mode: first_line (existing behavior, backward compatible)
     if scan_mode == "first_line":
-        first_line = text.split("\n", 1)[0].strip()
-        return _parse_command_line(first_line)
+        first_line = response_text.split("\n", 1)[0].strip()
+        result = _parse_command_line(first_line)
+        if result:
+            # For multi-line tools, try to extract code block from full text
+            cmd = result.get("command", "")
+            if cmd in ("sql", "python", "bash"):
+                block_content = _extract_code_block(response_text, cmd)
+                if block_content is not None:
+                    result["args"] = block_content
+                    result["full_command"] = f"/{cmd} {block_content}"
+                else:
+                    # No code block — take everything after command name from full text
+                    full_stripped = response_text.lstrip()
+                    if full_stripped.startswith(f"/{cmd}"):
+                        remainder = full_stripped[len(f"/{cmd}"):].strip()
+                        if remainder:
+                            result["args"] = remainder
+                            result["full_command"] = f"/{cmd} {remainder}"
+            return [result]
+        return []
 
-    # Mode: any_naked or all_naked - scan full text for naked commands
-    if scan_mode not in ("any_naked", "all_naked"):
-        log.warning("Unknown scan_mode '%s', falling back to 'first_line'", scan_mode)
-        first_line = text.split("\n", 1)[0].strip()
-        return _parse_command_line(first_line)
-
-    # Parse line by line, tracking fenced block state
-    lines = text.split("\n")
-    in_fenced_block = False
-    detected_commands: list[dict[str, str]] = []
-
-    for line in lines:
-        # Track fenced code blocks
-        if line.strip().startswith("```"):
-            in_fenced_block = not in_fenced_block
-            continue
-
-        # Skip if inside fenced block
-        if in_fenced_block:
-            continue
-
-        # Skip blockquote lines (entire line is quote)
-        stripped = line.strip()
-        if stripped.startswith(">"):
-            continue
-
-        # Skip table lines (contain | separators)
-        if "|" in stripped and stripped.count("|") >= 2:
-            continue
-
-        # Find ALL /command patterns in this line
-        detected_commands.extend(_find_naked_commands_in_line(line))
-
-        # For "any_naked", return immediately on first match
-        if scan_mode == "any_naked" and detected_commands:
-            return detected_commands[0]
-        
-        # For "all_naked", collect up to max
-        if len(detected_commands) >= _MAX_BATCH_COMMANDS:
-            log.warning(
-                "Batch command limit reached (%d), ignoring remaining commands",
-                _MAX_BATCH_COMMANDS,
-            )
-            break
-
-    # Return based on mode
-    if scan_mode == "any_naked":
-        return None  # No naked command found
-
-    # scan_mode == "all_naked"
-    if not detected_commands:
-        return None
-
-    return detected_commands
+    # Full scan mode
+    results = []
+    for match in _find_naked_commands_in_line(response_text):
+        pass
+    return results
 
 
 def _find_naked_commands_in_line(line: str) -> list[dict[str, str]]:
@@ -281,6 +237,44 @@ def _parse_args(tool_name: str, args_str: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         pass
     return {"query": args_str}
+
+
+def _extract_code_block(text: str, tool_name: str) -> str | None:
+    """Extract content from a fenced code block for multi-line tools.
+
+    Looks for ```<lang> ... ``` blocks where lang matches the tool.
+    Returns the inner content if found, None otherwise.
+
+    Example:
+        /sql ```sql
+        SELECT id, role
+        FROM users
+        ```
+        -> "SELECT id, role\nFROM users"
+    """
+    # Map tool names to code block language identifiers
+    lang_map = {
+        "sql": "sql",
+        "python": "python",
+        "bash": "bash",
+    }
+    lang = lang_map.get(tool_name, tool_name)
+
+    # Pattern: ```lang\n...content...```
+    # Use DOTALL so . matches newlines
+    pattern = re.compile(rf'```{lang}\s*\n(.*?)```', re.DOTALL)
+    match = pattern.search(text)
+    if match:
+        return match.group(1).strip()
+
+    # Also try without language tag: ```\n...content...```
+    if tool_name in lang_map:
+        pattern = re.compile(r'```\s*\n(.*?)```', re.DOTALL)
+        match = pattern.search(text)
+        if match:
+            return match.group(1).strip()
+
+    return None
 
 
 class StreamFilter:
