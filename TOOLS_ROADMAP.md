@@ -383,21 +383,21 @@ TOOL_ROLES: dict[str, str] = {
 
 ### PHASE 4: Database Query Tool
 
-- [ ] **Task 4.1: Buat `app/tools/db_query.py`**
-  - [ ] Sub-task 4.1.1: Implement `TOOL_DEFINITION` untuk `/sql`
-  - [ ] Sub-task 4.1.2: Implement `execute()` dengan `psql` subprocess
-  - [ ] Sub-task 4.1.3: Support multi-line SQL queries (```sql ... ```)
-  - [ ] Sub-task 4.1.4: Format output sebagai markdown table
-  - [ ] Sub-task 4.1.5: Security: READ-ONLY mode by default
-  - [ ] Sub-task 4.1.6: Implement `--write` flag for INSERT/UPDATE
-  - [ ] Sub-task 4.1.7: Read DB connection from environment variables
+- [x] **Task 4.1: Buat `app/tools/db_query.py`**
+  - [x] Sub-task 4.1.1: Implement `TOOL_DEFINITION` untuk `/sql`
+  - [x] Sub-task 4.1.2: Implement `execute()` dengan `psql` subprocess
+  - [x] Sub-task 4.1.3: Support multi-line SQL queries (```sql ... ```)
+  - [x] Sub-task 4.1.4: Format output sebagai markdown table
+  - [x] Sub-task 4.1.5: Security: READ-ONLY mode by default
+  - [x] Sub-task 4.1.6: Implement `--write` flag for INSERT/UPDATE
+  - [x] Sub-task 4.1.7: Read DB connection from environment variables
 
-- [ ] **Task 4.2: Register di `registry.py` dan `commands.py`**
-  - [ ] Sub-task 4.2.1: Tambah import di `_collect_definitions()` dan `_load_tool_module()`
-  - [ ] Sub-task 4.2.2: Tambah `"sql"` di `_STRING_ARG_TOOLS`
+- [x] **Task 4.2: Register di `registry.py` dan `commands.py`**
+  - [x] Sub-task 4.2.1: Tambah import di `_collect_definitions()` dan `_load_tool_module()`
+  - [x] Sub-task 4.2.2: Tambah `"sql"` di `_STRING_ARG_TOOLS`
 
-- [ ] **Task 4.3: Update system prompt**
-  - [ ] Sub-task 4.3.1: Tambah dokumentasi `/sql` dengan contoh dan security notes
+- [x] **Task 4.3: Update system prompt**
+  - [x] Sub-task 4.3.1: Tambah dokumentasi `/sql` dengan contoh dan security notes
 
 - [ ] **Task 4.4: Validasi**
   - [ ] Sub-task 4.4.1: `ruff check app/tools/db_query.py`
