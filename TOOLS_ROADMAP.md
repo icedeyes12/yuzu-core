@@ -408,7 +408,7 @@ TOOL_ROLES: dict[str, str] = {
 
 ### PHASE 5: Heredoc & Multi-line Support
 
-- [ ] **Task 5.1: Extend command parser untuk heredoc**
+- [x] **Task 5.1: Extend command parser untuk heredoc**
   - [ ] Sub-task 5.1.1: Parse heredoc syntax di `_parse_args()` atau new helper function
   - [ ] Sub-task 5.1.2: Support format: `/write path <<EOF\ncontent\nEOF`
   - [ ] Sub-task 5.1.3: Support code block format: `/python ```python\ncode\n``` `
