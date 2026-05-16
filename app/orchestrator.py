@@ -280,8 +280,11 @@ def _run_synthesis(
 
     Returns the cleaned synthesis text, or None when the LLM returned nothing.
     """
+    # Build image context from tool output (e.g., /imagine results)
+    image_context = _build_image_context(tool_markdown, session_id)
+    
     text, _ = generate_ai_response(
-        profile, "", interface, session_id, image_content_for_context=None
+        profile, "", interface, session_id, image_content_for_context=image_context
     )
     if not text or not text.strip():
         return None
@@ -311,11 +314,14 @@ def _stream_synthesis(
     _run_synthesis path because nested execution is structural, not a
     streaming concern.
     """
+    # Build image context from tool output (e.g., /imagine results)
+    image_context = _build_image_context(tool_markdown, session_id)
+    
     sf = StreamFilter()
     accumulated: list[str] = []
     for chunk in generate_ai_response_streaming(
         profile, "", interface, session_id,
-        image_content_for_context=None,
+        image_content_for_context=image_context,
     ):
         for safe in sf.feed(chunk):
             accumulated.append(safe)
