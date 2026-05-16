@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 import subprocess
 import logging
@@ -148,7 +147,7 @@ def execute(arguments: dict, session_id: int | None = None, tool_name: str = "ba
             capture_output=True,
             text=True,
             timeout=DEFAULT_TIMEOUT,
-            cwd=os.path.expanduser("~/workspace"),  # Run in workspace
+            cwd="/tmp",
         )
 
         duration_ms = int((time.time() - start_time) * 1000)

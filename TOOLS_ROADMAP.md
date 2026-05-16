@@ -406,9 +406,11 @@ result = execute({"command": "pwd && ls -la | head -5"}, session_id=1)
 
 ### PHASE 5: Heredoc & Multi-line Support
 
-- [x] **Task 5.1: Heredoc parsing** — Parse heredoc syntax in _parse_args for /write
-- [x] **Task 5.2: StreamFilter heredoc** — Update StreamFilter to buffer heredoc content during streaming
-- [x] **Task 5.3: Flush heredoc** — Handle heredoc cleanup in flush()
+- [x] **Task 5.1: Heredoc detection in `_parse_args`** — `<<DELIM` pattern, extract body until closing delimiter
+- [x] **Task 5.2: Code block extraction** — `_extract_code_block()` for `sql`/`python`/`bash`
+- [x] **Task 5.3: Multi-line args fallback** — `detect_command` first_line mode now takes full text remainder for multi-line tools
+- [x] **Task 5.4: StreamFilter heredoc buffering** — `feed()`/`flush()` handle heredoc mode
+- [x] **Task 5.5: Tests** — multi-line SQL, code block SQL, single-line SQL all pass
 
 ---
 

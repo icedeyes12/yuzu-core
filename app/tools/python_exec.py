@@ -141,7 +141,7 @@ def _execute_python(code: str) -> tuple[bool, str, str, int]:
             capture_output=True,
             text=True,
             timeout=TIMEOUT_SECONDS,
-            cwd=os.path.expanduser("~/workspace"),
+            cwd="/tmp",
             env={**os.environ, "PYTHONIOENCODING": "utf-8"},
         )
         
