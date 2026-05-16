@@ -324,33 +324,31 @@ def _run_synthesis(...):
 - [x] **Task 2.5: Update `db_queries.py` TOOL_ROLES**
   - [x] Sub-task 2.5.1: Add fs_tools role mapping
 
+- [x] **Task 2.6: Bug Fixes**
+  - [x] Sub-task 2.6.1: Fix `ok_result()` invalid `markdown` argument
+  - [x] Sub-task 2.6.2: Add `duration_ms` and `output` to data dict
+  - [x] Sub-task 2.6.3: Test on Termux via SSH — **SUCCESS**
+
 ---
 
-## Debug Session: Tool Output Formatting
+## Test Results on Termux (SSH)
 
-**Problem:** `/ls` tool results not reaching synthesis LLM
-
-**Root Cause:**
-- `format_ai_history_rows()` in `db_queries.py` filters messages by `ALL_TOOL_ROLES`
-- `fs_tools` role was not defined in `TOOL_ROLES`
-- Messages with role `fs_tools` were dropped from AI context
-- Synthesis LLM couldn't see tool results → empty response
-
-**Fix (commit fd8e9d2):**
-```python
-TOOL_ROLES: dict[str, str] = {
-    "read": "fs_tools",
-    "write": "fs_tools", 
-    "ls": "fs_tools",
-    "mkdir": "fs_tools",
-    "rm": "fs_tools",
-    "bash": "fs_tools",
-}
+### Test Environment
+```bash
+ssh -p 2222 localhost  # From container to Termux
 ```
 
-**Verification:**
-- Before: `fs_tools messages: 0`
-- After: `fs_tools messages: 13`
+### `/ls` Test
+```python
+result = execute_ls({"path": "~"}, session_id=1)
+# Result: OK=True, Total=36 items (17 dirs, 19 files)
+```
+
+### `/bash` Test (after fix)
+```python
+result = execute({"command": "pwd && ls -la | head -5"}, session_id=1)
+# Result: OK=True, exit_code=0, duration_ms=15ms
+```
 
 ---
 
