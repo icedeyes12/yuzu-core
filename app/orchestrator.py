@@ -306,7 +306,12 @@ def _run_synthesis(
         tool_name, nested_result = execute_command(nested, session_id=session_id)
         nested_md = nested_result.get("markdown", str(nested_result))
         _persist_tool_result(tool_name, nested_md, session_id)
-        cleaned = nested_md
+        # Preserve narration before the nested command, append tool result
+        narration = _strip_command_line(cleaned, nested)
+        if narration:
+            cleaned = f"{narration}\n\n{nested_md}"
+        else:
+            cleaned = nested_md
     return cleaned
 
 
@@ -691,6 +696,18 @@ def handle_user_message_streaming(
     synthesis = _clean(full_synthesis) if full_synthesis else None
 
     if synthesis:
+        # Check for nested commands in synthesis (e.g. "Aku sudah baca. /edit file.txt")
+        nested = detect_command(synthesis)
+        if nested:
+            log.info("streaming: executing nested command in synthesis: /%s", nested["command"])
+            tool_name, nested_result = execute_command(nested, session_id=session_id)
+            nested_md = nested_result.get("markdown", str(nested_result))
+            _persist_tool_result(tool_name, nested_md, session_id)
+            narration = _strip_command_line(synthesis, nested)
+            if narration:
+                synthesis = f"{narration}\n\n{nested_md}"
+            else:
+                synthesis = nested_md
         Database.add_message("assistant", synthesis, session_id=session_id)
         final_response = (
             f"{combined_tool_markdown}\n\n{synthesis}" if any_image_tool else synthesis
