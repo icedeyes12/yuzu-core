@@ -639,3 +639,17 @@ def test_execute_error():
 - `file app/commands.py` — Command detection and parsing
 - `file app/prompts.py` — System prompt with tool documentation
 - `file AGENTS.md` — Architecture constraints and rules
+
+## Bug Fixes Log
+
+### 2026-05-17
+- **[FIXED]** OpenRouter `:free` models crash with TypeError
+  - **Root cause:** `min(max_tokens, 2048)` when `max_tokens=None`
+  - **Fix:** `min(max_tokens or 2048, 2048)`
+  - **Files:** `app/providers.py` (lines 445, 522, 586)
+  - **Commit:** `b2de592`
+
+### Known Issues (Resolved)
+- [x] ~~`/ls ~/workspace` returns empty~~ — Fixed path validation
+- [x] ~~`/sql SELECT 1;` returns error~~ — Fixed DB connection
+- [x] ~~API key notification always shows "already exists"~~ — Fixed timestamp column
