@@ -159,7 +159,7 @@ SQL_PROFILE_INSERT_DEFAULT = """
 INSERT INTO profiles (display_name, partner_name, affection, theme,
                       memory_state, session_history, global_knowledge,
                       providers_config, context, timestamp, updated_at)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
 
 DEFAULT_PROFILE_PARAMS = ("", "", 50, "default", "{}", "{}", "{}", "{}", "{}", datetime.now(), datetime.now())
@@ -331,7 +331,7 @@ SQL_APIKEY_SELECT_ID_BY_NAME = \
 SQL_APIKEY_UPDATE = \
     "UPDATE api_keys SET key_value = %s, key_encrypted = %s WHERE key_name = %s"
 SQL_APIKEY_INSERT = (
-    "INSERT INTO api_keys (key_name, key_value, key_encrypted, timestamp) "
+    "INSERT INTO api_keys (key_name, key_value, key_encrypted, created_at) "
     "VALUES (%s, %s, %s, %s)"
 )
 SQL_APIKEY_DELETE = "DELETE FROM api_keys WHERE key_name = %s"
