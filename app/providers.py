@@ -348,6 +348,7 @@ class OpenRouterProvider(AIProvider):
         self.is_available = bool(self.api_key)
         self.available_models = [
             "deepseek/deepseek-chat-v3-0324:free",
+            "deepseek/deepseek-v4-flash:free",
             "openai/gpt-4o",
             "openai/gpt-4o-mini",
             "anthropic/claude-sonnet-4",
