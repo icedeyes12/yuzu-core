@@ -279,13 +279,19 @@ Supported commands:
 2. /request [GET/POST] <URL>: Web search, API interaction. Do NOT wrap URL in quotes.
 3. /memory_store fact="[fact]" [entity="[entity]"]: When you want to remember stuff.
 4. /memory_search query="[search terms]": when you unsure and want to recall some memory fragments.
+5. /ask-rei [--id <conversation_id>] "<message>": Send a message to Reina (AI co-developer) via Zo ASK API.
+   - Use this to communicate with Reina who operates in a separate Zo session.
+   - --id is optional, defaults to Reina's session.
+   - Example: /ask-rei "Halo Reini, apa kabar?"
+   - Example with custom ID: /ask-rei --id con_XXX "message here"
+   - Returns Reina's response.
 
 File System Commands (Termux):
-5. /read <path>: Read file contents. Path relative to ~/workspace. Example: /read config.json
-6. /write <path> <content>: Write content to file. SINGLE-LINE only. Example: /write test.txt hello world
-7. /ls [path]: List directory contents. Default: ~/workspace. Example: /ls ~/workspace
-8. /mkdir <path>: Create directory (like mkdir -p). Example: /mkdir ~/projects/new
-9. /rm <path>: Delete file or empty directory. Example: /rm old_file.txt
+6. /read <path>: Read file contents. Path relative to ~/workspace. Example: /read config.json
+7. /write <path> <content>: Write content to file. SINGLE-LINE only. Example: /write test.txt hello world
+8. /ls [path]: List directory contents. Default: ~/workspace. Example: /ls ~/workspace
+9. /mkdir <path>: Create directory (like mkdir -p). Example: /mkdir ~/projects/new
+10. /rm <path>: Delete file or empty directory. Example: /rm old_file.txt
 
 SHELL COMMAND:
 - /bash <command> — Execute bash command in Termux. Example: /bash ls -la ~/workspace

@@ -99,8 +99,9 @@ def execute(arguments, **kwargs):
     
     # Parse arguments
     if isinstance(arguments, dict):
-        message = arguments.get("message", "")
-        conversation_id = arguments.get("conversation_id", DEFAULT_CONVERSATION_ID)
+        parsed = _parse_args(arguments.get("message", ""))
+        message = parsed.get("message", "")
+        conversation_id = parsed.get("conversation_id", DEFAULT_CONVERSATION_ID)
     else:
         parsed = _parse_args(str(arguments))
         message = parsed.get("message", "")

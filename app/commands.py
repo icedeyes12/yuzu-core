@@ -36,6 +36,7 @@ _STRING_ARG_TOOLS: dict[str, str] = {
 _TOOL_ALIASES: dict[str, str] = {
     "imagine": "image_generate",
     "image_generate": "image_generate",
+    "ask-rei": "ask_rei",
 }
 
 _MARKDOWN_IMAGE_PATH = re.compile(
@@ -477,7 +478,7 @@ def _execute_single_command(
     """Execute a single command. Internal helper."""
     raw_name = command_info["command"]
     tool_name = _TOOL_ALIASES.get(raw_name, raw_name)
-    args = _parse_args(raw_name, command_info["args"])
+    args = _parse_args(tool_name, command_info["args"])
     log.info("command: /%s %s", raw_name, command_info["args"])
     result = execute_tool(tool_name, args, session_id=session_id)
     return tool_name, result
