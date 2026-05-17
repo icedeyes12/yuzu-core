@@ -12,7 +12,7 @@ from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 logger = logging.getLogger(__name__)
 
 # Default conversation ID for Reina's session
-DEFAULT_CONVERSATION_ID = "con_JC2FyZFrYEoag76X"
+DEFAULT_CONVERSATION_ID = "con_TzvviTNTYCFCJ7AR"
 
 # Zo ASK API endpoint
 ZO_ASK_URL = "https://api.zo.computer/zo/ask"
