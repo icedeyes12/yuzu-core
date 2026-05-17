@@ -558,10 +558,11 @@ class OpenRouterProvider(AIProvider):
                 self._last_raw_response = result
                 return result
             else:
-                logger.debug(f"[OpenRouter] raw error {response.status_code}: {response.text[:200]}")
+                logger.warning(f"[OpenRouter] raw error {response.status_code}: {response.text[:500]}")
                 return None
                 
-        except Exception:
+        except Exception as e:
+            logger.error(f"[OpenRouter] exception in send_message_raw: {type(e).__name__}: {e}")
             return None
     
     def send_message_streaming(self, messages: list[dict], model: str, **kwargs) -> Generator[str, None, None]:
