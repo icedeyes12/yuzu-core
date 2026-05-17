@@ -65,6 +65,9 @@ def _load_tool_module(tool_name: str):
         elif tool_name == "sql":
             from app.tools import db_query
             _TOOL_MODULES[tool_name] = db_query
+        elif tool_name == "ask_rei":
+            from app.tools import ask_rei
+            _TOOL_MODULES[tool_name] = ask_rei
         else:
             return None
     return _TOOL_MODULES.get(tool_name)
@@ -135,6 +138,14 @@ def _collect_definitions():
         _TOOL_MODULES["db_query"] = db_query
     except Exception as e:
         logger.info(f"[registry] Failed to load db_query definition: {e}")
+
+    # Ask Rei tool
+    try:
+        from app.tools import ask_rei
+        _TOOL_DEFINITIONS["ask_rei"] = ask_rei.TOOL_DEFINITION
+        _TOOL_MODULES["ask_rei"] = ask_rei
+    except Exception as e:
+        logger.info(f"[registry] Failed to load ask_rei definition: {e}")
 
     _DEFINITIONS_INITIALIZED = True
 

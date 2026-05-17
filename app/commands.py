@@ -26,6 +26,8 @@ _STRING_ARG_TOOLS: dict[str, str] = {
     "bash": "command",  # Fixed: was "code"
     "python": "code",
     "sql": "query",     # Fixed: was "sql"
+    # Ask Rei tool
+    "ask_rei": "message",
     # write is handled specially in _parse_args (path + content)
 }
 
