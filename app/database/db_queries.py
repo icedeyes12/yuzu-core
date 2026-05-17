@@ -549,7 +549,7 @@ def format_ai_history_rows(rows: list[dict]) -> list[dict]:
       * 'user' rows get an appended formatted timestamp.
       * 'assistant' / 'system' rows pass through unchanged.
       * tool-role rows expand into TWO entries: an assistant /command
-        line and a tool-role result entry.
+        line and a tool result entry with role="tool" (valid API role).
     """
     formatted: list[dict] = []
     for msg in rows:
@@ -565,12 +565,14 @@ def format_ai_history_rows(rows: list[dict]) -> list[dict]:
         elif role in ("assistant", "system"):
             formatted.append({"role": role, "content": content})
         elif role in ALL_TOOL_ROLES:
+            # Tool-role messages: expand into assistant command + tool result
+            # Use role="tool" for API compatibility (valid roles: developer, system, user, assistant, tool, function)
             formatted.append({
                 "role": "assistant",
                 "content": extract_command_from_markdown_contract(content),
             })
             formatted.append({
-                "role": role,
+                "role": "tool",  # Fixed: use valid API role instead of custom role like "sql_tools"
                 "content": extract_raw_result_from_markdown_contract(content),
             })
     return formatted
