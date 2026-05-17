@@ -18,7 +18,7 @@ DEFAULT_CONVERSATION_ID = "con_JC2FyZFrYEoag76X"
 ZO_ASK_URL = "https://api.zo.computer/zo/ask"
 
 # Request timeout
-TIMEOUT = 60
+TIMEOUT = 120
 
 
 TOOL_DEFINITION = ToolDefinition(
