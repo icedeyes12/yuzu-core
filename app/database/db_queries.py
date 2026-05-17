@@ -49,6 +49,7 @@ TOOL_ROLES: dict[str, str] = {
     "python": "python_tools",
     # SQL queries
     "sql": "sql_tools",
+    "ask_rei": "ask_rei_tools",
     "fs_tools": "fs_tools",
     "image_tools": "image_tools",
     "request_tools": "request_tools",
@@ -565,10 +566,10 @@ def format_ai_history_rows(rows: list[dict]) -> list[dict]:
         elif role in ("assistant", "system"):
             formatted.append({"role": role, "content": content})
         elif role in ALL_TOOL_ROLES:
-            # Keep original tool role - provider _normalize_messages will convert to assistant
-            # with [role] prefix. This maintains Chutes compatibility and avoids tool_call_id
-            # requirement (OpenRouter/DeepSeek crash on role="tool" without tool_call_id).
-            formatted.append({"role": role, "content": content})
+            # Strip tool-contract markdown and keep only the raw result
+            # so the AI can actually read the tool output.
+            raw = extract_raw_result_from_markdown_contract(content)
+            formatted.append({"role": role, "content": raw})
     return formatted
 
 
