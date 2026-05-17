@@ -442,7 +442,7 @@ class OpenRouterProvider(AIProvider):
             
             # Free tier rate limiting
             if model.endswith(':free'):
-                max_tokens = min(max_tokens, 2048)
+                max_tokens = min(max_tokens or 2048, 2048)
                 temperature = min(temperature, 0.8)
             
             headers = {
@@ -519,7 +519,7 @@ class OpenRouterProvider(AIProvider):
             typical_p = kwargs.get('typical_p', 0.8)
             
             if model.endswith(':free'):
-                max_tokens = min(max_tokens, 2048)
+                max_tokens = min(max_tokens or 2048, 2048)
                 temperature = min(temperature, 0.8)
             
             headers = {
@@ -583,7 +583,7 @@ class OpenRouterProvider(AIProvider):
             
             # Free tier rate limiting
             if model.endswith(':free'):
-                max_tokens = min(max_tokens, 2048)
+                max_tokens = min(max_tokens or 2048, 2048)
                 temperature = min(temperature, 0.8)
             
             headers = {
