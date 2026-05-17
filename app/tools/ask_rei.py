@@ -141,7 +141,7 @@ def execute(arguments, **kwargs):
             json={
                 "input": full_message,
                 "conversation_id": conversation_id,
-                "model_name": "vercel:minimax/minimax-m2.7",
+                "model_name": "vercel:zai/glm-5",  # Use current model (free)
             },
             timeout=TIMEOUT,
         )
