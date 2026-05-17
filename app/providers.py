@@ -386,6 +386,7 @@ class OpenRouterProvider(AIProvider):
             "tngtech/deepseek-r1t2-chimera",
             "z-ai/glm-4.6",
             "z-ai/glm-4.7",
+            "openrouter/owl-alpha",
         ]
     
     def _load_api_key(self):
