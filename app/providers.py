@@ -578,6 +578,9 @@ class OpenRouterProvider(AIProvider):
                     vision_messages = self.format_vision_message(last_user_message)
                     messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
             
+            # Normalize messages (convert custom tool roles to assistant)
+            messages = self._normalize_messages(messages)
+            
             temperature = kwargs.get('temperature', 0.73)
             max_tokens = kwargs.get('max_tokens')
             top_p = kwargs.get('top_p', 0.9)
