@@ -548,9 +548,8 @@ def format_ai_history_rows(rows: list[dict]) -> list[dict]:
       * 'event_log' rows are skipped.
       * 'user' rows get an appended formatted timestamp.
       * 'assistant' / 'system' rows pass through unchanged.
-      * tool-role rows expand into TWO entries: an assistant /command
-        line and a user message containing the tool result (provider-agnostic,
-        no tool_call_id required).
+      * tool-role rows pass through with their original custom role.
+        Provider normalization will convert them to 'assistant' with [role] prefix.
     """
     formatted: list[dict] = []
     for msg in rows:
@@ -566,18 +565,10 @@ def format_ai_history_rows(rows: list[dict]) -> list[dict]:
         elif role in ("assistant", "system"):
             formatted.append({"role": role, "content": content})
         elif role in ALL_TOOL_ROLES:
-            # Tool-role messages: expand into assistant command + tool result
-            # Use role="user" for the tool result to avoid requiring tool_call_id
-            # This is provider-agnostic: Chutes reads markdown content, and strict
-            # models like DeepSeek won't crash on role="tool" without tool_call_id.
-            formatted.append({
-                "role": "assistant",
-                "content": extract_command_from_markdown_contract(content),
-            })
-            formatted.append({
-                "role": "user",  # Provider-agnostic: valid role, no tool_call_id needed
-                "content": f"[Tool Result]\n{extract_raw_result_from_markdown_contract(content)}",
-            })
+            # Keep original tool role - provider _normalize_messages will convert to assistant
+            # with [role] prefix. This maintains Chutes compatibility and avoids tool_call_id
+            # requirement (OpenRouter/DeepSeek crash on role="tool" without tool_call_id).
+            formatted.append({"role": role, "content": content})
     return formatted
 
 
