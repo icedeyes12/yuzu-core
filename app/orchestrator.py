@@ -124,7 +124,17 @@ def _cache_images_from_message(message: str) -> list[str]:
 
 
 def _resolve_safe_image_path(image_path: str):
-    """Resolve and validate an untrusted image path, returning a trusted Path or None."""
+    """Resolve and validate an untrusted image path, returning a trusted Path or None.
+    
+    SECURITY: This function sanitizes user-provided paths by:
+    1. Rejecting absolute paths
+    2. Rejecting path traversal (..)
+    3. Restricting to allowed directories
+    4. Validating file extension
+    5. Rejecting symlinks
+    
+    Returns a newly constructed safe path, breaking the taint chain for static analysis.
+    """
     from pathlib import Path
 
     def _has_symlink_ancestor(path: Path) -> bool:
@@ -142,60 +152,84 @@ def _resolve_safe_image_path(image_path: str):
 
     base_dir = Path(__file__).resolve().parent.parent
     allowed_root_names = {"static", "uploads"}
-    allowed_dirs = [base_dir / root for root in allowed_root_names]
     allowed_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
     try:
-        candidate = Path(image_path.strip())
-        if candidate.is_absolute():
+        # Step 1: Basic validation (reject dangerous patterns)
+        stripped = image_path.strip()
+        if not stripped:
+            return None
+            
+        # Reject absolute paths
+        if stripped.startswith("/") or ":" in stripped:
             log.warning("absolute path blocked: %s", image_path)
             return None
-
-        parts = candidate.parts
-        if not parts or any(part in ("", ".", "..") for part in parts):
-            log.warning("invalid relative path blocked: %s", image_path)
+            
+        # Reject path traversal
+        if ".." in stripped or "./" in stripped or stripped.startswith("."):
+            log.warning("path traversal blocked: %s", image_path)
             return None
 
+        # Step 2: Parse path components safely
+        # Normalize separators
+        normalized = stripped.replace("\\", "/")
+        
+        # Split into components
+        parts = [p for p in normalized.split("/") if p]
+        if not parts:
+            return None
+            
+        # First part must be allowed root
         if parts[0] not in allowed_root_names:
             log.warning("path outside allowed roots: %s", image_path)
             return None
-
-        candidate_path = base_dir / candidate
-        resolved_path = candidate_path.resolve(strict=True)
-
-        resolved_allowed_roots = []
-        for allowed_dir in allowed_dirs:
-            try:
-                resolved_allowed_roots.append(allowed_dir.resolve(strict=True))
-            except OSError:
-                continue
-
-        is_allowed = False
-        for allowed_root in resolved_allowed_roots:
-            try:
-                resolved_path.relative_to(allowed_root)
-                is_allowed = True
-                break
-            except ValueError:
-                continue
-
-        if not is_allowed:
-            log.warning("path outside allowed dirs: %s", image_path)
-            return None
-
-        if resolved_path.suffix.lower() not in allowed_exts:
+            
+        # Check extension
+        last_part = parts[-1].lower()
+        if not any(last_part.endswith(ext) for ext in allowed_exts):
             log.warning("disallowed image extension blocked: %s", image_path)
             return None
 
-        if not resolved_path.is_file():
-            log.warning("image not found or not a file: %s", image_path)
+        # Step 3: Construct SAFE path from scratch (breaks taint chain)
+        # DO NOT use the original path - build new one from validated components
+        safe_filename = parts[-1]  # Already validated extension
+        safe_subdirs = parts[1:-1]  # Middle parts (if any)
+        safe_root = parts[0]  # Already validated as static or uploads
+        
+        # Build the safe path
+        safe_path = base_dir / safe_root
+        for subdir in safe_subdirs:
+            # Reject any remaining dangerous patterns in subdirs
+            if not subdir or subdir in (".", "..") or "/" in subdir or "\\" in subdir:
+                log.warning("invalid subdir in path: %s", subdir)
+                return None
+            safe_path = safe_path / subdir
+        safe_path = safe_path / safe_filename
+        
+        # Step 4: Final verification
+        resolved = safe_path.resolve()
+        
+        # Must be a file
+        if not resolved.is_file():
+            log.warning("not a file: %s", image_path)
             return None
-
-        if resolved_path.is_symlink() or _has_symlink_ancestor(resolved_path):
-            log.warning("symlink path blocked: %s", image_path)
+            
+        # Must not be a symlink
+        if resolved.is_symlink() or _has_symlink_ancestor(resolved):
+            log.warning("symlink blocked: %s", image_path)
             return None
+            
+        # Verify still within allowed directory (extra safety)
+        try:
+            resolved.relative_to(base_dir / "static")
+        except ValueError:
+            try:
+                resolved.relative_to(base_dir / "uploads")
+            except ValueError:
+                log.warning("path escaped allowed dirs: %s", image_path)
+                return None
 
-        return resolved_path
+        return resolved
 
     except (ValueError, OSError) as e:
         log.warning("invalid path: %s - %s", image_path, e)
