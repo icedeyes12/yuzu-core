@@ -128,6 +128,16 @@ def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
     import base64
     from pathlib import Path
 
+    def _has_symlink_ancestor(path: Path) -> bool:
+        """True if any ancestor (including the file itself) is a symlink."""
+        for parent in [path, *path.parents]:
+            try:
+                if parent.is_symlink():
+                    return True
+            except OSError:
+                return True
+        return False
+
     if not image_path:
         return None, None
 
@@ -175,8 +185,8 @@ def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
         log.warning("image not found or not a file: %s", image_path)
         return None, None
 
-    if resolved_path.is_symlink():
-        log.warning("symlink blocked: %s", image_path)
+    if _has_symlink_ancestor(resolved_path):
+        log.warning("symlink path blocked: %s", image_path)
         return None, None
 
     try:
@@ -185,7 +195,7 @@ def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
         log.warning("image read failed (%s): %s", resolved_path, e)
         return None, None
 
-    mime = "image/png" if image_path.lower().endswith(".png") else "image/jpeg"
+    mime = "image/png" if resolved_path.suffix.lower() == ".png" else "image/jpeg"
     return data, mime
 
 
