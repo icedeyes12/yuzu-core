@@ -291,13 +291,17 @@ async def add_message_async(
     session_id: int,
     role: str,
     content: str,
-    image_paths: str | None = None,  # noqa: ARG001
+    image_paths: str | None = None,  # noqa: ARG001 - column not yet wired
 ) -> int | None:
+    """Insert a message row, bump the session's message_count, return id.
+    
+    Timestamp is set by database NOW() to ensure ordering coherence.
+    """
     try:
         async with AsyncPgSession() as s:
             row = await s.execute_returning(
                 SQL_MESSAGE_INSERT,
-                (session_id, role, content, datetime.now()),
+                (session_id, role, content),  # timestamp handled by DB
             )
             if row:
                 await increment_message_count_async(session_id)

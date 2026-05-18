@@ -328,12 +328,15 @@ def add_message(
     content: str,
     image_paths: str | None = None,  # noqa: ARG001 - column not yet wired
 ) -> int | None:
-    """Insert a message row, bump the session's message_count, return id."""
+    """Insert a message row, bump the session's message_count, return id.
+    
+    Timestamp is set by database NOW() to ensure ordering coherence.
+    """
     try:
         with PgSession() as s:
             row = s.execute_returning(
                 SQL_MESSAGE_INSERT,
-                (session_id, role, content, datetime.now()),
+                (session_id, role, content),  # timestamp handled by DB
             )
             if row:
                 increment_message_count(session_id)

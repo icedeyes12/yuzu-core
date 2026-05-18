@@ -389,7 +389,7 @@ def decrypt_api_key_rows(rows: list[dict]) -> dict[str, str]:
 
 SQL_MESSAGE_INSERT = """
 INSERT INTO messages (session_id, role, content, timestamp, content_encrypted)
-VALUES (%s, %s, %s, %s, FALSE) RETURNING id
+VALUES (%s, %s, %s, NOW(), FALSE) RETURNING id, timestamp
 """
 
 SQL_MESSAGE_SELECT_ASC_LIMIT = """
