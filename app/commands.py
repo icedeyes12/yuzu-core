@@ -1,17 +1,30 @@
 # FILE: app/commands.py
-# DESCRIPTION: /command detection, dispatch, and markdown-image guards.
-#              All pure helpers - no side effects beyond log
+# DESCRIPTION: Tool-block parsing and command dispatch for Yuzu Companion.
+#              Implements the <tool>...</tool> protocol for tool invocation.
 
 from __future__ import annotations
 
 import json
 import re
-from typing import Any, Iterator
+from typing import Any
 
 from app.logging_config import get_logger
 from app.tools.registry import execute_tool
 
 log = get_logger(__name__)
+
+# --------------------------------------------------------------------
+# Constants
+# --------------------------------------------------------------------
+
+# Maximum chars for regex input to prevent ReDoS
+_REGEX_INPUT_LIMIT = 100000
+
+# Maximum tool blocks per LLM response
+_MAX_TOOL_BLOCKS = 3
+
+# Tool block pattern: <tool>...</tool> with multiline support
+_TOOL_BLOCK_PATTERN = re.compile(r"<tool>\s*(.*?)\s*</tool>", re.DOTALL)
 
 # Tools whose argument is a free-form string keyed by a specific field.
 _STRING_ARG_TOOLS: dict[str, str] = {
@@ -23,38 +36,38 @@ _STRING_ARG_TOOLS: dict[str, str] = {
     "ls": "path",
     "mkdir": "path",
     "rm": "path",
-    "bash": "command",  # Fixed: was "code"
+    "bash": "command",
     "python": "code",
-    "sql": "query",     # Fixed: was "sql"
+    "sql": "query",
     # Ask Rei tool
     "ask_rei": "message",
-    # write is handled specially in _parse_args (path + content)
 }
 
 # Aliases the model uses for tool routing.
-# These map /command names to registry tool names.
+# Maps tool names from LLM output to registry tool names.
 _TOOL_ALIASES: dict[str, str] = {
     "imagine": "image_generate",
     "image_generate": "image_generate",
     "ask-rei": "ask_rei",
 }
 
-_MARKDOWN_IMAGE_PATH = re.compile(
-    r'!\[[^\]]{0,200}\]\((static/|uploads/|generated_images/)[^)]{1,200}\)'
-)
-_MARKDOWN_IMAGE_ANY = re.compile(r'!\[[^\]]{0,200}\]\(([^)]{1,200})\)')
+# Image path patterns for result parsing
 _GENERATED_IMAGE_SRC = re.compile(r'src="(static/generated_images/[^"]+)"')
+_MARKDOWN_IMAGE_PATH = re.compile(
+    r"!\[[^\]]{0,200}\]\((static/|uploads/|generated_images/)[^)]{1,200}\)"
+)
+_MARKDOWN_IMAGE_ANY = re.compile(r"!\[[^\]]{0,200}\]\(([^)]{1,200})\)")
 
-# Maximum chars to buffer while sniffing for a leading /command.
-# Generous enough for any realistic command line, but bounded so we never
-# starve the user of streamed output if the model omits a newline.
-_COMMAND_SNIFF_LIMIT = 512
+# Image shortcut warning
+IMAGE_SHORTCUT_WARNING = (
+    "\n\nImage output detected via incorrect method. "
+    "Please use <tool>/imagine [prompt]</tool> for image generation."
+)
 
-# Maximum length for regex input to prevent ReDoS
-_REGEX_INPUT_LIMIT = 10000
 
-# Maximum commands to detect in batch mode
-_MAX_BATCH_COMMANDS = 3
+# --------------------------------------------------------------------
+# Safe regex helper
+# --------------------------------------------------------------------
 
 
 def _safe_regex_search(pattern: re.Pattern, text: str) -> re.Match | None:
@@ -64,424 +77,310 @@ def _safe_regex_search(pattern: re.Pattern, text: str) -> re.Match | None:
     return pattern.search(text)
 
 
-def _is_inside_inline_code(line: str, position: int) -> bool:
-    """Check if position in line is inside inline code (between backticks).
-    
-    Simple heuristic: count backticks before position.
-    If odd, position is inside inline code.
-    """
-    backtick_count = line[:position].count("`")
-    return backtick_count % 2 == 1
+# --------------------------------------------------------------------
+# Tool Block Parser (NEW PROTOCOL)
+# --------------------------------------------------------------------
 
 
-def _parse_command_line(line: str) -> dict[str, str] | None:
-    """Parse a /command line into {command, args, full_command}.
-    
-    Returns None if line doesn't start with /.
+def parse_tool_blocks(text: str) -> tuple[list[str], str]:
+    """Parse <tool>...</tool> blocks from LLM response.
+
+    This is the core parser for the new tool invocation protocol.
+
+    Args:
+        text: Raw LLM response text
+
+    Returns:
+        (commands, clean_text) tuple where:
+        - commands: List of command strings (max 3), stripped of whitespace
+        - clean_text: Original text with all tool blocks removed
+
+    Rules:
+        - Tool blocks are delimited by <tool> and </tool> tags
+        - Content inside tags is stripped of leading/trailing whitespace
+        - Empty tool blocks are ignored
+        - Nested <tool> tags are invalid and ignored
+        - Maximum 3 tool blocks per response (extras ignored)
+        - All conversational text outside blocks is preserved exactly
+
+    Example:
+        Input:
+            Baik saya cek dulu
+            <tool>
+            ls -la
+            </tool>
+            <tool>
+            pwd
+            </tool>
+            Mari tunggu hasilnya
+
+        Output:
+            commands = ["ls -la", "pwd"]
+            clean_text = "Baik saya cek dulu\\nMari tunggu hasilnya"
     """
-    stripped = line.strip()
-    if not stripped.startswith("/"):
+    if not text:
+        return [], ""
+
+    # Limit input to prevent ReDoS
+    if len(text) > _REGEX_INPUT_LIMIT:
+        text = text[:_REGEX_INPUT_LIMIT]
+
+    # Find all tool blocks
+    matches = list(_TOOL_BLOCK_PATTERN.finditer(text))
+
+    # Limit to max 3 blocks
+    matches = matches[:_MAX_TOOL_BLOCKS]
+
+    # Extract commands (strip whitespace, skip empty)
+    commands: list[str] = []
+    for match in matches:
+        command = match.group(1).strip()
+        if command:
+            commands.append(command)
+
+    # Remove all tool blocks from text (including the original matches, not just first 3)
+    # This ensures clean text even if there were more than 3 blocks
+    clean_text = _TOOL_BLOCK_PATTERN.sub("", text)
+
+    # Clean up excessive whitespace but preserve structure
+    # Remove leading/trailing whitespace from lines but keep line breaks
+    lines = clean_text.split("\n")
+    cleaned_lines: list[str] = []
+    prev_empty = False
+
+    for line in lines:
+        stripped = line.strip()
+        # Collapse multiple consecutive empty lines into one
+        if not stripped:
+            if not prev_empty:
+                cleaned_lines.append("")
+            prev_empty = True
+        else:
+            cleaned_lines.append(stripped)
+            prev_empty = False
+
+    # Remove leading/trailing empty lines
+    while cleaned_lines and not cleaned_lines[0]:
+        cleaned_lines.pop(0)
+    while cleaned_lines and not cleaned_lines[-1]:
+        cleaned_lines.pop()
+
+    clean_text = "\n".join(cleaned_lines)
+
+    return commands, clean_text
+
+
+def has_tool_blocks(text: str) -> bool:
+    """Check if text contains any <tool>...</tool> blocks."""
+    if not text:
+        return False
+    if len(text) > _REGEX_INPUT_LIMIT:
+        text = text[:_REGEX_INPUT_LIMIT]
+    return bool(_TOOL_BLOCK_PATTERN.search(text))
+
+
+# --------------------------------------------------------------------
+# Command Parsing (Legacy /command support removed)
+# --------------------------------------------------------------------
+
+
+def _parse_command_string(command_str: str) -> dict[str, str] | None:
+    """Parse a command string into {command, args}.
+
+    Command format: /command_name args...
+    or just: command_name args...
+
+    Returns None if the command string is invalid.
+    """
+    stripped = command_str.strip()
+    if not stripped:
         return None
-    
-    # Extract command name (first word after /)
+
+    # Handle /command format (legacy but still supported)
+    if stripped.startswith("/"):
+        stripped = stripped[1:]
+
+    # Split into command name and args
     parts = stripped.split(None, 1)
     if not parts:
         return None
-    
-    cmd_with_slash = parts[0]
-    cmd_name = cmd_with_slash[1:]  # Remove leading /
-    
-    # Accept any command name - validation happens at execution time
+
+    command_name = parts[0]
+    args = parts[1] if len(parts) > 1 else ""
+
     return {
-        "command": cmd_name,
-        "args": parts[1] if len(parts) > 1 else "",
-        "full_command": stripped,
+        "command": command_name,
+        "args": args,
+        "full_command": f"/{command_name} {args}".strip(),
     }
 
 
-def detect_command(
-    response_text: str,
-    scan_mode: str = "first_line",
-) -> dict[str, Any] | None:
-    """Detect inline /command calls in model output.
+def _parse_args(tool_name: str, raw_args: str) -> dict[str, Any]:
+    """Parse raw argument string into a dict for the tool.
 
-    Returns a dict with keys:
-        command: str   — tool name without the leading /
-        args: str      — raw argument string
-        full_command: str — the full matched line
-
-    scan_mode:
-        "first_line" — only scan the first non-blank line (for streaming)
-        "full"       — scan the entire text (for non-streaming / synthesis)
+    Supports:
+    - String-arg tools: Just pass the raw string as the keyed arg
+    - JSON args: Parse as JSON if it looks like JSON
+    - Key=value pairs: Parse as key=value; key2="value with spaces"
     """
-    if len(response_text) > _REGEX_INPUT_LIMIT:
-        response_text = response_text[:_REGEX_INPUT_LIMIT]
+    raw_args = raw_args.strip()
 
-    if scan_mode == "first_line":
-        first_line = response_text.split("\n", 1)[0].strip()
-        result = _parse_command_line(first_line)
-        if result:
-            # For multi-line tools, try to extract code block from full text
-            cmd = result.get("command", "")
-            if cmd in ("sql", "python", "bash"):
-                block_content = _extract_code_block(response_text, cmd)
-                if block_content is not None:
-                    result["args"] = block_content
-                    result["full_command"] = f"/{cmd} {block_content}"
-                else:
-                    # No code block — take everything after command name from full text
-                    full_stripped = response_text.lstrip()
-                    if full_stripped.startswith(f"/{cmd}"):
-                        remainder = full_stripped[len(f"/{cmd}"):].strip()
-                        if remainder:
-                            result["args"] = remainder
-                            result["full_command"] = f"/{cmd} {remainder}"
-            return result
-        return None
+    # String-arg tools: single argument mapped to a specific key
+    if tool_name in _STRING_ARG_TOOLS:
+        key = _STRING_ARG_TOOLS[tool_name]
 
-    # Full scan mode — return first match only for backwards compatibility
-    for match in _find_naked_commands_in_line(response_text):
-        return match
-    return None
+        # Special case for /write: path + content
+        if tool_name == "write":
+            parts = raw_args.split(None, 1)
+            if len(parts) == 2:
+                return {"path": parts[0], "content": parts[1]}
+            elif len(parts) == 1:
+                return {"path": parts[0], "content": ""}
+            return {"path": "", "content": raw_args}
+
+        return {key: raw_args}
+
+    # Try JSON parse first
+    if raw_args.startswith("{") and raw_args.endswith("}"):
+        try:
+            return json.loads(raw_args)
+        except json.JSONDecodeError:
+            pass
+
+    # Parse key=value; key2="value with spaces"
+    result: dict[str, Any] = {}
+    if not raw_args:
+        return result
+
+    # Pattern: key="value with spaces" or key=value
+    pattern = re.compile(r'(\w+)=(?:"([^"]*)"|(\S*))')
+    for match in pattern.finditer(raw_args):
+        key = match.group(1)
+        value = match.group(2) if match.group(2) is not None else match.group(3)
+        result[key] = value
+
+    return result
 
 
-def _find_naked_commands_in_line(line: str) -> list[dict[str, str]]:
-    """Find all naked /command occurrences in a line.
-    
-    A command is "naked" if NOT inside:
-    - Inline code (`...`)
-    - Quotes ("..." or '...')
-    
-    Returns list of {command, args, full_command} dicts.
+# --------------------------------------------------------------------
+# Command Execution
+# --------------------------------------------------------------------
+
+
+def execute_commands(
+    commands: list[str],
+    session_id: int | None = None,
+) -> list[tuple[str, dict[str, Any]]]:
+    """Execute a list of commands sequentially.
+
+    All commands are executed in order, even if one fails.
+    Errors are logged but don't stop execution.
+
+    Args:
+        commands: List of command strings (from parse_tool_blocks)
+        session_id: Optional session ID for context
+
+    Returns:
+        List of (tool_name, result_dict) tuples for each command
     """
-    results = []
-    
-    # Pattern: /word followed by optional args (until end of line or next wrapper)
-    # Command must be preceded by start of line, whitespace, or certain punctuation
-    pattern = re.compile(r'(?:^|[\s\-–—\(])(/[a-zA-Z_][a-zA-Z0-9_]*)')
-    
-    for match in pattern.finditer(line):
-        slash_pos = match.start(1)  # Position of the / in the match
-        
-        # Check if inside inline code
-        if _is_inside_inline_code(line, slash_pos):
-            continue
-        
-        # Check if inside quotes
-        if _is_inside_quotes(line, slash_pos):
-            continue
-        
-        # Extract the full command from this position
-        remainder = line[slash_pos:]
-        cmd_info = _parse_command_line(remainder)
-        if cmd_info:
-            results.append(cmd_info)
-    
+    results: list[tuple[str, dict[str, Any]]] = []
+
+    for command_str in commands:
+        try:
+            parsed = _parse_command_string(command_str)
+            if not parsed:
+                log.warning("failed to parse command: %s", command_str[:100])
+                results.append(("unknown", {"ok": False, "error": "Failed to parse command"}))
+                continue
+
+            raw_name = parsed["command"]
+            tool_name = _TOOL_ALIASES.get(raw_name, raw_name)
+            args = _parse_args(tool_name, parsed["args"])
+
+            log.info("executing tool: %s with args: %s", tool_name, str(args)[:100])
+            result = execute_tool(tool_name, args, session_id=session_id)
+            results.append((tool_name, result))
+
+        except Exception as e:
+            log.error("command execution failed: %s - %s", command_str[:50], e)
+            results.append(("unknown", {"ok": False, "error": str(e)}))
+
     return results
 
 
-def _is_inside_quotes(line: str, position: int) -> bool:
-    """Check if position in line is inside quotes ("..." or '...').
-    
-    Simple heuristic: count unescaped quotes before position.
-    If odd for either type, position is inside that quote type.
-    """
-    prefix = line[:position]
-    
-    # Count unescaped double quotes
-    double_count = prefix.count('"') - prefix.count('\\"')
-    if double_count % 2 == 1:
-        return True
-    
-    # Count unescaped single quotes  
-    single_count = prefix.count("'") - prefix.count("\\'")
-    if single_count % 2 == 1:
-        return True
-    
-    return False
+# --------------------------------------------------------------------
+# Observation Formatting
+# --------------------------------------------------------------------
 
 
-def _parse_args(tool_name: str, args_str: str) -> dict[str, Any]:
-    """Parse a /command argument string into a kwargs dict for the tool."""
-    if not args_str:
-        return {}
-    if tool_name in _STRING_ARG_TOOLS:
-        return {_STRING_ARG_TOOLS[tool_name]: args_str}
-    
-    # Special handling for /write: first word is path, rest is content
-    if tool_name == "write":
-        # Check for heredoc syntax: /write path <<DELIM\ncontent\nDELIM
-        heredoc_match = re.match(r'^(\S+)\s+<<(\S+)\s*\n?(.*)', args_str, re.DOTALL)
-        if heredoc_match:
-            path = heredoc_match.group(1)
-            delimiter = heredoc_match.group(2)
-            body = heredoc_match.group(3)
-            # Extract content up to the closing delimiter
-            end_marker = f"\n{delimiter}"
-            if end_marker in body:
-                content = body[:body.index(end_marker)]
-            elif body.rstrip().endswith(delimiter):
-                content = body[:body.rindex(delimiter)].rstrip()
-            else:
-                content = body
-            return {"path": path, "content": content}
-        # Standard: first word is path, rest is content
-        parts = args_str.split(None, 1)
-        if len(parts) == 1:
-            return {"path": parts[0], "content": ""}
-        return {"path": parts[0], "content": parts[1]}
-    
-    # Try JSON parse
-    try:
-        parsed = json.loads(args_str)
-        if isinstance(parsed, dict):
-            return parsed
-    except json.JSONDecodeError:
-        pass
-    return {"query": args_str}
+def format_observation(results: list[tuple[str, dict[str, Any]]]) -> str:
+    """Format tool execution results as a system observation.
 
-
-def _extract_code_block(text: str, tool_name: str) -> str | None:
-    """Extract content from a fenced code block for multi-line tools.
-
-    Looks for ```<lang> ... ``` blocks where lang matches the tool.
-    Returns the inner content if found, None otherwise.
-
-    Example:
-        /sql ```sql
-        SELECT id, role
-        FROM users
-        ```
-        -> "SELECT id, role\nFROM users"
-    """
-    # Map tool names to code block language identifiers
-    lang_map = {
-        "sql": "sql",
-        "python": "python",
-        "bash": "bash",
-    }
-    lang = lang_map.get(tool_name, tool_name)
-
-    # Pattern: ```lang\n...content...```
-    # Use DOTALL so . matches newlines
-    pattern = re.compile(rf'```{lang}\s*\n(.*?)```', re.DOTALL)
-    match = pattern.search(text)
-    if match:
-        return match.group(1).strip()
-
-    # Also try without language tag: ```\n...content...```
-    if tool_name in lang_map:
-        pattern = re.compile(r'```\s*\n(.*?)```', re.DOTALL)
-        match = pattern.search(text)
-        if match:
-            return match.group(1).strip()
-
-    return None
-
-
-class StreamFilter:
-    """Stateful filter that holds back chunks until a /command on the first
-    line can be confirmed or ruled out.
-
-    Usage:
-        sf = StreamFilter()
-        for chunk in upstream:
-            for safe in sf.feed(chunk):
-                yield safe
-        for safe in sf.flush():
-            yield safe
-
-        # After streaming completes:
-        if sf.command:
-            ...  # don't render command line; suppressed via emit
-        full_text = sf.full_text
-
-    Behavior:
-      - First non-whitespace char is '/': buffer until newline (or limit).
-        On newline, parse the command, suppress that line, and stream the
-        rest live.
-      - First non-whitespace char is not '/': flush buffer immediately and
-        pass through every subsequent chunk untouched.
-    """
-
-    __slots__ = ("_buffer", "_decided", "_is_command", "command", "full_text",
-                 "_in_heredoc", "_heredoc_delimiter", "_heredoc_buffer")
-
-    def __init__(self) -> None:
-        self._buffer = ""
-        self._decided = False
-        self._is_command = False
-        self.command: dict[str, str] | None = None
-        self.full_text = ""
-
-    def feed(self, chunk: str) -> Iterator[str]:  # type: ignore[name-defined]
-        if not chunk:
-            return
-        self.full_text += chunk
-
-        if self._decided and not self._is_command:
-            yield chunk
-            return
-
-        if self._decided and self._is_command:
-            # Command was already detected in a previous chunk.
-            # Any subsequent text is narration — yield it live.
-            # EXCEPT: if we're in heredoc mode, keep buffering
-            if getattr(self, "_in_heredoc", False):
-                self._heredoc_buffer += chunk
-                # Check if closing delimiter is in the buffer
-                delim_line = f"\n{self._heredoc_delimiter}"
-                if delim_line in self._heredoc_buffer:
-                    # End of heredoc: update command args with full content
-                    end_idx = self._heredoc_buffer.index(delim_line)
-                    heredoc_content = self._heredoc_buffer[:end_idx]
-                    if self.command:
-                        self.command["args"] = f"{self.command['args']}\n{heredoc_content}"
-                        self.command["full_command"] = f"/write {self.command['args']}"
-                    self._in_heredoc = False
-                    self._heredoc_buffer = ""
-                # Don't yield heredoc content to user
-                return
-            yield chunk
-            return
-
-        self._buffer += chunk
-
-        if not self._decided:
-            stripped = self._buffer.lstrip()
-            if stripped and not stripped.startswith("/"):
-                # Definitely not a command.
-                self._decided = True
-                self._is_command = False
-                yield self._buffer
-                self._buffer = ""
-                return
-            if len(self._buffer) >= _COMMAND_SNIFF_LIMIT and "\n" not in self._buffer:
-                # Ran out of patience: treat as plain text.
-                self._decided = True
-                self._is_command = False
-                yield self._buffer
-                self._buffer = ""
-                return
-            if not stripped:
-                # Only whitespace so far; keep buffering.
-                return
-            # Starts with '/': wait for the newline (handled below).
-
-        if "\n" in self._buffer and not self._decided:
-            self._decided = True
-            self._is_command = True
-            first_line, _, rest = self._buffer.partition("\n")
-            self.command = detect_command(first_line)
-            self._buffer = ""
-            # Heredoc support: if command args contain <<DELIM, keep buffering
-            # until we find the closing delimiter line
-            if self.command and self.command.get("command") == "write":
-                args = self.command.get("args", "")
-                heredoc_match = re.match(r'^(\S+)\s+<<(\S+)', args)
-                if heredoc_match:
-                    delimiter = heredoc_match.group(2)
-                    # Start heredoc capture: buffer rest + subsequent chunks
-                    self._heredoc_delimiter = delimiter
-                    self._heredoc_buffer = rest
-                    self._in_heredoc = True
-                    # Don't yield anything yet
-                    return
-            # No heredoc: suppress command line, yield rest if any
-            if rest:
-                yield rest
-
-    def flush(self) -> Iterator[str]:  # type: ignore[name-defined]
-        """Drain any held-back text. Call once after the upstream completes."""
-        # Handle heredoc: if stream ended while still buffering heredoc
-        if getattr(self, "_in_heredoc", False) and self.command:
-            # Finalize heredoc content (no closing delimiter found)
-            heredoc_content = self._heredoc_buffer.rstrip()
-            if heredoc_content:
-                self.command["args"] = f"{self.command['args']}\n{heredoc_content}"
-                self.command["full_command"] = f"/write {self.command['args']}"
-            self._in_heredoc = False
-            self._heredoc_buffer = ""
-            self._decided = True
-            return
-        if not self._decided:
-            # Stream ended before we could decide. If the buffer starts with
-            # a slash and never produced a newline, treat it as a command on
-            # a single line.
-            stripped = self._buffer.lstrip()
-            if stripped.startswith("/"):
-                self._is_command = True
-                self.command = detect_command(self._buffer)
-            else:
-                yield self._buffer
-            self._buffer = ""
-            self._decided = True
-
-    def get_commands(
-        self, scan_mode: str = "first_line"
-    ) -> dict[str, str] | list[dict[str, str]] | None:
-        """Return detected command(s), with optional full-text scan.
-
-        Args:
-            scan_mode: Detection mode:
-                - "first_line": Return self.command (first-line detection result)
-                - "any_naked": Scan full_text, return first naked command
-                - "all_naked": Scan full_text, return all naked commands (list)
-
-        This delegates to detect_command() for full-text scanning,
-        avoiding logic duplication.
-        """
-        if scan_mode == "first_line":
-            return self.command
-        # Delegate to detect_command for naked scanning
-        return detect_command(self.full_text, scan_mode=scan_mode)
-
-
-def execute_command(
-    command_info: dict[str, str] | list[dict[str, str]],
-    session_id: int | None = None,
-) -> tuple[str, dict[str, Any]] | list[tuple[str, dict[str, Any]]]:
-    """Resolve and execute a detected command or list of commands.
+    Creates a structured observation block for appending to conversation history.
 
     Args:
-        command_info: Single command dict or list of command dicts.
-        session_id: Optional session ID for context.
+        results: List of (tool_name, result_dict) tuples
 
     Returns:
-        - Single command: (tool_name, result_dict)
-        - Batch commands: list of (tool_name, result_dict) tuples
-
-    For batch execution, commands are executed sequentially in order.
-    Errors are logged but don't stop execution of remaining commands.
+        Formatted observation string wrapped in <SYSTEM_OBSERVATION> tags
     """
-    # Batch mode: list of commands
-    if isinstance(command_info, list):
-        results: list[tuple[str, dict[str, Any]]] = []
-        for cmd in command_info:
-            try:
-                result = _execute_single_command(cmd, session_id)
-                results.append(result)
-            except Exception as e:
-                log.error("command execution failed: /%s - %s", cmd.get("command", "?"), e)
-                # Append error result so caller knows which command failed
-                results.append((cmd.get("command", "?"), {"error": str(e)}))
-        return results
+    if not results:
+        return ""
 
-    # Single command mode
-    return _execute_single_command(command_info, session_id)
+    lines = ["<SYSTEM_OBSERVATION>"]
+
+    for i, (tool_name, result) in enumerate(results, 1):
+        lines.append(f"Command {i}:")
+        lines.append(f"TOOL: {tool_name}")
+
+        if isinstance(result, dict):
+            ok = result.get("ok", False)
+            lines.append(f"STATUS: {'SUCCESS' if ok else 'FAILED'}")
+
+            data = result.get("data", {})
+            if isinstance(data, dict):
+                # Extract common fields
+                if "command" in data:
+                    lines.append(f"COMMAND: {data['command']}")
+                if "exit_code" in data:
+                    lines.append(f"EXIT_CODE: {data['exit_code']}")
+                if "stdout" in data:
+                    stdout = data["stdout"]
+                    if stdout:
+                        lines.append(f"STDOUT:\n{stdout}")
+                    else:
+                        lines.append("STDOUT: (empty)")
+                if "stderr" in data:
+                    stderr = data["stderr"]
+                    if stderr:
+                        lines.append(f"STDERR:\n{stderr}")
+                    else:
+                        lines.append("STDERR: (empty)")
+                if "output" in data:
+                    lines.append(f"OUTPUT:\n{data['output']}")
+                if "image_path" in data:
+                    lines.append(f"IMAGE: {data['image_path']}")
+
+            error = result.get("error")
+            if error:
+                lines.append(f"ERROR: {error}")
+
+            markdown = result.get("markdown")
+            if markdown and ok:
+                # Include markdown for successful results
+                lines.append(f"MARKDOWN:\n{markdown[:500]}")
+        else:
+            lines.append(f"RESULT: {str(result)[:500]}")
+
+        lines.append("")  # Blank line between commands
+
+    lines.append("</SYSTEM_OBSERVATION>")
+    return "\n".join(lines)
 
 
-def _execute_single_command(
-    command_info: dict[str, str],
-    session_id: int | None = None,
-) -> tuple[str, dict[str, Any]]:
-    """Execute a single command. Internal helper."""
-    raw_name = command_info["command"]
-    tool_name = _TOOL_ALIASES.get(raw_name, raw_name)
-    args = _parse_args(tool_name, command_info["args"])
-    log.info("command: /%s %s", raw_name, command_info["args"])
-    result = execute_tool(tool_name, args, session_id=session_id)
-    return tool_name, result
+# --------------------------------------------------------------------
+# Image Helpers
+# --------------------------------------------------------------------
 
 
 def parse_image_path(formatted_result: str) -> str | None:
@@ -493,10 +392,9 @@ def parse_image_path(formatted_result: str) -> str | None:
 
 
 def is_markdown_image_shortcut(response_text: str | None) -> bool:
-    """True when the model emitted a raw ![](static/...) instead of /imagine."""
+    """True when the model emitted a raw ![](static/...) instead of <tool>."""
     if not response_text:
         return False
-    # Limit input length to prevent ReDoS
     if len(response_text) > _REGEX_INPUT_LIMIT:
         response_text = response_text[:_REGEX_INPUT_LIMIT]
     return bool(_MARKDOWN_IMAGE_PATH.search(response_text))
@@ -504,14 +402,92 @@ def is_markdown_image_shortcut(response_text: str | None) -> bool:
 
 def extract_markdown_image_path(response_text: str) -> str | None:
     """Return the first markdown image path/URL in *response_text*, if any."""
-    # Limit input length to prevent ReDoS
     if len(response_text) > _REGEX_INPUT_LIMIT:
         response_text = response_text[:_REGEX_INPUT_LIMIT]
     match = _MARKDOWN_IMAGE_ANY.search(response_text)
     return match.group(1) if match else None
 
 
-IMAGE_SHORTCUT_WARNING = (
-    "\n\nImage output detected via incorrect method. "
-    "Please use /imagine to generate images."
-)
+# --------------------------------------------------------------------
+# Legacy Compatibility (deprecated, will be removed)
+# --------------------------------------------------------------------
+
+# These are kept for backward compatibility during transition
+# but should not be used in new code
+
+
+def detect_command(text: str, scan_mode: str = "first_line") -> dict[str, str] | list[dict[str, str]] | None:
+    """DEPRECATED: Use parse_tool_blocks() instead.
+
+    This function is kept for backward compatibility but will be removed.
+    It now checks for both <tool> blocks and legacy /command format.
+    """
+    log.warning("detect_command() is deprecated, use parse_tool_blocks() instead")
+
+    # Try new tool block format first
+    commands, _ = parse_tool_blocks(text)
+    if commands:
+        parsed = [_parse_command_string(cmd) for cmd in commands]
+        parsed = [p for p in parsed if p]  # Filter out None
+        if len(parsed) == 1:
+            return parsed[0]
+        return parsed if parsed else None
+
+    # Fall back to legacy /command detection
+    if not text:
+        return None
+
+    lines = text.strip().split("\n")
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("/"):
+            result = _parse_command_string(stripped)
+            if result:
+                return result
+        # Stop after first non-empty line for first_line mode
+        if stripped and scan_mode == "first_line":
+            break
+
+    return None
+
+
+def execute_command(
+    command_info: dict[str, str] | list[dict[str, str]],
+    session_id: int | None = None,
+) -> tuple[str, dict[str, Any]] | list[tuple[str, dict[str, Any]]]:
+    """DEPRECATED: Use execute_commands() instead.
+
+    This function is kept for backward compatibility.
+    """
+    log.warning("execute_command() is deprecated, use execute_commands() instead")
+
+    if isinstance(command_info, list):
+        command_strs = []
+        for cmd in command_info:
+            if cmd.get("full_command"):
+                command_strs.append(cmd["full_command"])
+            elif cmd.get("command"):
+                args = cmd.get("args", "")
+                command_strs.append(f"/{cmd['command']} {args}".strip())
+        return execute_commands(command_strs, session_id)
+
+    # Single command
+    if command_info.get("full_command"):
+        command_str = command_info["full_command"]
+    else:
+        args = command_info.get("args", "")
+        command_str = f"/{command_info['command']} {args}".strip()
+
+    results = execute_commands([command_str], session_id)
+    return results[0] if results else ("unknown", {"ok": False, "error": "No command"})
+
+
+# --------------------------------------------------------------------
+# StreamFilter - REMOVED
+# --------------------------------------------------------------------
+# The StreamFilter class was used for sniffing /command at the start of
+# streaming responses. With the new <tool> protocol, we parse the full
+# response after streaming completes, so StreamFilter is no longer needed.
+#
+# If streaming with tool detection is needed in the future, it should be
+# implemented differently - by buffering until </tool> is seen.

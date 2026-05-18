@@ -1,6 +1,6 @@
 # Yuzu Companion — Agent Operational Manual
 
-> **Version:** 3.0.3 · **Last Updated:** 2026-05-11
+> **Version:** 3.1.0 · **Last Updated:** 2026-05-18
 > This is the master behavior manual for any AI agent interacting with this codebase.
 
 ---
@@ -33,24 +33,25 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 - **No Flask** — FastAPI only (migrated in v2.0.0).
 - **Pluggable LLM providers** — Ollama, Cerebras, OpenRouter, Chutes via `file providers.py`.
 - **Memory is first-class** — The memory subsystem (`app/memory/`) is not an afterthought; it's a core architectural layer.
+- **Tool protocol** — Uses `<tool>...</tool>` blocks for tool invocation (v3.1.0+). Legacy `/command` syntax removed.
 
 ### Key Files at a Glance
 
 | File | Role |
 | --- | --- |
-|  | **Single entry point** for all user messages |
-|  | LLM dispatch, vision routing, `chutes_chat()` helper |
-|  | System prompt assembly, message context building |
-|  | `/command` detection, `StreamFilter`, image guards |
-|  | AI provider hierarchy + `AIProviderManager` singleton |
-|  | Central tool dispatch — **only** place tools are executed |
+| `file app/orchestrator.py` | **Single entry point** for all user messages |
+| `file app/llm_client.py` | LLM dispatch, vision routing, `chutes_chat()` helper |
+| `file app/prompts.py` | System prompt assembly, message context building |
+| `file app/commands.py` | `<tool>` block parsing, command dispatch, image guards |
+| `file app/providers.py` | AI provider hierarchy + `AIProviderManager` singleton |
+| `file app/tools/registry.py` | Central tool dispatch — **only** place tools are executed |
 | `app/memory/` | Full memory pipeline (extraction, embedding, retrieval, retention) |
-|  | `Database` class — stable API over raw psycopg2 |
-|  | **Single source of truth** for all SQL strings |
-|  | FastAPI entry point (\~130 lines, minimal) |
-|  | CLI entry point (Rich TUI) |
-|  | Chat UI, SSE streaming, typing indicator |
-|  | Marked.js v18 + Mermaid rendering |
+| `file app/database/facade.py` | `Database` class — stable API over raw psycopg2 |
+| `file app/database/db_queries.py` | **Single source of truth** for all SQL strings |
+| `file app/web.py` | FastAPI entry point (~130 lines, minimal) |
+| `file app/cli.py` | CLI entry point (Rich TUI) |
+| `file static/js/chat.js` | Chat UI, SSE streaming, typing indicator |
+| `file static/js/renderer.js` | Marked.js v18 + Mermaid rendering |
 
 ---
 
@@ -61,14 +62,14 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 1. **NEVER drop tables.** Only add columns or create new tables.
 2. **NEVER use** `DELETE` **on** `semantic_facts`**.** Use `invalid_at` (soft delete) only.
 3. **NEVER use raw string interpolation for user input in SQL.** Use parameterized queries.
-4. **ALWAYS use `file db_queries.py`** for SQL strings — never inline SQL in business logic.
+4. **ALWAYS use** `file app/database/db_queries.py` **for SQL strings** — never inline SQL in business logic.
 5. **ALWAYS use the** `Database` **facade** (`file app/database/facade.py`) — never import `db_pg_models` directly from outside the database package.
 
 ### Code Safety
 
  6. **NEVER add** `print()` **statements.** Use `get_logger(__name__)` from `file logging_config.py`.
  7. **NEVER add new dependencies** without explicit approval. The dependency surface is intentionally minimal.
- 8. **NEVER modify `file web.py`** unless the change is about routing or static mounts. Business logic lives in `app/`.
+ 8. **NEVER modify** `file app/web.py` **unless the change is about routing or static mounts.** Business logic lives in `app/`.
  9. **NEVER add new streaming pipelines or files** when fixing streaming issues. Fix existing code.
 10. **ALWAYS use** `from __future__ import annotations` at the top of every Python file.
 11. **ALWAYS use modern type syntax** (`list[X]`, `X | None`) — never `typing.List`, `typing.Optional`.
@@ -86,8 +87,8 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 ### Before Making Changes
 
 1. **Read the relevant module** — Understand the current implementation before modifying.
-2. **Check `file app/database/db_queries.py`** — If touching DB logic, verify SQL constants are there.
-3. **Check `file app/tools/registry.py`** — If touching tool logic, verify dispatch goes through registry.
+2. **Check** `file app/database/db_queries.py` **— If touching DB logic, verify SQL constants are there.
+3. **Check** `file app/tools/registry.py` **— If touching tool logic, verify dispatch goes through registry.
 4. **Plan before executing** — For complex changes, present a structured plan first.
 
 ### After Making Changes
@@ -126,18 +127,19 @@ python3 -m pytest tests/ -v
 ### Data Flow Invariants
 
  6. **One primary LLM call per turn** — Plus at most one synthesis pass. No unbounded LLM chains.
- 7. **At most one tool execution per turn** — Terminal tools stop processing; non-terminal tools trigger synthesis.
- 8. **Memory pipeline is throttled** — Pipeline gate check runs every 5th turn, not every turn.
- 9. **Request caches are cleared at turn end** — Memory state cache and embedding cache must not leak across turns.
-10. **Tool results use markdown contracts** — All tool output wrapped in \`\`\`\`html-details
-    \` blocks.
+ 7. **Max 3 tool executions per turn** — Batching limit enforced by `parse_tool_blocks()`.
+ 8. **Sequential tool execution** — Tools execute one after another, results collected into single observation.
+ 9. **Memory pipeline is throttled** — Pipeline gate check runs every 5th turn, not every turn.
+10. **Request caches are cleared at turn end** — Memory state cache and embedding cache must not leak across turns.
+11. **Tool results use markdown contracts** — All tool output wrapped in `<details>` markdown blocks.
 
 ### What NOT to Change
 
-11. **Don't add new streaming pipelines** — The SSE streaming in `file chat.js` and `handle_user_message_streaming()` is the only streaming path.
-12. **Don't add new LLM call sites** — All LLM calls go through `file llm_client.py` (`generate_ai_response`, `generate_ai_response_streaming`, `chutes_chat`).
-13. **Don't modify the frontend buildless architecture** — No bundlers, no npm, no framework. Vanilla JS/ESM only.
-14. **Don't change the** `semantic_facts` **schema** without a migration plan — This table is the unified memory store.
+12. **Don't add new streaming pipelines** — The SSE streaming in `file chat.js` and `handle_user_message_streaming()` is the only streaming path.
+13. **Don't add new LLM call sites** — All LLM calls go through `file llm_client.py` (`generate_ai_response`, `generate_ai_response_streaming`, `chutes_chat`).
+14. **Don't modify the frontend buildless architecture** — No bundlers, no npm, no framework. Vanilla JS/ESM only.
+15. **Don't change the** `semantic_facts` **schema** without a migration plan — This table is the unified memory store.
+16. **Don't use legacy /command syntax** — Use `<tool>...</tool>` blocks only (v3.1.0+).
 
 ---
 
@@ -152,41 +154,41 @@ User Message
 │                                                         │
 │  ┌─────────────┐    ┌──────────────┐                   │
 │  │ commands.py │    │ llm_client.py│                   │
-│  │ (detect /   │    │ (dispatch)   │                   │
-│  │  command)   │    └──────┬───────┘                   │
-│  └──────┬──────┘           │                            │
-│         │            ┌─────▼──────┐                    │
-│         │            │providers.py│                    │
-│         │            │(Ollama,    │                    │
-│         │            │ Cerebras,  │                    │
-│         │            │ OpenRouter,│                    │
-│         │            │ Chutes)    │                    │
-│         │            └─────┬──────┘                    │
-│         │                  │                            │
-│  ┌──────▼──────┐    ┌─────▼──────┐                    │
-│  │tools/       │    │prompts.py  │                    │
-│  │registry.py  │    │(system     │                    │
-│  │(execute     │    │ prompt +   │                    │
-│  │ tool)       │    │ context)   │                    │
-│  └──────┬──────┘    └─────┬──────┘                    │
-│         │                  │                            │
-│         │            ┌─────▼──────┐                    │
-│         │            │memory/     │                    │
-│         │            │retrieval.py│                    │
-│         │            │(combined   │                    │
-│         │            │ static +   │                    │
-│         │            │ dynamic)   │                    │
-│         │            └─────┬──────┘                    │
-│         │                  │                            │
-│  ┌──────▼──────────────────▼──────┐                    │
-│  │     database/facade.py         │                    │
-│  │     (Database class)           │                    │
-│  └──────────────┬─────────────────┘                    │
-│                 │                                       │
-│          ┌──────▼──────┐                               │
-│          │ PostgreSQL  │                               │
-│          │ + pgvector  │                               │
-│          └─────────────┘                               │
+│  │ (parse      │    │ (dispatch)   │                   │
+│  │ <tool>      │    └──────┬───────┘                   │
+│  │ blocks)     │           │                            │
+│  └──────┬──────┘    ┌─────▼──────┐                    │
+│         │           │providers.py│                    │
+│         │           │(Ollama,    │                    │
+│         │           │ Cerebras,  │                    │
+│         │           │ OpenRouter,│                    │
+│         │           │ Chutes)    │                    │
+│         │           └─────┬──────┘                    │
+│         │                 │                            │
+│  ┌──────▼──────┐   ┌─────▼──────┐                    │
+│  │tools/       │   │prompts.py  │                    │
+│  │registry.py  │   │(system     │                    │
+│  │(execute     │   │ prompt +   │                    │
+│  │ tool)       │   │ context)   │                    │
+│  └──────┬──────┘   └─────┬──────┘                    │
+│         │                │                            │
+│         │          ┌─────▼──────┐                    │
+│         │          │memory/     │                    │
+│         │          │retrieval.py│                    │
+│         │          │(combined   │                    │
+│         │          │ static +   │                    │
+│         │          │ dynamic)   │                    │
+│         │          └─────┬──────┘                    │
+│         │                │                            │
+│  ┌──────▼────────────────▼──────┐                    │
+│  │     database/facade.py       │                    │
+│  │     (Database class)         │                    │
+│  └──────────────┬───────────────┘                    │
+│                 │                                      │
+│          ┌──────▼──────┐                              │
+│          │ PostgreSQL  │                              │
+│          │ + pgvector  │                              │
+│          └─────────────┘                              │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -194,21 +196,21 @@ User Message
 
 | Caller | Callee | Purpose |
 | --- | --- | --- |
-|  |  | Detect `/command` in LLM response |
-|  |  | Generate AI response (sync + stream) |
-|  |  | Execute detected tools |
-|  |  | Auto-name, summarize, pipeline trigger |
-|  |  | Dispatch to selected provider |
-|  |  | Build system message + context |
-|  |  | Vision routing, image caching |
-|  |  | Persistent visual context |
-|  |  | Combined memory retrieval |
-|  | `Database` facade | Profile, history, session data |
-|  |  | Lazy-load and dispatch tool modules |
-|  |  | Query embedding |
-|  | `file providers.py` (Chutes) | Embedding API call |
-|  |  | Fact consolidation CRUD |
-|  |  | FSRS decay updates |
+| `orchestrator.py` | `commands.py` | Parse `<tool>...</tool>` blocks from LLM response |
+| `orchestrator.py` | `llm_client.py` | Generate AI response (sync + stream) |
+| `commands.py` | `tools/registry.py` | Execute parsed commands |
+| `orchestrator.py` | `database/facade.py` | Auto-name, summarize, pipeline trigger |
+| `llm_client.py` | `providers.py` | Dispatch to selected provider |
+| `llm_client.py` | `prompts.py` | Build system message + context |
+| `llm_client.py` | `multimodal_tools.py` | Vision routing, image caching |
+| `prompts.py` | `visual_context.py` | Persistent visual context |
+| `prompts.py` | `memory/retrieval.py` | Combined memory retrieval |
+| `prompts.py` | `Database` facade | Profile, history, session data |
+| `tools/registry.py` | `tools/<tool>.py` | Lazy-load and dispatch tool modules |
+| `memory/retrieval.py` | `memory/embedder.py` | Query embedding |
+| `memory/embedder.py` | `providers.py` (Chutes) | Embedding API call |
+| `memory/db_memory.py` | `Database` facade | Fact consolidation CRUD |
+| `memory/fsrs.py` | `Database` facade | FSRS decay updates |
 
 ---
 
@@ -273,6 +275,29 @@ User Message
 
 ## 8. Tool System Rules
 
+### Tool Protocol (v3.1.0+)
+
+**LLM invokes tools using `<tool>...</tool>` blocks:**
+
+```
+<tool>
+/bash
+ls -la
+</tool>
+
+<tool>
+/python
+import os
+print(os.getcwd())
+</tool>
+```
+
+**Parsing behavior:**
+- Max 3 tool blocks per response (batching limit)
+- Empty blocks are ignored
+- Tool blocks are extracted and removed from conversational text
+- Remaining text is streamed to UI immediately
+
 ### Dispatch Rules
 
 1. **Single entry point**: `execute_tool(name, arguments, session_id)` in `file registry.py`
@@ -280,39 +305,38 @@ User Message
 3. **Alias resolution**: `imagine` → `image_generate`, `request` → `http_request`
 4. **Terminal tools**: `image_generate` is terminal — no synthesis pass on success
 5. **Non-terminal tools**: Trigger synthesis pass (2nd LLM call)
+6. **Sequential execution**: Tools execute one after another, results collected into single observation
 
-### Message Persistence Flow (NEW)
+### Message Persistence Flow
 
-When LLM invokes a tool via `/command`:
+When LLM invokes tools via `<tool>` blocks:
 
-1. **Narration first**: Strip command line from LLM response, persist narration as `assistant` message
-2. **Tool result**: Execute tool, persist result via `get_tool_role()` as separate message
-3. **Synthesis**: Run 2nd LLM pass, persist synthesis as `assistant` message
+1. **Clean text first**: Extract tool blocks, stream remaining conversational text to UI
+2. **Execute tools**: Run all parsed commands sequentially
+3. **Format observation**: Collect results into `<SYSTEM_OBSERVATION>` block
+4. **Synthesis**: Run 2nd LLM pass with observation, persist synthesis as `assistant` message
 
-Example DB messages for `/imagine cute cat`:
+Example DB messages:
 
 ```markdown
-user:        "buatin gambar kucing"
-assistant:   "baik saya akan buatkan"        ← narration (command stripped)
-tool:        <details>[image result]
+user:        "cek file apa aja di folder ini"
+assistant:   "baik saya cek dulu"              ← clean text (tools stripped)
+tool:        <SYSTEM_OBSERVATION>[bash result]
+assistant:   "ada 5 file di folder tersebut"   ← synthesis
 ```
-
-assistant:   "gimana lucu kan gambarnya"     ← synthesis
-
-```markdown
 
 ### Contract Rules
 
-6. **All tool results** wrapped in `<details>` markdown blocks
-7. **Tool role mapping**: `get_tool_role()` maps tool name to DB role string
-8. **Error handling**: Tool errors return structured `{"ok": False, "error": ..., "markdown": ...}`
+7. **All tool results** wrapped in `<details>` markdown blocks
+8. **Tool role mapping**: `get_tool_role()` maps tool name to DB role string
+9. **Error handling**: Tool errors return structured `{"ok": False, "error": ..., "markdown": ...}`
 
 ### Adding a New Tool
 
 1. Create `app/tools/<tool_name>.py` with `TOOL_DEFINITION` dict and `execute()` function
 2. Add import in `registry.py` `_collect_definitions()` and `_load_tool_module()`
-3. Add alias in `commands.py` `_TOOL_ALIASES` and `_STRING_ARG_TOOLS` if needed
-4. Update `prompts.py` system prompt with command documentation
+3. Update `prompts.py` system prompt with `<tool>` documentation
+4. No need to add aliases in `commands.py` — tool name comes from block content
 
 ---
 
@@ -346,13 +370,12 @@ assistant:   "gimana lucu kan gambarnya"     ← synthesis
 
 | Test | What it Covers |
 |---|---|
-| `tests/test_commands.py` | Command detection, `StreamFilter` |
+| `tests/test_commands.py` | `<tool>` block parsing, command dispatch |
 | `tests/test_db_queries.py` | SQL constants, parsers |
 | `tests/test_prompts.py` | Prompt assembly |
 | `tests/test_database_facade.py` | Database facade |
 | `tests/test_memory.py` | Memory operations |
 | `tests/test_profile_analysis.py` | Profile analysis |
-| `tests/test_stream_filter.py` | Streaming command detection |
 
 ### Running Tests
 
