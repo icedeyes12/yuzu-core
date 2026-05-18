@@ -132,17 +132,23 @@ def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
         return None, None
 
     # SECURITY: Strict path validation to prevent traversal attacks
-    # Only allow files from specific safe directories
     BASE_DIR = Path(__file__).resolve().parent.parent
-    ALLOWED_DIRS = [
-        BASE_DIR / "static",
-        BASE_DIR / "uploads",
-    ]
+    ALLOWED_ROOT_NAMES = {"static", "uploads"}
+    ALLOWED_DIRS = [BASE_DIR / root for root in ALLOWED_ROOT_NAMES]
 
     try:
-        candidate = Path(image_path)
+        candidate = Path(image_path.strip())
         if candidate.is_absolute():
             log.warning("absolute path blocked: %s", image_path)
+            return None, None
+
+        parts = candidate.parts
+        if not parts or any(part in ("", ".", "..") for part in parts):
+            log.warning("invalid relative path blocked: %s", image_path)
+            return None, None
+
+        if parts[0] not in ALLOWED_ROOT_NAMES:
+            log.warning("path outside allowed roots: %s", image_path)
             return None, None
 
         resolved_path = (BASE_DIR / candidate).resolve()
@@ -165,8 +171,12 @@ def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
         log.warning("invalid path: %s - %s", image_path, e)
         return None, None
 
-    if not resolved_path.exists():
-        log.warning("image not found: %s", image_path)
+    if not resolved_path.exists() or not resolved_path.is_file():
+        log.warning("image not found or not a file: %s", image_path)
+        return None, None
+
+    if resolved_path.is_symlink():
+        log.warning("symlink blocked: %s", image_path)
         return None, None
 
     try:
