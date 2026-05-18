@@ -59,7 +59,11 @@ def chutes_chat(
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
-    headers = {**_DEFAULT_HEADERS, "X-Title": title, "Authorization": f"Bearer {api_key}"}
+    headers = {
+        **_DEFAULT_HEADERS,
+        "X-Title": title,
+        "Authorization": f"Bearer {api_key}",
+    }
 
     for candidate in (model, *fallback_models):
         try:
@@ -87,7 +91,10 @@ def chutes_chat(
                 continue
 
         log.warning(
-            "chutes %s -> HTTP %s: %s", candidate, response.status_code, response.text[:200]
+            "chutes %s -> HTTP %s: %s",
+            candidate,
+            response.status_code,
+            response.text[:200],
         )
 
     return None
@@ -118,7 +125,10 @@ def _apply_vision_routing(
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Here's the generated image for your reference."},
+                        {
+                            "type": "text",
+                            "text": "Here's the generated image for your reference.",
+                        },
                         *image_content_for_context,
                     ],
                 }
@@ -150,7 +160,10 @@ def _inject_persistent_visual(
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": "[Previous image context re-attached for comparison]"},
+                {
+                    "type": "text",
+                    "text": "[Previous image context re-attached for comparison]",
+                },
                 {
                     "type": "image_url",
                     "image_url": {"url": f"data:{prev_mime};base64,{prev_b64}"},
@@ -240,7 +253,10 @@ def _send_to_provider(
     if text:
         log.info(
             "chat %s/%s | tools=%d | %.1fs ok",
-            provider, model, len(schemas), duration,
+            provider,
+            model,
+            len(schemas),
+            duration,
         )
         return text, raw_response
 
@@ -311,7 +327,10 @@ def _stream_from_provider(
     duration = time.time() - started
     log.info(
         "chat (stream) %s/%s | chars=%d | %.1fs",
-        provider, model, received, duration,
+        provider,
+        model,
+        received,
+        duration,
     )
 
 
@@ -340,7 +359,11 @@ def generate_ai_response_streaming(
         messages.append({"role": "user", "content": user_message})
 
     messages, resolved_provider, resolved_model = _apply_vision_routing(
-        messages, user_message, resolved_provider, resolved_model, image_content_for_context
+        messages,
+        user_message,
+        resolved_provider,
+        resolved_model,
+        image_content_for_context,
     )
     _inject_persistent_visual(messages, user_message, session_id)
 

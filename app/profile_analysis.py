@@ -19,7 +19,13 @@ from app.logging_config import get_logger
 log = get_logger(__name__)
 
 _IMPORTANT_KEYWORDS = (
-    "love", "hate", "important", "always", "never", "forever", "remember",
+    "love",
+    "hate",
+    "important",
+    "always",
+    "never",
+    "forever",
+    "remember",
 )
 _IDLE_THRESHOLD_HOURS = 1
 _SUMMARY_TRIGGER_INTERVAL = 100
@@ -92,7 +98,10 @@ def should_summarize_memory(
     history = Database.get_chat_history(session_id=session_id) or []
     convo_count = sum(1 for m in history if m["role"] in ("user", "assistant"))
 
-    if convo_count >= _SUMMARY_TRIGGER_INTERVAL and convo_count % _SUMMARY_TRIGGER_INTERVAL == 0:
+    if (
+        convo_count >= _SUMMARY_TRIGGER_INTERVAL
+        and convo_count % _SUMMARY_TRIGGER_INTERVAL == 0
+    ):
         session_memory = Database.get_session_memory(session_id) or {}
         if convo_count > session_memory.get("last_summary_count", 0):
             idle = _idle_hours(session_memory)
@@ -192,7 +201,10 @@ def _sync_episodic_to_db(
         emotional = calculate_emotional_weight(recent)
         importance = 0.5 + emotional * 0.3
         create_episodic_memory(
-            session_id, summary, emotional, importance,
+            session_id,
+            summary,
+            emotional,
+            importance,
             source_message_ids=[m["id"] for m in recent],
         )
     except Exception as e:  # noqa: BLE001
@@ -206,7 +218,7 @@ def _sync_episodic_to_db(
 
 def normalize_memory_item(text: str) -> str:
     cleaned = re.sub(r"\s+", " ", text.strip().lower())
-    return cleaned.rstrip('.,"\'')
+    return cleaned.rstrip(".,\"'")
 
 
 def merge_and_clean_memory(
@@ -258,7 +270,8 @@ def _merge_profile_data(
                 normalize_memory_item(i) for i in existing_items if i and i.strip()
             }
             added = sum(
-                1 for i in incoming
+                1
+                for i in incoming
                 if i and i.strip() and normalize_memory_item(i) not in existing_norms
             )
             result_facts[category] = merge_and_clean_memory(
@@ -284,8 +297,10 @@ def _select_session_messages(
     min_length: int,
 ) -> tuple[list[dict[str, Any]], str]:
     filtered = [
-        m for m in messages
-        if m["role"] in ("user", "assistant") and len(m["content"].strip()) >= min_length
+        m
+        for m in messages
+        if m["role"] in ("user", "assistant")
+        and len(m["content"].strip()) >= min_length
     ]
     if not filtered:
         return [], "none"
@@ -365,7 +380,9 @@ def _global_analysis_call(prompt: str, api_key: str) -> str | None:
         return primary
 
     log.warning("primary global-profile model failed, trying free fallbacks")
-    shortened = prompt[:15000] + "\n\n...[analysis limited due to free tier constraints]"
+    shortened = (
+        prompt[:15000] + "\n\n...[analysis limited due to free tier constraints]"
+    )
     return chutes_chat(
         shortened,
         api_key=api_key,
@@ -464,7 +481,9 @@ def summarize_global_player_profile() -> bool:
 
     log.info(
         "global profile updated: %d sessions, %d msgs, %d chars",
-        len(blocks), total_messages, len(conversation_text),
+        len(blocks),
+        total_messages,
+        len(conversation_text),
     )
     return True
 
@@ -494,7 +513,7 @@ def _save_debug_log(
 def _detect_section(line: str) -> tuple[str | None, str]:
     for pattern, key in _SECTION_PATTERNS.items():
         if line.startswith(pattern):
-            return key, line[len(pattern):].strip()
+            return key, line[len(pattern) :].strip()
     return None, line
 
 

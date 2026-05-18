@@ -51,52 +51,52 @@ _ALLOWED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 def _validate_image_path_safely(user_path: str) -> Path | None:
     """Validate a user-provided image path by searching trusted directories.
-    
+
     SECURITY: This function NEVER constructs paths from user input directly.
-    Instead, it extracts ONLY the filename (using os.path.basename) and 
+    Instead, it extracts ONLY the filename (using os.path.basename) and
     searches for it in pre-defined trusted directories.
-    
+
     This breaks the CodeQL taint chain completely - no part of the user's
     path string is used in path construction.
-    
+
     Returns:
         Path object if valid image found, None otherwise.
     """
     if not user_path or not isinstance(user_path, str):
         return None
-    
+
     # SECURITY: Extract ONLY the filename - this removes all directory components
     # and ensures no path traversal is possible. The filename is just a string
     # that we use to search in OUR trusted directories.
     filename = os.path.basename(user_path.replace("\\", "/"))
-    
+
     if not filename:
         return None
-    
+
     # Validate filename is not dangerous (defensive)
     if filename.startswith(".") or ".." in filename:
         log.warning("suspicious filename rejected: %s", filename[:50])
         return None
-    
+
     # Check extension
     ext = Path(filename).suffix.lower()
     if ext not in _ALLOWED_IMAGE_EXTS:
         return None
-    
+
     # SECURITY: Search ONLY in pre-resolved trusted directories
     # We construct paths using our constants, NOT user input
     for trusted_dir in _ALLOWED_IMAGE_DIRS:
         # Construct candidate using TRUSTED base + filename only
         candidate = trusted_dir / filename
-        
+
         try:
             # Resolve and verify
             resolved = candidate.resolve()
-            
+
             # Must exist and be a regular file
             if not resolved.is_file():
                 continue
-            
+
             # Verify resolved path is still within trusted_dir
             # (handles symlinks that might escape)
             try:
@@ -106,17 +106,17 @@ def _validate_image_path_safely(user_path: str) -> Path | None:
                     continue
             except ValueError:
                 continue
-            
+
             # Additional symlink check
             if resolved.is_symlink():
                 log.warning("symlink rejected: %s", filename[:50])
                 continue
-            
+
             return resolved
-            
+
         except (OSError, ValueError):
             continue
-    
+
     return None
 
 
@@ -134,8 +134,8 @@ def _cache_uploaded_images(message: str) -> list[str]:
 
     for line in message.split("\n"):
         if line.startswith("IMAGE_UPLOAD:"):
-            user_path = line[len("IMAGE_UPLOAD:"):].strip()
-            
+            user_path = line[len("IMAGE_UPLOAD:") :].strip()
+
             # Use the safe validator
             validated = _validate_image_path_safely(user_path)
             if validated:
@@ -206,20 +206,23 @@ def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
 # --------------------------------------------------------------------
 
 
-def _parse_raw_tool_calls(
-    provider_name: str, raw_response: dict | None
-) -> list[dict]:
+def _parse_raw_tool_calls(provider_name: str, raw_response: dict | None) -> list[dict]:
     """Parse tool_calls from a raw provider API response."""
     if not raw_response:
         return []
     try:
         from app.providers import get_ai_manager
+
         manager = get_ai_manager()
         provider = manager.providers.get(provider_name)
         if not provider:
             return []
         calls = provider.parse_tool_calls(raw_response)
-        return [{"name": c["name"], "arguments": c["arguments"]} for c in calls if c.get("name")]
+        return [
+            {"name": c["name"], "arguments": c["arguments"]}
+            for c in calls
+            if c.get("name")
+        ]
     except Exception:
         return []
 
@@ -253,17 +256,13 @@ def _clean(text: str) -> str:
     return _TIMESTAMP_SUFFIX.sub("", text).strip()
 
 
-def _persist_user(
-    message: str, session_id: int, image_paths: list[str] | None
-) -> None:
+def _persist_user(message: str, session_id: int, image_paths: list[str] | None) -> None:
     Database.add_message(
         "user", message, session_id=session_id, image_paths=image_paths or None
     )
 
 
-def _persist_tool_result(
-    tool_name: str, markdown: str, session_id: int
-) -> None:
+def _persist_tool_result(tool_name: str, markdown: str, session_id: int) -> None:
     Database.add_message(get_tool_role(tool_name), markdown, session_id=session_id)
 
 
@@ -319,7 +318,10 @@ def _stream_synthesis(
     image_context = _build_image_context(tool_markdown, session_id)
 
     for chunk in generate_ai_response_streaming(
-        profile, "", interface, session_id,
+        profile,
+        "",
+        interface,
+        session_id,
         image_content_for_context=image_context,
     ):
         yield chunk
@@ -358,11 +360,13 @@ def _post_turn(
     # Clear request-scoped caches
     try:
         from app.memory.memory import _clear_request_cache
+
         _clear_request_cache(session_id)
     except Exception:
         pass
     try:
         from app.memory.retrieval import _clear_embedding_cache
+
         _clear_embedding_cache()
     except Exception:
         pass
@@ -371,6 +375,7 @@ def _post_turn(
 def _trigger_memory_pipeline(session_id: int) -> None:
     try:
         from app.memory.memory import trigger_memory_pipeline_async
+
         count = Database.get_session_messages_count(session_id)
         if not trigger_memory_pipeline_async(session_id, count):
             log.info("memory pipeline skipped (count=%s)", count)
@@ -516,14 +521,20 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
             synthesis = _run_synthesis(profile, session_id, interface, combined)
             if synthesis:
                 Database.add_message("assistant", synthesis, session_id=session_id)
-                final = f"{combined}\n\n{synthesis}" if parse_image_path(combined) else synthesis
+                final = (
+                    f"{combined}\n\n{synthesis}"
+                    if parse_image_path(combined)
+                    else synthesis
+                )
             else:
                 final = combined
 
             _post_turn(profile, user_message, final, session_id, active_session)
             return final
 
-    provider_name = (profile.get("providers_config") or {}).get("preferred_provider", "ollama")
+    provider_name = (profile.get("providers_config") or {}).get(
+        "preferred_provider", "ollama"
+    )
 
     try:
         text_response, raw_api_response = generate_ai_response(
@@ -561,16 +572,16 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
             _persist_tool_result(tool_name, tool_markdown, session_id)
 
             is_image_tool = parse_image_path(tool_markdown) is not None
-            synthesis = _run_synthesis(
-                profile, session_id, interface, tool_markdown
-            )
+            synthesis = _run_synthesis(profile, session_id, interface, tool_markdown)
 
             if synthesis:
                 Database.add_message("assistant", synthesis, session_id=session_id)
                 final_response = (
                     f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
                 )
-                _post_turn(profile, user_message, final_response, session_id, active_session)
+                _post_turn(
+                    profile, user_message, final_response, session_id, active_session
+                )
                 return final_response
 
             _post_turn(profile, user_message, tool_markdown, session_id, active_session)
@@ -709,4 +720,6 @@ def handle_user_message_streaming(
         )
         _post_turn(profile, user_message, final_response, session_id, active_session)
     else:
-        _post_turn(profile, user_message, combined_tool_markdown, session_id, active_session)
+        _post_turn(
+            profile, user_message, combined_tool_markdown, session_id, active_session
+        )

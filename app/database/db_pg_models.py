@@ -146,19 +146,21 @@ def update_memory(memory_dict: dict) -> bool:
 
 def get_memory_state(session_id: int) -> dict:
     """Get pipeline state from session's memory_state.
-    
+
     Returns dict with:
         - last_segmented_count: int
         - last_segmented_at: ISO timestamp
     """
-    row = pg_fetchone("SELECT memory_state FROM chat_sessions WHERE id = %s", (session_id,))
+    row = pg_fetchone(
+        "SELECT memory_state FROM chat_sessions WHERE id = %s", (session_id,)
+    )
     if not row:
         return {"last_segmented_count": 0}
-    
+
     ms = row.get("memory_state")
     if not ms:
         return {"last_segmented_count": 0}
-    
+
     # JSONB column - already dict from psycopg v3
     if isinstance(ms, dict):
         return ms
@@ -168,7 +170,7 @@ def get_memory_state(session_id: int) -> dict:
 
 def update_memory_state(session_id: int, state: dict) -> bool:
     """Update pipeline state in session's memory_state.
-    
+
     Merges with existing state.
     """
     try:
@@ -342,7 +344,9 @@ def add_message(
         return None
 
 
-def get_session_messages(session_id: int, limit: int = 100, order: str = "ASC") -> list[dict]:
+def get_session_messages(
+    session_id: int, limit: int = 100, order: str = "ASC"
+) -> list[dict]:
     """Fetch messages by session_id.
 
     order: "ASC" (oldest first) or "DESC" (newest first).
@@ -407,9 +411,7 @@ def get_recent_sessions(limit: int = 20) -> list[dict]:
 
 
 def get_recent_sessions_for_session(session_id: int, limit: int = 20) -> list[dict]:
-    rows = pg_fetchall(
-        SQL_MESSAGE_RECENT_SYSTEM_FOR_SESSION, (session_id, limit)
-    )
+    rows = pg_fetchall(SQL_MESSAGE_RECENT_SYSTEM_FOR_SESSION, (session_id, limit))
     return [parse_event_row(r) for r in rows]
 
 
@@ -422,9 +424,7 @@ def add_image_tools_message(session_id: int, image_url: str) -> int | None:
     return add_message(session_id, "image_tools", image_url)
 
 
-def add_tool_result(
-    session_id: int, tool_name: str, result_content: str
-) -> int | None:
+def add_tool_result(session_id: int, tool_name: str, result_content: str) -> int | None:
     return add_message(session_id, tool_role_for(tool_name), result_content)
 
 
@@ -447,14 +447,10 @@ def get_chat_history_for_ai(
 ) -> list[dict]:
     """Build the chronologically ordered AI message context."""
     if limit and recent:
-        rows = pg_fetchall(
-            SQL_MESSAGE_HISTORY_FOR_AI_DESC_LIMIT, (session_id, limit)
-        )
+        rows = pg_fetchall(SQL_MESSAGE_HISTORY_FOR_AI_DESC_LIMIT, (session_id, limit))
         rows = list(reversed(rows))
     elif limit:
-        rows = pg_fetchall(
-            SQL_MESSAGE_HISTORY_FOR_AI_ASC_LIMIT, (session_id, limit)
-        )
+        rows = pg_fetchall(SQL_MESSAGE_HISTORY_FOR_AI_ASC_LIMIT, (session_id, limit))
     else:
         rows = pg_fetchall(SQL_MESSAGE_HISTORY_FOR_AI_ASC_ALL, (session_id,))
     return format_ai_history_rows(rows)
@@ -488,6 +484,7 @@ def batch_decrypt_messages(message_ids: list[int]) -> dict:
             row = pg_fetchone(SQL_MESSAGE_SELECT_CONTENT_BY_ID, (msg_id,))
             if row and row.get("content"):
                 from app.encryption import encryptor
+
                 plaintext = encryptor.decrypt(row["content"])
                 pg_execute(SQL_MESSAGE_UPDATE_DECRYPTED, (plaintext, msg_id))
                 decrypted_count += 1
@@ -505,29 +502,52 @@ __all__ = [
     # Schema
     "init_pg_tables",
     # Profile
-    "get_profile", "update_profile",
-    "get_context", "update_context",
-    "get_memory", "update_memory",
+    "get_profile",
+    "update_profile",
+    "get_context",
+    "update_context",
+    "get_memory",
+    "update_memory",
     # Sessions
-    "get_active_session", "get_all_sessions", "create_session",
-    "switch_session", "rename_session", "delete_session",
-    "get_session_memory", "update_session_memory", "increment_message_count",
+    "get_active_session",
+    "get_all_sessions",
+    "create_session",
+    "switch_session",
+    "rename_session",
+    "delete_session",
+    "get_session_memory",
+    "update_session_memory",
+    "increment_message_count",
     # Pipeline state
-    "get_memory_state", "update_memory_state",
+    "get_memory_state",
+    "update_memory_state",
     # API keys
-    "get_api_keys", "get_api_key", "add_api_key", "remove_api_key",
+    "get_api_keys",
+    "get_api_key",
+    "add_api_key",
+    "remove_api_key",
     # Messages
-    "add_message", "get_session_messages", "get_recent_messages",
-    "get_chat_history", "clear_session_messages", "get_message_count",
-    "add_session_event", "get_recent_sessions",
-    "get_recent_sessions_for_session", "get_session_conversation_summary",
-    "add_image_tools_message", "add_tool_result", "add_system_note",
+    "add_message",
+    "get_session_messages",
+    "get_recent_messages",
+    "get_chat_history",
+    "clear_session_messages",
+    "get_message_count",
+    "add_session_event",
+    "get_recent_sessions",
+    "get_recent_sessions_for_session",
+    "get_session_conversation_summary",
+    "add_image_tools_message",
+    "add_tool_result",
+    "add_system_note",
     "add_memory_note",
     # AI history
     "get_chat_history_for_ai",
     # Encryption
-    "get_encryption_status", "get_all_encrypted_messages",
+    "get_encryption_status",
+    "get_all_encrypted_messages",
     "batch_decrypt_messages",
     # Tool roles (re-exported for backward-compat imports)
-    "TOOL_ROLES", "ALL_TOOL_ROLES",
+    "TOOL_ROLES",
+    "ALL_TOOL_ROLES",
 ]

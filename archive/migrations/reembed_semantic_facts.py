@@ -6,12 +6,15 @@ HNSW notes:
 - halvec max_dim = 2000, so we use halvec(2560) which auto-truncates to 2000
 - Alternative: use pgvector with lower dim (1536) for full HNSW support
 """
+
 import os
 import sys
 import time
 import json
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(
+    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 
 from app.database import pg_fetchone, pg_fetchall, pg_execute
 from app.memory.embedder import embed_texts
@@ -21,14 +24,16 @@ TARGET_DIM = 2560  # halvec will truncate to 2000 for HNSW index
 
 
 def get_null_count():
-    row = pg_fetchone("SELECT COUNT(*) as cnt FROM semantic_facts WHERE embedding IS NULL")
-    return row.get('cnt', 0) if row else 0
+    row = pg_fetchone(
+        "SELECT COUNT(*) as cnt FROM semantic_facts WHERE embedding IS NULL"
+    )
+    return row.get("cnt", 0) if row else 0
 
 
 def get_null_embeddings_batch(last_id: int, batch_size: int = 100):
     return pg_fetchall(
         "SELECT id, content FROM semantic_facts WHERE embedding IS NULL AND id > %s ORDER BY id LIMIT %s",
-        (last_id, batch_size)
+        (last_id, batch_size),
     )
 
 
@@ -36,7 +41,7 @@ def update_embedding(fact_id: int, embedding: list):
     """Store embedding as JSON string for halvec."""
     pg_execute(
         "UPDATE semantic_facts SET embedding = %s WHERE id = %s",
-        (json.dumps(embedding), fact_id)
+        (json.dumps(embedding), fact_id),
     )
 
 
@@ -71,8 +76,8 @@ def main():
         batch_ids = []
 
         for row in rows:
-            fact_id = row.get('id')
-            content = row.get('content', '')
+            fact_id = row.get("id")
+            content = row.get("content", "")
 
             if not content or len(content.strip()) < 5:
                 last_id = fact_id
@@ -116,7 +121,9 @@ def main():
             total_failed += len(batch_buffer)
 
         remaining = get_null_count()
-        print(f"[PROGRESS] Embedded: {total_embedded}, Failed: {total_failed}, Remaining: {remaining}")
+        print(
+            f"[PROGRESS] Embedded: {total_embedded}, Failed: {total_failed}, Remaining: {remaining}"
+        )
 
         if remaining == 0:
             break
@@ -129,7 +136,9 @@ def main():
     print("=" * 60)
     print()
     print("NOTE: After re-embedding, create HNSW index:")
-    print("  CREATE INDEX idx_hnsw ON semantic_facts USING hnsw (embedding halvec_l2_ops)")
+    print(
+        "  CREATE INDEX idx_hnsw ON semantic_facts USING hnsw (embedding halvec_l2_ops)"
+    )
     print("  WITH (m = 16, ef_construction = 200);")
 
 

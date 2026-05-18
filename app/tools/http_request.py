@@ -22,8 +22,8 @@ TIMEOUT = 90
 TOOL_DEFINITION = ToolDefinition(
     name="http_request",
     description="Make HTTP requests to public HTTPS endpoints. "
-                "Use for web searches, fetching data from public APIs, or retrieving content. "
-                "Only accepts public HTTPS URLs. Returns text content or downloaded images.",
+    "Use for web searches, fetching data from public APIs, or retrieving content. "
+    "Only accepts public HTTPS URLs. Returns text content or downloaded images.",
     role="request_tools",
     parameters=[
         ToolParam(
@@ -47,7 +47,7 @@ TOOL_DEFINITION = ToolDefinition(
 
 def is_safe_public_url(url: str) -> tuple[bool, str]:
     """Validate URL is safe public HTTPS endpoint.
-    
+
     Returns:
         (is_safe, reason) tuple. Reason is empty string if valid.
     """
@@ -71,7 +71,10 @@ def is_safe_public_url(url: str) -> tuple[bool, str]:
         ):
             return False, f"IP address is private/unsafe: {ip}"
     except Exception:
-        return False, f"DNS resolution failed - domain '{parsed.hostname}' may not exist or is down"
+        return (
+            False,
+            f"DNS resolution failed - domain '{parsed.hostname}' may not exist or is down",
+        )
 
     return True, ""
 
@@ -88,7 +91,9 @@ def _extract_url(args_str: str) -> tuple:
     """
     args_str = args_str.strip()
 
-    method_match = re.match(r'^(GET|POST|PUT|DELETE|PATCH)\s+(.+)$', args_str, re.IGNORECASE)
+    method_match = re.match(
+        r"^(GET|POST|PUT|DELETE|PATCH)\s+(.+)$", args_str, re.IGNORECASE
+    )
     if method_match:
         method = method_match.group(1).upper()
         url = method_match.group(2).strip()

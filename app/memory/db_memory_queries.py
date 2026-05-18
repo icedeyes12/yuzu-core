@@ -237,26 +237,33 @@ def build_count_query(extra_conditions: list[str]) -> str:
 def build_update_last_accessed_query(id_count: int) -> str:
     """Render the multi-id last_accessed UPDATE for the given count."""
     placeholders = ",".join(["%s"] * id_count)
-    return (
-        "UPDATE semantic_facts SET last_accessed=%s "
-        f"WHERE id IN ({placeholders})"
-    )
+    return f"UPDATE semantic_facts SET last_accessed=%s WHERE id IN ({placeholders})"
 
 
 __all__ = [
     # Constants
-    "FACT_TYPE_STATIC", "FACT_TYPE_DYNAMIC", "EMBEDDING_DIM",
+    "FACT_TYPE_STATIC",
+    "FACT_TYPE_DYNAMIC",
+    "EMBEDDING_DIM",
     # Vector helpers
-    "normalize_vector", "vector_literal",
+    "normalize_vector",
+    "vector_literal",
     # Static SQL
-    "SQL_FACT_DUP_CHECK_BY_CONTENT", "SQL_FACT_INSERT",
-    "SQL_FACT_SELECT_BY_ID", "SQL_FACT_SELECT_STATIC_LIMIT",
-    "SQL_FACT_UPDATE_METADATA", "SQL_FACT_INVALIDATE",
+    "SQL_FACT_DUP_CHECK_BY_CONTENT",
+    "SQL_FACT_INSERT",
+    "SQL_FACT_SELECT_BY_ID",
+    "SQL_FACT_SELECT_STATIC_LIMIT",
+    "SQL_FACT_UPDATE_METADATA",
+    "SQL_FACT_INVALIDATE",
     "SQL_FACT_UPDATE_DECAY",
-    "SQL_FACT_DECAY_FETCH_FOR_SESSION", "SQL_FACT_DECAY_FETCH_GLOBAL",
+    "SQL_FACT_DECAY_FETCH_FOR_SESSION",
+    "SQL_FACT_DECAY_FETCH_GLOBAL",
     # Builders
     "build_metadata_conditions",
-    "build_search_similar_query", "build_search_trgm_query",
-    "build_search_tsv_query", "build_facts_by_session_query",
-    "build_count_query", "build_update_last_accessed_query",
+    "build_search_similar_query",
+    "build_search_trgm_query",
+    "build_search_tsv_query",
+    "build_facts_by_session_query",
+    "build_count_query",
+    "build_update_last_accessed_query",
 ]

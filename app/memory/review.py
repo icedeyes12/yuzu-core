@@ -11,7 +11,7 @@ from app.memory.db_memory import decay_facts, increment_importance, FACT_TYPE_DY
 
 logger = logging.getLogger(__name__)
 
-_DECAY_STATE_FILE = os.path.join(os.path.dirname(__file__), '.decay_state.json')
+_DECAY_STATE_FILE = os.path.join(os.path.dirname(__file__), ".decay_state.json")
 
 
 def _get_last_decay_time():
@@ -20,7 +20,7 @@ def _get_last_decay_time():
         return None
     try:
         with open(_DECAY_STATE_FILE) as f:
-            return json.load(f).get('last_decay')
+            return json.load(f).get("last_decay")
     except (ValueError, IOError):
         return None
 
@@ -28,8 +28,8 @@ def _get_last_decay_time():
 def _set_last_decay_time():
     """Record current time as last decay timestamp."""
     try:
-        with open(_DECAY_STATE_FILE, 'w') as f:
-            json.dump({'last_decay': datetime.now().isoformat()}, f)
+        with open(_DECAY_STATE_FILE, "w") as f:
+            json.dump({"last_decay": datetime.now().isoformat()}, f)
     except IOError as e:
         logger.warning(f"Could not write decay state: {e}")
 
@@ -41,7 +41,7 @@ def run_decay(session_id=None, force=False):
     (valid_at/invalid_at) instead of FSRS-style decay.
 
     Skips if decay ran within the last 6 hours unless force=True.
-    
+
     Args:
         session_id: optional session to limit decay scope
         force: run even if recently ran
@@ -50,16 +50,18 @@ def run_decay(session_id=None, force=False):
         last = _get_last_decay_time()
         if last:
             try:
-                last_dt = datetime.strptime(last, '%Y-%m-%dT%H:%M:%S.%f')
+                last_dt = datetime.strptime(last, "%Y-%m-%dT%H:%M:%S.%f")
                 hours_since = (datetime.now() - last_dt).total_seconds() / 3600.0
                 if hours_since < 6.0:
-                    logger.debug(f"Skipped — ran {hours_since:.1f}h ago (min interval: 6h)")
+                    logger.debug(
+                        f"Skipped — ran {hours_since:.1f}h ago (min interval: 6h)"
+                    )
                     return
             except (ValueError, TypeError):
                 pass
 
     logger.info("Running memory decay...")
-    
+
     # Decay episodic memories (dynamic facts) — NOT semantic static facts
     try:
         count_episodic = decay_facts(session_id=session_id, fact_type=FACT_TYPE_DYNAMIC)
@@ -71,7 +73,7 @@ def run_decay(session_id=None, force=False):
     logger.info("Done.")
 
 
-def reinforce_memory(memory_id, memory_type='semantic'):
+def reinforce_memory(memory_id, memory_type="semantic"):
     """Increase importance when a memory is retrieved.
 
     Args:

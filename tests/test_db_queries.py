@@ -136,7 +136,9 @@ class TestSessionParsers:
 
 class TestApiKeyDecryption:
     def test_unencrypted_passes_through(self):
-        rows = [{"key_name": "openrouter", "key_value": "sk-plain", "key_encrypted": False}]
+        rows = [
+            {"key_name": "openrouter", "key_value": "sk-plain", "key_encrypted": False}
+        ]
         out = decrypt_api_key_rows(rows)
         assert out == {"openrouter": "sk-plain"}
 
@@ -212,8 +214,7 @@ class TestToolContractParsers:
 
     def test_extract_raw_result_strips_html(self):
         assert (
-            extract_raw_result_from_markdown_contract("<b>bold</b> text")
-            == "bold text"
+            extract_raw_result_from_markdown_contract("<b>bold</b> text") == "bold text"
         )
 
 
@@ -257,11 +258,17 @@ class TestEncryptionStatus:
         assert out["api_keys"]["encrypted"] == 0
 
     def test_build_encryption_status_populated(self):
-        out = build_encryption_status(
-            {"cnt": 100}, {"cnt": 5}, {"cnt": 3}, {"cnt": 3}
-        )
-        assert out["messages"] == {"total": 100, "encrypted": 5, "policy": "NO_ENCRYPTION"}
-        assert out["api_keys"] == {"total": 3, "encrypted": 3, "policy": "FULL_ENCRYPTION"}
+        out = build_encryption_status({"cnt": 100}, {"cnt": 5}, {"cnt": 3}, {"cnt": 3})
+        assert out["messages"] == {
+            "total": 100,
+            "encrypted": 5,
+            "policy": "NO_ENCRYPTION",
+        }
+        assert out["api_keys"] == {
+            "total": 3,
+            "encrypted": 3,
+            "policy": "FULL_ENCRYPTION",
+        }
 
 
 class TestToolRoleHelpers:

@@ -28,7 +28,7 @@ def store_visual_context(session_id: int, image_base64: str, mime: str) -> None:
 
 def consume_visual_context(session_id: int) -> tuple[str | None, str | None]:
     """Return stored visual context if available and decrement turn counter.
-    
+
     Returns (base64, mime) or (None, None). Thread-safe.
     """
     with _visual_context_lock:
@@ -46,9 +46,9 @@ def consume_visual_context(session_id: int) -> tuple[str | None, str | None]:
 
 
 _VISUAL_REF_PATTERNS = re.compile(
-    r'(?:yang tadi|yang sebelumnya|tadi|bedanya|beda apa|compare|'
-    r'bandingin|foto tadi|gambar tadi|image before|the previous|earlier image|'
-    r'dari tadi|yang barusan)',
+    r"(?:yang tadi|yang sebelumnya|tadi|bedanya|beda apa|compare|"
+    r"bandingin|foto tadi|gambar tadi|image before|the previous|earlier image|"
+    r"dari tadi|yang barusan)",
     re.IGNORECASE,
 )
 

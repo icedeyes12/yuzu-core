@@ -41,26 +41,42 @@ from datetime import datetime
 from psycopg.types.json import Json
 
 from app.database import (
-    PgSession, pg_fetchone, pg_fetchall, pg_execute,
+    PgSession,
+    pg_fetchone,
+    pg_fetchall,
+    pg_execute,
     # Async versions
-    AsyncPgSession, pg_fetchone_async, pg_fetchall_async, pg_execute_async,
+    AsyncPgSession,
+    pg_fetchone_async,
+    pg_fetchall_async,
+    pg_execute_async,
 )
 from app.memory.db_memory_queries import (
     # Constants
-    FACT_TYPE_STATIC, FACT_TYPE_DYNAMIC, EMBEDDING_DIM,
+    FACT_TYPE_STATIC,
+    FACT_TYPE_DYNAMIC,
+    EMBEDDING_DIM,
     # Vector helpers
-    normalize_vector, vector_literal,
+    normalize_vector,
+    vector_literal,
     # Static SQL
-    SQL_FACT_DUP_CHECK_BY_CONTENT, SQL_FACT_INSERT,
-    SQL_FACT_SELECT_BY_ID, SQL_FACT_SELECT_STATIC_LIMIT,
-    SQL_FACT_UPDATE_METADATA, SQL_FACT_INVALIDATE,
+    SQL_FACT_DUP_CHECK_BY_CONTENT,
+    SQL_FACT_INSERT,
+    SQL_FACT_SELECT_BY_ID,
+    SQL_FACT_SELECT_STATIC_LIMIT,
+    SQL_FACT_UPDATE_METADATA,
+    SQL_FACT_INVALIDATE,
     SQL_FACT_UPDATE_DECAY,
-    SQL_FACT_DECAY_FETCH_FOR_SESSION, SQL_FACT_DECAY_FETCH_GLOBAL,
+    SQL_FACT_DECAY_FETCH_FOR_SESSION,
+    SQL_FACT_DECAY_FETCH_GLOBAL,
     # Builders
     build_metadata_conditions,
-    build_search_similar_query, build_search_trgm_query,
-    build_search_tsv_query, build_facts_by_session_query,
-    build_count_query, build_update_last_accessed_query,
+    build_search_similar_query,
+    build_search_trgm_query,
+    build_search_tsv_query,
+    build_facts_by_session_query,
+    build_count_query,
+    build_update_last_accessed_query,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,6 +87,7 @@ def _embed_text(text: str) -> list[float] | None:
     """Embed text via Chutes API. Returns None on failure."""
     try:
         from app.memory.embedder import embed_text as _embed
+
         return _embed(text)
     except Exception as e:
         logger.warning(f"Embed failed: {e}")
@@ -80,6 +97,7 @@ def _embed_text(text: str) -> list[float] | None:
 # ═════════════════════════════════════════════════════════════════════════════
 # SYNC FUNCTIONS (legacy compatibility)
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 # ── Save / Insert ─────────────────────────────────────────────────────────────
 def save_fact(
@@ -104,7 +122,9 @@ def save_fact(
     norm_vec = normalize_vector(embedding) if embedding else None
 
     if norm_vec is not None and len(norm_vec) != EMBEDDING_DIM:
-        raise ValueError(f"Embedding dimension must be {EMBEDDING_DIM}, got {len(norm_vec)}")
+        raise ValueError(
+            f"Embedding dimension must be {EMBEDDING_DIM}, got {len(norm_vec)}"
+        )
 
     vec_literal = vector_literal(norm_vec)
 
@@ -112,22 +132,27 @@ def save_fact(
     try:
         dup_check = pg_fetchone(SQL_FACT_DUP_CHECK_BY_CONTENT, (fact_type, content))
         if dup_check:
-            logger.debug(f"save_fact: duplicate content found, rejecting id={dup_check['id']}")
+            logger.debug(
+                f"save_fact: duplicate content found, rejecting id={dup_check['id']}"
+            )
             return dup_check["id"]
     except Exception as e:
         logger.warning(f"save_fact: dup check failed: {e}")
 
     try:
         with PgSession() as s:
-            row = s.execute_returning(SQL_FACT_INSERT, (
-                fact_type,
-                content,
-                vec_literal,
-                Json(meta),
-                datetime.now(),
-                datetime.now(),
-                datetime.now(),
-            ))
+            row = s.execute_returning(
+                SQL_FACT_INSERT,
+                (
+                    fact_type,
+                    content,
+                    vec_literal,
+                    Json(meta),
+                    datetime.now(),
+                    datetime.now(),
+                    datetime.now(),
+                ),
+            )
             return row["id"] if row else None
     except Exception as e:
         logger.error(f"save_fact failed: {e}")
@@ -280,14 +305,18 @@ def get_facts_by_session(
     if fact_type == FACT_TYPE_STATIC:
         return pg_fetchall(SQL_FACT_SELECT_STATIC_LIMIT, (fact_type, limit))
     # Dynamic facts: build conditions
-    conditions, params = build_metadata_conditions(session_id=session_id, fact_type=fact_type)
+    conditions, params = build_metadata_conditions(
+        session_id=session_id, fact_type=fact_type
+    )
     params.append(limit)
     query = build_facts_by_session_query(conditions, default_dynamic=True)
     return pg_fetchall(query, params)
 
 
 def count_facts(fact_type: str | None = None, session_id: int | None = None) -> int:
-    conditions, params = build_metadata_conditions(fact_type=fact_type, session_id=session_id)
+    conditions, params = build_metadata_conditions(
+        fact_type=fact_type, session_id=session_id
+    )
     query = build_count_query(conditions)
     row = pg_fetchone(query, params)
     return row["cnt"] if row else 0
@@ -348,7 +377,9 @@ def decay_facts(
         now = datetime.now()
 
         if session_id is not None:
-            rows = pg_fetchall(SQL_FACT_DECAY_FETCH_FOR_SESSION, (fact_type, session_id))
+            rows = pg_fetchall(
+                SQL_FACT_DECAY_FETCH_FOR_SESSION, (fact_type, session_id)
+            )
         else:
             rows = pg_fetchall(SQL_FACT_DECAY_FETCH_GLOBAL, (fact_type,))
 
@@ -419,6 +450,7 @@ def invalidate_fact(id: int) -> bool:
 # ASYNC FUNCTIONS (for FastAPI routes)
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 async def save_fact_async(
     session_id: int | None,
     content: str,
@@ -437,29 +469,38 @@ async def save_fact_async(
     norm_vec = normalize_vector(embedding) if embedding else None
 
     if norm_vec is not None and len(norm_vec) != EMBEDDING_DIM:
-        raise ValueError(f"Embedding dimension must be {EMBEDDING_DIM}, got {len(norm_vec)}")
+        raise ValueError(
+            f"Embedding dimension must be {EMBEDDING_DIM}, got {len(norm_vec)}"
+        )
 
     vec_literal = vector_literal(norm_vec)
 
     try:
-        dup_check = await pg_fetchone_async(SQL_FACT_DUP_CHECK_BY_CONTENT, (fact_type, content))
+        dup_check = await pg_fetchone_async(
+            SQL_FACT_DUP_CHECK_BY_CONTENT, (fact_type, content)
+        )
         if dup_check:
-            logger.debug(f"save_fact_async: duplicate content found, rejecting id={dup_check['id']}")
+            logger.debug(
+                f"save_fact_async: duplicate content found, rejecting id={dup_check['id']}"
+            )
             return dup_check["id"]
     except Exception as e:
         logger.warning(f"save_fact_async: dup check failed: {e}")
 
     try:
         async with AsyncPgSession() as s:
-            row = await s.execute_returning(SQL_FACT_INSERT, (
-                fact_type,
-                content,
-                vec_literal,
-                Json(meta),
-                datetime.now(),
-                datetime.now(),
-                datetime.now(),
-            ))
+            row = await s.execute_returning(
+                SQL_FACT_INSERT,
+                (
+                    fact_type,
+                    content,
+                    vec_literal,
+                    Json(meta),
+                    datetime.now(),
+                    datetime.now(),
+                    datetime.now(),
+                ),
+            )
             return row["id"] if row else None
     except Exception as e:
         logger.error(f"save_fact_async failed: {e}")
@@ -511,7 +552,9 @@ async def get_facts_by_session_async(
     """Async version of get_facts_by_session."""
     if fact_type == FACT_TYPE_STATIC:
         return await pg_fetchall_async(SQL_FACT_SELECT_STATIC_LIMIT, (fact_type, limit))
-    conditions, params = build_metadata_conditions(session_id=session_id, fact_type=fact_type)
+    conditions, params = build_metadata_conditions(
+        session_id=session_id, fact_type=fact_type
+    )
     params.append(limit)
     query = build_facts_by_session_query(conditions, default_dynamic=True)
     return await pg_fetchall_async(query, params)

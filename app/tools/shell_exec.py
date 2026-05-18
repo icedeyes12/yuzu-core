@@ -88,12 +88,16 @@ def _get_persistent_session() -> subprocess.Popen:
             text=True,
             cwd=_session_cwd,
         )
-        logger.info("created persistent shell session (pid=%d)", _persistent_process.pid)
+        logger.info(
+            "created persistent shell session (pid=%d)", _persistent_process.pid
+        )
 
     return _persistent_process
 
 
-def _execute_in_session(command: str, timeout: float = DEFAULT_TIMEOUT) -> tuple[int, str, str]:
+def _execute_in_session(
+    command: str, timeout: float = DEFAULT_TIMEOUT
+) -> tuple[int, str, str]:
     """Execute a command in the persistent session.
 
     Returns (exit_code, stdout, stderr).
@@ -166,7 +170,9 @@ def _execute_in_session(command: str, timeout: float = DEFAULT_TIMEOUT) -> tuple
             stdout = full_output[start_idx:end_idx].strip()
 
             # Try to extract exit code
-            exit_code_line = [line for line in full_output.split("\n") if f"{exit_code_var}:" in line]
+            exit_code_line = [
+                line for line in full_output.split("\n") if f"{exit_code_var}:" in line
+            ]
             if exit_code_line:
                 try:
                     exit_code = int(exit_code_line[0].split(":")[-1].strip())
@@ -254,7 +260,9 @@ def _get_partner_name() -> str:
 # --------------------------------------------------------------------
 
 
-def execute(arguments: dict, session_id: int | None = None, tool_name: str = "bash") -> dict:
+def execute(
+    arguments: dict, session_id: int | None = None, tool_name: str = "bash"
+) -> dict:
     """Execute a bash command.
 
     Args:

@@ -98,9 +98,7 @@ def _format_now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
-def _last_active_timestamp(
-    sessions: list[dict[str, Any]], current_id: int
-) -> str:
+def _last_active_timestamp(sessions: list[dict[str, Any]], current_id: int) -> str:
     others = [s for s in sessions if s["id"] != current_id and s.get("updated_at")]
     if not others:
         return "Never"
@@ -140,6 +138,7 @@ def start_session(interface: str = "terminal") -> dict[str, Any]:
 def _bootstrap_memory(session_id: int) -> None:
     try:
         from app.memory.review import run_decay
+
         run_decay(session_id)
         # Don't enqueue pipeline on every session start - let natural triggers handle it
         # Pipeline will be triggered by should_trigger_segmentation() thresholds
@@ -174,7 +173,9 @@ def end_session_cleanup(
         "unexpected_exit": unexpected_exit,
     }
     history["total_sessions"] = (history.get("total_sessions") or 0) + session_count
-    history["total_time_minutes"] = (history.get("total_time_minutes") or 0) + session_count
+    history["total_time_minutes"] = (
+        history.get("total_time_minutes") or 0
+    ) + session_count
     history["current_session"] = {}
     Database.update_profile({"session_history": history})
     return connection_msg

@@ -158,7 +158,9 @@ def build_stats_table(desc: dict) -> Table:
 
 def build_inference_table(desc: dict) -> Table:
     """Build inferential statistics table."""
-    conclusion = "[green]Normal[/green]" if desc["is_normal"] else "[yellow]Non-normal[/yellow]"
+    conclusion = (
+        "[green]Normal[/green]" if desc["is_normal"] else "[yellow]Non-normal[/yellow]"
+    )
     table = Table(
         title="[bold magenta]Inferential Statistics[/bold magenta]",
         box=None,
@@ -199,7 +201,10 @@ def build_fft_table(fft_result: dict) -> Table:
     )
     table.add_column("Metric", style="cyan", width=22)
     table.add_column("Value", style="white", justify="right")
-    table.add_row("Dominant Freq", f"{fft_result['dominant_freq']:.3f}Hz ({fft_result['dominant_magnitude']:.1f})")
+    table.add_row(
+        "Dominant Freq",
+        f"{fft_result['dominant_freq']:.3f}Hz ({fft_result['dominant_magnitude']:.1f})",
+    )
     table.add_row("Spectral Centroid", f"{fft_result['spectral_centroid']:.3f} Hz")
     table.add_row("Signal Energy", f"{fft_result['energy']:.2f}")
     return table
@@ -212,7 +217,9 @@ def build_distribution_chart(ascii_vals: np.ndarray, text: str) -> Text:
     for i, (char, val) in enumerate(zip(text, ascii_vals), 1):
         char_display = char if char != " " else "␣"
         bar = gradient_bar(val, max_val, 35)
-        lines.append(f"  [bold yellow]{char_display}[/bold yellow]  {bar}  [dim]#{i}[/dim]")
+        lines.append(
+            f"  [bold yellow]{char_display}[/bold yellow]  {bar}  [dim]#{i}[/dim]"
+        )
     return Text.from_markup("\n".join(lines))
 
 
@@ -224,7 +231,9 @@ def build_dramatic_reveal(text: str, ascii_vals: np.ndarray) -> Panel:
         chars.append(f"[{color}]{char}[/{color}]")
     colored_text = "  ".join(chars)
     note = "Character-by-character coloring based on ASCII value intensity\nThis is what 'Hello World!' looks like as numbers"
-    content = Text.from_markup(f"[bold]{colored_text}[/bold]\n\n[dim italic]{note}[/dim italic]")
+    content = Text.from_markup(
+        f"[bold]{colored_text}[/bold]\n\n[dim italic]{note}[/dim italic]"
+    )
     return Panel(
         content,
         title="[bold magenta]Dramatic Reveal[/bold magenta]",
@@ -274,7 +283,9 @@ def main() -> None:
     console.print()
 
     note_panel = Panel(
-        Text.from_markup("[dim italic]Note: p > 0.05 = Normal distribution (we accept H₀)[/dim italic]"),
+        Text.from_markup(
+            "[dim italic]Note: p > 0.05 = Normal distribution (we accept H₀)[/dim italic]"
+        ),
         border_style="dim",
     )
     console.print(note_panel)

@@ -117,19 +117,19 @@ async def retrieve_memory_context_async(
     """Async memory retrieval used by FastAPI routes."""
     try:
         from app.memory.retrieval import retrieve_for_context_async
+
         return await retrieve_for_context_async(session_id, query=user_message)
     except Exception:
         return [], ""
 
 
-async def mark_pending_review_async(
-    static_ids: list[int], session_id: int
-) -> None:
+async def mark_pending_review_async(static_ids: list[int], session_id: int) -> None:
     """Async wrapper for marking facts as pending review."""
     if not static_ids:
         return
     import asyncio
     from app.memory.memory_review import mark_retrieved_as_pending_review
+
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(
         None, mark_retrieved_as_pending_review, static_ids, session_id

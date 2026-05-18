@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 TOOL_DEFINITION = ToolDefinition(
     name="memory_search",
     description="Search the user's stored memories and facts across all categories. "
-                "Returns relevant memories ranked by relevance.",
+    "Returns relevant memories ranked by relevance.",
     role="memory_search_tools",
     parameters=[
         ToolParam(

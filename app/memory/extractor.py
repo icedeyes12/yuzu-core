@@ -25,20 +25,39 @@ logger = logging.getLogger(__name__)
 
 # ── Emotional keywords for weight calculation ─────────────────────────────────
 _EMOTIONAL_KEYWORDS = [
-    "angry", "frustrated", "sad", "happy", "excited", "love",
-    "hate", "cry", "laugh", "upset", "worried", "scared",
-    "marah", "kesal", "sedih", "senang", "sayang", "benci",
-    "takut", "khawatir", "kecewa",
+    "angry",
+    "frustrated",
+    "sad",
+    "happy",
+    "excited",
+    "love",
+    "hate",
+    "cry",
+    "laugh",
+    "upset",
+    "worried",
+    "scared",
+    "marah",
+    "kesal",
+    "sedih",
+    "senang",
+    "sayang",
+    "benci",
+    "takut",
+    "khawatir",
+    "kecewa",
 ]
 
 
 def _get_ai_manager():
     """Lazy-import to avoid circular imports."""
     from app import get_ai_manager
+
     return get_ai_manager()
 
 
 # ── Semantic extraction (LLM-only) ──────────────────────────────────────────────
+
 
 def calculate_emotional_weight(messages) -> float:
     """Calculate emotional intensity. Returns 0.0–1.0."""
@@ -127,6 +146,7 @@ def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None
     # Embed the text
     try:
         from app.memory.embedder import embed_text
+
         vector = embed_text(text)
     except Exception as e:
         logger.warning(f"Embedding failed: {e}")
@@ -149,6 +169,7 @@ def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None
                 # Exact content match — reinforce existing
                 from app.memory.db_memory import increment_importance, pg_execute
                 from datetime import datetime
+
                 increment_importance(e["id"], delta=0.1, cap=1.0)
                 meta = e.get("metadata") or {}
                 ids = meta.get("source_episodic_ids", [])
@@ -166,13 +187,15 @@ def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None
 
         # Also check by exact content match directly in DB
         from app.memory.db_memory import pg_fetchone
+
         existing_exact = pg_fetchone(
             "SELECT id, metadata FROM semantic_facts WHERE fact_type=%s AND content=%s AND invalid_at IS NULL LIMIT 1",
-            (FACT_TYPE_STATIC, text)
+            (FACT_TYPE_STATIC, text),
         )
         if existing_exact:
             from app.memory.db_memory import increment_importance, pg_execute
             from datetime import datetime
+
             increment_importance(existing_exact["id"], delta=0.1, cap=1.0)
             meta = existing_exact.get("metadata") or {}
             ids = meta.get("source_episodic_ids", [])
@@ -212,7 +235,9 @@ def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None
     )
 
 
-def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance=0.5, source_message_ids=None):
+def create_episodic_memory(
+    session_id, summary, emotional_weight=0.0, importance=0.5, source_message_ids=None
+):
     """Create a new episodic memory record with embedding.
 
     Args:
@@ -225,6 +250,7 @@ def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance
     # Embed the summary
     try:
         from app.memory.embedder import embed_text
+
         vector = embed_text(summary)
     except Exception as e:
         logger.warning(f"Embedding failed: {e}")
@@ -244,4 +270,3 @@ def create_episodic_memory(session_id, summary, emotional_weight=0.0, importance
         },
     )
     return fact_id
-

@@ -180,7 +180,9 @@ class PgSession:
             row = cur.fetchone()
             return list(row.values())[0] if row else None
 
-    def execute_returning(self, query: str, params: tuple | dict | None = None) -> dict | None:
+    def execute_returning(
+        self, query: str, params: tuple | dict | None = None
+    ) -> dict | None:
         """Execute INSERT/UPDATE ... RETURNING * and return the row dict."""
         with self.conn.cursor() as cur:
             cur.execute(query, params)
@@ -232,14 +234,18 @@ class AsyncPgSession:
             await self._pool.putconn(self.conn)
             self.conn = None
 
-    async def fetchone(self, query: str, params: tuple | dict | None = None) -> dict | None:
+    async def fetchone(
+        self, query: str, params: tuple | dict | None = None
+    ) -> dict | None:
         """Return the first row as a dict, or None."""
         async with self.conn.cursor() as cur:
             await cur.execute(query, params)
             row = await cur.fetchone()
             return dict(row) if row else None
 
-    async def fetchall(self, query: str, params: tuple | dict | None = None) -> list[dict]:
+    async def fetchall(
+        self, query: str, params: tuple | dict | None = None
+    ) -> list[dict]:
         """Return all rows as a list of dicts."""
         async with self.conn.cursor() as cur:
             await cur.execute(query, params)
@@ -250,14 +256,18 @@ class AsyncPgSession:
         async with self.conn.cursor() as cur:
             await cur.execute(query, params)
 
-    async def execute_scalar(self, query: str, params: tuple | dict | None = None) -> Any:
+    async def execute_scalar(
+        self, query: str, params: tuple | dict | None = None
+    ) -> Any:
         """Return the first column of the first row (e.g. COUNT, SUM)."""
         async with self.conn.cursor() as cur:
             await cur.execute(query, params)
             row = await cur.fetchone()
             return list(row.values())[0] if row else None
 
-    async def execute_returning(self, query: str, params: tuple | dict | None = None) -> dict | None:
+    async def execute_returning(
+        self, query: str, params: tuple | dict | None = None
+    ) -> dict | None:
         """Execute INSERT/UPDATE ... RETURNING * and return the row dict."""
         async with self.conn.cursor() as cur:
             await cur.execute(query, params)
@@ -302,12 +312,16 @@ def pg_scalar(query: str, params: tuple | dict | None = None) -> Any:
         return s.execute_scalar(query, params)
 
 
-async def pg_fetchone_async(query: str, params: tuple | dict | None = None) -> dict | None:
+async def pg_fetchone_async(
+    query: str, params: tuple | dict | None = None
+) -> dict | None:
     async with AsyncPgSession() as s:
         return await s.fetchone(query, params)
 
 
-async def pg_fetchall_async(query: str, params: tuple | dict | None = None) -> list[dict]:
+async def pg_fetchall_async(
+    query: str, params: tuple | dict | None = None
+) -> list[dict]:
     async with AsyncPgSession() as s:
         return await s.fetchall(query, params)
 

@@ -8,6 +8,7 @@ Set these before running:
 
 Run from yuzu-companion/ directory.
 """
+
 import sqlite3
 import psycopg2
 import json
@@ -25,13 +26,17 @@ PG_PASS = os.getenv("PGPASSWORD", "")
 
 def _validate_pg_config():
     """Validate PostgreSQL configuration is set."""
-    missing = [k for k, v in {
-        "PGHOST": PG_HOST,
-        "PGPORT": PG_PORT,
-        "PGDATABASE": PG_DBNAME,
-        "PGUSER": PG_USER,
-        "PGPASSWORD": PG_PASS
-    }.items() if not v]
+    missing = [
+        k
+        for k, v in {
+            "PGHOST": PG_HOST,
+            "PGPORT": PG_PORT,
+            "PGDATABASE": PG_DBNAME,
+            "PGUSER": PG_USER,
+            "PGPASSWORD": PG_PASS,
+        }.items()
+        if not v
+    ]
     if missing:
         print(f"[ERR] Missing required environment variables: {', '.join(missing)}")
         print("Set them before running this migration.")
@@ -63,8 +68,7 @@ def migrate_relational():
 
     print("[2/4] Connecting to PostgreSQL...")
     pg_conn = psycopg2.connect(
-        dbname=PG_DBNAME, host=PG_HOST, port=PG_PORT,
-        user=PG_USER, password=PG_PASS
+        dbname=PG_DBNAME, host=PG_HOST, port=PG_PORT, user=PG_USER, password=PG_PASS
     )
     pc = pg_conn.cursor()
 
@@ -73,7 +77,8 @@ def migrate_relational():
     sc.execute("SELECT * FROM profiles")
     profiles = 0
     for row in map(dict, sc.fetchall()):
-        pc.execute("""
+        pc.execute(
+            """
             INSERT INTO profiles (id, display_name, partner_name, affection, theme,
                 memory_json, session_history_json, global_knowledge_json,
                 providers_config_json, context, image_model, vision_model,
@@ -85,13 +90,24 @@ def migrate_relational():
                 affection=EXCLUDED.affection,
                 memory_json=EXCLUDED.memory_json,
                 updated_at=EXCLUDED.updated_at
-        """, (
-            row['id'], row['display_name'], row['partner_name'], row['affection'],
-            row['theme'], row['memory_json'], row['session_history_json'],
-            row['global_knowledge_json'], row['providers_config_json'],
-            row['context'], row['image_model'], row['vision_model'],
-            row.get('created_at'), row.get('updated_at')
-        ))
+        """,
+            (
+                row["id"],
+                row["display_name"],
+                row["partner_name"],
+                row["affection"],
+                row["theme"],
+                row["memory_json"],
+                row["session_history_json"],
+                row["global_knowledge_json"],
+                row["providers_config_json"],
+                row["context"],
+                row["image_model"],
+                row["vision_model"],
+                row.get("created_at"),
+                row.get("updated_at"),
+            ),
+        )
         profiles += 1
     print(f"  -> {profiles} profiles upserted")
 
@@ -100,7 +116,8 @@ def migrate_relational():
     sc.execute("SELECT * FROM chat_sessions")
     sessions = 0
     for row in map(dict, sc.fetchall()):
-        pc.execute("""
+        pc.execute(
+            """
             INSERT INTO chat_sessions (id, name, is_active, message_count, memory_json,
                 timestamp, updated_at)
             VALUES (%s,%s,%s,%s,%s,%s,%s)
@@ -109,11 +126,17 @@ def migrate_relational():
                 is_active=EXCLUDED.is_active,
                 message_count=EXCLUDED.message_count,
                 updated_at=EXCLUDED.updated_at
-        """, (
-            row['id'], row['name'], bool(row['is_active']),
-            row['message_count'], row['memory_json'],
-            row.get('created_at'), row.get('updated_at')
-        ))
+        """,
+            (
+                row["id"],
+                row["name"],
+                bool(row["is_active"]),
+                row["message_count"],
+                row["memory_json"],
+                row.get("created_at"),
+                row.get("updated_at"),
+            ),
+        )
         sessions += 1
     print(f"  -> {sessions} chat_sessions upserted")
 
@@ -122,18 +145,25 @@ def migrate_relational():
     sc.execute("SELECT * FROM messages")
     messages = 0
     for row in map(dict, sc.fetchall()):
-        pc.execute("""
+        pc.execute(
+            """
             INSERT INTO messages (id, session_id, role, content,
                 content_encrypted, image_paths, timestamp)
             VALUES (%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (id) DO UPDATE SET
                 content=EXCLUDED.content,
                 role=EXCLUDED.role
-        """, (
-            row['id'], row['session_id'], row['role'], row['content'],
-            bool(row['content_encrypted']), row.get('image_paths', '{}'),
-            row.get('timestamp')
-        ))
+        """,
+            (
+                row["id"],
+                row["session_id"],
+                row["role"],
+                row["content"],
+                bool(row["content_encrypted"]),
+                row.get("image_paths", "{}"),
+                row.get("timestamp"),
+            ),
+        )
         messages += 1
     print(f"  -> {messages} messages upserted")
 
@@ -142,21 +172,27 @@ def migrate_relational():
     sc.execute("SELECT * FROM api_keys")
     keys = 0
     for row in map(dict, sc.fetchall()):
-        pc.execute("""
+        pc.execute(
+            """
             INSERT INTO api_keys (id, key_name, key_value, key_encrypted, timestamp)
             VALUES (%s,%s,%s,%s,%s)
             ON CONFLICT (id) DO UPDATE SET
                 key_value=EXCLUDED.key_value
-        """, (
-            row['id'], row['key_name'], row['key_value'],
-            bool(row['key_encrypted']), row.get('created_at')
-        ))
+        """,
+            (
+                row["id"],
+                row["key_name"],
+                row["key_value"],
+                bool(row["key_encrypted"]),
+                row.get("created_at"),
+            ),
+        )
         keys += 1
     print(f"  -> {keys} api_keys upserted")
 
     # ── Reset sequences ──────────────────────────────────────────────────────
     print("[4/4] Resetting serial sequences...")
-    for table in ['chat_sessions', 'profiles', 'messages', 'api_keys']:
+    for table in ["chat_sessions", "profiles", "messages", "api_keys"]:
         pc.execute(f"""
             SELECT setval(pg_get_serial_sequence('{table}', 'id'),
                 coalesce(max(id), 1), true) FROM {table}
@@ -167,7 +203,10 @@ def migrate_relational():
     pg_conn.close()
 
     print("\n✅ DONE. Relational migration complete:")
-    print(f"   {profiles} profiles, {sessions} sessions, {messages} messages, {keys} keys")
+    print(
+        f"   {profiles} profiles, {sessions} sessions, {messages} messages, {keys} keys"
+    )
+
 
 if __name__ == "__main__":
     migrate_relational()

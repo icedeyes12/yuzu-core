@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 # API: Scheduler.review_card(card, rating) -> (new_card, review_log)
 try:
     from fsrs import Scheduler, Card, Rating, State
+
     FSRS_AVAILABLE = True
 except ImportError:
     FSRS_AVAILABLE = False
@@ -55,9 +56,9 @@ def _get_scheduler() -> Scheduler | None:
 # ── Fallback multipliers (when fsrs not available) ─────────────────────────────
 _RATING_MULTIPLIERS = {
     "again": {"stability_mult": 0.5, "difficulty_delta": +0.15},
-    "hard":  {"stability_mult": 0.9, "difficulty_delta": +0.05},
-    "good":  {"stability_mult": 1.2, "difficulty_delta": -0.05},
-    "easy":  {"stability_mult": 1.5, "difficulty_delta": -0.10},
+    "hard": {"stability_mult": 0.9, "difficulty_delta": +0.05},
+    "good": {"stability_mult": 1.2, "difficulty_delta": -0.05},
+    "easy": {"stability_mult": 1.5, "difficulty_delta": -0.10},
 }
 
 _MIN_STABILITY = 0.1
@@ -69,10 +70,13 @@ _REVIEW_BATCH_SIZE = 20
 def _get_ai_manager():
     """Lazy-import to avoid circular imports."""
     from app import get_ai_manager
+
     return get_ai_manager()
 
 
-def mark_retrieved_as_pending_review(fact_ids: list[int], session_id: int | None = None) -> int:
+def mark_retrieved_as_pending_review(
+    fact_ids: list[int], session_id: int | None = None
+) -> int:
     """Mark retrieved facts as pending review.
 
     Uses native `pending_review` BOOLEAN column (not JSONB metadata).
@@ -134,7 +138,7 @@ def _rate_facts_batch(
 
     # Build facts list for prompt
     facts_text = "\n".join(
-        f"[{i+1}] ID={f['id']}: {f['content'][:200]} (category: {f.get('category', 'unknown')})"
+        f"[{i + 1}] ID={f['id']}: {f['content'][:200]} (category: {f.get('category', 'unknown')})"
         for i, f in enumerate(facts)
     )
 
@@ -176,7 +180,7 @@ Rate each fact (respond with JSON array only):"""
         try:
             ratings = json.loads(response.strip())
         except json.JSONDecodeError:
-            match = re.search(r'\[.*\]', response, re.DOTALL)
+            match = re.search(r"\[.*\]", response, re.DOTALL)
             if match:
                 ratings = json.loads(match.group(0))
             else:
@@ -234,12 +238,15 @@ def _update_fsrs_params_fsrs(fact_id: int, rating: str, row: dict) -> bool:
 
     # Map state int to State enum (handle invalid values)
     try:
-        state_enum = State(current_state) if current_state in (1, 2, 3) else State.Review
+        state_enum = (
+            State(current_state) if current_state in (1, 2, 3) else State.Review
+        )
     except ValueError:
         state_enum = State.Review
 
     # Calculate due date from stability
     from datetime import timedelta
+
     due = now + timedelta(days=current_stability)
 
     # Create Card with correct fsrs v6.3.1 API
@@ -270,7 +277,9 @@ def _update_fsrs_params_fsrs(fact_id: int, rating: str, row: dict) -> bool:
         meta["difficulty"] = new_card.difficulty
         meta["state"] = new_card.state.value  # Store as int for JSON
         meta["due"] = new_card.due.isoformat() if new_card.due else None
-        meta["last_review"] = new_card.last_review.isoformat() if new_card.last_review else None
+        meta["last_review"] = (
+            new_card.last_review.isoformat() if new_card.last_review else None
+        )
         meta["last_rating"] = rating
         meta["pending_review"] = False
 
@@ -278,8 +287,10 @@ def _update_fsrs_params_fsrs(fact_id: int, rating: str, row: dict) -> bool:
             "UPDATE semantic_facts SET metadata=%s, last_accessed=%s WHERE id=%s",
             (Json(meta), now, fact_id),
         )
-        
-        logger.info(f"FSRS review: fact={fact_id}, rating={rating}, S={current_stability:.1f}→{new_card.stability:.1f}, D={current_difficulty:.1f}→{new_card.difficulty:.1f}")
+
+        logger.info(
+            f"FSRS review: fact={fact_id}, rating={rating}, S={current_stability:.1f}→{new_card.stability:.1f}, D={current_difficulty:.1f}→{new_card.difficulty:.1f}"
+        )
         return True
 
     except Exception as e:
@@ -362,7 +373,9 @@ def _update_fsrs_params(fact_id: int, rating: str) -> bool:
         return False
 
 
-def review_memory(fact_ids: list[int], conversation_context: str, session_id: int | None = None) -> dict:
+def review_memory(
+    fact_ids: list[int], conversation_context: str, session_id: int | None = None
+) -> dict:
     """Review a list of retrieved memories against the conversation context.
 
     Uses batch processing for efficiency: processes up to 20 facts per LLM call.
@@ -399,18 +412,20 @@ def review_memory(fact_ids: list[int], conversation_context: str, session_id: in
                     )
                     continue
 
-                facts_to_rate.append({
-                    "id": fid,
-                    "content": row.get("content", ""),
-                    "category": row.get("metadata", {}).get("category"),
-                })
+                facts_to_rate.append(
+                    {
+                        "id": fid,
+                        "content": row.get("content", ""),
+                        "category": row.get("metadata", {}).get("category"),
+                    }
+                )
         except Exception as e:
             logger.warning(f"Could not fetch fact {fid}: {e}")
             counts["failed"] += 1
 
     # Process in batches
     for i in range(0, len(facts_to_rate), _REVIEW_BATCH_SIZE):
-        batch = facts_to_rate[i:i + _REVIEW_BATCH_SIZE]
+        batch = facts_to_rate[i : i + _REVIEW_BATCH_SIZE]
 
         # Rate batch
         ratings = _rate_facts_batch(batch, conversation_context)
@@ -429,5 +444,7 @@ def review_memory(fact_ids: list[int], conversation_context: str, session_id: in
             else:
                 counts["failed"] += 1
 
-    logger.info(f"session={session_id} reviewed {len(facts_to_rate)} facts in {(len(facts_to_rate) + _REVIEW_BATCH_SIZE - 1) // _REVIEW_BATCH_SIZE} batches: {counts}")
+    logger.info(
+        f"session={session_id} reviewed {len(facts_to_rate)} facts in {(len(facts_to_rate) + _REVIEW_BATCH_SIZE - 1) // _REVIEW_BATCH_SIZE} batches: {counts}"
+    )
     return counts

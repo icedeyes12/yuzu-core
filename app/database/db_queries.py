@@ -68,6 +68,7 @@ ALL_TOOL_ROLES: list[str] = sorted(set(TOOL_ROLES.values()))
 def encrypt_api_key(api_key: str) -> str:
     """Encrypt an API key with the project-wide encryptor."""
     from app.encryption import encryptor
+
     return encryptor.encrypt(api_key)
 
 
@@ -76,6 +77,7 @@ def decrypt_api_key(encrypted_key: str, is_encrypted: bool = True) -> str:
     if not is_encrypted:
         return encrypted_key
     from app.encryption import encryptor
+
     try:
         return encryptor.decrypt(encrypted_key)
     except Exception:  # noqa: BLE001 - any failure means "can't decrypt"
@@ -163,13 +165,33 @@ INSERT INTO profiles (display_name, partner_name, affection, theme,
 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
 
-DEFAULT_PROFILE_PARAMS = ("", "", 50, "default", "{}", "{}", "{}", "{}", "{}", datetime.now(), datetime.now())
+DEFAULT_PROFILE_PARAMS = (
+    "",
+    "",
+    50,
+    "default",
+    "{}",
+    "{}",
+    "{}",
+    "{}",
+    "{}",
+    datetime.now(),
+    datetime.now(),
+)
 
 _PROFILE_JSON_FIELDS = (
-    "memory", "session_history", "global_knowledge", "providers_config", "context",
+    "memory",
+    "session_history",
+    "global_knowledge",
+    "providers_config",
+    "context",
 )
 _PROFILE_TEXT_FIELDS = (
-    "display_name", "partner_name", "theme", "image_model", "vision_model",
+    "display_name",
+    "partner_name",
+    "theme",
+    "image_model",
+    "vision_model",
 )
 
 
@@ -178,7 +200,7 @@ def build_profile_update(updates: dict[str, Any]) -> tuple[str, list[Any]] | Non
 
     Returns None when there are no recognized fields to update. Always
     appends `updated_at` to the SET clause when at least one field changes.
-    
+
     Note: All JSON fields are JSONB columns (no _json suffix).
     """
     set_parts: list[str] = []
@@ -207,7 +229,7 @@ def build_profile_update(updates: dict[str, Any]) -> tuple[str, list[Any]] | Non
 
 def parse_profile_row(row: dict | None) -> dict:
     """Convert a raw profile row into the public dict shape.
-    
+
     All JSON columns are JSONB, so they're already dict - no parse_json needed.
     """
     if not row:
@@ -234,30 +256,32 @@ def parse_profile_row(row: dict | None) -> dict:
 # Chat session SQL
 # ---------------------------------------------------------------------------
 
-SQL_SESSION_SELECT_ACTIVE = \
+SQL_SESSION_SELECT_ACTIVE = (
     "SELECT * FROM chat_sessions WHERE is_active = TRUE AND deleted_at IS NULL LIMIT 1"
+)
 
 SQL_SESSION_INSERT = """
 INSERT INTO chat_sessions (name, is_active, message_count, memory_state, created_at, updated_at)
 VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
 """
 
-SQL_SESSION_SELECT_ALL = \
+SQL_SESSION_SELECT_ALL = (
     "SELECT * FROM chat_sessions WHERE deleted_at IS NULL ORDER BY updated_at DESC"
+)
 
-SQL_SESSION_DEACTIVATE_ALL = \
+SQL_SESSION_DEACTIVATE_ALL = (
     "UPDATE chat_sessions SET is_active = FALSE WHERE deleted_at IS NULL"
+)
 
-SQL_SESSION_ACTIVATE_ONE = \
-    "UPDATE chat_sessions SET is_active = TRUE, updated_at = %s WHERE id = %s AND deleted_at IS NULL"
+SQL_SESSION_ACTIVATE_ONE = "UPDATE chat_sessions SET is_active = TRUE, updated_at = %s WHERE id = %s AND deleted_at IS NULL"
 
-SQL_SESSION_RENAME = \
-    "UPDATE chat_sessions SET name = %s, updated_at = %s WHERE id = %s AND deleted_at IS NULL"
+SQL_SESSION_RENAME = "UPDATE chat_sessions SET name = %s, updated_at = %s WHERE id = %s AND deleted_at IS NULL"
 
 SQL_SESSION_DELETE = "UPDATE chat_sessions SET deleted_at = NOW() WHERE id = %s"
 
-SQL_SESSION_UPDATE_MEMORY = \
+SQL_SESSION_UPDATE_MEMORY = (
     "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s"
+)
 
 SQL_SESSION_INCREMENT_COUNT = (
     "UPDATE chat_sessions SET message_count = message_count + 1, "
@@ -272,7 +296,7 @@ SQL_SESSION_RESET_COUNT_AND_MEMORY = (
 
 def parse_session_row(row: dict | None) -> dict:
     """Convert a raw chat_sessions row into the public dict shape.
-    
+
     memory_state is JSONB, so it's already dict - no parse_json needed.
     """
     if not row:
@@ -323,14 +347,14 @@ def parse_session_memory_rows(rows: list[dict]) -> dict:
 # API key SQL
 # ---------------------------------------------------------------------------
 
-SQL_APIKEY_SELECT_ALL = \
-    "SELECT key_name, key_value, key_encrypted FROM api_keys"
-SQL_APIKEY_SELECT_BY_NAME = \
+SQL_APIKEY_SELECT_ALL = "SELECT key_name, key_value, key_encrypted FROM api_keys"
+SQL_APIKEY_SELECT_BY_NAME = (
     "SELECT key_name, key_value, key_encrypted FROM api_keys WHERE key_name = %s"
-SQL_APIKEY_SELECT_ID_BY_NAME = \
-    "SELECT id FROM api_keys WHERE key_name = %s"
-SQL_APIKEY_UPDATE = \
+)
+SQL_APIKEY_SELECT_ID_BY_NAME = "SELECT id FROM api_keys WHERE key_name = %s"
+SQL_APIKEY_UPDATE = (
     "UPDATE api_keys SET key_value = %s, key_encrypted = %s WHERE key_name = %s"
+)
 SQL_APIKEY_INSERT = (
     "INSERT INTO api_keys (key_name, key_value, key_encrypted, created_at) "
     "VALUES (%s, %s, %s, %s)"
@@ -451,8 +475,7 @@ FROM messages
 WHERE content_encrypted = TRUE
 """
 
-SQL_MESSAGE_SELECT_CONTENT_BY_ID = \
-    "SELECT content FROM messages WHERE id = %s"
+SQL_MESSAGE_SELECT_CONTENT_BY_ID = "SELECT content FROM messages WHERE id = %s"
 
 SQL_MESSAGE_UPDATE_DECRYPTED = (
     "UPDATE messages SET content = %s, content_encrypted = FALSE WHERE id = %s"
@@ -494,16 +517,16 @@ def format_conversation_summary(rows: list[dict]) -> str:
 # AI history formatting (tool-contract parsing for chat_history_for_ai)
 # ---------------------------------------------------------------------------
 
-_RX_BASH_COMMAND = re.compile(r'```bash\n\S+\$\s*(/[^\n]{1,500})\n```')
-_RX_DETAILS_OPEN = re.compile(r'<details>\s*<summary>[^<]{0,500}</summary>', re.DOTALL)
-_RX_DETAILS_CLOSE = re.compile(r'</details>', re.DOTALL)
-_RX_BASH_BLOCK = re.compile(r'```bash\n[^`]{0,5000}\n```', re.DOTALL)
-_RX_FENCE_OPEN = re.compile(r'```[\w]{0,20}\n?')
-_RX_FENCE_CLOSE = re.compile(r'```')
-_RX_BLOCKQUOTE = re.compile(r'^>\s*', re.MULTILINE)
-_RX_HTML_TAGS = re.compile(r'<[^>]{1,500}>')
-_RX_LEADING_NL = re.compile(r'^\n+')
-_RX_TRAILING_NL = re.compile(r'\n+$')
+_RX_BASH_COMMAND = re.compile(r"```bash\n\S+\$\s*(/[^\n]{1,500})\n```")
+_RX_DETAILS_OPEN = re.compile(r"<details>\s*<summary>[^<]{0,500}</summary>", re.DOTALL)
+_RX_DETAILS_CLOSE = re.compile(r"</details>", re.DOTALL)
+_RX_BASH_BLOCK = re.compile(r"```bash\n[^`]{0,5000}\n```", re.DOTALL)
+_RX_FENCE_OPEN = re.compile(r"```[\w]{0,20}\n?")
+_RX_FENCE_CLOSE = re.compile(r"```")
+_RX_BLOCKQUOTE = re.compile(r"^>\s*", re.MULTILINE)
+_RX_HTML_TAGS = re.compile(r"<[^>]{1,500}>")
+_RX_LEADING_NL = re.compile(r"^\n+")
+_RX_TRAILING_NL = re.compile(r"\n+$")
 
 
 def extract_command_from_markdown_contract(content: str) -> str:
@@ -578,11 +601,13 @@ def format_ai_history_rows(rows: list[dict]) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 SQL_ENC_TOTAL_MESSAGES = "SELECT COUNT(*) as cnt FROM messages"
-SQL_ENC_ENCRYPTED_MESSAGES = \
+SQL_ENC_ENCRYPTED_MESSAGES = (
     "SELECT COUNT(*) as cnt FROM messages WHERE content_encrypted = TRUE"
+)
 SQL_ENC_TOTAL_KEYS = "SELECT COUNT(*) as cnt FROM api_keys"
-SQL_ENC_ENCRYPTED_KEYS = \
+SQL_ENC_ENCRYPTED_KEYS = (
     "SELECT COUNT(*) as cnt FROM api_keys WHERE key_encrypted = TRUE"
+)
 
 
 def build_encryption_status(
@@ -592,6 +617,7 @@ def build_encryption_status(
     encrypted_keys: dict | None,
 ) -> dict:
     """Assemble the encryption-status response from four count rows."""
+
     def cnt(row: dict | None) -> int:
         return row.get("cnt", 0) if row else 0
 
@@ -639,43 +665,73 @@ def format_session_event(content: str, interface: str) -> str:
 
 __all__ = [
     # Tool roles
-    "TOOL_ROLES", "ALL_TOOL_ROLES", "tool_role_for",
+    "TOOL_ROLES",
+    "ALL_TOOL_ROLES",
+    "tool_role_for",
     # Encryption
-    "encrypt_api_key", "decrypt_api_key", "DECRYPTION_ERROR",
+    "encrypt_api_key",
+    "decrypt_api_key",
+    "DECRYPTION_ERROR",
     # Schema
     "SCHEMA_DDL",
     # Profile
-    "SQL_PROFILE_SELECT_FIRST", "SQL_PROFILE_INSERT_DEFAULT",
+    "SQL_PROFILE_SELECT_FIRST",
+    "SQL_PROFILE_INSERT_DEFAULT",
     "DEFAULT_PROFILE_PARAMS",
-    "build_profile_update", "parse_profile_row",
+    "build_profile_update",
+    "parse_profile_row",
     # Sessions
-    "SQL_SESSION_SELECT_ACTIVE", "SQL_SESSION_INSERT", "SQL_SESSION_SELECT_ALL",
-    "SQL_SESSION_DEACTIVATE_ALL", "SQL_SESSION_ACTIVATE_ONE",
-    "SQL_SESSION_RENAME", "SQL_SESSION_DELETE", "SQL_SESSION_UPDATE_MEMORY",
-    "SQL_SESSION_INCREMENT_COUNT", "SQL_SESSION_RESET_COUNT_AND_MEMORY",
-    "parse_session_row", "SQL_SESSION_MEMORY_NOTES", "parse_session_memory_rows",
+    "SQL_SESSION_SELECT_ACTIVE",
+    "SQL_SESSION_INSERT",
+    "SQL_SESSION_SELECT_ALL",
+    "SQL_SESSION_DEACTIVATE_ALL",
+    "SQL_SESSION_ACTIVATE_ONE",
+    "SQL_SESSION_RENAME",
+    "SQL_SESSION_DELETE",
+    "SQL_SESSION_UPDATE_MEMORY",
+    "SQL_SESSION_INCREMENT_COUNT",
+    "SQL_SESSION_RESET_COUNT_AND_MEMORY",
+    "parse_session_row",
+    "SQL_SESSION_MEMORY_NOTES",
+    "parse_session_memory_rows",
     # API keys
-    "SQL_APIKEY_SELECT_ALL", "SQL_APIKEY_SELECT_BY_NAME",
-    "SQL_APIKEY_SELECT_ID_BY_NAME", "SQL_APIKEY_UPDATE",
-    "SQL_APIKEY_INSERT", "SQL_APIKEY_DELETE", "decrypt_api_key_rows",
+    "SQL_APIKEY_SELECT_ALL",
+    "SQL_APIKEY_SELECT_BY_NAME",
+    "SQL_APIKEY_SELECT_ID_BY_NAME",
+    "SQL_APIKEY_UPDATE",
+    "SQL_APIKEY_INSERT",
+    "SQL_APIKEY_DELETE",
+    "decrypt_api_key_rows",
     # Messages
-    "SQL_MESSAGE_INSERT", "SQL_MESSAGE_SELECT_ASC_LIMIT",
-    "SQL_MESSAGE_SELECT_DESC_LIMIT", "SQL_MESSAGE_SELECT_ASC_ALL",
-    "SQL_MESSAGE_DELETE_FOR_SESSION", "SQL_MESSAGE_COUNT_CONVERSATIONAL",
-    "SQL_MESSAGE_RECENT_SYSTEM_GLOBAL", "SQL_MESSAGE_RECENT_SYSTEM_FOR_SESSION",
-    "SQL_MESSAGE_CONVERSATION_SUMMARY", "SQL_MESSAGE_HISTORY_FOR_AI_ASC_LIMIT",
-    "SQL_MESSAGE_HISTORY_FOR_AI_DESC_LIMIT", "SQL_MESSAGE_HISTORY_FOR_AI_ASC_ALL",
-    "SQL_MESSAGE_SELECT_ENCRYPTED", "SQL_MESSAGE_SELECT_CONTENT_BY_ID",
+    "SQL_MESSAGE_INSERT",
+    "SQL_MESSAGE_SELECT_ASC_LIMIT",
+    "SQL_MESSAGE_SELECT_DESC_LIMIT",
+    "SQL_MESSAGE_SELECT_ASC_ALL",
+    "SQL_MESSAGE_DELETE_FOR_SESSION",
+    "SQL_MESSAGE_COUNT_CONVERSATIONAL",
+    "SQL_MESSAGE_RECENT_SYSTEM_GLOBAL",
+    "SQL_MESSAGE_RECENT_SYSTEM_FOR_SESSION",
+    "SQL_MESSAGE_CONVERSATION_SUMMARY",
+    "SQL_MESSAGE_HISTORY_FOR_AI_ASC_LIMIT",
+    "SQL_MESSAGE_HISTORY_FOR_AI_DESC_LIMIT",
+    "SQL_MESSAGE_HISTORY_FOR_AI_ASC_ALL",
+    "SQL_MESSAGE_SELECT_ENCRYPTED",
+    "SQL_MESSAGE_SELECT_CONTENT_BY_ID",
     "SQL_MESSAGE_UPDATE_DECRYPTED",
-    "parse_message_row", "parse_event_row", "format_conversation_summary",
+    "parse_message_row",
+    "parse_event_row",
+    "format_conversation_summary",
     "format_ai_history_rows",
     # Tool-contract parsers
     "extract_command_from_markdown_contract",
     "extract_raw_result_from_markdown_contract",
     # Encryption status
-    "SQL_ENC_TOTAL_MESSAGES", "SQL_ENC_ENCRYPTED_MESSAGES",
-    "SQL_ENC_TOTAL_KEYS", "SQL_ENC_ENCRYPTED_KEYS",
+    "SQL_ENC_TOTAL_MESSAGES",
+    "SQL_ENC_ENCRYPTED_MESSAGES",
+    "SQL_ENC_TOTAL_KEYS",
+    "SQL_ENC_ENCRYPTED_KEYS",
     "build_encryption_status",
     # Misc
-    "parse_json", "format_session_event",
+    "parse_json",
+    "format_session_event",
 ]

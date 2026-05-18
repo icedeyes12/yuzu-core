@@ -71,21 +71,16 @@ Relationship Dynamics: trusts the AI for technical guidance."""
     def test_parses_summary(self):
         result = parse_global_profile_summary(self.SAMPLE)
         assert result["player_summary"] == "A curious developer"
-        assert result["relationship_dynamics"].startswith(
-            "trusts the AI"
-        )
+        assert result["relationship_dynamics"].startswith("trusts the AI")
 
     def test_parses_key_facts(self):
         result = parse_global_profile_summary(self.SAMPLE)
-        assert result["key_facts"]["likes"] == [
-            "coffee", "late nights", "refactoring"
-        ]
+        assert result["key_facts"]["likes"] == ["coffee", "late nights", "refactoring"]
         assert result["key_facts"]["dislikes"] == ["meetings", "regressions"]
-        assert result["key_facts"]["personality_traits"] == [
-            "focused", "introverted"
-        ]
+        assert result["key_facts"]["personality_traits"] == ["focused", "introverted"]
         assert result["key_facts"]["important_memories"] == [
-            "shipped first PR", "fixed prod incident"
+            "shipped first PR",
+            "fixed prod incident",
         ]
 
     def test_handles_empty_input(self):

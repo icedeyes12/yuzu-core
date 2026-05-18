@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 TOOL_DEFINITION = ToolDefinition(
     name="memory_store",
     description="Store a new fact or piece of information about the user into long-term memory. "
-                "The system auto-classifies into categories: Identity, Preference, Interest, "
-                "Personality, Relationship, Experience, Goal, or Guideline.",
+    "The system auto-classifies into categories: Identity, Preference, Interest, "
+    "Personality, Relationship, Experience, Goal, or Guideline.",
     role="memory_store_tools",
     parameters=[
         ToolParam(
@@ -29,8 +29,16 @@ TOOL_DEFINITION = ToolDefinition(
             description="Optional memory category. If omitted, auto-detected by LLM.",
             type="string",
             required=False,
-            enum=["Identity", "Preference", "Interest", "Personality",
-                  "Relationship", "Experience", "Goal", "Guideline"],
+            enum=[
+                "Identity",
+                "Preference",
+                "Interest",
+                "Personality",
+                "Relationship",
+                "Experience",
+                "Goal",
+                "Guideline",
+            ],
         ),
     ],
     needs_session=True,
@@ -46,6 +54,7 @@ def _classify_category_llm(fact: str) -> str:
     """
     try:
         from app import get_ai_manager
+
         ai_manager = get_ai_manager()
     except Exception as e:
         logger.warning(f"[memory_store] AI manager unavailable: {e}")
@@ -76,8 +85,16 @@ Respond with ONLY the category name, nothing else."""
         )
         if response:
             category = response.strip().title()
-            valid = {"Identity", "Preference", "Interest", "Personality",
-                     "Relationship", "Experience", "Goal", "Guideline"}
+            valid = {
+                "Identity",
+                "Preference",
+                "Interest",
+                "Personality",
+                "Relationship",
+                "Experience",
+                "Goal",
+                "Guideline",
+            }
             if category in valid:
                 return category
     except Exception as e:
@@ -158,6 +175,7 @@ def execute(arguments, **kwargs):
         if e:
             # Duplicate found — reinforce existing fact
             from app.memory.db_memory import increment_importance
+
             increment_importance(e["id"], delta=0.1, cap=1.0)
             new_confidence = e.get("metadata", {}).get("confidence", 0.7)
             return ok_result(

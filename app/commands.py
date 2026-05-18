@@ -159,7 +159,7 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
         end_idx = clean_text.find(_TOOL_CLOSE, start_idx)
         if end_idx == -1:
             break
-        clean_text = clean_text[:start_idx] + clean_text[end_idx + len(_TOOL_CLOSE):]
+        clean_text = clean_text[:start_idx] + clean_text[end_idx + len(_TOOL_CLOSE) :]
 
     # Clean up excessive whitespace but preserve structure
     # Remove leading/trailing whitespace from lines but keep line breaks
@@ -250,7 +250,7 @@ def _parse_args(tool_name: str, raw_args: str) -> dict[str, Any]:
     # SECURITY: Limit input size to prevent ReDoS
     if len(raw_args) > 5000:
         raw_args = raw_args[:5000]
-    
+
     raw_args = raw_args.strip()
 
     # String-arg tools: single argument mapped to a specific key
@@ -281,11 +281,11 @@ def _parse_args(tool_name: str, raw_args: str) -> dict[str, Any]:
     if not raw_args:
         return result
 
-    for pair in raw_args.split(';'):
+    for pair in raw_args.split(";"):
         pair = pair.strip()
-        if '=' not in pair:
+        if "=" not in pair:
             continue
-        key, _, value = pair.partition('=')
+        key, _, value = pair.partition("=")
         key = key.strip()
         if not key:
             continue
@@ -300,7 +300,7 @@ def _parse_args(tool_name: str, raw_args: str) -> dict[str, Any]:
 
 def _parse_key_value_args(raw_args: str) -> dict[str, Any]:
     """Parse key=value args from raw_args string.
-    
+
     Args format:
     - Plain args: Just text after command
     - JSON args: Parse as JSON if it looks like JSON
@@ -309,10 +309,10 @@ def _parse_key_value_args(raw_args: str) -> dict[str, Any]:
     # SECURITY: Limit input size to prevent ReDoS
     if len(raw_args) > 1000:
         raw_args = raw_args[:1000]
-    
+
     if not raw_args:
         return {}
-    
+
     # Try JSON first
     if raw_args.startswith("{") and raw_args.endswith("}"):
         try:
@@ -322,15 +322,15 @@ def _parse_key_value_args(raw_args: str) -> dict[str, Any]:
 
     # Parse key=value; key2="value with spaces"
     result: dict[str, Any] = {}
-    
+
     # SECURITY: Use non-backtracking pattern with bounded quantifiers
     # Pattern: key="value with spaces" or key=value
     # Using string operations instead of complex regex for safety
-    for pair in raw_args.split(';'):
+    for pair in raw_args.split(";"):
         pair = pair.strip()
-        if '=' not in pair:
+        if "=" not in pair:
             continue
-        key, _, value = pair.partition('=')
+        key, _, value = pair.partition("=")
         key = key.strip()
         if not key:
             continue
@@ -371,7 +371,9 @@ def execute_commands(
             parsed = _parse_command_string(command_str)
             if not parsed:
                 log.warning("failed to parse command: %s", command_str[:100])
-                results.append(("unknown", {"ok": False, "error": "Failed to parse command"}))
+                results.append(
+                    ("unknown", {"ok": False, "error": "Failed to parse command"})
+                )
                 continue
 
             raw_name = parsed["command"]
@@ -521,7 +523,9 @@ def extract_markdown_image_path(response_text: str) -> str | None:
 # but should not be used in new code
 
 
-def detect_command(text: str, scan_mode: str = "first_line") -> dict[str, str] | list[dict[str, str]] | None:
+def detect_command(
+    text: str, scan_mode: str = "first_line"
+) -> dict[str, str] | list[dict[str, str]] | None:
     """DEPRECATED: Use parse_tool_blocks() instead.
 
     This function is kept for backward compatibility but will be removed.

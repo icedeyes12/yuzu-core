@@ -146,15 +146,18 @@ class TestFormatObservation:
 
     def test_single_success_result(self):
         results = [
-            ("bash", {
-                "ok": True,
-                "data": {
-                    "command": "ls",
-                    "exit_code": 0,
-                    "stdout": "file1.txt\nfile2.txt",
-                    "stderr": "",
-                }
-            })
+            (
+                "bash",
+                {
+                    "ok": True,
+                    "data": {
+                        "command": "ls",
+                        "exit_code": 0,
+                        "stdout": "file1.txt\nfile2.txt",
+                        "stderr": "",
+                    },
+                },
+            )
         ]
         obs = format_observation(results)
         assert "<SYSTEM_OBSERVATION>" in obs
@@ -188,7 +191,7 @@ class TestParseImagePath:
 
     def test_extracts_generated_image_src(self):
         contract = (
-            '<details><summary>shell_tools</summary>'
+            "<details><summary>shell_tools</summary>"
             '<img src="static/generated_images/abc.png" /></details>'
         )
         assert parse_image_path(contract) == "static/generated_images/abc.png"

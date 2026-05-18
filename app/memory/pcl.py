@@ -54,9 +54,13 @@ _CATEGORY_CAPS = {
 
 # ── 1. Load relevant facts ────────────────────────────────────────────────────
 
-def load_relevant_semantic_facts(session_id: int, limit: int = MAX_FACTS_FOR_PREDICTION):
+
+def load_relevant_semantic_facts(
+    session_id: int, limit: int = MAX_FACTS_FOR_PREDICTION
+):
     """Fetch top semantic facts for a session to use in PREDICT phase."""
     from app.memory.db_memory import get_facts_by_session
+
     facts = get_facts_by_session(session_id, fact_type=FACT_TYPE_STATIC, limit=limit)
     # Filter out invalidated ones
     active = [f for f in facts if not f.get("invalid_at")]
@@ -64,6 +68,7 @@ def load_relevant_semantic_facts(session_id: int, limit: int = MAX_FACTS_FOR_PRE
 
 
 # ── 2. PREDICT phase ──────────────────────────────────────────────────────────
+
 
 def _build_facts_context(facts: list[dict]) -> str:
     """Format facts for the prediction prompt."""
@@ -78,13 +83,18 @@ def _build_facts_context(facts: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def predict_episode_content(existing_facts: list[dict], episode_summary: str, segment_messages: list[dict] = None) -> str | None:
+def predict_episode_content(
+    existing_facts: list[dict],
+    episode_summary: str,
+    segment_messages: list[dict] = None,
+) -> str | None:
     """PREDICT: Generate a prediction of what the episode contains, based on known facts.
 
     Returns predicted episode content as a string, or None on failure.
     """
     try:
         from app import get_ai_manager
+
         ai_manager = get_ai_manager()
     except Exception as e:
         logger.warning(f"AI manager unavailable: {e}")
@@ -92,14 +102,19 @@ def predict_episode_content(existing_facts: list[dict], episode_summary: str, se
 
     facts_context = _build_facts_context(existing_facts)
 
-    system_prompt = """You are a memory predictor. Based on the existing knowledge below,
-predict what a conversation episode will contain. Generate a detailed prediction of the
-topics, preferences, and facts likely to appear in this episode.
+    system_prompt = """You are a topic mapper. Given a set of known facts, produce a JSON array of likely discussion topics derived DIRECTLY from those facts.
 
-Be specific and concrete. Predict actual content that would appear in the conversation,
-not abstract summaries. Write in the same style as the actual conversation content.
+## OUTPUT FORMAT (JSON array ONLY, no other text)
+Return exactly a JSON array of strings. Each string is a topic.
 
-If there is no existing knowledge, say "No prior knowledge — cold start." """
+## FORMAT ILLUSTRATION (placeholders only, never copy these values)
+["<topic1>", "<topic2>"]
+
+## RULES
+- Derive topics ONLY from the provided facts. Do not invent.
+- If a fact says 'User works as chef', the topic can be 'User occupation'. Never invent 'User is a sushi chef at Restaurant X'.
+- If no facts are provided, output: ["No prior knowledge — cold start"]
+- Output the JSON array ONLY. No markdown, no explanation."""
 
     user_prompt = f"""Existing knowledge:
 {facts_context}
@@ -107,7 +122,7 @@ If there is no existing knowledge, say "No prior knowledge — cold start." """
 Episode summary to predict:
 \"\"\"{episode_summary}\"\"\"
 
-Predict what content will appear in this episode. Write as if you were the user in this conversation."""
+Based on the existing knowledge and episode summary, list the topics that are likely to appear in this episode. Return ONLY a JSON array of topic strings."""
 
     try:
         response = ai_manager._internal_llm_call(
@@ -128,6 +143,7 @@ Predict what content will appear in this episode. Write as if you were the user 
 
 # ── 3. CALIBRATE phase ────────────────────────────────────────────────────────
 
+
 def _build_messages_context(messages: list[dict]) -> str:
     """Format messages for the calibration prompt."""
     lines = []
@@ -135,7 +151,9 @@ def _build_messages_context(messages: list[dict]) -> str:
         role = m.get("role", "unknown")
         content = m.get("content", "")
         if isinstance(content, list):
-            content = " ".join(c.get("text", "") for c in content if c.get("type") == "text")
+            content = " ".join(
+                c.get("text", "") for c in content if c.get("type") == "text"
+            )
         label = "User" if role == "user" else "AI"
         lines.append(f"{label}: {content[:300]}")
     return "\n".join(lines)
@@ -179,6 +197,7 @@ def calibrate_and_extract(
     """
     try:
         from app import get_ai_manager
+
         ai_manager = get_ai_manager()
     except Exception as e:
         logger.warning(f"AI manager unavailable: {e}")
@@ -188,32 +207,31 @@ def calibrate_and_extract(
     prediction_text = predicted_content or "No prediction (cold start)."
     facts_context = _build_facts_context(existing_facts)
 
-    system_prompt = """You are a knowledge calibration specialist. Your job is to compare
-what was PREDICTED versus what actually happened in a conversation, and extract
-high-value knowledge from the gaps.
+    system_prompt = """You are a deterministic knowledge auditor. Compare a topic prediction, existing facts, and an actual conversation log. Output a JSON array of audit actions ONLY.
 
-## Output format (JSON array only):
+## OUTPUT FORMAT (JSON array ONLY, no other text)
+Return exactly a JSON array of objects. Each object has the keys: fact, category, action, source_id.
+
+## FORMAT ILLUSTRATION (placeholders only, never copy these values)
 [
-  {"fact": "...", "category": "Preference", "action": "new"},
-  {"fact": "...", "category": "Guideline", "action": "reinforce", "source_id": 42},
-  {"fact": "...", "category": "Identity", "action": "update"},
-  {"fact": "...", "category": "Preference", "action": "invalidate", "source_id": 99}
+  {"fact": "<fact statement>", "category": "<Category>", "action": "<action>", "source_id": <integer or null>},
+  ...
 ]
 
-## Actions:
-- "new": knowledge that couldn't be predicted — not in existing facts or contradicts them
-- "reinforce": knowledge that was predicted and confirmed — existing fact ID to reinforce
-- "update": knowledge that refines or contradicts an existing vague fact — existing fact ID
-- "invalidate": knowledge that directly contradicts an existing fact — existing fact ID
+## DETERMINISTIC ACTION RULES (apply the FIRST matching rule)
+1. **invalidate**: If a fact in EXISTING knowledge directly contradicts a statement in ACTUAL conversation. MUST set "source_id" to the contradicted fact's ID.
+2. **update**: If a statement provides more specific/different detail for an EXISTING fact. Example pattern: existing="User likes music", actual="User likes jazz" → update. MUST set "source_id" to the refined fact's ID.
+3. **reinforce**: If a fact appears in BOTH prediction topics AND actual conversation, AND matches an EXISTING fact. MUST set "source_id" to the confirmed fact's ID.
+4. **new**: If a statement appears in ACTUAL conversation, is NOT in prediction topics, AND NOT in EXISTING facts. "source_id" must be null.
 
-## Rules:
-- Extract ONLY facts that pass the 4 tests: persistent, specific, useful, independent
-- Use exact existing fact IDs when action is reinforce/update/invalidate
-- category must be one of: Identity, Preference, Interest, Personality, Relationship, Experience, Goal, Guideline
-- If nothing new or contradictory was found, return []
-- Output JSON array only — no markdown, no explanation"""
+## STRICT OPERATIONAL RULES
+- "category" MUST be one of: Identity, Preference, Interest, Personality, Relationship, Experience, Goal, Guideline.
+- The "fact" field must be a self-contained, standalone statement of truth that passes: persistent, specific, useful, independent.
+- Extract ONLY facts that trigger one of the four actions. Ignore trivial statements.
+- If NO rules are triggered, output: []
+- Output the JSON array ONLY. No markdown, no explanation, no surrounding text."""
 
-    user_prompt = f"""Prediction (what we expected):
+    user_prompt = f"""Prediction (topics we expected):
 {prediction_text}
 
 Existing knowledge:
@@ -222,12 +240,7 @@ Existing knowledge:
 Actual conversation:
 {messages_context}
 
-Compare the prediction to the actual conversation. Extract knowledge that:
-1. Couldn't have been predicted from existing facts (new)
-2. Confirmed existing predictions (reinforce)
-3. Refined or contradicted existing vague knowledge (update/invalidate)
-
-Return a JSON array of actions."""
+Apply the deterministic action rules to extract any new, updated, reinforced, or invalidated facts. Return a JSON array of actions."""
 
     try:
         response = ai_manager._internal_llm_call(
@@ -242,6 +255,7 @@ Return a JSON array of actions."""
             return []
 
         import json
+
         try:
             actions = json.loads(response)
         except json.JSONDecodeError:
@@ -259,8 +273,14 @@ Return a JSON array of actions."""
 
         # Validate and normalize categories
         valid_categories = {
-            "Identity", "Preference", "Interest", "Personality",
-            "Relationship", "Experience", "Goal", "Guideline"
+            "Identity",
+            "Preference",
+            "Interest",
+            "Personality",
+            "Relationship",
+            "Experience",
+            "Goal",
+            "Guideline",
         }
         cleaned = []
         for a in actions:
@@ -273,12 +293,14 @@ Return a JSON array of actions."""
             action = a.get("action", "new")
             if action not in ("new", "reinforce", "update", "invalidate"):
                 action = "new"
-            cleaned.append({
-                "fact": str(a.get("fact", "")).strip(),
-                "category": cat,
-                "action": action,
-                "source_id": a.get("source_id"),
-            })
+            cleaned.append(
+                {
+                    "fact": str(a.get("fact", "")).strip(),
+                    "category": cat,
+                    "action": action,
+                    "source_id": a.get("source_id"),
+                }
+            )
         return cleaned
 
     except Exception as e:
@@ -287,6 +309,7 @@ Return a JSON array of actions."""
 
 
 # ── 4. CONSOLIDATE phase ──────────────────────────────────────────────────────
+
 
 def _map_category_to_relation(category: str) -> str:
     """Map category back to relation/triple format."""
@@ -306,6 +329,7 @@ def _map_category_to_relation(category: str) -> str:
 def _get_category_counts(session_id: int) -> dict[str, int]:
     """Count existing facts per category for the session (global static facts)."""
     from app.memory.db_memory import get_facts_by_session, FACT_TYPE_STATIC
+
     facts = get_facts_by_session(session_id=None, fact_type=FACT_TYPE_STATIC, limit=500)
     counts: dict[str, int] = {}
     for f in facts:
@@ -374,6 +398,7 @@ def consolidate_facts(extracted: list[dict], session_id: int, episode_id=None) -
                 fact = get_fact_by_id(source_id)
                 if fact:
                     from app.memory.db_memory import pg_execute
+
                     meta = fact.get("metadata") or {}
                     ids = meta.get("source_episodic_ids", [])
                     if episode_id and episode_id not in ids:
@@ -404,6 +429,7 @@ def consolidate_facts(extracted: list[dict], session_id: int, episode_id=None) -
 
 # ── 5. Main entry point ───────────────────────────────────────────────────────
 
+
 def run_predict_calibrate(
     session_id: int,
     episode_summary: str,
@@ -422,13 +448,17 @@ def run_predict_calibrate(
         existing = load_relevant_semantic_facts(session_id)
 
         # 2. PREDICT
-        predicted = predict_episode_content(existing, episode_summary, segment_messages=messages)
+        predicted = predict_episode_content(
+            existing, episode_summary, segment_messages=messages
+        )
 
         # 3. CALIBRATE
         extracted = calibrate_and_extract(predicted, messages, existing)
 
         if not extracted:
-            logger.info(f"No knowledge gaps found — session {session_id} already aligned.")
+            logger.info(
+                f"No knowledge gaps found — session {session_id} already aligned."
+            )
             return {"new": 0, "reinforced": 0, "updated": 0, "invalidated": 0}
 
         # 4. CONSOLIDATE
@@ -438,6 +468,7 @@ def run_predict_calibrate(
         if episode_id:
             try:
                 from app.memory.db_memory import pg_execute
+
                 ep = get_fact_by_id(episode_id)
                 if ep:
                     meta = ep.get("metadata") or {}

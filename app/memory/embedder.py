@@ -9,7 +9,9 @@ import threading
 from app.database import get_api_key
 
 
-CHUTES_EMBED_ENDPOINT = "https://chutes-qwen-qwen3-embedding-8b-tee.chutes.ai/v1/embeddings"
+CHUTES_EMBED_ENDPOINT = (
+    "https://chutes-qwen-qwen3-embedding-8b-tee.chutes.ai/v1/embeddings"
+)
 DEFAULT_MODEL = None  # Endpoint is model-specific, no model param needed
 EMBEDDING_DIM = 4096  # Qwen3-Embedding-8B output dimension
 
@@ -24,23 +26,27 @@ def _get_session():
         if not api_key:
             return None
         _thread_local.session = __import__("requests").Session()
-        _thread_local.session.headers.update({
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        })
+        _thread_local.session.headers.update(
+            {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+        )
     return _thread_local.session
 
 
-def embed_texts(texts, model=None, dimensions=None, encoding_format="float", timeout=30):
+def embed_texts(
+    texts, model=None, dimensions=None, encoding_format="float", timeout=30
+):
     """Embed a list of strings via Chutes API. Returns list of embedding lists.
-    
+
     Args:
         texts: String or list of strings to embed
         model: Ignored (endpoint is model-specific)
         dimensions: Optional output dimensions (not supported by this endpoint)
         encoding_format: Output format (default: "float")
         timeout: Request timeout in seconds (default: 30, was 60)
-    
+
     Returns:
         List of embedding vectors, or raises exception on failure.
     """
@@ -61,40 +67,42 @@ def embed_texts(texts, model=None, dimensions=None, encoding_format="float", tim
 
     # Hard timeout with exception propagation
     result_container = {"result": None, "error": None}
-    
+
     def _do_post():
         try:
             resp = session.post(CHUTES_EMBED_ENDPOINT, json=payload, timeout=timeout)
             resp.raise_for_status()
             results = [item["embedding"] for item in resp.json()["data"]]
             if results and len(results[0]) != EMBEDDING_DIM:
-                raise ValueError(f"Embedding dim mismatch: got {len(results[0])}, expected {EMBEDDING_DIM}")
+                raise ValueError(
+                    f"Embedding dim mismatch: got {len(results[0])}, expected {EMBEDDING_DIM}"
+                )
             result_container["result"] = results
         except Exception as e:
             result_container["error"] = e
-    
+
     thread = threading.Thread(target=_do_post, daemon=True)
     thread.start()
     thread.join(timeout=timeout + 5)  # Thread timeout slightly longer than HTTP timeout
-    
+
     if thread.is_alive():
         # Thread hung - return empty instead of blocking forever
         raise TimeoutError(f"Embedding request timed out after {timeout}s")
-    
+
     if result_container["error"]:
         raise result_container["error"]
-    
+
     return result_container["result"]
 
 
 def embed_text(text, timeout=30, **kwargs):
     """Embed a single string. Returns None if embedding fails.
-    
+
     Args:
         text: String to embed
         timeout: Request timeout in seconds (default: 30)
         **kwargs: Additional args passed to embed_texts
-    
+
     Returns:
         Embedding vector or None on failure.
     """

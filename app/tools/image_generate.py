@@ -20,7 +20,7 @@ QWEN_IMAGE_ENDPOINT = "https://image.chutes.ai/generate"
 TOOL_DEFINITION = ToolDefinition(
     name="image_generate",
     description="Generate an image from a text prompt using AI diffusion models. "
-                "Returns the generated image displayed inline.",
+    "Returns the generated image displayed inline.",
     role="image_tools",
     parameters=[
         ToolParam(
@@ -49,7 +49,7 @@ def execute(arguments, **kwargs):
 
     try:
         api_keys = get_api_keys()
-        api_key = api_keys.get('chutes')
+        api_key = api_keys.get("chutes")
         if not api_key:
             return error_result(
                 "No Chutes API key available",
@@ -80,19 +80,16 @@ def execute(arguments, **kwargs):
             payload = {"prompt": prompt}
 
         logger.debug(f"[IMAGE TOOL] Endpoint: {endpoint}")
-        logger.debug(f"[IMAGE TOOL] Generating image (prompt length: {len(prompt)} chars)")
+        logger.debug(
+            f"[IMAGE TOOL] Generating image (prompt length: {len(prompt)} chars)"
+        )
 
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
-        response = requests.post(
-            endpoint,
-            headers=headers,
-            json=payload,
-            timeout=300
-        )
+        response = requests.post(endpoint, headers=headers, json=payload, timeout=300)
 
         if response.status_code != 200:
             logger.debug(f"[IMAGE TOOL] API error {response.status_code}")
@@ -108,7 +105,9 @@ def execute(arguments, **kwargs):
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_prompt = "".join(
-            c for c in prompt[:30] if c.isascii() and (c.isalnum() or c in (" ", "-", "_"))
+            c
+            for c in prompt[:30]
+            if c.isascii() and (c.isalnum() or c in (" ", "-", "_"))
         ).strip()
         if not safe_prompt:
             safe_prompt = "image"
@@ -120,7 +119,7 @@ def execute(arguments, **kwargs):
         if not filepath.startswith(images_dir + os.sep):
             raise ValueError("Unsafe output path")
 
-        with open(filepath, 'wb') as f:
+        with open(filepath, "wb") as f:
             f.write(response.content)
 
         logger.debug(f"[IMAGE TOOL] Saved: {filepath}")

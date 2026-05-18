@@ -180,9 +180,7 @@ async def switch_session_async(session_id: int) -> bool:
     try:
         async with AsyncPgSession() as s:
             await s.execute(SQL_SESSION_DEACTIVATE_ALL)
-            await s.execute(
-                SQL_SESSION_ACTIVATE_ONE, (datetime.now(), session_id)
-            )
+            await s.execute(SQL_SESSION_ACTIVATE_ONE, (datetime.now(), session_id))
         return True
     except Exception as e:  # noqa: BLE001
         log.error("switch_session_async failed: %s", e)
@@ -259,9 +257,7 @@ async def add_api_key_async(key_name: str, key_value: str) -> bool:
     encrypted = encrypt_api_key(key_value)
     is_encrypted = encrypted != key_value
     try:
-        existing = await pg_fetchone_async(
-            SQL_APIKEY_SELECT_ID_BY_NAME, (key_name,)
-        )
+        existing = await pg_fetchone_async(SQL_APIKEY_SELECT_ID_BY_NAME, (key_name,))
         if existing:
             await pg_execute_async(
                 SQL_APIKEY_UPDATE, (encrypted, is_encrypted, key_name)
@@ -327,9 +323,7 @@ async def get_session_messages_async(
     return [parse_message_row(r) for r in rows]
 
 
-async def get_recent_messages_async(
-    session_id: int, limit: int = 20
-) -> list[dict]:
+async def get_recent_messages_async(session_id: int, limit: int = 20) -> list[dict]:
     return await get_session_messages_async(session_id, limit)
 
 
@@ -346,9 +340,7 @@ async def get_chat_history_async(
             SQL_MESSAGE_SELECT_ASC_LIMIT, (session_id, limit)
         )
     else:
-        rows = await pg_fetchall_async(
-            SQL_MESSAGE_SELECT_ASC_ALL, (session_id,)
-        )
+        rows = await pg_fetchall_async(SQL_MESSAGE_SELECT_ASC_ALL, (session_id,))
     return [parse_message_row(r) for r in rows]
 
 
@@ -366,9 +358,7 @@ async def clear_session_messages_async(session_id: int) -> bool:
 
 
 async def get_message_count_async(session_id: int) -> int:
-    row = await pg_fetchone_async(
-        SQL_MESSAGE_COUNT_CONVERSATIONAL, (session_id,)
-    )
+    row = await pg_fetchone_async(SQL_MESSAGE_COUNT_CONVERSATIONAL, (session_id,))
     return row.get("cnt", 0) if row else 0
 
 
@@ -403,18 +393,14 @@ async def get_session_conversation_summary_async(
     return format_conversation_summary(rows)
 
 
-async def add_image_tools_message_async(
-    session_id: int, image_url: str
-) -> int | None:
+async def add_image_tools_message_async(session_id: int, image_url: str) -> int | None:
     return await add_message_async(session_id, "image_tools", image_url)
 
 
 async def add_tool_result_async(
     session_id: int, tool_name: str, result_content: str
 ) -> int | None:
-    return await add_message_async(
-        session_id, tool_role_for(tool_name), result_content
-    )
+    return await add_message_async(session_id, tool_role_for(tool_name), result_content)
 
 
 async def add_system_note_async(session_id: int, content: str) -> int | None:
@@ -473,11 +459,10 @@ async def batch_decrypt_messages_async(message_ids: list[int]) -> dict:
     failed_count = 0
     for msg_id in message_ids:
         try:
-            row = await pg_fetchone_async(
-                SQL_MESSAGE_SELECT_CONTENT_BY_ID, (msg_id,)
-            )
+            row = await pg_fetchone_async(SQL_MESSAGE_SELECT_CONTENT_BY_ID, (msg_id,))
             if row and row.get("content"):
                 from app.encryption import encryptor
+
                 plaintext = encryptor.decrypt(row["content"])
                 await pg_execute_async(
                     SQL_MESSAGE_UPDATE_DECRYPTED, (plaintext, msg_id)
@@ -497,32 +482,49 @@ __all__ = [
     # Schema
     "init_pg_tables_async",
     # Profile
-    "get_profile_async", "update_profile_async",
-    "get_context_async", "update_context_async",
-    "get_memory_async", "update_memory_async",
+    "get_profile_async",
+    "update_profile_async",
+    "get_context_async",
+    "update_context_async",
+    "get_memory_async",
+    "update_memory_async",
     # Sessions
-    "get_active_session_async", "get_all_sessions_async",
-    "create_session_async", "switch_session_async",
-    "rename_session_async", "delete_session_async",
-    "get_session_memory_async", "update_session_memory_async",
+    "get_active_session_async",
+    "get_all_sessions_async",
+    "create_session_async",
+    "switch_session_async",
+    "rename_session_async",
+    "delete_session_async",
+    "get_session_memory_async",
+    "update_session_memory_async",
     "increment_message_count_async",
     # API keys
-    "get_api_keys_async", "get_api_key_async",
-    "add_api_key_async", "remove_api_key_async",
+    "get_api_keys_async",
+    "get_api_key_async",
+    "add_api_key_async",
+    "remove_api_key_async",
     # Messages
-    "add_message_async", "get_session_messages_async",
-    "get_recent_messages_async", "get_chat_history_async",
-    "clear_session_messages_async", "get_message_count_async",
-    "add_session_event_async", "get_recent_sessions_async",
+    "add_message_async",
+    "get_session_messages_async",
+    "get_recent_messages_async",
+    "get_chat_history_async",
+    "clear_session_messages_async",
+    "get_message_count_async",
+    "add_session_event_async",
+    "get_recent_sessions_async",
     "get_recent_sessions_for_session_async",
     "get_session_conversation_summary_async",
-    "add_image_tools_message_async", "add_tool_result_async",
-    "add_system_note_async", "add_memory_note_async",
+    "add_image_tools_message_async",
+    "add_tool_result_async",
+    "add_system_note_async",
+    "add_memory_note_async",
     # AI history
     "get_chat_history_for_ai_async",
     # Encryption
-    "get_encryption_status_async", "get_all_encrypted_messages_async",
+    "get_encryption_status_async",
+    "get_all_encrypted_messages_async",
     "batch_decrypt_messages_async",
     # Tool roles (re-exported for backward-compat imports)
-    "TOOL_ROLES", "ALL_TOOL_ROLES",
+    "TOOL_ROLES",
+    "ALL_TOOL_ROLES",
 ]

@@ -14,7 +14,11 @@ def test_simple_select():
 
 
 def test_select_tables():
-    result = sql_execute({"query": "SELECT table_name FROM information_schema.tables WHERE table_schema='public' LIMIT 3"})
+    result = sql_execute(
+        {
+            "query": "SELECT table_name FROM information_schema.tables WHERE table_schema='public' LIMIT 3"
+        }
+    )
     assert result["ok"] is True
     assert result["data"]["row_count"] <= 3
 

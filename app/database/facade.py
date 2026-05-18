@@ -84,6 +84,7 @@ def _proxy(target: Callable[..., Any]) -> staticmethod:
 
     Used for pure passthroughs where Database.X(args) == _pg_X(args).
     """
+
     def _call(*args: Any, **kwargs: Any) -> Any:
         return target(*args, **kwargs)
 
@@ -147,7 +148,9 @@ class Database:
         image_paths: str | None = None,
     ) -> int | None:
         """Add a message to a session (defaults to active session)."""
-        return _pg_add_message(_resolve_session_id(session_id), role, content, image_paths)
+        return _pg_add_message(
+            _resolve_session_id(session_id), role, content, image_paths
+        )
 
     @staticmethod
     def get_messages(
@@ -172,7 +175,9 @@ class Database:
         recent: bool = False,
     ) -> list[dict]:
         """Build message context for AI provider (defaults to active session)."""
-        return _pg_get_chat_history_for_ai(_resolve_session_id(session_id), limit, recent)
+        return _pg_get_chat_history_for_ai(
+            _resolve_session_id(session_id), limit, recent
+        )
 
     @staticmethod
     def clear_session(session_id: int | None = None) -> bool:
@@ -204,19 +209,17 @@ class Database:
         session_id: int | None = None,
     ) -> int | None:
         """Store tool result with tool-specific role (defaults to active session)."""
-        return _pg_add_tool_result(_resolve_session_id(session_id), tool_name, result_content)
+        return _pg_add_tool_result(
+            _resolve_session_id(session_id), tool_name, result_content
+        )
 
     @staticmethod
-    def add_system_note(
-        content: str, session_id: int | None = None
-    ) -> int | None:
+    def add_system_note(content: str, session_id: int | None = None) -> int | None:
         """Add a system note message (defaults to active session)."""
         return _pg_add_system_note(_resolve_session_id(session_id), content)
 
     @staticmethod
-    def add_memory_note(
-        content: str, session_id: int | None = None
-    ) -> int | None:
+    def add_memory_note(content: str, session_id: int | None = None) -> int | None:
         """Alias for add_system_note."""
         return Database.add_system_note(content, session_id)
 

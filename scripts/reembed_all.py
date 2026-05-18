@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Load env vars from .env file if exists
 from pathlib import Path
+
 env_file = Path(__file__).parent.parent / ".env"
 if env_file.exists():
     with open(env_file) as f:
@@ -52,9 +53,9 @@ def get_total_count(active_only=True):
                 "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE invalid_at IS NULL"
             )["cnt"]
         else:
-            return s.fetchone(
-                "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE 1=1"
-            )["cnt"]
+            return s.fetchone("SELECT COUNT(*) AS cnt FROM semantic_facts WHERE 1=1")[
+                "cnt"
+            ]
 
 
 def fetch_batch(offset, batch_size, active_only=True):
@@ -103,21 +104,27 @@ def migrate_column():
         print(f"[migrate] Current embedding column dimension: {current_dim}")
 
         if current_dim == NEW_EMBEDDING_DIM:
-            print(f"[migrate] Column already at target dim {NEW_EMBEDDING_DIM}, nothing to do.")
+            print(
+                f"[migrate] Column already at target dim {NEW_EMBEDDING_DIM}, nothing to do."
+            )
             return
 
         # 2. Check if new column already exists
         col_check = s.fetchone(
             "SELECT column_name FROM information_schema.columns "
             "WHERE table_name='semantic_facts' AND column_name=%s",
-            (NEW_COL,)
+            (NEW_COL,),
         )
         if col_check:
             print(f"[migrate] Column {NEW_COL} already exists.")
         else:
             # 3. Add new column with correct dimension
-            print(f"[migrate] Adding new column {NEW_COL} as VECTOR({NEW_EMBEDDING_DIM})...")
-            s.execute(f"ALTER TABLE semantic_facts ADD COLUMN {NEW_COL} vector({NEW_EMBEDDING_DIM})")
+            print(
+                f"[migrate] Adding new column {NEW_COL} as VECTOR({NEW_EMBEDDING_DIM})..."
+            )
+            s.execute(
+                f"ALTER TABLE semantic_facts ADD COLUMN {NEW_COL} vector({NEW_EMBEDDING_DIM})"
+            )
             s.conn.commit()
             print(f"[migrate] New column {NEW_COL} added.")
 
@@ -126,10 +133,8 @@ def migrate_column():
             "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE invalid_at IS NULL"
         )
         print(f"[migrate] {count_row['cnt']} ACTIVE rows need re-embedding.")
-        
-        total_row = s.fetchone(
-            "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE 1=1"
-        )
+
+        total_row = s.fetchone("SELECT COUNT(*) AS cnt FROM semantic_facts WHERE 1=1")
         print(f"[migrate] {total_row['cnt']} total rows (including invalidated).")
 
 
@@ -139,17 +144,17 @@ def reembed_into_new_column(batch_size=50, active_only=True):
     Args:
         batch_size: Number of rows per batch (default: 50)
         active_only: Only re-embed active facts (default: True)
-    
+
     Safe: fetches from original embedding column, writes to new column.
     If the new column doesn't exist yet, aborts.
     """
-    
+
     # Verify new column exists via information_schema
     with PgSession() as s:
         col_check = s.fetchone(
             "SELECT column_name FROM information_schema.columns "
             "WHERE table_name='semantic_facts' AND column_name=%s",
-            (NEW_COL,)
+            (NEW_COL,),
         )
         if col_check is None:
             print(f"[reembed] Column {NEW_COL} not found. Run --migrate first.")
@@ -183,7 +188,9 @@ def reembed_into_new_column(batch_size=50, active_only=True):
             continue
 
         if not embeddings or len(embeddings) != len(texts):
-            print(f"[reembed] Embedding count mismatch: expected {len(texts)}, got {len(embeddings) if embeddings else 0}")
+            print(
+                f"[reembed] Embedding count mismatch: expected {len(texts)}, got {len(embeddings) if embeddings else 0}"
+            )
             errors += len(batch)
             offset += batch_size
             continue
@@ -191,7 +198,9 @@ def reembed_into_new_column(batch_size=50, active_only=True):
         pairs = []
         for i, emb in enumerate(embeddings):
             if len(emb) != NEW_EMBEDDING_DIM:
-                print(f"[reembed] WARNING: row id={ids[i]} got dim={len(emb)}, expected {NEW_EMBEDDING_DIM} — skipping")
+                print(
+                    f"[reembed] WARNING: row id={ids[i]} got dim={len(emb)}, expected {NEW_EMBEDDING_DIM} — skipping"
+                )
                 errors += 1
                 continue
             pairs.append((ids[i], emb))
@@ -229,9 +238,11 @@ def finalize_migration():
             f"SELECT COUNT(*) AS cnt FROM semantic_facts WHERE {NEW_COL} IS NOT NULL"
         )
         print(f"[finalize] Rows with new embeddings: {count_row['cnt']}")
-        
+
         if count_row["cnt"] == 0:
-            print("[finalize] ERROR: No rows have embeddings in new column. Run --reembed first.")
+            print(
+                "[finalize] ERROR: No rows have embeddings in new column. Run --reembed first."
+            )
             return
 
         # Spot-check dimension
@@ -247,15 +258,17 @@ def finalize_migration():
         # Drop old column
         print("[finalize] Dropping old embedding column...")
         s.execute("ALTER TABLE semantic_facts DROP COLUMN embedding")
-        
+
         # Rename new column to original name
         print(f"[finalize] Renaming {NEW_COL} → embedding...")
         s.execute(f"ALTER TABLE semantic_facts RENAME COLUMN {NEW_COL} TO embedding")
 
         # Recreate index
         print("[finalize] Recreating vector index...")
-        s.execute("CREATE INDEX IF NOT EXISTS idx_semantic_facts_embedding ON semantic_facts USING ivfflat (embedding vector_cosine_ops)")
-        
+        s.execute(
+            "CREATE INDEX IF NOT EXISTS idx_semantic_facts_embedding ON semantic_facts USING ivfflat (embedding vector_cosine_ops)"
+        )
+
         s.conn.commit()
         print(f"[finalize] Done. Column is now VECTOR({NEW_EMBEDDING_DIM}).")
 
@@ -263,22 +276,30 @@ def finalize_migration():
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage:")
-        print(f"  python3 scripts/reembed_all.py --migrate          # add new {NEW_EMBEDDING_DIM}-dim column")
-        print("  python3 scripts/reembed_all.py --reembed [--batch N]  # reembed ACTIVE facts")
-        print("  python3 scripts/reembed_all.py --reembed-all [--batch N]  # reembed ALL facts")
-        print("  python3 scripts/reembed_all.py --finalize        # swap columns after reembed")
+        print(
+            f"  python3 scripts/reembed_all.py --migrate          # add new {NEW_EMBEDDING_DIM}-dim column"
+        )
+        print(
+            "  python3 scripts/reembed_all.py --reembed [--batch N]  # reembed ACTIVE facts"
+        )
+        print(
+            "  python3 scripts/reembed_all.py --reembed-all [--batch N]  # reembed ALL facts"
+        )
+        print(
+            "  python3 scripts/reembed_all.py --finalize        # swap columns after reembed"
+        )
         sys.exit(1)
 
     cmd = sys.argv[1]
     batch_size = 50  # default
-    
+
     # Parse --batch N argument
     if "--batch" in sys.argv:
         idx = sys.argv.index("--batch")
         if idx + 1 < len(sys.argv):
             batch_size = int(sys.argv[idx + 1])
             print(f"Using batch size: {batch_size}")
-    
+
     if cmd == "--migrate":
         migrate_column()
     elif cmd == "--reembed":

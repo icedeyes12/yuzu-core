@@ -11,6 +11,7 @@ from typing import Any
 @dataclass
 class ToolParam:
     """A single parameter for a tool's execute() function."""
+
     name: str
     description: str
     type: str = "string"  # string | number | boolean | object | array
@@ -29,6 +30,7 @@ class ToolDefinition:
     - Role categorization for DB storage
     - Terminal/non-terminal classification for second LLM pass
     """
+
     name: str  # unique, matches module name, e.g. "image_generate"
     description: str  # human-readable; LLM uses this to decide when to call
     role: str  # DB storage role, e.g. "image_tools", "request_tools"
@@ -79,7 +81,6 @@ class ToolDefinition:
 # --------------------------------------------------------------------
 
 
-
 def build_tool_contract(
     tool_def: ToolDefinition,
     full_command: str,
@@ -94,7 +95,7 @@ def build_tool_contract(
     quoted = []
     raw = []
     in_code_fence = False
-    
+
     for line in output_lines:
         if line.strip() == "```":
             in_code_fence = not in_code_fence
@@ -105,7 +106,7 @@ def build_tool_contract(
             raw.append(line)
         else:
             quoted.append(f"> {line}")
-    
+
     formatted_output = "\n".join(quoted)
     if raw:
         formatted_output += "\n\n" + "\n".join(raw)
@@ -134,7 +135,9 @@ def ok_result(
     return {
         "ok": True,
         "data": data,
-        "markdown": build_tool_contract(tool_def, full_command, _flatten_lines(data), partner_name),
+        "markdown": build_tool_contract(
+            tool_def, full_command, _flatten_lines(data), partner_name
+        ),
     }
 
 
@@ -148,7 +151,9 @@ def error_result(
     return {
         "ok": False,
         "error": message,
-        "markdown": build_tool_contract(tool_def, full_command, [f"Error: {message}"], partner_name),
+        "markdown": build_tool_contract(
+            tool_def, full_command, [f"Error: {message}"], partner_name
+        ),
     }
 
 
@@ -198,7 +203,7 @@ def _flatten_lines(data: dict) -> list[str]:
     """Flatten a result dict into displayable lines."""
     lines = []
     file_ext = data.get("file_ext", "")
-    
+
     for key, value in data.items():
         if key == "file_ext":
             # Skip, already extracted
@@ -209,7 +214,7 @@ def _flatten_lines(data: dict) -> list[str]:
             # Add newline after "content:" label
             lines.append(f"{key}:")
             lines.append("")
-            
+
             # Check if markdown file - don't fence, render directly
             if file_ext == ".md":
                 lines.append(value)
