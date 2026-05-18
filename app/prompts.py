@@ -36,7 +36,6 @@ def _truncate(text: str, limit: int = 120) -> str:
 
 def _read_file_content(filepath: str, max_size: int = 50000) -> str:
     """Read file content with size limit. Returns empty string if file not found."""
-    import os
 
     try:
         if not os.path.exists(filepath):
