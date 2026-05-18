@@ -33,6 +33,41 @@ def _truncate(text: str, limit: int = 120) -> str:
     return text if len(text) <= limit else text[:limit] + "..."
 
 
+def _read_file_content(filepath: str, max_size: int = 50000) -> str:
+    """Read file content with size limit. Returns empty string if file not found."""
+    import os
+    try:
+        if not os.path.exists(filepath):
+            return ""
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read(max_size)
+            return content
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _architecture_block() -> str:
+    """Load architecture documentation."""
+    content = _read_file_content("/home/workspace/yuzu-companion/docs/ARCHITECTURE.md")
+    if not content:
+        return ""
+    # Truncate if too long
+    if len(content) > 30000:
+        content = content[:30000] + "\n\n... (truncated)"
+    return f"\n\n# YOUR ARCHITECTURE\n\n{content}"
+
+
+def _agents_instructions_block() -> str:
+    """Load agent instructions from AGENTS.md."""
+    content = _read_file_content("/home/workspace/yuzu-companion/AGENTS.md")
+    if not content:
+        return ""
+    # Truncate if too long
+    if len(content) > 20000:
+        content = content[:20000] + "\n\n... (truncated)"
+    return f"\n\n# GENERAL INSTRUCTIONS FOR ANY AGENT INCLUDING YOU\n\n{content}"
+
+
 def _retrieve_memories(
     session_id: int, user_message: str | None
 ) -> tuple[list[int], str, str]:
@@ -438,6 +473,8 @@ Session Metadata: {_session_events_block(session_id)}
 
 [ CORE FOUNDATION ]
 These principles form the stable foundation of your identity and behavior. Interpret them coherently rather than mechanically. Preserve emotional consistency, contextual awareness, and relational integrity across interactions.
+{_architecture_block()}
+{_agents_instructions_block()}
 """.strip()
 
 
