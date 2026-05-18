@@ -123,9 +123,8 @@ def _cache_images_from_message(message: str) -> list[str]:
     return cached
 
 
-def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
-    """Return (base64, mime) for a generated image file, or (None, None)."""
-    import base64
+def _resolve_safe_image_path(image_path: str):
+    """Resolve and validate an untrusted image path, returning a trusted Path or None."""
     from pathlib import Path
 
     def _has_symlink_ancestor(path: Path) -> bool:
@@ -139,32 +138,32 @@ def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
         return False
 
     if not image_path:
-        return None, None
+        return None
 
-    # SECURITY: Strict path validation to prevent traversal attacks
-    BASE_DIR = Path(__file__).resolve().parent.parent
-    ALLOWED_ROOT_NAMES = {"static", "uploads"}
-    ALLOWED_DIRS = [BASE_DIR / root for root in ALLOWED_ROOT_NAMES]
+    base_dir = Path(__file__).resolve().parent.parent
+    allowed_root_names = {"static", "uploads"}
+    allowed_dirs = [base_dir / root for root in allowed_root_names]
+    allowed_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
     try:
         candidate = Path(image_path.strip())
         if candidate.is_absolute():
             log.warning("absolute path blocked: %s", image_path)
-            return None, None
+            return None
 
         parts = candidate.parts
         if not parts or any(part in ("", ".", "..") for part in parts):
             log.warning("invalid relative path blocked: %s", image_path)
-            return None, None
+            return None
 
-        if parts[0] not in ALLOWED_ROOT_NAMES:
+        if parts[0] not in allowed_root_names:
             log.warning("path outside allowed roots: %s", image_path)
-            return None, None
+            return None
 
-        resolved_path = (BASE_DIR / candidate).resolve()
+        resolved_path = (base_dir / candidate).resolve()
 
         is_allowed = False
-        for allowed_dir in ALLOWED_DIRS:
+        for allowed_dir in allowed_dirs:
             allowed_root = allowed_dir.resolve()
             try:
                 resolved_path.relative_to(allowed_root)
@@ -175,18 +174,33 @@ def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
 
         if not is_allowed:
             log.warning("path outside allowed dirs: %s", image_path)
-            return None, None
+            return None
+
+        if resolved_path.suffix.lower() not in allowed_exts:
+            log.warning("disallowed image extension blocked: %s", image_path)
+            return None
+
+        if not resolved_path.exists() or not resolved_path.is_file():
+            log.warning("image not found or not a file: %s", image_path)
+            return None
+
+        if _has_symlink_ancestor(resolved_path):
+            log.warning("symlink path blocked: %s", image_path)
+            return None
+
+        return resolved_path
 
     except (ValueError, OSError) as e:
         log.warning("invalid path: %s - %s", image_path, e)
-        return None, None
+        return None
 
-    if not resolved_path.exists() or not resolved_path.is_file():
-        log.warning("image not found or not a file: %s", image_path)
-        return None, None
 
-    if _has_symlink_ancestor(resolved_path):
-        log.warning("symlink path blocked: %s", image_path)
+def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
+    """Return (base64, mime) for a generated image file, or (None, None)."""
+    import base64
+
+    resolved_path = _resolve_safe_image_path(image_path)
+    if not resolved_path:
         return None, None
 
     try:
@@ -195,7 +209,15 @@ def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
         log.warning("image read failed (%s): %s", resolved_path, e)
         return None, None
 
-    mime = "image/png" if resolved_path.suffix.lower() == ".png" else "image/jpeg"
+    suffix = resolved_path.suffix.lower()
+    if suffix == ".png":
+        mime = "image/png"
+    elif suffix == ".webp":
+        mime = "image/webp"
+    elif suffix == ".gif":
+        mime = "image/gif"
+    else:
+        mime = "image/jpeg"
     return data, mime
 
 
