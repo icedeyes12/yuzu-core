@@ -48,22 +48,6 @@ def _read_file_content(filepath: str, max_size: int = 50000) -> str:
         return ""
 
 
-# Hitung root directory secara dinamis (mundur 1 level dari folder app/)
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-
-
-def _architecture_block() -> str:
-    """Load architecture documentation completely raw."""
-    filepath = os.path.join(PROJECT_ROOT, "docs", "ARCHITECTURE.md")
-    return _read_file_content(filepath, max_size=1000000)
-
-
-def _agents_instructions_block() -> str:
-    """Load agent instructions from AGENTS.md completely raw."""
-    filepath = os.path.join(PROJECT_ROOT, "AGENTS.md")
-    return _read_file_content(filepath, max_size=1000000)
-
-
 def _retrieve_memories(
     session_id: int, user_message: str | None
 ) -> tuple[list[int], str, str]:
@@ -499,14 +483,6 @@ Session Metadata: {_session_events_block(session_id)}
 
 [ OPERATIONAL COHERENCE ]
 The priority order and rules above are your binding operational framework. Resolve conflicts using the layered precedence defined in PRIORITY ORDER & CONFLICT RESOLUTION.
-
-# YOUR ARCHITECTURE
-
-{_architecture_block()}
-
-# GENERAL INSTRUCTIONS FOR ANY AGENT INCLUDING YOU
-
-{_agents_instructions_block()}
 """.strip()
 
 
