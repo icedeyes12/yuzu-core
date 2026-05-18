@@ -50,62 +50,74 @@ _ALLOWED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 
 def _validate_image_path_safely(user_path: str) -> Path | None:
-    """Validate a user-provided image path and return a safe Path if valid.
+    """Validate a user-provided image path by searching trusted directories.
     
-    This function uses a "resolve and verify" approach that CodeQL recognizes
-    as safe. The key is using os.path.realpath() and checking containment.
+    SECURITY: This function NEVER constructs paths from user input directly.
+    Instead, it extracts ONLY the filename (using os.path.basename) and 
+    searches for it in pre-defined trusted directories.
     
-    SECURITY GUARANTEE: Returns None if any of these are true:
-    - Path contains .. or is absolute
-    - Resolved path is outside allowed directories
-    - File doesn't exist or isn't a regular file
-    - Extension is not allowed
+    This breaks the CodeQL taint chain completely - no part of the user's
+    path string is used in path construction.
+    
+    Returns:
+        Path object if valid image found, None otherwise.
     """
     if not user_path or not isinstance(user_path, str):
         return None
     
-    # Quick rejection of dangerous patterns (defensive, not relied upon)
-    normalized = user_path.replace("\\", "/").strip()
-    if not normalized:
-        return None
-    if ".." in normalized or normalized.startswith("/") or ":" in normalized:
-        log.warning("path validation rejected: %s", user_path[:50])
+    # SECURITY: Extract ONLY the filename - this removes all directory components
+    # and ensures no path traversal is possible. The filename is just a string
+    # that we use to search in OUR trusted directories.
+    filename = os.path.basename(user_path.replace("\\", "/"))
+    
+    if not filename:
         return None
     
-    # Check extension early (cheap check)
-    ext = Path(normalized).suffix.lower()
+    # Validate filename is not dangerous (defensive)
+    if filename.startswith(".") or ".." in filename:
+        log.warning("suspicious filename rejected: %s", filename[:50])
+        return None
+    
+    # Check extension
+    ext = Path(filename).suffix.lower()
     if ext not in _ALLOWED_IMAGE_EXTS:
         return None
     
-    try:
-        # Construct candidate path
-        candidate = (_BASE_DIR / normalized).resolve()
+    # SECURITY: Search ONLY in pre-resolved trusted directories
+    # We construct paths using our constants, NOT user input
+    for trusted_dir in _ALLOWED_IMAGE_DIRS:
+        # Construct candidate using TRUSTED base + filename only
+        candidate = trusted_dir / filename
         
-        # Verify it's a regular file (not directory, not symlink)
-        if not candidate.is_file():
-            return None
-        
-        # SECURITY CHECK: Verify resolved path is within allowed directories
-        # Using os.path.commonpath is the CodeQL-recommended approach
-        candidate_str = str(candidate)
-        for allowed_dir in _ALLOWED_IMAGE_DIRS:
-            try:
-                # This will succeed only if candidate is inside allowed_dir
-                os.path.relpath(candidate_str, str(allowed_dir))
-                # Additional check: relative path should not start with ..
-                rel = os.path.relpath(candidate_str, str(allowed_dir))
-                if not rel.startswith(".."):
-                    return candidate
-            except ValueError:
-                # Paths are on different drives (Windows)
+        try:
+            # Resolve and verify
+            resolved = candidate.resolve()
+            
+            # Must exist and be a regular file
+            if not resolved.is_file():
                 continue
-        
-        log.warning("path outside allowed dirs: %s", user_path[:50])
-        return None
-        
-    except (ValueError, OSError) as e:
-        log.warning("path validation error: %s - %s", user_path[:50], e)
-        return None
+            
+            # Verify resolved path is still within trusted_dir
+            # (handles symlinks that might escape)
+            try:
+                rel = os.path.relpath(str(resolved), str(trusted_dir))
+                if rel.startswith(".."):
+                    log.warning("path escaped trusted dir: %s", filename[:50])
+                    continue
+            except ValueError:
+                continue
+            
+            # Additional symlink check
+            if resolved.is_symlink():
+                log.warning("symlink rejected: %s", filename[:50])
+                continue
+            
+            return resolved
+            
+        except (OSError, ValueError):
+            continue
+    
+    return None
 
 
 # --------------------------------------------------------------------
