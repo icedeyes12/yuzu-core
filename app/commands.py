@@ -286,6 +286,51 @@ def _parse_args(tool_name: str, raw_args: str) -> dict[str, Any]:
     return result
 
 
+def _parse_key_value_args(raw_args: str) -> dict[str, Any]:
+    """Parse key=value args from raw_args string.
+    
+    Args format:
+    - Plain args: Just text after command
+    - JSON args: Parse as JSON if it looks like JSON
+    - Key=value pairs: Parse as key=value; key2="value with spaces"
+    """
+    # SECURITY: Limit input size to prevent ReDoS
+    if len(raw_args) > 1000:
+        raw_args = raw_args[:1000]
+    
+    if not raw_args:
+        return {}
+    
+    # Try JSON first
+    if raw_args.startswith("{") and raw_args.endswith("}"):
+        try:
+            return json.loads(raw_args)
+        except json.JSONDecodeError:
+            pass
+
+    # Parse key=value; key2="value with spaces"
+    result: dict[str, Any] = {}
+    
+    # SECURITY: Use non-backtracking pattern with bounded quantifiers
+    # Pattern: key="value with spaces" or key=value
+    # Using string operations instead of complex regex for safety
+    for pair in raw_args.split(';'):
+        pair = pair.strip()
+        if '=' not in pair:
+            continue
+        key, _, value = pair.partition('=')
+        key = key.strip()
+        if not key:
+            continue
+        # Handle quoted values
+        value = value.strip()
+        if value.startswith('"') and value.endswith('"'):
+            value = value[1:-1]
+        result[key] = value
+
+    return result
+
+
 # --------------------------------------------------------------------
 # Command Execution
 # --------------------------------------------------------------------

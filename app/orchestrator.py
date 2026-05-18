@@ -133,7 +133,21 @@ def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
     if not image_path:
         return None, None
 
-    abs_path = BASE_DIR / image_path
+    # SECURITY: Validate path to prevent traversal attacks
+    # Normalize the path and check it's within allowed directories
+    try:
+        # Remove any leading slashes or dots that could escape
+        safe_path = image_path.lstrip('/.')
+        abs_path = (BASE_DIR / safe_path).resolve()
+        
+        # Ensure resolved path is within BASE_DIR
+        if not str(abs_path).startswith(str(BASE_DIR.resolve())):
+            log.warning("path traversal blocked: %s", image_path)
+            return None, None
+    except (ValueError, OSError) as e:
+        log.warning("invalid path: %s - %s", image_path, e)
+        return None, None
+    
     if not abs_path.exists():
         log.warning("image not found: %s (resolved: %s)", image_path, abs_path)
         return None, None

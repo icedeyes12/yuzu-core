@@ -241,9 +241,8 @@ async def api_send_message(request: MessageRequest):
         return {"reply": ai_reply}
         
     except Exception as e:
-        print(f"Error in api_send_message: {e}")
-        import traceback
-        traceback.print_exc()
+        # Log internally but don't expose details to user
+        print(f"Error in api_send_message: {type(e).__name__}")
         return {"reply": "Sorry, I encountered an error processing your message."}
 
 
@@ -276,9 +275,8 @@ async def api_send_message_stream(request: StreamMessageRequest):
         return StreamingResponse(generate(), media_type="text/event-stream")
         
     except Exception as e:
-        print(f"Error in streaming: {e}")
-        import traceback
-        traceback.print_exc()
+        # Log internally but don't expose details
+        print(f"Error in streaming: {type(e).__name__}")
         
         def generate_error():
             yield 'data: {"chunk": "Sorry, I encountered an error processing your message."}\n\n'
@@ -346,9 +344,8 @@ async def api_send_message_with_images(
         }
         
     except Exception as e:
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
+        # Log internally but don't expose details
+        print(f"Error in image upload: {type(e).__name__}")
         return {"reply": "Error processing message."}
 
 
@@ -362,8 +359,8 @@ async def api_generate_image(request: MessageRequest):
         ai_reply = handle_user_message(f"/imagine {prompt}", interface="web")
         return {"reply": ai_reply, "status": "success"}
     except Exception as e:
-        print(f"Error generating image: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error generating image: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail="Failed to generate image")
 
 
 @api_router.get("/get_vision_capabilities")
@@ -375,8 +372,8 @@ async def api_get_vision_capabilities():
             "capabilities": capabilities
         }
     except Exception as e:
-        print(f"Error getting vision capabilities: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error getting vision capabilities: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail="Failed to get vision capabilities")
 
 
 @api_router.post("/update_profile")
