@@ -453,11 +453,35 @@ def format_observation(results: list[tuple[str, dict[str, Any]]]) -> str:
 
 
 def parse_image_path(formatted_result: str) -> str | None:
-    """Extract a generated-image path from a tool-contract markdown blob."""
+    """Extract and validate a generated-image path from a tool-contract markdown blob."""
     if not formatted_result:
         return None
+
     match = _GENERATED_IMAGE_SRC.search(formatted_result)
-    return match.group(1) if match else None
+    if not match:
+        return None
+
+    raw_path = match.group(1).strip()
+    if not raw_path:
+        return None
+
+    # Normalize separators and reject absolute/escape paths
+    candidate = raw_path.replace("\\", "/")
+    if candidate.startswith("/") or candidate.startswith("../") or "/../" in candidate:
+        return None
+    if "/./" in candidate or candidate.endswith("/.") or candidate.endswith("/.."):
+        return None
+
+    # Allow only known local roots used by the app for generated/served images
+    if not (candidate.startswith("static/") or candidate.startswith("uploads/")):
+        return None
+
+    # Restrict to common image file extensions
+    lowered = candidate.lower()
+    if not lowered.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
+        return None
+
+    return candidate
 
 
 def is_markdown_image_shortcut(response_text: str | None) -> bool:
