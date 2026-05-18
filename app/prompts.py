@@ -362,8 +362,7 @@ Wrap tool invocations in <tool>...</tool> tags:
 /python
 ```python
 import math
-val = math.sqrt(16)
-print(f"Square root of 16 is {val}")
+print("Square root of 16 is", math.sqrt(16))
 ```
 </tool>
 

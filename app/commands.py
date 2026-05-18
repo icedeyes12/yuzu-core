@@ -23,8 +23,10 @@ _REGEX_INPUT_LIMIT = 100000
 # Maximum tool blocks per LLM response
 _MAX_TOOL_BLOCKS = 3
 
-# Tool block pattern: <tool>...</tool> with multiline support
-_TOOL_BLOCK_PATTERN = re.compile(r"<tool>\s*(.*?)\s*</tool>", re.DOTALL)
+# Tool block parsing - uses string methods instead of regex to prevent ReDoS
+# Opening and closing tags
+_TOOL_OPEN = "<tool>"
+_TOOL_CLOSE = "</tool>"
 
 # Tools whose argument is a free-form string keyed by a specific field.
 _STRING_ARG_TOOLS: dict[str, str] = {
@@ -126,7 +128,19 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
         text = text[:_REGEX_INPUT_LIMIT]
 
     # Find all tool blocks
-    matches = list(_TOOL_BLOCK_PATTERN.finditer(text))
+    matches = []
+    start = 0
+    while True:
+        open_idx = text.find(_TOOL_OPEN, start)
+        if open_idx == -1:
+            break
+        close_idx = text.find(_TOOL_CLOSE, open_idx + len(_TOOL_OPEN))
+        if close_idx == -1:
+            break
+        content = text[open_idx + len(_TOOL_OPEN) : close_idx].strip()
+        if content:
+            matches.append(content)
+        start = close_idx + len(_TOOL_CLOSE)
 
     # Limit to max 3 blocks
     matches = matches[:_MAX_TOOL_BLOCKS]
@@ -134,13 +148,18 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
     # Extract commands (strip whitespace, skip empty)
     commands: list[str] = []
     for match in matches:
-        command = match.group(1).strip()
+        command = match.strip()
         if command:
             commands.append(command)
 
-    # Remove all tool blocks from text (including the original matches, not just first 3)
-    # This ensures clean text even if there were more than 3 blocks
-    clean_text = _TOOL_BLOCK_PATTERN.sub("", text)
+    # Remove all tool blocks from text using string replacement
+    clean_text = text
+    while _TOOL_OPEN in clean_text:
+        start_idx = clean_text.find(_TOOL_OPEN)
+        end_idx = clean_text.find(_TOOL_CLOSE, start_idx)
+        if end_idx == -1:
+            break
+        clean_text = clean_text[:start_idx] + clean_text[end_idx + len(_TOOL_CLOSE):]
 
     # Clean up excessive whitespace but preserve structure
     # Remove leading/trailing whitespace from lines but keep line breaks
@@ -176,7 +195,12 @@ def has_tool_blocks(text: str) -> bool:
         return False
     if len(text) > _REGEX_INPUT_LIMIT:
         text = text[:_REGEX_INPUT_LIMIT]
-    return bool(_TOOL_BLOCK_PATTERN.search(text))
+    # Use string find instead of regex to prevent ReDoS
+    open_idx = text.find(_TOOL_OPEN)
+    if open_idx == -1:
+        return False
+    close_idx = text.find(_TOOL_CLOSE, open_idx)
+    return close_idx != -1
 
 
 # --------------------------------------------------------------------
