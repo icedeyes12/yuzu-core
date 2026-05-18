@@ -57,76 +57,144 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 
 ## 2. Safety Rules
 
-### Security Warnings (CodeQL)
+### Security Checklist for Agents
 
-**⚠️ CRITICAL: Breaking Taint Chains**
+**Before modifying any file that handles user input, check these:**
 
-CodeQL uses taint analysis to track user input through the codebase. Even after "validation", if a path/string is derived from user input, CodeQL may still flag it.
+#### 1. Path Traversal Prevention
 
-**Key Insight from v3.1.0 Refactor:**
-
-When handling file paths from user input, NEVER construct paths directly from validated user input:
+**When handling file paths from user input:**
 
 ```python
-# ❌ WRONG - CodeQL still sees this as tainted
-normalized = os.path.normpath(user_path)
-candidate = (_BASE_DIR / normalized).resolve()  # Still derived from user input!
-
-# ✅ CORRECT - Break the taint chain completely
+# ✅ SAFE - Break taint chain completely
 filename = os.path.basename(user_path)  # Extract ONLY filename
 for trusted_dir in _ALLOWED_DIRS:
-    candidate = trusted_dir / filename  # We control trusted_dir
+    candidate = trusted_dir / filename  # We construct path from trusted constants
     if candidate.exists():
         return candidate
+
+# ❌ DANGER - CodeQL flags this as path traversal
+normalized = os.path.normpath(user_path)
+candidate = (_BASE_DIR / normalized).resolve()  # Still derived from user input!
 ```
 
-**Why this works:**
-- `os.path.basename()` removes ALL directory components
-- User can ONLY specify a filename, not a path
-- We control where that filename is searched
-- Zero user-controlled path structure reaches the filesystem
+**Why:** CodeQL tracks "taint" from user input. Even "validated" paths are still flagged. Use `os.path.basename()` to strip ALL directory components, then construct paths from trusted constants only.
 
-**ReDoS Prevention:**
+**Files that handle paths:**
+- `app/orchestrator.py` - Image path validation
+- `app/tools/shell_exec.py` - Shell commands (different concern)
+- `app/tools/fs_operations.py` - File operations
 
-Always bound regex input with a size limit:
+---
+
+#### 2. ReDoS Prevention (Regex DoS)
+
+**When using regex on user input:**
 
 ```python
+# ✅ SAFE - Bounded input
 _REGEX_INPUT_LIMIT = 100_000
 
 def _safe_regex_search(pattern: re.Pattern, text: str) -> re.Match | None:
     if len(text) > _REGEX_INPUT_LIMIT:
         text = text[:_REGEX_INPUT_LIMIT]
     return pattern.search(text)
+
+# ✅ BETTER - Avoid regex when possible
+key, _, value = pair.partition('=')  # String operation, no backtracking
+
+# ❌ DANGER - Unbounded regex on user input
+pattern = re.compile(r'(\\w+)=(?:\"([^\"]*)\"|(\\S*))')  # Can cause ReDoS
+result = pattern.search(user_controlled_text)  # No size limit!
 ```
 
-Or better: avoid regex entirely for user-controlled input when possible:
+**Why:** Certain regex patterns (especially with alternation and quantifiers) can cause catastrophic backtracking. Always bound input size or use string operations.
+
+**Files that use regex:**
+- `app/commands.py` - Tool block parsing, argument parsing
+- `app/tools/shell_exec.py` - Output parsing
+
+---
+
+#### 3. Exception Exposure
+
+**When catching exceptions in API routes:**
 
 ```python
-# ❌ Vulnerable to ReDoS
-pattern = re.compile(r'(\w+)=(?:"([^"]*)"|(\S*))')
-
-# ✅ Use string operations instead
-key, _, value = pair.partition('=')
-```
-
-**Exception Exposure:**
-
-Never expose exception details to users:
-
-```python
-# ❌ WRONG - Exposes internal info
+# ✅ SAFE - Generic error, logged internally
 except Exception as e:
-    raise HTTPException(status_code=500, detail=str(e))
-
-# ✅ CORRECT - Generic message
-except Exception:
-    log.exception("internal error")
+    log.error("operation failed: %s", e)
     raise HTTPException(status_code=500, detail="Internal server error")
+
+# ❌ DANGER - Exposes stack trace / internal info
+except Exception as e:
+    traceback.print_exc()  # Never print stack trace in production!
+    raise HTTPException(status_code=500, detail=str(e))  # Leaks internal details!
 ```
 
-**Commits that fixed security warnings:**
-- `188dcbf` - ReDoS fix in tool-block parser
-- `60e57ed` - Path traversal fix breaking taint chain
+**Why:** Exception messages can leak file paths, SQL queries, internal state. Always use generic messages for users, log details for debugging.
+
+**Files with exception handling:**
+- `app/api/routes.py` - All endpoints
+- `app/orchestrator.py` - Tool execution
+- `app/tools/*.py` - Individual tools
+
+---
+
+#### 4. SQL Injection
+
+**When building SQL queries:**
+
+```python
+# ✅ SAFE - Parameterized query
+cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+
+# ❌ DANGER - String concatenation
+cursor.execute(f"SELECT * FROM users WHERE id = '{user_id}'")
+```
+
+**All SQL lives in:** `app/database/db_queries.py` (single source of truth)
+
+---
+
+### CodeQL-Specific Guidance
+
+**CodeQL tracks "taint" from sources to sinks:**
+
+| Source (user input) | Sink (dangerous operation) |
+|---------------------|---------------------------|
+| Request body/params | File path construction |
+| LLM response text | Regex patterns |
+| Tool execution args | Shell commands |
+| Database query results | SQL execution |
+
+**To break the taint chain:**
+
+1. **Sanitization is NOT enough** - CodeQL may still see derived values as tainted
+2. **Use functions that extract only safe components** - `os.path.basename()` strips all path info
+3. **Construct from trusted constants** - Build paths from variables YOU control
+4. **Validate the result, not the input** - Check if resolved path is within allowed dirs
+
+**Reference commits:**
+- `60e57ed` - Path traversal fix (taint chain break)
+- `188dcbf` - ReDoS fix (input bounding)
+- `1ce20ed` - Exception exposure fix
+
+---
+
+### Quick Security Checklist
+
+Before committing changes that touch user input:
+
+- [ ] Paths: Using `os.path.basename()` + trusted dirs?
+- [ ] Regex: Input bounded? Or using string ops instead?
+- [ ] Exceptions: Generic message to user? Details logged only?
+- [ ] SQL: Parameterized queries only?
+- [ ] Shell: No raw user input in commands?
+
+If unsure, check `app/orchestrator.py` for reference implementations.
+
+---
 
 ### Database Safety
 
