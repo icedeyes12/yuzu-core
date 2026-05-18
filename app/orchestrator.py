@@ -126,7 +126,6 @@ def _cache_images_from_message(message: str) -> list[str]:
 def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
     """Return (base64, mime) for a generated image file, or (None, None)."""
     import base64
-    import os
     from pathlib import Path
 
     if not image_path:
@@ -141,33 +140,31 @@ def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
     ]
 
     try:
-        # Normalize the path using os.path.normpath (CodeQL recommendation)
-        # This removes any ".." segments and normalizes the path
-        normalized = os.path.normpath(image_path)
-        
-        # Reject absolute paths and paths with remaining traversal attempts
-        if os.path.isabs(normalized) or normalized.startswith(".."):
-            log.warning("path traversal blocked: %s", image_path)
+        candidate = Path(image_path)
+        if candidate.is_absolute():
+            log.warning("absolute path blocked: %s", image_path)
             return None, None
-        
-        # Build full path and resolve it (follows symlinks)
-        # Check against ALL allowed directories
-        resolved_path = (BASE_DIR / normalized).resolve()
-        
-        # Verify the resolved path is within at least one allowed directory
-        is_allowed = any(
-            str(resolved_path).startswith(str(allowed_dir.resolve()))
-            for allowed_dir in ALLOWED_DIRS
-        )
-        
+
+        resolved_path = (BASE_DIR / candidate).resolve()
+
+        is_allowed = False
+        for allowed_dir in ALLOWED_DIRS:
+            allowed_root = allowed_dir.resolve()
+            try:
+                resolved_path.relative_to(allowed_root)
+                is_allowed = True
+                break
+            except ValueError:
+                continue
+
         if not is_allowed:
             log.warning("path outside allowed dirs: %s", image_path)
             return None, None
-            
+
     except (ValueError, OSError) as e:
         log.warning("invalid path: %s - %s", image_path, e)
         return None, None
-    
+
     if not resolved_path.exists():
         log.warning("image not found: %s", image_path)
         return None, None
