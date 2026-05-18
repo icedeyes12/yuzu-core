@@ -31,10 +31,14 @@ _TOOL_CLOSE = "</tool>"
 # Tools whose argument is a free-form string keyed by a specific field.
 _STRING_ARG_TOOLS: dict[str, str] = {
     "imagine": "prompt",
-    "request": "url",
+    "image_generate": "prompt",  # Same as imagine (alias resolution)
+    "http_request": "url",  # HTTP request tool
+    "request": "url",  # Alias for http_request
     "memory_store": "fact",
+    "memory_search": "query",  # Memory search tool
     # File system tools
     "read": "path",
+    "write": "path",  # Also needs content, but path is primary
     "ls": "path",
     "mkdir": "path",
     "rm": "path",
@@ -50,6 +54,8 @@ _STRING_ARG_TOOLS: dict[str, str] = {
 _TOOL_ALIASES: dict[str, str] = {
     "imagine": "image_generate",
     "image_generate": "image_generate",
+    "http_request": "http_request",
+    "request": "http_request",  # Alias for http_request
     "ask-rei": "ask_rei",
 }
 
