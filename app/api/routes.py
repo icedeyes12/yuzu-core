@@ -167,7 +167,7 @@ async def api_get_config():
         }
     except Exception as e:
         print(f"Error getting config: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -407,8 +407,8 @@ async def api_update_profile(request: Request):
         updates = await request.json()
         await update_profile_async(updates)
         return {"status": "success"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/clear_chat")
@@ -423,8 +423,8 @@ async def api_clear_chat(request: Request):
         _web_session_tracker.pop(client_id, None)
 
         return {"status": "success"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/end_session")
@@ -456,8 +456,8 @@ async def api_end_session(request: Request):
         Database.add_message("system", disconnect_msg)
         end_session_cleanup(profile, interface="web", unexpected_exit=False)
         return {"status": "session ended"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -496,7 +496,7 @@ async def api_add_chutes_key(request: ChutesKeyRequest):
             return {"status": "error", "message": "Failed to save Chutes API key"}
     except Exception as e:
         print(f"Error adding Chutes API key: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/remove_api_key")
@@ -512,8 +512,8 @@ async def api_remove_api_key(request: Request):
             return {"status": "success", "message": f"{key_name} API key removed"}
         else:
             return {"status": "error", "message": "API key not found"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -562,7 +562,7 @@ async def api_update_session_context():
 
     except Exception as e:
         print(f"Error updating session context: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/update_global_profile")
@@ -583,7 +583,7 @@ async def api_update_global_profile():
             return {"status": "error", "message": "Global profile analysis failed"}
     except Exception as e:
         print(f"Error updating global profile: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/rebuild_structured_memory")
@@ -621,7 +621,7 @@ async def api_rebuild_structured_memory():
         }
     except Exception as e:
         print(f"Error rebuilding structured memory: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/run_memory_decay")
@@ -640,7 +640,7 @@ async def api_run_memory_decay():
         }
     except Exception as e:
         print(f"Error running memory decay: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.get("/memory_stats")
@@ -686,7 +686,7 @@ async def api_memory_stats():
         }
     except Exception as e:
         print(f"Error getting memory stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -715,7 +715,7 @@ async def api_list_providers():
         }
     except Exception as e:
         print(f"Error listing providers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/providers/set_preferred")
@@ -729,7 +729,7 @@ async def api_set_preferred_provider(request: ProviderSetRequest):
         return {"status": "success", "message": result}
     except Exception as e:
         print(f"Error setting preferred provider: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/providers/test_connection")
@@ -756,7 +756,7 @@ async def api_test_provider_connection(request: ProviderTestRequest):
         }
     except Exception as e:
         print(f"Error testing provider connection: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/providers/set_vision_model")
@@ -770,7 +770,7 @@ async def api_set_vision_model(request: VisionModelSetRequest):
         return {"status": "success", "message": result}
     except Exception as e:
         print(f"Error setting vision model: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/providers/test_vision")
@@ -779,7 +779,7 @@ async def api_test_vision():
         return {"status": "success", "message": "Vision model test successful"}
     except Exception as e:
         print(f"Error testing vision: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/browser_unload")
@@ -813,8 +813,8 @@ async def api_browser_unload(request: Request):
         end_session_cleanup(profile, interface="web", unexpected_exit=True)
 
         return {"status": "page closed"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -829,7 +829,7 @@ async def api_list_sessions():
         return {"sessions": sessions}
     except Exception as e:
         print(f"Error listing sessions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/sessions/create")
@@ -844,7 +844,7 @@ async def api_create_session(http_request: Request, request: SessionCreateReques
         return {"status": "success", "session_id": session_id}
     except Exception as e:
         print(f"Error creating session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/sessions/switch")
@@ -884,7 +884,7 @@ async def api_switch_session(request: SessionSwitchRequest, http_request: Reques
         }
     except Exception as e:
         print(f"Error switching session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/sessions/rename")
@@ -903,7 +903,7 @@ async def api_rename_session(request: SessionRenameRequest):
         raise
     except Exception as e:
         print(f"Error renaming session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/sessions/delete")
@@ -931,7 +931,7 @@ async def api_delete_session(request: SessionDeleteRequest):
         raise
     except Exception as e:
         print(f"Error deleting session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.get("/sessions/{session_id}/memory")
@@ -946,7 +946,7 @@ async def api_get_session_memory(session_id: int):
         }
     except Exception as e:
         print(f"Error getting session memory: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -963,7 +963,7 @@ async def api_update_location(request: LocationUpdateRequest):
         return {"status": "ok"}
     except Exception as e:
         print(f"Error updating location: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/update_weather_location")
@@ -975,7 +975,7 @@ async def api_update_weather_location(request: LocationUpdateRequest):
         return {"status": "success", "message": "Weather location updated"}
     except Exception as e:
         print(f"Error updating weather location: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @api_router.post("/global_knowledge/update")
@@ -986,7 +986,7 @@ async def api_update_global_knowledge(request: GlobalKnowledgeUpdateRequest):
         return {"status": "success", "message": "Global knowledge updated"}
     except Exception as e:
         print(f"Error updating global knowledge: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
