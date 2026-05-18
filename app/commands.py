@@ -247,6 +247,10 @@ def _parse_args(tool_name: str, raw_args: str) -> dict[str, Any]:
     - JSON args: Parse as JSON if it looks like JSON
     - Key=value pairs: Parse as key=value; key2="value with spaces"
     """
+    # SECURITY: Limit input size to prevent ReDoS
+    if len(raw_args) > 5000:
+        raw_args = raw_args[:5000]
+    
     raw_args = raw_args.strip()
 
     # String-arg tools: single argument mapped to a specific key
@@ -272,15 +276,23 @@ def _parse_args(tool_name: str, raw_args: str) -> dict[str, Any]:
             pass
 
     # Parse key=value; key2="value with spaces"
+    # SECURITY: Use string operations instead of regex to prevent ReDoS
     result: dict[str, Any] = {}
     if not raw_args:
         return result
 
-    # Pattern: key="value with spaces" or key=value
-    pattern = re.compile(r'(\w+)=(?:"([^"]*)"|(\S*))')
-    for match in pattern.finditer(raw_args):
-        key = match.group(1)
-        value = match.group(2) if match.group(2) is not None else match.group(3)
+    for pair in raw_args.split(';'):
+        pair = pair.strip()
+        if '=' not in pair:
+            continue
+        key, _, value = pair.partition('=')
+        key = key.strip()
+        if not key:
+            continue
+        # Handle quoted values
+        value = value.strip()
+        if value.startswith('"') and value.endswith('"'):
+            value = value[1:-1]
         result[key] = value
 
     return result
