@@ -57,6 +57,77 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 
 ## 2. Safety Rules
 
+### Security Warnings (CodeQL)
+
+**⚠️ CRITICAL: Breaking Taint Chains**
+
+CodeQL uses taint analysis to track user input through the codebase. Even after "validation", if a path/string is derived from user input, CodeQL may still flag it.
+
+**Key Insight from v3.1.0 Refactor:**
+
+When handling file paths from user input, NEVER construct paths directly from validated user input:
+
+```python
+# ❌ WRONG - CodeQL still sees this as tainted
+normalized = os.path.normpath(user_path)
+candidate = (_BASE_DIR / normalized).resolve()  # Still derived from user input!
+
+# ✅ CORRECT - Break the taint chain completely
+filename = os.path.basename(user_path)  # Extract ONLY filename
+for trusted_dir in _ALLOWED_DIRS:
+    candidate = trusted_dir / filename  # We control trusted_dir
+    if candidate.exists():
+        return candidate
+```
+
+**Why this works:**
+- `os.path.basename()` removes ALL directory components
+- User can ONLY specify a filename, not a path
+- We control where that filename is searched
+- Zero user-controlled path structure reaches the filesystem
+
+**ReDoS Prevention:**
+
+Always bound regex input with a size limit:
+
+```python
+_REGEX_INPUT_LIMIT = 100_000
+
+def _safe_regex_search(pattern: re.Pattern, text: str) -> re.Match | None:
+    if len(text) > _REGEX_INPUT_LIMIT:
+        text = text[:_REGEX_INPUT_LIMIT]
+    return pattern.search(text)
+```
+
+Or better: avoid regex entirely for user-controlled input when possible:
+
+```python
+# ❌ Vulnerable to ReDoS
+pattern = re.compile(r'(\w+)=(?:"([^"]*)"|(\S*))')
+
+# ✅ Use string operations instead
+key, _, value = pair.partition('=')
+```
+
+**Exception Exposure:**
+
+Never expose exception details to users:
+
+```python
+# ❌ WRONG - Exposes internal info
+except Exception as e:
+    raise HTTPException(status_code=500, detail=str(e))
+
+# ✅ CORRECT - Generic message
+except Exception:
+    log.exception("internal error")
+    raise HTTPException(status_code=500, detail="Internal server error")
+```
+
+**Commits that fixed security warnings:**
+- `188dcbf` - ReDoS fix in tool-block parser
+- `60e57ed` - Path traversal fix breaking taint chain
+
 ### Database Safety
 
 1. **NEVER drop tables.** Only add columns or create new tables.
