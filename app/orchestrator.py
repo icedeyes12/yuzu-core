@@ -160,11 +160,18 @@ def _resolve_safe_image_path(image_path: str):
             log.warning("path outside allowed roots: %s", image_path)
             return None
 
-        resolved_path = (base_dir / candidate).resolve()
+        candidate_path = base_dir / candidate
+        resolved_path = candidate_path.resolve(strict=True)
+
+        resolved_allowed_roots = []
+        for allowed_dir in allowed_dirs:
+            try:
+                resolved_allowed_roots.append(allowed_dir.resolve(strict=True))
+            except OSError:
+                continue
 
         is_allowed = False
-        for allowed_dir in allowed_dirs:
-            allowed_root = allowed_dir.resolve()
+        for allowed_root in resolved_allowed_roots:
             try:
                 resolved_path.relative_to(allowed_root)
                 is_allowed = True
@@ -180,11 +187,11 @@ def _resolve_safe_image_path(image_path: str):
             log.warning("disallowed image extension blocked: %s", image_path)
             return None
 
-        if not resolved_path.exists() or not resolved_path.is_file():
+        if not resolved_path.is_file():
             log.warning("image not found or not a file: %s", image_path)
             return None
 
-        if _has_symlink_ancestor(resolved_path):
+        if resolved_path.is_symlink() or _has_symlink_ancestor(resolved_path):
             log.warning("symlink path blocked: %s", image_path)
             return None
 
