@@ -14,7 +14,6 @@ from app.commands import (
     IMAGE_SHORTCUT_WARNING,
     execute_commands,
     extract_markdown_image_path,
-    format_observation,
     has_tool_blocks,
     is_markdown_image_shortcut,
     parse_image_path,
@@ -384,100 +383,6 @@ def _trigger_memory_pipeline(session_id: int) -> None:
 
 
 # --------------------------------------------------------------------
-# Agentic Loop: Thought → Action → Observation
-# --------------------------------------------------------------------
-
-
-def _run_agentic_loop(
-    profile: dict[str, Any],
-    user_message: str,
-    interface: str,
-    session_id: int,
-    initial_response: str,
-) -> str:
-    """Run the agentic Thought → Action → Observation loop.
-
-    This implements the core orchestration:
-    1. Receive LLM response
-    2. Parse tool blocks
-    3. If no tool blocks: return response
-    4. If tool blocks: execute tools, format observation, loop back to LLM
-    5. Continue until no tool blocks or max loops reached
-    """
-    current_response = initial_response
-    loop_count = 0
-
-    while loop_count < _MAX_ORCHESTRATION_LOOPS:
-        loop_count += 1
-        log.info("orchestration loop %d", loop_count)
-
-        # Parse tool blocks from current response
-        commands, clean_text = parse_tool_blocks(current_response)
-
-        if not commands:
-            # No tool blocks - we're done
-            log.info("no tool blocks found, ending orchestration")
-            return current_response
-
-        log.info("found %d tool block(s)", len(commands))
-
-        # Persist the full response with tool blocks (so Yuzuki can learn from her patterns)
-        if current_response:
-            Database.add_message("assistant", current_response, session_id=session_id)
-
-        # Execute all commands sequentially
-        results = execute_commands(commands, session_id=session_id)
-
-        # Persist each tool result
-        tool_markdowns: list[str] = []
-        any_image_tool = False
-
-        for tool_name, result in results:
-            tool_markdown = result.get("markdown", str(result))
-            tool_markdowns.append(tool_markdown)
-            _persist_tool_result(tool_name, tool_markdown, session_id)
-
-            if parse_image_path(tool_markdown) is not None:
-                any_image_tool = True
-
-        # Format and persist observation
-        observation = format_observation(results)
-        if observation:
-            _persist_observation(observation, session_id)
-
-        # Combine tool markdowns for synthesis
-        combined_tool_markdown = "\n\n".join(tool_markdowns)
-
-        # Run synthesis pass to get next response
-        synthesis = _run_synthesis(
-            profile, session_id, interface, combined_tool_markdown
-        )
-
-        if not synthesis:
-            # No synthesis - return tool results
-            log.info("no synthesis generated, returning tool results")
-            return combined_tool_markdown
-
-        # Check if synthesis contains more tool blocks
-        if has_tool_blocks(synthesis):
-            log.info("synthesis contains tool blocks, continuing loop")
-            current_response = synthesis
-            # Don't persist synthesis yet - it will be processed in next iteration
-            continue
-
-        # No more tool blocks - persist and return synthesis
-        Database.add_message("assistant", synthesis, session_id=session_id)
-
-        if any_image_tool:
-            return f"{combined_tool_markdown}\n\n{synthesis}"
-        return synthesis
-
-    # Max loops reached
-    log.warning("max orchestration loops reached (%d)", _MAX_ORCHESTRATION_LOOPS)
-    return current_response
-
-
-# --------------------------------------------------------------------
 # Public entry points
 # --------------------------------------------------------------------
 
@@ -485,8 +390,8 @@ def _run_agentic_loop(
 def handle_user_message(user_message: str, interface: str = "terminal") -> str:
     """Process a user message end-to-end and return the assistant reply.
 
-    Implements the agentic Thought → Action → Observation loop using
-    the <tool>...</tool> protocol for tool invocation.
+    Non-streaming path for CLI and simple API calls.
+    For tool execution with agentic loop, use handle_user_message_streaming().
     """
     profile = Database.get_profile()
     if not user_message.strip():
@@ -560,13 +465,10 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
         return IMAGE_SHORTCUT_WARNING
 
     # Try native tool-call execution first (for providers that support it)
-    native_tool_executed = False
-    tool_results: list[tuple[str, dict]] = []
     tool_calls = _parse_raw_tool_calls(provider_name, raw_api_response)
     if tool_calls:
         tool_results = _execute_tool_calls(tool_calls, session_id)
         if tool_results:
-            native_tool_executed = True
             tool_name, tool_result = tool_results[0]
             tool_markdown = tool_result.get("markdown", str(tool_result))
             _persist_tool_result(tool_name, tool_markdown, session_id)
@@ -587,14 +489,10 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
             _post_turn(profile, user_message, tool_markdown, session_id, active_session)
             return tool_markdown
 
-    if not native_tool_executed:
-        # Run agentic loop with <tool> block protocol
-        final_response = _run_agentic_loop(
-            profile, user_message, interface, session_id, text_response
-        )
-        _post_turn(profile, user_message, final_response, session_id, active_session)
-        return final_response
-
+    # Non-streaming path: just return LLM response
+    # Tool execution via <tool> blocks only happens in streaming path
+    Database.add_message("assistant", text_response, session_id=session_id)
+    _post_turn(profile, user_message, text_response, session_id, active_session)
     return text_response
 
 
