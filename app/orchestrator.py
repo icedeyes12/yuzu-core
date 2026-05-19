@@ -421,9 +421,9 @@ def _run_agentic_loop(
 
         log.info("found %d tool block(s)", len(commands))
 
-        # Persist the narration (clean text before tool execution)
-        if clean_text:
-            Database.add_message("assistant", clean_text, session_id=session_id)
+        # Persist the full response with tool blocks (so Yuzuki can learn from her patterns)
+        if current_response:
+            Database.add_message("assistant", current_response, session_id=session_id)
 
         # Execute all commands sequentially
         results = execute_commands(commands, session_id=session_id)
@@ -677,9 +677,9 @@ def handle_user_message_streaming(
 
     log.info("[stream] found %d tool block(s)", len(commands))
 
-    # Persist narration before tool execution
-    if clean_text:
-        Database.add_message("assistant", clean_text, session_id=session_id)
+    # Persist full response with tool blocks (so Yuzuki can learn from her patterns)
+    if full_response:
+        Database.add_message("assistant", full_response, session_id=session_id)
 
     # Execute all commands
     results = execute_commands(commands, session_id=session_id)
