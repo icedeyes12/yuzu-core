@@ -9,6 +9,7 @@ const MESSAGES_PER_PAGE = 30;
 
 // ==================== STREAMING STATE ====================
 let currentStreamMessage = null;
+let currentAbortController = null;
 
 // ==================== MULTIMODAL MANAGER ====================
 class MultimodalManager {
@@ -107,6 +108,13 @@ class MultimodalManager {
 	}
 
 	handleSend() {
+		// If processing, abort the current stream
+		if (isProcessingMessage && currentAbortController) {
+			console.log("Aborting current stream...");
+			currentAbortController.abort();
+			return;
+		}
+
 		if (isProcessingMessage) {
 			console.log("Message already being processed, please wait...");
 			return;
@@ -121,6 +129,7 @@ class MultimodalManager {
 		}
 
 		isProcessingMessage = true;
+		this.setSendButtonState("sending");
 
 		if (this.currentMode === "generate") {
 			this.handleImageGeneration(text);
@@ -153,6 +162,10 @@ class MultimodalManager {
 			return;
 		}
 
+		// Create abort controller for this request
+		currentAbortController = new AbortController();
+		const signal = currentAbortController.signal;
+
 		// Show typing indicator as in-flow message
 		showTypingIndicator();
 
@@ -170,6 +183,7 @@ class MultimodalManager {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ message }),
+				signal,
 			});
 
 			if (!response.ok) {
@@ -245,16 +259,31 @@ class MultimodalManager {
 				}
 			}
 		} catch (error) {
-			console.error("Stream error:", error);
-			if (contentDiv) {
-				contentDiv.textContent =
-					"Sorry, I encountered an error processing your message.";
+			// Handle abort gracefully
+			if (error.name === "AbortError") {
+				console.log("Stream aborted by user");
+				// Show partial message or remove it
+				if (currentStreamMessage && !accumulatedText) {
+					currentStreamMessage.remove();
+				} else if (contentDiv && accumulatedText) {
+					// Show partial response with indicator
+					contentDiv.innerHTML = `${renderer.render(accumulatedText)}\n\n*[Stopped]*`;
+					this.renderStreamChunk(contentDiv, accumulatedText, true);
+				}
+			} else {
+				console.error("Stream error:", error);
+				if (contentDiv) {
+					contentDiv.textContent =
+						"Sorry, I encountered an error processing your message.";
+				}
 			}
 		} finally {
 			hideTypingIndicator();
 			this.cleanupStreamState();
+			currentAbortController = null;
 			isProcessingMessage = false;
 			this.isSending = false;
+			this.setSendButtonState("ready");
 		}
 	}
 
@@ -526,12 +555,14 @@ class MultimodalManager {
 		if (!sendBtn) return;
 
 		if (state === "sending") {
-			sendBtn.disabled = true;
-			sendBtn.textContent = "Sending...";
-			sendBtn.style.opacity = "0.7";
+			sendBtn.disabled = false; // Keep clickable for abort
+			sendBtn.textContent = "Stop";
+			sendBtn.classList.add("stop-mode");
+			sendBtn.style.opacity = "1";
 		} else {
 			sendBtn.disabled = false;
 			sendBtn.textContent = "Send";
+			sendBtn.classList.remove("stop-mode");
 			sendBtn.style.opacity = "1";
 		}
 	}

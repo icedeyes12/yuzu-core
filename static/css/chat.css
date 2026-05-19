@@ -598,6 +598,25 @@ body {
 	cursor: not-allowed;
 }
 
+#sendButton.stop-mode {
+	background: #dc3545;
+	animation: pulse-stop 1.5s infinite;
+}
+
+#sendButton.stop-mode:hover {
+	background: #c82333;
+	transform: scale(1.05);
+}
+
+@keyframes pulse-stop {
+	0%, 100% {
+		box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+	}
+	50% {
+		box-shadow: 0 0 0 8px rgba(220, 53, 69, 0);
+	}
+}
+
 /* ==================== MULTIMODAL COMPONENTS ==================== */
 .multimodal-toggle-container {
 	position: relative;
