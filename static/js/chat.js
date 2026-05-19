@@ -956,7 +956,10 @@ function renderMessageContent(rawText, isUser = false) {
 	console.log("User raw message:", JSON.stringify(safeText));
 	const escapedText = escapeMessageHtml(safeText);
 	try {
-		let processed = safeText;
+		// Phase 1: Escape <tool> tags before marked.parse() to prevent them being treated as HTML
+		let processed = safeText
+			.replace(/<tool>/gi, "&lt;tool&gt;")
+			.replace(/<\/tool>/gi, "&lt;/tool&gt;");
 		if (
 			typeof renderer !== "undefined" &&
 			typeof renderer.preprocessGeneratedImages === "function"
