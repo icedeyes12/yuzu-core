@@ -700,26 +700,70 @@ def handle_user_message_streaming(
 
     combined_tool_markdown = "\n\n".join(tool_markdowns)
 
-    # Stream synthesis
-    synthesis_chunks: list[str] = []
-    full_synthesis = ""
+    # Agentic loop: execute tools, stream synthesis, check for more tools
+    current_synthesis_context = combined_tool_markdown
+    loop_count = 0
+    
+    while loop_count < _MAX_ORCHESTRATION_LOOPS:
+        loop_count += 1
+        log.info("[stream] orchestration loop %d", loop_count)
+        
+        # Stream synthesis
+        synthesis_chunks: list[str] = []
+        full_synthesis = ""
 
-    for chunk in _stream_synthesis(
-        profile, session_id, interface, combined_tool_markdown
-    ):
-        synthesis_chunks.append(chunk)
-        full_synthesis += chunk
-        yield "\n\n" + chunk if any_image_tool and not synthesis_chunks[:-1] else chunk
+        for chunk in _stream_synthesis(
+            profile, session_id, interface, current_synthesis_context
+        ):
+            synthesis_chunks.append(chunk)
+            full_synthesis += chunk
+            yield "\n\n" + chunk if any_image_tool and not synthesis_chunks[:-1] else chunk
 
-    synthesis = _clean(full_synthesis) if full_synthesis else None
+        synthesis = _clean(full_synthesis) if full_synthesis else None
 
-    if synthesis:
+        if not synthesis:
+            # No synthesis - finish
+            _post_turn(
+                profile, user_message, current_synthesis_context, session_id, active_session
+            )
+            return
+
+        # Persist synthesis
         Database.add_message("assistant", synthesis, session_id=session_id)
-        final_response = (
-            f"{combined_tool_markdown}\n\n{synthesis}" if any_image_tool else synthesis
-        )
-        _post_turn(profile, user_message, final_response, session_id, active_session)
-    else:
-        _post_turn(
-            profile, user_message, combined_tool_markdown, session_id, active_session
-        )
+        
+        # Check if synthesis contains more tool blocks
+        if not has_tool_blocks(synthesis):
+            # No more tools - we're done
+            final_response = (
+                f"{current_synthesis_context}\n\n{synthesis}" if any_image_tool else synthesis
+            )
+            _post_turn(profile, user_message, final_response, session_id, active_session)
+            return
+
+        log.info("[stream] synthesis contains tool blocks, continuing loop")
+        
+        # Parse and execute tools from synthesis
+        next_commands, _ = parse_tool_blocks(synthesis)
+        if not next_commands:
+            _post_turn(profile, user_message, synthesis, session_id, active_session)
+            return
+
+        # Execute tools
+        next_results = execute_commands(next_commands, session_id=session_id)
+        next_markdowns: list[str] = []
+        any_image_tool = False
+
+        for tool_name, result in next_results:
+            tm = result.get("markdown", str(result))
+            next_markdowns.append(tm)
+            _persist_tool_result(tool_name, tm, session_id)
+            if parse_image_path(tm) is not None:
+                any_image_tool = True
+            yield "\n\n" + tm
+
+        # Update context for next synthesis
+        current_synthesis_context = "\n\n".join(next_markdowns)
+
+    # Max loops reached
+    log.warning("[stream] max orchestration loops reached (%d)", _MAX_ORCHESTRATION_LOOPS)
+    _post_turn(profile, user_message, synthesis or current_synthesis_context, session_id, active_session)

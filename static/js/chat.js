@@ -380,33 +380,68 @@ class MultimodalManager {
 			// Use dynamic typing indicator
 			showTypingIndicator();
 
-			// Route through unified send_message pipeline
-			const response = await fetch("/api/send_message", {
+			// Use streaming endpoint for proper agentic loop support
+			const response = await fetch("/api/send_message_stream", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ message: `/imagine ${prompt}` }),
 			});
 
-			const data = await response.json();
-
-			// Hide dynamic typing indicator
-			hideTypingIndicator();
-
-			if (data.reply) {
-				const reply = String(data.reply);
-				if (reply.trimStart().startsWith("<details>")) {
-					addMessage("tool", reply);
-				} else {
-					addMessage("ai", reply);
-				}
-				this.clearInput();
-			} else {
-				throw new Error(data.error || "Image generation failed");
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 			}
+
+			// Create streaming message element
+			const chatContainer = document.getElementById("chat-container");
+			currentStreamMessage = this.createStreamingMessageElement("ai");
+			currentStreamMessage.style.display = "none";
+			chatContainer.appendChild(currentStreamMessage);
+
+			const contentDiv = currentStreamMessage.querySelector(".message-content");
+			let accumulatedText = "";
+
+			const reader = response.body.getReader();
+			const decoder = new TextDecoder();
+			let firstChunk = true;
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				const chunk = decoder.decode(value, { stream: true });
+				const lines = chunk.split("\n");
+
+				for (const line of lines) {
+					if (line.startsWith("data: ")) {
+						try {
+							const json = JSON.parse(line.slice(6));
+							if (json.chunk) {
+								if (firstChunk) {
+									hideTypingIndicator();
+									currentStreamMessage.style.display = "";
+									firstChunk = false;
+								}
+
+								accumulatedText += json.chunk;
+								this.renderStreamChunk(contentDiv, accumulatedText);
+								scrollToBottom();
+							}
+						} catch (_e) {
+							// Ignore parse errors
+						}
+					}
+				}
+			}
+
+			// Final render
+			this.renderStreamChunk(contentDiv, accumulatedText, true);
+			this.clearInput();
 		} catch (error) {
 			console.error("Image generation failed:", error);
+			hideTypingIndicator();
 			addMessage("ai", `Error: ${error.message}`);
 		} finally {
+			this.cleanupStreamState();
 			this.isSending = false;
 			this.setSendButtonState("ready");
 			isProcessingMessage = false;
