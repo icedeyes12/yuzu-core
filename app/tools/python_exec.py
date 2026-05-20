@@ -80,17 +80,26 @@ def _extract_code_block(text: str) -> str:
     - ```python\ncode\n```
     - ```\ncode\n```
     - plain code
+    
+    IMPORTANT: Preserves leading whitespace (indentation) for Python code.
+    Only strips trailing whitespace from the final result.
     """
     # Check for fenced code block
     fenced_match = re.match(r"```(?:python)?\s*\n(.*?)\n```", text.strip(), re.DOTALL)
     if fenced_match:
-        return fenced_match.group(1).strip()
+        # Preserve leading whitespace - only strip trailing
+        code = fenced_match.group(1)
+        # Remove trailing whitespace from each line but preserve leading
+        lines = code.split("\n")
+        lines = [line.rstrip() for line in lines]
+        return "\n".join(lines).rstrip()
 
     # Check for single backtick
     if text.strip().startswith("`") and text.strip().endswith("`"):
-        return text.strip()[1:-1].strip()
+        return text.strip()[1:-1].rstrip()
 
-    return text.strip()
+    # Plain code - preserve leading whitespace, strip trailing
+    return text.rstrip()
 
 
 def _check_security(code: str) -> tuple[bool, str]:

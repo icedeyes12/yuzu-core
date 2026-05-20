@@ -156,7 +156,8 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
                     # Verify </tool> is at the end
                     after_close = after_open[close_idx + len(_TOOL_CLOSE):].strip()
                     if not after_close:
-                        content = after_open[:close_idx].strip()
+                        # Preserve leading whitespace, only strip trailing
+                        content = after_open[:close_idx].rstrip()
                         if content:
                             matches.append(content)
                         # Mark line for removal
@@ -177,7 +178,10 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
                             # Check if it's pure </tool> or has content before
                             before_close = inner_stripped[:-len(_TOOL_CLOSE)].strip()
                             if before_close:
-                                content_lines.append(before_close)
+                                # Preserve leading whitespace for the content part
+                                # Find where the content starts in the original line
+                                content_part = inner_line[:inner_line.rfind(_TOOL_CLOSE)].rstrip()
+                                content_lines.append(content_part)
                             found_close = True
                             # Mark lines for removal
                             for k in range(i, j + 1):
@@ -190,11 +194,13 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
                                 lines[k] = ""
                             break
                         else:
-                            content_lines.append(inner_stripped)
+                            # Preserve leading whitespace - only rstrip trailing
+                            content_lines.append(inner_line.rstrip())
                         j += 1
                     
                     if found_close and content_lines:
-                        content = "\n".join(content_lines).strip()
+                        # Join lines preserving indentation, strip only trailing whitespace
+                        content = "\n".join(content_lines).rstrip()
                         if content:
                             matches.append(content)
                     elif found_close:
