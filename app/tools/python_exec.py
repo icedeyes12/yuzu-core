@@ -235,27 +235,40 @@ def execute(
             _get_partner_name(),
         )
 
-    log.info("[python] Executing code (%d chars)", len(code))
+        log.info("[python] Executing code (%d chars)", len(code))
 
     # Execute
     success, stdout, stderr, duration_ms = _execute_python(code)
+    
+    # Mapping success ke Exit Code standar
+    exit_code = 0 if success else 1
+    
+    # Format terisolasi
+    stdout_str = stdout.strip() if stdout and stdout.strip() else "(empty)"
+    stderr_str = stderr.strip() if stderr and stderr.strip() else "(empty)"
+
+    formatted_output = (
+        f"Exit Code: {exit_code}\n"
+        f"Duration: {duration_ms}ms\n\n"
+        f"[STDOUT]\n{stdout_str}\n\n"
+        f"[STDERR]\n{stderr_str}"
+    )
 
     # Build result
     if success:
         return ok_result(
             {
-                "code": code[:500] + "..." if len(code) > 500 else code,
-                "output": stdout or "(no output)",
-                "stderr": stderr,
-                "duration_ms": duration_ms,
+                "code_snippet": code[:100] + "..." if len(code) > 100 else code,
+                "output": formatted_output
             },
             TOOL_DEFINITION,
             full_command,
             _get_partner_name(),
         )
     else:
+        # Meskipun error, kita tetap kirim format yang sama agar Yuzuki bisa baca STDOUT & STDERR terpisah
         return error_result(
-            stderr or stdout or "Execution failed",
+            formatted_output,
             TOOL_DEFINITION,
             full_command,
             _get_partner_name(),

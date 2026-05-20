@@ -301,42 +301,38 @@ def execute(
     # Persistent sessions have complexity trade-offs; keeping simple for now
     try:
         start_time = time.time()
-
         result = subprocess.run(
-            ["bash", "-c", command],
+            command,
+            shell=True,
             capture_output=True,
             text=True,
             timeout=DEFAULT_TIMEOUT,
             cwd=DEFAULT_CWD,
+            executable="/data/data/com.termux/files/usr/bin/bash" # Sesuaikan path bash Termux
         )
-
         duration_ms = int((time.time() - start_time) * 1000)
 
-        stdout = result.stdout or ""
-        stderr = result.stderr or ""
+        # Truncate if needed
+        stdout = _truncate_output(result.stdout or "")
+        stderr = _truncate_output(result.stderr or "")
         exit_code = result.returncode
 
-        # Truncate if needed
-        stdout = _truncate_output(stdout)
-        stderr = _truncate_output(stderr)
+        # Format terisolasi untuk Yuzuki
+        stdout_str = stdout.strip() if stdout.strip() else "(empty)"
+        stderr_str = stderr.strip() if stderr.strip() else "(empty)"
 
-        # Build output
-        output_parts = []
-        if stdout:
-            output_parts.append(stdout)
-        if stderr:
-            output_parts.append(f"[stderr]\n{stderr}")
+        formatted_output = (
+            f"Exit Code: {exit_code}\n"
+            f"Duration: {duration_ms}ms\n\n"
+            f"[STDOUT]\n{stdout_str}\n\n"
+            f"[STDERR]\n{stderr_str}"
+        )
 
-        combined_output = "\n".join(output_parts) if output_parts else "(no output)"
-
-        # Success result (even if exit_code != 0, we executed successfully)
         return ok_result(
             {
                 "command": command,
                 "exit_code": exit_code,
-                "stdout": stdout,
-                "stderr": stderr,
-                "output": combined_output,
+                "output": formatted_output,
                 "duration_ms": duration_ms,
             },
             TOOL_BASH,
