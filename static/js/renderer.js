@@ -547,8 +547,11 @@ class MessageRenderer {
 		}
 
 		try {
+			// Pre-process: Convert tool blocks to collapsible UI
+			let processedMarkdown = this.preprocessToolBlocks(safeMarkdown);
+
 			// Pre-process: Convert plain text image patterns to markdown
-			const processedMarkdown = this.preprocessGeneratedImages(safeMarkdown);
+			processedMarkdown = this.preprocessGeneratedImages(processedMarkdown);
 
 			// Parse markdown
 			let html = marked.parse(processedMarkdown);
@@ -561,6 +564,41 @@ class MessageRenderer {
 			console.error("Render error:", error, safeMarkdown);
 			return `<pre class="render-error">${this.escapeHtml(safeMarkdown)}</pre>`;
 		}
+	}
+
+	preprocessToolBlocks(text) {
+		if (!text || typeof text !== "string") return text;
+
+		// Regex to capture <tool> content </tool>
+		// We use [\s\S]*? to match multiline content lazily
+		const toolPattern = /<tool>([\s\S]*?)<\/tool>/g;
+
+		return text.replace(toolPattern, (match, content) => {
+			const trimmedContent = content.trim();
+			if (!trimmedContent) return "";
+
+			const lines = trimmedContent.split("\n");
+			const firstLine = lines[0].trim();
+
+			// Dynamic label: extract first line (e.g., /bash ls -la) or use default
+			// Limit label length to keep UI clean
+			const label =
+				firstLine.length > 60
+					? `${firstLine.substring(0, 57)}...`
+					: firstLine || "Tool Execution";
+
+			// Escape content for safe rendering inside pre/code
+			const escapedContent = this.escapeHtml(trimmedContent);
+
+			// Return the collapsible details block
+			// We wrap with newlines to ensure marked treats it as a block element
+			return `\n\n<details class="tool-execution">
+    <summary>🛠️ ${label}</summary>
+    <div class="tool-content">
+        <pre><code>${escapedContent}</code></pre>
+    </div>
+</details>\n\n`;
+		});
 	}
 
 	preprocessGeneratedImages(text) {

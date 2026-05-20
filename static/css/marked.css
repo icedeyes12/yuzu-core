@@ -930,3 +930,86 @@
 [data-theme="light"] .mermaid-placeholder-text {
 	color: var(--text-muted, #666);
 }
+
+/* ========================================
+   TOOL EXECUTION (COLLAPSIBLE)
+   ======================================== */
+
+.message-content .tool-execution {
+	margin: 0.8rem 0;
+	border-radius: 8px;
+	background: var(--tool-execution-bg, var(--code-bg));
+	border: 1px solid var(--brain-box-border, var(--border-ai));
+	overflow: hidden;
+}
+
+.message-content .tool-execution summary {
+	padding: 0.6rem 1rem;
+	cursor: pointer;
+	font-weight: 600;
+	font-size: 0.85rem;
+	color: var(--brain-box-text, var(--accent-primary));
+	background: rgba(0, 0, 0, 0.2);
+	list-style: none;
+	transition: background 0.2s ease;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.message-content .tool-execution summary::-webkit-details-marker {
+	display: none;
+}
+
+.message-content .tool-execution summary:hover {
+	background: rgba(0, 0, 0, 0.3);
+}
+
+.message-content .tool-execution[open] summary {
+	border-bottom: 1px solid var(--brain-box-border, var(--border-ai));
+}
+
+.message-content .tool-content {
+	padding: 0;
+	max-height: 350px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: var(--accent-primary) transparent;
+}
+
+.message-content .tool-content pre {
+	margin: 0;
+	padding: 1rem;
+	white-space: pre-wrap;
+	word-break: break-all;
+	font-family: "JetBrains Mono", "Hack", monospace;
+	font-size: 0.85rem;
+	background: transparent;
+	border: none;
+}
+
+.message-content .tool-content code {
+	background: transparent !important;
+	padding: 0 !important;
+	border: none !important;
+	color: var(--text-color);
+}
+
+/* Slim Scrollbar for Tool Content */
+.message-content .tool-content::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+
+.message-content .tool-content::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.message-content .tool-content::-webkit-scrollbar-thumb {
+	background: var(--border-primary);
+	border-radius: 10px;
+}
+
+.message-content .tool-content::-webkit-scrollbar-thumb:hover {
+	background: var(--accent-primary);
+}
