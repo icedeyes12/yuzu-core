@@ -573,7 +573,7 @@ class MessageRenderer {
 		// We use [\s\S]*? to match multiline content lazily
 		const toolPattern = /<tool>([\s\S]*?)<\/tool>/g;
 
-		return text.replace(toolPattern, (match, content) => {
+		return text.replace(toolPattern, (_match, content) => {
 			const trimmedContent = content.trim();
 			if (!trimmedContent) return "";
 

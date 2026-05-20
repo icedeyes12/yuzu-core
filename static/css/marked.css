@@ -904,8 +904,12 @@
 }
 
 @keyframes mermaidSpin {
-	from { transform: rotate(0deg); }
-	to { transform: rotate(360deg); }
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 .mermaid-loader-dots {
@@ -988,10 +992,11 @@
 	border: none;
 }
 
-.message-content .tool-content code {
-	background: transparent !important;
-	padding: 0 !important;
-	border: none !important;
+/* Tool content code - specific override without !important */
+.message-content pre.tool-content code {
+	background: transparent;
+	padding: 0;
+	border: none;
 	color: var(--text-color);
 }
 
