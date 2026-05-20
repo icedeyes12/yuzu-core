@@ -1018,3 +1018,40 @@
 .message-content .tool-content::-webkit-scrollbar-thumb:hover {
 	background: var(--accent-primary);
 }
+
+/* ========================================
+   KATEX MATH RENDERING
+   ======================================== */
+
+.message-content .katex-display {
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding: 0.8rem 0;
+	margin: 0.5rem 0;
+	scrollbar-width: thin;
+	scrollbar-color: var(--border-primary) transparent;
+}
+
+/* Inherit theme colors for better visibility */
+.katex {
+	color: inherit;
+	font-size: 1.1em;
+}
+
+/* Custom slim scrollbar for math display */
+.katex-display::-webkit-scrollbar {
+	height: 6px;
+}
+
+.katex-display::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.katex-display::-webkit-scrollbar-thumb {
+	background: var(--border-primary);
+	border-radius: 10px;
+}
+
+.katex-display::-webkit-scrollbar-thumb:hover {
+	background: var(--accent-primary);
+}

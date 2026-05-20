@@ -5,6 +5,7 @@ class MessageRenderer {
 		this.isMermaidReady = false;
 		this.isMarkedReady = false;
 		this.isHighlightReady = false;
+		this.isKatexReady = false;
 		this.initializeLibraries();
 	}
 
@@ -50,6 +51,12 @@ class MessageRenderer {
 			});
 			this.isMermaidReady = true;
 			console.log("Mermaid initialized successfully");
+		}
+
+		// Check if KaTeX is available
+		if (typeof katex !== "undefined") {
+			this.isKatexReady = true;
+			console.log("KaTeX initialized successfully");
 		}
 	}
 
@@ -202,6 +209,63 @@ class MessageRenderer {
 
 		// Configure marked renderer
 		const renderer = new marked.Renderer();
+
+		// Custom math extension for KaTeX
+		const mathExtension = {
+			name: "math",
+			level: "inline",
+			start(src) {
+				return src.indexOf("$");
+			},
+			tokenizer(src, _tokens) {
+				// Block math: $$ ... $$
+				const blockRule = /^\$\$([\s\S]+?)\$\$/;
+				const blockMatch = blockRule.exec(src);
+				if (blockMatch) {
+					return {
+						type: "math",
+						raw: blockMatch[0],
+						text: blockMatch[1].trim(),
+						displayMode: true,
+					};
+				}
+
+				// Inline math: $ ... $
+				// Requirements: $ followed by non-space, ends with non-space followed by $
+				// Negative lookahead for digit to handle $50 and $100 cases
+				const inlineRule = /^\$([^\s$][^$]*?[^\s$])\$(?!\d)/;
+				const inlineRuleSimple = /^\$([^$\s])\$(?!\d)/;
+
+				const inlineMatch = inlineRule.exec(src) || inlineRuleSimple.exec(src);
+				if (inlineMatch) {
+					return {
+						type: "math",
+						raw: inlineMatch[0],
+						text: inlineMatch[1],
+						displayMode: false,
+					};
+				}
+				return undefined;
+			},
+			renderer(token) {
+				if (typeof katex === "undefined") return token.raw;
+				try {
+					return katex.renderToString(token.text, {
+						displayMode: token.displayMode,
+						throwOnError: false,
+						output: "html",
+					});
+				} catch (err) {
+					console.error("KaTeX rendering error:", err);
+					return token.raw;
+				}
+			},
+		};
+
+		// Register extensions
+		marked.use({
+			extensions: [mathExtension],
+		});
 
 		// Custom code block renderer
 		// Marked v18 passes an object {text, lang} instead of (code, language)
