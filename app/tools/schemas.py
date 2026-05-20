@@ -105,7 +105,7 @@ def build_tool_contract(
         elif line.startswith("<img ") or line.startswith("<video "):
             raw.append(line)
         else:
-            quoted.append(f"> {line}")
+            quoted.append(line)
 
     formatted_output = "\n".join(quoted)
     if raw:
