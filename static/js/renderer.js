@@ -611,11 +611,8 @@ class MessageRenderer {
 		}
 
 		try {
-			// Pre-process: Convert tool blocks to collapsible UI
-			let processedMarkdown = this.preprocessToolBlocks(safeMarkdown);
-
 			// Pre-process: Convert plain text image patterns to markdown
-			processedMarkdown = this.preprocessGeneratedImages(processedMarkdown);
+			const processedMarkdown = this.preprocessGeneratedImages(safeMarkdown);
 
 			// Parse markdown
 			let html = marked.parse(processedMarkdown);
@@ -630,39 +627,120 @@ class MessageRenderer {
 		}
 	}
 
-	preprocessToolBlocks(text) {
-		if (!text || typeof text !== "string") return text;
+	// MutationObserver for post-rendering <tool> tag transformation
+	// This runs AFTER Markdown/LaTeX parsing, ensuring 100% non-destructive rendering
+	static toolObserver = null;
+	static toolObserverInitialized = false;
 
-		// Regex to capture <tool> content </tool>
-		// We use [\s\S]*? to match multiline content lazily
-		const toolPattern = /<tool>([\s\S]*?)<\/tool>/g;
+	static initToolObserver() {
+		if (MarkdownRenderer.toolObserverInitialized) return;
 
-		return text.replace(toolPattern, (_match, content) => {
-			const trimmedContent = content.trim();
-			if (!trimmedContent) return "";
+		const observer = new MutationObserver((mutations) => {
+			mutations.forEach((mutation) => {
+				mutation.addedNodes.forEach((node) => {
+					if (node.nodeType === 1) {
+						// Find <tool> tags that survived standard markdown rendering
+						const tools = node.querySelectorAll("tool");
+						tools.forEach((toolEl) => {
+							if (toolEl.dataset.processed === "true") return;
 
-			const lines = trimmedContent.split("\n");
-			const firstLine = lines[0].trim();
+							// Get content and transform to Accordion UI
+							const content = toolEl.innerHTML.trim();
+							if (!content) {
+								toolEl.remove();
+								return;
+							}
 
-			// Dynamic label: extract first line (e.g., /bash ls -la) or use default
-			// Limit label length to keep UI clean
-			const label =
-				firstLine.length > 60
-					? `${firstLine.substring(0, 57)}...`
-					: firstLine || "Tool Execution";
+							// Extract first line for label
+							const lines = content.split("\n");
+							const firstLine = lines[0].trim();
+							const label =
+								firstLine.length > 60
+									? `${firstLine.substring(0, 57)}...`
+									: firstLine || "Tool Execution";
 
-			// Escape content for safe rendering inside pre/code
-			const escapedContent = this.escapeHtml(trimmedContent);
+							// Create accordion details element
+							const details = document.createElement("details");
+							details.className = "tool-execution";
+							details.innerHTML = `
+								<summary>🛠️ ${MarkdownRenderer.escapeHtmlStatic(label)}</summary>
+								<div class="tool-content">
+									<pre><code>${MarkdownRenderer.escapeHtmlStatic(content)}</code></pre>
+								</div>
+							`;
 
-			// Return the collapsible details block
-			// We wrap with newlines to ensure marked treats it as a block element
-			return `\n\n<details class="tool-execution">
-    <summary>🛠️ ${label}</summary>
-    <div class="tool-content">
-        <pre><code>${escapedContent}</code></pre>
-    </div>
-</details>\n\n`;
+							toolEl.replaceWith(details);
+						});
+
+						// Also check the node itself if it's a <tool> element
+						if (node.tagName && node.tagName.toLowerCase() === "tool") {
+							if (node.dataset.processed === "true") return;
+							const content = node.innerHTML.trim();
+							if (!content) {
+								node.remove();
+								return;
+							}
+							const lines = content.split("\n");
+							const firstLine = lines[0].trim();
+							const label =
+								firstLine.length > 60
+									? `${firstLine.substring(0, 57)}...`
+									: firstLine || "Tool Execution";
+
+							const details = document.createElement("details");
+							details.className = "tool-execution";
+							details.innerHTML = `
+								<summary>🛠️ ${MarkdownRenderer.escapeHtmlStatic(label)}</summary>
+								<div class="tool-content">
+									<pre><code>${MarkdownRenderer.escapeHtmlStatic(content)}</code></pre>
+								</div>
+							`;
+
+							node.replaceWith(details);
+						}
+					}
+				});
+			});
 		});
+
+		// Observe the chat container for new messages
+		const chatContainer = document.querySelector("#chat-container");
+		if (chatContainer) {
+			observer.observe(chatContainer, { childList: true, subtree: true });
+			MarkdownRenderer.toolObserverInitialized = true;
+			MarkdownRenderer.toolObserver = observer;
+			console.log("[Renderer] Tool MutationObserver initialized");
+		} else {
+			// Try again when DOM is ready
+			document.addEventListener("DOMContentLoaded", () => {
+				const container = document.querySelector("#chat-container");
+				if (container) {
+					observer.observe(container, { childList: true, subtree: true });
+					MarkdownRenderer.toolObserverInitialized = true;
+					MarkdownRenderer.toolObserver = observer;
+					console.log(
+						"[Renderer] Tool MutationObserver initialized (deferred)",
+					);
+				}
+			});
+		}
+	}
+
+	// Static escapeHtml helper for MutationObserver
+	static escapeHtmlStatic(text) {
+		if (typeof text !== "string") return "";
+		return text
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&#039;");
+	}
+
+	preprocessToolBlocks(text) {
+		// DEPRECATED: Tool transformation now handled by MutationObserver
+		// This method is kept for backwards compatibility but does nothing
+		return text;
 	}
 
 	preprocessGeneratedImages(text) {
@@ -1088,6 +1166,9 @@ class MessageRenderer {
 
 // Create global renderer instance
 const renderer = new MessageRenderer();
+
+// Initialize tool MutationObserver for post-rendering transformation
+MarkdownRenderer.initToolObserver();
 
 // === HTML Preview Modal ===
 document.addEventListener("click", (e) => {
