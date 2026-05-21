@@ -1,6 +1,6 @@
 # Yuzu Companion — Structural Blueprint
 
-> **Version:** 3.0.3 · **Python:** 3.12+ (3.13 compatible) · **Database:** PostgreSQL + pgvector · **Web:** FastAPI + Jinja2
+> **Version:** 3.0.6 · **Python:** 3.12+ (3.13 compatible) · **Database:** PostgreSQL + pgvector · **Web:** FastAPI + Jinja2
 
 ---
 
@@ -39,6 +39,13 @@ flowchart TB
         O4["4. Tool execution (tools/registry.py)"]
         O5["5. Synthesis pass (2nd LLM call)"]
         O6["6. Post-turn: memory pipeline + cache cleanup"]
+    end
+
+    subgraph Stream["stream_manager.py (Streaming State)"]
+        S1["StreamBuffer cache"]
+        S2["Chunk accumulation and replay"]
+        S3["Incremental persistence to PostgreSQL"]
+        S4["15-minute TTL cleanup"]
     end
 
     subgraph Providers["providers.py"]
@@ -83,6 +90,8 @@ flowchart TB
     O2 --> Providers
     O4 --> Tools
     O6 --> Memory
+    O6 --> Stream
+    Stream --> Database
     Memory --> Database
     Tools --> Database
     Providers --> Database
@@ -229,6 +238,7 @@ yuzu-companion/
 | **Memory Store** |  | Semantic fact persistence tool. |
 | **Multimodal** |  | Vision model routing, image downloading/caching, base64 encoding. |
 | **Memory Pipeline** |  | Background segmentation, pipeline gating, request-scoped caching. |
+| **Stream Manager** |  | Stream buffer cache, reconnect replay, incremental persistence, TTL cleanup. |
 | **Memory CRUD** |  | Unified CRUD over `semantic_facts` with pgvector search. |
 | **Memory Queries** |  | SQL constants and query builders for memory operations. |
 | **Embedder** |  | Chutes API client for Qwen3-Embedding-0.6B (1024-dim). |
@@ -311,6 +321,9 @@ User Message
     │
     ▼
 orchestrator.handle_user_message_streaming()
+    │
+    ├─► StreamManager.start_stream()         [stream_manager.py]
+    │     └─ Spawn background worker thread
     │
     ├─► _cache_images_from_message()          [multimodal.py]
     │
@@ -449,6 +462,35 @@ tools.image_generate.execute()
 visual_context.store_visual_context()
     └─ Store base64 for 3 follow-up turns
 ```
+
+### 5.7 Streaming State Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant F as Frontend
+    participant R as FastAPI Route
+    participant W as Background Thread
+    participant S as StreamManager
+    participant P as PostgreSQL
+
+    F->>R: POST /api/send_message_stream
+    R->>S: start_stream(session_id, user_message)
+    S->>W: spawn orchestrator worker
+    W->>S: add_chunk(chunk)
+    S->>P: update_message(...) every 2 seconds
+    F--xR: client disconnects
+    W->>S: continue generation independently
+    W->>S: finish() on completion
+    F->>R: reload /api/get_profile
+    R->>S: get_active_buffer(session_id)
+    S-->>R: full_text + buffered chunks
+    R->>F: history includes sentinel id -99
+    F->>R: reconnect and render live content
+    S-->>F: replay buffered chunks
+    S->>P: final persisted update
+```
+
+The live buffer persists across disconnects for up to 15 minutes. The profile reload path injects the active buffer into the returned history so the UI can recover the in-flight assistant response without waiting for the original request socket.
 
 ---
 
@@ -620,6 +662,8 @@ Browser                                    Server
    │  hideTypingIndicator()                  │
    │  scrollToBottom()                       │
 ```
+
+The transport is stateful rather than purely request-scoped. Generation continues in a background thread, and the active `StreamManager` buffer remains available for reconnect and profile reload paths until completion or TTL expiration.
 
 ### Rendering Pipeline
 

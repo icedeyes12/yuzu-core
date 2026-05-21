@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.6] - 2026-05-22
+
+### Changed
+- Decoupled streaming orchestration from the HTTP request lifecycle by moving `handle_user_message_streaming()` into background worker threads.
+- Added cooperative cancellation via `abort_check` so an active stream can stop cleanly when it is superseded or explicitly finished.
+- Added lazy synthesis record creation to avoid inserting empty assistant rows before content exists.
+- Introduced `StreamManager` as a singleton stream buffer cache with a 15-minute buffer TTL, incremental chunk accumulation, and periodic database persistence every 2 seconds.
+- Added reconnectable stream state reattachment in `/api/send_message_stream` and `/api/get_profile`, including live buffer injection with sentinel message ID `-99` for UI recovery after reload.
+- Increased the orchestration loop ceiling to 30 iterations to support the extended agentic state machine.
+- Updated database write paths to support incremental `update_message` operations through pooled connections.
+
 ## [3.0.5] - 2026-05-13
 
 ### Changed

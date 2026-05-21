@@ -1,6 +1,6 @@
 # Yuzu Companion — Agent Operational Manual
 
-> **Version:** 3.1.0 · **Last Updated:** 2026-05-18
+> **Version:** 3.2.0 · **Last Updated:** 2026-05-22
 > This is the master behavior manual for any AI agent interacting with this codebase.
 
 ---
@@ -34,6 +34,7 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 - **Pluggable LLM providers** — Ollama, Cerebras, OpenRouter, Chutes via `file providers.py`.
 - **Memory is first-class** — The memory subsystem (`app/memory/`) is not an afterthought; it's a core architectural layer.
 - **Tool protocol** — Uses `<tool>...</tool>` blocks for tool invocation (v3.1.0+). Legacy `/command` syntax removed.
+- **Streaming is stateful** — Long-running SSE responses are managed by `StreamManager`, not by the request thread.
 
 ### Key Files at a Glance
 
@@ -48,6 +49,7 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 | `app/memory/` | Full memory pipeline (extraction, embedding, retrieval, retention) |
 | `file app/database/facade.py` | `Database` class — stable API over raw psycopg2 |
 | `file app/database/db_queries.py` | **Single source of truth** for all SQL strings |
+| `file app/stream_manager.py` | Background stream buffers, reconnect state, incremental persistence |
 | `file app/web.py` | FastAPI entry point (~130 lines, minimal) |
 | `file app/cli.py` | CLI entry point (Rich TUI) |
 | `file static/js/chat.js` | Chat UI, SSE streaming, typing indicator |
@@ -213,11 +215,17 @@ If unsure, check `app/orchestrator.py` for reference implementations.
 10. **ALWAYS use** `from __future__ import annotations` at the top of every Python file.
 11. **ALWAYS use modern type syntax** (`list[X]`, `X | None`) — never `typing.List`, `typing.Optional`.
 
+### Streaming Safety
+
+12. **Streaming state is owned by** `file app/stream_manager.py` **once a background stream starts.** The request handler is only the ingress/egress surface.
+13. **Active stream buffers remain attachable for 15 minutes** after inactivity. This preserves state across client disconnects and page reloads.
+14. **Background streams continue independently of the HTTP request lifecycle.** Reconnect logic should read from the live buffer rather than assuming the original socket still exists.
+
 ### Security
 
-12. **NEVER expose secrets** — API keys are encrypted at rest via ChaCha20-Poly1305.
-13. **ALWAYS validate file paths** — Path traversal protection in `_cache_uploaded_images()` and `_cache_images_from_message()`.
-14. **ALWAYS bound regex input** — ReDoS protection via `_REGEX_INPUT_LIMIT` in `file commands.py`.
+15. **NEVER expose secrets** — API keys are encrypted at rest via ChaCha20-Poly1305.
+16. **ALWAYS validate file paths** — Path traversal protection in `_cache_uploaded_images()` and `_cache_images_from_message()`.
+17. **ALWAYS bound regex input** — ReDoS protection via `_REGEX_INPUT_LIMIT` in `file commands.py`.
 
 ---
 
@@ -235,7 +243,7 @@ If unsure, check `app/orchestrator.py` for reference implementations.
 1. **Lint**: `ruff check .` (Python) or `npx @biomejs/biome check .` (JS)
 2. **Compile check**: `python3 -m py_compile <changed_files>`
 3. **NEVER push if lint fails** — Fix errors first.
-4. **Use** `git co-author` instead of `git commit -m` — This adds the `Co-authored-by: Yuzuki-ai` trailer.
+4. **Use** `git co-author` **instead of** `git commit -m` — This adds the `Co-authored-by: Yuzuki-ai` trailer.
 
 ### Validation Commands
 
@@ -251,6 +259,13 @@ npx @biomejs/biome check static/js/
 python3 -m pytest tests/ -v
 ```
 
+### Streaming Execution Notes
+
+- The orchestration loop now permits up to **30 iterations** before termination.
+- Streaming continues on a worker thread after the HTTP response has been accepted.
+- Disconnects do not necessarily terminate execution; they only remove the client connection.
+- Reconnects should be treated as state reattachment against the live `StreamManager` buffer.
+
 ---
 
 ## 4. Architecture Constraints
@@ -262,73 +277,117 @@ python3 -m pytest tests/ -v
 3. `Database` **facade is the only DB surface** — No raw `db_pg_models` imports outside the database package.
 4. **`file db_queries.py` owns all SQL** — No SQL strings in business logic modules.
 5. `AIProviderManager` **is a singleton** — Accessed via `get_ai_manager()`, never instantiated directly.
+6. **`file stream_manager.py` owns live streaming buffers** — It coordinates chunk accumulation, subscriber replay, completion signaling, and stale-buffer cleanup.
 
 ### Data Flow Invariants
 
- 6. **One primary LLM call per turn** — Plus at most one synthesis pass. No unbounded LLM chains.
- 7. **Max 3 tool executions per turn** — Batching limit enforced by `parse_tool_blocks()`.
- 8. **Sequential tool execution** — Tools execute one after another, results collected into single observation.
- 9. **Memory pipeline is throttled** — Pipeline gate check runs every 5th turn, not every turn.
-10. **Request caches are cleared at turn end** — Memory state cache and embedding cache must not leak across turns.
-11. **Tool results use markdown contracts** — All tool output wrapped in `<details>` markdown blocks.
+ 7. **One primary LLM call per turn** — Plus at most one synthesis pass. No unbounded LLM chains.
+ 8. **Max 3 tool executions per turn** — Batching limit enforced by `parse_tool_blocks()`.
+ 9. **Sequential tool execution** — Tools execute one after another, results collected into single observation.
+10. **Memory pipeline is throttled** — Pipeline gate check runs every 5th turn, not every turn.
+11. **Request caches are cleared at turn end** — Memory state cache and embedding cache must not leak across turns.
+12. **Tool results use markdown contracts** — All tool output wrapped in `<details>` markdown blocks.
 
 ### What NOT to Change
 
-12. **Don't add new streaming pipelines** — The SSE streaming in `file chat.js` and `handle_user_message_streaming()` is the only streaming path.
-13. **Don't add new LLM call sites** — All LLM calls go through `file llm_client.py` (`generate_ai_response`, `generate_ai_response_streaming`, `chutes_chat`).
-14. **Don't modify the frontend buildless architecture** — No bundlers, no npm, no framework. Vanilla JS/ESM only.
-15. **Don't change the** `semantic_facts` **schema** without a migration plan — This table is the unified memory store.
-16. **Don't use legacy /command syntax** — Use `<tool>...</tool>` blocks only (v3.1.0+).
+13. **Don't add new streaming pipelines** — The SSE streaming in `file chat.js` and `handle_user_message_streaming()` is the only streaming path.
+14. **Don't add new LLM call sites** — All LLM calls go through `file llm_client.py` (`generate_ai_response`, `generate_ai_response_streaming`, `chutes_chat`).
+15. **Don't modify the frontend buildless architecture** — No bundlers, no npm, no framework. Vanilla JS/ESM only.
+16. **Don't change the** `semantic_facts` **schema** without a migration plan — This table is the unified memory store.
+17. **Don't use legacy /command syntax** — Use `<tool>...</tool>` blocks only (v3.1.0+).
+18. **Don't assume the request thread owns completion state** — Background streaming may outlive the original HTTP request and still must remain recoverable.
 
 ---
 
 ## 5. Module Interaction Map
 
-```markdown
-User Message
-    │
-    ▼
-┌─────────────────────────────────────────────────────────┐
-│  orchestrator.py                                        │
-│                                                         │
-│  ┌─────────────┐    ┌──────────────┐                   │
-│  │ commands.py │    │ llm_client.py│                   │
-│  │ (parse      │    │ (dispatch)   │                   │
-│  │ <tool>      │    └──────┬───────┘                   │
-│  │ blocks)     │           │                            │
-│  └──────┬──────┘    ┌─────▼──────┐                    │
-│         │           │providers.py│                    │
-│         │           │(Ollama,    │                    │
-│         │           │ Cerebras,  │                    │
-│         │           │ OpenRouter,│                    │
-│         │           │ Chutes)    │                    │
-│         │           └─────┬──────┘                    │
-│         │                 │                            │
-│  ┌──────▼──────┐   ┌─────▼──────┐                    │
-│  │tools/       │   │prompts.py  │                    │
-│  │registry.py  │   │(system     │                    │
-│  │(execute     │   │ prompt +   │                    │
-│  │ tool)       │   │ context)   │                    │
-│  └──────┬──────┘   └─────┬──────┘                    │
-│         │                │                            │
-│         │          ┌─────▼──────┐                    │
-│         │          │memory/     │                    │
-│         │          │retrieval.py│                    │
-│         │          │(combined   │                    │
-│         │          │ static +   │                    │
-│         │          │ dynamic)   │                    │
-│         │          └─────┬──────┘                    │
-│         │                │                            │
-│  ┌──────▼────────────────▼──────┐                    │
-│  │     database/facade.py       │                    │
-│  │     (Database class)         │                    │
-│  └──────────────┬───────────────┘                    │
-│                 │                                      │
-│          ┌──────▼──────┐                              │
-│          │ PostgreSQL  │                              │
-│          │ + pgvector  │                              │
-│          └─────────────┘                              │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Interfaces["User Interfaces"]
+        direction LR
+        TERM["Terminal (main.py)"]
+        WEB["Web Browser (web.py)"]
+        EXT["External API Consumers"]
+    end
+
+    subgraph Facade["app.py (Facade)"]
+        F1["Re-exports orchestrator + session + profile"]
+    end
+
+    subgraph Orchestrator["orchestrator.py (Core Pipeline)"]
+        O1["1. Image cache detection"]
+        O2["2. LLM dispatch (llm_client.py)"]
+        O3["3. Tool-call parsing (native + legacy /command)"]
+        O4["4. Tool execution (tools/registry.py)"]
+        O5["5. Synthesis pass (2nd LLM call)"]
+        O6["6. Post-turn: memory pipeline + cache cleanup"]
+    end
+
+    subgraph Stream["stream_manager.py"]
+        S1["StreamBuffer"]
+        S2["Chunk accumulation"]
+        S3["Subscriber replay"]
+        S4["Incremental persistence"]
+        S5["15-minute TTL cleanup"]
+    end
+
+    subgraph Providers["providers.py"]
+        P1["OllamaProvider"]
+        P2["CerebrasProvider"]
+        P3["OpenRouterProvider"]
+        P4["ChutesProvider"]
+        PM["AIProviderManager"]
+    end
+
+    subgraph Tools["tools/"]
+        T1["registry.py — central dispatch"]
+        T2["image_generate.py"]
+        T3["http_request.py"]
+        T4["memory_search.py"]
+        T5["memory_store.py"]
+        T6["multimodal.py — vision + image cache"]
+    end
+
+    subgraph Memory["memory/"]
+        M1["memory.py — pipeline + segmentation"]
+        M2["db_memory.py — CRUD + pgvector search"]
+        M3["embedder.py — Chutes API (1024-dim)"]
+        M4["retrieval.py — hybrid scoring + RRF"]
+        M5["review.py — FSRS decay"]
+        M6["pcl.py — Predict-Calibrate Learning"]
+        M7["memory_review.py — LLM-based review"]
+    end
+
+    subgraph Database["database/"]
+        D1["facade.py — Database class"]
+        D2["db_pg_models.py — sync CRUD"]
+        D3["db_pg_models_async.py — async CRUD"]
+        D4["db_queries.py — SQL constants"]
+        D5[(PostgreSQL + pgvector)]
+    end
+
+    TERM --> F1
+    WEB --> F1
+    EXT --> F1
+    F1 --> Orchestrator
+    O2 --> Providers
+    O4 --> Tools
+    O6 --> Memory
+    O6 --> Stream
+    Stream --> D5
+    Memory --> Database
+    Tools --> Database
+    Providers --> Database
+    O1 --> T6
+    O5 --> Providers
+    M3 --> Providers
+    M4 --> M3
+    M6 --> M2
+    M7 --> M2
+    M5 --> M2
+    T4 --> M4
+    T5 --> M2
+    T2 --> T6
 ```
 
 ### Key Interactions
@@ -350,6 +409,7 @@ User Message
 | `memory/embedder.py` | `providers.py` (Chutes) | Embedding API call |
 | `memory/db_memory.py` | `Database` facade | Fact consolidation CRUD |
 | `memory/fsrs.py` | `Database` facade | FSRS decay updates |
+| `stream_manager.py` | `database/` | Incremental persistence and recovery state |
 
 ---
 
@@ -401,7 +461,7 @@ User Message
 
  9. **Memory state cache** (`file memory.py`): Thread-local, cleared at turn end via `_clear_request_cache()`
 10. **Embedding cache** (`file retrieval.py`): Thread-local, cleared at turn end via `_clear_embedding_cache()`
-11. **Short query skip**: Queries &lt; 4 chars skip embedding entirely
+11. **Short query skip**: Queries < 4 chars skip embedding entirely
 12. **Combined retrieval**: `retrieve_memories_combined()` uses single embedding for both static + dynamic
 
 ### PCL Pipeline Rules
@@ -558,6 +618,7 @@ python3 -m pytest tests/ -v
 - Use parameterized queries for user input
 - Clear request caches at turn end
 - Validate file paths before use
+- Preserve background stream buffers through reconnect windows when the request lifecycle ends
 
 ### ❌ Don't
 
@@ -571,6 +632,7 @@ python3 -m pytest tests/ -v
 - Don't drop tables or hard-delete facts
 - Don't add npm/bundler to the frontend
 - Don't modify `file web.py` for business logic
+- Don't assume a client disconnect invalidates the in-flight assistant response
 
 ---
 
@@ -595,7 +657,7 @@ python3 -m pytest tests/ -v
 ┌──────────────────┐     HTTP/SSE      ┌──────────────────────┐
 │  Zo Container    │ ──────────────────▶ │  Termux (Yuzuki)     │
 │  (this server)   │  localhost:5000    │  yuzu-companion      │
-│                  │  (SSH tunnel)      │  port 5000           │
+│                  │                    │                      │
 │  yuzu_cli.py     │                    │                      │
 └──────────────────┘                    └──────────────────────┘
 ```
@@ -641,8 +703,6 @@ When `--seal` is used, the message is prefixed with a one-line JSON signature:
 ```json
 {"signature":{"identity":"maintainer","location":"Ashburn, Virginia, US (39.0437,-77.4875)","ip":"129.153.25.21","timestamp":"2026-05-16T00:04:11+07:00","hash":"maintainer"}}
 ```
-
-This proves the message originated from a specific agent at a specific time and location.
 
 ### Testing Tools & Capabilities
 
