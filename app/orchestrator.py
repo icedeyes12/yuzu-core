@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -36,7 +37,7 @@ _EMPTY_RESPONSE_FALLBACK = "I'm having trouble responding right now. Please try 
 _MD_IMAGE_PATTERN = re.compile(r"!\[[^\]]{0,200}\]\(([^)]{1,200})\)")
 
 # Maximum orchestration loops to prevent runaway execution
-_MAX_ORCHESTRATION_LOOPS = 5
+_MAX_ORCHESTRATION_LOOPS = 30
 
 # Allowed image directories (resolved at module load, not runtime)
 _BASE_DIR = Path(__file__).resolve().parent.parent
@@ -501,6 +502,7 @@ def handle_user_message_streaming(
     interface: str = "terminal",
     provider: str | None = None,
     model: str | None = None,
+    abort_check: callable[[], bool] | None = None,
 ) -> Iterator[str]:
     """Streaming entrypoint with true incremental chunk delivery.
 
@@ -516,9 +518,17 @@ def handle_user_message_streaming(
         yield "Please enter a message!"
         return
 
+    # Check for early abort
+    if abort_check and abort_check():
+        log.info("[stream] early abort for session")
+        return
+
     active_session = Database.get_active_session()
     session_id = active_session["id"]
     cached_images = _cache_images_from_message(user_message)
+
+    # STRICT: Persist user message immediately to ensure it's in history even if process crashes
+    _persist_user(user_message, session_id, cached_images)
 
     # Fast-path: user typed /imagine directly
     stripped = user_message.strip()
@@ -528,10 +538,9 @@ def handle_user_message_streaming(
             if stripped.startswith("/imagine"):
                 commands = [stripped]
 
-            _persist_user(user_message, session_id, cached_images)
-
             results = execute_commands(commands, session_id=session_id)
 
+            tool_markdown = ""
             for tool_name, result in results:
                 tool_markdown = result.get("markdown", str(result))
                 _persist_tool_result(tool_name, tool_markdown, session_id)
@@ -542,19 +551,40 @@ def handle_user_message_streaming(
 
     # Collect streamed response
     response_chunks: list[str] = []
+    assistant_msg_id = Database.add_message("assistant", "", session_id=session_id)
+    last_db_update = time.time()
+    
     try:
         for chunk in generate_ai_response_streaming(
             profile, user_message, interface, session_id, provider, model
         ):
-            response_chunks.append(chunk)
-            yield chunk
-    except Exception:
-        _persist_user(user_message, session_id, cached_images)
+            if chunk:
+                # Check for cancellation
+                if abort_check and abort_check():
+                    log.info("[stream] aborting during first pass")
+                    if response_chunks:
+                        Database.update_message(assistant_msg_id, "".join(response_chunks))
+                    return
+
+                response_chunks.append(chunk)
+                
+                # Periodically update DB to ensure state recovery on reconnect
+                now = time.time()
+                if now - last_db_update > 2.0: # Every 2 seconds
+                    Database.update_message(assistant_msg_id, "".join(response_chunks))
+                    last_db_update = now
+                    
+                yield chunk
+    except Exception as e:
+        log.error("[stream] error in first pass: %s", e)
+        # Ensure partial response is saved even on error
+        if response_chunks:
+            Database.update_message(assistant_msg_id, "".join(response_chunks))
         raise
 
-    _persist_user(user_message, session_id, cached_images)
-
-    full_response = _clean("".join(response_chunks)) or _EMPTY_RESPONSE_FALLBACK
+    # Final update for this pass
+    full_response = "".join(response_chunks)
+    Database.update_message(assistant_msg_id, full_response)
 
     if is_markdown_image_shortcut(full_response):
         log.warning(
@@ -568,16 +598,13 @@ def handle_user_message_streaming(
     commands, clean_text = parse_tool_blocks(full_response)
 
     if not commands:
-        # Plain response - already streamed. Persist and finish.
-        Database.add_message("assistant", full_response, session_id=session_id)
+        # Plain response - already streamed and persisted.
         _post_turn(profile, user_message, full_response, session_id, active_session)
         return
 
     log.info("[stream] found %d tool block(s)", len(commands))
 
-    # Persist full response with tool blocks (so Yuzuki can learn from her patterns)
-    if full_response:
-        Database.add_message("assistant", full_response, session_id=session_id)
+    # Full response with tool blocks is already persisted in assistant_msg_id
 
     # Execute all commands
     results = execute_commands(commands, session_id=session_id)
@@ -606,28 +633,63 @@ def handle_user_message_streaming(
         loop_count += 1
         log.info("[stream] orchestration loop %d", loop_count)
         
+        # Check for cancellation
+        if abort_check and abort_check():
+            log.info("[stream] aborting orchestration loop")
+            return
+
         # Stream synthesis
         synthesis_chunks: list[str] = []
         full_synthesis = ""
+        synthesis_msg_id = None # Lazy created
+        last_synth_update = time.time()
 
-        for chunk in _stream_synthesis(
-            profile, session_id, interface, current_synthesis_context
-        ):
-            synthesis_chunks.append(chunk)
-            full_synthesis += chunk
-            yield "\n\n" + chunk if any_image_tool and not synthesis_chunks[:-1] else chunk
+        try:
+            for chunk in _stream_synthesis(
+                profile, session_id, interface, current_synthesis_context
+            ):
+                if chunk:
+                    # Check for cancellation
+                    if abort_check and abort_check():
+                        log.info("[stream] aborting during synthesis")
+                        if full_synthesis and synthesis_msg_id:
+                            Database.update_message(synthesis_msg_id, full_synthesis)
+                        return
+
+                    synthesis_chunks.append(chunk)
+                    full_synthesis += chunk
+                    
+                    # Lazy create message row
+                    if synthesis_msg_id is None:
+                        synthesis_msg_id = Database.add_message("assistant", "", session_id=session_id)
+
+                    # Periodic update
+                    now = time.time()
+                    if now - last_synth_update > 2.0:
+                        Database.update_message(synthesis_msg_id, full_synthesis)
+                        last_synth_update = now
+                        
+                    yield "\n\n" + chunk if any_image_tool and not synthesis_chunks[:-1] else chunk
+        except Exception as e:
+            log.error("[stream] error in synthesis loop: %s", e)
+            if full_synthesis:
+                Database.update_message(synthesis_msg_id, full_synthesis)
+            raise
 
         synthesis = _clean(full_synthesis) if full_synthesis else None
+        
+        # Final update
+        if full_synthesis and synthesis_msg_id:
+            Database.update_message(synthesis_msg_id, full_synthesis)
 
         if not synthesis:
-            # No synthesis - finish
+            # No synthesis - already handled persistence above if any chunks existed
             _post_turn(
                 profile, user_message, current_synthesis_context, session_id, active_session
             )
             return
 
-        # Persist synthesis
-        Database.add_message("assistant", synthesis, session_id=session_id)
+        # Synthesis already persisted in synthesis_msg_id
         
         # Check if synthesis contains more tool blocks
         if not has_tool_blocks(synthesis):

@@ -9,10 +9,11 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 import json
 import os
+import asyncio
 
+from app.stream_manager import StreamManager
 from app.app import (
     handle_user_message,
-    handle_user_message_streaming,
     end_session_cleanup,
     summarize_memory,
     summarize_global_player_profile,
@@ -180,9 +181,28 @@ async def api_get_profile():
     try:
         profile = await get_profile_async()
         active_session = await get_active_session_async()
+        session_id = active_session["id"]
         chat_history = await get_chat_history_async(
-            session_id=active_session["id"], limit=None
+            session_id=session_id, limit=None
         )
+
+        # Inject ongoing stream if it exists
+        active_buf = StreamManager.get_active_buffer(session_id)
+        if active_buf and active_buf.full_text:
+            # Check if the last message in history is already this response
+            last_msg = chat_history[-1] if chat_history else None
+            is_duplicate = False
+            if last_msg and last_msg.get("role") == "assistant":
+                if len(last_msg.get("content", "")) >= len(active_buf.full_text):
+                    is_duplicate = True
+            
+            if not is_duplicate:
+                chat_history.append({
+                    "id": -99, # Sentinel ID for live content
+                    "role": "assistant",
+                    "content": active_buf.full_text,
+                    "timestamp": datetime.now().isoformat()
+                })
         session_memory = await get_session_memory_async(active_session["id"])
 
         ai_manager = get_ai_manager()
@@ -280,18 +300,33 @@ async def api_send_message_stream(request: StreamMessageRequest):
         interface = request.interface  # from request payload
         print(f"[{interface}] streaming message: {user_message[:200]}...")
 
-        response_generator = handle_user_message_streaming(
+        # Get session ID asynchronously
+        active_session = await get_active_session_async()
+        session_id = active_session["id"]
+
+        # Use StreamManager to start or reattach to a stream
+        buffer = StreamManager.start_stream(
+            session_id,
             user_message,
-            interface=interface,  # DYNAMIC
+            interface=interface,
             provider=request.provider,
             model=request.model,
         )
 
-        def generate():
-            for chunk in response_generator:
-                if chunk:
-                    escaped_chunk = json.dumps(chunk)
-                    yield f'data: {{"chunk": {escaped_chunk}}}\n\n'
+        async def generate():
+            q = buffer.subscribe()
+            try:
+                while True:
+                    # Run in executor to avoid blocking event loop
+                    chunk = await asyncio.get_event_loop().run_in_executor(None, q.get)
+                    if chunk is None:  # sentinel for end of stream
+                        break
+                    
+                    if chunk:
+                        escaped_chunk = json.dumps(chunk)
+                        yield f'data: {{"chunk": {escaped_chunk}}}\n\n'
+            finally:
+                buffer.unsubscribe(q)
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 
