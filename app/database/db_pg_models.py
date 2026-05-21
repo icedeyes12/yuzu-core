@@ -39,6 +39,7 @@ from app.database.db_queries import (
     SQL_MESSAGE_SELECT_CONTENT_BY_ID,
     SQL_MESSAGE_SELECT_DESC_LIMIT,
     SQL_MESSAGE_SELECT_ENCRYPTED,
+    SQL_MESSAGE_UPDATE,
     SQL_MESSAGE_UPDATE_DECRYPTED,
     SQL_PROFILE_INSERT_DEFAULT,
     SQL_PROFILE_SELECT_FIRST,
@@ -342,9 +343,19 @@ def add_message(
                 increment_message_count(session_id)
                 return row.get("id")
         return None
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         log.error("add_message failed: %s", e)
         return None
+
+
+def update_message(message_id: int, content: str) -> bool:
+    """Update the content of an existing message."""
+    try:
+        pg_execute(SQL_MESSAGE_UPDATE, (content, message_id))
+        return True
+    except Exception as e:
+        log.error("update_message failed: %s", e)
+        return False
 
 
 def get_session_messages(
@@ -531,6 +542,7 @@ __all__ = [
     "remove_api_key",
     # Messages
     "add_message",
+    "update_message",
     "get_session_messages",
     "get_recent_messages",
     "get_chat_history",

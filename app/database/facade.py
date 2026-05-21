@@ -17,6 +17,7 @@ from app.database.db_pg_models import (
     add_api_key as _pg_add_api_key,
     add_image_tools_message as _pg_add_image_tools_message,
     add_message as _pg_add_message,
+    update_message as _pg_update_message,
     add_session_event as _pg_add_session_event,
     add_system_note as _pg_add_system_note,
     add_tool_result as _pg_add_tool_result,
@@ -137,6 +138,8 @@ class Database:
     batch_decrypt_messages = _proxy(_pg_batch_decrypt_messages)
 
     # ── Messages (session_id-defaulting wrappers) ────────────────────────────────
+    update_message = _proxy(_pg_update_message)
+
     # These reorder args (role/content first) and default session_id to the
     # active session, which is the convention used throughout the codebase.
 

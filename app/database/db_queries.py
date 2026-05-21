@@ -415,6 +415,8 @@ WHERE session_id = %s
 ORDER BY timestamp ASC
 """
 
+SQL_MESSAGE_UPDATE = "UPDATE messages SET content = %s WHERE id = %s"
+
 SQL_MESSAGE_DELETE_FOR_SESSION = "DELETE FROM messages WHERE session_id = %s"
 
 SQL_MESSAGE_COUNT_CONVERSATIONAL = (

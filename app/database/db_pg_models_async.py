@@ -43,6 +43,7 @@ from app.database.db_queries import (
     SQL_MESSAGE_SELECT_CONTENT_BY_ID,
     SQL_MESSAGE_SELECT_DESC_LIMIT,
     SQL_MESSAGE_SELECT_ENCRYPTED,
+    SQL_MESSAGE_UPDATE,
     SQL_MESSAGE_UPDATE_DECRYPTED,
     SQL_PROFILE_INSERT_DEFAULT,
     SQL_PROFILE_SELECT_FIRST,
@@ -307,9 +308,19 @@ async def add_message_async(
                 await increment_message_count_async(session_id)
                 return row.get("id")
         return None
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         log.error("add_message_async failed: %s", e)
         return None
+
+
+async def update_message_async(message_id: int, content: str) -> bool:
+    """Update the content of an existing message (async)."""
+    try:
+        await pg_execute_async(SQL_MESSAGE_UPDATE, (content, message_id))
+        return True
+    except Exception as e:
+        log.error("update_message_async failed: %s", e)
+        return False
 
 
 async def get_session_messages_async(
@@ -469,7 +480,8 @@ async def batch_decrypt_messages_async(message_ids: list[int]) -> dict:
 
                 plaintext = encryptor.decrypt(row["content"])
                 await pg_execute_async(
-                    SQL_MESSAGE_UPDATE_DECRYPTED, (plaintext, msg_id)
+                    SQL_MESSAGE_UPDATE_DECRYPTED,
+                    (plaintext, msg_id),
                 )
                 decrypted_count += 1
         except Exception as e:  # noqa: BLE001
@@ -509,6 +521,7 @@ __all__ = [
     "remove_api_key_async",
     # Messages
     "add_message_async",
+    "update_message_async",
     "get_session_messages_async",
     "get_recent_messages_async",
     "get_chat_history_async",
