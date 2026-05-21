@@ -711,7 +711,7 @@ class MessageRenderer {
 		});
 
 		// Observe the chat container for new messages
-		const chatContainer = document.querySelector("#chat-container");
+		const chatContainer = document.querySelector("#chatContainer");
 		if (chatContainer) {
 			observer.observe(chatContainer, { childList: true, subtree: true });
 			MessageRenderer.toolObserverInitialized = true;
@@ -720,7 +720,7 @@ class MessageRenderer {
 		} else {
 			// Try again when DOM is ready
 			document.addEventListener("DOMContentLoaded", () => {
-				const container = document.querySelector("#chat-container");
+				const container = document.querySelector("#chatContainer");
 				if (container) {
 					observer.observe(container, { childList: true, subtree: true });
 					MessageRenderer.toolObserverInitialized = true;
