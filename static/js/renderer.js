@@ -632,8 +632,15 @@ class MessageRenderer {
 	static toolObserver = null;
 	static toolObserverInitialized = false;
 
+	// Static escape method for use in MutationObserver
+	static escapeHtmlStatic(text) {
+		const div = document.createElement("div");
+		div.textContent = text;
+		return div.innerHTML;
+	}
+
 	static initToolObserver() {
-		if (MarkdownRenderer.toolObserverInitialized) return;
+		if (MessageRenderer.toolObserverInitialized) return;
 
 		const observer = new MutationObserver((mutations) => {
 			mutations.forEach((mutation) => {
@@ -663,9 +670,9 @@ class MessageRenderer {
 							const details = document.createElement("details");
 							details.className = "tool-execution";
 							details.innerHTML = `
-								<summary>🛠️ ${MarkdownRenderer.escapeHtmlStatic(label)}</summary>
+								<summary>🛠️ ${MessageRenderer.escapeHtmlStatic(label)}</summary>
 								<div class="tool-content">
-									<pre><code>${MarkdownRenderer.escapeHtmlStatic(content)}</code></pre>
+									<pre><code>${MessageRenderer.escapeHtmlStatic(content)}</code></pre>
 								</div>
 							`;
 
@@ -690,9 +697,9 @@ class MessageRenderer {
 							const details = document.createElement("details");
 							details.className = "tool-execution";
 							details.innerHTML = `
-								<summary>🛠️ ${MarkdownRenderer.escapeHtmlStatic(label)}</summary>
+								<summary>🛠️ ${MessageRenderer.escapeHtmlStatic(label)}</summary>
 								<div class="tool-content">
-									<pre><code>${MarkdownRenderer.escapeHtmlStatic(content)}</code></pre>
+									<pre><code>${MessageRenderer.escapeHtmlStatic(content)}</code></pre>
 								</div>
 							`;
 
@@ -707,8 +714,8 @@ class MessageRenderer {
 		const chatContainer = document.querySelector("#chat-container");
 		if (chatContainer) {
 			observer.observe(chatContainer, { childList: true, subtree: true });
-			MarkdownRenderer.toolObserverInitialized = true;
-			MarkdownRenderer.toolObserver = observer;
+			MessageRenderer.toolObserverInitialized = true;
+			MessageRenderer.toolObserver = observer;
 			console.log("[Renderer] Tool MutationObserver initialized");
 		} else {
 			// Try again when DOM is ready
@@ -716,25 +723,14 @@ class MessageRenderer {
 				const container = document.querySelector("#chat-container");
 				if (container) {
 					observer.observe(container, { childList: true, subtree: true });
-					MarkdownRenderer.toolObserverInitialized = true;
-					MarkdownRenderer.toolObserver = observer;
+					MessageRenderer.toolObserverInitialized = true;
+					MessageRenderer.toolObserver = observer;
 					console.log(
 						"[Renderer] Tool MutationObserver initialized (deferred)",
 					);
 				}
 			});
 		}
-	}
-
-	// Static escapeHtml helper for MutationObserver
-	static escapeHtmlStatic(text) {
-		if (typeof text !== "string") return "";
-		return text
-			.replace(/&/g, "&amp;")
-			.replace(/</g, "&lt;")
-			.replace(/>/g, "&gt;")
-			.replace(/"/g, "&quot;")
-			.replace(/'/g, "&#039;");
 	}
 
 	preprocessToolBlocks(text) {
@@ -1168,7 +1164,7 @@ class MessageRenderer {
 const renderer = new MessageRenderer();
 
 // Initialize tool MutationObserver for post-rendering transformation
-MarkdownRenderer.initToolObserver();
+MessageRenderer.initToolObserver();
 
 // === HTML Preview Modal ===
 document.addEventListener("click", (e) => {
