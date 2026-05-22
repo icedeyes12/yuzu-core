@@ -390,19 +390,18 @@ class MultimodalManager {
 		timeDiv.textContent = this.getCurrentTime();
 		footer.appendChild(timeDiv);
 
-		// Add copy button for assistant messages
-		if (role === "ai") {
-			const copyBtn = document.createElement("button");
-			copyBtn.className = "copy-message-btn";
-			copyBtn.title = "Copy full message";
-			copyBtn.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-            `;
-			footer.appendChild(copyBtn);
-		}
+		// Add copy button for all messages (both user and assistant)
+		// Uses centralized ClipboardUtils from renderer.js
+		const copyBtn = document.createElement("button");
+		copyBtn.className = "copy-message-btn";
+		copyBtn.title = "Copy full message";
+		copyBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+        `;
+		footer.appendChild(copyBtn);
 
 		msg.appendChild(footer);
 		return msg;
@@ -430,16 +429,8 @@ class MultimodalManager {
 		if (currentStreamMessage) {
 			const copyBtn = currentStreamMessage.querySelector(".copy-message-btn");
 			if (copyBtn) {
-				copyBtn.onclick = () => {
-					navigator.clipboard
-						.writeText(finalContent)
-						.then(() => {
-							console.log("Message copied to clipboard");
-						})
-						.catch((err) => {
-							console.error("Failed to copy message:", err);
-						});
-				};
+				// Uses centralized copyFullMessage which internally uses ClipboardUtils
+				copyBtn.onclick = () => copyFullMessage(finalContent);
 			}
 			currentStreamMessage.removeAttribute("data-streaming");
 		}
@@ -892,20 +883,19 @@ function createMessageElement(role, content, timestamp = null) {
 	timeDiv.textContent = displayTime;
 	footer.appendChild(timeDiv);
 
-	// Add copy button for assistant messages
-	if (role === "ai") {
-		const copyBtn = document.createElement("button");
-		copyBtn.className = "copy-message-btn";
-		copyBtn.title = "Copy full message";
-		copyBtn.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
-        `;
-		copyBtn.onclick = () => copyFullMessage(content);
-		footer.appendChild(copyBtn);
-	}
+	// Add copy button for both user and assistant messages
+	// Uses centralized ClipboardUtils from renderer.js
+	const copyBtn = document.createElement("button");
+	copyBtn.className = "copy-message-btn";
+	copyBtn.title = "Copy full message";
+	copyBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+    `;
+	copyBtn.onclick = () => copyFullMessage(content);
+	footer.appendChild(copyBtn);
 
 	msg.appendChild(footer);
 
@@ -913,14 +903,20 @@ function createMessageElement(role, content, timestamp = null) {
 }
 
 function copyFullMessage(content) {
-	navigator.clipboard
-		.writeText(content)
-		.then(() => {
-			console.log("Message copied to clipboard");
-		})
-		.catch((err) => {
-			console.error("Failed to copy message:", err);
-		});
+	// Uses centralized ClipboardUtils from renderer.js for consistent behavior
+	if (typeof ClipboardUtils !== "undefined") {
+		ClipboardUtils.copyText(content);
+	} else {
+		// Fallback for cases where renderer.js hasn't loaded
+		navigator.clipboard
+			.writeText(content)
+			.then(() => {
+				console.log("Message copied to clipboard");
+			})
+			.catch((err) => {
+				console.error("Failed to copy message:", err);
+			});
+	}
 }
 
 function addMessage(role, content, timestamp = null, isHistory = false) {

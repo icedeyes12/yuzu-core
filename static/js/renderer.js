@@ -1,5 +1,70 @@
 // FILE: static/js/renderer.js
 // DESCRIPTION: Markdown renderer using marked.js with syntax highlighting
+
+// ==================== CENTRALIZED CLIPBOARD UTILITY ====================
+// Single source of truth for all copy-to-clipboard operations.
+// Provides consistent visual feedback across code blocks, tables, and messages.
+const ClipboardUtils = {
+	// SVG icons for consistent button appearance
+	ICONS: {
+		copy: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+			<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+		</svg>`,
+		check: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			<polyline points="20 6 9 17 4 12"></polyline>
+		</svg>`,
+	},
+
+	// Default feedback duration in milliseconds
+	FEEDBACK_DURATION: 2000,
+
+	/**
+	 * Copy text to clipboard with optional button feedback.
+	 * The button param receives visual success feedback (icon change + "Copied!" text).
+	 * @param {string} text - Text to copy
+	 * @param {HTMLElement} [button] - Optional button element for visual feedback
+	 * @param {object} [options] - Optional configuration
+	 * @param {number} [options.duration] - Feedback duration in ms (default: 2000)
+	 * @param {string} [options.successText] - Text to show on success (default: "Copied!")
+	 * @returns {Promise<boolean>} - True if copy succeeded
+	 */
+	async copyText(text, button = null, options = {}) {
+		const { duration = this.FEEDBACK_DURATION, successText = "Copied!" } =
+			options;
+
+		try {
+			await navigator.clipboard.writeText(text);
+			console.log("Copied to clipboard");
+
+			if (button) {
+				this._showSuccess(button, successText, duration);
+			}
+			return true;
+		} catch (err) {
+			console.error("Failed to copy to clipboard:", err);
+			return false;
+		}
+	},
+
+	/**
+	 * Show success feedback on a button element.
+	 * Restores original content after the specified duration.
+	 * @private
+	 */
+	_showSuccess(button, successText, duration) {
+		const originalHTML = button.innerHTML;
+		button.innerHTML = `${this.ICONS.check}${successText}`;
+		button.classList.add("copied");
+
+		setTimeout(() => {
+			button.innerHTML = originalHTML;
+			button.classList.remove("copied");
+		}, duration);
+	},
+};
+
+// ==================== RENDERER CLASS ====================
 class MessageRenderer {
 	constructor() {
 		this.isMermaidReady = false;
@@ -287,10 +352,11 @@ class MessageRenderer {
 			if (normalizedLang === "mermaid" && this.isMermaidReady) {
 				const id = `mermaid-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 				const mermaidCode = this.escapeHtml(code);
+				// Mermaid copy button uses renderer.copyMermaidCode for centralized clipboard handling
 				return `<div class="mermaid-container" data-mermaid-id="${id}">
                     <div class="code-block-header">
                         <span class="code-language">mermaid</span>
-                        <button class="copy-code-btn" onclick="navigator.clipboard.writeText(decodeURIComponent('${encodeURIComponent(code)}')).then(() => { this.innerHTML='<svg width=\\'16\\' height=\\'16\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><polyline points=\\'20 6 9 17 4 12\\'></polyline></svg>Copied!'; this.classList.add('copied'); setTimeout(() => { this.innerHTML='<svg width=\\'16\\' height=\\'16\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><rect x=\\'9\\' y=\\'9\\' width=\\'13\\' height=\\'13\\' rx=\\'2\\' ry=\\'2\\'></rect><path d=\\'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\\'></path></svg>Copy'; this.classList.remove('copied'); }, 2000); })">
+                        <button class="copy-code-btn" data-mermaid-code="${encodeURIComponent(code)}" onclick="renderer.copyMermaidCode(this)">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -435,32 +501,11 @@ class MessageRenderer {
 
 		const tsv = tsvLines.join("\n");
 
-		navigator.clipboard
-			.writeText(tsv)
-			.then(() => {
-				// Show success feedback
-				const wrapper = table.closest(".table-container");
-				if (wrapper) {
-					const copyBtn = wrapper.querySelector(".copy-table-btn");
-					if (copyBtn) {
-						const originalHTML = copyBtn.innerHTML;
-						copyBtn.innerHTML = `
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                        Copied!
-                    `;
-						copyBtn.classList.add("copied");
-						setTimeout(() => {
-							copyBtn.innerHTML = originalHTML;
-							copyBtn.classList.remove("copied");
-						}, 2000);
-					}
-				}
-			})
-			.catch((err) => {
-				console.error("Failed to copy table:", err);
-			});
+		// Find the copy button for visual feedback
+		const wrapper = table.closest(".table-container");
+		const copyBtn = wrapper ? wrapper.querySelector(".copy-table-btn") : null;
+
+		ClipboardUtils.copyText(tsv, copyBtn);
 	}
 
 	escapeHtml(text) {
@@ -875,27 +920,17 @@ class MessageRenderer {
 	copyCode(button) {
 		const codeBlock = button.closest(".code-block-container");
 		const code = codeBlock.querySelector("code").textContent;
+		ClipboardUtils.copyText(code, button);
+	}
 
-		navigator.clipboard
-			.writeText(code)
-			.then(() => {
-				const originalText = button.innerHTML;
-				button.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                Copied!
-            `;
-				button.classList.add("copied");
-
-				setTimeout(() => {
-					button.innerHTML = originalText;
-					button.classList.remove("copied");
-				}, 2000);
-			})
-			.catch((err) => {
-				console.error("Failed to copy code:", err);
-			});
+	/**
+	 * Copy mermaid diagram source code.
+	 * Used by the copy button in mermaid code blocks.
+	 */
+	copyMermaidCode(button) {
+		const encodedCode = button.getAttribute("data-mermaid-code") || "";
+		const code = decodeURIComponent(encodedCode);
+		ClipboardUtils.copyText(code, button);
 	}
 
 	renderMessage(content, _isUser = false) {
@@ -1162,6 +1197,9 @@ class MessageRenderer {
 
 // Create global renderer instance
 const renderer = new MessageRenderer();
+
+// Expose ClipboardUtils globally for use by other scripts (e.g., chat.js)
+window.ClipboardUtils = ClipboardUtils;
 
 // Initialize tool MutationObserver for post-rendering transformation
 MessageRenderer.initToolObserver();

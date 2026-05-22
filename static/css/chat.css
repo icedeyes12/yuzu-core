@@ -205,7 +205,7 @@ body {
 	gap: 0.5rem;
 }
 
-/* Copy full message button for assistant */
+/* Copy full message button - consistent across all message types */
 .copy-message-btn {
 	background: var(--bg-secondary);
 	border: 1px solid var(--border-color);
@@ -220,7 +220,8 @@ body {
 	flex-shrink: 0;
 }
 
-.message.ai:hover .copy-message-btn {
+/* Show button on hover for both user and ai messages */
+.message:hover .copy-message-btn {
 	opacity: 1;
 }
 
@@ -228,6 +229,13 @@ body {
 	background: var(--accent-primary);
 	color: white;
 	border-color: var(--accent-primary);
+}
+
+/* Success state - consistent with other copy buttons */
+.copy-message-btn.copied {
+	background: var(--accent-tertiary);
+	color: white;
+	border-color: var(--accent-tertiary);
 }
 
 /* ==================== MARKDOWN CONTENT ==================== */
