@@ -359,6 +359,7 @@ async def api_send_message_with_images(
 
         saved_images = []
         image_markdowns = []
+        local_paths = []
 
         for i, image_file in enumerate(images):
             if image_file and image_file.filename:
@@ -381,6 +382,7 @@ async def api_send_message_with_images(
                 web_url = f"/uploads/{filename}"
                 image_markdown = f"![Uploaded Image](uploads/{filename})"
                 image_markdowns.append(image_markdown)
+                local_paths.append(filepath)
 
                 saved_images.append(
                     {
@@ -402,6 +404,10 @@ async def api_send_message_with_images(
 
         print(f"Final user message: {final_user_message[:200]}...")
 
+        # Use handle_user_message directly - it now handles image_paths via _cache_images_from_message
+        # or we could pass them explicitly if we wanted to be 100% sure. 
+        # Actually, let's update handle_user_message to accept image_paths optionally.
+        
         ai_reply = handle_user_message(final_user_message, interface="web")
 
         return {"reply": ai_reply, "uploaded_images": saved_images}

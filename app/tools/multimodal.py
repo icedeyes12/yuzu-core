@@ -11,6 +11,8 @@ import time
 import os
 import hashlib
 from typing import List, Dict, Optional, Tuple
+from PIL import Image
+import io
 from app.database import get_profile, get_api_keys
 
 logger = logging.getLogger(__name__)
@@ -661,6 +663,79 @@ class MultimodalTools:
             found_images.extend(matches)
 
         return found_images
+
+    def inject_vision_context(self, messages: list[dict], current_model: str) -> list[dict]:
+        """Pure helper function to inject vision context into the messages list.
+        
+        If the current_model does not support vision, returns messages unmodified.
+        Otherwise, converts messages with image_paths into the standard OpenAI 
+        multimodal array structure with Base64 strings.
+        """
+        if not self.is_vision_model(current_model):
+            return messages
+
+        new_messages = []
+        for msg in messages:
+            role = msg.get("role")
+            content = msg.get("content")
+            image_paths = msg.get("image_paths")
+
+            if role == "user" and image_paths:
+                # Build multimodal content array
+                # Content might already be a string or list
+                text_content = ""
+                if isinstance(content, str):
+                    text_content = content
+                elif isinstance(content, list):
+                    # Find the text part
+                    for part in content:
+                        if isinstance(part, dict) and part.get("type") == "text":
+                            text_content = part.get("text", "")
+                            break
+
+                new_content = [{"type": "text", "text": text_content or "What's in these images?"}]
+                
+                for path in image_paths:
+                    try:
+                        # Resizing/Compression to prevent 413 Payload Too Large
+                        if not os.path.exists(path):
+                            continue
+                            
+                        with Image.open(path) as img:
+                            # Resize if larger than 1024px
+                            if max(img.size) > 1024:
+                                img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+                            
+                            # Convert to Base64
+                            img_byte_arr = io.BytesIO()
+                            # Preserve transparency for PNG, else JPEG
+                            if path.lower().endswith(".png"):
+                                format_ext = "PNG"
+                                mime = "image/png"
+                            else:
+                                format_ext = "JPEG"
+                                mime = "image/jpeg"
+                                
+                            img.save(img_byte_arr, format=format_ext, quality=85)
+                            data = base64.b64encode(img_byte_arr.getvalue()).decode("utf-8")
+                            
+                        new_content.append({
+                            "type": "image_url", 
+                            "image_url": {"url": f"data:{mime};base64,{data}"}
+                        })
+                    except Exception as e:
+                        logger.warning(f"[Vision] Failed to process image {path}: {e}")
+                            
+                new_msg = msg.copy()
+                new_msg["content"] = new_content
+                # Remove image_paths from the payload sent to LLM
+                if "image_paths" in new_msg:
+                    del new_msg["image_paths"]
+                new_messages.append(new_msg)
+            else:
+                new_messages.append(msg)
+                
+        return new_messages
 
 
 multimodal_tools = MultimodalTools()

@@ -327,17 +327,18 @@ def add_message(
     session_id: int,
     role: str,
     content: str,
-    image_paths: str | None = None,  # noqa: ARG001 - column not yet wired
+    image_paths: list[str] | None = None,
 ) -> int | None:
     """Insert a message row, bump the session's message_count, return id.
     
     Timestamp is set by database NOW() to ensure ordering coherence.
     """
     try:
+        paths_json = json.dumps(image_paths or [])
         with PgSession() as s:
             row = s.execute_returning(
                 SQL_MESSAGE_INSERT,
-                (session_id, role, content),  # timestamp handled by DB
+                (session_id, role, content, paths_json),  # timestamp handled by DB
             )
             if row:
                 increment_message_count(session_id)
@@ -348,10 +349,11 @@ def add_message(
         return None
 
 
-def update_message(message_id: int, content: str) -> bool:
-    """Update the content of an existing message."""
+def update_message(message_id: int, content: str, image_paths: list[str] | None = None) -> bool:
+    """Update the content and optional image paths of an existing message."""
     try:
-        pg_execute(SQL_MESSAGE_UPDATE, (content, message_id))
+        paths_json = json.dumps(image_paths or [])
+        pg_execute(SQL_MESSAGE_UPDATE, (content, paths_json, message_id))
         return True
     except Exception as e:
         log.error("update_message failed: %s", e)
@@ -435,6 +437,7 @@ def get_session_conversation_summary(session_id: int, limit: int = 20) -> str:
 
 
 def add_image_tools_message(session_id: int, image_url: str) -> int | None:
+    # DEPRECATED: image_tools messages are now unified into the standard message pipeline with image_paths
     return add_message(session_id, "image_tools", image_url)
 
 
@@ -457,17 +460,11 @@ def add_memory_note(session_id: int, content: str) -> int | None:
 
 
 def get_chat_history_for_ai(
-    session_id: int, limit: int | None = None, recent: bool = False
+    session_id: int, limit: int | None = None, recent: bool = False, include_image_paths: bool = False
 ) -> list[dict]:
-    """Build the chronologically ordered AI message context."""
-    if limit and recent:
-        rows = pg_fetchall(SQL_MESSAGE_HISTORY_FOR_AI_DESC_LIMIT, (session_id, limit))
-        rows = list(reversed(rows))
-    elif limit:
-        rows = pg_fetchall(SQL_MESSAGE_HISTORY_FOR_AI_ASC_LIMIT, (session_id, limit))
-    else:
-        rows = pg_fetchall(SQL_MESSAGE_HISTORY_FOR_AI_ASC_ALL, (session_id,))
-    return format_ai_history_rows(rows)
+    """Fetch history and format specifically for LLM context (e.g. system turn)."""
+    rows = get_session_messages(session_id, limit, recent)
+    return format_ai_history_rows(rows, include_image_paths=include_image_paths)
 
 
 # ---------------------------------------------------------------------------

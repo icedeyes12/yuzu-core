@@ -157,7 +157,7 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
                     after_close = after_open[close_idx + len(_TOOL_CLOSE):].strip()
                     if not after_close:
                         # Preserve leading whitespace, only strip trailing
-                        content = after_open[:close_idx].rstrip()
+                        content = after_open[:close_idx].strip()
                         if content:
                             matches.append(content)
                         # Mark line for removal
@@ -180,7 +180,7 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
                             if before_close:
                                 # Preserve leading whitespace for the content part
                                 # Find where the content starts in the original line
-                                content_part = inner_line[:inner_line.rfind(_TOOL_CLOSE)].rstrip()
+                                content_part = inner_line[:inner_line.rfind(_TOOL_CLOSE)].strip()
                                 content_lines.append(content_part)
                             found_close = True
                             # Mark lines for removal
@@ -195,12 +195,12 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
                             break
                         else:
                             # Preserve leading whitespace - only rstrip trailing
-                            content_lines.append(inner_line.rstrip())
+                            content_lines.append(inner_line.strip())
                         j += 1
                     
                     if found_close and content_lines:
                         # Join lines preserving indentation, strip only trailing whitespace
-                        content = "\n".join(content_lines).rstrip()
+                        content = "\n".join(content_lines).strip()
                         if content:
                             matches.append(content)
                     elif found_close:
@@ -253,6 +253,9 @@ def has_tool_blocks(text: str) -> bool:
     if len(text) > _REGEX_INPUT_LIMIT:
         text = text[:_REGEX_INPUT_LIMIT]
     
+    if "<tool>" in text and "</tool>" in text:
+        return True
+        
     lines = text.split("\n")
     for line in lines:
         stripped = line.strip()

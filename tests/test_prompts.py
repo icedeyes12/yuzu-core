@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+from app.database import Database
 from app.prompts import closeness_mode
+from app.tools.multimodal import MultimodalTools
 
 
 class TestClosenessMode:

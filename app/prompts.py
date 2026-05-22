@@ -30,6 +30,21 @@ log = get_logger(__name__)
 # ────────────────────────────────────────────────────────────────────────────
 
 
+def closeness_mode(affection: int) -> str:
+    """Map an affection score to a closeness mode label."""
+    _AFFECTION_THRESHOLDS: tuple[tuple[int, str], ...] = (
+        (25, "distant but attentive"),
+        (45, "reserved and observant"),
+        (65, "comfortable and open"),
+        (85, "close and warm"),
+        (101, "deeply attuned and intimate"),
+    )
+    for threshold, label in _AFFECTION_THRESHOLDS:
+        if affection < threshold:
+            return label
+    return _AFFECTION_THRESHOLDS[-1][1]
+
+
 def _truncate(text: str, limit: int = 120) -> str:
     return text if len(text) <= limit else text[:limit] + "..."
 
@@ -348,13 +363,18 @@ def build_messages(
     session_id: int,
     interface: str,
     user_message: str | None,
+    include_image_paths: bool = False,
 ) -> list[dict[str, Any]]:
     """Build the full chat-completion messages list (system + recent history)."""
     system_message = build_system_message(profile, session_id, interface, user_message)
     history = (
-        Database.get_chat_history_for_ai(session_id=session_id, limit=50, recent=True)
+        Database.get_chat_history_for_ai(
+            session_id=session_id, limit=50, recent=True, include_image_paths=include_image_paths
+        )
         or []
     )
     return [{"role": "system", "content": system_message}] + [
-        {"role": m["role"], "content": m["content"]} for m in history
+        {"role": m["role"], "content": m["content"], "image_paths": m.get("image_paths")}
+        if "image_paths" in m else {"role": m["role"], "content": m["content"]}
+        for m in history
     ]

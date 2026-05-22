@@ -138,7 +138,7 @@ SCHEMA_DDL: tuple[str, ...] = (
         role VARCHAR(50) NOT NULL,
         content TEXT NOT NULL,
         content_encrypted BOOLEAN NOT NULL DEFAULT FALSE,
-        image_paths TEXT NOT NULL DEFAULT '{}',
+        image_paths TEXT NOT NULL DEFAULT '[]',
         timestamp TIMESTAMP DEFAULT NOW(),
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     )
@@ -388,12 +388,12 @@ def decrypt_api_key_rows(rows: list[dict]) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 SQL_MESSAGE_INSERT = """
-INSERT INTO messages (session_id, role, content, timestamp, content_encrypted)
-VALUES (%s, %s, %s, NOW(), FALSE) RETURNING id, timestamp
+INSERT INTO messages (session_id, role, content, image_paths, timestamp, content_encrypted)
+VALUES (%s, %s, %s, %s, NOW(), FALSE) RETURNING id, timestamp
 """
 
 SQL_MESSAGE_SELECT_ASC_LIMIT = """
-SELECT id, session_id, role, content, timestamp
+SELECT id, session_id, role, content, image_paths, timestamp
 FROM messages
 WHERE session_id = %s
 ORDER BY timestamp ASC
@@ -401,7 +401,7 @@ LIMIT %s
 """
 
 SQL_MESSAGE_SELECT_DESC_LIMIT = """
-SELECT id, session_id, role, content, timestamp
+SELECT id, session_id, role, content, image_paths, timestamp
 FROM messages
 WHERE session_id = %s
 ORDER BY timestamp DESC
@@ -409,13 +409,13 @@ LIMIT %s
 """
 
 SQL_MESSAGE_SELECT_ASC_ALL = """
-SELECT id, session_id, role, content, timestamp
+SELECT id, session_id, role, content, image_paths, timestamp
 FROM messages
 WHERE session_id = %s
 ORDER BY timestamp ASC
 """
 
-SQL_MESSAGE_UPDATE = "UPDATE messages SET content = %s WHERE id = %s"
+SQL_MESSAGE_UPDATE = "UPDATE messages SET content = %s, image_paths = %s WHERE id = %s"
 
 SQL_MESSAGE_DELETE_FOR_SESSION = "DELETE FROM messages WHERE session_id = %s"
 
@@ -449,7 +449,7 @@ LIMIT %s
 """
 
 SQL_MESSAGE_HISTORY_FOR_AI_ASC_LIMIT = """
-SELECT id, role, content, timestamp
+SELECT id, role, content, image_paths, timestamp
 FROM messages
 WHERE session_id = %s
 ORDER BY timestamp ASC
@@ -457,7 +457,7 @@ LIMIT %s
 """
 
 SQL_MESSAGE_HISTORY_FOR_AI_DESC_LIMIT = """
-SELECT id, role, content, timestamp
+SELECT id, role, content, image_paths, timestamp
 FROM messages
 WHERE session_id = %s
 ORDER BY timestamp DESC
@@ -465,7 +465,7 @@ LIMIT %s
 """
 
 SQL_MESSAGE_HISTORY_FOR_AI_ASC_ALL = """
-SELECT id, role, content, timestamp
+SELECT id, role, content, image_paths, timestamp
 FROM messages
 WHERE session_id = %s
 ORDER BY timestamp ASC
@@ -491,6 +491,7 @@ def parse_message_row(row: dict) -> dict:
         "session_id": row.get("session_id"),
         "role": row.get("role"),
         "content": row.get("content"),
+        "image_paths": parse_json(row.get("image_paths", "[]")),
         "timestamp": str(row.get("timestamp", "")),
     }
 
@@ -567,7 +568,7 @@ def _format_user_timestamp(ts: Any) -> str:
         return f"[{ts}]"
 
 
-def format_ai_history_rows(rows: list[dict]) -> list[dict]:
+def format_ai_history_rows(rows: list[dict], include_image_paths: bool = False) -> list[dict]:
     """Convert raw message rows into the AI-context message list.
 
     Behavior preserved exactly from the previous duplicated implementations:
@@ -581,20 +582,31 @@ def format_ai_history_rows(rows: list[dict]) -> list[dict]:
     for msg in rows:
         role = msg.get("role", "")
         content = msg.get("content", "")
+        image_paths = parse_json(msg.get("image_paths", "[]"))
 
         if role == "event_log":
             continue
 
         if role == "user":
             ts = _format_user_timestamp(msg.get("timestamp", ""))
-            formatted.append({"role": role, "content": f"{content} {ts}"})
+            entry = {
+                "role": role,
+                "content": f"{content} {ts}",
+            }
         elif role in ("assistant", "system"):
-            formatted.append({"role": role, "content": content})
+            entry = {"role": role, "content": content}
         elif role in ALL_TOOL_ROLES:
             # Strip tool-contract markdown and keep only the raw result
             # so the AI can actually read the tool output.
             raw = extract_raw_result_from_markdown_contract(content)
-            formatted.append({"role": role, "content": raw})
+            entry = {"role": role, "content": raw}
+        else:
+            entry = {"role": role, "content": content}
+
+        if include_image_paths and image_paths:
+            entry["image_paths"] = image_paths
+
+        formatted.append(entry)
     return formatted
 
 

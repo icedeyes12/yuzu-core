@@ -262,6 +262,11 @@ def _persist_user(message: str, session_id: int, image_paths: list[str] | None) 
     )
 
 
+def _persist_assistant(content: str, session_id: int, image_paths: list[str] | None = None) -> None:
+    """Persist an assistant response, with optional image paths (for image generation)."""
+    Database.add_message("assistant", content, session_id=session_id, image_paths=image_paths)
+
+
 def _persist_tool_result(tool_name: str, markdown: str, session_id: int) -> None:
     Database.add_message(get_tool_role(tool_name), markdown, session_id=session_id)
 
@@ -342,6 +347,7 @@ def _post_turn(
     active_session: dict[str, Any],
 ) -> None:
     """Auto-rename session, summarize memory, trigger memory pipeline."""
+    # DEPRECATED: image_cache cleanup moved to turn end
     from app.session_lifecycle import auto_name_session_if_needed
     from app.profile_analysis import (
         should_summarize_memory,
@@ -422,11 +428,18 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
                 _persist_tool_result(tool_name, tool_markdown, session_id)
 
             combined = "\n\n".join(tool_markdowns)
+            
+            # Extract any generated image paths
+            generated_paths = []
+            for tm in tool_markdowns:
+                path = parse_image_path(tm)
+                if path:
+                    generated_paths.append(path)
 
             # Run synthesis
             synthesis = _run_synthesis(profile, session_id, interface, combined)
             if synthesis:
-                Database.add_message("assistant", synthesis, session_id=session_id)
+                _persist_assistant(synthesis, session_id, generated_paths)
                 final = (
                     f"{combined}\n\n{synthesis}"
                     if parse_image_path(combined)
@@ -475,10 +488,12 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
             _persist_tool_result(tool_name, tool_markdown, session_id)
 
             is_image_tool = parse_image_path(tool_markdown) is not None
+            generated_paths = [parse_image_path(tool_markdown)] if is_image_tool else None
+            
             synthesis = _run_synthesis(profile, session_id, interface, tool_markdown)
 
             if synthesis:
-                Database.add_message("assistant", synthesis, session_id=session_id)
+                _persist_assistant(synthesis, session_id, generated_paths)
                 final_response = (
                     f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
                 )
@@ -492,7 +507,7 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
 
     # Non-streaming path: just return LLM response
     # Tool execution via <tool> blocks only happens in streaming path
-    Database.add_message("assistant", text_response, session_id=session_id)
+    _persist_assistant(text_response, session_id)
     _post_turn(profile, user_message, text_response, session_id, active_session)
     return text_response
 
@@ -627,6 +642,12 @@ def handle_user_message_streaming(
 
     # Agentic loop: execute tools, stream synthesis, check for more tools
     current_synthesis_context = combined_tool_markdown
+    # Track paths across loops
+    all_generated_paths = []
+    for tm in tool_markdowns:
+        p = parse_image_path(tm)
+        if p: all_generated_paths.append(p)
+        
     loop_count = 0
     
     while loop_count < _MAX_ORCHESTRATION_LOOPS:
@@ -680,7 +701,10 @@ def handle_user_message_streaming(
         
         # Final update
         if full_synthesis and synthesis_msg_id:
-            Database.update_message(synthesis_msg_id, full_synthesis)
+            # Check if this loop generated images to attach to the assistant message
+            # All generated paths from this loop and previous ones are in all_generated_paths
+            # DEPRECATED: image_paths population in update_message is now the primary way to track images
+            Database.update_message(synthesis_msg_id, full_synthesis, image_paths=all_generated_paths)
 
         if not synthesis:
             # No synthesis - already handled persistence above if any chunks existed
@@ -717,8 +741,10 @@ def handle_user_message_streaming(
             tm = result.get("markdown", str(result))
             next_markdowns.append(tm)
             _persist_tool_result(tool_name, tm, session_id)
-            if parse_image_path(tm) is not None:
+            p = parse_image_path(tm)
+            if p:
                 any_image_tool = True
+                all_generated_paths.append(p)
             yield "\n\n" + tm
 
         # Update context for next synthesis

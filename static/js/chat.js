@@ -223,6 +223,11 @@ class MultimodalManager {
 								// renderStreamChunk already does full markdown rendering
 								this.renderStreamChunk(contentDiv, accumulatedText);
 								scrollToBottom();
+
+								// [UNIFIED] If the chunk contains the vision error message, handle it
+								if (accumulatedText.includes("[System] Current model does not support vision")) {
+									// It's a validation error, keep it in the stream
+								}
 							}
 						} catch (_e) {
 							// Ignore parse errors
@@ -494,7 +499,7 @@ class MultimodalManager {
 		this.setSendButtonState("sending");
 
 		try {
-			// Build a single unified message containing text + images
+			// Build a single unified message containing text + images for history
 			let combinedMarkdown = "";
 			if (text?.trim()) {
 				combinedMarkdown += `${text.trim()}\n\n`;
@@ -520,6 +525,7 @@ class MultimodalManager {
 			const data = await response.json();
 
 			if (data.reply) {
+				// [UNIFIED] All messages now flow through standard render path
 				addMessage("ai", data.reply);
 				this.clearInput();
 				this.clearImages();

@@ -138,7 +138,11 @@ class Database:
     batch_decrypt_messages = _proxy(_pg_batch_decrypt_messages)
 
     # ── Messages (session_id-defaulting wrappers) ────────────────────────────────
-    update_message = _proxy(_pg_update_message)
+    @staticmethod
+    def update_message(
+        message_id: int, content: str, image_paths: list[str] | None = None
+    ) -> bool:
+        return _pg_update_message(message_id, content, image_paths)
 
     # These reorder args (role/content first) and default session_id to the
     # active session, which is the convention used throughout the codebase.
@@ -148,7 +152,7 @@ class Database:
         role: str,
         content: str,
         session_id: int | None = None,
-        image_paths: str | None = None,
+        image_paths: list[str] | None = None,
     ) -> int | None:
         """Add a message to a session (defaults to active session)."""
         return _pg_add_message(
@@ -176,10 +180,11 @@ class Database:
         session_id: int | None = None,
         limit: int | None = None,
         recent: bool = False,
+        include_image_paths: bool = False,
     ) -> list[dict]:
         """Build message context for AI provider (defaults to active session)."""
         return _pg_get_chat_history_for_ai(
-            _resolve_session_id(session_id), limit, recent
+            _resolve_session_id(session_id), limit, recent, include_image_paths
         )
 
     @staticmethod
@@ -203,6 +208,7 @@ class Database:
         image_url: str, session_id: int | None = None
     ) -> int | None:
         """Add an image tools message (defaults to active session)."""
+        # DEPRECATED: image_tools messages are now unified into the standard message pipeline with image_paths
         return _pg_add_image_tools_message(_resolve_session_id(session_id), image_url)
 
     @staticmethod

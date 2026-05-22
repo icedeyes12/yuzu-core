@@ -113,39 +113,8 @@ def _apply_vision_routing(
     image_content_for_context: list[dict[str, Any]] | None,
 ) -> tuple[list[dict[str, Any]], str, str]:
     """Switch to vision provider/model when needed and rewrite the last user msg."""
-    if image_content_for_context is not None:
-        vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
-        if vision_provider and vision_model:
-            log.info(
-                "force-switch to vision %s/%s for image_tools output",
-                vision_provider,
-                vision_model,
-            )
-            messages.append(
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Here's the generated image for your reference.",
-                        },
-                        *image_content_for_context,
-                    ],
-                }
-            )
-            return messages, vision_provider, vision_model
-
-    if not multimodal_tools.should_use_vision(user_message, provider, model):
-        return messages, provider, model
-
-    vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
-    if not (vision_provider and vision_model):
-        return messages, provider, model
-
-    vision_messages = multimodal_tools.format_vision_message(user_message)
-    if messages and messages[-1].get("role") == "user":
-        messages = messages[:-1] + vision_messages
-    return messages, vision_provider, vision_model
+    # DEPRECATED: Automatic vision model switching is removed in favor of manual configuration and validation.
+    return messages, provider, model
 
 
 def _inject_persistent_visual(
@@ -280,13 +249,45 @@ def generate_ai_response(
         session_id = Database.get_active_session()["id"]
 
     provider, model = _resolve_provider(profile, None, None)
-    messages = build_messages(profile, session_id, interface, user_message)
-    if user_message and user_message.strip():
-        messages.append({"role": "user", "content": user_message})
+    
+    # Validation: If images are present but model is not vision-capable, abort
+    if multimodal_tools.has_images(user_message) and not multimodal_tools.is_vision_model(model):
+        error_msg = "[System] Current model does not support vision. Please reconfigure your active model to a multimodal one first~ :3"
+        Database.add_message("system", error_msg, session_id=session_id)
+        return error_msg, None
 
-    messages, provider, model = _apply_vision_routing(
-        messages, user_message, provider, model, image_content_for_context
-    )
+    messages = build_messages(profile, session_id, interface, user_message, include_image_paths=True)
+    if user_message and user_message.strip():
+        # Note: image_paths will be populated by orchestrator and available in history if needed,
+        # but for the current message we might need to handle it if build_messages doesn't.
+        # However, build_messages typically handles history. 
+        # For the CURRENT turn's message:
+        cached_images = []
+        try:
+            from app.orchestrator import _cache_images_from_message
+            cached_images = _cache_images_from_message(user_message)
+        except ImportError:
+            pass
+            
+        messages.append({
+            "role": "user", 
+            "content": user_message,
+            "image_paths": cached_images
+        })
+
+    # Apply the Interceptor Hook
+    messages = multimodal_tools.inject_vision_context(messages, model)
+    
+    if image_content_for_context:
+        # 2nd pass synthesis often has image context from tool results
+        messages.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Here's the generated image for your reference."},
+                *image_content_for_context
+            ]
+        })
+
     _inject_persistent_visual(messages, user_message, session_id)
 
     text, raw = _send_to_provider(
@@ -354,17 +355,41 @@ def generate_ai_response_streaming(
         session_id = Database.get_active_session()["id"]
 
     resolved_provider, resolved_model = _resolve_provider(profile, provider, model)
-    messages = build_messages(profile, session_id, interface, user_message)
-    if user_message and user_message.strip():
-        messages.append({"role": "user", "content": user_message})
+    
+    # Validation: If images are present but model is not vision-capable, abort
+    if multimodal_tools.has_images(user_message) and not multimodal_tools.is_vision_model(resolved_model):
+        error_msg = "[System] Current model does not support vision. Please reconfigure your active model to a multimodal one first~ :3"
+        Database.add_message("system", error_msg, session_id=session_id)
+        yield error_msg
+        return
 
-    messages, resolved_provider, resolved_model = _apply_vision_routing(
-        messages,
-        user_message,
-        resolved_provider,
-        resolved_model,
-        image_content_for_context,
-    )
+    messages = build_messages(profile, session_id, interface, user_message, include_image_paths=True)
+    if user_message and user_message.strip():
+        cached_images = []
+        try:
+            from app.orchestrator import _cache_images_from_message
+            cached_images = _cache_images_from_message(user_message)
+        except ImportError:
+            pass
+            
+        messages.append({
+            "role": "user", 
+            "content": user_message,
+            "image_paths": cached_images
+        })
+
+    # Apply the Interceptor Hook
+    messages = multimodal_tools.inject_vision_context(messages, resolved_model)
+    
+    if image_content_for_context:
+        messages.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Here's the generated image for your reference."},
+                *image_content_for_context
+            ]
+        })
+
     _inject_persistent_visual(messages, user_message, session_id)
 
     yield from _stream_from_provider(
