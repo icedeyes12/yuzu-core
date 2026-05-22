@@ -133,32 +133,61 @@ class MultimodalManager {
 
 		if (this.currentMode === "generate") {
 			this.handleImageGeneration(text);
-		} else if (this.currentMode === "image" || this.selectedImages.length > 0) {
-			this.handleImageMessage(text);
 		} else {
-			this.handleChatMessage(text);
+			// [UNIFIED] All normal chat and image messages now use sendMessageStreaming
+			this.handleUnifiedMessage(text);
+		}
+	}
+
+	async handleUnifiedMessage(text) {
+		if (!text && this.selectedImages.length === 0) {
+			isProcessingMessage = false;
+			this.setSendButtonState("ready");
+			return;
+		}
+
+		// Build a single unified message containing text + images for local history display
+		let combinedMarkdown = "";
+		if (text?.trim()) {
+			combinedMarkdown += `${text.trim()}\n\n`;
+		}
+
+		const imageBlobs = [];
+		this.selectedImages.forEach((image) => {
+			const imageUrl = URL.createObjectURL(image);
+			combinedMarkdown += `![Uploaded Image](${imageUrl})\n\n`;
+			imageBlobs.push(image);
+		});
+
+		addMessage("user", combinedMarkdown.trim());
+		this.clearInput();
+
+		// Use streaming endpoint for real-time rendering of all message types
+		await this.sendMessageStreaming(text, imageBlobs);
+
+		this.clearImages();
+		if (this.currentMode !== "chat") {
+			this.switchMode("chat");
 		}
 	}
 
 	async handleChatMessage(text) {
-		if (!text) {
-			isProcessingMessage = false;
-			return;
-		}
-
-		addMessage("user", text);
-		this.clearInput();
-
-		// Use streaming endpoint for real-time rendering
-		await this.sendMessageStreaming(text);
+		// DEPRECATED: Unified into handleUnifiedMessage
+		return this.handleUnifiedMessage(text);
 	}
 
-	async sendMessageStreaming(message) {
+	async handleImageMessage(text) {
+		// DEPRECATED: Unified into handleUnifiedMessage
+		return this.handleUnifiedMessage(text);
+	}
+
+	async sendMessageStreaming(message, images = []) {
 		const chatContainer = document.getElementById("chatContainer");
 
 		if (!chatContainer) {
 			console.error("Chat container not found");
 			isProcessingMessage = false;
+			this.setSendButtonState("ready");
 			return;
 		}
 
@@ -179,12 +208,29 @@ class MultimodalManager {
 		let accumulatedText = "";
 
 		try {
-			const response = await fetch("/api/send_message_stream", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ message }),
-				signal,
-			});
+			let response;
+			if (images && images.length > 0) {
+				// Use FormData for images
+				const formData = new FormData();
+				formData.append("message", message || "");
+				images.forEach((img) => {
+					formData.append("images", img);
+				});
+
+				response = await fetch("/api/send_message_stream", {
+					method: "POST",
+					body: formData,
+					signal,
+				});
+			} else {
+				// Standard JSON for text-only
+				response = await fetch("/api/send_message_stream", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ message }),
+					signal,
+				});
+			}
 
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -225,7 +271,11 @@ class MultimodalManager {
 								scrollToBottom();
 
 								// [UNIFIED] If the chunk contains the vision error message, handle it
-								if (accumulatedText.includes("[System] Current model does not support vision")) {
+								if (
+									accumulatedText.includes(
+										"[System] Current model does not support vision",
+									)
+								) {
 									// It's a validation error, keep it in the stream
 								}
 							}
@@ -482,64 +532,6 @@ class MultimodalManager {
 			addMessage("ai", `Error: ${error.message}`);
 		} finally {
 			this.cleanupStreamState();
-			this.isSending = false;
-			this.setSendButtonState("ready");
-			isProcessingMessage = false;
-		}
-	}
-
-	async handleImageMessage(text) {
-		if (!text && this.selectedImages.length === 0) {
-			alert("Please enter a message or upload images");
-			isProcessingMessage = false;
-			return;
-		}
-
-		this.isSending = true;
-		this.setSendButtonState("sending");
-
-		try {
-			// Build a single unified message containing text + images for history
-			let combinedMarkdown = "";
-			if (text?.trim()) {
-				combinedMarkdown += `${text.trim()}\n\n`;
-			}
-			this.selectedImages.forEach((image) => {
-				const imageUrl = URL.createObjectURL(image);
-				combinedMarkdown += `![Uploaded Image](${imageUrl})\n\n`;
-			});
-			addMessage("user", combinedMarkdown.trim());
-
-			const formData = new FormData();
-			if (text) formData.append("message", text);
-
-			this.selectedImages.forEach((image) => {
-				formData.append("images", image);
-			});
-
-			const response = await fetch("/api/send_message_with_images", {
-				method: "POST",
-				body: formData,
-			});
-
-			const data = await response.json();
-
-			if (data.reply) {
-				// [UNIFIED] All messages now flow through standard render path
-				addMessage("ai", data.reply);
-				this.clearInput();
-				this.clearImages();
-
-				if (this.currentMode !== "chat") {
-					this.switchMode("chat");
-				}
-			} else {
-				throw new Error(data.error || "Failed to send message");
-			}
-		} catch (error) {
-			console.error("Image message failed:", error);
-			addMessage("ai", `Error: ${error.message}`);
-		} finally {
 			this.isSending = false;
 			this.setSendButtonState("ready");
 			isProcessingMessage = false;

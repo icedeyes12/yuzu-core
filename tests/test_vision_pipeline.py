@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import os
-import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import sys
 
 # Ensure app is in path
@@ -36,7 +35,6 @@ def test_inject_vision_context_with_vision_model():
 
 def test_vision_model_validation_llm_client():
     from app.llm_client import generate_ai_response
-    from app.database import Database
     
     profile = {"providers_config": {"preferred_provider": "ollama", "preferred_model": "non-vision"}}
     user_message = "![test](static/uploads/test.jpg)"

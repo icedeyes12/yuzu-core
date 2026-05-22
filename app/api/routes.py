@@ -286,42 +286,80 @@ async def api_send_message(request: MessageRequest):
 
 
 @api_router.post("/send_message_stream")
-async def api_send_message_stream(request: StreamMessageRequest):
+async def api_send_message_stream(
+    request: Request,
+    message: str | None = Form(None),
+    interface: str = Form("web"),
+    provider: str | None = Form(None),
+    model: str | None = Form(None),
+    images: list[UploadFile] = File(default=[]),
+):
+    """Unified streaming endpoint for text and images."""
     try:
-        user_message = request.message.strip()
+        # Support both JSON (legacy/simple) and Form (unified/images)
+        if request.headers.get("content-type", "").startswith("application/json"):
+            try:
+                data = await request.json()
+                user_message = data.get("message", "").strip()
+                interface = data.get("interface", "web")
+                provider = data.get("provider")
+                model = data.get("model")
+            except Exception:
+                user_message = ""
+        else:
+            user_message = message.strip() if message else ""
 
-        if not user_message:
-
+        if not user_message and not images:
             async def empty_generator():
-                yield 'data: {"chunk": "Please type a message!"}\n\n'
-
+                yield 'data: {"chunk": "Please provide a message or images!"}\n\n'
             return StreamingResponse(empty_generator(), media_type="text/event-stream")
 
-        interface = request.interface  # from request payload
-        print(f"[{interface}] streaming message: {user_message[:200]}...")
+        # Handle image saving if present
+        image_markdowns = []
+        if images:
+            uploads_dir = "static/uploads"
+            os.makedirs(uploads_dir, exist_ok=True)
+            
+            for i, image_file in enumerate(images):
+                if image_file and image_file.filename:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    safe_filename = "".join(c for c in image_file.filename if c.isalnum() or c in (".", "-", "_")).rstrip()
+                    filename = f"{timestamp}_{i}_{safe_filename}"
+                    filepath = os.path.join(uploads_dir, filename)
+                    
+                    content = await image_file.read()
+                    with open(filepath, "wb") as f:
+                        f.write(content)
+                    
+                    image_markdowns.append(f"![Uploaded Image](uploads/{filename})")
 
-        # Get session ID asynchronously
+        if image_markdowns:
+            user_message = (
+                f"{user_message}\n\n" + "\n".join(image_markdowns)
+                if user_message
+                else "\n".join(image_markdowns)
+            )
+
+        print(f"[{interface}] streaming unified message: {user_message[:200]}...")
+
         active_session = await get_active_session_async()
         session_id = active_session["id"]
 
-        # Use StreamManager to start or reattach to a stream
         buffer = StreamManager.start_stream(
             session_id,
             user_message,
             interface=interface,
-            provider=request.provider,
-            model=request.model,
+            provider=provider,
+            model=model,
         )
 
         async def generate():
             q = buffer.subscribe()
             try:
                 while True:
-                    # Run in executor to avoid blocking event loop
                     chunk = await asyncio.get_event_loop().run_in_executor(None, q.get)
-                    if chunk is None:  # sentinel for end of stream
+                    if chunk is None:
                         break
-                    
                     if chunk:
                         escaped_chunk = json.dumps(chunk)
                         yield f'data: {{"chunk": {escaped_chunk}}}\n\n'
@@ -331,12 +369,9 @@ async def api_send_message_stream(request: StreamMessageRequest):
         return StreamingResponse(generate(), media_type="text/event-stream")
 
     except Exception as e:
-        # Log internally but don't expose details
-        print(f"Error in streaming: {type(e).__name__}")
-
+        print(f"Error in unified streaming: {type(e).__name__} - {e}")
         def generate_error():
             yield 'data: {"chunk": "Sorry, I encountered an error processing your message."}\n\n'
-
         return StreamingResponse(generate_error(), media_type="text/event-stream")
 
 
@@ -346,6 +381,8 @@ async def api_send_message_with_images(
     message: str = Form(""),
     images: list[UploadFile] = File(default=[]),
 ):
+    # DEPRECATED: Standard chat and image messages now use the unified /send_message_stream endpoint.
+    # This remains for backward compatibility during the transition.
     try:
         message_text = message.strip()
 

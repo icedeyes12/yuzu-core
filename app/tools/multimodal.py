@@ -723,6 +723,9 @@ class MultimodalTools:
                             "type": "image_url", 
                             "image_url": {"url": f"data:{mime};base64,{data}"}
                         })
+                    except FileNotFoundError:
+                        # Catch FileNotFoundError silently as per requirements
+                        continue
                     except Exception as e:
                         logger.warning(f"[Vision] Failed to process image {path}: {e}")
                             

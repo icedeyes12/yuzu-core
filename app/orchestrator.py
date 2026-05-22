@@ -43,6 +43,8 @@ _MAX_ORCHESTRATION_LOOPS = 30
 _BASE_DIR = Path(__file__).resolve().parent.parent
 _ALLOWED_IMAGE_DIRS = [
     (_BASE_DIR / "static").resolve(),
+    (_BASE_DIR / "static" / "uploads").resolve(),
+    (_BASE_DIR / "static" / "generated_images").resolve(),
     (_BASE_DIR / "uploads").resolve(),
     (_BASE_DIR / "generated_images").resolve(),
 ]
@@ -268,7 +270,15 @@ def _persist_assistant(content: str, session_id: int, image_paths: list[str] | N
 
 
 def _persist_tool_result(tool_name: str, markdown: str, session_id: int) -> None:
-    Database.add_message(get_tool_role(tool_name), markdown, session_id=session_id)
+    """Persist a tool result, extracting and saving any generated image paths."""
+    from app.commands import parse_image_path
+    
+    image_paths = []
+    path = parse_image_path(markdown)
+    if path:
+        image_paths.append(path)
+        
+    Database.add_message(get_tool_role(tool_name), markdown, session_id=session_id, image_paths=image_paths or None)
 
 
 def _persist_observation(observation: str, session_id: int) -> None:
@@ -439,6 +449,8 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
             # Run synthesis
             synthesis = _run_synthesis(profile, session_id, interface, combined)
             if synthesis:
+                # DEPRECATED: image_paths are now primarily tracked in the tool_result message
+                # but we keep them here for backward compatibility with synthesis context
                 _persist_assistant(synthesis, session_id, generated_paths)
                 final = (
                     f"{combined}\n\n{synthesis}"
@@ -493,6 +505,7 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
             synthesis = _run_synthesis(profile, session_id, interface, tool_markdown)
 
             if synthesis:
+                # DEPRECATED: image_paths are now primarily tracked in the tool_result message
                 _persist_assistant(synthesis, session_id, generated_paths)
                 final_response = (
                     f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
@@ -646,7 +659,8 @@ def handle_user_message_streaming(
     all_generated_paths = []
     for tm in tool_markdowns:
         p = parse_image_path(tm)
-        if p: all_generated_paths.append(p)
+        if p:
+            all_generated_paths.append(p)
         
     loop_count = 0
     
