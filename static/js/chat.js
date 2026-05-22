@@ -373,15 +373,50 @@ class MultimodalManager {
 		const msg = document.createElement("div");
 		msg.className = `message ${role}`;
 		msg.setAttribute("data-streaming", "true");
-		// No animation for streaming - CSS handles this
 
+		// User messages use nested bubble structure: wrapper > bubble + footer
+		// AI messages keep the original flat structure
+		const isUserMessage = role === "user";
+
+		if (isUserMessage) {
+			// === USER MESSAGE: NESTED BUBBLE STRUCTURE ===
+			const bubble = document.createElement("div");
+			bubble.className = "message-bubble";
+
+			const contentDiv = document.createElement("div");
+			contentDiv.className = "message-content";
+			bubble.appendChild(contentDiv);
+			msg.appendChild(bubble);
+
+			// Footer OUTSIDE the bubble
+			const footer = document.createElement("div");
+			footer.className = "message-footer message-footer--user";
+
+			const timeDiv = document.createElement("div");
+			timeDiv.className = "timestamp";
+			timeDiv.textContent = this.getCurrentTime();
+			footer.appendChild(timeDiv);
+
+			const copyBtn = document.createElement("button");
+			copyBtn.className = "copy-message-btn";
+			copyBtn.title = "Copy full message";
+			copyBtn.innerHTML = `
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+					<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+				</svg>
+			`;
+			footer.appendChild(copyBtn);
+
+			msg.appendChild(footer);
+			return msg;
+		}
+
+		// === AI MESSAGE: ORIGINAL FLAT STRUCTURE ===
 		const contentDiv = document.createElement("div");
 		contentDiv.className = "message-content";
-		// Empty content - will be filled by streaming
-
 		msg.appendChild(contentDiv);
 
-		// Add footer for timestamp and copy button
 		const footer = document.createElement("div");
 		footer.className = "message-footer";
 
@@ -390,17 +425,15 @@ class MultimodalManager {
 		timeDiv.textContent = this.getCurrentTime();
 		footer.appendChild(timeDiv);
 
-		// Add copy button for all messages (both user and assistant)
-		// Uses centralized ClipboardUtils from renderer.js
 		const copyBtn = document.createElement("button");
 		copyBtn.className = "copy-message-btn";
 		copyBtn.title = "Copy full message";
 		copyBtn.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
-        `;
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+				<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+			</svg>
+		`;
 		footer.appendChild(copyBtn);
 
 		msg.appendChild(footer);
@@ -838,66 +871,127 @@ function scrollToBottom() {
 
 function createMessageElement(role, content, timestamp = null) {
 	const msg = document.createElement("div");
-	msg.classList.add("message", role);
+	msg.className = `message ${role}`;
 
+	// User messages use nested bubble structure: wrapper > bubble + footer
+	// AI messages keep the original flat structure for backward compatibility
+	const isUserMessage = role === "user";
+
+	// Format timestamp
 	const displayTime = timestamp
 		? formatTimestamp(timestamp)
 		: getCurrentTime24h();
 
-	// Message content container
-	const contentContainer = document.createElement("div");
-	contentContainer.className = "message-content";
+	if (isUserMessage) {
+		// === USER MESSAGE: NESTED BUBBLE STRUCTURE ===
+		// Outer wrapper contains bubble + footer stacked vertically
+		// This keeps the colored background only on the text content
 
-	// Render content through a single safe pipeline
-	if (typeof renderer !== "undefined") {
-		contentContainer.innerHTML = renderMessageContent(
-			String(content),
-			role === "user",
-		);
+		// Bubble container - holds the colored background
+		const bubble = document.createElement("div");
+		bubble.className = "message-bubble";
 
-		// Apply syntax highlighting to code blocks after rendering
-		setTimeout(() => {
-			if (typeof hljs !== "undefined") {
-				const codeBlocks = contentContainer.querySelectorAll("pre code");
-				codeBlocks.forEach((block) => {
-					// Only highlight if not already highlighted
-					if (!block.classList.contains("hljs")) {
-						hljs.highlightElement(block);
-					}
-				});
-			}
-		}, 0);
+		// Content inside the bubble
+		const contentContainer = document.createElement("div");
+		contentContainer.className = "message-content";
+
+		// Render content through a single safe pipeline
+		if (typeof renderer !== "undefined") {
+			contentContainer.innerHTML = renderMessageContent(
+				String(content),
+				role === "user",
+			);
+
+			// Apply syntax highlighting to code blocks after rendering
+			setTimeout(() => {
+				if (typeof hljs !== "undefined") {
+					const codeBlocks = contentContainer.querySelectorAll("pre code");
+					codeBlocks.forEach((block) => {
+						if (!block.classList.contains("hljs")) {
+							hljs.highlightElement(block);
+						}
+					});
+				}
+			}, 0);
+		} else {
+			contentContainer.textContent = String(content);
+		}
+
+		bubble.appendChild(contentContainer);
+		msg.appendChild(bubble);
+
+		// Footer OUTSIDE the bubble (timestamp + copy button)
+		const footer = document.createElement("div");
+		footer.className = "message-footer message-footer--user";
+
+		const timeDiv = document.createElement("div");
+		timeDiv.className = "timestamp";
+		timeDiv.textContent = displayTime;
+		footer.appendChild(timeDiv);
+
+		const copyBtn = document.createElement("button");
+		copyBtn.className = "copy-message-btn";
+		copyBtn.title = "Copy full message";
+		copyBtn.innerHTML = `
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+				<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+			</svg>
+		`;
+		copyBtn.onclick = () => copyFullMessage(content);
+		footer.appendChild(copyBtn);
+
+		msg.appendChild(footer);
 	} else {
-		contentContainer.textContent = String(content);
+		// === AI MESSAGE: ORIGINAL FLAT STRUCTURE ===
+		// Kept for backward compatibility with existing CSS
+		const contentContainer = document.createElement("div");
+		contentContainer.className = "message-content";
+
+		if (typeof renderer !== "undefined") {
+			contentContainer.innerHTML = renderMessageContent(
+				String(content),
+				role === "user",
+			);
+
+			setTimeout(() => {
+				if (typeof hljs !== "undefined") {
+					const codeBlocks = contentContainer.querySelectorAll("pre code");
+					codeBlocks.forEach((block) => {
+						if (!block.classList.contains("hljs")) {
+							hljs.highlightElement(block);
+						}
+					});
+				}
+			}, 0);
+		} else {
+			contentContainer.textContent = String(content);
+		}
+
+		msg.appendChild(contentContainer);
+
+		const footer = document.createElement("div");
+		footer.className = "message-footer";
+
+		const timeDiv = document.createElement("div");
+		timeDiv.className = "timestamp";
+		timeDiv.textContent = displayTime;
+		footer.appendChild(timeDiv);
+
+		const copyBtn = document.createElement("button");
+		copyBtn.className = "copy-message-btn";
+		copyBtn.title = "Copy full message";
+		copyBtn.innerHTML = `
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+				<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+			</svg>
+		`;
+		copyBtn.onclick = () => copyFullMessage(content);
+		footer.appendChild(copyBtn);
+
+		msg.appendChild(footer);
 	}
-
-	msg.appendChild(contentContainer);
-
-	// Create footer for timestamp and copy button
-	const footer = document.createElement("div");
-	footer.className = "message-footer";
-
-	// Timestamp
-	const timeDiv = document.createElement("div");
-	timeDiv.className = "timestamp";
-	timeDiv.textContent = displayTime;
-	footer.appendChild(timeDiv);
-
-	// Add copy button for both user and assistant messages
-	// Uses centralized ClipboardUtils from renderer.js
-	const copyBtn = document.createElement("button");
-	copyBtn.className = "copy-message-btn";
-	copyBtn.title = "Copy full message";
-	copyBtn.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-        </svg>
-    `;
-	copyBtn.onclick = () => copyFullMessage(content);
-	footer.appendChild(copyBtn);
-
-	msg.appendChild(footer);
 
 	return msg;
 }

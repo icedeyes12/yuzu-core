@@ -167,15 +167,46 @@ body {
 	}
 }
 
-/* User messages - bubble style */
+/* === USER MESSAGES: NESTED BUBBLE STRUCTURE === */
+/* The .message.user is now a transparent wrapper container.
+ * The colored background is applied to .message-bubble inside it.
+ * This keeps the timestamp and copy button outside the colored bubble.
+ */
 .message.user {
 	align-self: flex-end;
-	background: var(--user-bubble);
-	border: 1px solid var(--border-color);
 	margin-left: auto;
+	
+	/* DEPRECATED: Background moved to .message-bubble
+	 * Keeping these commented for reference during migration.
+	 */
+	/* background: var(--user-bubble); */
+	/* border: 1px solid var(--border-color); */
+	
+	/* Wrapper has no background, minimal padding */
+	background: transparent;
+	border: none;
+	padding: 0;
 }
 
-/* Assistant messages - GPT style (no bubble) */
+/* The colored bubble inside user messages - contains only the text content */
+.message-bubble {
+	background: var(--user-bubble);
+	border: 1px solid var(--border-color);
+	border-radius: 12px;
+	padding: 0.8rem 1rem;
+	word-wrap: break-word;
+	overflow-wrap: break-word;
+}
+
+/* User message footer - positioned below the bubble, right-aligned */
+.message-footer--user {
+	justify-content: flex-end;
+	margin-top: 0.25rem;
+	padding: 0 0.25rem;
+}
+
+/* === ASSISTANT MESSAGES: ORIGINAL FLAT STRUCTURE === */
+/* Kept for backward compatibility. Background and padding remain on .message.ai */
 .message.ai {
 	align-self: flex-start;
 	background: transparent;
