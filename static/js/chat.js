@@ -193,13 +193,16 @@ class MultimodalManager {
 			const reader = response.body.getReader();
 			const decoder = new TextDecoder();
 			let firstChunk = true;
+			let sseBuffer = ""; // [FIX] Tail-buffer nahan chunk yang kepotong
 
 			while (true) {
 				const { done, value } = await reader.read();
 				if (done) break;
 
 				const chunk = decoder.decode(value, { stream: true });
-				const lines = chunk.split("\n");
+				sseBuffer += chunk; // Masuk buffer
+				const lines = sseBuffer.split("\n");
+				sseBuffer = lines.pop(); // Tahan string yg belum komplit
 
 				for (const line of lines) {
 					if (line.startsWith("data: ")) {
@@ -432,13 +435,16 @@ class MultimodalManager {
 			const reader = response.body.getReader();
 			const decoder = new TextDecoder();
 			let firstChunk = true;
+			let sseBuffer = ""; // [FIX] Tail-buffer nahan chunk yang kepotong
 
 			while (true) {
 				const { done, value } = await reader.read();
 				if (done) break;
 
 				const chunk = decoder.decode(value, { stream: true });
-				const lines = chunk.split("\n");
+				sseBuffer += chunk; // Masuk buffer
+				const lines = sseBuffer.split("\n");
+				sseBuffer = lines.pop(); // Tahan string yg belum komplit
 
 				for (const line of lines) {
 					if (line.startsWith("data: ")) {
