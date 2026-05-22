@@ -330,7 +330,7 @@ async def get_session_messages_async(
 
     order: "ASC" (oldest first) or "DESC" (newest first).
     """
-    if order == "DESC":
+    if order.upper() == "DESC":
         query = SQL_MESSAGE_SELECT_DESC_LIMIT
     else:
         query = SQL_MESSAGE_SELECT_ASC_LIMIT
@@ -432,7 +432,7 @@ async def add_memory_note_async(session_id: int, content: str) -> int | None:
 
 
 async def get_chat_history_for_ai_async(
-    session_id: int, limit: int | None = None, recent: bool = False
+    session_id: int, limit: int | None = None, recent: bool = False, include_image_paths: bool = False
 ) -> list[dict]:
     if limit and recent:
         rows = await pg_fetchall_async(
@@ -447,7 +447,7 @@ async def get_chat_history_for_ai_async(
         rows = await pg_fetchall_async(
             SQL_MESSAGE_HISTORY_FOR_AI_ASC_ALL, (session_id,)
         )
-    return format_ai_history_rows(rows)
+    return format_ai_history_rows(rows, include_image_paths=include_image_paths)
 
 
 # ---------------------------------------------------------------------------

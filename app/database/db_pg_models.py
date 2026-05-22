@@ -460,7 +460,7 @@ def get_chat_history_for_ai(
     session_id: int, limit: int | None = None, recent: bool = False, include_image_paths: bool = False
 ) -> list[dict]:
     """Fetch history and format specifically for LLM context (e.g. system turn)."""
-    rows = get_session_messages(session_id, limit, recent)
+    rows = get_chat_history(session_id, limit, recent)
     return format_ai_history_rows(rows, include_image_paths=include_image_paths)
 
 

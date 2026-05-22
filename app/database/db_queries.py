@@ -654,13 +654,13 @@ def build_encryption_status(
 # ---------------------------------------------------------------------------
 
 
-def parse_json(s: str | None) -> dict:
+def parse_json(s: str | None) -> Any:
     """Safe JSON parse: returns {} on None / parse failure."""
     if not s:
         return {}
     if not isinstance(s, str):
-        # Already-parsed dict shape; pass through.
-        return s if isinstance(s, dict) else {}
+        # Already-parsed shape; pass through.
+        return s
     try:
         return json.loads(s)
     except (json.JSONDecodeError, TypeError):
