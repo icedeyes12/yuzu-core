@@ -6,11 +6,11 @@ from __future__ import annotations
 
 from app.memory.memory import (
     trigger_memory_pipeline_async,
-    run_memory_pipeline,
+    run_memory_pipeline_async,
 )
 from app.memory.summarization import (
-    summarize_memory,
-    should_summarize_memory,
+    summarize_memory_async,
+    should_summarize_memory_async,
     detect_important_content,
 )
 from app.memory.profile import (
@@ -21,9 +21,9 @@ from app.memory.profile import (
 
 __all__ = [
     "trigger_memory_pipeline_async",
-    "run_memory_pipeline",
-    "summarize_memory",
-    "should_summarize_memory",
+    "run_memory_pipeline_async",
+    "summarize_memory_async",
+    "should_summarize_memory_async",
     "detect_important_content",
     "summarize_global_player_profile",
     "normalize_memory_item",

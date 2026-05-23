@@ -82,7 +82,7 @@ async def api_rebuild_structured_memory():
         active_session = Database.get_active_session()
         session_id = active_session["id"]
 
-        from app.memory.memory import run_memory_pipeline
+        from app.memory.memory import run_memory_pipeline_async
         from app.memory.db_memory import (
             count_facts,
             FACT_TYPE_STATIC,
@@ -93,7 +93,7 @@ async def api_rebuild_structured_memory():
         count = Database.get_session_messages_count(session_id)
 
         # Run the full pipeline
-        result = run_memory_pipeline(session_id, count)
+        result = await run_memory_pipeline_async(session_id, count)
 
         semantic_count = count_facts(fact_type=FACT_TYPE_STATIC, session_id=session_id)
         episodic_count = count_facts(fact_type=FACT_TYPE_DYNAMIC, session_id=session_id)

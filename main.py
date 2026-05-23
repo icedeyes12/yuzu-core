@@ -16,13 +16,14 @@ from app.orchestrator import (
     handle_user_message_streaming,
 )
 from app.services.session_service import SessionService
-from app.memory.summarization import summarize_memory
+from app.memory.summarization import summarize_memory_async
 from app.memory.profile import summarize_global_player_profile
 from app.db import Database
 from app.providers import get_ai_manager
 from app.services.config_service import ConfigService
 from app.tools import multimodal_tools
 from datetime import datetime
+import asyncio
 import threading
 import webbrowser
 import time
@@ -1390,12 +1391,12 @@ class YuzuCompanionAgent:
 
         if last_user_msg and last_ai_reply:
             console.print("[dim]Generating session context...[/]")
-            if summarize_memory(
+            if asyncio.run(summarize_memory_async(
                 self.profile,
                 last_user_msg["content"],
                 last_ai_reply["content"],
                 session_id,
-            ):
+            )):
                 success("Session context updated!")
             else:
                 error("Session context update failed")

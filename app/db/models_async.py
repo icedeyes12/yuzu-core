@@ -238,6 +238,53 @@ async def increment_message_count_async(session_id: int) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Pipeline state (stored in memory_state)
+# ---------------------------------------------------------------------------
+
+
+async def get_memory_state_async(session_id: int) -> dict:
+    """Get pipeline state from session's memory_state.
+
+    Returns dict with:
+        - last_segmented_count: int
+        - last_segmented_at: ISO timestamp
+    """
+    row = await pg_fetchone_async(
+        "SELECT memory_state FROM chat_sessions WHERE id = %s", (session_id,)
+    )
+    if not row:
+        return {"last_segmented_count": 0}
+
+    ms = row.get("memory_state")
+    if not ms:
+        return {"last_segmented_count": 0}
+
+    # JSONB column - already dict from psycopg v3
+    if isinstance(ms, dict):
+        return ms
+    else:
+        return {"last_segmented_count": 0}
+
+
+async def update_memory_state_async(session_id: int, state: dict) -> bool:
+    """Update pipeline state in session's memory_state.
+
+    Merges with existing state.
+    """
+    try:
+        existing = await get_memory_state_async(session_id)
+        existing.update(state)
+        await pg_execute_async(
+            "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s",
+            (json.dumps(existing), datetime.now(), session_id),
+        )
+        return True
+    except Exception as e:
+        log.error("update_memory_state_async failed: %s", e)
+        return False
+
+
+# ---------------------------------------------------------------------------
 # API keys
 # ---------------------------------------------------------------------------
 
@@ -517,6 +564,8 @@ __all__ = [
     "get_session_memory_async",
     "update_session_memory_async",
     "increment_message_count_async",
+    "get_memory_state_async",
+    "update_memory_state_async",
     # API keys
     "get_api_keys_async",
     "get_api_key_async",
