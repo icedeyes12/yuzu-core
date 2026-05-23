@@ -309,7 +309,7 @@ def execute(
             text=True,
             timeout=DEFAULT_TIMEOUT,
             cwd=DEFAULT_CWD,
-            executable="/data/data/com.termux/files/usr/bin/bash" # Sesuaikan path bash Termux
+            executable="/data/data/com.termux/files/usr/bin/bash",  # Sesuaikan path bash Termux
         )
         duration_ms = int((time.time() - start_time) * 1000)
 

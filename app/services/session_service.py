@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from typing import Any
 
@@ -10,11 +9,12 @@ from app.logging_config import get_logger
 
 log = get_logger(__name__)
 
+
 class SessionService:
     _AUTO_NAME_TRIGGER_COUNT = 10
     _AUTO_NAME_TRUNCATE = 40
     _AUTO_NAME_MODEL = "google/gemma-4-31B-turbo-TEE"
-    
+
     # Global session tracker for web clients to prevent duplicate connection messages
     _web_session_tracker: dict[str, bool] = {}
 
@@ -71,8 +71,6 @@ class SessionService:
         """Persist a disconnect note and update aggregate session history."""
         active_session = Database.get_active_session()
         session_id = active_session["id"]
-        sessions = Database.get_all_sessions() or []
-        session_count = len(sessions)
 
         # Calculate duration if possible
         history = profile.get("session_history") or {}
@@ -114,7 +112,10 @@ class SessionService:
         """Rename a 'New Chat' session once it has reached the trigger count."""
         if active_session.get("name") != "New Chat":
             return
-        if Database.get_session_messages_count(session_id) < SessionService._AUTO_NAME_TRIGGER_COUNT:
+        if (
+            Database.get_session_messages_count(session_id)
+            < SessionService._AUTO_NAME_TRIGGER_COUNT
+        ):
             return
 
         api_keys = Database.get_api_keys() or {}
@@ -134,14 +135,21 @@ class SessionService:
         Database.rename_session(session_id, name)
 
     @staticmethod
-    def generate_connection_msg(display_name: str, interface: str, last_active: str, session_count: int) -> str:
+    def generate_connection_msg(
+        display_name: str, interface: str, last_active: str, session_count: int
+    ) -> str:
         return (
             f"*{display_name} connected to {interface} interface at {SessionService._format_now()}. "
             f"Last active: {last_active}. Session count: #{session_count}*"
         )
 
     @staticmethod
-    def generate_disconnect_msg(display_name: str, interface: str, duration_minutes: float, unexpected_exit: bool = False) -> str:
+    def generate_disconnect_msg(
+        display_name: str,
+        interface: str,
+        duration_minutes: float,
+        unexpected_exit: bool = False,
+    ) -> str:
         status = "unexpectedly " if unexpected_exit else ""
         return (
             f"*{display_name} disconnected {status}from {interface} "
@@ -164,6 +172,7 @@ class SessionService:
     def _bootstrap_memory(session_id: int) -> None:
         try:
             from app.memory.review import run_decay
+
             run_decay(session_id)
         except Exception as e:
             log.warning("memory bootstrap failed: %s", e)
@@ -193,6 +202,10 @@ class SessionService:
         for msg in history:
             if msg["role"] == "user" and len(msg["content"].strip()) > 10:
                 text = msg["content"].strip()
-                short = text[:SessionService._AUTO_NAME_TRUNCATE]
-                return short + "..." if len(text) > SessionService._AUTO_NAME_TRUNCATE else short
+                short = text[: SessionService._AUTO_NAME_TRUNCATE]
+                return (
+                    short + "..."
+                    if len(text) > SessionService._AUTO_NAME_TRUNCATE
+                    else short
+                )
         return None

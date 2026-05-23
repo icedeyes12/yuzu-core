@@ -3,7 +3,6 @@
 #              Logic migrated to app/memory/ in Phase 3.
 
 from __future__ import annotations
-from typing import Any
 from app.memory.summarization import (
     detect_important_content,
     should_summarize_memory,

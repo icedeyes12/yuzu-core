@@ -132,29 +132,29 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
 
     # Split into lines for line-start validation
     lines = text.split("\n")
-    
+
     # Find tool blocks with line-start requirement
     matches: list[str] = []
     i = 0
     while i < len(lines):
         line = lines[i]
         stripped = line.strip()
-        
+
         # Check if this line starts with <tool> (after optional whitespace)
         if stripped.startswith(_TOOL_OPEN):
             # Find the matching </tool>
             content_lines: list[str] = []
             found_close = False
-            
+
             # Check if <tool> and </tool> are on the same line
             if _TOOL_CLOSE in stripped:
                 # Single-line format: <tool>command</tool>
                 # Must be pure tool block (only whitespace around)
-                after_open = stripped[len(_TOOL_OPEN):]
+                after_open = stripped[len(_TOOL_OPEN) :]
                 close_idx = after_open.find(_TOOL_CLOSE)
                 if close_idx != -1:
                     # Verify </tool> is at the end
-                    after_close = after_open[close_idx + len(_TOOL_CLOSE):].strip()
+                    after_close = after_open[close_idx + len(_TOOL_CLOSE) :].strip()
                     if not after_close:
                         # Preserve leading whitespace, only strip trailing
                         content = after_open[:close_idx].strip()
@@ -165,22 +165,24 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
             else:
                 # Multi-line format: <tool> on its own line
                 # Check that <tool> is the only content (pure block start)
-                after_open = stripped[len(_TOOL_OPEN):].strip()
+                after_open = stripped[len(_TOOL_OPEN) :].strip()
                 if not after_open:  # Pure <tool> line
                     # Collect content until </tool>
                     j = i + 1
                     while j < len(lines):
                         inner_line = lines[j]
                         inner_stripped = inner_line.strip()
-                        
+
                         if inner_stripped.endswith(_TOOL_CLOSE):
                             # Found closing tag
                             # Check if it's pure </tool> or has content before
-                            before_close = inner_stripped[:-len(_TOOL_CLOSE)].strip()
+                            before_close = inner_stripped[: -len(_TOOL_CLOSE)].strip()
                             if before_close:
                                 # Preserve leading whitespace for the content part
                                 # Find where the content starts in the original line
-                                content_part = inner_line[:inner_line.rfind(_TOOL_CLOSE)].strip()
+                                content_part = inner_line[
+                                    : inner_line.rfind(_TOOL_CLOSE)
+                                ].strip()
                                 content_lines.append(content_part)
                             found_close = True
                             # Mark lines for removal
@@ -197,7 +199,7 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
                             # Preserve leading whitespace - only rstrip trailing
                             content_lines.append(inner_line.strip())
                         j += 1
-                    
+
                     if found_close and content_lines:
                         # Join lines preserving indentation, strip only trailing whitespace
                         content = "\n".join(content_lines).strip()
@@ -213,7 +215,7 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
 
     # Reconstruct clean text (lines with tool blocks already emptied)
     clean_text = "\n".join(lines)
-    
+
     # Clean up excessive whitespace but preserve structure
     lines = clean_text.split("\n")
     cleaned_lines: list[str] = []
@@ -243,7 +245,7 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
 
 def has_tool_blocks(text: str) -> bool:
     """Check if text contains any <tool>...</tool> blocks.
-    
+
     Uses same line-start requirement as parse_tool_blocks():
     - <tool> must be at line start (after optional whitespace)
     - </tool> must be at line end (only whitespace after)
@@ -252,20 +254,20 @@ def has_tool_blocks(text: str) -> bool:
         return False
     if len(text) > _REGEX_INPUT_LIMIT:
         text = text[:_REGEX_INPUT_LIMIT]
-    
+
     if "<tool>" in text and "</tool>" in text:
         return True
-        
+
     lines = text.split("\n")
     for line in lines:
         stripped = line.strip()
         if stripped.startswith(_TOOL_OPEN):
             if _TOOL_CLOSE in stripped:
                 # Single-line format
-                after_open = stripped[len(_TOOL_OPEN):]
+                after_open = stripped[len(_TOOL_OPEN) :]
                 close_idx = after_open.find(_TOOL_CLOSE)
                 if close_idx != -1:
-                    after_close = after_open[close_idx + len(_TOOL_CLOSE):].strip()
+                    after_close = after_open[close_idx + len(_TOOL_CLOSE) :].strip()
                     if not after_close:
                         return True
             else:

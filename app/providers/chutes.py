@@ -3,12 +3,12 @@ from __future__ import annotations
 import json
 import logging
 import requests
-import time
 from typing import Generator
 from app.providers.base import AIProvider
 from app.tools import multimodal_tools
 
 logger = logging.getLogger(__name__)
+
 
 class ChutesProvider(AIProvider):
     def __init__(self, config: dict | None = None):
@@ -40,7 +40,9 @@ class ChutesProvider(AIProvider):
             elif role not in standard_roles:
                 content = msg.get("content", "")
                 normalized_content = f"[{role}]\n{content}"
-                normalized_messages.append({"role": "assistant", "content": normalized_content})
+                normalized_messages.append(
+                    {"role": "assistant", "content": normalized_content}
+                )
             else:
                 normalized_messages.append(msg)
 
@@ -98,7 +100,9 @@ class ChutesProvider(AIProvider):
             if status not in retryable_codes:
                 return None
 
-            logger.debug(f"{log_prefix} {current_model} failed ({status}), retrying with another model...")
+            logger.debug(
+                f"{log_prefix} {current_model} failed ({status}), retrying with another model..."
+            )
 
         logger.debug(f"{log_prefix} All models exhausted, last error: {last_error}")
         return None
@@ -110,9 +114,13 @@ class ChutesProvider(AIProvider):
             if self.supports_vision(model) and messages:
                 last_user_message = self._get_last_user_message(messages)
                 if last_user_message and multimodal_tools.has_images(last_user_message):
-                    logger.debug(f"[Vision] Triggered for message: {last_user_message[:100]}...")
+                    logger.debug(
+                        f"[Vision] Triggered for message: {last_user_message[:100]}..."
+                    )
                     vision_messages = self.format_vision_message(last_user_message)
-                    messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
+                    messages = self._replace_last_user_message(
+                        messages, last_user_message, vision_messages
+                    )
 
         temperature = kwargs.get("temperature", 0.73)
         max_tokens = kwargs.get("max_tokens")
@@ -146,7 +154,10 @@ class ChutesProvider(AIProvider):
                 timeout=kwargs.get("timeout", 120),
             )
             if response.status_code == 200:
-                return (200, response.json()["choices"][0]["message"]["content"].strip())
+                return (
+                    200,
+                    response.json()["choices"][0]["message"]["content"].strip(),
+                )
             return (response.status_code, None, response.text[:200])
         except Exception as e:
             return (0, None, str(e))
@@ -164,7 +175,9 @@ class ChutesProvider(AIProvider):
                 last_user_message = self._get_last_user_message(messages)
                 if last_user_message and multimodal_tools.has_images(last_user_message):
                     vision_messages = self.format_vision_message(last_user_message)
-                    messages = self._replace_last_user_message(messages, last_user_message, vision_messages)
+                    messages = self._replace_last_user_message(
+                        messages, last_user_message, vision_messages
+                    )
 
             temperature = kwargs.get("temperature", 0.73)
             max_tokens = kwargs.get("max_tokens")

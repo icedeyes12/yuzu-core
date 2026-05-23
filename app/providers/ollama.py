@@ -5,6 +5,7 @@ import requests
 from typing import Generator
 from app.providers.base import AIProvider
 
+
 class OllamaProvider(AIProvider):
     def __init__(self, config: dict | None = None):
         super().__init__("ollama", config)

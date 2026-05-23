@@ -7,6 +7,7 @@ from app.providers.base import AIProvider
 
 logger = logging.getLogger(__name__)
 
+
 class CerebrasProvider(AIProvider):
     def __init__(self, config: dict | None = None):
         super().__init__("cerebras", config)
@@ -53,7 +54,9 @@ class CerebrasProvider(AIProvider):
                 "stream": False,
             }
 
-            logger.debug(f"[Cerebras] {model} | new_msg=1 | max_tokens={max_tokens or 'unlimited'}")
+            logger.debug(
+                f"[Cerebras] {model} | new_msg=1 | max_tokens={max_tokens or 'unlimited'}"
+            )
 
             response = requests.post(
                 self.base_url,
@@ -110,6 +113,7 @@ class CerebrasProvider(AIProvider):
 
             if response.status_code == 200:
                 import json
+
                 for line in response.iter_lines():
                     if line and line.startswith(b"data: "):
                         try:

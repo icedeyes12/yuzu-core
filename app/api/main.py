@@ -5,12 +5,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-# The main router that will hold all sub-routers
-router = APIRouter()
-
-# Register sub-routers
+from app.api.endpoints import chat, memory, profile, sessions
 from app.api.static import router as static_router
-from app.api.endpoints import chat, sessions, profile, memory
+
+router = APIRouter()
 
 router.include_router(static_router)
 router.include_router(chat.router)

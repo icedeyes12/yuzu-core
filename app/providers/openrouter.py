@@ -9,6 +9,7 @@ from app.tools import multimodal_tools
 
 logger = logging.getLogger(__name__)
 
+
 class OpenRouterProvider(AIProvider):
     def __init__(self, config: dict | None = None):
         super().__init__("openrouter", config)
@@ -59,7 +60,9 @@ class OpenRouterProvider(AIProvider):
     def get_models(self) -> list[str]:
         return self.available_models
 
-    def _prepare_payload(self, messages: list[dict], model: str, stream: bool, **kwargs) -> tuple[dict, dict]:
+    def _prepare_payload(
+        self, messages: list[dict], model: str, stream: bool, **kwargs
+    ) -> tuple[dict, dict]:
         messages = self._normalize_messages(messages)
 
         if self.supports_vision(model) and messages:
@@ -97,13 +100,13 @@ class OpenRouterProvider(AIProvider):
             "typical_p": typical_p,
             "stream": stream,
         }
-        
+
         tools = kwargs.get("tools")
         if tools:
             payload["tools"] = tools
-            if not stream: # Usually tool_choice is auto for non-streaming
+            if not stream:  # Usually tool_choice is auto for non-streaming
                 payload["tool_choice"] = "auto"
-                
+
         return headers, payload
 
     def send_message(self, messages: list[dict], model: str, **kwargs) -> str | None:
@@ -112,7 +115,9 @@ class OpenRouterProvider(AIProvider):
 
         try:
             headers, payload = self._prepare_payload(messages, model, False, **kwargs)
-            logger.debug(f"[OpenRouter] {model} | max_tokens={payload['max_tokens'] or 'unlimited'}")
+            logger.debug(
+                f"[OpenRouter] {model} | max_tokens={payload['max_tokens'] or 'unlimited'}"
+            )
 
             response = requests.post(
                 self.base_url,
@@ -127,7 +132,7 @@ class OpenRouterProvider(AIProvider):
                 message = result["choices"][0]["message"]
                 content = message.get("content", "")
                 return content.strip() if content else ""
-            
+
             if response.status_code == 402:
                 return "OpenRouter free tier limit reached. Please try a different model or add credits."
             if response.status_code == 429:
@@ -155,10 +160,14 @@ class OpenRouterProvider(AIProvider):
                 result = response.json()
                 self._last_raw_response = result
                 return result
-            logger.warning(f"[OpenRouter] raw error {response.status_code}: {response.text[:500]}")
+            logger.warning(
+                f"[OpenRouter] raw error {response.status_code}: {response.text[:500]}"
+            )
             return None
         except Exception as e:
-            logger.error(f"[OpenRouter] exception in send_message_raw: {type(e).__name__}: {e}")
+            logger.error(
+                f"[OpenRouter] exception in send_message_raw: {type(e).__name__}: {e}"
+            )
             return None
 
     def send_message_streaming(
@@ -205,11 +214,13 @@ class OpenRouterProvider(AIProvider):
             results = []
             for tc in tool_calls:
                 fn = tc.get("function", {})
-                results.append({
-                    "id": tc.get("id", ""),
-                    "name": fn.get("name", ""),
-                    "arguments": json.loads(fn.get("arguments", "{}")),
-                })
+                results.append(
+                    {
+                        "id": tc.get("id", ""),
+                        "name": fn.get("name", ""),
+                        "arguments": json.loads(fn.get("arguments", "{}")),
+                    }
+                )
             return results
         except Exception:
             return []

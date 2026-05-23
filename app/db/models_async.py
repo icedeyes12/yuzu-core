@@ -295,7 +295,7 @@ async def add_message_async(
     image_paths: str | None = None,  # noqa: ARG001 - column not yet wired
 ) -> int | None:
     """Insert a message row, bump the session's message_count, return id.
-    
+
     Timestamp is set by database NOW() to ensure ordering coherence.
     """
     try:
@@ -432,7 +432,10 @@ async def add_memory_note_async(session_id: int, content: str) -> int | None:
 
 
 async def get_chat_history_for_ai_async(
-    session_id: int, limit: int | None = None, recent: bool = False, include_image_paths: bool = False
+    session_id: int,
+    limit: int | None = None,
+    recent: bool = False,
+    include_image_paths: bool = False,
 ) -> list[dict]:
     if limit and recent:
         rows = await pg_fetchall_async(

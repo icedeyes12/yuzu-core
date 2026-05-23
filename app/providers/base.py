@@ -9,6 +9,7 @@ from app.tools import multimodal_tools
 
 logger = logging.getLogger(__name__)
 
+
 class AIProvider:
     def __init__(self, name: str, config: dict | None = None):
         self.name = name
@@ -96,6 +97,7 @@ class AIProvider:
                 normalized.append(msg)
         return normalized
 
+
 class AIProviderManager:
     def __init__(self):
         self.providers = {}
@@ -175,40 +177,58 @@ class AIProviderManager:
         FALLBACK_MODEL = "Qwen/Qwen3.6-27B-TEE"
 
         def _is_connection_error(error: str | None) -> bool:
-            if not error: return True
+            if not error:
+                return True
             error_lower = error.lower()
-            retryable = ["timeout", "connection", "network", "refused", "reset", "socket", "timed out"]
+            retryable = [
+                "timeout",
+                "connection",
+                "network",
+                "refused",
+                "reset",
+                "socket",
+                "timed out",
+            ]
             return any(r in error_lower for r in retryable)
 
         for attempt in range(3):
             result = provider.send_message(
                 messages, MAIN_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs
             )
-            if result: return result
+            if result:
+                return result
             last_error = getattr(provider, "_last_error", None)
-            if not _is_connection_error(last_error): break
-            if attempt < 2: time.sleep(0.5)
+            if not _is_connection_error(last_error):
+                break
+            if attempt < 2:
+                time.sleep(0.5)
 
         for attempt in range(2):
             result = provider.send_message(
                 messages, FALLBACK_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs
             )
-            if result: return result
+            if result:
+                return result
             last_error = getattr(provider, "_last_error", None)
-            if not _is_connection_error(last_error): break
-            if attempt < 1: time.sleep(0.5)
+            if not _is_connection_error(last_error):
+                break
+            if attempt < 1:
+                time.sleep(0.5)
         return None
 
     def auto_send_message(self, messages: list[dict], **kwargs) -> str | None:
         return self._internal_llm_call(messages, **kwargs)
 
+
 _ai_manager_instance = None
+
 
 def get_ai_manager():
     global _ai_manager_instance
     if _ai_manager_instance is None:
         _ai_manager_instance = AIProviderManager()
     return _ai_manager_instance
+
 
 def reload_ai_manager():
     global _ai_manager_instance

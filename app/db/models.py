@@ -327,7 +327,7 @@ def add_message(
     image_paths: list[str] | None = None,
 ) -> int | None:
     """Insert a message row, bump the session's message_count, return id.
-    
+
     Timestamp is set by database NOW() to ensure ordering coherence.
     """
     try:
@@ -346,7 +346,9 @@ def add_message(
         return None
 
 
-def update_message(message_id: int, content: str, image_paths: list[str] | None = None) -> bool:
+def update_message(
+    message_id: int, content: str, image_paths: list[str] | None = None
+) -> bool:
     """Update the content and optional image paths of an existing message."""
     try:
         paths_json = json.dumps(image_paths or [])
@@ -457,7 +459,10 @@ def add_memory_note(session_id: int, content: str) -> int | None:
 
 
 def get_chat_history_for_ai(
-    session_id: int, limit: int | None = None, recent: bool = False, include_image_paths: bool = False
+    session_id: int,
+    limit: int | None = None,
+    recent: bool = False,
+    include_image_paths: bool = False,
 ) -> list[dict]:
     """Fetch history and format specifically for LLM context (e.g. system turn)."""
     rows = get_chat_history(session_id, limit, recent)

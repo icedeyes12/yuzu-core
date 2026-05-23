@@ -303,7 +303,9 @@ class YuzuCompanionAgent:
         console.print(
             f"\n[magenta]{self.profile['partner_name']}[/] > Ending terminal session..."
         )
-        SessionService.end_session_cleanup(self.profile, interface="terminal", unexpected_exit=False)
+        SessionService.end_session_cleanup(
+            self.profile, interface="terminal", unexpected_exit=False
+        )
         return False
 
     def _handle_multimodal_commands(self, cmd: str, args: list):
@@ -383,7 +385,9 @@ class YuzuCompanionAgent:
         model_arg = " ".join(args)
         if "/" in model_arg:
             provider_part, model_part = model_arg.split("/", 1)
-            result = ConfigService.set_preferred_provider(provider_part.strip(), model_part.strip())
+            result = ConfigService.set_preferred_provider(
+                provider_part.strip(), model_part.strip()
+            )
             success(result)
             self.update_session_state()
             console.print(
@@ -478,7 +482,7 @@ class YuzuCompanionAgent:
     def show_status_info(self):
         active_session = Database.get_active_session()
         session_memory = Database.get_session_memory(active_session["id"])
-        
+
         vision_caps = ConfigService.get_vision_capabilities()
 
         status_table = Table(show_header=False, title="Current Status", style="blue")
@@ -508,9 +512,7 @@ class YuzuCompanionAgent:
         )
         status_table.add_row(
             "Image Generation",
-            "Available"
-            if vision_caps["has_image_generation"]
-            else "Unavailable",
+            "Available" if vision_caps["has_image_generation"] else "Unavailable",
         )
 
         console.print(status_table)
@@ -798,11 +800,15 @@ class YuzuCompanionAgent:
 
     def _handle_graceful_exit(self):
         console.print("\n[green]Goodbye![/]")
-        SessionService.end_session_cleanup(self.profile, interface="terminal", unexpected_exit=False)
+        SessionService.end_session_cleanup(
+            self.profile, interface="terminal", unexpected_exit=False
+        )
 
     def _handle_unexpected_error(self, e: Exception):
         error(f"Unexpected error: {e}")
-        SessionService.end_session_cleanup(self.profile, interface="terminal", unexpected_exit=True)
+        SessionService.end_session_cleanup(
+            self.profile, interface="terminal", unexpected_exit=True
+        )
 
     def chat_loop(self):
         SessionService.start_session(interface="terminal")

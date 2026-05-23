@@ -39,8 +39,6 @@ _EMPTY_RESPONSE_FALLBACK = "I'm having trouble responding right now. Please try 
 _MD_IMAGE_PATTERN = re.compile(r"!\[[^\]]{0,200}\]\(([^)]{1,200})\)")
 
 # Services
-from app.services.session_service import SessionService
-from app.services.memory_service import MemoryService
 
 # Maximum orchestration loops to prevent runaway execution
 _MAX_ORCHESTRATION_LOOPS = 30
@@ -270,21 +268,30 @@ def _persist_user(message: str, session_id: int, image_paths: list[str] | None) 
     )
 
 
-def _persist_assistant(content: str, session_id: int, image_paths: list[str] | None = None) -> None:
+def _persist_assistant(
+    content: str, session_id: int, image_paths: list[str] | None = None
+) -> None:
     """Persist an assistant response, with optional image paths (for image generation)."""
-    Database.add_message("assistant", content, session_id=session_id, image_paths=image_paths)
+    Database.add_message(
+        "assistant", content, session_id=session_id, image_paths=image_paths
+    )
 
 
 def _persist_tool_result(tool_name: str, markdown: str, session_id: int) -> None:
     """Persist a tool result, extracting and saving any generated image paths."""
     from app.commands import parse_image_path
-    
+
     image_paths = []
     path = parse_image_path(markdown)
     if path:
         image_paths.append(path)
-        
-    Database.add_message(get_tool_role(tool_name), markdown, session_id=session_id, image_paths=image_paths or None)
+
+    Database.add_message(
+        get_tool_role(tool_name),
+        markdown,
+        session_id=session_id,
+        image_paths=image_paths or None,
+    )
 
 
 def _persist_observation(observation: str, session_id: int) -> None:
@@ -365,7 +372,7 @@ def _post_turn(
     """Auto-rename session, summarize memory, trigger memory pipeline."""
     # Auto-rename via service
     SessionService.auto_name_session_if_needed(session_id, active_session)
-    
+
     # Memory checks via service
     MemoryService.run_per_message_checks(
         profile, user_message, final_response, session_id, active_session
@@ -430,7 +437,7 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
                 _persist_tool_result(tool_name, tool_markdown, session_id)
 
             combined = "\n\n".join(tool_markdowns)
-            
+
             # Extract any generated image paths
             generated_paths = []
             for tm in tool_markdowns:
@@ -492,8 +499,10 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
             _persist_tool_result(tool_name, tool_markdown, session_id)
 
             is_image_tool = parse_image_path(tool_markdown) is not None
-            generated_paths = [parse_image_path(tool_markdown)] if is_image_tool else None
-            
+            generated_paths = (
+                [parse_image_path(tool_markdown)] if is_image_tool else None
+            )
+
             synthesis = _run_synthesis(profile, session_id, interface, tool_markdown)
 
             if synthesis:
@@ -573,7 +582,7 @@ def handle_user_message_streaming(
     response_chunks: list[str] = []
     assistant_msg_id = Database.add_message("assistant", "", session_id=session_id)
     last_db_update = time.time()
-    
+
     try:
         for chunk in generate_ai_response_streaming(
             profile, user_message, interface, session_id, provider, model
@@ -583,17 +592,19 @@ def handle_user_message_streaming(
                 if abort_check and abort_check():
                     log.info("[stream] aborting during first pass")
                     if response_chunks:
-                        Database.update_message(assistant_msg_id, "".join(response_chunks))
+                        Database.update_message(
+                            assistant_msg_id, "".join(response_chunks)
+                        )
                     return
 
                 response_chunks.append(chunk)
-                
+
                 # Periodically update DB to ensure state recovery on reconnect
                 now = time.time()
-                if now - last_db_update > 2.0: # Every 2 seconds
+                if now - last_db_update > 2.0:  # Every 2 seconds
                     Database.update_message(assistant_msg_id, "".join(response_chunks))
                     last_db_update = now
-                    
+
                 yield chunk
     except Exception as e:
         log.error("[stream] error in first pass: %s", e)
@@ -653,13 +664,13 @@ def handle_user_message_streaming(
         p = parse_image_path(tm)
         if p:
             all_generated_paths.append(p)
-        
+
     loop_count = 0
-    
+
     while loop_count < _MAX_ORCHESTRATION_LOOPS:
         loop_count += 1
         log.info("[stream] orchestration loop %d", loop_count)
-        
+
         # Check for cancellation
         if abort_check and abort_check():
             log.info("[stream] aborting orchestration loop")
@@ -668,7 +679,7 @@ def handle_user_message_streaming(
         # Stream synthesis
         synthesis_chunks: list[str] = []
         full_synthesis = ""
-        synthesis_msg_id = None # Lazy created
+        synthesis_msg_id = None  # Lazy created
         last_synth_update = time.time()
 
         try:
@@ -685,18 +696,24 @@ def handle_user_message_streaming(
 
                     synthesis_chunks.append(chunk)
                     full_synthesis += chunk
-                    
+
                     # Lazy create message row
                     if synthesis_msg_id is None:
-                        synthesis_msg_id = Database.add_message("assistant", "", session_id=session_id)
+                        synthesis_msg_id = Database.add_message(
+                            "assistant", "", session_id=session_id
+                        )
 
                     # Periodic update
                     now = time.time()
                     if now - last_synth_update > 2.0:
                         Database.update_message(synthesis_msg_id, full_synthesis)
                         last_synth_update = now
-                        
-                    yield "\n\n" + chunk if any_image_tool and not synthesis_chunks[:-1] else chunk
+
+                    yield (
+                        "\n\n" + chunk
+                        if any_image_tool and not synthesis_chunks[:-1]
+                        else chunk
+                    )
         except Exception as e:
             log.error("[stream] error in synthesis loop: %s", e)
             if full_synthesis:
@@ -704,34 +721,44 @@ def handle_user_message_streaming(
             raise
 
         synthesis = _clean(full_synthesis) if full_synthesis else None
-        
+
         # Final update
         if full_synthesis and synthesis_msg_id:
             # Check if this loop generated images to attach to the assistant message
             # All generated paths from this loop and previous ones are in all_generated_paths
             # DEPRECATED: image_paths population in update_message is now the primary way to track images
-            Database.update_message(synthesis_msg_id, full_synthesis, image_paths=all_generated_paths)
+            Database.update_message(
+                synthesis_msg_id, full_synthesis, image_paths=all_generated_paths
+            )
 
         if not synthesis:
             # No synthesis - already handled persistence above if any chunks existed
             _post_turn(
-                profile, user_message, current_synthesis_context, session_id, active_session
+                profile,
+                user_message,
+                current_synthesis_context,
+                session_id,
+                active_session,
             )
             return
 
         # Synthesis already persisted in synthesis_msg_id
-        
+
         # Check if synthesis contains more tool blocks
         if not has_tool_blocks(synthesis):
             # No more tools - we're done
             final_response = (
-                f"{current_synthesis_context}\n\n{synthesis}" if any_image_tool else synthesis
+                f"{current_synthesis_context}\n\n{synthesis}"
+                if any_image_tool
+                else synthesis
             )
-            _post_turn(profile, user_message, final_response, session_id, active_session)
+            _post_turn(
+                profile, user_message, final_response, session_id, active_session
+            )
             return
 
         log.info("[stream] synthesis contains tool blocks, continuing loop")
-        
+
         # Parse and execute tools from synthesis
         next_commands, _ = parse_tool_blocks(synthesis)
         if not next_commands:
@@ -757,5 +784,13 @@ def handle_user_message_streaming(
         current_synthesis_context = "\n\n".join(next_markdowns)
 
     # Max loops reached
-    log.warning("[stream] max orchestration loops reached (%d)", _MAX_ORCHESTRATION_LOOPS)
-    _post_turn(profile, user_message, synthesis or current_synthesis_context, session_id, active_session)
+    log.warning(
+        "[stream] max orchestration loops reached (%d)", _MAX_ORCHESTRATION_LOOPS
+    )
+    _post_turn(
+        profile,
+        user_message,
+        synthesis or current_synthesis_context,
+        session_id,
+        active_session,
+    )

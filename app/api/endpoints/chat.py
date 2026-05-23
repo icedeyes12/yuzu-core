@@ -16,14 +16,17 @@ log = get_logger(__name__)
 
 router = APIRouter(tags=["chat"])
 
+
 def _get_session_id(request: Request) -> str:
     client_host = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     return f"{client_host}_{hash(user_agent) % 10000}"
 
+
 class MessageRequest(BaseModel):
     message: str = Field(..., min_length=1, description="User message text")
     interface: str = Field(default="web", description="Interface source identifier")
+
 
 @router.post("/send_message")
 async def api_send_message(request: MessageRequest):
@@ -43,6 +46,7 @@ async def api_send_message(request: MessageRequest):
     except Exception as e:
         log.error("Error in api_send_message: %s", type(e).__name__)
         return {"reply": "Sorry, I encountered an error processing your message."}
+
 
 @router.post("/send_message_stream")
 async def api_send_message_stream(
@@ -69,8 +73,10 @@ async def api_send_message_stream(
             user_message = message.strip() if message else ""
 
         if not user_message and not images:
+
             async def empty_generator():
                 yield 'data: {"chunk": "Please provide a message or images!"}\n\n'
+
             return StreamingResponse(empty_generator(), media_type="text/event-stream")
 
         log.info("[%s] streaming unified message: %s...", interface, user_message[:200])
@@ -81,16 +87,19 @@ async def api_send_message_stream(
                 interface=interface,
                 provider=provider,
                 model=model,
-                images=images
+                images=images,
             ),
-            media_type="text/event-stream"
+            media_type="text/event-stream",
         )
 
     except Exception as e:
         log.error("Error in unified streaming: %s - %s", type(e).__name__, e)
+
         async def generate_error():
             yield 'data: {"chunk": "Sorry, I encountered an error processing your message."}\n\n'
+
         return StreamingResponse(generate_error(), media_type="text/event-stream")
+
 
 @router.post("/generate_image")
 async def api_generate_image(request: MessageRequest):
@@ -105,16 +114,20 @@ async def api_generate_image(request: MessageRequest):
         log.error("Error generating image: %s", type(e).__name__)
         return {"reply": "Failed to generate image", "status": "error"}
 
+
 @router.post("/browser_unload")
 async def api_browser_unload(request: Request):
     try:
         from app.db import Database
+
         client_id = _get_session_id(request)
         SessionService.clear_client_session(client_id)
         log.info("Web page closed or refreshed - session cleared")
 
         profile = Database.get_profile()
-        SessionService.end_session_cleanup(profile, interface="web", unexpected_exit=True)
+        SessionService.end_session_cleanup(
+            profile, interface="web", unexpected_exit=True
+        )
 
         return {"status": "page closed"}
     except Exception:

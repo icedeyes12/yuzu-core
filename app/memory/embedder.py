@@ -4,7 +4,6 @@ from __future__ import annotations
 #              PostgreSQL handles list[float] natively - no blob conversion needed
 
 
-import os
 import threading
 from app.providers import get_ai_manager
 
@@ -24,10 +23,10 @@ def _get_session():
         manager = get_ai_manager()
         chutes = manager.providers.get("chutes")
         api_key = chutes.api_key if chutes else None
-        
+
         if not api_key:
             return None
-            
+
         _thread_local.session = __import__("requests").Session()
         _thread_local.session.headers.update(
             {

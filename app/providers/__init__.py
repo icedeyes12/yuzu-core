@@ -6,6 +6,7 @@ from app.providers.cerebras import CerebrasProvider
 from app.providers.openrouter import OpenRouterProvider
 from app.providers.chutes import ChutesProvider
 
+
 # Override load_providers to register actual provider implementations
 def load_all_providers(manager: AIProviderManager):
     ollama = OllamaProvider()
@@ -23,6 +24,7 @@ def load_all_providers(manager: AIProviderManager):
     chutes = ChutesProvider()
     if chutes.is_available:
         manager.register_provider("chutes", chutes)
+
 
 # Patch the AIProviderManager to use our load function
 AIProviderManager.load_providers = load_all_providers

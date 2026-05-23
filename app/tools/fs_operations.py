@@ -437,9 +437,7 @@ def execute_ls(arguments: dict, session_id: int | None = None) -> dict:
         try:
             stats = entry.stat()
             size = stats.st_size
-            mtime = datetime.fromtimestamp(stats.st_mtime).strftime(
-                "%Y-%m-%d %H:%M"
-            )
+            mtime = datetime.fromtimestamp(stats.st_mtime).strftime("%Y-%m-%d %H:%M")
             lines.append(f"\ud83d\udcc4 {f_name:<30} {size:>8}  {mtime}")
         except OSError:
             lines.append(f"\ud83d\udcc4 {f_name}")

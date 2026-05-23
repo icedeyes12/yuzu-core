@@ -4,7 +4,6 @@ from __future__ import annotations
 
 
 import logging
-import os
 import json
 from pathlib import Path
 from datetime import datetime
@@ -29,7 +28,9 @@ def _get_last_decay_time():
 def _set_last_decay_time():
     """Record current time as last decay timestamp."""
     try:
-        _DECAY_STATE_FILE.write_text(json.dumps({"last_decay": datetime.now().isoformat()}))
+        _DECAY_STATE_FILE.write_text(
+            json.dumps({"last_decay": datetime.now().isoformat()})
+        )
     except IOError as e:
         logger.warning(f"Could not write decay state: {e}")
 

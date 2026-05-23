@@ -249,44 +249,52 @@ def generate_ai_response(
         session_id = Database.get_active_session()["id"]
 
     provider, model = _resolve_provider(profile, None, None)
-    
+
     # Validation: If images are present but model is not vision-capable, abort
-    if multimodal_tools.has_images(user_message) and not multimodal_tools.is_vision_model(model):
+    if multimodal_tools.has_images(
+        user_message
+    ) and not multimodal_tools.is_vision_model(model):
         error_msg = "[System] Current model does not support vision. Please reconfigure your active model to a multimodal one first~ :3"
         Database.add_message("system", error_msg, session_id=session_id)
         return error_msg, None
 
-    messages = build_messages(profile, session_id, interface, user_message, include_image_paths=True)
+    messages = build_messages(
+        profile, session_id, interface, user_message, include_image_paths=True
+    )
     if user_message and user_message.strip():
         # Note: image_paths will be populated by orchestrator and available in history if needed,
         # but for the current message we might need to handle it if build_messages doesn't.
-        # However, build_messages typically handles history. 
+        # However, build_messages typically handles history.
         # For the CURRENT turn's message:
         cached_images = []
         try:
             from app.orchestrator import _cache_images_from_message
+
             cached_images = _cache_images_from_message(user_message)
         except ImportError:
             pass
-            
-        messages.append({
-            "role": "user", 
-            "content": user_message,
-            "image_paths": cached_images
-        })
+
+        messages.append(
+            {"role": "user", "content": user_message, "image_paths": cached_images}
+        )
 
     # Apply the Interceptor Hook
     messages = multimodal_tools.inject_vision_context(messages, model)
-    
+
     if image_content_for_context:
         # 2nd pass synthesis often has image context from tool results
-        messages.append({
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "Here's the generated image for your reference."},
-                *image_content_for_context
-            ]
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Here's the generated image for your reference.",
+                    },
+                    *image_content_for_context,
+                ],
+            }
+        )
 
     _inject_persistent_visual(messages, user_message, session_id)
 
@@ -355,40 +363,48 @@ def generate_ai_response_streaming(
         session_id = Database.get_active_session()["id"]
 
     resolved_provider, resolved_model = _resolve_provider(profile, provider, model)
-    
+
     # Validation: If images are present but model is not vision-capable, abort
-    if multimodal_tools.has_images(user_message) and not multimodal_tools.is_vision_model(resolved_model):
+    if multimodal_tools.has_images(
+        user_message
+    ) and not multimodal_tools.is_vision_model(resolved_model):
         error_msg = "[System] Current model does not support vision. Please reconfigure your active model to a multimodal one first~ :3"
         Database.add_message("system", error_msg, session_id=session_id)
         yield error_msg
         return
 
-    messages = build_messages(profile, session_id, interface, user_message, include_image_paths=True)
+    messages = build_messages(
+        profile, session_id, interface, user_message, include_image_paths=True
+    )
     if user_message and user_message.strip():
         cached_images = []
         try:
             from app.orchestrator import _cache_images_from_message
+
             cached_images = _cache_images_from_message(user_message)
         except ImportError:
             pass
-            
-        messages.append({
-            "role": "user", 
-            "content": user_message,
-            "image_paths": cached_images
-        })
+
+        messages.append(
+            {"role": "user", "content": user_message, "image_paths": cached_images}
+        )
 
     # Apply the Interceptor Hook
     messages = multimodal_tools.inject_vision_context(messages, resolved_model)
-    
+
     if image_content_for_context:
-        messages.append({
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "Here's the generated image for your reference."},
-                *image_content_for_context
-            ]
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Here's the generated image for your reference.",
+                    },
+                    *image_content_for_context,
+                ],
+            }
+        )
 
     _inject_persistent_visual(messages, user_message, session_id)
 

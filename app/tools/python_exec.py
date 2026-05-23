@@ -80,7 +80,7 @@ def _extract_code_block(text: str) -> str:
     - ```python\ncode\n```
     - ```\ncode\n```
     - plain code
-    
+
     IMPORTANT: Preserves leading whitespace (indentation) for Python code.
     Only strips trailing whitespace from the final result.
     """
@@ -239,10 +239,10 @@ def execute(
 
     # Execute
     success, stdout, stderr, duration_ms = _execute_python(code)
-    
+
     # Mapping success ke Exit Code standar
     exit_code = 0 if success else 1
-    
+
     # Format terisolasi
     stdout_str = stdout.strip() if stdout and stdout.strip() else "(empty)"
     stderr_str = stderr.strip() if stderr and stderr.strip() else "(empty)"
@@ -259,7 +259,7 @@ def execute(
         return ok_result(
             {
                 "code_snippet": code[:100] + "..." if len(code) > 100 else code,
-                "output": formatted_output
+                "output": formatted_output,
             },
             TOOL_DEFINITION,
             full_command,

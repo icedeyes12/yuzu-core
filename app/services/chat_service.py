@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-import os
 import json
 import asyncio
 import logging
 from pathlib import Path
 from datetime import datetime
-from typing import Any, AsyncIterator
+from typing import AsyncIterator
 
 from fastapi import UploadFile
-from app.db import Database, get_active_session_async
+from app.db import get_active_session_async
 from app.stream_manager import StreamManager
 from app.orchestrator import handle_user_message
 
 log = logging.getLogger(__name__)
+
 
 class ChatService:
     @staticmethod
@@ -30,23 +30,27 @@ class ChatService:
 
         uploads_dir = Path("static/uploads")
         uploads_dir.mkdir(parents=True, exist_ok=True)
-        
+
         for i, image_file in enumerate(images):
             if image_file and image_file.filename:
                 try:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     # Clean filename
-                    safe_filename = "".join(c for c in image_file.filename if c.isalnum() or c in (".", "-", "_")).rstrip()
+                    safe_filename = "".join(
+                        c
+                        for c in image_file.filename
+                        if c.isalnum() or c in (".", "-", "_")
+                    ).rstrip()
                     filename = f"{timestamp}_{i}_{safe_filename}"
                     filepath = uploads_dir / filename
-                    
+
                     content = await image_file.read()
                     filepath.write_bytes(content)
-                    
+
                     image_markdowns.append(f"![Uploaded Image](uploads/{filename})")
                 except Exception as e:
                     log.error(f"Error saving uploaded image {image_file.filename}: {e}")
-        
+
         return image_markdowns
 
     @staticmethod
@@ -58,7 +62,7 @@ class ChatService:
         images: list[UploadFile] | None = None,
     ) -> AsyncIterator[str]:
         """
-        Start a streaming message response and return an async generator 
+        Start a streaming message response and return an async generator
         yielding SSE-formatted data chunks.
         """
         if images:

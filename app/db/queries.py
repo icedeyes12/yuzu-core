@@ -568,7 +568,9 @@ def _format_user_timestamp(ts: Any) -> str:
         return f"[{ts}]"
 
 
-def format_ai_history_rows(rows: list[dict], include_image_paths: bool = False) -> list[dict]:
+def format_ai_history_rows(
+    rows: list[dict], include_image_paths: bool = False
+) -> list[dict]:
     """Convert raw message rows into the AI-context message list.
 
     Behavior preserved exactly from the previous duplicated implementations:

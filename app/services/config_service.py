@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import Any
 
 from app.db import Database, get_api_keys
 from app.providers import get_ai_manager, reload_ai_manager
 
 logger = logging.getLogger(__name__)
+
 
 class ConfigService:
     @staticmethod
@@ -38,10 +38,10 @@ class ConfigService:
     def get_ai_providers_payload(profile: dict | None = None) -> dict[str, Any]:
         if profile is None:
             profile = Database.get_profile()
-        
+
         ai_manager = get_ai_manager()
         providers_config = profile.get("providers_config", {})
-        
+
         return {
             "available_providers": ai_manager.get_available_providers(),
             "all_models": ai_manager.get_all_models(),
@@ -53,9 +53,9 @@ class ConfigService:
     def get_vision_payload(profile: dict | None = None) -> dict[str, Any]:
         if profile is None:
             profile = Database.get_profile()
-            
+
         from app.tools.multimodal import multimodal_tools
-        
+
         vision_capabilities = ConfigService.get_vision_capabilities()
         providers_config = profile.get("providers_config", {})
         vision_prefs = providers_config.get("vision_model_preferences", {})
@@ -102,12 +102,18 @@ class ConfigService:
             "vision_model_preferences": profile.get("providers_config", {}).get(
                 "vision_model_preferences", {}
             ),
-            "created_at": profile["created_at"].isoformat() if profile.get("created_at") else None,
-            "updated_at": profile["updated_at"].isoformat() if profile.get("updated_at") else None,
+            "created_at": profile["created_at"].isoformat()
+            if profile.get("created_at")
+            else None,
+            "updated_at": profile["updated_at"].isoformat()
+            if profile.get("updated_at")
+            else None,
         }
 
     @staticmethod
-    def set_preferred_provider(provider_name: str, model_name: str | None = None) -> str:
+    def set_preferred_provider(
+        provider_name: str, model_name: str | None = None
+    ) -> str:
         profile = Database.get_profile()
         config = profile.get("providers_config") or {}
         config["preferred_provider"] = provider_name

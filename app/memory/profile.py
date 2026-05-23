@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import logging
-import os
 import random
 import re
-import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -56,9 +53,11 @@ _SECTION_PATTERNS: dict[str, str] = {
     "Dynamics:": "relationship_dynamics",
 }
 
+
 def normalize_memory_item(text: str) -> str:
     cleaned = re.sub(r"\s+", " ", text.strip().lower())
     return cleaned.rstrip(".,\"'")
+
 
 def merge_and_clean_memory(
     existing: list[str], new_items: list[str], max_size: int
@@ -73,6 +72,7 @@ def merge_and_clean_memory(
             seen.add(norm)
             result.append(item)
     return result[:max_size]
+
 
 def _merge_profile_data(
     existing_memory: dict[str, Any], new_data: dict[str, Any]
@@ -122,6 +122,7 @@ def _merge_profile_data(
     result["sessions_analyzed"] = new_data.get("sessions_analyzed", 0)
     return result
 
+
 def _select_session_messages(
     messages: list[dict[str, Any]],
     max_per_session: int,
@@ -149,6 +150,7 @@ def _select_session_messages(
         sample = random.sample(older_msgs, min(random_count, len(older_msgs)))
         return recent_msgs + sample, f"recent+random ({recent_count}+{len(sample)})"
     return recent_msgs, f"recent only ({len(recent_msgs)})"
+
 
 def _build_global_analysis_prompt(conversation_text: str) -> str:
     return f"""# PLAYER PROFILE ANALYSIS TASK
@@ -188,6 +190,7 @@ Relationship Dynamics: [Provide analysis of the relationship dynamics between Us
 - No markdown formatting, no bullet points, no numbering
 - Follow the EXACT format above - no additional sections"""
 
+
 def _global_analysis_call(prompt: str, api_key: str) -> str | None:
     system = (
         "You are an expert psychologist and data analyst specializing in conversation "
@@ -224,6 +227,7 @@ def _global_analysis_call(prompt: str, api_key: str) -> str | None:
         timeout=300,
         fallback_models=_GLOBAL_FREE_FALLBACKS[1:],
     )
+
 
 def summarize_global_player_profile() -> bool:
     """Analyze ALL conversation history across ALL sessions and update the profile."""
@@ -282,7 +286,7 @@ def summarize_global_player_profile() -> bool:
     manager = get_ai_manager()
     chutes = manager.providers.get("chutes")
     api_key = chutes.api_key if chutes else None
-    
+
     if not api_key:
         log.error("no chutes API key configured")
         return False
@@ -318,6 +322,7 @@ def summarize_global_player_profile() -> bool:
     )
     return True
 
+
 def _save_debug_log(
     summary_text: str, sessions: int, messages: int, chars: int
 ) -> None:
@@ -328,16 +333,18 @@ def _save_debug_log(
         path = debug_dir / f"profile_summary_{timestamp}.txt"
         path.write_text(
             f"=== GLOBAL PROFILE ANALYSIS ===\nDate: {timestamp}\nSessions: {sessions}\nMessages: {messages}\nChars: {chars}\n\n=== RAW ANALYSIS ===\n{summary_text}",
-            encoding="utf-8"
+            encoding="utf-8",
         )
     except OSError as e:
         log.warning("debug log write failed: %s", e)
+
 
 def _detect_section(line: str) -> tuple[str | None, str]:
     for pattern, key in _SECTION_PATTERNS.items():
         if line.startswith(pattern):
             return key, line[len(pattern) :].strip()
     return None, line
+
 
 def parse_global_profile_summary(summary_text: str) -> dict[str, Any]:
     profile_data: dict[str, Any] = {

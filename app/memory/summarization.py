@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from typing import Any
 
@@ -26,9 +25,11 @@ _SUMMARY_TRIGGER_INTERVAL = 100
 _SUMMARY_MODEL = "google/gemma-4-31B-turbo-TEE"
 _SUMMARY_FALLBACKS = ("Qwen/Qwen3-235B-A22B-Instruct-2507-TEE",)
 
+
 def detect_important_content(message: str) -> bool:
     lower = message.lower()
     return any(keyword in lower for keyword in _IMPORTANT_KEYWORDS)
+
 
 def _idle_hours(session_memory: dict[str, Any]) -> float | None:
     last = session_memory.get("last_message_time")
@@ -38,6 +39,7 @@ def _idle_hours(session_memory: dict[str, Any]) -> float | None:
         return (datetime.now() - datetime.fromisoformat(last)).total_seconds() / 3600.0
     except ValueError:
         return None
+
 
 def should_summarize_memory(
     profile: dict[str, Any], user_message: str, session_id: int
@@ -61,12 +63,14 @@ def should_summarize_memory(
 
     return detect_important_content(user_message)
 
+
 def _format_recent_conversation(history: list[dict[str, Any]], limit: int = 100) -> str:
     parts = []
     for msg in history[-limit:]:
         role = "User" if msg["role"] == "user" else "AI"
         parts.append(f"{role}: {msg['content']}")
     return "\n".join(parts)
+
 
 def summarize_memory(
     profile: dict[str, Any],
@@ -79,11 +83,11 @@ def summarize_memory(
         return False
 
     convo_count = sum(1 for m in history if m["role"] in ("user", "assistant"))
-    
+
     manager = get_ai_manager()
     chutes = manager.providers.get("chutes")
     api_key = chutes.api_key if chutes else None
-    
+
     if not api_key:
         return False
 
@@ -131,6 +135,7 @@ just a natural paragraph.
 
     _sync_episodic_to_db(session_id, paragraph.strip(), history)
     return True
+
 
 def _sync_episodic_to_db(
     session_id: int, summary: str, history: list[dict[str, Any]]

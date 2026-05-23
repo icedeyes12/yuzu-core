@@ -10,6 +10,7 @@ from app.memory.memory import trigger_memory_pipeline_async
 
 logger = logging.getLogger(__name__)
 
+
 class MemoryService:
     _PIPELINE_CHECK_INTERVAL = 5
 
@@ -23,7 +24,7 @@ class MemoryService:
     ) -> None:
         """Trigger session summarization and background pipeline if needed."""
         # Session auto-naming is handled by SessionService, called by orchestrator
-        
+
         # 1. Check for session context summary
         if should_summarize_memory(profile, user_message, session_id):
             summarize_memory(profile, user_message, final_response, session_id)
@@ -44,7 +45,9 @@ class MemoryService:
             return False
 
     @staticmethod
-    def summarize_session(profile: dict[str, Any], user_message: str, ai_reply: str, session_id: int) -> bool:
+    def summarize_session(
+        profile: dict[str, Any], user_message: str, ai_reply: str, session_id: int
+    ) -> bool:
         return summarize_memory(profile, user_message, ai_reply, session_id)
 
     @staticmethod

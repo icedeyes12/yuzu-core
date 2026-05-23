@@ -15,8 +15,7 @@ from app.db import (
     rename_session_async,
     delete_session_async,
     clear_session_messages_async,
-    get_profile_async,
-    Database
+    Database,
 )
 from app.services.session_service import SessionService
 from app.logging_config import get_logger
@@ -25,23 +24,29 @@ log = get_logger(__name__)
 
 router = APIRouter(tags=["sessions"])
 
+
 def _get_session_id(request: Request) -> str:
     client_host = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     return f"{client_host}_{hash(user_agent) % 10000}"
 
+
 class SessionCreateRequest(BaseModel):
     name: str = Field(default="New Chat", min_length=1, description="Session name")
 
+
 class SessionSwitchRequest(BaseModel):
     session_id: int = Field(..., gt=0, description="Session ID to switch to")
+
 
 class SessionRenameRequest(BaseModel):
     session_id: int = Field(..., gt=0, description="Session ID to rename")
     name: str = Field(..., min_length=1, description="New session name")
 
+
 class SessionDeleteRequest(BaseModel):
     session_id: int = Field(..., gt=0, description="Session ID to delete")
+
 
 @router.get("/sessions/list")
 async def api_list_sessions():
@@ -51,6 +56,7 @@ async def api_list_sessions():
     except Exception as e:
         log.error("Error listing sessions: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.post("/sessions/create")
 async def api_create_session(http_request: Request, request: SessionCreateRequest):
@@ -66,6 +72,7 @@ async def api_create_session(http_request: Request, request: SessionCreateReques
         log.error("Error creating session: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.post("/sessions/switch")
 async def api_switch_session(request: SessionSwitchRequest, http_request: Request):
     try:
@@ -77,7 +84,6 @@ async def api_switch_session(request: SessionSwitchRequest, http_request: Reques
         client_id = _get_session_id(http_request)
         SessionService.clear_client_session(client_id)
 
-        profile = await get_profile_async()
         SessionService.start_session(interface="web")
 
         SessionService.mark_client_connected(client_id)
@@ -94,6 +100,7 @@ async def api_switch_session(request: SessionSwitchRequest, http_request: Reques
     except Exception as e:
         log.error("Error switching session: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.post("/sessions/rename")
 async def api_rename_session(request: SessionRenameRequest):
@@ -112,6 +119,7 @@ async def api_rename_session(request: SessionRenameRequest):
     except Exception as e:
         log.error("Error renaming session: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.post("/sessions/delete")
 async def api_delete_session(request: SessionDeleteRequest):
@@ -140,6 +148,7 @@ async def api_delete_session(request: SessionDeleteRequest):
         log.error("Error deleting session: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.post("/clear_chat")
 async def api_clear_chat(request: Request):
     try:
@@ -155,6 +164,7 @@ async def api_clear_chat(request: Request):
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.post("/end_session")
 async def api_end_session(request: Request):
     try:
@@ -162,10 +172,13 @@ async def api_end_session(request: Request):
         SessionService.clear_client_session(client_id)
 
         profile = Database.get_profile()
-        SessionService.end_session_cleanup(profile, interface="web", unexpected_exit=False)
+        SessionService.end_session_cleanup(
+            profile, interface="web", unexpected_exit=False
+        )
         return {"status": "session ended"}
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.get("/sessions/{session_id}/memory")
 async def api_get_session_memory(session_id: int):

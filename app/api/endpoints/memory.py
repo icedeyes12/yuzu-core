@@ -12,6 +12,7 @@ log = get_logger(__name__)
 
 router = APIRouter(tags=["memory"])
 
+
 @router.post("/update_session_context")
 async def api_update_session_context():
     try:
@@ -55,6 +56,7 @@ async def api_update_session_context():
         log.error("Error updating session context: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.post("/update_global_profile")
 async def api_update_global_profile():
     try:
@@ -72,6 +74,7 @@ async def api_update_global_profile():
     except Exception as e:
         log.error("Error updating global profile: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.post("/rebuild_structured_memory")
 async def api_rebuild_structured_memory():
@@ -110,6 +113,7 @@ async def api_rebuild_structured_memory():
         log.error("Error rebuilding structured memory: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.post("/run_memory_decay")
 async def api_run_memory_decay():
     try:
@@ -127,6 +131,7 @@ async def api_run_memory_decay():
     except Exception as e:
         log.error("Error running memory decay: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.get("/memory_stats")
 async def api_memory_stats():

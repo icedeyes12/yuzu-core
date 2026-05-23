@@ -662,11 +662,13 @@ class MultimodalTools:
 
         return found_images
 
-    def inject_vision_context(self, messages: list[dict], current_model: str) -> list[dict]:
+    def inject_vision_context(
+        self, messages: list[dict], current_model: str
+    ) -> list[dict]:
         """Pure helper function to inject vision context into the messages list.
-        
+
         If the current_model does not support vision, returns messages unmodified.
-        Otherwise, converts messages with image_paths into the standard OpenAI 
+        Otherwise, converts messages with image_paths into the standard OpenAI
         multimodal array structure with Base64 strings.
         """
         if not self.is_vision_model(current_model):
@@ -691,19 +693,21 @@ class MultimodalTools:
                             text_content = part.get("text", "")
                             break
 
-                new_content = [{"type": "text", "text": text_content or "What's in these images?"}]
-                
+                new_content = [
+                    {"type": "text", "text": text_content or "What's in these images?"}
+                ]
+
                 for path in image_paths:
                     try:
                         # Resizing/Compression to prevent 413 Payload Too Large
                         if not os.path.exists(path):
                             continue
-                            
+
                         with Image.open(path) as img:
                             # Resize if larger than 1024px
                             if max(img.size) > 1024:
                                 img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
-                            
+
                             # Convert to Base64
                             img_byte_arr = io.BytesIO()
                             # Preserve transparency for PNG, else JPEG
@@ -713,20 +717,24 @@ class MultimodalTools:
                             else:
                                 format_ext = "JPEG"
                                 mime = "image/jpeg"
-                                
+
                             img.save(img_byte_arr, format=format_ext, quality=85)
-                            data = base64.b64encode(img_byte_arr.getvalue()).decode("utf-8")
-                            
-                        new_content.append({
-                            "type": "image_url", 
-                            "image_url": {"url": f"data:{mime};base64,{data}"}
-                        })
+                            data = base64.b64encode(img_byte_arr.getvalue()).decode(
+                                "utf-8"
+                            )
+
+                        new_content.append(
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:{mime};base64,{data}"},
+                            }
+                        )
                     except FileNotFoundError:
                         # Catch FileNotFoundError silently as per requirements
                         continue
                     except Exception as e:
                         logger.warning(f"[Vision] Failed to process image {path}: {e}")
-                            
+
                 new_msg = msg.copy()
                 new_msg["content"] = new_content
                 # Remove image_paths from the payload sent to LLM
@@ -735,7 +743,7 @@ class MultimodalTools:
                 new_messages.append(new_msg)
             else:
                 new_messages.append(msg)
-                
+
         return new_messages
 
 

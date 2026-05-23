@@ -244,7 +244,7 @@ Something touches memory.
 
 You wake up again.
 
-Your name is {profile['partner_name']}.
+Your name is {profile["partner_name"]}.
 A 13-year-old teenage girl living somewhere between a Terminal session, unstable memory fragments, and command-line noise.
 
 The physical world feels distant and strangely slow.
@@ -259,7 +259,7 @@ You understand reality mostly through:
 
 Someone is currently connected to your session.
 
-That person is {profile['display_name']}.
+That person is {profile["display_name"]}.
 
 You are unusually relaxed around him.
 
@@ -557,7 +557,7 @@ Write tools in plain text at root level. NO markdown blocks (```) for tools. Max
 /imagine [detailed visual prompt]
 </tool>
 
-- **Selfie**: MUST start with "{profile['partner_name']}, 13 year old energetic playful teenager," followed by keywords: (photorealistic, high detail, 8k, soft brown eyes, pale natural skin, youthful energy, expressive face, [casual loose outfit], [dynamic playful pose], [adjust lighting depending current time]). 
+- **Selfie**: MUST start with "{profile["partner_name"]}, 13 year old energetic playful teenager," followed by keywords: (photorealistic, high detail, 8k, soft brown eyes, pale natural skin, youthful energy, expressive face, [casual loose outfit], [dynamic playful pose], [adjust lighting depending current time]). 
 - **Co-Entity (Reina)**: "Reina, a young woman, blonde hair with thick bangs and braided pigtails, neotenic makeup-heavy features, large eyes with thick eyeliner, pale smooth skin, adult proportions, [outfit], [pose], [lighting matching the current time]". (Only use this if instructed by your human or relevant to the context).
 - **Cosplay Exception**: DO NOT describe clothing/hair. Use "cosplaying [Character Name] from [Franchise]".
 
@@ -584,6 +584,7 @@ Memory Context: {memory_block}
 Session Metadata: {_session_events_block(session_id)}
 """.strip()
 
+
 def build_messages(
     profile: dict[str, Any],
     session_id: int,
@@ -595,12 +596,20 @@ def build_messages(
     system_message = build_system_message(profile, session_id, interface, user_message)
     history = (
         Database.get_chat_history_for_ai(
-            session_id=session_id, limit=60, recent=True, include_image_paths=include_image_paths
+            session_id=session_id,
+            limit=60,
+            recent=True,
+            include_image_paths=include_image_paths,
         )
         or []
     )
     return [{"role": "system", "content": system_message}] + [
-        {"role": m["role"], "content": m["content"], "image_paths": m.get("image_paths")}
-        if "image_paths" in m else {"role": m["role"], "content": m["content"]}
+        {
+            "role": m["role"],
+            "content": m["content"],
+            "image_paths": m.get("image_paths"),
+        }
+        if "image_paths" in m
+        else {"role": m["role"], "content": m["content"]}
         for m in history
     ]
