@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.commands import detect_command as _detect_command
 from app.db import Database
 from app.llm_client import (
@@ -25,23 +27,38 @@ from app.orchestrator import (
     handle_user_message,
     handle_user_message_streaming,
 )
-from app.profile_analysis import (
+from app.memory.summarization import (
     detect_important_content,
+    should_summarize_memory,
+    summarize_memory,
+)
+from app.memory.profile import (
     merge_and_clean_memory,
     normalize_memory_item,
     parse_global_profile_summary,
-    should_summarize_memory,
     summarize_global_player_profile,
-    summarize_memory,
 )
 from app.providers import get_ai_manager, reload_ai_manager
 from app.services.config_service import ConfigService
-from app.session_lifecycle import (
-    UserContext,
-    auto_name_session_if_needed,
-    end_session_cleanup,
-    start_session,
-)
+from app.services.session_service import SessionService
+
+UserContext = SessionService  # Mock context if needed
+
+
+def auto_name_session_if_needed(session_id: int, active_session: dict[str, Any]) -> None:
+    return SessionService.auto_name_session_if_needed(session_id, active_session)
+
+
+def start_session(interface: str = "terminal") -> dict[str, Any]:
+    return SessionService.start_session(interface)
+
+
+def end_session_cleanup(
+    profile: dict[str, Any],
+    interface: str = "terminal",
+    unexpected_exit: bool = False,
+) -> str:
+    return SessionService.end_session_cleanup(profile, interface, unexpected_exit)
 
 
 # ---------------------------------------------------------------------------

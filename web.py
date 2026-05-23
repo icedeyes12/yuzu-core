@@ -23,7 +23,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 from app.app import start_session  # noqa: E402
 from app.db import Database  # noqa: E402
 from app.api import api_router  # noqa: E402
-from app.api.routes import set_session_tracker  # noqa: E402
+from app.services.session_service import SessionService  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # FastAPI Application Setup
@@ -98,14 +98,6 @@ app.mount(
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 
-# In-memory session tracking
-_web_session_tracker: Dict[str, bool] = {}
-
-
-# Share session tracker with API routes
-set_session_tracker(_web_session_tracker)
-
-
 def ensure_static_dirs():
     static_dirs = [
         os.path.join(BASE_DIR, "static/uploads"),
@@ -156,12 +148,12 @@ async def home(request: Request):
 
 @app.get("/chat", response_class=HTMLResponse)
 async def chat_page(request: Request):
-    session_id = _get_session_id(request)
+    client_id = _get_session_id(request)
 
-    if not _web_session_tracker.get(session_id):
-        print(f"Web session not found for {session_id}, starting new web session...")
-        start_session(interface="web")
-        _web_session_tracker[session_id] = True
+    if not SessionService.is_client_connected(client_id):
+        print(f"Web session not found for {client_id}, starting new web session...")
+        SessionService.start_session(interface="web")
+        SessionService.mark_client_connected(client_id)
         print("Web session started and flagged.")
 
     profile = Database.get_profile()

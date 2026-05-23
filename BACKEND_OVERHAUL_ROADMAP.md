@@ -57,23 +57,23 @@ This roadmap outlines the systematic restructuring of the `yuzu-companion` backe
 ## Phase 3: Service Layer Extraction
 *Strip business logic out of the API routes and orchestrator.*
 
-- [ ] **Session Lifecycle Service**
-    - [ ] Create `app/services/session_service.py`.
-    - [ ] Migrate `start_session`, `end_session_cleanup`, and `auto_name_session_if_needed`.
-    - [ ] Consolidate `_web_session_tracker` into a service-level state if still needed, or replace with DB session status.
-    - [ ] Standardize `connection_msg` and `disconnect_msg` generation.
+- [x] **Session Lifecycle Service**
+    - [x] Create `app/services/session_service.py`.
+    - [x] Migrate `start_session`, `end_session_cleanup`, and `auto_name_session_if_needed`.
+    - [x] Consolidate `_web_session_tracker` into a service-level state if still needed, or replace with DB session status.
+    - [x] Standardize `connection_msg` and `disconnect_msg` generation.
 
-- [ ] **Chat & Messaging Service**
-    - [ ] Create `app/services/chat_service.py`.
-    - [ ] Extract `api_send_message` logic.
-    - [ ] Extract `api_send_message_stream` initiation logic.
-    - [ ] Move `image_markdowns` construction from the API layer to this service.
-    - [ ] Delete `api_send_message_with_images` (DEPRECATED).
+- [x] **Chat & Messaging Service**
+    - [x] Create `app/services/chat_service.py`.
+    - [x] Extract `api_send_message` logic.
+    - [x] Extract `api_send_message_stream` initiation logic.
+    - [x] Move `image_markdowns` construction from the API layer to this service.
+    - [x] Delete `api_send_message_with_images` (DEPRECATED).
 
-- [ ] **Memory Pipeline Isolation**
-    - [ ] Move `detect_important_content`, `summarize_memory`, etc., from `app/profile_analysis.py` to `app/memory/`.
-    - [ ] Move `run_memory_pipeline` trigger logic to `app/services/memory_service.py`.
-    - [ ] Clean up `app/memory/__init__.py` to export the public API.
+- [x] **Memory Pipeline Isolation**
+    - [x] Move `detect_important_content`, `summarize_memory`, etc., from `app/profile_analysis.py` to `app/memory/`.
+    - [x] Move `run_memory_pipeline` trigger logic to `app/services/memory_service.py`.
+    - [x] Clean up `app/memory/__init__.py` to export the public API.
 
 ## Phase 4: API Route Decomposition
 *Break down the monolithic routes.py into focused, maintainable modules.*

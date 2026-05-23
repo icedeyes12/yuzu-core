@@ -24,18 +24,13 @@ from app.app import (
 from app.db import Database, get_profile_async, get_active_session_async, get_chat_history_async, get_session_memory_async, get_api_keys_async
 from app.providers import get_ai_manager
 from app.services.config_service import ConfigService
+from app.services.session_service import SessionService
+from app.services.chat_service import ChatService
+from app.services.memory_service import MemoryService
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 api_router = APIRouter()
-
-# Global session tracker (shared with web.py)
-_web_session_tracker: dict[str, bool] = {}
-
-
-def set_session_tracker(tracker: dict[str, bool]):
-    global _web_session_tracker
-    _web_session_tracker = tracker
 
 
 def _get_session_id(request: Request) -> str:
@@ -181,24 +176,18 @@ async def api_get_profile():
 async def api_send_message(request: MessageRequest):
     try:
         user_message = request.message.strip()
-
         if not user_message:
             return {"reply": "Please type a message!"}
 
-        interface = request.interface  # from request payload
+        interface = request.interface
         print(f"[{interface}] message: {user_message[:200]}...")
 
-        active_session = Database.get_active_session()
-        _ = active_session["id"]
-
-        ai_reply = handle_user_message(user_message, interface=interface)  # DYNAMIC
+        ai_reply = ChatService.send_message(user_message, interface=interface)
 
         print(f"AI reply: {ai_reply}")
-
         return {"reply": ai_reply}
 
     except Exception as e:
-        # Log internally but don't expose details to user
         print(f"Error in api_send_message: {type(e).__name__}")
         return {"reply": "Sorry, I encountered an error processing your message."}
 
@@ -232,145 +221,24 @@ async def api_send_message_stream(
                 yield 'data: {"chunk": "Please provide a message or images!"}\n\n'
             return StreamingResponse(empty_generator(), media_type="text/event-stream")
 
-        # Handle image saving if present
-        image_markdowns = []
-        if images:
-            uploads_dir = "static/uploads"
-            os.makedirs(uploads_dir, exist_ok=True)
-            
-            for i, image_file in enumerate(images):
-                if image_file and image_file.filename:
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    safe_filename = "".join(c for c in image_file.filename if c.isalnum() or c in (".", "-", "_")).rstrip()
-                    filename = f"{timestamp}_{i}_{safe_filename}"
-                    filepath = os.path.join(uploads_dir, filename)
-                    
-                    content = await image_file.read()
-                    with open(filepath, "wb") as f:
-                        f.write(content)
-                    
-                    image_markdowns.append(f"![Uploaded Image](uploads/{filename})")
-
-        if image_markdowns:
-            user_message = (
-                f"{user_message}\n\n" + "\n".join(image_markdowns)
-                if user_message
-                else "\n".join(image_markdowns)
-            )
-
         print(f"[{interface}] streaming unified message: {user_message[:200]}...")
 
-        active_session = await get_active_session_async()
-        session_id = active_session["id"]
-
-        buffer = StreamManager.start_stream(
-            session_id,
-            user_message,
-            interface=interface,
-            provider=provider,
-            model=model,
+        return StreamingResponse(
+            ChatService.get_stream_generator(
+                user_message,
+                interface=interface,
+                provider=provider,
+                model=model,
+                images=images
+            ),
+            media_type="text/event-stream"
         )
-
-        async def generate():
-            q = buffer.subscribe()
-            try:
-                while True:
-                    chunk = await asyncio.get_event_loop().run_in_executor(None, q.get)
-                    if chunk is None:
-                        break
-                    if chunk:
-                        escaped_chunk = json.dumps(chunk)
-                        yield f'data: {{"chunk": {escaped_chunk}}}\n\n'
-            finally:
-                buffer.unsubscribe(q)
-
-        return StreamingResponse(generate(), media_type="text/event-stream")
 
     except Exception as e:
         print(f"Error in unified streaming: {type(e).__name__} - {e}")
-        def generate_error():
+        async def generate_error():
             yield 'data: {"chunk": "Sorry, I encountered an error processing your message."}\n\n'
         return StreamingResponse(generate_error(), media_type="text/event-stream")
-
-
-@api_router.post("/send_message_with_images")
-async def api_send_message_with_images(
-    request: Request,
-    message: str = Form(""),
-    images: list[UploadFile] = File(default=[]),
-):
-    # DEPRECATED: Standard chat and image messages now use the unified /send_message_stream endpoint.
-    # This remains for backward compatibility during the transition.
-    try:
-        message_text = message.strip()
-
-        if not message_text and not images:
-            return {"reply": "Please provide a message or images!"}
-
-        print(f"Processing message with {len(images)} images")
-
-        active_session = Database.get_active_session()
-        _ = active_session["id"]
-
-        saved_images = []
-        image_markdowns = []
-        local_paths = []
-
-        for i, image_file in enumerate(images):
-            if image_file and image_file.filename:
-                uploads_dir = "static/uploads"
-                os.makedirs(uploads_dir, exist_ok=True)
-
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                safe_filename = "".join(
-                    c
-                    for c in image_file.filename
-                    if c.isalnum() or c in (".", "-", "_")
-                ).rstrip()
-                filename = f"{timestamp}_{i}_{safe_filename}"
-                filepath = os.path.join(uploads_dir, filename)
-
-                content = await image_file.read()
-                with open(filepath, "wb") as f:
-                    f.write(content)
-
-                web_url = f"/uploads/{filename}"
-                image_markdown = f"![Uploaded Image](uploads/{filename})"
-                image_markdowns.append(image_markdown)
-                local_paths.append(filepath)
-
-                saved_images.append(
-                    {
-                        "web_url": web_url,
-                        "filepath": filepath,
-                        "markdown": image_markdown,
-                    }
-                )
-                print(f"Saved image to static: {filepath}")
-
-        if image_markdowns:
-            final_user_message = (
-                f"{message_text}\n\n" + "\n".join(image_markdowns)
-                if message_text
-                else "\n".join(image_markdowns)
-            )
-        else:
-            final_user_message = message_text
-
-        print(f"Final user message: {final_user_message[:200]}...")
-
-        # Use handle_user_message directly - it now handles image_paths via _cache_images_from_message
-        # or we could pass them explicitly if we wanted to be 100% sure. 
-        # Actually, let's update handle_user_message to accept image_paths optionally.
-        
-        ai_reply = handle_user_message(final_user_message, interface="web")
-
-        return {"reply": ai_reply, "uploaded_images": saved_images}
-
-    except Exception as e:
-        # Log internally but don't expose details
-        print(f"Error in image upload: {type(e).__name__}")
-        return {"reply": "Error processing message."}
 
 
 @api_router.post("/generate_image")
@@ -416,7 +284,7 @@ async def api_clear_chat(request: Request):
         await clear_session_messages_async(session_id)
 
         client_id = _get_session_id(request)
-        _web_session_tracker.pop(client_id, None)
+        SessionService.clear_client_session(client_id)
 
         return {"status": "success"}
     except Exception:
@@ -427,30 +295,10 @@ async def api_clear_chat(request: Request):
 async def api_end_session(request: Request):
     try:
         client_id = _get_session_id(request)
-        _web_session_tracker.pop(client_id, None)
+        SessionService.clear_client_session(client_id)
 
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
         profile = Database.get_profile()
-
-        session_history = profile.get("session_history", {})
-        current_session = session_history.get("current_session", {})
-        start_time = current_session.get("start_time")
-        duration = 0
-
-        if start_time:
-            try:
-                start = datetime.fromisoformat(start_time)
-                duration = (datetime.now() - start).total_seconds() / 60
-            except Exception:
-                pass
-
-        disconnect_msg = (
-            f"*{profile['display_name']} disconnected from web interface at {current_time}. "
-            f"Session duration: {duration:.1f} minutes*"
-        )
-
-        Database.add_message("system", disconnect_msg)
-        end_session_cleanup(profile, interface="web", unexpected_exit=False)
+        SessionService.end_session_cleanup(profile, interface="web", unexpected_exit=False)
         return {"status": "session ended"}
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -540,7 +388,7 @@ async def api_update_session_context():
         )
 
         if last_user_msg and last_ai_reply:
-            success = summarize_memory(
+            success = MemoryService.summarize_session(
                 profile, last_user_msg["content"], last_ai_reply["content"], session_id
             )
 
@@ -564,7 +412,7 @@ async def api_update_session_context():
 @api_router.post("/update_global_profile")
 async def api_update_global_profile():
     try:
-        success = summarize_global_player_profile()
+        success = MemoryService.summarize_global_profile()
 
         if success:
             profile = Database.get_profile()
@@ -782,31 +630,11 @@ async def api_test_vision():
 async def api_browser_unload(request: Request):
     try:
         client_id = _get_session_id(request)
-        _web_session_tracker.pop(client_id, None)
+        SessionService.clear_client_session(client_id)
         print("Web page closed or refreshed - session cleared")
 
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
         profile = Database.get_profile()
-
-        session_history = profile.get("session_history", {})
-        current_session = session_history.get("current_session", {})
-        start_time = current_session.get("start_time")
-        duration = 0
-
-        if start_time:
-            try:
-                start = datetime.fromisoformat(start_time)
-                duration = (datetime.now() - start).total_seconds() / 60
-            except Exception:
-                pass
-
-        disconnect_msg = (
-            f"*{profile['display_name']} disconnected unexpectedly from web interface at {current_time}. "
-            f"Session duration: {duration:.1f} minutes*"
-        )
-
-        Database.add_message("system", disconnect_msg)
-        end_session_cleanup(profile, interface="web", unexpected_exit=True)
+        SessionService.end_session_cleanup(profile, interface="web", unexpected_exit=True)
 
         return {"status": "page closed"}
     except Exception:
@@ -835,7 +663,7 @@ async def api_create_session(http_request: Request, request: SessionCreateReques
         await switch_session_async(session_id)
 
         client_id = _get_session_id(http_request)
-        _web_session_tracker.pop(client_id, None)
+        SessionService.clear_client_session(client_id)
 
         return {"status": "success", "session_id": session_id}
     except Exception as e:
@@ -852,22 +680,12 @@ async def api_switch_session(request: SessionSwitchRequest, http_request: Reques
         await switch_session_async(request.session_id)
 
         client_id = _get_session_id(http_request)
-        _web_session_tracker.pop(client_id, None)
+        SessionService.clear_client_session(client_id)
 
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
         profile = await get_profile_async()
+        SessionService.start_session(interface="web")
 
-        all_sessions = await get_all_sessions_async()
-        session_count = len(all_sessions)
-
-        connection_msg = (
-            f"*{profile['display_name']} connected to web interface at {current_time}. "
-            f"Switched to session #{[s['id'] for s in all_sessions].index(request.session_id) + 1} of {session_count}*"
-        )
-
-        await add_message_async(request.session_id, "system", connection_msg)
-
-        _web_session_tracker[client_id] = True
+        SessionService.mark_client_connected(client_id)
 
         chat_history = await get_chat_history_async(session_id=request.session_id)
         session_memory = await get_session_memory_async(request.session_id)

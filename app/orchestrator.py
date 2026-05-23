@@ -26,6 +26,8 @@ from app.llm_client import (
     generate_ai_response_streaming,
 )
 from app.logging_config import get_logger
+from app.services.session_service import SessionService
+from app.services.memory_service import MemoryService
 from app.tools import multimodal_tools
 from app.tools.registry import get_tool_role
 from app.visual_context import store_visual_context
@@ -35,6 +37,10 @@ log = get_logger(__name__)
 _TIMESTAMP_SUFFIX = re.compile(r"\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$")
 _EMPTY_RESPONSE_FALLBACK = "I'm having trouble responding right now. Please try again."
 _MD_IMAGE_PATTERN = re.compile(r"!\[[^\]]{0,200}\]\(([^)]{1,200})\)")
+
+# Services
+from app.services.session_service import SessionService
+from app.services.memory_service import MemoryService
 
 # Maximum orchestration loops to prevent runaway execution
 _MAX_ORCHESTRATION_LOOPS = 30
@@ -357,21 +363,13 @@ def _post_turn(
     active_session: dict[str, Any],
 ) -> None:
     """Auto-rename session, summarize memory, trigger memory pipeline."""
-    # DEPRECATED: image_cache cleanup moved to turn end
-    from app.session_lifecycle import auto_name_session_if_needed
-    from app.profile_analysis import (
-        should_summarize_memory,
-        summarize_memory,
+    # Auto-rename via service
+    SessionService.auto_name_session_if_needed(session_id, active_session)
+    
+    # Memory checks via service
+    MemoryService.run_per_message_checks(
+        profile, user_message, final_response, session_id, active_session
     )
-
-    auto_name_session_if_needed(session_id, active_session)
-    if should_summarize_memory(profile, user_message, session_id):
-        summarize_memory(profile, user_message, final_response, session_id)
-
-    # Throttle: only check pipeline every Nth message
-    msg_count = Database.get_session_messages_count(session_id)
-    if msg_count % _PIPELINE_CHECK_INTERVAL == 0:
-        _trigger_memory_pipeline(session_id)
 
     # Clear request-scoped caches
     try:
@@ -389,14 +387,8 @@ def _post_turn(
 
 
 def _trigger_memory_pipeline(session_id: int) -> None:
-    try:
-        from app.memory.memory import trigger_memory_pipeline_async
-
-        count = Database.get_session_messages_count(session_id)
-        if not trigger_memory_pipeline_async(session_id, count):
-            log.info("memory pipeline skipped (count=%s)", count)
-    except Exception as e:
-        log.warning("memory pipeline trigger failed: %s", e)
+    # DEPRECATED: use MemoryService.trigger_pipeline
+    MemoryService.trigger_pipeline(session_id)
 
 
 # --------------------------------------------------------------------
