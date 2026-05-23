@@ -115,9 +115,9 @@ class AIProviderManager:
         """Async initialization of all registered providers."""
         if hasattr(self, "load_providers"):
             if asyncio.iscoroutinefunction(self.load_providers):
-                await self.load_providers(self)
+                await self.load_providers()
             else:
-                self.load_providers(self)
+                self.load_providers()
 
         await asyncio.gather(*[p.initialize() for p in self.providers.values()])
 

@@ -349,7 +349,7 @@ async def add_message_async(
         async with AsyncPgSession() as s:
             row = await s.execute_returning(
                 SQL_MESSAGE_INSERT,
-                (session_id, role, content),  # timestamp handled by DB
+                (session_id, role, content, image_paths),  # 4 params for 4 placeholders
             )
             if row:
                 await increment_message_count_async(session_id)

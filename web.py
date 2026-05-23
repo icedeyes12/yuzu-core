@@ -138,7 +138,7 @@ async def favicon():
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    profile = Database.get_profile()
+    profile = await Database.get_profile_async()
     return templates.TemplateResponse(
         request=request, name="index.html", context={"profile": profile}
     )
@@ -154,7 +154,7 @@ async def chat_page(request: Request):
         SessionService.mark_client_connected(client_id)
         print("Web session started and flagged.")
 
-    profile = Database.get_profile()
+    profile = await Database.get_profile_async()
     return templates.TemplateResponse(
         request=request, name="chat.html", context={"profile": profile}
     )
@@ -162,7 +162,7 @@ async def chat_page(request: Request):
 
 @app.get("/config", response_class=HTMLResponse)
 async def config_page(request: Request):
-    profile = Database.get_profile()
+    profile = await Database.get_profile_async()
     return templates.TemplateResponse(
         request=request, name="config.html", context={"profile": profile}
     )
@@ -170,7 +170,7 @@ async def config_page(request: Request):
 
 @app.get("/about", response_class=HTMLResponse)
 async def about_page(request: Request):
-    profile = Database.get_profile()
+    profile = await Database.get_profile_async()
     return templates.TemplateResponse(
         request=request, name="about.html", context={"profile": profile}
     )

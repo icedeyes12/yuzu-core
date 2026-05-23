@@ -1144,3 +1144,21 @@ async def retrieve_for_context_async(
         return [], ""
     ids = [m["id"] for m in static]
     return ids, _format_static_context(static)
+
+
+async def retrieve_memories_combined_async(
+    session_id: int,
+    query: str | None = None,
+    static_limit: int = 10,
+    dynamic_limit: int = 5,
+) -> tuple[list[dict], list[dict]]:
+    """Async wrapper for retrieve_memories_combined using asyncio.to_thread."""
+    import asyncio
+
+    return await asyncio.to_thread(
+        retrieve_memories_combined,
+        session_id,
+        query,
+        static_limit,
+        dynamic_limit,
+    )
