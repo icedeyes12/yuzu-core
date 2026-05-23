@@ -126,7 +126,11 @@ class TestArgumentReordering:
 class TestProxiedMethods:
     def test_get_profile_proxies_directly(self, monkeypatch):
 
-        monkeypatch.setattr(Database, "get_profile", staticmethod(lambda: {"id": 1, "display_name": "x"}))
+        monkeypatch.setattr(
+            Database,
+            "get_profile",
+            staticmethod(lambda: {"id": 1, "display_name": "x"}),
+        )
         result = Database.get_profile()
         assert result == {"id": 1, "display_name": "x"}
 

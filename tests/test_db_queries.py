@@ -281,7 +281,16 @@ class TestToolRoleHelpers:
 
     def test_all_tool_roles_dedup(self):
         # imagine + image_generate both map to image_tools, dedup -> 2 unique
-        assert sorted(ALL_TOOL_ROLES) == ['ask_rei_tools', 'fs_tools', 'image_tools', 'memory_tools', 'python_tools', 'request_tools', 'shell_tools', 'sql_tools']
+        assert sorted(ALL_TOOL_ROLES) == [
+            "ask_rei_tools",
+            "fs_tools",
+            "image_tools",
+            "memory_tools",
+            "python_tools",
+            "request_tools",
+            "shell_tools",
+            "sql_tools",
+        ]
 
     def test_tool_roles_dict_is_complete(self):
         assert "imagine" in TOOL_ROLES
