@@ -91,19 +91,23 @@ This roadmap outlines the systematic restructuring of the `yuzu-companion` backe
     - [x] Ensure all routes use Pydantic models for validation (remove `request.json()` usage).
 
 ## Phase 5: Final Cleanup & Shim Removal
-*Remove the "scaffolding" and technical debt.*
+*Final technical debt clearance and architecture finalization.*
 
-- [ ] **Shim Elimination**
-    - [ ] Update `main.py`: Replace `from app.app import ...` with specific imports.
-    - [ ] Update `web.py`: Replace `from app.app import ...` with specific imports.
-    - [ ] Update `scripts/yuzu_cli.py`: Replace `from app.app import ...` with specific imports.
-    - [ ] Delete `app/app.py`.
+- [x] **Shim Elimination**
+    - [x] Update `main.py`: Replace `from app.app import ...` with specific imports.
+    - [x] Update `web.py`: Replace `from app.app import ...` with specific imports.
+    - [x] Update `scripts/yuzu_cli.py`: Verified no `app.app` imports needed.
+    - [x] Delete `app/app.py`.
 
-- [ ] **Flask-era Baggage Hunt**
-    - [ ] Replace `print()` with `log.info()`, `log.error()`, etc.
-    - [ ] Standardize error responses: Use `HTTPException` with clear, non-leaking detail strings.
-    - [ ] Clean up manual path manipulations: Replace `os.path.join` with `/` operator from `pathlib.Path`.
-    - [ ] Remove unused `_NoopContext` in `app/session_lifecycle.py`.
+- [x] **Flask-era Baggage Hunt**
+    - [x] Replace `print()` with `log.info()`, `log.error()`, etc.
+    - [x] Standardize error responses: Use `HTTPException` with clear, non-leaking detail strings.
+    - [x] Clean up manual path manipulations: Replace `os.path.join` with `/` operator from `pathlib.Path`.
+    - [x] Remove unused `_NoopContext` in `app/session_lifecycle.py` (file deleted).
+
+- [x] **Final Verification**
+    - [x] Run `py_compile` across the whole project to ensure import integrity.
+    - [x] Verify roadmap completion.
 
 ## Phase 6: Verification & Documentation
 *Ensure the new architecture is solid and well-explained.*

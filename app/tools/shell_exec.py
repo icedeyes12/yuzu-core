@@ -10,6 +10,7 @@ import re
 import subprocess
 import logging
 import time
+from pathlib import Path
 
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 
@@ -62,7 +63,7 @@ DANGEROUS_PATTERNS = [
 DANGEROUS_REGEX = re.compile("|".join(DANGEROUS_PATTERNS), re.IGNORECASE)
 
 # Default working directory - use HOME env var with Termux fallback
-DEFAULT_CWD = os.environ.get("HOME", "/data/data/com.termux/files/home")
+DEFAULT_CWD = Path(os.environ.get("HOME", "/data/data/com.termux/files/home"))
 
 
 # --------------------------------------------------------------------
@@ -71,7 +72,7 @@ DEFAULT_CWD = os.environ.get("HOME", "/data/data/com.termux/files/home")
 
 # Module-level persistent session (reset between user turns)
 _persistent_process: subprocess.Popen | None = None
-_session_cwd: str = DEFAULT_CWD
+_session_cwd: Path = DEFAULT_CWD
 
 
 def _get_persistent_session() -> subprocess.Popen:
@@ -86,7 +87,7 @@ def _get_persistent_session() -> subprocess.Popen:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            cwd=_session_cwd,
+            cwd=str(_session_cwd),
         )
         logger.info(
             "created persistent shell session (pid=%d)", _persistent_process.pid
@@ -185,7 +186,7 @@ def _execute_in_session(
             try:
                 new_dir = command.strip()[3:].strip()
                 if new_dir:
-                    _session_cwd = os.path.normpath(os.path.join(_session_cwd, new_dir))
+                    _session_cwd = (_session_cwd / new_dir).resolve()
             except Exception:
                 pass
 

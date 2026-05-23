@@ -11,19 +11,13 @@ from __future__ import annotations
 # ==========================================================
 
 
-from app.app import (
+from app.orchestrator import (
     handle_user_message,
     handle_user_message_streaming,
-    start_session,
-    end_session_cleanup,
-    summarize_memory,
-    summarize_global_player_profile,
 )
-from app.app import (
-    get_available_providers,
-    get_all_models,
-    set_preferred_provider,
-)
+from app.services.session_service import SessionService
+from app.memory.summarization import summarize_memory
+from app.memory.profile import summarize_global_player_profile
 from app.db import Database
 from app.providers import get_ai_manager
 from app.services.config_service import ConfigService
@@ -309,7 +303,7 @@ class YuzuCompanionAgent:
         console.print(
             f"\n[magenta]{self.profile['partner_name']}[/] > Ending terminal session..."
         )
-        end_session_cleanup(self.profile, interface="terminal", unexpected_exit=False)
+        SessionService.end_session_cleanup(self.profile, interface="terminal", unexpected_exit=False)
         return False
 
     def _handle_multimodal_commands(self, cmd: str, args: list):
@@ -389,18 +383,18 @@ class YuzuCompanionAgent:
         model_arg = " ".join(args)
         if "/" in model_arg:
             provider_part, model_part = model_arg.split("/", 1)
-            result = set_preferred_provider(provider_part.strip(), model_part.strip())
+            result = ConfigService.set_preferred_provider(provider_part.strip(), model_part.strip())
             success(result)
             self.update_session_state()
             console.print(
                 f"[bold cyan]>[/] Active model set to: [green]{self.session_state['current_provider']}/{self.session_state['current_model']}[/]"
             )
         else:
-            all_models = get_all_models()
+            all_models = get_ai_manager().get_all_models()
             found = False
             for provider, models in all_models.items():
                 if model_arg in models:
-                    result = set_preferred_provider(provider, model_arg)
+                    result = ConfigService.set_preferred_provider(provider, model_arg)
                     success(result)
                     self.update_session_state()
                     console.print(
@@ -412,7 +406,7 @@ class YuzuCompanionAgent:
                 error(f"Model '{model_arg}' not found in any provider")
 
     def show_available_models(self):
-        all_models = get_all_models()
+        all_models = get_ai_manager().get_all_models()
         table = Table(
             show_header=True, header_style="bold blue", title="Available AI Models"
         )
@@ -438,7 +432,7 @@ class YuzuCompanionAgent:
         console.print(table)
 
     def show_available_providers(self):
-        providers = get_available_providers()
+        providers = get_ai_manager().get_available_providers()
         table = Table(show_header=True, header_style="bold green", title="AI Providers")
         table.add_column("Provider", style="cyan")
         table.add_column("Status", style="white")
@@ -529,7 +523,7 @@ class YuzuCompanionAgent:
         vision_provider = self.vision_capabilities["vision_provider"]
         vision_model = self.vision_capabilities["vision_model"]
 
-        result = set_preferred_provider(vision_provider, vision_model)
+        result = ConfigService.set_preferred_provider(vision_provider, vision_model)
         success(result)
         self.update_session_state()
         console.print(
@@ -594,7 +588,7 @@ class YuzuCompanionAgent:
 
         console.print(table)
 
-        providers = get_available_providers()
+        providers = get_ai_manager().get_available_providers()
         vision_models_found = False
         for provider in providers:
             vision_models = multimodal_tools.get_available_vision_models(provider)
@@ -804,14 +798,14 @@ class YuzuCompanionAgent:
 
     def _handle_graceful_exit(self):
         console.print("\n[green]Goodbye![/]")
-        end_session_cleanup(self.profile, interface="terminal", unexpected_exit=False)
+        SessionService.end_session_cleanup(self.profile, interface="terminal", unexpected_exit=False)
 
     def _handle_unexpected_error(self, e: Exception):
         error(f"Unexpected error: {e}")
-        end_session_cleanup(self.profile, interface="terminal", unexpected_exit=True)
+        SessionService.end_session_cleanup(self.profile, interface="terminal", unexpected_exit=True)
 
     def chat_loop(self):
-        start_session(interface="terminal")
+        SessionService.start_session(interface="terminal")
         welcome_banner()
         prompt_session = self._initialize_prompt_session()
         self._print_initial_info()
@@ -1275,12 +1269,12 @@ class YuzuCompanionAgent:
 
         if choice == "1":
             self.show_available_providers()
-            providers = get_available_providers()
+            providers = get_ai_manager().get_available_providers()
             try:
                 provider_num = IntPrompt.ask("Select provider number", default=1)
                 if 1 <= provider_num <= len(providers):
                     selected_provider = providers[provider_num - 1]
-                    result = set_preferred_provider(selected_provider)
+                    result = ConfigService.set_preferred_provider(selected_provider)
                     success(result)
                     self.update_session_state()
                 else:

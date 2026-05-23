@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from app.db import Database, get_api_keys
-from app.providers import get_ai_manager
+from app.providers import get_ai_manager, reload_ai_manager
 
 logger = logging.getLogger(__name__)
 
@@ -105,3 +105,24 @@ class ConfigService:
             "created_at": profile["created_at"].isoformat() if profile.get("created_at") else None,
             "updated_at": profile["updated_at"].isoformat() if profile.get("updated_at") else None,
         }
+
+    @staticmethod
+    def set_preferred_provider(provider_name: str, model_name: str | None = None) -> str:
+        profile = Database.get_profile()
+        config = profile.get("providers_config") or {}
+        config["preferred_provider"] = provider_name
+        if model_name:
+            config["preferred_model"] = model_name
+        Database.update_profile({"providers_config": config})
+        reload_ai_manager()
+
+        suffix = f" with model: {model_name}" if model_name else ""
+        return f"Preferred provider set to: {provider_name}{suffix}"
+
+    @staticmethod
+    def set_vision_model(provider: str, model: str) -> str:
+        profile = Database.get_profile()
+        config = profile.get("providers_config") or {}
+        config["vision_model_preferences"] = {"provider": provider, "model": model}
+        Database.update_profile({"providers_config": config})
+        return f"Vision model set to: {provider}/{model}"

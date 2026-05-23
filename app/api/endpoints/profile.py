@@ -19,11 +19,9 @@ from app.db import (
 from app.stream_manager import StreamManager
 from app.services.config_service import ConfigService
 from app.providers import get_ai_manager
-from app.app import (
-    set_preferred_provider,
-    get_vision_capabilities,
-    set_vision_model
-)
+from app.logging_config import get_logger
+
+log = get_logger(__name__)
 
 router = APIRouter(tags=["profile"])
 
@@ -64,7 +62,7 @@ async def api_get_config():
     try:
         return ConfigService.get_frontend_config()
     except Exception as e:
-        print(f"Error getting config: {e}")
+        log.error("Error getting config: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/get_profile")
@@ -111,7 +109,7 @@ async def api_get_profile():
             "multimodal_capabilities": vision_capabilities,
         }
     except Exception as e:
-        print(f"Error in api_get_profile: {e}")
+        log.error("Error in api_get_profile: %s", e)
         raise HTTPException(status_code=500, detail="Failed to load profile")
 
 @router.post("/update_profile")
@@ -137,7 +135,7 @@ async def api_add_chutes_key(request: ChutesKeyRequest):
         else:
             return {"status": "error", "message": "Failed to save Chutes API key"}
     except Exception as e:
-        print(f"Error adding Chutes API key: {e}")
+        log.error("Error adding Chutes API key: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/remove_api_key")
@@ -170,16 +168,16 @@ async def api_list_providers():
             "current_model": current_model,
         }
     except Exception as e:
-        print(f"Error listing providers: {e}")
+        log.error("Error listing providers: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/providers/set_preferred")
 async def api_set_preferred_provider(request: ProviderSetRequest):
     try:
-        result = set_preferred_provider(request.provider_name, request.model_name)
+        result = ConfigService.set_preferred_provider(request.provider_name, request.model_name)
         return {"status": "success", "message": result}
     except Exception as e:
-        print(f"Error setting preferred provider: {e}")
+        log.error("Error setting preferred provider: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/providers/test_connection")
@@ -197,25 +195,25 @@ async def api_test_provider_connection(request: ProviderTestRequest):
             "message": f"{request.provider_name}: {'Connected' if is_connected else 'Connection failed'}",
         }
     except Exception as e:
-        print(f"Error testing provider connection: {e}")
+        log.error("Error testing provider connection: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/get_vision_capabilities")
 async def api_get_vision_capabilities():
     try:
-        capabilities = get_vision_capabilities()
+        capabilities = ConfigService.get_vision_capabilities()
         return {"status": "success", "capabilities": capabilities}
     except Exception as e:
-        print(f"Error getting vision capabilities: {type(e).__name__}")
+        log.error("Error getting vision capabilities: %s - %s", type(e).__name__, e)
         raise HTTPException(status_code=500, detail="Failed to get vision capabilities")
 
 @router.post("/providers/set_vision_model")
 async def api_set_vision_model(request: VisionModelSetRequest):
     try:
-        result = set_vision_model(request.provider, request.model)
+        result = ConfigService.set_vision_model(request.provider, request.model)
         return {"status": "success", "message": result}
     except Exception as e:
-        print(f"Error setting vision model: {e}")
+        log.error("Error setting vision model: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/providers/test_vision")
@@ -230,7 +228,7 @@ async def api_update_location(request: LocationUpdateRequest):
         Database.update_context(context)
         return {"status": "success", "message": "Location updated"}
     except Exception as e:
-        print(f"Error updating location: {e}")
+        log.error("Error updating location: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/update_weather_location")
@@ -245,5 +243,5 @@ async def api_update_global_knowledge(request: GlobalKnowledgeUpdateRequest):
         Database.update_profile({"global_knowledge": global_knowledge})
         return {"status": "success", "message": "Global knowledge updated"}
     except Exception as e:
-        print(f"Error updating global knowledge: {e}")
+        log.error("Error updating global knowledge: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

@@ -10,6 +10,7 @@ import re
 import time
 import os
 import hashlib
+from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from PIL import Image
 import io
@@ -19,9 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class MultimodalTools:
-    IMAGE_CACHE_DIR = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), "static", "image_cache"
-    )
+    IMAGE_CACHE_DIR = Path(__file__).resolve().parent.parent / "static" / "image_cache"
 
     def __init__(self):
         # Vision models by provider
@@ -49,7 +48,7 @@ class MultimodalTools:
         self.cache_ttl = 3600  # 1 hour TTL
 
         # Ensure cache directory exists
-        os.makedirs(self.IMAGE_CACHE_DIR, exist_ok=True)
+        self.IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     def get_available_vision_models(self, provider: str) -> List[str]:
         """Get list of available vision models for a provider."""
@@ -112,10 +111,10 @@ class MultimodalTools:
 
         # Check if already cached with any common extension
         for ext in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
-            candidate = os.path.join(self.IMAGE_CACHE_DIR, f"{url_hash}{ext}")
-            if os.path.isfile(candidate):
+            candidate = self.IMAGE_CACHE_DIR / f"{url_hash}{ext}"
+            if candidate.is_file():
                 logger.debug(f"[Vision] Using cached image → {candidate}")
-                return candidate
+                return str(candidate)
 
         try:
             response = requests.get(url, timeout=30)
@@ -131,12 +130,11 @@ class MultimodalTools:
             else:
                 ext = ".jpg"
 
-            filepath = os.path.join(self.IMAGE_CACHE_DIR, f"{url_hash}{ext}")
-            with open(filepath, "wb") as f:
-                f.write(response.content)
+            filepath = self.IMAGE_CACHE_DIR / f"{url_hash}{ext}"
+            filepath.write_bytes(response.content)
 
             logger.debug(f"[Vision] Downloaded image → {filepath}")
-            return filepath
+            return str(filepath)
         except Exception as e:
             logger.warning(f"[WARNING] Failed to download image from {url}: {e}")
             return None

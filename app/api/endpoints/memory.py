@@ -6,6 +6,9 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from app.db import Database
 from app.services.memory_service import MemoryService
+from app.logging_config import get_logger
+
+log = get_logger(__name__)
 
 router = APIRouter(tags=["memory"])
 
@@ -49,7 +52,7 @@ async def api_update_session_context():
             return {"status": "error", "message": "Need conversation history"}
 
     except Exception as e:
-        print(f"Error updating session context: {e}")
+        log.error("Error updating session context: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/update_global_profile")
@@ -67,7 +70,7 @@ async def api_update_global_profile():
         else:
             return {"status": "error", "message": "Global profile analysis failed"}
     except Exception as e:
-        print(f"Error updating global profile: {e}")
+        log.error("Error updating global profile: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/rebuild_structured_memory")
@@ -104,7 +107,7 @@ async def api_rebuild_structured_memory():
             },
         }
     except Exception as e:
-        print(f"Error rebuilding structured memory: {e}")
+        log.error("Error rebuilding structured memory: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/run_memory_decay")
@@ -122,7 +125,7 @@ async def api_run_memory_decay():
             "message": "Memory decay applied. Old memories faded, recent ones preserved.",
         }
     except Exception as e:
-        print(f"Error running memory decay: {e}")
+        log.error("Error running memory decay: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/memory_stats")
@@ -155,7 +158,7 @@ async def api_memory_stats():
                         f"{category}: {content[:100]}" if category else content[:100]
                     )
         except Exception as e:
-            print(f"[memory_stats] top_facts failed: {e}")
+            log.error("[memory_stats] top_facts failed: %s", e)
 
         return {
             "status": "success",
@@ -167,5 +170,5 @@ async def api_memory_stats():
             },
         }
     except Exception as e:
-        print(f"Error getting memory stats: {e}")
+        log.error("Error getting memory stats: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

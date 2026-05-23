@@ -11,6 +11,7 @@ import ipaddress
 import re
 from urllib.parse import urlparse
 from datetime import datetime
+from pathlib import Path
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 
 logger = logging.getLogger(__name__)
@@ -102,10 +103,9 @@ def _extract_url(args_str: str) -> tuple:
     return "GET", args_str
 
 
-def get_media_dir():
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    media_dir = os.path.join(project_root, "static", "media")
-    os.makedirs(media_dir, exist_ok=True)
+def get_media_dir() -> Path:
+    media_dir = Path(__file__).resolve().parent.parent / "static" / "media"
+    media_dir.mkdir(parents=True, exist_ok=True)
     return media_dir
 
 
@@ -176,10 +176,9 @@ def execute(arguments, **kwargs):
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             ext = content_type.split("/")[-1].split(";")[0]
             filename = f"{timestamp}.{'jpg' if ext == 'jpeg' else ext}"
-            filepath = os.path.join(media_dir, filename)
+            filepath = media_dir / filename
 
-            with open(filepath, "wb") as f:
-                f.write(content)
+            filepath.write_bytes(content)
 
             web_path = f"static/media/{filename}"
 

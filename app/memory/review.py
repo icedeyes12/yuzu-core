@@ -6,21 +6,22 @@ from __future__ import annotations
 import logging
 import os
 import json
+from pathlib import Path
 from datetime import datetime
 from app.memory.db_memory import decay_facts, increment_importance, FACT_TYPE_DYNAMIC
 
 logger = logging.getLogger(__name__)
 
-_DECAY_STATE_FILE = os.path.join(os.path.dirname(__file__), ".decay_state.json")
+_DECAY_STATE_FILE = Path(__file__).resolve().parent / ".decay_state.json"
 
 
 def _get_last_decay_time():
     """Return the last time decay ran (epoch), or None if never run."""
-    if not os.path.exists(_DECAY_STATE_FILE):
+    if not _DECAY_STATE_FILE.exists():
         return None
     try:
-        with open(_DECAY_STATE_FILE) as f:
-            return json.load(f).get("last_decay")
+        data = json.loads(_DECAY_STATE_FILE.read_text())
+        return data.get("last_decay")
     except (ValueError, IOError):
         return None
 
@@ -28,8 +29,7 @@ def _get_last_decay_time():
 def _set_last_decay_time():
     """Record current time as last decay timestamp."""
     try:
-        with open(_DECAY_STATE_FILE, "w") as f:
-            json.dump({"last_decay": datetime.now().isoformat()}, f)
+        _DECAY_STATE_FILE.write_text(json.dumps({"last_decay": datetime.now().isoformat()}))
     except IOError as e:
         logger.warning(f"Could not write decay state: {e}")
 

@@ -284,7 +284,7 @@ def mark_segmentation_done(session_id: int, count: int) -> None:
 
 def _get_ai_manager():
     """Lazy-import to avoid circular imports."""
-    from app import get_ai_manager
+    from app.providers import get_ai_manager
 
     return get_ai_manager()
 

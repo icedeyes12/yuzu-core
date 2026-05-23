@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import logging
+from pathlib import Path
 from datetime import datetime
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 
@@ -14,10 +15,10 @@ logger = logging.getLogger(__name__)
 # Allowed base directories (Termux workspace)
 # Paths must be within these directories for security
 ALLOWED_BASE_DIRS = [
-    os.path.expanduser("~/workspace"),
-    os.path.expanduser("~/.config"),
-    os.path.expanduser("~/.local"),
-    "/tmp",
+    Path("~/workspace").expanduser(),
+    Path("~/.config").expanduser(),
+    Path("~/.local").expanduser(),
+    Path("/tmp"),
 ]
 
 # Maximum file size for read operations (1MB)
@@ -124,33 +125,31 @@ TOOL_DEFINITION = TOOL_READ  # Default for registry lookup
 # --------------------------------------------------------------------
 
 
-def _resolve_path(path: str) -> str | None:
+def _resolve_path(path: str) -> Path | None:
     """Resolve and validate a path is within allowed directories.
 
-    Returns absolute path if valid, None if path traversal detected.
+    Returns absolute Path if valid, None if path traversal detected.
     """
     if not path:
         return None
 
     # Expand ~ to home directory
-    expanded = os.path.expanduser(path)
+    expanded = Path(path).expanduser()
 
     # Normalize to prevent traversal
-    normalized = os.path.normpath(expanded)
+    normalized = expanded.resolve()
 
     # Make absolute
-    if not os.path.isabs(normalized):
+    if not normalized.is_absolute():
         # Relative path: resolve from ~/workspace
-        normalized = os.path.normpath(
-            os.path.join(os.path.expanduser("~/workspace"), normalized)
-        )
+        normalized = (Path("~/workspace").expanduser() / normalized).resolve()
 
     # Check for path traversal attempts
     if (
         ".." in path
-        or path.startswith("/etc")
-        or path.startswith("/sys")
-        or path.startswith("/proc")
+        or str(normalized).startswith("/etc")
+        or str(normalized).startswith("/sys")
+        or str(normalized).startswith("/proc")
     ):
         logger.warning(f"[fs] Rejected path traversal attempt: {path}")
         return None
@@ -158,7 +157,7 @@ def _resolve_path(path: str) -> str | None:
     # Verify path is within allowed directories
     is_allowed = False
     for base_dir in ALLOWED_BASE_DIRS:
-        if normalized.startswith(base_dir + os.sep) or normalized == base_dir:
+        if str(normalized).startswith(str(base_dir) + os.sep) or normalized == base_dir:
             is_allowed = True
             break
 
@@ -236,7 +235,7 @@ def execute_read(arguments: dict, session_id: int | None = None) -> dict:
             partner_name,
         )
 
-    if not os.path.exists(resolved):
+    if not resolved.exists():
         return error_result(
             f"File not found: {path_arg}",
             TOOL_READ,
@@ -244,7 +243,7 @@ def execute_read(arguments: dict, session_id: int | None = None) -> dict:
             partner_name,
         )
 
-    if not os.path.isfile(resolved):
+    if not resolved.is_file():
         return error_result(
             f"Not a file: {path_arg}",
             TOOL_READ,
@@ -254,7 +253,7 @@ def execute_read(arguments: dict, session_id: int | None = None) -> dict:
 
     # Check file size
     try:
-        size = os.path.getsize(resolved)
+        size = resolved.stat().st_size
         if size > MAX_READ_SIZE:
             return error_result(
                 f"File too large ({size} bytes). Max: {MAX_READ_SIZE} bytes.",
@@ -272,8 +271,7 @@ def execute_read(arguments: dict, session_id: int | None = None) -> dict:
 
     # Read file
     try:
-        with open(resolved, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read()
+        content = resolved.read_text(encoding="utf-8", errors="replace")
     except OSError as e:
         return error_result(
             f"Cannot read file: {e}",
@@ -283,14 +281,14 @@ def execute_read(arguments: dict, session_id: int | None = None) -> dict:
         )
 
     # Get file extension for syntax highlighting
-    _, file_ext = os.path.splitext(resolved)
+    file_ext = resolved.suffix
 
     # Format output with line numbers
     lines = content.split("\n")
 
     return ok_result(
         {
-            "path": resolved,
+            "path": str(resolved),
             "size": size,
             "lines": len(lines),
             "content": content,
@@ -328,10 +326,10 @@ def execute_write(arguments: dict, session_id: int | None = None) -> dict:
         )
 
     # Create parent directories if needed
-    parent = os.path.dirname(resolved)
-    if parent and not os.path.exists(parent):
+    parent = resolved.parent
+    if parent and not parent.exists():
         try:
-            os.makedirs(parent, exist_ok=True)
+            parent.mkdir(parents=True, exist_ok=True)
         except OSError as e:
             return error_result(
                 f"Cannot create directory: {e}",
@@ -342,8 +340,7 @@ def execute_write(arguments: dict, session_id: int | None = None) -> dict:
 
     # Write file
     try:
-        with open(resolved, "w", encoding="utf-8") as f:
-            f.write(content)
+        resolved.write_text(content, encoding="utf-8")
     except OSError as e:
         return error_result(
             f"Cannot write file: {e}",
@@ -356,7 +353,7 @@ def execute_write(arguments: dict, session_id: int | None = None) -> dict:
 
     return ok_result(
         {
-            "path": resolved,
+            "path": str(resolved),
             "bytes_written": size,
             "lines": content.count("\n") + 1 if content else 0,
         },
@@ -382,7 +379,7 @@ def execute_ls(arguments: dict, session_id: int | None = None) -> dict:
             partner_name,
         )
 
-    if not os.path.exists(resolved):
+    if not resolved.exists():
         return error_result(
             f"Directory not found: {path_arg}",
             TOOL_LS,
@@ -390,7 +387,7 @@ def execute_ls(arguments: dict, session_id: int | None = None) -> dict:
             partner_name,
         )
 
-    if not os.path.isdir(resolved):
+    if not resolved.is_dir():
         return error_result(
             f"Not a directory: {path_arg}",
             TOOL_LS,
@@ -400,7 +397,7 @@ def execute_ls(arguments: dict, session_id: int | None = None) -> dict:
 
     # List contents
     try:
-        entries = os.listdir(resolved)
+        entries = list(resolved.iterdir())
     except OSError as e:
         return error_result(
             f"Cannot list directory: {e}",
@@ -413,14 +410,13 @@ def execute_ls(arguments: dict, session_id: int | None = None) -> dict:
     dirs = []
     files = []
     for entry in entries:
-        full_path = os.path.join(resolved, entry)
         try:
-            if os.path.isdir(full_path):
-                dirs.append(entry)
+            if entry.is_dir():
+                dirs.append(entry.name)
             else:
-                files.append(entry)
+                files.append(entry.name)
         except OSError:
-            files.append(entry)
+            files.append(entry.name)
 
     dirs.sort()
     files.sort()
@@ -432,20 +428,21 @@ def execute_ls(arguments: dict, session_id: int | None = None) -> dict:
 
     # Format directories
     for d in dirs[:MAX_LS_LINES]:
-        lines.append(f"📁 {d}/")
+        lines.append(f"\ud83d\udcc1 {d}/")
 
     # Format files with size
     remaining = MAX_LS_LINES - len(dirs)
-    for f in files[:remaining]:
-        full_path = os.path.join(resolved, f)
+    for f_name in files[:remaining]:
+        entry = resolved / f_name
         try:
-            size = os.path.getsize(full_path)
-            mtime = datetime.fromtimestamp(os.path.getmtime(full_path)).strftime(
+            stats = entry.stat()
+            size = stats.st_size
+            mtime = datetime.fromtimestamp(stats.st_mtime).strftime(
                 "%Y-%m-%d %H:%M"
             )
-            lines.append(f"📄 {f:<30} {size:>8}  {mtime}")
+            lines.append(f"\ud83d\udcc4 {f_name:<30} {size:>8}  {mtime}")
         except OSError:
-            lines.append(f"📄 {f}")
+            lines.append(f"\ud83d\udcc4 {f_name}")
 
     if len(files) > remaining:
         lines.append(f"... and {len(files) - remaining} more files")
@@ -453,7 +450,7 @@ def execute_ls(arguments: dict, session_id: int | None = None) -> dict:
     # Return with listing in markdown
     return ok_result(
         {
-            "path": resolved,
+            "path": str(resolved),
             "listing": "\n".join(lines),
             "total": len(entries),
             "directories": len(dirs),
@@ -491,7 +488,7 @@ def execute_mkdir(arguments: dict, session_id: int | None = None) -> dict:
 
     # Create directory
     try:
-        os.makedirs(resolved, exist_ok=True)
+        resolved.mkdir(parents=True, exist_ok=True)
     except OSError as e:
         return error_result(
             f"Cannot create directory: {e}",
@@ -502,7 +499,7 @@ def execute_mkdir(arguments: dict, session_id: int | None = None) -> dict:
 
     return ok_result(
         {
-            "path": resolved,
+            "path": str(resolved),
             "created": True,
         },
         TOOL_MKDIR,
@@ -535,7 +532,7 @@ def execute_rm(arguments: dict, session_id: int | None = None) -> dict:
             partner_name,
         )
 
-    if not os.path.exists(resolved):
+    if not resolved.exists():
         return error_result(
             f"Path not found: {path_arg}",
             TOOL_RM,
@@ -545,10 +542,10 @@ def execute_rm(arguments: dict, session_id: int | None = None) -> dict:
 
     # Delete
     try:
-        if os.path.isdir(resolved):
-            os.rmdir(resolved)  # Only empty directories
+        if resolved.is_dir():
+            resolved.rmdir()  # Only empty directories
         else:
-            os.remove(resolved)
+            resolved.unlink()
     except OSError as e:
         if "Directory not empty" in str(e):
             return error_result(
@@ -566,7 +563,7 @@ def execute_rm(arguments: dict, session_id: int | None = None) -> dict:
 
     return ok_result(
         {
-            "path": resolved,
+            "path": str(resolved),
             "deleted": True,
         },
         TOOL_RM,

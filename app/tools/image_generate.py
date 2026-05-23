@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import os
 import requests
+from pathlib import Path
 from datetime import datetime
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 from app.db import get_profile, get_api_keys
@@ -100,8 +101,8 @@ def execute(arguments, **kwargs):
                 partner_name,
             )
 
-        images_dir = os.path.abspath(os.path.join("static", "generated_images"))
-        os.makedirs(images_dir, exist_ok=True)
+        images_dir = Path("static/generated_images").resolve()
+        images_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_prompt = "".join(
@@ -114,13 +115,11 @@ def execute(arguments, **kwargs):
         ext = "jpg" if image_model == "qwen_image" else "png"
         filename = f"{timestamp}_{safe_prompt}.{ext}"
 
-        candidate_path = os.path.join(images_dir, filename)
-        filepath = os.path.abspath(os.path.normpath(candidate_path))
-        if not filepath.startswith(images_dir + os.sep):
+        filepath = (images_dir / filename).resolve()
+        if not str(filepath).startswith(str(images_dir) + os.sep):
             raise ValueError("Unsafe output path")
 
-        with open(filepath, "wb") as f:
-            f.write(response.content)
+        filepath.write_bytes(response.content)
 
         logger.debug(f"[IMAGE TOOL] Saved: {filepath}")
 

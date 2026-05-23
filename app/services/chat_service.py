@@ -4,6 +4,7 @@ import os
 import json
 import asyncio
 import logging
+from pathlib import Path
 from datetime import datetime
 from typing import Any, AsyncIterator
 
@@ -27,8 +28,8 @@ class ChatService:
         if not images:
             return []
 
-        uploads_dir = "static/uploads"
-        os.makedirs(uploads_dir, exist_ok=True)
+        uploads_dir = Path("static/uploads")
+        uploads_dir.mkdir(parents=True, exist_ok=True)
         
         for i, image_file in enumerate(images):
             if image_file and image_file.filename:
@@ -37,11 +38,10 @@ class ChatService:
                     # Clean filename
                     safe_filename = "".join(c for c in image_file.filename if c.isalnum() or c in (".", "-", "_")).rstrip()
                     filename = f"{timestamp}_{i}_{safe_filename}"
-                    filepath = os.path.join(uploads_dir, filename)
+                    filepath = uploads_dir / filename
                     
                     content = await image_file.read()
-                    with open(filepath, "wb") as f:
-                        f.write(content)
+                    filepath.write_bytes(content)
                     
                     image_markdowns.append(f"![Uploaded Image](uploads/{filename})")
                 except Exception as e:

@@ -6,6 +6,7 @@ import random
 import re
 import traceback
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from app.db import Database
@@ -305,9 +306,8 @@ def summarize_global_player_profile() -> bool:
     merged = _merge_profile_data(profile.get("memory") or {}, parsed)
     try:
         Database.update_profile({"memory": merged})
-    except Exception as e:
-        log.error("profile update failed: %s", e)
-        traceback.print_exc()
+    except Exception:
+        log.exception("profile update failed")
         return False
 
     log.info(
@@ -322,15 +322,14 @@ def _save_debug_log(
     summary_text: str, sessions: int, messages: int, chars: int
 ) -> None:
     try:
-        os.makedirs("debug_logs", exist_ok=True)
+        debug_dir = Path("debug_logs")
+        debug_dir.mkdir(exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = os.path.join("debug_logs", f"profile_summary_{timestamp}.txt")
-        with open(path, "w", encoding="utf-8") as f:
-            f.write("=== GLOBAL PROFILE ANALYSIS ===\n")
-            f.write(f"Date: {timestamp}\nSessions: {sessions}\n")
-            f.write(f"Messages: {messages}\nChars: {chars}\n")
-            f.write("\n=== RAW ANALYSIS ===\n")
-            f.write(summary_text)
+        path = debug_dir / f"profile_summary_{timestamp}.txt"
+        path.write_text(
+            f"=== GLOBAL PROFILE ANALYSIS ===\nDate: {timestamp}\nSessions: {sessions}\nMessages: {messages}\nChars: {chars}\n\n=== RAW ANALYSIS ===\n{summary_text}",
+            encoding="utf-8"
+        )
     except OSError as e:
         log.warning("debug log write failed: %s", e)
 

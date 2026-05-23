@@ -19,6 +19,9 @@ from app.db import (
     Database
 )
 from app.services.session_service import SessionService
+from app.logging_config import get_logger
+
+log = get_logger(__name__)
 
 router = APIRouter(tags=["sessions"])
 
@@ -46,7 +49,7 @@ async def api_list_sessions():
         sessions = await get_all_sessions_async()
         return {"sessions": sessions}
     except Exception as e:
-        print(f"Error listing sessions: {e}")
+        log.error("Error listing sessions: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/sessions/create")
@@ -60,7 +63,7 @@ async def api_create_session(http_request: Request, request: SessionCreateReques
 
         return {"status": "success", "session_id": session_id}
     except Exception as e:
-        print(f"Error creating session: {e}")
+        log.error("Error creating session: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/sessions/switch")
@@ -89,7 +92,7 @@ async def api_switch_session(request: SessionSwitchRequest, http_request: Reques
             "session_memory": session_memory,
         }
     except Exception as e:
-        print(f"Error switching session: {e}")
+        log.error("Error switching session: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/sessions/rename")
@@ -107,7 +110,7 @@ async def api_rename_session(request: SessionRenameRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error renaming session: {e}")
+        log.error("Error renaming session: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/sessions/delete")
@@ -134,7 +137,7 @@ async def api_delete_session(request: SessionDeleteRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error deleting session: {e}")
+        log.error("Error deleting session: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/clear_chat")
@@ -175,5 +178,5 @@ async def api_get_session_memory(session_id: int):
             "last_summarized": session_memory.get("last_summarized", "Never"),
         }
     except Exception as e:
-        print(f"Error getting session memory: {e}")
+        log.error("Error getting session memory: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
