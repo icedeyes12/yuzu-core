@@ -1,0 +1,249 @@
+# FILE: app/api/endpoints/profile.py
+# DESCRIPTION: Profile, config, and provider settings endpoints
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Request, HTTPException
+from pydantic import BaseModel, Field
+from datetime import datetime
+
+from app.db import (
+    Database,
+    get_profile_async,
+    get_active_session_async,
+    get_chat_history_async,
+    get_session_memory_async,
+    get_api_keys_async,
+    update_profile_async
+)
+from app.stream_manager import StreamManager
+from app.services.config_service import ConfigService
+from app.providers import get_ai_manager
+from app.app import (
+    set_preferred_provider,
+    get_vision_capabilities,
+    set_vision_model
+)
+
+router = APIRouter(tags=["profile"])
+
+class ApiKeyRequest(BaseModel):
+    key_name: str = Field(..., min_length=1, description="Name for the API key")
+    api_key: str = Field(..., min_length=1, description="The API key value")
+
+class ChutesKeyRequest(BaseModel):
+    api_key: str = Field(..., min_length=1, description="Chutes API key value")
+
+class ProviderSetRequest(BaseModel):
+    provider_name: str = Field(..., min_length=1, description="AI provider name")
+    model_name: str | None = Field(None, description="Optional model name")
+
+class ProviderTestRequest(BaseModel):
+    provider_name: str = Field(..., min_length=1, description="Provider name to test")
+
+class VisionModelSetRequest(BaseModel):
+    provider: str = Field(..., min_length=1, description="Vision provider name")
+    model: str = Field(..., min_length=1, description="Vision model name")
+
+class LocationUpdateRequest(BaseModel):
+    lat: float = Field(..., description="Latitude")
+    lon: float = Field(..., description="Longitude")
+
+class GlobalKnowledgeUpdateRequest(BaseModel):
+    facts: str = Field(..., description="Global knowledge facts")
+
+class ProfileUpdateRequest(BaseModel):
+    updates: dict = Field(..., description="Key-value pairs for profile updates")
+
+class ApiKeyRemoveRequest(BaseModel):
+    key_name: str = Field(..., min_length=1, description="Name of the API key to remove")
+
+@router.get("/config")
+async def api_get_config():
+    """Single source of truth for frontend configuration."""
+    try:
+        return ConfigService.get_frontend_config()
+    except Exception as e:
+        print(f"Error getting config: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.get("/get_profile")
+async def api_get_profile():
+    try:
+        profile = await get_profile_async()
+        active_session = await get_active_session_async()
+        session_id = active_session["id"]
+        chat_history = await get_chat_history_async(
+            session_id=session_id, limit=None
+        )
+
+        # Inject ongoing stream if it exists
+        active_buf = StreamManager.get_active_buffer(session_id)
+        if active_buf and active_buf.full_text:
+            # Check if the last message in history is already this response
+            last_msg = chat_history[-1] if chat_history else None
+            is_duplicate = False
+            if last_msg and last_msg.get("role") == "assistant":
+                if len(last_msg.get("content", "")) >= len(active_buf.full_text):
+                    is_duplicate = True
+            
+            if not is_duplicate:
+                chat_history.append({
+                    "id": -99, # Sentinel ID for live content
+                    "role": "assistant",
+                    "content": active_buf.full_text,
+                    "timestamp": datetime.now().isoformat()
+                })
+        session_memory = await get_session_memory_async(active_session["id"])
+
+        api_keys = await get_api_keys_async()
+        profile_dict = ConfigService.format_profile_dict(profile)
+        ai_providers_payload = ConfigService.get_ai_providers_payload(profile)
+        vision_capabilities = ConfigService.get_vision_capabilities()
+
+        return {
+            **profile_dict,
+            "chat_history": chat_history,
+            "api_keys": api_keys,
+            "active_session": active_session,
+            "session_memory": session_memory,
+            "ai_providers": ai_providers_payload,
+            "multimodal_capabilities": vision_capabilities,
+        }
+    except Exception as e:
+        print(f"Error in api_get_profile: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load profile")
+
+@router.post("/update_profile")
+async def api_update_profile(request: ProfileUpdateRequest):
+    try:
+        await update_profile_async(request.updates)
+        return {"status": "success"}
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.post("/add_api_key")
+async def api_add_api_key(request: ApiKeyRequest):
+    if Database.add_api_key(request.key_name, request.api_key):
+        return {"status": "success", "message": f"{request.key_name} API key added"}
+    else:
+        return {"status": "error", "message": "API key already exists or failed to save"}
+
+@router.post("/add_chutes_key")
+async def api_add_chutes_key(request: ChutesKeyRequest):
+    try:
+        if Database.add_api_key("chutes", request.api_key.strip()):
+            return {"status": "success", "message": "Chutes API key added successfully!"}
+        else:
+            return {"status": "error", "message": "Failed to save Chutes API key"}
+    except Exception as e:
+        print(f"Error adding Chutes API key: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.post("/remove_api_key")
+async def api_remove_api_key(request: ApiKeyRemoveRequest):
+    try:
+        if Database.remove_api_key(request.key_name):
+            return {"status": "success", "message": f"{request.key_name} API key removed"}
+        else:
+            return {"status": "error", "message": "API key not found"}
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.get("/providers/list")
+async def api_list_providers():
+    try:
+        ai_manager = get_ai_manager()
+        available_providers = ai_manager.get_available_providers()
+        all_models = ai_manager.get_all_models()
+
+        profile = Database.get_profile()
+        providers_config = profile.get("providers_config", {})
+        current_provider = providers_config.get("preferred_provider", "ollama")
+        current_model = providers_config.get("preferred_model", "glm-4.6:cloud")
+
+        return {
+            "status": "success",
+            "available_providers": available_providers,
+            "all_models": all_models,
+            "current_provider": current_provider,
+            "current_model": current_model,
+        }
+    except Exception as e:
+        print(f"Error listing providers: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.post("/providers/set_preferred")
+async def api_set_preferred_provider(request: ProviderSetRequest):
+    try:
+        result = set_preferred_provider(request.provider_name, request.model_name)
+        return {"status": "success", "message": result}
+    except Exception as e:
+        print(f"Error setting preferred provider: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.post("/providers/test_connection")
+async def api_test_provider_connection(request: ProviderTestRequest):
+    try:
+        ai_manager = get_ai_manager()
+        provider = ai_manager.providers.get(request.provider_name)
+        if not provider:
+            return {"status": "error", "message": f"Provider {request.provider_name} not found"}
+        is_connected = provider.test_connection()
+        return {
+            "status": "success",
+            "provider": request.provider_name,
+            "connected": is_connected,
+            "message": f"{request.provider_name}: {'Connected' if is_connected else 'Connection failed'}",
+        }
+    except Exception as e:
+        print(f"Error testing provider connection: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.get("/get_vision_capabilities")
+async def api_get_vision_capabilities():
+    try:
+        capabilities = get_vision_capabilities()
+        return {"status": "success", "capabilities": capabilities}
+    except Exception as e:
+        print(f"Error getting vision capabilities: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail="Failed to get vision capabilities")
+
+@router.post("/providers/set_vision_model")
+async def api_set_vision_model(request: VisionModelSetRequest):
+    try:
+        result = set_vision_model(request.provider, request.model)
+        return {"status": "success", "message": result}
+    except Exception as e:
+        print(f"Error setting vision model: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.post("/providers/test_vision")
+async def api_test_vision():
+    return {"status": "success", "message": "Vision model test successful"}
+
+@router.post("/update_location")
+async def api_update_location(request: LocationUpdateRequest):
+    try:
+        context = Database.get_context()
+        context["location"] = {"lat": request.lat, "lon": request.lon}
+        Database.update_context(context)
+        return {"status": "success", "message": "Location updated"}
+    except Exception as e:
+        print(f"Error updating location: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.post("/update_weather_location")
+async def api_update_weather_location(request: LocationUpdateRequest):
+    """Alias for update_location to maintain compatibility."""
+    return await api_update_location(request)
+
+@router.post("/global_knowledge/update")
+async def api_update_global_knowledge(request: GlobalKnowledgeUpdateRequest):
+    try:
+        global_knowledge = {"facts": request.facts}
+        Database.update_profile({"global_knowledge": global_knowledge})
+        return {"status": "success", "message": "Global knowledge updated"}
+    except Exception as e:
+        print(f"Error updating global knowledge: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

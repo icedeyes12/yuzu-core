@@ -1,0 +1,171 @@
+# FILE: app/api/endpoints/memory.py
+# DESCRIPTION: Memory pipeline and stats endpoints
+
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException
+from app.db import Database
+from app.services.memory_service import MemoryService
+
+router = APIRouter(tags=["memory"])
+
+@router.post("/update_session_context")
+async def api_update_session_context():
+    try:
+        active_session = Database.get_active_session()
+        session_id = active_session["id"]
+        profile = Database.get_profile()
+
+        chat_history = Database.get_chat_history(session_id=session_id)
+
+        if len(chat_history) < 5:
+            return {
+                "status": "error",
+                "message": "Need at least 5 conversation messages",
+            }
+
+        last_user_msg = next(
+            (msg for msg in reversed(chat_history) if msg["role"] == "user"), None
+        )
+        last_ai_reply = next(
+            (msg for msg in reversed(chat_history) if msg["role"] == "assistant"), None
+        )
+
+        if last_user_msg and last_ai_reply:
+            success = MemoryService.summarize_session(
+                profile, last_user_msg["content"], last_ai_reply["content"], session_id
+            )
+
+            if success:
+                session_memory = Database.get_session_memory(session_id)
+                return {
+                    "status": "success",
+                    "message": "Session context updated!",
+                    "session_memory": session_memory,
+                }
+            else:
+                return {"status": "error", "message": "Session context update failed"}
+        else:
+            return {"status": "error", "message": "Need conversation history"}
+
+    except Exception as e:
+        print(f"Error updating session context: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.post("/update_global_profile")
+async def api_update_global_profile():
+    try:
+        success = MemoryService.summarize_global_profile()
+
+        if success:
+            profile = Database.get_profile()
+            return {
+                "status": "success",
+                "message": "Global player profile updated from ALL sessions!",
+                "profile": profile,
+            }
+        else:
+            return {"status": "error", "message": "Global profile analysis failed"}
+    except Exception as e:
+        print(f"Error updating global profile: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.post("/rebuild_structured_memory")
+async def api_rebuild_structured_memory():
+    try:
+        active_session = Database.get_active_session()
+        session_id = active_session["id"]
+
+        from app.memory.memory import run_memory_pipeline
+        from app.memory.db_memory import (
+            count_facts,
+            FACT_TYPE_STATIC,
+            FACT_TYPE_DYNAMIC,
+        )
+
+        # Get message count
+        count = Database.get_session_messages_count(session_id)
+
+        # Run the full pipeline
+        result = run_memory_pipeline(session_id, count)
+
+        semantic_count = count_facts(fact_type=FACT_TYPE_STATIC, session_id=session_id)
+        episodic_count = count_facts(fact_type=FACT_TYPE_DYNAMIC, session_id=session_id)
+
+        return {
+            "status": "success",
+            "message": f"Memory pipeline completed: {result.get('segments', 0)} segments, {result.get('episodes', 0)} episodes, {result.get('pcl_runs', 0)} PCL runs",
+            "stats": {
+                "semantic": semantic_count,
+                "episodic": episodic_count,
+                "segments": result.get("segments", 0),
+                "episodes": result.get("episodes", 0),
+                "pcl_runs": result.get("pcl_runs", 0),
+            },
+        }
+    except Exception as e:
+        print(f"Error rebuilding structured memory: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.post("/run_memory_decay")
+async def api_run_memory_decay():
+    try:
+        active_session = Database.get_active_session()
+        session_id = active_session["id"]
+
+        from app.memory.review import run_decay
+
+        run_decay(session_id)
+
+        return {
+            "status": "success",
+            "message": "Memory decay applied. Old memories faded, recent ones preserved.",
+        }
+    except Exception as e:
+        print(f"Error running memory decay: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.get("/memory_stats")
+async def api_memory_stats():
+    try:
+        active_session = Database.get_active_session()
+        session_id = active_session["id"]
+
+        from app.memory.db_memory import (
+            count_facts,
+            FACT_TYPE_STATIC,
+            FACT_TYPE_DYNAMIC,
+            get_facts_by_session,
+        )
+
+        semantic_count = count_facts(fact_type=FACT_TYPE_STATIC, session_id=session_id)
+        episodic_count = count_facts(fact_type=FACT_TYPE_DYNAMIC, session_id=session_id)
+
+        top_facts = []
+        try:
+            facts = get_facts_by_session(
+                session_id=session_id, fact_type=FACT_TYPE_STATIC, limit=10
+            )
+            for f in facts:
+                meta = f.get("metadata") or {}
+                content = f.get("content", "")
+                category = meta.get("category", "")
+                if content:
+                    top_facts.append(
+                        f"{category}: {content[:100]}" if category else content[:100]
+                    )
+        except Exception as e:
+            print(f"[memory_stats] top_facts failed: {e}")
+
+        return {
+            "status": "success",
+            "stats": {
+                "semantic": semantic_count,
+                "episodic": episodic_count,
+                "segments": 0,
+                "top_facts": top_facts,
+            },
+        }
+    except Exception as e:
+        print(f"Error getting memory stats: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

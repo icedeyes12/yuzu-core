@@ -78,17 +78,17 @@ This roadmap outlines the systematic restructuring of the `yuzu-companion` backe
 ## Phase 4: API Route Decomposition
 *Break down the monolithic routes.py into focused, maintainable modules.*
 
-- [ ] **Module Split**
-    - [ ] Implement `app/api/endpoints/chat.py` (message sending, streaming).
-    - [ ] Implement `app/api/endpoints/sessions.py` (CRUD, switching, renaming).
-    - [ ] Implement `app/api/endpoints/profile.py` (config, settings, keys).
-    - [ ] Implement `app/api/endpoints/memory.py` (stats, rebuild, decay).
+- [x] **Module Split**
+    - [x] Implement `app/api/endpoints/chat.py` (message sending, streaming).
+    - [x] Implement `app/api/endpoints/sessions.py` (CRUD, switching, renaming).
+    - [x] Implement `app/api/endpoints/profile.py` (config, settings, keys).
+    - [x] Implement `app/api/endpoints/memory.py` (stats, rebuild, decay).
 
-- [ ] **Cleanup & Deletion**
-    - [ ] Delete `app/api/routes.py` after full migration.
-    - [ ] Remove `app/api/routes/` empty directory.
-    - [ ] Consolidate `api_update_location` and `api_update_weather_location`.
-    - [ ] Ensure all routes use Pydantic models for validation (remove `request.json()` usage).
+- [x] **Cleanup & Deletion**
+    - [x] Delete `app/api/routes.py` after full migration.
+    - [x] Remove `app/api/routes/` empty directory.
+    - [x] Consolidate `api_update_location` and `api_update_weather_location`.
+    - [x] Ensure all routes use Pydantic models for validation (remove `request.json()` usage).
 
 ## Phase 5: Final Cleanup & Shim Removal
 *Remove the "scaffolding" and technical debt.*
