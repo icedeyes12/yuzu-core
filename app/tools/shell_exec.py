@@ -247,7 +247,7 @@ def _truncate_output(output: str, max_size: int = MAX_OUTPUT_SIZE) -> str:
 def _get_partner_name() -> str:
     """Get partner name from profile."""
     try:
-        from app.database import get_profile
+        from app.db import get_profile
 
         profile = get_profile() or {}
         return profile.get("partner_name", "Yuzu")

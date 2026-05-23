@@ -13,7 +13,7 @@ import hashlib
 from typing import List, Dict, Optional, Tuple
 from PIL import Image
 import io
-from app.database import get_profile, get_api_keys
+from app.db import get_profile, get_api_keys
 
 logger = logging.getLogger(__name__)
 

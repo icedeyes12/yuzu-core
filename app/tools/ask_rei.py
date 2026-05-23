@@ -92,7 +92,7 @@ def execute(arguments, **kwargs):
 
     Sends a message to Reina via Zo ASK API and returns her response.
     """
-    from app.database import get_profile
+    from app.db import get_profile
 
     profile = get_profile() or {}
     partner_name = profile.get("partner_name", "Yuzu")

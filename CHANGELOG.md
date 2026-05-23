@@ -247,7 +247,7 @@ This release modernizes the codebase for Python 3.13 while maintaining backward 
 
 | Category | Files |
 | --- | --- |
-| Core | `file app/app.py`, `file app/providers.py`, `file app/database.py`, `file web.py`, `file main.py` |
+| Core | `file app/app.py`, `file app/providers.py`, `file app.db.py`, `file web.py`, `file main.py` |
 | Tools | All `file app/tools/*.py` (7 files) |
 | Memory | All `file app/memory/*.py` (10 files) |
 | API | `file app/api/routes.py`, `file app/api/__init__.py` |
@@ -293,7 +293,7 @@ This is a **major refactor** focused on simplicity, clarity, and maintainability
 
 #### Stage 2: Database Simplification
 
-- **`file app/database.py`**: **DELETED** — removed passthrough wrapper
+- **`file app.db.py`**: **DELETED** — removed passthrough wrapper
 - All callers migrated to direct `db_pg_models` imports
 
 #### Stage 3: db_pg Cleanup
@@ -565,7 +565,7 @@ All **GitHub Advanced Security alerts resolved**:
 
 ### Changed — Database Interface
 
-- **`file app/database.py`**: Refactored as thin delegate layer
+- **`file app.db.py`**: Refactored as thin delegate layer
   - All operations delegate to `file db_pg_models.py`
   - ORM models removed: `SemanticMemory`, `EpisodicMemory`, `ConversationSegment` → deprecated
   - `Profile`, `ChatSession`, `Message`, `APIKey` tables remain (via psycopg2)
@@ -667,7 +667,7 @@ All **GitHub Advanced Security alerts resolved**:
 
 ### Added — FastAPI Database Support
 
-- `file app/database.py`: Added `get_db()` generator for FastAPI `Depends()` dependency injection
+- `file app.db.py`: Added `get_db()` generator for FastAPI `Depends()` dependency injection
   - Maintains compatibility with legacy `get_db_session()` context manager
 
 ### Migrated — Entry Point
@@ -707,7 +707,7 @@ All **GitHub Advanced Security alerts resolved**:
 ### Fixed — Memory System (Medium)
 
 - **M1**: Inconsistent `confidence`/`importance` across creation paths — standardized to `confidence=0.7, importance=0.7` in `upsert_semantic_memory` and all migration paths
-- **M3**: `file models.py` was empty and misleading — now properly re-exports `SemanticMemory`, `EpisodicMemory`, `ConversationSegment` from `app.database` with `__all__`
+- **M3**: `file models.py` was empty and misleading — now properly re-exports `SemanticMemory`, `EpisodicMemory`, `ConversationSegment` from `app.db` with `__all__`
 - **M4**: `source_episode_id` misattributed — all facts in a batch were tagged with `batch[0]["id"]`; fixed to round-robin per-episode attribution
 - **M5**: Inconsistent dedup strategy between `memory_store` tool and `upsert_semantic_memory` — resolved (both now use cosine similarity >0.95)
 

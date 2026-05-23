@@ -26,7 +26,7 @@ from app.memory.db_memory_queries import (
     FACT_TYPE_STATIC,
     FACT_TYPE_DYNAMIC,
 )
-from app.database import get_session_messages
+from app.db import get_session_messages
 
 logger = logging.getLogger(__name__)
 

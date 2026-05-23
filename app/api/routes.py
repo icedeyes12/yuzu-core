@@ -21,9 +21,9 @@ from app.app import (
     get_vision_capabilities,
     set_vision_model,
 )
-from app.database import Database
+from app.db import Database
 from app.providers import get_ai_manager
-from app.database import (
+from app.db import (
     get_active_session_async,
     get_all_sessions_async,
     create_session_async,
@@ -1067,44 +1067,5 @@ async def api_update_global_knowledge(request: GlobalKnowledgeUpdateRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-# ---------------------------------------------------------------------------
-# Static File Serving
-# ---------------------------------------------------------------------------
+# Static File Serving endpoints moved to app/api/static.py
 
-
-@api_router.get("/static/uploads/{filename}")
-async def serve_uploaded_image(filename: str):
-    try:
-        uploads_dir = os.path.abspath(os.path.join(BASE_DIR, "static", "uploads"))
-        file_path = os.path.abspath(
-            os.path.normpath(os.path.join(uploads_dir, filename))
-        )
-        if not file_path.startswith(uploads_dir + os.sep):
-            raise HTTPException(status_code=404, detail="Image not found")
-        if os.path.exists(file_path):
-            return FileResponse(file_path)
-        raise HTTPException(status_code=404, detail="Image not found")
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=404, detail="Image not found")
-
-
-@api_router.get("/static/generated_images/{filename}")
-async def serve_generated_image(filename: str):
-    try:
-        generated_dir = os.path.abspath(
-            os.path.join(BASE_DIR, "static", "generated_images")
-        )
-        file_path = os.path.abspath(
-            os.path.normpath(os.path.join(generated_dir, filename))
-        )
-        if not file_path.startswith(generated_dir + os.sep):
-            raise HTTPException(status_code=404, detail="Image not found")
-        if os.path.exists(file_path):
-            return FileResponse(file_path)
-        raise HTTPException(status_code=404, detail="Image not found")
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=404, detail="Image not found")

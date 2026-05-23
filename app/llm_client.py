@@ -10,7 +10,7 @@ from typing import Any, Iterable, Iterator
 
 import requests
 
-from app.database import Database
+from app.db import Database
 from app.logging_config import get_logger
 from app.prompts import build_messages
 from app.providers import get_ai_manager

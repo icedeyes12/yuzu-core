@@ -52,7 +52,7 @@ ADD COLUMN IF NOT EXISTS valid_at TIMESTAMP DEFAULT NOW();
 
 ### Files
 - `app/db_pg_models.py` → async functions
-- `app/database.py` → async functions
+- `app.db.py` → async functions
 
 ---
 

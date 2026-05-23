@@ -1,8 +1,8 @@
-# FILE: app/database/db_pg_models.py
+# FILE: app.db.models.py
 # DESCRIPTION: Sync PostgreSQL repository.
 #
 #   Each function is a thin wrapper that calls a SQL constant from
-#   app.database.db_queries, runs it through app.database.db_pg, and passes
+#   app.db.queries, runs it through app.db.connection, and passes
 #   the result to a parser also defined in db_queries. The async mirror
 #   lives in db_pg_models_async.py and uses the same constants and parsers.
 
@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from app.database.db_pg import PgSession, pg_execute, pg_fetchall, pg_fetchone
-from app.database.db_queries import (
+from app.db.connection import PgSession, pg_execute, pg_fetchall, pg_fetchone
+from app.db.queries import (
     ALL_TOOL_ROLES,
     DEFAULT_PROFILE_PARAMS,
     SCHEMA_DDL,

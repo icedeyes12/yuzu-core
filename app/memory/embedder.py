@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 import threading
-from app.database import get_api_key
+from app.db import get_api_key
 
 
 CHUTES_EMBED_ENDPOINT = (

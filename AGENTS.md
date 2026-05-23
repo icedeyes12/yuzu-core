@@ -47,8 +47,8 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 | `file app/providers.py` | AI provider hierarchy + `AIProviderManager` singleton |
 | `file app/tools/registry.py` | Central tool dispatch — **only** place tools are executed |
 | `app/memory/` | Full memory pipeline (extraction, embedding, retrieval, retention) |
-| `file app/database/facade.py` | `Database` class — stable API over raw psycopg2 |
-| `file app/database/db_queries.py` | **Single source of truth** for all SQL strings |
+| `file app.db/facade.py` | `Database` class — stable API over raw psycopg2 |
+| `file app.db/db_queries.py` | **Single source of truth** for all SQL strings |
 | `file app/stream_manager.py` | Background stream buffers, reconnect state, incremental persistence |
 | `file app/web.py` | FastAPI entry point (~130 lines, minimal) |
 | `file app/cli.py` | CLI entry point (Rich TUI) |
@@ -155,7 +155,7 @@ cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
 cursor.execute(f"SELECT * FROM users WHERE id = '{user_id}'")
 ```
 
-**All SQL lives in:** `app/database/db_queries.py` (single source of truth)
+**All SQL lives in:** `app.db/db_queries.py` (single source of truth)
 
 ---
 
@@ -203,8 +203,8 @@ If unsure, check `app/orchestrator.py` for reference implementations.
 1. **NEVER drop tables.** Only add columns or create new tables.
 2. **NEVER use** `DELETE` **on** `semantic_facts`**.** Use `invalid_at` (soft delete) only.
 3. **NEVER use raw string interpolation for user input in SQL.** Use parameterized queries.
-4. **ALWAYS use** `file app/database/db_queries.py` **for SQL strings** — never inline SQL in business logic.
-5. **ALWAYS use the** `Database` **facade** (`file app/database/facade.py`) — never import `db_pg_models` directly from outside the database package.
+4. **ALWAYS use** `file app.db/db_queries.py` **for SQL strings** — never inline SQL in business logic.
+5. **ALWAYS use the** `Database` **facade** (`file app.db/facade.py`) — never import `db_pg_models` directly from outside the database package.
 
 ### Code Safety
 
@@ -234,7 +234,7 @@ If unsure, check `app/orchestrator.py` for reference implementations.
 ### Before Making Changes
 
 1. **Read the relevant module** — Understand the current implementation before modifying.
-2. **Check** `file app/database/db_queries.py` **— If touching DB logic, verify SQL constants are there.
+2. **Check** `file app.db/db_queries.py` **— If touching DB logic, verify SQL constants are there.
 3. **Check** `file app/tools/registry.py` **— If touching tool logic, verify dispatch goes through registry.
 4. **Plan before executing** — For complex changes, present a structured plan first.
 

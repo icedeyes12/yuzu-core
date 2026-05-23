@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from app.database import Database
+from app.db import Database
 from app.llm_client import chutes_chat
 from app.logging_config import get_logger
 

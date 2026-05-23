@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from app.database import (
+from app.db import (
     ALL_TOOL_ROLES,
     DEFAULT_PROFILE_PARAMS,
     SCHEMA_DDL,

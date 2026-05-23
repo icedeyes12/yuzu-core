@@ -305,7 +305,7 @@ def execute_tool(
 def _get_partner_name() -> str:
     """Get partner name from profile for error messages."""
     try:
-        from app.database import get_profile
+        from app.db import get_profile
 
         profile = get_profile() or {}
         return profile.get("partner_name", "Yuzu")

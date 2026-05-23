@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 from app.commands import detect_command as _detect_command
-from app.database import Database
+from app.db import Database
 from app.llm_client import (
     generate_ai_response,
     generate_ai_response_streaming,

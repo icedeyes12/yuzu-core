@@ -41,8 +41,8 @@ def test_vision_model_validation_llm_client():
     
     with patch('app.tools.multimodal.multimodal_tools.has_images', return_value=True), \
          patch('app.tools.multimodal.multimodal_tools.is_vision_model', return_value=False), \
-         patch('app.database.Database.get_active_session', return_value={"id": 1}), \
-         patch('app.database.Database.add_message') as mock_add:
+         patch('app.db.Database.get_active_session', return_value={"id": 1}), \
+         patch('app.db.Database.add_message') as mock_add:
         
         text, raw = generate_ai_response(profile, user_message, session_id=1)
         

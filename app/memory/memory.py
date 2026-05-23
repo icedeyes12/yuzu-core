@@ -86,7 +86,7 @@ def _get_cached_memory_state(session_id: int) -> dict:
     if hasattr(_request_cache, cache_key):
         return getattr(_request_cache, cache_key)
 
-    from app.database import get_memory_state
+    from app.db import get_memory_state
 
     state = get_memory_state(session_id)
     setattr(_request_cache, cache_key, state)
@@ -112,7 +112,7 @@ def _try_set_fence(session_id: int, fence_count: int) -> bool:
     Persists fence to DB for crash safety.
     Returns True if fence was set (no existing fence).
     """
-    from app.database import update_memory_state
+    from app.db import update_memory_state
 
     with _fence_lock:
         now = datetime.now()
@@ -155,7 +155,7 @@ def _try_set_fence(session_id: int, fence_count: int) -> bool:
 
 def _clear_fence(session_id: int) -> None:
     """Clear the fence for a session after processing completes."""
-    from app.database import update_memory_state
+    from app.db import update_memory_state
 
     with _fence_lock:
         update_memory_state(
@@ -189,7 +189,7 @@ def _is_fence_active(session_id: int) -> bool:
 
 def _get_session_idle_hours(session_id: int) -> float | None:
     """Get hours since last message in session. Returns None if no messages."""
-    from app.database import get_session_messages
+    from app.db import get_session_messages
 
     # Need newest message — use DESC order
     messages = get_session_messages(session_id, limit=1, order="DESC")
@@ -264,7 +264,7 @@ def mark_segmentation_done(session_id: int, count: int) -> None:
     at the time of marking. We re-read it from the DB to be safe since the
     fence's in_progress_fence_count may not reflect the true total.
     """
-    from app.database import get_message_count, update_memory_state
+    from app.db import get_message_count, update_memory_state
 
     # Re-read actual current total from DB — fence count may be stale or 0
     actual_total = get_message_count(session_id)
@@ -801,7 +801,7 @@ def run_memory_review(session_id: int) -> dict:
     """
     from app.memory.memory_review import review_memory
     from app.memory.db_memory import get_facts_by_session, FACT_TYPE_STATIC
-    from app.database import get_session_messages
+    from app.db import get_session_messages
 
     try:
         # Get facts pending review
@@ -848,7 +848,7 @@ def run_memory_pipeline(session_id: int, message_count: int) -> dict:
 
     Returns summary: {segments: n, episodes: n, pcl_runs: n}
     """
-    from app.database import get_session_messages, get_memory_state
+    from app.db import get_session_messages, get_memory_state
     from app.memory.db_memory import get_facts_by_session, FACT_TYPE_DYNAMIC
 
     logger.info(f"Starting for session {session_id}, count={message_count}")
@@ -959,7 +959,7 @@ def _background_worker():
         if session_to_process:
             try:
                 # Retrieve count from DB-persisted fence
-                from app.database import get_memory_state
+                from app.db import get_memory_state
 
                 state = get_memory_state(session_to_process)
                 count = state.get("in_progress_fence_count", 0) or 0

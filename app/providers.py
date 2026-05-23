@@ -9,7 +9,7 @@ import time
 import logging
 from typing import Generator
 
-from app.database import Database
+from app.db import Database
 from app.tools import multimodal_tools
 
 logger = logging.getLogger(__name__)

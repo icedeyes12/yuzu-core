@@ -1,0 +1,119 @@
+# Backend Overhaul Roadmap: yuzu-companion
+
+This roadmap outlines the systematic restructuring of the `yuzu-companion` backend from legacy-inflected patterns to a clean, modular FastAPI + PostgreSQL architecture.
+
+## Phase 1: Foundation & Safe Isolation
+*Establish the target structure and ensure a safe environment for destructive cleanup.*
+
+- [x] **Infrastructure Setup**
+    - [x] Create a new refactor branch: `git checkout -b refactor/backend-overhaul`.
+    - [x] Initialize the new directory structure (empty `__init__.py` files):
+        - [x] Create `app/api/endpoints/` and `app/api/endpoints/__init__.py`.
+        - [x] Create `app/db/` and `app/db/__init__.py`.
+        - [x] Create `app/services/` and `app/services/__init__.py`.
+    - [x] Verify existing test suite passes: `python3 -m pytest tests/`. (Note: tests had some pre-existing failures/errors, but were verified).
+
+- [x] **Database Layer Consolidation**
+    - [x] Migration of `app/database/` content to `app/db/`.
+        - [x] Move `app/database/db_queries.py` to `app/db/queries.py`.
+        - [x] Move `app/database/db_pg.py` to `app/db/connection.py`.
+        - [x] Move `app/database/db_pg_models.py` to `app/db/models.py`.
+        - [x] Move `app/database/db_pg_models_async.py` to `app/db/models_async.py`.
+        - [x] Extract `Database` class from `app/database/facade.py` into `app/db/facade.py`.
+    - [x] Update all internal imports:
+        - [x] `grep -r "app.database" app/` and replace with `app.db`.
+        - [x] `grep -r "from app.database import" app/` and replace with `from app.db import`.
+    - [x] Clean up redundant passthroughs in `app/db/facade.py`. (Simplified `_proxy` logic).
+
+- [x] **API Registry Refactor**
+    - [x] Initialize `app/api/main.py` as the new central router registry.
+    - [x] Configure `APIRouter` with prefix and tags for each module.
+    - [x] Move static file serving (`/static/uploads`, etc.) to a dedicated `app/api/static.py`.
+        - [x] Migrate `serve_uploaded_image` from `routes.py`.
+        - [x] Migrate `serve_generated_image` from `routes.py`.
+
+## Phase 2: Provider & Config Canonization
+*Unify how the system handles external AI services and configuration state.*
+
+- [ ] **One Provider Manager**
+    - [ ] Convert `app/providers.py` into a package `app/providers/`.
+        - [ ] Create `app/providers/base.py` and extract `AIProvider` and `AIProviderManager`.
+        - [ ] Create `app/providers/ollama.py` and extract `OllamaProvider`.
+        - [ ] Create `app/providers/cerebras.py` and extract `CerebrasProvider`.
+        - [ ] Create `app/providers/openrouter.py` and extract `OpenRouterProvider`.
+        - [ ] Create `app/providers/chutes.py` and extract `ChutesProvider`.
+    - [ ] Centralize API key lookup:
+        - [ ] Update `app/providers/base.py` to handle common `api_key` retrieval from DB.
+        - [ ] Remove manual lookup logic from `app/memory/embedder.py`.
+        - [ ] Remove manual lookup logic from `app/profile_analysis.py`.
+
+- [ ] **Single Config Payload (SSOT)**
+    - [ ] Create `app/services/config_service.py`.
+    - [ ] Move logic for building `ai_providers` and `vision` JSON from `api_get_config`.
+    - [ ] Move logic for building `profile_dict` from `api_get_profile`.
+    - [ ] Implement a unified `get_frontend_config()` that satisfies both web and CLI needs.
+    - [ ] Ensure `main.py` uses this service for its "status" display.
+
+## Phase 3: Service Layer Extraction
+*Strip business logic out of the API routes and orchestrator.*
+
+- [ ] **Session Lifecycle Service**
+    - [ ] Create `app/services/session_service.py`.
+    - [ ] Migrate `start_session`, `end_session_cleanup`, and `auto_name_session_if_needed`.
+    - [ ] Consolidate `_web_session_tracker` into a service-level state if still needed, or replace with DB session status.
+    - [ ] Standardize `connection_msg` and `disconnect_msg` generation.
+
+- [ ] **Chat & Messaging Service**
+    - [ ] Create `app/services/chat_service.py`.
+    - [ ] Extract `api_send_message` logic.
+    - [ ] Extract `api_send_message_stream` initiation logic.
+    - [ ] Move `image_markdowns` construction from the API layer to this service.
+    - [ ] Delete `api_send_message_with_images` (DEPRECATED).
+
+- [ ] **Memory Pipeline Isolation**
+    - [ ] Move `detect_important_content`, `summarize_memory`, etc., from `app/profile_analysis.py` to `app/memory/`.
+    - [ ] Move `run_memory_pipeline` trigger logic to `app/services/memory_service.py`.
+    - [ ] Clean up `app/memory/__init__.py` to export the public API.
+
+## Phase 4: API Route Decomposition
+*Break down the monolithic routes.py into focused, maintainable modules.*
+
+- [ ] **Module Split**
+    - [ ] Implement `app/api/endpoints/chat.py` (message sending, streaming).
+    - [ ] Implement `app/api/endpoints/sessions.py` (CRUD, switching, renaming).
+    - [ ] Implement `app/api/endpoints/profile.py` (config, settings, keys).
+    - [ ] Implement `app/api/endpoints/memory.py` (stats, rebuild, decay).
+
+- [ ] **Cleanup & Deletion**
+    - [ ] Delete `app/api/routes.py` after full migration.
+    - [ ] Remove `app/api/routes/` empty directory.
+    - [ ] Consolidate `api_update_location` and `api_update_weather_location`.
+    - [ ] Ensure all routes use Pydantic models for validation (remove `request.json()` usage).
+
+## Phase 5: Final Cleanup & Shim Removal
+*Remove the "scaffolding" and technical debt.*
+
+- [ ] **Shim Elimination**
+    - [ ] Update `main.py`: Replace `from app.app import ...` with specific imports.
+    - [ ] Update `web.py`: Replace `from app.app import ...` with specific imports.
+    - [ ] Update `scripts/yuzu_cli.py`: Replace `from app.app import ...` with specific imports.
+    - [ ] Delete `app/app.py`.
+
+- [ ] **Flask-era Baggage Hunt**
+    - [ ] Replace `print()` with `log.info()`, `log.error()`, etc.
+    - [ ] Standardize error responses: Use `HTTPException` with clear, non-leaking detail strings.
+    - [ ] Clean up manual path manipulations: Replace `os.path.join` with `/` operator from `pathlib.Path`.
+    - [ ] Remove unused `_NoopContext` in `app/session_lifecycle.py`.
+
+## Phase 6: Verification & Documentation
+*Ensure the new architecture is solid and well-explained.*
+
+- [ ] **Validation Pass**
+    - [ ] Run exhaustive integration tests for all API contracts.
+    - [ ] Verify CLI ( `main.py`) functionality remains unbroken.
+    - [ ] Check for any performance regressions in the memory pipeline.
+
+- [ ] **Documentation Update**
+    - [ ] Update `README.md` and `AGENTS.md` to reflect the new module structure.
+    - [ ] Create/Update `docs/BACKEND.md` detailing the flow from Request -> Router -> Service -> DB.
+    - [ ] Document the removal of shims and deprecated endpoints.

@@ -25,7 +25,7 @@ from app.app import (
     set_preferred_provider,
     get_vision_capabilities,
 )
-from app.database import Database
+from app.db import Database
 from app.providers import get_ai_manager
 from app.tools import multimodal_tools
 from datetime import datetime

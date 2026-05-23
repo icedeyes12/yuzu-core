@@ -178,7 +178,7 @@ def _resolve_path(path: str) -> str | None:
 def _get_partner_name() -> str:
     """Get partner name from profile."""
     try:
-        from app.database import get_profile
+        from app.db import get_profile
 
         profile = get_profile() or {}
         return profile.get("partner_name", "Yuzu")

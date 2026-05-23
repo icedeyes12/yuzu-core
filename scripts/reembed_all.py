@@ -38,7 +38,7 @@ else:
     print(f"⚠ No .env file found at {env_file}")
 
 from app.memory.embedder import embed_texts  # noqa: E402
-from app.database import PgSession  # noqa: E402
+from app.db import PgSession  # noqa: E402
 
 # New embedding dimension (Qwen3-Embedding-8B)
 NEW_EMBEDDING_DIM = 4096

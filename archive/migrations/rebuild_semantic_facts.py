@@ -12,7 +12,7 @@ import time
 # Add app to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app.database import PgSession, pg_fetchall, pg_execute
+from app.db import PgSession, pg_fetchall, pg_execute
 
 
 def get_all_sessions():

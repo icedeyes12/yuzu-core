@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 from app.memory.db_memory import save_fact, search_similar, FACT_TYPE_STATIC
-from app.database import get_profile
+from app.db import get_profile
 
 logger = logging.getLogger(__name__)
 

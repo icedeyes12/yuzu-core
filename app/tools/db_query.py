@@ -345,7 +345,7 @@ def execute(
 def _get_partner_name() -> str:
     """Get partner name from profile for tool output."""
     try:
-        from app.database.db_queries import get_active_profile
+        from app.db.db_queries import get_active_profile
 
         profile = get_active_profile()
         return profile.get("partner_name", "Yuzu")

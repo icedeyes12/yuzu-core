@@ -20,7 +20,7 @@ from app.commands import (
     parse_image_path,
     parse_tool_blocks,
 )
-from app.database import Database
+from app.db import Database
 from app.llm_client import (
     generate_ai_response,
     generate_ai_response_streaming,

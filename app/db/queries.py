@@ -1,4 +1,4 @@
-# FILE: app/database/db_queries.py
+# FILE: app.db.queries.py
 # DESCRIPTION: Single source of truth for SQL strings, schema DDL, row
 #              parsers, and shared constants used by both the sync and
 #              async repository layers.

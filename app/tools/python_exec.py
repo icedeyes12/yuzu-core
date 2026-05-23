@@ -278,7 +278,7 @@ def execute(
 def _get_partner_name() -> str:
     """Get partner name from profile."""
     try:
-        from app.database import Database
+        from app.db import Database
 
         profile = Database.get_profile()
         return profile.get("partner_name", "Yuzu")

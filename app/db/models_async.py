@@ -1,21 +1,21 @@
-# FILE: app/database/db_pg_models_async.py
+# FILE: app.db.models_async.py
 # DESCRIPTION: Async PostgreSQL repository.
 #
-#   Mirror of app/database/db_pg_models.py but using AsyncPgSession + the
+#   Mirror of app.db.models.py but using AsyncPgSession + the
 #   pg_*_async helpers. SQL strings and row parsers are imported from
-#   app.database.db_queries so the two layers stay byte-identical.
+#   app.db.queries so the two layers stay byte-identical.
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from app.database.db_pg import (
+from app.db.connection import (
     AsyncPgSession,
     pg_execute_async,
     pg_fetchall_async,
     pg_fetchone_async,
 )
-from app.database.db_queries import (
+from app.db.queries import (
     ALL_TOOL_ROLES,
     DEFAULT_PROFILE_PARAMS,
     SCHEMA_DDL,

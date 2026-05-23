@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from app import database as db_module
-from app.database import Database
+from app.db import Database
 
 
 @pytest.fixture

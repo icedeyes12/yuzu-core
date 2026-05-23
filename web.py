@@ -21,7 +21,7 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 from app.app import start_session  # noqa: E402
-from app.database import Database  # noqa: E402
+from app.db import Database  # noqa: E402
 from app.api import api_router  # noqa: E402
 from app.api.routes import set_session_tracker  # noqa: E402
 

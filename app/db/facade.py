@@ -1,5 +1,5 @@
-# FILE: app/database/facade.py
-# DESCRIPTION: Thin facade over app.database.db_pg_models.
+# FILE: app.db.facade.py
+# DESCRIPTION: Thin facade over app.db.models.
 #
 # The Database class normalizes argument order (most app code wants to pass
 # `role` and `content` first, with `session_id` defaulting to the active
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from app.database.db_pg_models import (
+from app.db.models import (
     ALL_TOOL_ROLES,
     TOOL_ROLES,
     add_api_key as _pg_add_api_key,
