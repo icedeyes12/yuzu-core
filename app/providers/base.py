@@ -101,6 +101,7 @@ class AIProvider:
 class AIProviderManager:
     def __init__(self):
         self.providers = {}
+        self.load_providers()
 
     def register_provider(self, name: str, provider: AIProvider):
         self.providers[name] = provider
