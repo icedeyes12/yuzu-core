@@ -166,7 +166,9 @@ class ChutesProvider(AIProvider):
         self, messages: list[dict], model: str, **kwargs
     ) -> Generator[str, None, None]:
         if not self.api_key or model not in self.available_models:
-            yield ""
+            reason = "missing API key" if not self.api_key else f"model {model} not in available"
+            logger.warning("Chutes stream aborted: %s", reason)
+            yield "\n[System] Chutes provider error: " + reason + ". Please check configuration."
             return
 
         try:
@@ -223,6 +225,7 @@ class ChutesProvider(AIProvider):
                         except (json.JSONDecodeError, KeyError):
                             continue
             else:
-                yield ""
+                logger.warning("Chutes HTTP %d for model %s", response.status_code, model)
+                yield "\n[System] Chutes API returned HTTP " + str(response.status_code) + ". Please try again."
         except Exception as e:
             yield f"Error: {str(e)}"

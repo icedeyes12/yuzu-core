@@ -617,6 +617,15 @@ def handle_user_message_streaming(
     full_response = "".join(response_chunks)
     Database.update_message(assistant_msg_id, full_response)
 
+    # Guard against empty LLM response
+    if not _clean(full_response):
+        log.warning("[stream] LLM returned empty response, using fallback")
+        fallback = _EMPTY_RESPONSE_FALLBACK
+        yield fallback
+        Database.update_message(assistant_msg_id, fallback)
+        _post_turn(profile, user_message, fallback, session_id, active_session)
+        return
+
     if is_markdown_image_shortcut(full_response):
         log.warning(
             "intercepted markdown image shortcut (stream): %s",
