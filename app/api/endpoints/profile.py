@@ -87,13 +87,13 @@ async def api_get_profile():
         chat_history = await get_chat_history_async(session_id=session_id, limit=None)
 
         # Inject ongoing stream if it exists
-        active_buf = StreamManager.get_active_buffer(session_id)
-        if active_buf and active_buf.full_text:
+        active_buf = await StreamManager.get_stream(session_id)
+        if active_buf and active_buf.full_content:
             # Check if the last message in history is already this response
             last_msg = chat_history[-1] if chat_history else None
             is_duplicate = False
             if last_msg and last_msg.get("role") == "assistant":
-                if len(last_msg.get("content", "")) >= len(active_buf.full_text):
+                if len(last_msg.get("content", "")) >= len(active_buf.full_content):
                     is_duplicate = True
 
             if not is_duplicate:
@@ -101,7 +101,7 @@ async def api_get_profile():
                     {
                         "id": -99,  # Sentinel ID for live content
                         "role": "assistant",
-                        "content": active_buf.full_text,
+                        "content": active_buf.full_content,
                         "timestamp": datetime.now().isoformat(),
                     }
                 )
@@ -137,7 +137,7 @@ async def api_update_profile(request: ProfileUpdateRequest):
 
 @router.post("/add_api_key")
 async def api_add_api_key(request: ApiKeyRequest):
-    if Database.add_api_key(request.key_name, request.api_key):
+    if await Database.add_api_key_async(request.key_name, request.api_key):
         return {"status": "success", "message": f"{request.key_name} API key added"}
     else:
         return {
@@ -149,7 +149,7 @@ async def api_add_api_key(request: ApiKeyRequest):
 @router.post("/add_chutes_key")
 async def api_add_chutes_key(request: ChutesKeyRequest):
     try:
-        if Database.add_api_key("chutes", request.api_key.strip()):
+        if await Database.add_api_key_async("chutes", request.api_key.strip()):
             return {
                 "status": "success",
                 "message": "Chutes API key added successfully!",
@@ -164,7 +164,7 @@ async def api_add_chutes_key(request: ChutesKeyRequest):
 @router.post("/remove_api_key")
 async def api_remove_api_key(request: ApiKeyRemoveRequest):
     try:
-        if Database.remove_api_key(request.key_name):
+        if await Database.remove_api_key_async(request.key_name):
             return {
                 "status": "success",
                 "message": f"{request.key_name} API key removed",
@@ -182,7 +182,7 @@ async def api_list_providers():
         available_providers = ai_manager.get_available_providers()
         all_models = ai_manager.get_all_models()
 
-        profile = Database.get_profile()
+        profile = await Database.get_profile_async()
         providers_config = profile.get("providers_config", {})
         current_provider = providers_config.get("preferred_provider", "ollama")
         current_model = providers_config.get("preferred_model", "glm-4.6:cloud")
@@ -261,9 +261,9 @@ async def api_test_vision():
 @router.post("/update_location")
 async def api_update_location(request: LocationUpdateRequest):
     try:
-        context = Database.get_context()
+        context = await Database.get_context_async()
         context["location"] = {"lat": request.lat, "lon": request.lon}
-        Database.update_context(context)
+        await Database.update_context_async(context)
         return {"status": "success", "message": "Location updated"}
     except Exception as e:
         log.error("Error updating location: %s", e)
@@ -280,7 +280,7 @@ async def api_update_weather_location(request: LocationUpdateRequest):
 async def api_update_global_knowledge(request: GlobalKnowledgeUpdateRequest):
     try:
         global_knowledge = {"facts": request.facts}
-        Database.update_profile({"global_knowledge": global_knowledge})
+        await Database.update_profile_async({"global_knowledge": global_knowledge})
         return {"status": "success", "message": "Global knowledge updated"}
     except Exception as e:
         log.error("Error updating global knowledge: %s", e)

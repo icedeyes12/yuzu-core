@@ -171,8 +171,8 @@ async def api_end_session(request: Request):
         client_id = _get_session_id(request)
         SessionService.clear_client_session(client_id)
 
-        profile = Database.get_profile()
-        SessionService.end_session_cleanup(
+        profile = await Database.get_profile_async()
+        await SessionService.end_session_cleanup_async(
             profile, interface="web", unexpected_exit=False
         )
         return {"status": "session ended"}

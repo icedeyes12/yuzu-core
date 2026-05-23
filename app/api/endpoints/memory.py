@@ -16,11 +16,11 @@ router = APIRouter(tags=["memory"])
 @router.post("/update_session_context")
 async def api_update_session_context():
     try:
-        active_session = Database.get_active_session()
+        active_session = await Database.get_active_session_async()
         session_id = active_session["id"]
-        profile = Database.get_profile()
+        profile = await Database.get_profile_async()
 
-        chat_history = Database.get_chat_history(session_id=session_id)
+        chat_history = await Database.get_chat_history_async(session_id=session_id)
 
         if len(chat_history) < 5:
             return {
@@ -36,12 +36,12 @@ async def api_update_session_context():
         )
 
         if last_user_msg and last_ai_reply:
-            success = MemoryService.summarize_session(
+            success = await MemoryService.summarize_session_async(
                 profile, last_user_msg["content"], last_ai_reply["content"], session_id
             )
 
             if success:
-                session_memory = Database.get_session_memory(session_id)
+                session_memory = await Database.get_session_memory_async(session_id)
                 return {
                     "status": "success",
                     "message": "Session context updated!",
@@ -60,10 +60,10 @@ async def api_update_session_context():
 @router.post("/update_global_profile")
 async def api_update_global_profile():
     try:
-        success = MemoryService.summarize_global_profile()
+        success = await MemoryService.summarize_global_profile_async()
 
         if success:
-            profile = Database.get_profile()
+            profile = await Database.get_profile_async()
             return {
                 "status": "success",
                 "message": "Global player profile updated from ALL sessions!",
@@ -79,7 +79,7 @@ async def api_update_global_profile():
 @router.post("/rebuild_structured_memory")
 async def api_rebuild_structured_memory():
     try:
-        active_session = Database.get_active_session()
+        active_session = await Database.get_active_session_async()
         session_id = active_session["id"]
 
         from app.memory.memory import run_memory_pipeline_async
@@ -90,7 +90,7 @@ async def api_rebuild_structured_memory():
         )
 
         # Get message count
-        count = Database.get_session_messages_count(session_id)
+        count = await Database.get_session_messages_count_async(session_id)
 
         # Run the full pipeline
         result = await run_memory_pipeline_async(session_id, count)
@@ -117,12 +117,12 @@ async def api_rebuild_structured_memory():
 @router.post("/run_memory_decay")
 async def api_run_memory_decay():
     try:
-        active_session = Database.get_active_session()
+        active_session = await Database.get_active_session_async()
         session_id = active_session["id"]
 
-        from app.memory.review import run_decay
+        from app.memory.review import run_decay_async
 
-        run_decay(session_id)
+        await run_decay_async(session_id)
 
         return {
             "status": "success",
@@ -136,7 +136,7 @@ async def api_run_memory_decay():
 @router.get("/memory_stats")
 async def api_memory_stats():
     try:
-        active_session = Database.get_active_session()
+        active_session = await Database.get_active_session_async()
         session_id = active_session["id"]
 
         from app.memory.db_memory import (
