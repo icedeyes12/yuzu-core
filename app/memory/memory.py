@@ -249,7 +249,7 @@ def should_trigger_segmentation(
         return False, delta
 
     logger.info(
-        f"Trigger: delta={delta} >= WINDOW_BASE={WINDOW_BASE}, idle={idle_hours:.1f}h"
+        f"Trigger: delta={delta} >= WINDOW_BASE={WINDOW_BASE}, idle={idle_hours:.1f if idle_hours is not None else 'N/A'}h"
     )
     return True, delta
 

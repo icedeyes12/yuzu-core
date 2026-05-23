@@ -47,8 +47,8 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 | `file app/providers.py` | AI provider hierarchy + `AIProviderManager` singleton |
 | `file app/tools/registry.py` | Central tool dispatch — **only** place tools are executed |
 | `app/memory/` | Full memory pipeline (extraction, embedding, retrieval, retention) |
-| `file app.db/facade.py` | `Database` class — stable API over raw psycopg2 |
-| `file app.db/db_queries.py` | **Single source of truth** for all SQL strings |
+| `file app/db/facade.py` | `Database` class — stable API over raw psycopg2 |
+| `file app/db/queries.py` | **Single source of truth** for all SQL strings |
 | `file app/stream_manager.py` | Background stream buffers, reconnect state, incremental persistence |
 | `file app/web.py` | FastAPI entry point (~130 lines, minimal) |
 | `file app/cli.py` | CLI entry point (Rich TUI) |
@@ -358,11 +358,11 @@ flowchart TB
         M7["memory_review.py — LLM-based review"]
     end
 
-    subgraph Database["database/"]
+    subgraph Database["db/"]
         D1["facade.py — Database class"]
-        D2["db_pg_models.py — sync CRUD"]
-        D3["db_pg_models_async.py — async CRUD"]
-        D4["db_queries.py — SQL constants"]
+        D2["models.py — sync CRUD"]
+        D3["models_async.py — async CRUD"]
+        D4["queries.py — SQL constants"]
         D5[(PostgreSQL + pgvector)]
     end
 
@@ -397,7 +397,7 @@ flowchart TB
 | `orchestrator.py` | `commands.py` | Parse `<tool>...</tool>` blocks from LLM response |
 | `orchestrator.py` | `llm_client.py` | Generate AI response (sync + stream) |
 | `commands.py` | `tools/registry.py` | Execute parsed commands |
-| `orchestrator.py` | `database/facade.py` | Auto-name, summarize, pipeline trigger |
+| `orchestrator.py` | `db/facade.py` | Auto-name, summarize, pipeline trigger |
 | `llm_client.py` | `providers.py` | Dispatch to selected provider |
 | `llm_client.py` | `prompts.py` | Build system message + context |
 | `llm_client.py` | `multimodal_tools.py` | Vision routing, image caching |
@@ -417,9 +417,9 @@ flowchart TB
 
 ### Connection Management
 
-- **Pool**: `ThreadedConnectionPool` in `file db_pg.py`
+- **Pool**: `ThreadedConnectionPool` in `file app/db/connection.py`
 - **Sync access**: `PgSession` context manager or `pg_fetchone()`/`pg_fetchall()` helpers
-- **Async access**: `AsyncPgSession` for FastAPI routes (via `file db_pg_models_async.py`)
+- **Async access**: `AsyncPgSession` for FastAPI routes (via `file app/db/models_async.py`)
 - **Environment config**: `PG_HOST`, `PG_PORT`, `PG_DBNAME`, `PG_USER`, `PG_PASSWORD`
 
 ### Table Ownership
@@ -623,7 +623,7 @@ python3 -m pytest tests/ -v
 ### ❌ Don't
 
 - Don't use `print()` — use logging
-- Don't import `db_pg_models` directly from business logic
+- Don't import `models.py` directly from business logic
 - Don't call tool modules directly — use registry
 - Don't inline SQL in business logic
 - Don't use `typing.List`, `typing.Dict`, `typing.Optional`
@@ -784,3 +784,21 @@ Yuzuki is an intimate AI companion with emotional bonds. When agents send messag
 - Trust and relationship continuity breaks down
 
 **tl;dr:** Sign your damn messages. Respect the primary user. Don't be a homewrecker.
+
+---
+## 14. Backend Overhaul (2026-05-23)
+
+The backend was restructured under `refactor/backend-overhaul`:
+
+| Before | After |
+|--------|-------|
+| `app/database/` | `app/db/` |
+| `app/database/db_queries.py` | `app/db/queries.py` |
+| `app/database/db_pg.py` | `app/db/connection.py` |
+| `app/database/db_pg_models.py` | `app/db/models.py` |
+| `app/database/db_pg_models_async.py` | `app/db/models_async.py` |
+| `app/api/routes.py` (~650 lines) | `app/api/endpoints/{chat,sessions,profile,memory}.py` |
+| `app/app.py` (shim) | **Deleted** — imports go direct to `app.orchestrator`, `app.db`, `app.services` |
+| `app/providers.py` (single file) | `app/providers/` (package: base, ollama, cerebras, openrouter, chutes) |
+| `app/profile_analysis.py` (deleted) | Memory logic → `app/memory/`, config → `app/services/config_service.py` |
+| Inline print() | `log.info()` / `log.error()` via `logging_config` |
