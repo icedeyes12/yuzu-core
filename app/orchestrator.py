@@ -532,6 +532,7 @@ async def handle_user_message(user_message: str, interface: str = "terminal") ->
 async def handle_user_message_streaming(
     user_message: str,
     interface: str = "terminal",
+    session_id: int | None = None,
     provider: str | None = None,
     model: str | None = None,
     abort_check: callable[[], bool] | None = None,
@@ -545,8 +546,11 @@ async def handle_user_message_streaming(
     if abort_check and abort_check():
         return
 
-    active_session = await Database.get_active_session_async()
-    session_id = active_session["id"]
+    if session_id is None:
+        active_session = await Database.get_active_session_async()
+        session_id = active_session["id"]
+    else:
+        active_session = {"id": session_id}
     cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
 
     await _persist_user_async(user_message, session_id, cached_images)
