@@ -50,6 +50,42 @@ from app.db.models import (
     update_profile as _pg_update_profile,
     update_session_memory as _pg_update_session_memory,
 )
+from app.db.models_async import (
+    add_api_key_async as _pg_add_api_key_async,
+    add_image_tools_message_async as _pg_add_image_tools_message_async,
+    add_message_async as _pg_add_message_async,
+    update_message_async as _pg_update_message_async,
+    add_session_event_async as _pg_add_session_event_async,
+    add_system_note_async as _pg_add_system_note_async,
+    add_tool_result_async as _pg_add_tool_result_async,
+    batch_decrypt_messages_async as _pg_batch_decrypt_messages_async,
+    clear_session_messages_async as _pg_clear_session_messages_async,
+    create_session_async as _pg_create_session_async,
+    delete_session_async as _pg_delete_session_async,
+    get_active_session_async as _pg_get_active_session_async,
+    get_all_encrypted_messages_async as _pg_get_all_encrypted_messages_async,
+    get_all_sessions_async as _pg_get_all_sessions_async,
+    get_api_key_async as _pg_get_api_key_async,
+    get_api_keys_async as _pg_get_api_keys_async,
+    get_chat_history_async as _pg_get_chat_history_async,
+    get_chat_history_for_ai_async as _pg_get_chat_history_for_ai_async,
+    get_context_async as _pg_get_context_async,
+    get_encryption_status_async as _pg_get_encryption_status_async,
+    get_message_count_async as _pg_get_message_count_async,
+    get_profile_async as _pg_get_profile_async,
+    get_recent_sessions_async as _pg_get_recent_sessions_async,
+    get_recent_sessions_for_session_async as _pg_get_recent_sessions_for_session_async,
+    get_session_conversation_summary_async as _pg_get_session_conversation_summary_async,
+    get_session_memory_async as _pg_get_session_memory_async,
+    get_session_messages_async as _pg_get_session_messages_async,
+    increment_message_count_async as _pg_increment_message_count_async,
+    remove_api_key_async as _pg_remove_api_key_async,
+    rename_session_async as _pg_rename_session_async,
+    switch_session_async as _pg_switch_session_async,
+    update_context_async as _pg_update_context_async,
+    update_profile_async as _pg_update_profile_async,
+    update_session_memory_async as _pg_update_session_memory_async,
+)
 from app.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -80,6 +116,14 @@ def _resolve_session_id(session_id: int | None) -> int:
     return active["id"]
 
 
+async def _resolve_session_id_async(session_id: int | None) -> int:
+    """Default a missing session_id to the currently active session (async)."""
+    if session_id is not None:
+        return session_id
+    active = await _pg_get_active_session_async()
+    return active["id"]
+
+
 def _proxy(target: Callable[..., Any]) -> staticmethod:
     """Wrap a function in a staticmethod that forwards *args/**kwargs.
 
@@ -88,6 +132,17 @@ def _proxy(target: Callable[..., Any]) -> staticmethod:
 
     def _call(*args: Any, **kwargs: Any) -> Any:
         return target(*args, **kwargs)
+
+    _call.__name__ = target.__name__
+    _call.__doc__ = target.__doc__
+    return staticmethod(_call)
+
+
+def _proxy_async(target: Callable[..., Any]) -> staticmethod:
+    """Wrap an async function in a staticmethod that forwards *args/**kwargs."""
+
+    async def _call(*args: Any, **kwargs: Any) -> Any:
+        return await target(*args, **kwargs)
 
     _call.__name__ = target.__name__
     _call.__doc__ = target.__doc__
@@ -105,44 +160,80 @@ class Database:
            - accept a different argument order than db_pg_models.
     """
 
-    # ── Profile / context (pure passthroughs) ────────────────────────────────────
+    # ── Profile / context (pure passthroughs) ────────────────────────────────
     get_profile = _proxy(_pg_get_profile)
+    get_profile_async = _proxy_async(_pg_get_profile_async)
     update_profile = _proxy(_pg_update_profile)
+    update_profile_async = _proxy_async(_pg_update_profile_async)
     get_context = _proxy(_pg_get_context)
+    get_context_async = _proxy_async(_pg_get_context_async)
     update_context = _proxy(_pg_update_context)
+    update_context_async = _proxy_async(_pg_update_context_async)
 
-    # ── API keys (pure passthroughs) ──────────────────────────────────────────────
+    # ── API keys (pure passthroughs) ──────────────────────────────────────────
     get_api_keys = _proxy(_pg_get_api_keys)
+    get_api_keys_async = _proxy_async(_pg_get_api_keys_async)
     get_api_key = _proxy(_pg_get_api_key)
+    get_api_key_async = _proxy_async(_pg_get_api_key_async)
     add_api_key = _proxy(_pg_add_api_key)
+    add_api_key_async = _proxy_async(_pg_add_api_key_async)
     remove_api_key = _proxy(_pg_remove_api_key)
+    remove_api_key_async = _proxy_async(_pg_remove_api_key_async)
 
-    # ── Sessions (pure passthroughs) ──────────────────────────────────────────────
+    # ── Sessions (pure passthroughs) ──────────────────────────────────────────
     create_session = _proxy(_pg_create_session)
+    create_session_async = _proxy_async(_pg_create_session_async)
     get_active_session = _proxy(_pg_get_active_session)
+    get_active_session_async = _proxy_async(_pg_get_active_session_async)
     get_all_sessions = _proxy(_pg_get_all_sessions)
+    get_all_sessions_async = _proxy_async(_pg_get_all_sessions_async)
     switch_session = _proxy(_pg_switch_session)
+    switch_session_async = _proxy_async(_pg_switch_session_async)
     rename_session = _proxy(_pg_rename_session)
+    rename_session_async = _proxy_async(_pg_rename_session_async)
     delete_session = _proxy(_pg_delete_session)
+    delete_session_async = _proxy_async(_pg_delete_session_async)
     get_session_memory = _proxy(_pg_get_session_memory)
+    get_session_memory_async = _proxy_async(_pg_get_session_memory_async)
     update_session_memory = _proxy(_pg_update_session_memory)
+    update_session_memory_async = _proxy_async(_pg_update_session_memory_async)
     increment_message_count = _proxy(_pg_increment_message_count)
+    increment_message_count_async = _proxy_async(_pg_increment_message_count_async)
     get_session_messages_count = _proxy(_pg_get_message_count)
+    get_session_messages_count_async = _proxy_async(_pg_get_message_count_async)
     get_session_conversation_summary = _proxy(_pg_get_session_conversation_summary)
+    get_session_conversation_summary_async = _proxy_async(
+        _pg_get_session_conversation_summary_async
+    )
     get_recent_sessions = _proxy(_pg_get_recent_sessions)
+    get_recent_sessions_async = _proxy_async(_pg_get_recent_sessions_async)
     get_recent_sessions_for_session = _proxy(_pg_get_recent_sessions_for_session)
+    get_recent_sessions_for_session_async = _proxy_async(
+        _pg_get_recent_sessions_for_session_async
+    )
 
-    # ── Encryption status (pure passthroughs) ──────────────────────────────────
+    # ── Encryption status (pure passthroughs) ────────────────────────────────
     get_encryption_status = _proxy(_pg_get_encryption_status)
+    get_encryption_status_async = _proxy_async(_pg_get_encryption_status_async)
     get_all_encrypted_messages = _proxy(_pg_get_all_encrypted_messages)
+    get_all_encrypted_messages_async = _proxy_async(
+        _pg_get_all_encrypted_messages_async
+    )
     batch_decrypt_messages = _proxy(_pg_batch_decrypt_messages)
+    batch_decrypt_messages_async = _proxy_async(_pg_batch_decrypt_messages_async)
 
-    # ── Messages (session_id-defaulting wrappers) ────────────────────────────────
+    # ── Messages (session_id-defaulting wrappers) ────────────────────────────
     @staticmethod
     def update_message(
         message_id: int, content: str, image_paths: list[str] | None = None
     ) -> bool:
         return _pg_update_message(message_id, content, image_paths)
+
+    @staticmethod
+    async def update_message_async(
+        message_id: int, content: str, image_paths: list[str] | None = None
+    ) -> bool:
+        return await _pg_update_message_async(message_id, content)
 
     # These reorder args (role/content first) and default session_id to the
     # active session, which is the convention used throughout the codebase.
@@ -160,11 +251,32 @@ class Database:
         )
 
     @staticmethod
+    async def add_message_async(
+        role: str,
+        content: str,
+        session_id: int | None = None,
+        image_paths: list[str] | None = None,
+    ) -> int | None:
+        """Add a message to a session (defaults to active session)."""
+        return await _pg_add_message_async(
+            await _resolve_session_id_async(session_id), role, content, image_paths
+        )
+
+    @staticmethod
     def get_messages(
         session_id: int | None = None, limit: int | None = None
     ) -> list[dict]:
         """Get messages for a session (defaults to active session)."""
         return _pg_get_session_messages(_resolve_session_id(session_id), limit or 100)
+
+    @staticmethod
+    async def get_messages_async(
+        session_id: int | None = None, limit: int | None = None
+    ) -> list[dict]:
+        """Get messages for a session (defaults to active session)."""
+        return await _pg_get_session_messages_async(
+            await _resolve_session_id_async(session_id), limit or 100
+        )
 
     @staticmethod
     def get_chat_history(
@@ -174,6 +286,17 @@ class Database:
     ) -> list[dict]:
         """Get chat history for a session (defaults to active session)."""
         return _pg_get_chat_history(_resolve_session_id(session_id), limit, recent)
+
+    @staticmethod
+    async def get_chat_history_async(
+        session_id: int | None = None,
+        limit: int | None = None,
+        recent: bool = False,
+    ) -> list[dict]:
+        """Get chat history for a session (defaults to active session)."""
+        return await _pg_get_chat_history_async(
+            await _resolve_session_id_async(session_id), limit, recent
+        )
 
     @staticmethod
     def get_chat_history_for_ai(
@@ -188,14 +311,41 @@ class Database:
         )
 
     @staticmethod
+    async def get_chat_history_for_ai_async(
+        session_id: int | None = None,
+        limit: int | None = None,
+        recent: bool = False,
+        include_image_paths: bool = False,
+    ) -> list[dict]:
+        """Build message context for AI provider (defaults to active session)."""
+        return await _pg_get_chat_history_for_ai_async(
+            await _resolve_session_id_async(session_id),
+            limit,
+            recent,
+            include_image_paths,
+        )
+
+    @staticmethod
     def clear_session(session_id: int | None = None) -> bool:
         """Clear all messages for a session (defaults to active session)."""
         return _pg_clear_session_messages(_resolve_session_id(session_id))
 
     @staticmethod
+    async def clear_session_async(session_id: int | None = None) -> bool:
+        """Clear all messages for a session (defaults to active session)."""
+        return await _pg_clear_session_messages_async(
+            await _resolve_session_id_async(session_id)
+        )
+
+    @staticmethod
     def clear_chat_history(session_id: int | None = None) -> bool:
         """Alias for clear_session."""
         return Database.clear_session(session_id)
+
+    @staticmethod
+    async def clear_chat_history_async(session_id: int | None = None) -> bool:
+        """Alias for clear_session_async."""
+        return await Database.clear_session_async(session_id)
 
     @staticmethod
     def add_session_event(content: str, interface: str = "terminal") -> int | None:
@@ -204,12 +354,29 @@ class Database:
         return _pg_add_session_event(active["id"], content, interface)
 
     @staticmethod
+    async def add_session_event_async(
+        content: str, interface: str = "terminal"
+    ) -> int | None:
+        """Add a session event message to the active session."""
+        active = await _pg_get_active_session_async()
+        return await _pg_add_session_event_async(active["id"], content, interface)
+
+    @staticmethod
     def add_image_tools_message(
         image_url: str, session_id: int | None = None
     ) -> int | None:
         """Add an image tools message (defaults to active session)."""
         # DEPRECATED: image_tools messages are now unified into the standard message pipeline with image_paths
         return _pg_add_image_tools_message(_resolve_session_id(session_id), image_url)
+
+    @staticmethod
+    async def add_image_tools_message_async(
+        image_url: str, session_id: int | None = None
+    ) -> int | None:
+        """Add an image tools message (defaults to active session)."""
+        return await _pg_add_image_tools_message_async(
+            await _resolve_session_id_async(session_id), image_url
+        )
 
     @staticmethod
     def add_tool_result(
@@ -223,14 +390,41 @@ class Database:
         )
 
     @staticmethod
+    async def add_tool_result_async(
+        tool_name: str,
+        result_content: str,
+        session_id: int | None = None,
+    ) -> int | None:
+        """Store tool result with tool-specific role (defaults to active session)."""
+        return await _pg_add_tool_result_async(
+            await _resolve_session_id_async(session_id), tool_name, result_content
+        )
+
+    @staticmethod
     def add_system_note(content: str, session_id: int | None = None) -> int | None:
         """Add a system note message (defaults to active session)."""
         return _pg_add_system_note(_resolve_session_id(session_id), content)
 
     @staticmethod
+    async def add_system_note_async(
+        content: str, session_id: int | None = None
+    ) -> int | None:
+        """Add a system note message (defaults to active session)."""
+        return await _pg_add_system_note_async(
+            await _resolve_session_id_async(session_id), content
+        )
+
+    @staticmethod
     def add_memory_note(content: str, session_id: int | None = None) -> int | None:
         """Alias for add_system_note."""
         return Database.add_system_note(content, session_id)
+
+    @staticmethod
+    async def add_memory_note_async(
+        content: str, session_id: int | None = None
+    ) -> int | None:
+        """Alias for add_system_note_async."""
+        return await Database.add_system_note_async(content, session_id)
 
 
 __all__ = [

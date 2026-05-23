@@ -586,3 +586,65 @@ async def invalidate_fact_async(id: int) -> bool:
     except Exception as e:
         logger.error(f"invalidate_fact_async failed: {e}")
         return False
+
+
+async def search_trgm_async(
+    query: str,
+    session_id: int | None = None,
+    fact_type: str | None = None,
+    limit: int = 15,
+    min_similarity: float = 0.3,
+    metadata_filter: dict | None = None,
+    category: str | None = None,
+) -> list[dict]:
+    """Async version of search_trgm."""
+    if not query or not query.strip():
+        return []
+
+    conditions, params = build_metadata_conditions(
+        session_id=session_id,
+        fact_type=fact_type,
+        category=category,
+        metadata_filter=metadata_filter,
+    )
+
+    sql = build_search_trgm_query(conditions)
+    params_with_query = [query] + params + [query, min_similarity, limit]
+
+    try:
+        results = await pg_fetchall_async(sql, params_with_query)
+        return results if results else []
+    except Exception as e:
+        logger.error(f"search_trgm_async EXCEPTION: {e}")
+        return []
+
+
+async def search_tsv_async(
+    query: str,
+    session_id: int | None = None,
+    fact_type: str | None = None,
+    limit: int = 15,
+    metadata_filter: dict | None = None,
+    category: str | None = None,
+    rank_weight: float = 0.3,
+) -> list[dict]:
+    """Async version of search_tsv."""
+    if not query or not query.strip():
+        return []
+
+    conditions, params = build_metadata_conditions(
+        session_id=session_id,
+        fact_type=fact_type,
+        category=category,
+        metadata_filter=metadata_filter,
+    )
+
+    sql = build_search_tsv_query(conditions)
+    params_with_query = [query, query] + params + [limit]
+
+    try:
+        results = await pg_fetchall_async(sql, params_with_query)
+        return results if results else []
+    except Exception as e:
+        logger.error(f"search_tsv_async EXCEPTION: {e}")
+        return []

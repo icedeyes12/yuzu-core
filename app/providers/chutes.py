@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
-import requests
-from typing import Generator
+import httpx
+from typing import AsyncGenerator
 from app.providers.base import AIProvider
 from app.tools import multimodal_tools
 
@@ -51,10 +51,12 @@ class ChutesProvider(AIProvider):
             return [{"role": "system", "content": merged_system}] + normalized_messages
         return normalized_messages
 
-    def get_models(self) -> list[str]:
+    async def get_models(self) -> list[str]:
         return self.available_models
 
-    def send_message(self, messages: list[dict], model: str, **kwargs) -> str | None:
+    async def send_message(
+        self, messages: list[dict], model: str, **kwargs
+    ) -> str | None:
         if not self.api_key or model not in self.available_models:
             return None
 
@@ -87,7 +89,7 @@ class ChutesProvider(AIProvider):
             if not current_model:
                 break
 
-            result = self._chutes_raw(current_model, messages, kwargs)
+            result = await self._chutes_raw(current_model, messages, kwargs)
             status = result[0]
             data = result[1]
 
@@ -107,7 +109,7 @@ class ChutesProvider(AIProvider):
         logger.debug(f"{log_prefix} All models exhausted, last error: {last_error}")
         return None
 
-    def _chutes_raw(self, model: str, messages: list[dict], kwargs) -> tuple:
+    async def _chutes_raw(self, model: str, messages: list[dict], kwargs) -> tuple:
         messages = self._normalize_messages_for_chutes(list(messages))
 
         if kwargs.get("skip_vision") is not True:
@@ -146,25 +148,26 @@ class ChutesProvider(AIProvider):
         log_prefix = kwargs.get("log_prefix", "[CHAT]")
         logger.debug(f"{log_prefix} {model} | max_tokens={max_tokens or 'unlimited'}")
 
-        try:
-            response = requests.post(
-                self.base_url,
-                headers=headers,
-                json=payload,
-                timeout=kwargs.get("timeout", 120),
-            )
-            if response.status_code == 200:
-                return (
-                    200,
-                    response.json()["choices"][0]["message"]["content"].strip(),
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(
+                    self.base_url,
+                    headers=headers,
+                    json=payload,
+                    timeout=kwargs.get("timeout", 120),
                 )
-            return (response.status_code, None, response.text[:200])
-        except Exception as e:
-            return (0, None, str(e))
+                if response.status_code == 200:
+                    return (
+                        200,
+                        response.json()["choices"][0]["message"]["content"].strip(),
+                    )
+                return (response.status_code, None, response.text[:200])
+            except Exception as e:
+                return (0, None, str(e))
 
-    def send_message_streaming(
+    async def send_message_streaming(
         self, messages: list[dict], model: str, **kwargs
-    ) -> Generator[str, None, None]:
+    ) -> AsyncGenerator[str, None]:
         if not self.api_key or model not in self.available_models:
             reason = (
                 "missing API key"
@@ -211,35 +214,38 @@ class ChutesProvider(AIProvider):
                 "stream": True,
             }
 
-            response = requests.post(
-                self.base_url,
-                headers=headers,
-                json=payload,
-                timeout=kwargs.get("timeout", 120),
-                stream=True,
-            )
-
-            if response.status_code == 200:
-                for line in response.iter_lines():
-                    if line and line.startswith(b"data: "):
-                        if line == b"data: [DONE]":
-                            break
-                        try:
-                            json_data = json.loads(line[6:])
-                            if "choices" in json_data and len(json_data["choices"]) > 0:
-                                delta = json_data["choices"][0].get("delta", {})
-                                if "content" in delta and delta["content"]:
-                                    yield delta["content"]
-                        except (json.JSONDecodeError, KeyError):
-                            continue
-            else:
-                logger.warning(
-                    "Chutes HTTP %d for model %s", response.status_code, model
-                )
-                yield (
-                    "\n[System] Chutes API returned HTTP "
-                    + str(response.status_code)
-                    + ". Please try again."
-                )
+            async with httpx.AsyncClient() as client:
+                async with client.stream(
+                    "POST",
+                    self.base_url,
+                    headers=headers,
+                    json=payload,
+                    timeout=kwargs.get("timeout", 120),
+                ) as response:
+                    if response.status_code == 200:
+                        async for line in response.aiter_lines():
+                            if line and line.startswith("data: "):
+                                if line == "data: [DONE]":
+                                    break
+                                try:
+                                    json_data = json.loads(line[6:])
+                                    if (
+                                        "choices" in json_data
+                                        and len(json_data["choices"]) > 0
+                                    ):
+                                        delta = json_data["choices"][0].get("delta", {})
+                                        if "content" in delta and delta["content"]:
+                                            yield delta["content"]
+                                except (json.JSONDecodeError, KeyError):
+                                    continue
+                    else:
+                        logger.warning(
+                            "Chutes HTTP %d for model %s", response.status_code, model
+                        )
+                        yield (
+                            "\n[System] Chutes API returned HTTP "
+                            + str(response.status_code)
+                            + ". Please try again."
+                        )
         except Exception as e:
             yield f"Error: {str(e)}"

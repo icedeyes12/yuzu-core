@@ -5,16 +5,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import time
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, AsyncIterator
 
 from app.commands import (
     IMAGE_SHORTCUT_WARNING,
     execute_commands,
-    extract_markdown_image_path,
     has_tool_blocks,
     is_markdown_image_shortcut,
     parse_image_path,
@@ -212,14 +212,16 @@ def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
 # --------------------------------------------------------------------
 
 
-def _parse_raw_tool_calls(provider_name: str, raw_response: dict | None) -> list[dict]:
-    """Parse tool_calls from a raw provider API response."""
+async def _parse_raw_tool_calls_async(
+    provider_name: str, raw_response: dict | None
+) -> list[dict]:
+    """Parse tool_calls from a raw provider API response (async)."""
     if not raw_response:
         return []
     try:
         from app.providers import get_ai_manager
 
-        manager = get_ai_manager()
+        manager = await get_ai_manager()
         provider = manager.providers.get(provider_name)
         if not provider:
             return []
@@ -233,10 +235,10 @@ def _parse_raw_tool_calls(provider_name: str, raw_response: dict | None) -> list
         return []
 
 
-def _execute_tool_calls(
+async def _execute_tool_calls_async(
     tool_calls: list[dict], session_id: int
 ) -> list[tuple[str, dict]]:
-    """Execute a list of tool calls and return results."""
+    """Execute a list of tool calls and return results (async)."""
     from app.commands import _TOOL_ALIASES
     from app.tools.registry import execute_tool, is_terminal_tool
 
@@ -246,7 +248,7 @@ def _execute_tool_calls(
         tool_name = _TOOL_ALIASES.get(raw_name, raw_name)
         arguments = tc.get("arguments", {})
         log.info("native tool_call: %s %s", tool_name, arguments)
-        result = execute_tool(tool_name, arguments, session_id=session_id)
+        result = await execute_tool(tool_name, arguments, session_id=session_id)
         results.append((tool_name, result))
         if is_terminal_tool(tool_name) and result.get("ok"):
             break
@@ -262,23 +264,27 @@ def _clean(text: str) -> str:
     return _TIMESTAMP_SUFFIX.sub("", text).strip()
 
 
-def _persist_user(message: str, session_id: int, image_paths: list[str] | None) -> None:
-    Database.add_message(
+async def _persist_user_async(
+    message: str, session_id: int, image_paths: list[str] | None
+) -> None:
+    await Database.add_message_async(
         "user", message, session_id=session_id, image_paths=image_paths or None
     )
 
 
-def _persist_assistant(
+async def _persist_assistant_async(
     content: str, session_id: int, image_paths: list[str] | None = None
 ) -> None:
-    """Persist an assistant response, with optional image paths (for image generation)."""
-    Database.add_message(
+    """Persist an assistant response, with optional image paths (async)."""
+    await Database.add_message_async(
         "assistant", content, session_id=session_id, image_paths=image_paths
     )
 
 
-def _persist_tool_result(tool_name: str, markdown: str, session_id: int) -> None:
-    """Persist a tool result, extracting and saving any generated image paths."""
+async def _persist_tool_result_async(
+    tool_name: str, markdown: str, session_id: int
+) -> None:
+    """Persist a tool result (async)."""
     from app.commands import parse_image_path
 
     image_paths = []
@@ -286,7 +292,7 @@ def _persist_tool_result(tool_name: str, markdown: str, session_id: int) -> None
     if path:
         image_paths.append(path)
 
-    Database.add_message(
+    await Database.add_message_async(
         get_tool_role(tool_name),
         markdown,
         session_id=session_id,
@@ -294,9 +300,11 @@ def _persist_tool_result(tool_name: str, markdown: str, session_id: int) -> None
     )
 
 
-def _persist_observation(observation: str, session_id: int) -> None:
-    """Persist a system observation as an internal message."""
-    Database.add_message("system_observation", observation, session_id=session_id)
+async def _persist_observation_async(observation: str, session_id: int) -> None:
+    """Persist a system observation as an internal message (async)."""
+    await Database.add_message_async(
+        "system_observation", observation, session_id=session_id
+    )
 
 
 # --------------------------------------------------------------------
@@ -304,30 +312,33 @@ def _persist_observation(observation: str, session_id: int) -> None:
 # --------------------------------------------------------------------
 
 
-def _build_image_context(
+async def _build_image_context_async(
     tool_markdown: str, session_id: int
 ) -> list[dict[str, Any]] | None:
     image_path = parse_image_path(tool_markdown)
     if not image_path:
         return None
-    b64, mime = _load_image_base64(image_path)
+    # Assuming _load_image_base64 is fast or run it in thread if needed
+    # It reads bytes, so better to use asyncio.to_thread if it's not already
+    b64, mime = await asyncio.to_thread(_load_image_base64, image_path)
     if not (b64 and mime):
         return None
+    # Assuming store_visual_context is fast/local
     store_visual_context(session_id, b64, mime)
     log.info("attached generated image to synthesis pass")
     return [{"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}]
 
 
-def _run_synthesis(
+async def _run_synthesis_async(
     profile: dict[str, Any],
     session_id: int,
     interface: str,
     tool_markdown: str,
 ) -> str | None:
-    """Run a 2nd LLM pass to narrate around the tool result."""
-    image_context = _build_image_context(tool_markdown, session_id)
+    """Run a 2nd LLM pass to narrate around the tool result (async)."""
+    image_context = await _build_image_context_async(tool_markdown, session_id)
 
-    text, _ = generate_ai_response(
+    text, _ = await generate_ai_response(
         profile, "", interface, session_id, image_content_for_context=image_context
     )
     if not text or not text.strip():
@@ -336,16 +347,16 @@ def _run_synthesis(
     return _clean(text)
 
 
-def _stream_synthesis(
+async def _stream_synthesis_async(
     profile: dict[str, Any],
     session_id: int,
     interface: str,
     tool_markdown: str,
-) -> Iterator[str]:
-    """Stream the 2nd LLM pass."""
-    image_context = _build_image_context(tool_markdown, session_id)
+) -> AsyncIterator[str]:
+    """Stream the 2nd LLM pass (async)."""
+    image_context = await _build_image_context_async(tool_markdown, session_id)
 
-    for chunk in generate_ai_response_streaming(
+    async for chunk in generate_ai_response_streaming(
         profile,
         "",
         interface,
@@ -362,19 +373,19 @@ def _stream_synthesis(
 _PIPELINE_CHECK_INTERVAL = 5
 
 
-def _post_turn(
+async def _post_turn_async(
     profile: dict[str, Any],
     user_message: str,
     final_response: str,
     session_id: int,
     active_session: dict[str, Any],
 ) -> None:
-    """Auto-rename session, summarize memory, trigger memory pipeline."""
+    """Auto-rename session, summarize memory, trigger memory pipeline (async)."""
     # Auto-rename via service
-    SessionService.auto_name_session_if_needed(session_id, active_session)
+    await SessionService.auto_name_session_if_needed_async(session_id, active_session)
 
     # Memory checks via service
-    MemoryService.run_per_message_checks(
+    await MemoryService.run_per_message_checks_async(
         profile, user_message, final_response, session_id, active_session
     )
 
@@ -393,52 +404,43 @@ def _post_turn(
         pass
 
 
-def _trigger_memory_pipeline(session_id: int) -> None:
-    # DEPRECATED: use MemoryService.trigger_pipeline
-    MemoryService.trigger_pipeline(session_id)
-
-
 # --------------------------------------------------------------------
 # Public entry points
 # --------------------------------------------------------------------
 
 
-def handle_user_message(user_message: str, interface: str = "terminal") -> str:
-    """Process a user message end-to-end and return the assistant reply.
-
-    Non-streaming path for CLI and simple API calls.
-    For tool execution with agentic loop, use handle_user_message_streaming().
-    """
-    profile = Database.get_profile()
+async def handle_user_message(user_message: str, interface: str = "terminal") -> str:
+    """Process a user message end-to-end and return the assistant reply (async)."""
+    profile = await Database.get_profile_async()
     if not user_message.strip():
         return "Please enter a message!"
 
-    active_session = Database.get_active_session()
+    active_session = await Database.get_active_session_async()
     session_id = active_session["id"]
-    cached_images = _cache_images_from_message(user_message)
+    # Assuming _cache_images_from_message is relatively fast (local check + potential small download)
+    # If it downloads, it should be async. Let's check multimodal_tools.
+    cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
 
     # Fast-path: user typed /imagine directly
     stripped = user_message.strip()
     if stripped.startswith("/imagine ") or stripped.startswith("<tool>"):
-        # Check if it's a direct tool invocation
         commands, _ = parse_tool_blocks(stripped)
         if commands or stripped.startswith("/imagine"):
             if stripped.startswith("/imagine"):
                 commands = [stripped]
 
-            _persist_user(user_message, session_id, cached_images)
+            await _persist_user_async(user_message, session_id, cached_images)
 
-            results = execute_commands(commands, session_id=session_id)
+            results = await execute_commands(commands, session_id=session_id)
             tool_markdowns = []
 
             for tool_name, result in results:
                 tool_markdown = result.get("markdown", str(result))
                 tool_markdowns.append(tool_markdown)
-                _persist_tool_result(tool_name, tool_markdown, session_id)
+                await _persist_tool_result_async(tool_name, tool_markdown, session_id)
 
             combined = "\n\n".join(tool_markdowns)
 
-            # Extract any generated image paths
             generated_paths = []
             for tm in tool_markdowns:
                 path = parse_image_path(tm)
@@ -446,11 +448,11 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
                     generated_paths.append(path)
 
             # Run synthesis
-            synthesis = _run_synthesis(profile, session_id, interface, combined)
+            synthesis = await _run_synthesis_async(
+                profile, session_id, interface, combined
+            )
             if synthesis:
-                # DEPRECATED: image_paths are now primarily tracked in the tool_result message
-                # but we keep them here for backward compatibility with synthesis context
-                _persist_assistant(synthesis, session_id, generated_paths)
+                await _persist_assistant_async(synthesis, session_id, generated_paths)
                 final = (
                     f"{combined}\n\n{synthesis}"
                     if parse_image_path(combined)
@@ -459,7 +461,9 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
             else:
                 final = combined
 
-            _post_turn(profile, user_message, final, session_id, active_session)
+            await _post_turn_async(
+                profile, user_message, final, session_id, active_session
+            )
             return final
 
     provider_name = (profile.get("providers_config") or {}).get(
@@ -467,14 +471,14 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
     )
 
     try:
-        text_response, raw_api_response = generate_ai_response(
+        text_response, raw_api_response = await generate_ai_response(
             profile, user_message, interface, session_id
         )
     except Exception:
-        _persist_user(user_message, session_id, cached_images)
+        await _persist_user_async(user_message, session_id, cached_images)
         raise
 
-    _persist_user(user_message, session_id, cached_images)
+    await _persist_user_async(user_message, session_id, cached_images)
 
     if text_response is None:
         log.error("AI provider returned None")
@@ -483,81 +487,69 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
     text_response = _clean(text_response) or _EMPTY_RESPONSE_FALLBACK
 
     if is_markdown_image_shortcut(text_response):
-        log.warning(
-            "intercepted markdown image shortcut: %s",
-            extract_markdown_image_path(text_response),
-        )
         return IMAGE_SHORTCUT_WARNING
 
-    # Try native tool-call execution first (for providers that support it)
-    tool_calls = _parse_raw_tool_calls(provider_name, raw_api_response)
+    # Try native tool-call execution first
+    tool_calls = await _parse_raw_tool_calls_async(provider_name, raw_api_response)
     if tool_calls:
-        tool_results = _execute_tool_calls(tool_calls, session_id)
+        tool_results = await _execute_tool_calls_async(tool_calls, session_id)
         if tool_results:
             tool_name, tool_result = tool_results[0]
             tool_markdown = tool_result.get("markdown", str(tool_result))
-            _persist_tool_result(tool_name, tool_markdown, session_id)
+            await _persist_tool_result_async(tool_name, tool_markdown, session_id)
 
             is_image_tool = parse_image_path(tool_markdown) is not None
             generated_paths = (
                 [parse_image_path(tool_markdown)] if is_image_tool else None
             )
 
-            synthesis = _run_synthesis(profile, session_id, interface, tool_markdown)
+            synthesis = await _run_synthesis_async(
+                profile, session_id, interface, tool_markdown
+            )
 
             if synthesis:
-                # DEPRECATED: image_paths are now primarily tracked in the tool_result message
-                _persist_assistant(synthesis, session_id, generated_paths)
+                await _persist_assistant_async(synthesis, session_id, generated_paths)
                 final_response = (
                     f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
                 )
-                _post_turn(
+                await _post_turn_async(
                     profile, user_message, final_response, session_id, active_session
                 )
                 return final_response
 
-            _post_turn(profile, user_message, tool_markdown, session_id, active_session)
+            await _post_turn_async(
+                profile, user_message, tool_markdown, session_id, active_session
+            )
             return tool_markdown
 
-    # Non-streaming path: just return LLM response
-    # Tool execution via <tool> blocks only happens in streaming path
-    _persist_assistant(text_response, session_id)
-    _post_turn(profile, user_message, text_response, session_id, active_session)
+    await _persist_assistant_async(text_response, session_id)
+    await _post_turn_async(
+        profile, user_message, text_response, session_id, active_session
+    )
     return text_response
 
 
-def handle_user_message_streaming(
+async def handle_user_message_streaming(
     user_message: str,
     interface: str = "terminal",
     provider: str | None = None,
     model: str | None = None,
     abort_check: callable[[], bool] | None = None,
-) -> Iterator[str]:
-    """Streaming entrypoint with true incremental chunk delivery.
-
-    Implements the agentic loop:
-    1. Stream LLM response
-    2. Parse tool blocks
-    3. If no tool blocks: done
-    4. If tool blocks: stream narration, execute tools, stream synthesis
-    5. Loop until no tool blocks
-    """
-    profile = Database.get_profile()
+) -> AsyncIterator[str]:
+    """Streaming entrypoint (async)."""
+    profile = await Database.get_profile_async()
     if not user_message.strip():
         yield "Please enter a message!"
         return
 
-    # Check for early abort
     if abort_check and abort_check():
-        log.info("[stream] early abort for session")
         return
 
-    active_session = Database.get_active_session()
+    active_session = await Database.get_active_session_async()
     session_id = active_session["id"]
-    cached_images = _cache_images_from_message(user_message)
+    cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
 
-    # STRICT: Persist user message immediately to ensure it's in history even if process crashes
-    _persist_user(user_message, session_id, cached_images)
+    await _persist_user_async(user_message, session_id, cached_images)
 
     # Fast-path: user typed /imagine directly
     stripped = user_message.strip()
@@ -567,96 +559,91 @@ def handle_user_message_streaming(
             if stripped.startswith("/imagine"):
                 commands = [stripped]
 
-            results = execute_commands(commands, session_id=session_id)
+            results = await execute_commands(commands, session_id=session_id)
 
             tool_markdown = ""
             for tool_name, result in results:
                 tool_markdown = result.get("markdown", str(result))
-                _persist_tool_result(tool_name, tool_markdown, session_id)
+                await _persist_tool_result_async(tool_name, tool_markdown, session_id)
                 yield tool_markdown
 
-            _post_turn(profile, user_message, tool_markdown, session_id, active_session)
+            await _post_turn_async(
+                profile, user_message, tool_markdown, session_id, active_session
+            )
             return
 
     # Collect streamed response
     response_chunks: list[str] = []
-    assistant_msg_id = Database.add_message("assistant", "", session_id=session_id)
+    assistant_msg_id = await Database.add_message_async(
+        "assistant", "", session_id=session_id
+    )
     last_db_update = time.time()
 
     try:
-        for chunk in generate_ai_response_streaming(
+        async for chunk in generate_ai_response_streaming(
             profile, user_message, interface, session_id, provider, model
         ):
             if chunk:
-                # Check for cancellation
                 if abort_check and abort_check():
-                    log.info("[stream] aborting during first pass")
                     if response_chunks:
-                        Database.update_message(
+                        await Database.update_message_async(
                             assistant_msg_id, "".join(response_chunks)
                         )
                     return
 
                 response_chunks.append(chunk)
 
-                # Periodically update DB to ensure state recovery on reconnect
                 now = time.time()
-                if now - last_db_update > 2.0:  # Every 2 seconds
-                    Database.update_message(assistant_msg_id, "".join(response_chunks))
+                if now - last_db_update > 2.0:
+                    await Database.update_message_async(
+                        assistant_msg_id, "".join(response_chunks)
+                    )
                     last_db_update = now
 
                 yield chunk
     except Exception as e:
         log.error("[stream] error in first pass: %s", e)
-        # Ensure partial response is saved even on error
         if response_chunks:
-            Database.update_message(assistant_msg_id, "".join(response_chunks))
+            await Database.update_message_async(
+                assistant_msg_id, "".join(response_chunks)
+            )
         raise
 
-    # Final update for this pass
     full_response = "".join(response_chunks)
-    Database.update_message(assistant_msg_id, full_response)
+    await Database.update_message_async(assistant_msg_id, full_response)
 
-    # Guard against empty LLM response
     if not _clean(full_response):
-        log.warning("[stream] LLM returned empty response, using fallback")
         fallback = _EMPTY_RESPONSE_FALLBACK
         yield fallback
-        Database.update_message(assistant_msg_id, fallback)
-        _post_turn(profile, user_message, fallback, session_id, active_session)
+        await Database.update_message_async(assistant_msg_id, fallback)
+        await _post_turn_async(
+            profile, user_message, fallback, session_id, active_session
+        )
         return
 
     if is_markdown_image_shortcut(full_response):
-        log.warning(
-            "intercepted markdown image shortcut (stream): %s",
-            extract_markdown_image_path(full_response),
-        )
         yield IMAGE_SHORTCUT_WARNING
         return
 
-    # Parse tool blocks
     commands, clean_text = parse_tool_blocks(full_response)
 
     if not commands:
-        # Plain response - already streamed and persisted.
-        _post_turn(profile, user_message, full_response, session_id, active_session)
+        await _post_turn_async(
+            profile, user_message, full_response, session_id, active_session
+        )
         return
 
     log.info("[stream] found %d tool block(s)", len(commands))
 
-    # Full response with tool blocks is already persisted in assistant_msg_id
+    results = await execute_commands(commands, session_id=session_id)
 
-    # Execute all commands
-    results = execute_commands(commands, session_id=session_id)
-
-    # Yield each tool result
     tool_markdowns: list[str] = []
     any_image_tool = False
 
     for tool_name, result in results:
         tool_markdown = result.get("markdown", str(result))
         tool_markdowns.append(tool_markdown)
-        _persist_tool_result(tool_name, tool_markdown, session_id)
+        await _persist_tool_result_async(tool_name, tool_markdown, session_id)
 
         if parse_image_path(tool_markdown) is not None:
             any_image_tool = True
@@ -665,9 +652,7 @@ def handle_user_message_streaming(
 
     combined_tool_markdown = "\n\n".join(tool_markdowns)
 
-    # Agentic loop: execute tools, stream synthesis, check for more tools
     current_synthesis_context = combined_tool_markdown
-    # Track paths across loops
     all_generated_paths = []
     for tm in tool_markdowns:
         p = parse_image_path(tm)
@@ -680,42 +665,39 @@ def handle_user_message_streaming(
         loop_count += 1
         log.info("[stream] orchestration loop %d", loop_count)
 
-        # Check for cancellation
         if abort_check and abort_check():
-            log.info("[stream] aborting orchestration loop")
             return
 
-        # Stream synthesis
         synthesis_chunks: list[str] = []
         full_synthesis = ""
-        synthesis_msg_id = None  # Lazy created
+        synthesis_msg_id = None
         last_synth_update = time.time()
 
         try:
-            for chunk in _stream_synthesis(
+            async for chunk in _stream_synthesis_async(
                 profile, session_id, interface, current_synthesis_context
             ):
                 if chunk:
-                    # Check for cancellation
                     if abort_check and abort_check():
-                        log.info("[stream] aborting during synthesis")
                         if full_synthesis and synthesis_msg_id:
-                            Database.update_message(synthesis_msg_id, full_synthesis)
+                            await Database.update_message_async(
+                                synthesis_msg_id, full_synthesis
+                            )
                         return
 
                     synthesis_chunks.append(chunk)
                     full_synthesis += chunk
 
-                    # Lazy create message row
                     if synthesis_msg_id is None:
-                        synthesis_msg_id = Database.add_message(
+                        synthesis_msg_id = await Database.add_message_async(
                             "assistant", "", session_id=session_id
                         )
 
-                    # Periodic update
                     now = time.time()
                     if now - last_synth_update > 2.0:
-                        Database.update_message(synthesis_msg_id, full_synthesis)
+                        await Database.update_message_async(
+                            synthesis_msg_id, full_synthesis
+                        )
                         last_synth_update = now
 
                     yield (
@@ -725,24 +707,19 @@ def handle_user_message_streaming(
                     )
         except Exception as e:
             log.error("[stream] error in synthesis loop: %s", e)
-            if full_synthesis:
-                Database.update_message(synthesis_msg_id, full_synthesis)
+            if full_synthesis and synthesis_msg_id:
+                await Database.update_message_async(synthesis_msg_id, full_synthesis)
             raise
 
         synthesis = _clean(full_synthesis) if full_synthesis else None
 
-        # Final update
         if full_synthesis and synthesis_msg_id:
-            # Check if this loop generated images to attach to the assistant message
-            # All generated paths from this loop and previous ones are in all_generated_paths
-            # DEPRECATED: image_paths population in update_message is now the primary way to track images
-            Database.update_message(
+            await Database.update_message_async(
                 synthesis_msg_id, full_synthesis, image_paths=all_generated_paths
             )
 
         if not synthesis:
-            # No synthesis - already handled persistence above if any chunks existed
-            _post_turn(
+            await _post_turn_async(
                 profile,
                 user_message,
                 current_synthesis_context,
@@ -751,52 +728,43 @@ def handle_user_message_streaming(
             )
             return
 
-        # Synthesis already persisted in synthesis_msg_id
-
-        # Check if synthesis contains more tool blocks
         if not has_tool_blocks(synthesis):
-            # No more tools - we're done
             final_response = (
                 f"{current_synthesis_context}\n\n{synthesis}"
                 if any_image_tool
                 else synthesis
             )
-            _post_turn(
+            await _post_turn_async(
                 profile, user_message, final_response, session_id, active_session
             )
             return
 
         log.info("[stream] synthesis contains tool blocks, continuing loop")
 
-        # Parse and execute tools from synthesis
         next_commands, _ = parse_tool_blocks(synthesis)
         if not next_commands:
-            _post_turn(profile, user_message, synthesis, session_id, active_session)
+            await _post_turn_async(
+                profile, user_message, synthesis, session_id, active_session
+            )
             return
 
-        # Execute tools
-        next_results = execute_commands(next_commands, session_id=session_id)
+        next_results = await execute_commands(next_commands, session_id=session_id)
         next_markdowns: list[str] = []
         any_image_tool = False
 
         for tool_name, result in next_results:
             tm = result.get("markdown", str(result))
             next_markdowns.append(tm)
-            _persist_tool_result(tool_name, tm, session_id)
+            await _persist_tool_result_async(tool_name, tm, session_id)
             p = parse_image_path(tm)
             if p:
                 any_image_tool = True
                 all_generated_paths.append(p)
             yield "\n\n" + tm
 
-        # Update context for next synthesis
         current_synthesis_context = "\n\n".join(next_markdowns)
 
-    # Max loops reached
-    log.warning(
-        "[stream] max orchestration loops reached (%d)", _MAX_ORCHESTRATION_LOOPS
-    )
-    _post_turn(
+    await _post_turn_async(
         profile,
         user_message,
         synthesis or current_synthesis_context,

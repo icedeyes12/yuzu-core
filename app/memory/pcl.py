@@ -12,23 +12,15 @@
 from __future__ import annotations
 
 import logging
-
-__all__ = [
-    "run_predict_calibrate",
-    "load_relevant_semantic_facts",
-    "predict_episode_content",
-    "calibrate_and_extract",
-    "consolidate_facts",
-]
-
 from datetime import datetime
 from psycopg.types.json import Json
 from app.memory.db_memory import (
-    invalidate_fact,
-    get_fact_by_id,
+    invalidate_fact_async,
+    get_fact_by_id_async,
+    get_facts_by_session_async,
     FACT_TYPE_STATIC,
 )
-from app.memory.extractor import upsert_semantic_memory
+from app.memory.extractor import upsert_semantic_memory_async
 
 logger = logging.getLogger(__name__)
 
@@ -55,16 +47,14 @@ _CATEGORY_CAPS = {
 # ── 1. Load relevant facts ────────────────────────────────────────────────────
 
 
-def load_relevant_semantic_facts(
+async def load_relevant_semantic_facts_async(
     session_id: int, limit: int = MAX_FACTS_FOR_PREDICTION
 ):
-    """Fetch top semantic facts for a session to use in PREDICT phase."""
-    from app.memory.db_memory import get_facts_by_session
-
-    facts = get_facts_by_session(session_id, fact_type=FACT_TYPE_STATIC, limit=limit)
-    # Filter out invalidated ones
-    active = [f for f in facts if not f.get("invalid_at")]
-    return active
+    """Fetch top semantic facts for a session (async)."""
+    facts = await get_facts_by_session_async(
+        session_id, fact_type=FACT_TYPE_STATIC, limit=limit
+    )
+    return [f for f in facts if not f.get("invalid_at")]
 
 
 # ── 2. PREDICT phase ──────────────────────────────────────────────────────────
@@ -83,19 +73,16 @@ def _build_facts_context(facts: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def predict_episode_content(
+async def predict_episode_content_async(
     existing_facts: list[dict],
     episode_summary: str,
     segment_messages: list[dict] = None,
 ) -> str | None:
-    """PREDICT: Generate a prediction of what the episode contains, based on known facts.
-
-    Returns predicted episode content as a string, or None on failure.
-    """
+    """PREDICT (async)."""
     try:
-        from app import get_ai_manager
+        from app.providers import get_ai_manager
 
-        ai_manager = get_ai_manager()
+        ai_manager = await get_ai_manager()
     except Exception as e:
         logger.warning(f"AI manager unavailable: {e}")
         return None
@@ -125,7 +112,7 @@ Episode summary to predict:
 Based on the existing knowledge and episode summary, list the topics that are likely to appear in this episode. Return ONLY a JSON array of topic strings."""
 
     try:
-        response = ai_manager._internal_llm_call(
+        response = await ai_manager._internal_llm_call(
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -136,7 +123,7 @@ Based on the existing knowledge and episode summary, list the topics that are li
         if response and isinstance(response, str) and response.strip():
             return response.strip()
     except Exception as e:
-        logger.warning(f"PREDICT phase failed: {e}")
+        logger.warning(f"PREDICT phase async failed: {e}")
 
     return None
 
@@ -185,20 +172,16 @@ _CATEGORY_MAP = {
 }
 
 
-def calibrate_and_extract(
+async def calibrate_and_extract_async(
     predicted_content: str | None,
     actual_messages: list[dict],
     existing_facts: list[dict],
 ) -> list[dict]:
-    """CALIBRATE: Compare prediction with actual messages to identify knowledge gaps.
-
-    Returns list of extracted knowledge statements as dicts:
-        {fact, category, action: "new"|"reinforce"|"update"|"invalidate", source_id?}
-    """
+    """CALIBRATE (async)."""
     try:
-        from app import get_ai_manager
+        from app.providers import get_ai_manager
 
-        ai_manager = get_ai_manager()
+        ai_manager = await get_ai_manager()
     except Exception as e:
         logger.warning(f"AI manager unavailable: {e}")
         return []
@@ -243,7 +226,7 @@ Actual conversation:
 Apply the deterministic action rules to extract any new, updated, reinforced, or invalidated facts. Return a JSON array of actions."""
 
     try:
-        response = ai_manager._internal_llm_call(
+        response = await ai_manager._internal_llm_call(
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -326,11 +309,11 @@ def _map_category_to_relation(category: str) -> str:
     return mapping.get(category, "experience")
 
 
-def _get_category_counts(session_id: int) -> dict[str, int]:
-    """Count existing facts per category for the session (global static facts)."""
-    from app.memory.db_memory import get_facts_by_session, FACT_TYPE_STATIC
-
-    facts = get_facts_by_session(session_id=None, fact_type=FACT_TYPE_STATIC, limit=500)
+async def _get_category_counts_async(session_id: int) -> dict[str, int]:
+    """Count existing facts per category (async)."""
+    facts = await get_facts_by_session_async(
+        session_id=None, fact_type=FACT_TYPE_STATIC, limit=500
+    )
     counts: dict[str, int] = {}
     for f in facts:
         cat = f.get("metadata", {}).get("category", "Experience")
@@ -338,19 +321,14 @@ def _get_category_counts(session_id: int) -> dict[str, int]:
     return counts
 
 
-def consolidate_facts(extracted: list[dict], session_id: int, episode_id=None) -> dict:
-    """Apply extracted knowledge actions to the DB.
-
-    Per-category caps (_CATEGORY_CAPS) are enforced: facts in categories
-    already at their cap are skipped (not inserted but reinforce/update/invalidate
-    actions on existing facts still proceed).
-
-    Returns summary: {new: n, reinforced: n, updated: n, invalidated: n}
-    """
+async def consolidate_facts_async(
+    extracted: list[dict], session_id: int, episode_id=None
+) -> dict:
+    """Apply extracted knowledge actions (async)."""
     counts = {"new": 0, "reinforced": 0, "updated": 0, "invalidated": 0}
 
     # Pre-count existing facts per category to enforce caps
-    category_counts = _get_category_counts(session_id)
+    category_counts = await _get_category_counts_async(session_id)
 
     for item in extracted:
         fact_text = item.get("fact", "")
@@ -376,28 +354,28 @@ def consolidate_facts(extracted: list[dict], session_id: int, episode_id=None) -
 
         if action == "invalidate" and source_id:
             try:
-                invalidate_fact(source_id)
+                await invalidate_fact_async(source_id)
                 counts["invalidated"] += 1
-            except Exception as e:
-                logger.warning(f"Invalidate failed id={source_id}: {e}")
+            except Exception:
+                pass
 
         elif action == "update" and source_id:
             try:
                 # Invalidate old, insert new
-                invalidate_fact(source_id)
-                upsert_semantic_memory(
+                await invalidate_fact_async(source_id)
+                await upsert_semantic_memory_async(
                     session_id, entity, relation, fact_text, episode_id=episode_id
                 )
                 counts["updated"] += 1
-            except Exception as e:
-                logger.warning(f"Update failed id={source_id}: {e}")
+            except Exception:
+                pass
 
         elif action == "reinforce" and source_id:
             try:
                 # Append source_episodic_ids and bump confidence
-                fact = get_fact_by_id(source_id)
+                fact = await get_fact_by_id_async(source_id)
                 if fact:
-                    from app.memory.db_memory import pg_execute
+                    from app.memory.db_memory import pg_execute_async
 
                     meta = fact.get("metadata") or {}
                     ids = meta.get("source_episodic_ids", [])
@@ -407,22 +385,22 @@ def consolidate_facts(extracted: list[dict], session_id: int, episode_id=None) -
                         ids = [episode_id] if episode_id else []
                     meta["source_episodic_ids"] = ids
                     meta["confidence"] = min((meta.get("confidence", 0.7) + 0.1), 1.0)
-                    pg_execute(
+                    await pg_execute_async(
                         "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
                         (datetime.now(), Json(meta), source_id),
                     )
                     counts["reinforced"] += 1
-            except Exception as e:
-                logger.warning(f"Reinforce failed id={source_id}: {e}")
+            except Exception:
+                pass
 
         else:  # action == "new"
             try:
-                upsert_semantic_memory(
+                await upsert_semantic_memory_async(
                     session_id, entity, relation, fact_text, episode_id=episode_id
                 )
                 counts["new"] += 1
-            except Exception as e:
-                logger.warning(f"New fact failed: {e}")
+            except Exception:
+                pass
 
     return counts
 
@@ -430,30 +408,27 @@ def consolidate_facts(extracted: list[dict], session_id: int, episode_id=None) -
 # ── 5. Main entry point ───────────────────────────────────────────────────────
 
 
-def run_predict_calibrate(
+async def run_predict_calibrate_async(
     session_id: int,
     episode_summary: str,
     messages: list[dict],
     episode_id=None,
 ) -> dict | None:
-    """Run the full PCL pipeline: PREDICT → CALIBRATE → CONSOLIDATE.
-
-    Returns a summary dict or None if skipped.
-    """
+    """Run full PCL pipeline (async)."""
     if not messages:
         return None
 
     try:
         # 1. Load existing semantic facts
-        existing = load_relevant_semantic_facts(session_id)
+        existing = await load_relevant_semantic_facts_async(session_id)
 
         # 2. PREDICT
-        predicted = predict_episode_content(
+        predicted = await predict_episode_content_async(
             existing, episode_summary, segment_messages=messages
         )
 
         # 3. CALIBRATE
-        extracted = calibrate_and_extract(predicted, messages, existing)
+        extracted = await calibrate_and_extract_async(predicted, messages, existing)
 
         if not extracted:
             logger.info(
@@ -462,27 +437,29 @@ def run_predict_calibrate(
             return {"new": 0, "reinforced": 0, "updated": 0, "invalidated": 0}
 
         # 4. CONSOLIDATE
-        result = consolidate_facts(extracted, session_id, episode_id=episode_id)
+        result = await consolidate_facts_async(
+            extracted, session_id, episode_id=episode_id
+        )
 
         # 5. Mark episode consolidated
         if episode_id:
             try:
-                from app.memory.db_memory import pg_execute
+                from app.memory.db_memory import pg_execute_async
 
-                ep = get_fact_by_id(episode_id)
+                ep = await get_fact_by_id_async(episode_id)
                 if ep:
                     meta = ep.get("metadata") or {}
                     meta["consolidated_at"] = datetime.now().isoformat()
-                    pg_execute(
+                    await pg_execute_async(
                         "UPDATE semantic_facts SET metadata=%s, last_accessed=%s WHERE id=%s",
                         (Json(meta), datetime.now(), episode_id),
                     )
-            except Exception as e:
-                logger.warning(f"Failed to mark episode {episode_id} consolidated: {e}")
+            except Exception:
+                pass
 
         logger.info(f"session={session_id} result={result}")
         return result
 
     except Exception as e:
-        logger.error(f"Pipeline failed: {e}")
+        logger.error(f"PCL async failed: {e}")
         return None

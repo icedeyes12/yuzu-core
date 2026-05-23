@@ -6,9 +6,9 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Iterable, Iterator
+from typing import Any, Iterable, AsyncIterator
 
-import requests
+import httpx
 
 from app.db import Database
 from app.logging_config import get_logger
@@ -35,7 +35,7 @@ _DEFAULT_HEADERS = {
 # ---------------------------------------------------------------------------
 
 
-def chutes_chat(
+async def chutes_chat(
     prompt: str,
     *,
     api_key: str,
@@ -65,37 +65,38 @@ def chutes_chat(
         "Authorization": f"Bearer {api_key}",
     }
 
-    for candidate in (model, *fallback_models):
-        try:
-            response = requests.post(
-                CHUTES_URL,
-                headers=headers,
-                json={
-                    "model": candidate,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "stream": False,
-                },
-                timeout=timeout,
-            )
-        except requests.RequestException as e:
-            log.warning("chutes call failed for %s: %s", candidate, e)
-            continue
-
-        if response.status_code == 200:
+    async with httpx.AsyncClient() as client:
+        for candidate in (model, *fallback_models):
             try:
-                return response.json()["choices"][0]["message"]["content"].strip()
-            except (KeyError, IndexError, ValueError) as e:
-                log.warning("chutes response parse failed for %s: %s", candidate, e)
+                response = await client.post(
+                    CHUTES_URL,
+                    headers=headers,
+                    json={
+                        "model": candidate,
+                        "messages": messages,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                        "stream": False,
+                    },
+                    timeout=timeout,
+                )
+            except httpx.RequestError as e:
+                log.warning("chutes call failed for %s: %s", candidate, e)
                 continue
 
-        log.warning(
-            "chutes %s -> HTTP %s: %s",
-            candidate,
-            response.status_code,
-            response.text[:200],
-        )
+            if response.status_code == 200:
+                try:
+                    return response.json()["choices"][0]["message"]["content"].strip()
+                except (KeyError, IndexError, ValueError) as e:
+                    log.warning("chutes response parse failed for %s: %s", candidate, e)
+                    continue
+
+            log.warning(
+                "chutes %s -> HTTP %s: %s",
+                candidate,
+                response.status_code,
+                response.text[:200],
+            )
 
     return None
 
@@ -179,7 +180,7 @@ def _resolve_provider(
     )
 
 
-def _send_to_provider(
+async def _send_to_provider(
     provider: str,
     model: str,
     messages: list[dict[str, Any]],
@@ -187,7 +188,7 @@ def _send_to_provider(
     image_context: list[dict[str, Any]] | None,
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single LLM dispatch with timing log. Returns (text, raw_response)."""
-    ai_manager = get_ai_manager()
+    ai_manager = await get_ai_manager()
     schemas = _unique_tool_schemas()
 
     if image_context and provider in ai_manager.providers:
@@ -200,7 +201,7 @@ def _send_to_provider(
     started = time.time()
     raw_response: dict[str, Any] | None = None
     try:
-        raw_response = ai_manager.send_message_raw(
+        raw_response = await ai_manager.send_message_raw(
             provider, model, messages, timeout=180, tools=schemas
         )
     except Exception as e:  # noqa: BLE001
@@ -233,7 +234,7 @@ def _send_to_provider(
     return text, raw_response
 
 
-def generate_ai_response(
+async def generate_ai_response(
     profile: dict[str, Any],
     user_message: str,
     interface: str = "terminal",
@@ -246,7 +247,7 @@ def generate_ai_response(
     Legacy /command detection lives in the orchestrator.
     """
     if session_id is None:
-        session_id = Database.get_active_session()["id"]
+        session_id = (await Database.get_active_session_async())["id"]
 
     provider, model = _resolve_provider(profile, None, None)
 
@@ -255,10 +256,10 @@ def generate_ai_response(
         user_message
     ) and not multimodal_tools.is_vision_model(model):
         error_msg = "[System] Current model does not support vision. Please reconfigure your active model to a multimodal one first~ :3"
-        Database.add_message("system", error_msg, session_id=session_id)
+        await Database.add_message_async("system", error_msg, session_id=session_id)
         return error_msg, None
 
-    messages = build_messages(
+    messages = await build_messages(
         profile, session_id, interface, user_message, include_image_paths=True
     )
     if user_message and user_message.strip():
@@ -298,21 +299,21 @@ def generate_ai_response(
 
     _inject_persistent_visual(messages, user_message, session_id)
 
-    text, raw = _send_to_provider(
+    text, raw = await _send_to_provider(
         provider, model, messages, image_context=image_content_for_context
     )
     return text, raw
 
 
-def _stream_from_provider(
+async def _stream_from_provider(
     provider: str,
     model: str,
     messages: list[dict[str, Any]],
     *,
     image_context: list[dict[str, Any]] | None,
-) -> Iterator[str]:
+) -> AsyncIterator[str]:
     """Yield raw chunks from the provider's streaming API."""
-    ai_manager = get_ai_manager()
+    ai_manager = await get_ai_manager()
 
     if image_context and provider in ai_manager.providers:
         v_provider, v_model = multimodal_tools.get_best_vision_provider()
@@ -320,10 +321,9 @@ def _stream_from_provider(
             log.info("streaming 2nd-pass vision: %s/%s", v_provider, v_model)
             provider, model = v_provider, v_model
 
-    started = time.time()
     received = 0
     try:
-        for chunk in ai_manager.send_message_streaming(
+        async for chunk in ai_manager.send_message_streaming(
             provider, model, messages, timeout=180
         ):
             if chunk:
@@ -333,17 +333,8 @@ def _stream_from_provider(
         log.error("streaming exception (%s/%s): %s", provider, model, e)
         return
 
-    duration = time.time() - started
-    log.info(
-        "chat (stream) %s/%s | chars=%d | %.1fs",
-        provider,
-        model,
-        received,
-        duration,
-    )
 
-
-def generate_ai_response_streaming(
+async def generate_ai_response_streaming(
     profile: dict[str, Any],
     user_message: str,
     interface: str = "terminal",
@@ -351,7 +342,7 @@ def generate_ai_response_streaming(
     provider: str | None = None,
     model: str | None = None,
     image_content_for_context: list[dict[str, Any]] | None = None,
-) -> Iterator[str]:
+) -> AsyncIterator[str]:
     """Stream a response from the configured provider chunk by chunk.
 
     Performs the same context assembly and vision routing as the
@@ -360,7 +351,7 @@ def generate_ai_response_streaming(
     filtering /command preambles and post-processing.
     """
     if session_id is None:
-        session_id = Database.get_active_session()["id"]
+        session_id = (await Database.get_active_session_async())["id"]
 
     resolved_provider, resolved_model = _resolve_provider(profile, provider, model)
 
@@ -369,11 +360,11 @@ def generate_ai_response_streaming(
         user_message
     ) and not multimodal_tools.is_vision_model(resolved_model):
         error_msg = "[System] Current model does not support vision. Please reconfigure your active model to a multimodal one first~ :3"
-        Database.add_message("system", error_msg, session_id=session_id)
+        await Database.add_message_async("system", error_msg, session_id=session_id)
         yield error_msg
         return
 
-    messages = build_messages(
+    messages = await build_messages(
         profile, session_id, interface, user_message, include_image_paths=True
     )
     if user_message and user_message.strip():
@@ -408,9 +399,10 @@ def generate_ai_response_streaming(
 
     _inject_persistent_visual(messages, user_message, session_id)
 
-    yield from _stream_from_provider(
+    async for chunk in _stream_from_provider(
         resolved_provider,
         resolved_model,
         messages,
         image_context=image_content_for_context,
-    )
+    ):
+        yield chunk

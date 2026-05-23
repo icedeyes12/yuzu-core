@@ -10,6 +10,7 @@ import re
 import subprocess
 import logging
 import time
+import asyncio
 from pathlib import Path
 
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
@@ -245,12 +246,12 @@ def _truncate_output(output: str, max_size: int = MAX_OUTPUT_SIZE) -> str:
     return f"{truncated}\n\n... ({remaining} more bytes truncated)"
 
 
-def _get_partner_name() -> str:
-    """Get partner name from profile."""
+async def _get_partner_name_async() -> str:
+    """Get partner name from profile (async)."""
     try:
-        from app.db import get_profile
+        from app.db import Database
 
-        profile = get_profile() or {}
+        profile = await Database.get_profile_async() or {}
         return profile.get("partner_name", "Yuzu")
     except Exception:
         return "Yuzu"
@@ -261,10 +262,10 @@ def _get_partner_name() -> str:
 # --------------------------------------------------------------------
 
 
-def execute(
+async def execute(
     arguments: dict, session_id: int | None = None, tool_name: str = "bash"
 ) -> dict:
-    """Execute a bash command.
+    """Execute a bash command (async).
 
     Args:
         arguments: {"command": "ls -la"}
@@ -274,7 +275,7 @@ def execute(
     Returns:
         {"ok": True/False, "data": {...}, "markdown": "..."}
     """
-    partner_name = _get_partner_name()
+    partner_name = await _get_partner_name_async()
     command = arguments.get("command", "").strip()
 
     if not command:
@@ -298,29 +299,40 @@ def execute(
             partner_name,
         )
 
-    # Execute command (non-persistent for now, persistent session can be enabled later)
-    # Persistent sessions have complexity trade-offs; keeping simple for now
+    # Execute command (async)
     try:
         start_time = time.time()
-        result = subprocess.run(
+
+        # Use asyncio.create_subprocess_shell
+        process = await asyncio.create_subprocess_shell(
             command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=DEFAULT_TIMEOUT,
-            cwd=DEFAULT_CWD,
-            executable="/data/data/com.termux/files/usr/bin/bash",  # Sesuaikan path bash Termux
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=str(DEFAULT_CWD),
+            executable="/data/data/com.termux/files/usr/bin/bash",
         )
+
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(), timeout=DEFAULT_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            logger.warning(f"[shell] Command timed out: {command}")
+            return error_result(
+                f"Command timed out after {DEFAULT_TIMEOUT}s",
+                TOOL_BASH,
+                full_command,
+                partner_name,
+            )
+
         duration_ms = int((time.time() - start_time) * 1000)
 
         # Truncate if needed
-        stdout = _truncate_output(result.stdout or "")
-        stderr = _truncate_output(result.stderr or "")
-        exit_code = result.returncode
-
-        # Format terisolasi untuk Yuzuki
-        stdout_str = stdout.strip() if stdout.strip() else "(empty)"
-        stderr_str = stderr.strip() if stderr.strip() else "(empty)"
+        stdout_str = _truncate_output(stdout.decode().strip() or "(empty)")
+        stderr_str = _truncate_output(stderr.decode().strip() or "(empty)")
+        exit_code = process.returncode
 
         formatted_output = (
             f"Exit Code: {exit_code}\n"
@@ -336,15 +348,6 @@ def execute(
                 "output": formatted_output,
                 "duration_ms": duration_ms,
             },
-            TOOL_BASH,
-            full_command,
-            partner_name,
-        )
-
-    except subprocess.TimeoutExpired:
-        logger.warning(f"[shell] Command timed out: {command}")
-        return error_result(
-            f"Command timed out after {DEFAULT_TIMEOUT}s",
             TOOL_BASH,
             full_command,
             partner_name,

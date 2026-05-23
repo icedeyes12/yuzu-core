@@ -41,17 +41,17 @@ def _idle_hours(session_memory: dict[str, Any]) -> float | None:
         return None
 
 
-def should_summarize_memory(
+async def should_summarize_memory_async(
     profile: dict[str, Any], user_message: str, session_id: int
 ) -> bool:
-    history = Database.get_chat_history(session_id=session_id) or []
+    history = await Database.get_chat_history_async(session_id=session_id) or []
     convo_count = sum(1 for m in history if m["role"] in ("user", "assistant"))
 
     if (
         convo_count >= _SUMMARY_TRIGGER_INTERVAL
         and convo_count % _SUMMARY_TRIGGER_INTERVAL == 0
     ):
-        session_memory = Database.get_session_memory(session_id) or {}
+        session_memory = await Database.get_session_memory_async(session_id) or {}
         if convo_count > session_memory.get("last_summary_count", 0):
             idle = _idle_hours(session_memory)
             if idle is not None and idle < _IDLE_THRESHOLD_HOURS:
@@ -72,19 +72,21 @@ def _format_recent_conversation(history: list[dict[str, Any]], limit: int = 100)
     return "\n".join(parts)
 
 
-def summarize_memory(
+async def summarize_memory_async(
     profile: dict[str, Any],
     user_message: str,
     ai_reply: str,
     session_id: int,
 ) -> bool:
-    history = Database.get_chat_history(session_id=session_id, limit=80) or []
+    history = (
+        await Database.get_chat_history_async(session_id=session_id, limit=80) or []
+    )
     if not history:
         return False
 
     convo_count = sum(1 for m in history if m["role"] in ("user", "assistant"))
 
-    manager = get_ai_manager()
+    manager = await get_ai_manager()
     chutes = manager.providers.get("chutes")
     api_key = chutes.api_key if chutes else None
 
@@ -106,7 +108,7 @@ the current topics being discussed, and the general context. No lists, no bullet
 just a natural paragraph.
 """.strip()
 
-    paragraph = chutes_chat(
+    paragraph = await chutes_chat(
         prompt,
         api_key=api_key,
         model=_SUMMARY_MODEL,
@@ -123,7 +125,7 @@ just a natural paragraph.
     if not paragraph:
         return False
 
-    Database.update_session_memory(
+    await Database.update_session_memory_async(
         session_id,
         {
             "session_context": paragraph.strip(),
@@ -133,17 +135,17 @@ just a natural paragraph.
         },
     )
 
-    _sync_episodic_to_db(session_id, paragraph.strip(), history)
+    await _sync_episodic_to_db_async(session_id, paragraph.strip(), history)
     return True
 
 
-def _sync_episodic_to_db(
+async def _sync_episodic_to_db_async(
     session_id: int, summary: str, history: list[dict[str, Any]]
 ) -> None:
     try:
         from app.memory.extractor import (
             calculate_emotional_weight,
-            create_episodic_memory,
+            create_episodic_memory_async,
         )
     except Exception as e:
         log.warning("structured-DB sync skipped: %s", e)
@@ -151,9 +153,10 @@ def _sync_episodic_to_db(
 
     recent = history[-20:]
     try:
+        # Assuming calculate_emotional_weight is CPU bound but small
         emotional = calculate_emotional_weight(recent)
         importance = 0.5 + emotional * 0.3
-        create_episodic_memory(
+        await create_episodic_memory_async(
             session_id,
             summary,
             emotional,

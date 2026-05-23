@@ -5,11 +5,12 @@ from __future__ import annotations
 
 import logging
 import os
-import requests
+import httpx
+import asyncio
 from pathlib import Path
 from datetime import datetime
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
-from app.db import get_profile, get_api_keys
+from app.db import Database
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ TOOL_DEFINITION = ToolDefinition(
 )
 
 
-def execute(arguments, **kwargs):
+async def execute(arguments, **kwargs):
     prompt = arguments.get("prompt", "")
     if not prompt:
         return error_result(
@@ -45,11 +46,11 @@ def execute(arguments, **kwargs):
             "Yuzu",
         )
 
-    profile = get_profile() or {}
+    profile = await Database.get_profile_async() or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     try:
-        api_keys = get_api_keys()
+        api_keys = await Database.get_api_keys_async()
         api_key = api_keys.get("chutes")
         if not api_key:
             return error_result(
@@ -90,7 +91,10 @@ def execute(arguments, **kwargs):
             "Content-Type": "application/json",
         }
 
-        response = requests.post(endpoint, headers=headers, json=payload, timeout=300)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                endpoint, headers=headers, json=payload, timeout=300
+            )
 
         if response.status_code != 200:
             logger.debug(f"[IMAGE TOOL] API error {response.status_code}")
@@ -119,7 +123,8 @@ def execute(arguments, **kwargs):
         if not str(filepath).startswith(str(images_dir) + os.sep):
             raise ValueError("Unsafe output path")
 
-        filepath.write_bytes(response.content)
+        # Use asyncio.to_thread for file I/O
+        await asyncio.to_thread(filepath.write_bytes, response.content)
 
         logger.debug(f"[IMAGE TOOL] Saved: {filepath}")
 
@@ -137,7 +142,7 @@ def execute(arguments, **kwargs):
 
     except Exception as e:
         logger.debug(f"[IMAGE TOOL] Exception: {str(e)}")
-        profile = get_profile() or {}
+        profile = await Database.get_profile_async() or {}
         partner_name = profile.get("partner_name", "Yuzu")
         return error_result(
             "Image generation failed. Please try again later.",

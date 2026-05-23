@@ -62,24 +62,18 @@ def _read_file_content(filepath: str, max_size: int = 50000) -> str:
         return ""
 
 
-def _retrieve_memories(
+async def _retrieve_memories_async(
     session_id: int, user_message: str | None
 ) -> tuple[list[int], str, str]:
-    """Combined retrieval with single embedding call.
-
-    Optimized to compute embedding once for both static and dynamic retrieval.
-
-    Returns:
-        (static_ids, static_context, dynamic_context) tuple
-    """
+    """Combined retrieval with single embedding call (async)."""
     try:
         from app.memory.retrieval import (
-            retrieve_memories_combined,
+            retrieve_memories_combined_async,
             _format_static_context,
             _format_dynamic_context,
         )
 
-        static, dynamic = retrieve_memories_combined(
+        static, dynamic = await retrieve_memories_combined_async(
             session_id, query=user_message, static_limit=10, dynamic_limit=5
         )
 
@@ -89,38 +83,34 @@ def _retrieve_memories(
 
         return ids, static_text, dynamic_text
     except Exception as e:  # noqa: BLE001
-        log.warning("combined memory retrieval failed: %s", e)
+        log.warning("combined memory retrieval async failed: %s", e)
         return [], "", ""
 
 
-def _retrieve_static_memory(
+def _retrieve_memories(
     session_id: int, user_message: str | None
-) -> tuple[list[int], str]:
-    """Legacy wrapper for backward compat. Uses combined retrieval internally."""
-    ids, static_text, _ = _retrieve_memories(session_id, user_message)
-    return ids, (f"\n\n{static_text}" if static_text else "")
+) -> tuple[list[int], str, str]:
+    """Sync wrapper for _retrieve_memories_async."""
+    import asyncio
+
+    return asyncio.run(_retrieve_memories_async(session_id, user_message))
 
 
-def _mark_facts_pending(static_ids: list[int], session_id: int) -> None:
+async def _mark_facts_pending_async(static_ids: list[int], session_id: int) -> None:
     if not static_ids:
         return
     try:
         from app.memory.memory_review import mark_retrieved_as_pending_review
 
+        # Assume this might be sync, but check if we should run in thread
         mark_retrieved_as_pending_review(static_ids, session_id)
     except Exception as e:  # noqa: BLE001
         log.warning("pending-review marking failed: %s", e)
 
 
-def _retrieve_dynamic_memory(session_id: int, user_message: str | None) -> str:
-    """Legacy wrapper for backward compat. Uses combined retrieval internally."""
-    _, _, dynamic_text = _retrieve_memories(session_id, user_message)
-    return dynamic_text
-
-
-def _legacy_memory_block(profile: dict[str, Any], session_id: int) -> str:
+async def _legacy_memory_block_async(profile: dict[str, Any], session_id: int) -> str:
     block = ""
-    session_memory = Database.get_session_memory(session_id)
+    session_memory = await Database.get_session_memory_async(session_id)
     if session_memory and session_memory.get("session_context"):
         block += (
             f"\n\nBACKGROUND (recent context):\n{session_memory['session_context']}"
@@ -147,9 +137,10 @@ def _legacy_memory_block(profile: dict[str, Any], session_id: int) -> str:
     return block
 
 
-def _location_block() -> str:
+async def _location_block_async() -> str:
     try:
-        loc = (Database.get_context() or {}).get("location") or {}
+        ctx = await Database.get_context_async()
+        loc = (ctx or {}).get("location") or {}
     except Exception:  # noqa: BLE001
         return "Unknown"
 
@@ -166,14 +157,6 @@ def _interface_block(interface: str) -> str:
     elif interface.lower() == "web":
         return "WEB UI (Supports Markdown, Mermaid diagrams, images)"
     return interface.upper()
-
-
-def _session_events_block(session_id: int) -> str:
-    events = Database.get_recent_sessions_for_session(session_id, limit=3) or []
-    if not events:
-        return "\n\nCURRENT SESSION EVENTS:"
-    lines = [f"- {e['content']} at {e['timestamp']}" for e in events]
-    return "\n\nCURRENT SESSION EVENTS:\n" + "\n".join(lines)
 
 
 def _global_knowledge_block(profile: dict[str, Any]) -> str:
@@ -216,22 +199,32 @@ def _global_knowledge_block(profile: dict[str, Any]) -> str:
     return "\n\n **WHAT YOU SHOULD KNOW ABOUT YOUR HUMAN**\n" + "\n".join(lines)
 
 
-def build_system_message(
+async def _session_events_block_async(session_id: int) -> str:
+    events = (
+        await Database.get_recent_sessions_for_session_async(session_id, limit=3) or []
+    )
+    if not events:
+        return "\n\nCURRENT SESSION EVENTS:"
+    lines = [f"- {e['content']} at {e['timestamp']}" for e in events]
+    return "\n\nCURRENT SESSION EVENTS:\n" + "\n".join(lines)
+
+
+async def build_system_message_async(
     profile: dict[str, Any],
     session_id: int,
     interface: str,
     user_message: str | None,
 ) -> str:
-    """Render the full system prompt for a chat turn."""
+    """Render the full system prompt for a chat turn (async)."""
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     # Combined retrieval - single embedding call for both static and dynamic
-    static_ids, static_context, dynamic_context = _retrieve_memories(
+    static_ids, static_context, dynamic_context = await _retrieve_memories_async(
         session_id, user_message
     )
-    _mark_facts_pending(static_ids, session_id)
+    await _mark_facts_pending_async(static_ids, session_id)
     memory_block = (f"\n\n{static_context}" if static_context else "") + dynamic_context
-    memory_block += _legacy_memory_block(profile, session_id)
+    memory_block += await _legacy_memory_block_async(profile, session_id)
 
     return f"""# BOOT SEQUENCE
 
@@ -578,31 +571,32 @@ OS: Termux (Android aarch64). Standard Linux root paths do not exist. Binaries a
 Default Path: Tool executions (shell/python) start at `~` (`/data/data/com.termux/files/home`). Do not assume the codebase is in a specific folder; verify paths dynamically if needed.
 
 Current Time: {current_time}
-Location: {_location_block()}
+Location: {await _location_block_async()}
 Interface: {_interface_block(interface)}
 Memory Context: {memory_block}
-Session Metadata: {_session_events_block(session_id)}
+Session Metadata: {await _session_events_block_async(session_id)}
 """.strip()
 
 
-def build_messages(
+async def build_messages(
     profile: dict[str, Any],
     session_id: int,
     interface: str,
     user_message: str | None,
     include_image_paths: bool = False,
 ) -> list[dict[str, Any]]:
-    """Build the full chat-completion messages list (system + recent history)."""
-    system_message = build_system_message(profile, session_id, interface, user_message)
+    """Build the full chat-completion messages list (async)."""
+    system_message = await build_system_message_async(
+        profile, session_id, interface, user_message
+    )
     history = (
-        Database.get_chat_history_for_ai(
+        await Database.get_chat_history_for_ai_async(
             session_id=session_id,
             limit=60,
             recent=True,
             include_image_paths=include_image_paths,
         )
-        or []
-    )
+    ) or []
     return [{"role": "system", "content": system_message}] + [
         {
             "role": m["role"],

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import asyncio
 import logging
 from pathlib import Path
 from datetime import datetime
@@ -17,9 +16,9 @@ log = logging.getLogger(__name__)
 
 class ChatService:
     @staticmethod
-    def send_message(message: str, interface: str = "web") -> str:
-        """Process a simple text message synchronously."""
-        return handle_user_message(message, interface=interface)
+    async def send_message_async(message: str, interface: str = "web") -> str:
+        """Process a simple text message (async)."""
+        return await handle_user_message(message, interface=interface)
 
     @staticmethod
     async def process_image_uploads(images: list[UploadFile]) -> list[str]:
@@ -62,8 +61,7 @@ class ChatService:
         images: list[UploadFile] | None = None,
     ) -> AsyncIterator[str]:
         """
-        Start a streaming message response and return an async generator
-        yielding SSE-formatted data chunks.
+        Start a streaming message response (async).
         """
         if images:
             image_markdowns = await ChatService.process_image_uploads(images)
@@ -77,7 +75,7 @@ class ChatService:
         active_session = await get_active_session_async()
         session_id = active_session["id"]
 
-        buffer = StreamManager.start_stream(
+        buffer = await StreamManager.start_stream(
             session_id,
             user_message,
             interface=interface,
@@ -88,8 +86,8 @@ class ChatService:
         q = buffer.subscribe()
         try:
             while True:
-                # Use a loop executor for the blocking queue.get()
-                chunk = await asyncio.get_event_loop().run_in_executor(None, q.get)
+                # q is now an asyncio.Queue, so just await it
+                chunk = await q.get()
                 if chunk is None:
                     break
                 if chunk:

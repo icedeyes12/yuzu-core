@@ -4,20 +4,26 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
+from psycopg.types.json import Json
 
 __all__ = [
     "upsert_semantic_memory",
+    "upsert_semantic_memory_async",
     "create_episodic_memory",
+    "create_episodic_memory_async",
     "calculate_emotional_weight",
 ]
 
-from psycopg.types.json import Json
-
 from app.memory.db_memory import (
     save_fact,
+    save_fact_async,
     search_similar,
+    search_similar_async,
     FACT_TYPE_STATIC,
     FACT_TYPE_DYNAMIC,
+    pg_fetchone_async,
+    pg_execute_async,
 )
 
 logger = logging.getLogger(__name__)
@@ -235,6 +241,90 @@ def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None
     )
 
 
+async def upsert_semantic_memory_async(
+    session_id, entity, relation, target, episode_id=None
+):
+    """Async version of upsert_semantic_memory."""
+    category = _map_relation_to_category(relation)
+    text = _build_semantic_text(entity, relation, target)
+
+    try:
+        from app.memory.embedder import embed_text_async
+
+        vector = await embed_text_async(text)
+    except Exception as e:
+        logger.warning(f"Embedding async failed: {e}")
+        vector = None
+
+    if vector is not None:
+        existing = await search_similar_async(
+            embedding=vector,
+            session_id=session_id,
+            fact_type=FACT_TYPE_STATIC,
+            limit=5,
+            max_distance=_EXTRACTOR_DEDUP_THRESHOLD,
+        )
+
+        if existing and len(existing) > 0:
+            e = existing[0]
+            if e.get("content") == text:
+                meta = e.get("metadata") or {}
+                ids = meta.get("source_episodic_ids", [])
+                if episode_id and episode_id not in ids:
+                    ids.append(episode_id)
+                elif not ids:
+                    ids = [episode_id] if episode_id else []
+                meta["source_episodic_ids"] = ids
+                meta["category"] = category
+                await pg_execute_async(
+                    "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
+                    (datetime.now(), Json(meta), e["id"]),
+                )
+                return  # done — no insert needed
+
+        existing_exact = await pg_fetchone_async(
+            "SELECT id, metadata FROM semantic_facts WHERE fact_type=%s AND content=%s AND invalid_at IS NULL LIMIT 1",
+            (FACT_TYPE_STATIC, text),
+        )
+        if existing_exact:
+            meta = existing_exact.get("metadata") or {}
+            ids = meta.get("source_episodic_ids", [])
+            if episode_id and episode_id not in ids:
+                ids.append(episode_id)
+            elif not ids:
+                ids = [episode_id] if episode_id else []
+            meta["source_episodic_ids"] = ids
+            meta["category"] = category
+            await pg_execute_async(
+                "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
+                (datetime.now(), Json(meta), existing_exact["id"]),
+            )
+            return  # exact content dupe — reinforce, don't insert
+
+    # No duplicate — insert new fact
+    metadata = {
+        "entity": entity,
+        "relation": relation,
+        "target": target,
+        "confidence": 0.7,
+        "importance": 0.7,
+        "category": category,
+        "source_table": "semantic_memories",
+        "session_id": session_id,
+    }
+    if episode_id:
+        metadata["source_episodic_ids"] = [episode_id]
+
+    await save_fact_async(
+        session_id=session_id,
+        content=f"{entity} {relation} {target}",
+        embedding=vector,
+        fact_type=FACT_TYPE_STATIC,
+        metadata=metadata,
+        category=category,
+    )
+
+
 def create_episodic_memory(
     session_id, summary, emotional_weight=0.0, importance=0.5, source_message_ids=None
 ):
@@ -257,6 +347,34 @@ def create_episodic_memory(
         vector = None
 
     fact_id = save_fact(
+        session_id=session_id,
+        content=summary,
+        embedding=vector,
+        fact_type=FACT_TYPE_DYNAMIC,
+        metadata={
+            "importance": importance,
+            "emotional_weight": emotional_weight,
+            "source_table": "episodic_memories",
+            "source_message_ids": source_message_ids,
+            "session_id": session_id,
+        },
+    )
+    return fact_id
+
+
+async def create_episodic_memory_async(
+    session_id, summary, emotional_weight=0.0, importance=0.5, source_message_ids=None
+):
+    """Async version of create_episodic_memory."""
+    try:
+        from app.memory.embedder import embed_text_async
+
+        vector = await embed_text_async(summary)
+    except Exception as e:
+        logger.warning(f"Embedding async failed: {e}")
+        vector = None
+
+    fact_id = await save_fact_async(
         session_id=session_id,
         content=summary,
         embedding=vector,

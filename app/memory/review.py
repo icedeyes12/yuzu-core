@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import json
+import asyncio
 from pathlib import Path
 from datetime import datetime
 from app.memory.db_memory import decay_facts, increment_importance, FACT_TYPE_DYNAMIC
@@ -74,6 +75,38 @@ def run_decay(session_id=None, force=False):
     logger.info("Done.")
 
 
+async def run_decay_async(session_id=None, force=False):
+    """Run full decay cycle (async)."""
+    if not force:
+        last = _get_last_decay_time()
+        if last:
+            try:
+                last_dt = datetime.strptime(last, "%Y-%m-%dT%H:%M:%S.%f")
+                hours_since = (datetime.now() - last_dt).total_seconds() / 3600.0
+                if hours_since < 6.0:
+                    return
+            except (ValueError, TypeError):
+                pass
+
+    logger.info("Running memory decay async...")
+
+    try:
+        # Re-implementing logic of decay_facts with async SQL
+        # I'll just use asyncio.to_thread for now because decay_facts logic
+        # is complex and it's already implemented.
+        # But wait, I'm supposed to make everything non-blocking.
+        # I'll use asyncio.to_thread for the sync decay_facts call.
+        count_episodic = await asyncio.to_thread(
+            decay_facts, session_id=session_id, fact_type=FACT_TYPE_DYNAMIC
+        )
+        logger.info(f"Decayed {count_episodic} episodic memories")
+    except Exception as e:
+        logger.warning(f"Episodic decay failed: {e}")
+
+    _set_last_decay_time()
+    logger.info("Done.")
+
+
 def reinforce_memory(memory_id, memory_type="semantic"):
     """Increase importance when a memory is retrieved.
 
@@ -82,3 +115,8 @@ def reinforce_memory(memory_id, memory_type="semantic"):
         memory_type: 'semantic' or 'episodic' (ignored, all use same table)
     """
     increment_importance(memory_id, delta=0.05, cap=1.0)
+
+
+async def reinforce_memory_async(memory_id, memory_type="semantic"):
+    """Increase importance (async)."""
+    await asyncio.to_thread(increment_importance, memory_id, delta=0.05, cap=1.0)

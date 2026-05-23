@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import logging
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
-from app.memory.db_memory import save_fact, search_similar, FACT_TYPE_STATIC
-from app.db import get_profile
+from app.memory.db_memory import save_fact_async, search_similar_async, FACT_TYPE_STATIC
+from app.db import Database
 
 logger = logging.getLogger(__name__)
 
@@ -46,16 +46,12 @@ TOOL_DEFINITION = ToolDefinition(
 )
 
 
-def _classify_category_llm(fact: str) -> str:
-    """Classify a fact into a memory category using LLM.
-
-    Returns one of: Identity, Preference, Interest, Personality,
-    Relationship, Experience, Goal, Guideline.
-    """
+async def _classify_category_llm_async(fact: str) -> str:
+    """Classify a fact into a memory category using LLM (async)."""
     try:
-        from app import get_ai_manager
+        from app.providers import get_ai_manager
 
-        ai_manager = get_ai_manager()
+        ai_manager = await get_ai_manager()
     except Exception as e:
         logger.warning(f"[memory_store] AI manager unavailable: {e}")
         return "Identity"
@@ -75,7 +71,7 @@ Categories:
 Respond with ONLY the category name, nothing else."""
 
     try:
-        response = ai_manager._internal_llm_call(
+        response = await ai_manager._internal_llm_call(
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Fact: {fact}"},
@@ -103,11 +99,11 @@ Respond with ONLY the category name, nothing else."""
     return "Identity"
 
 
-def execute(arguments, **kwargs):
+async def execute(arguments, **kwargs):
     session_id = kwargs.get("session_id")
-    from app.memory.embedder import embed_texts
+    from app.memory.embedder import embed_texts_async
 
-    profile = get_profile() or {}
+    profile = await Database.get_profile_async() or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     fact = arguments.get("fact", "").strip()
@@ -137,13 +133,13 @@ def execute(arguments, **kwargs):
 
     category = arguments.get("category")
     if not category:
-        category = _classify_category_llm(fact)
+        category = await _classify_category_llm_async(fact)
     full_command = f'/memory_store fact="{fact[:60]}" category={category}'
 
     # Embed the fact text
     fact_embed_text = f"[{category}] {fact}"
     try:
-        vecs = embed_texts([fact_embed_text])
+        vecs = await embed_texts_async([fact_embed_text])
         if not vecs:
             return error_result(
                 "Embedding service unavailable",
@@ -162,7 +158,7 @@ def execute(arguments, **kwargs):
         )
 
     # Check for duplicate using vector distance
-    existing = search_similar(
+    existing = await search_similar_async(
         embedding=vector,
         session_id=session_id,
         fact_type=FACT_TYPE_STATIC,
@@ -174,9 +170,20 @@ def execute(arguments, **kwargs):
         e = existing[0]
         if e:
             # Duplicate found — reinforce existing fact
-            from app.memory.db_memory import increment_importance
+            from app.memory.db_memory import pg_execute_async, SQL_FACT_UPDATE_METADATA
+            from datetime import datetime
+            from psycopg.types.json import Json
 
-            increment_importance(e["id"], delta=0.1, cap=1.0)
+            meta = e.get("metadata") or {}
+            current = meta.get("importance") or 0.5
+            meta["importance"] = min(current + 0.1, 1.0)
+            meta["access_count"] = (meta.get("access_count") or 0) + 1
+
+            await pg_execute_async(
+                SQL_FACT_UPDATE_METADATA,
+                (datetime.now(), Json(meta), e["id"]),
+            )
+
             new_confidence = e.get("metadata", {}).get("confidence", 0.7)
             return ok_result(
                 {"status": "duplicate", "confidence": new_confidence},
@@ -186,7 +193,7 @@ def execute(arguments, **kwargs):
             )
 
     # Insert new fact into semantic_facts
-    fact_id = save_fact(
+    fact_id = await save_fact_async(
         session_id=session_id,
         content=fact,
         embedding=vector,

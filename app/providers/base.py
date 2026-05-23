@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Generator
+import asyncio
+from typing import AsyncGenerator
 
-from app.db import get_api_key
+from app.db import get_api_key_async
 from app.tools import multimodal_tools
 
 logger = logging.getLogger(__name__)
@@ -16,42 +17,49 @@ class AIProvider:
         self.config = config or {}
         self.is_available = True
         self._last_raw_response: dict | None = None
-        self.api_key = self._load_api_key()
+        self.api_key = None  # Will be loaded async
+
+    async def initialize(self) -> None:
+        """Async initialization to load API keys."""
+        self.api_key = await self._load_api_key()
         if self.name != "ollama":  # Ollama doesn't need API key
             self.is_available = bool(self.api_key)
 
-    def _load_api_key(self) -> str | None:
-        """Centralized API key lookup from DB."""
+    async def _load_api_key(self) -> str | None:
+        """Centralized API key lookup from DB (async)."""
         try:
-            return get_api_key(self.name)
+            return await get_api_key_async(self.name)
         except Exception:
             return None
 
-    def get_models(self) -> list[str]:
+    async def get_models(self) -> list[str]:
         raise NotImplementedError
 
-    def send_message(self, messages: list[dict], model: str, **kwargs) -> str | None:
+    async def send_message(
+        self, messages: list[dict], model: str, **kwargs
+    ) -> str | None:
         raise NotImplementedError
 
-    def send_message_raw(
+    async def send_message_raw(
         self, messages: list[dict], model: str, **kwargs
     ) -> dict | None:
-        text = self.send_message(messages, model, **kwargs)
+        text = await self.send_message(messages, model, **kwargs)
         if text is not None:
             return {"choices": [{"message": {"content": text, "tool_calls": []}}]}
         return None
 
-    def send_message_streaming(
+    async def send_message_streaming(
         self, messages: list[dict], model: str, **kwargs
-    ) -> Generator[str, None, None]:
+    ) -> AsyncGenerator[str, None]:
         raise NotImplementedError
+        yield ""  # Keep as async generator
 
     def parse_tool_calls(self, raw_response) -> list[dict]:
         return []
 
-    def test_connection(self) -> bool:
+    async def test_connection(self) -> bool:
         try:
-            models = self.get_models()
+            models = await self.get_models()
             return len(models) > 0
         except Exception:
             return False
@@ -100,8 +108,18 @@ class AIProvider:
 
 class AIProviderManager:
     def __init__(self):
-        self.providers = {}
-        self.load_providers()
+        self.providers: dict[str, AIProvider] = {}
+        # initialization is now deferred to an async setup call
+
+    async def initialize(self):
+        """Async initialization of all registered providers."""
+        if hasattr(self, "load_providers"):
+            if asyncio.iscoroutinefunction(self.load_providers):
+                await self.load_providers(self)
+            else:
+                self.load_providers(self)
+
+        await asyncio.gather(*[p.initialize() for p in self.providers.values()])
 
     def register_provider(self, name: str, provider: AIProvider):
         self.providers[name] = provider
@@ -109,25 +127,25 @@ class AIProviderManager:
     def get_available_providers(self) -> list[str]:
         return list(self.providers.keys())
 
-    def get_provider_models(self, provider_name: str) -> list[str]:
+    async def get_provider_models(self, provider_name: str) -> list[str]:
         if provider_name in self.providers:
-            return self.providers[provider_name].get_models()
+            return await self.providers[provider_name].get_models()
         return []
 
-    def get_all_models(self) -> dict[str, list[str]]:
+    async def get_all_models(self) -> dict[str, list[str]]:
         all_models = {}
         for provider_name, provider in self.providers.items():
-            all_models[provider_name] = provider.get_models()
+            all_models[provider_name] = await provider.get_models()
         return all_models
 
-    def send_message(
+    async def send_message(
         self, provider_name: str, model: str, messages: list[dict], **kwargs
     ) -> str | None:
         if provider_name not in self.providers:
             return None
         provider = self.providers[provider_name]
         start_time = time.time()
-        response = provider.send_message(messages, model, **kwargs)
+        response = await provider.send_message(messages, model, **kwargs)
         response_time = time.time() - start_time
         if response:
             return response
@@ -136,14 +154,14 @@ class AIProviderManager:
         )
         return None
 
-    def send_message_raw(
+    async def send_message_raw(
         self, provider_name: str, model: str, messages: list[dict], **kwargs
     ) -> dict | None:
         if provider_name not in self.providers:
             return None
         provider = self.providers[provider_name]
         start_time = time.time()
-        raw = provider.send_message_raw(messages, model, **kwargs)
+        raw = await provider.send_message_raw(messages, model, **kwargs)
         response_time = time.time() - start_time
         if raw is not None:
             return raw
@@ -152,15 +170,17 @@ class AIProviderManager:
         )
         return None
 
-    def send_message_streaming(
+    async def send_message_streaming(
         self, provider_name: str, model: str, messages: list[dict], **kwargs
-    ) -> Generator[str, None, None]:
+    ) -> AsyncGenerator[str, None]:
         if provider_name not in self.providers:
             yield ""
             return
         provider = self.providers[provider_name]
         try:
-            for chunk in provider.send_message_streaming(messages, model, **kwargs):
+            async for chunk in provider.send_message_streaming(
+                messages, model, **kwargs
+            ):
                 yield chunk
         except Exception as e:
             yield f"Streaming error: {str(e)}"
@@ -170,7 +190,7 @@ class AIProviderManager:
         "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE",
     ]
 
-    def _internal_llm_call(self, messages: list[dict], **kwargs) -> str | None:
+    async def _internal_llm_call(self, messages: list[dict], **kwargs) -> str | None:
         if "chutes" not in self.providers:
             return None
         provider = self.providers["chutes"]
@@ -193,7 +213,7 @@ class AIProviderManager:
             return any(r in error_lower for r in retryable)
 
         for attempt in range(3):
-            result = provider.send_message(
+            result = await provider.send_message(
                 messages, MAIN_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs
             )
             if result:
@@ -202,10 +222,10 @@ class AIProviderManager:
             if not _is_connection_error(last_error):
                 break
             if attempt < 2:
-                time.sleep(0.5)
+                await asyncio.sleep(0.5)
 
         for attempt in range(2):
-            result = provider.send_message(
+            result = await provider.send_message(
                 messages, FALLBACK_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs
             )
             if result:
@@ -214,24 +234,26 @@ class AIProviderManager:
             if not _is_connection_error(last_error):
                 break
             if attempt < 1:
-                time.sleep(0.5)
+                await asyncio.sleep(0.5)
         return None
 
-    def auto_send_message(self, messages: list[dict], **kwargs) -> str | None:
-        return self._internal_llm_call(messages, **kwargs)
+    async def auto_send_message(self, messages: list[dict], **kwargs) -> str | None:
+        return await self._internal_llm_call(messages, **kwargs)
 
 
 _ai_manager_instance = None
 
 
-def get_ai_manager():
+async def get_ai_manager():
     global _ai_manager_instance
     if _ai_manager_instance is None:
         _ai_manager_instance = AIProviderManager()
+        await _ai_manager_instance.initialize()
     return _ai_manager_instance
 
 
-def reload_ai_manager():
+async def reload_ai_manager():
     global _ai_manager_instance
     _ai_manager_instance = AIProviderManager()
+    await _ai_manager_instance.initialize()
     return _ai_manager_instance

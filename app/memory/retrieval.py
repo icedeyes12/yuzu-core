@@ -21,6 +21,8 @@ from app.memory.db_memory import (
     search_similar_async,
     get_facts_by_session_async,
     update_last_accessed_async,
+    search_trgm_async,
+    search_tsv_async,
 )
 from app.memory.db_memory_queries import (
     FACT_TYPE_STATIC,
@@ -918,6 +920,31 @@ def format_memory(memory_bundle):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
+async def _get_cached_embedding_async(query: str) -> list[float] | None:
+    """Get embedding with request-scoped cache (async)."""
+    if len(query.strip()) < _MIN_QUERY_LEN_FOR_EMBEDDING:
+        return None
+
+    cache_key = f"embedding_{hash(query)}"
+    if hasattr(_embedding_cache, cache_key):
+        return getattr(_embedding_cache, cache_key)
+
+    vec = await _embed_query_async(query)
+    setattr(_embedding_cache, cache_key, vec)
+    return vec
+
+
+async def _embed_query_async(text: str) -> list[float] | None:
+    """Embed a query string via Chutes API with hard timeout protection (async)."""
+    try:
+        from app.memory.embedder import embed_text_async
+
+        return await embed_text_async(text, timeout=30)
+    except Exception as e:
+        logger.warning(f"Query embedding async failed: {e}")
+        return None
+
+
 async def retrieve_static_memories_async(query=None, limit=15):
     """
     Async version of retrieve_static_memories.
@@ -933,7 +960,7 @@ async def retrieve_static_memories_async(query=None, limit=15):
             await update_last_accessed_async([m["id"] for m in parsed])
         return parsed
 
-    query_vec = _embed_query(query)
+    query_vec = await _get_cached_embedding_async(query)  # CACHED
     keyword = query.strip()
 
     # Channel 1: vector (pgvector)
@@ -947,15 +974,15 @@ async def retrieve_static_memories_async(query=None, limit=15):
         else []
     )
 
-    # Channel 2: trigram fuzzy (pg_trgm) - still sync, runs in thread
-    trgm_results = search_trgm(
+    # Channel 2: trigram fuzzy (pg_trgm)
+    trgm_results = await search_trgm_async(
         query=keyword,
         fact_type=FACT_TYPE_STATIC,
         limit=limit,
     )
 
-    # Channel 3: tsvector full-text - still sync
-    tsv_results = search_tsv(
+    # Channel 3: tsvector full-text
+    tsv_results = await search_tsv_async(
         query=keyword,
         fact_type=FACT_TYPE_STATIC,
         limit=limit,
@@ -1007,7 +1034,9 @@ async def retrieve_dynamic_memories_async(session_id: int, query=None, limit=10)
             await update_last_accessed_async([m["id"] for m in parsed])
         return parsed
 
-    query_vec = _embed_query(query)
+    query_vec = await _get_cached_embedding_async(
+        query
+    )  # CACHED - reuses same embedding
     keyword = query.strip()
 
     # Channel 1: vector (pgvector)
@@ -1023,16 +1052,16 @@ async def retrieve_dynamic_memories_async(session_id: int, query=None, limit=10)
         else []
     )
 
-    # Channel 2: trigram fuzzy - still sync
-    trgm_results = search_trgm(
+    # Channel 2: trigram fuzzy
+    trgm_results = await search_trgm_async(
         query=keyword,
         session_id=session_id,
         fact_type=FACT_TYPE_DYNAMIC,
         limit=limit,
     )
 
-    # Channel 3: tsvector full-text - still sync
-    tsv_results = search_tsv(
+    # Channel 3: tsvector full-text
+    tsv_results = await search_tsv_async(
         query=keyword,
         session_id=session_id,
         fact_type=FACT_TYPE_DYNAMIC,

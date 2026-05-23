@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 import logging
-import requests
+import httpx
 import socket
 import ipaddress
 import re
@@ -108,10 +108,10 @@ def get_media_dir() -> Path:
     return media_dir
 
 
-def execute(arguments, **kwargs):
-    from app.db import get_profile
+async def execute(arguments, **kwargs):
+    from app.db import Database
 
-    profile = get_profile() or {}
+    profile = await Database.get_profile_async() or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     if isinstance(arguments, dict):
@@ -146,71 +146,67 @@ def execute(arguments, **kwargs):
         )
 
     try:
-        if method == "POST":
-            resp = requests.post(url, timeout=TIMEOUT, stream=True)
-        elif method == "PUT":
-            resp = requests.put(url, timeout=TIMEOUT, stream=True)
-        elif method == "DELETE":
-            resp = requests.delete(url, timeout=TIMEOUT, stream=True)
-        else:
-            resp = requests.get(url, timeout=TIMEOUT, stream=True)
+        async with httpx.AsyncClient() as client:
+            resp = await client.request(
+                method, url, timeout=TIMEOUT, follow_redirects=True
+            )
 
-        content = b""
-        for chunk in resp.iter_content(8192):
-            content += chunk
-            if len(content) > MAX_BYTES:
-                return error_result(
-                    "Response too large (max 2MB)",
+            content = b""
+            async for chunk in resp.aiter_bytes(8192):
+                content += chunk
+                if len(content) > MAX_BYTES:
+                    return error_result(
+                        "Response too large (max 2MB)",
+                        TOOL_DEFINITION,
+                        full_command,
+                        partner_name,
+                    )
+
+            content_type = resp.headers.get("Content-Type", "")
+            size = len(content)
+
+            if content_type.startswith("image/"):
+                media_dir = get_media_dir()
+
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                ext = content_type.split("/")[-1].split(";")[0]
+                filename = f"{timestamp}.{'jpg' if ext == 'jpeg' else ext}"
+                filepath = media_dir / filename
+
+                filepath.write_bytes(content)
+
+                web_path = f"static/media/{filename}"
+
+                return ok_result(
+                    {
+                        "type": "image",
+                        "path": web_path,
+                        "content_type": content_type,
+                        "size_bytes": size,
+                    },
                     TOOL_DEFINITION,
                     full_command,
                     partner_name,
                 )
 
-        content_type = resp.headers.get("Content-Type", "")
-        size = len(content)
-
-        if content_type.startswith("image/"):
-            media_dir = get_media_dir()
-
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            ext = content_type.split("/")[-1].split(";")[0]
-            filename = f"{timestamp}.{'jpg' if ext == 'jpeg' else ext}"
-            filepath = media_dir / filename
-
-            filepath.write_bytes(content)
-
-            web_path = f"static/media/{filename}"
+            try:
+                text = content.decode("utf-8", errors="ignore")
+                lines = text.splitlines()[:200]
+            except Exception:
+                lines = ["Binary content received (non-text, non-image)"]
 
             return ok_result(
                 {
-                    "type": "image",
-                    "path": web_path,
+                    "type": "text",
+                    "content": "\n".join(lines),
                     "content_type": content_type,
                     "size_bytes": size,
+                    "truncated": len(lines) >= 200,
                 },
                 TOOL_DEFINITION,
                 full_command,
                 partner_name,
             )
-
-        try:
-            text = content.decode("utf-8", errors="ignore")
-            lines = text.splitlines()[:200]
-        except Exception:
-            lines = ["Binary content received (non-text, non-image)"]
-
-        return ok_result(
-            {
-                "type": "text",
-                "content": "\n".join(lines),
-                "content_type": content_type,
-                "size_bytes": size,
-                "truncated": len(lines) >= 200,
-            },
-            TOOL_DEFINITION,
-            full_command,
-            partner_name,
-        )
 
     except Exception as e:
         logger.warning(f"[request_tools] Exception during HTTP request: {e}")

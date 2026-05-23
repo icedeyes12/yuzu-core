@@ -38,7 +38,9 @@ async def api_send_message(request: MessageRequest):
         interface = request.interface
         log.info("[%s] message: %s...", interface, user_message[:200])
 
-        ai_reply = ChatService.send_message(user_message, interface=interface)
+        ai_reply = await ChatService.send_message_async(
+            user_message, interface=interface
+        )
 
         log.info("AI reply: %s", ai_reply)
         return {"reply": ai_reply}
@@ -108,7 +110,7 @@ async def api_generate_image(request: MessageRequest):
         if not prompt:
             return {"reply": "Prompt required", "status": "error"}
 
-        ai_reply = handle_user_message(f"/imagine {prompt}", interface="web")
+        ai_reply = await handle_user_message(f"/imagine {prompt}", interface="web")
         return {"reply": ai_reply, "status": "success"}
     except Exception as e:
         log.error("Error generating image: %s", type(e).__name__)
@@ -124,8 +126,8 @@ async def api_browser_unload(request: Request):
         SessionService.clear_client_session(client_id)
         log.info("Web page closed or refreshed - session cleared")
 
-        profile = Database.get_profile()
-        SessionService.end_session_cleanup(
+        profile = await Database.get_profile_async()
+        await SessionService.end_session_cleanup_async(
             profile, interface="web", unexpected_exit=True
         )
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Optional
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -220,10 +221,10 @@ def is_terminal_tool(tool_name: str) -> bool:
 # --------------------------------------------------------------------
 
 
-def execute_tool(
+async def execute_tool(
     tool_name: str, arguments: dict, session_id: Optional[str] = None
 ) -> dict:
-    """Dispatch a tool call and return a structured result dict.
+    """Dispatch a tool call and return a structured result dict (async).
 
     This is the SINGLE source of truth for tool dispatch.
     All tool execution MUST go through this function.
@@ -262,11 +263,19 @@ def execute_tool(
             f"Tool module unavailable: {tool_name}",
             tool_def,
             f"/{tool_name}",
-            _get_partner_name(),
+            await _get_partner_name_async(),
         )
 
     try:
-        result = module.execute(arguments, session_id=session_id, tool_name=tool_name)
+        if asyncio.iscoroutinefunction(module.execute):
+            result = await module.execute(
+                arguments, session_id=session_id, tool_name=tool_name
+            )
+        else:
+            # Fallback for sync tools - run in thread to avoid blocking loop
+            result = await asyncio.to_thread(
+                module.execute, arguments, session_id=session_id, tool_name=tool_name
+            )
 
         # New-style structured result (already a dict with ok/data/markdown)
         if isinstance(result, dict) and "ok" in result:
@@ -288,7 +297,7 @@ def execute_tool(
                 ToolDefinition(name="", description="", role=tool_def.role),
                 f"/{tool_name}",
                 [str(result)],
-                _get_partner_name(),
+                await _get_partner_name_async(),
             ),
         }
 
@@ -298,16 +307,21 @@ def execute_tool(
             "Tool execution failed. Please try again later.",
             tool_def,
             f"/{tool_name}",
-            _get_partner_name(),
+            await _get_partner_name_async(),
         )
 
 
-def _get_partner_name() -> str:
-    """Get partner name from profile for error messages."""
+async def _get_partner_name_async() -> str:
+    """Get partner name from profile for error messages (async)."""
     try:
-        from app.db import get_profile
+        from app.db import Database
 
-        profile = get_profile() or {}
+        profile = await Database.get_profile_async() or {}
         return profile.get("partner_name", "Yuzu")
     except Exception:
         return "Yuzu"
+
+
+def _get_partner_name() -> str:
+    """Legacy sync wrapper."""
+    return asyncio.run(_get_partner_name_async())

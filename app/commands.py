@@ -422,11 +422,11 @@ def _parse_key_value_args(raw_args: str) -> dict[str, Any]:
 # --------------------------------------------------------------------
 
 
-def execute_commands(
+async def execute_commands(
     commands: list[str],
     session_id: int | None = None,
 ) -> list[tuple[str, dict[str, Any]]]:
-    """Execute a list of commands sequentially.
+    """Execute a list of commands sequentially (async).
 
     All commands are executed in order, even if one fails.
     Errors are logged but don't stop execution.
@@ -455,7 +455,7 @@ def execute_commands(
             args = _parse_args(tool_name, parsed["args"])
 
             log.info("executing tool: %s with args: %s", tool_name, str(args)[:100])
-            result = execute_tool(tool_name, args, session_id=session_id)
+            result = await execute_tool(tool_name, args, session_id=session_id)
             results.append((tool_name, result))
 
         except Exception as e:
@@ -634,7 +634,7 @@ def detect_command(
     return None
 
 
-def execute_command(
+async def execute_command(
     command_info: dict[str, str] | list[dict[str, str]],
     session_id: int | None = None,
 ) -> tuple[str, dict[str, Any]] | list[tuple[str, dict[str, Any]]]:
@@ -652,7 +652,7 @@ def execute_command(
             elif cmd.get("command"):
                 args = cmd.get("args", "")
                 command_strs.append(f"/{cmd['command']} {args}".strip())
-        return execute_commands(command_strs, session_id)
+        return await execute_commands(command_strs, session_id)
 
     # Single command
     if command_info.get("full_command"):
@@ -661,7 +661,7 @@ def execute_command(
         args = command_info.get("args", "")
         command_str = f"/{command_info['command']} {args}".strip()
 
-    results = execute_commands([command_str], session_id)
+    results = await execute_commands([command_str], session_id)
     return results[0] if results else ("unknown", {"ok": False, "error": "No command"})
 
 
