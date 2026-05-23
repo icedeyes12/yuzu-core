@@ -23,10 +23,10 @@ from app.app import (
     get_available_providers,
     get_all_models,
     set_preferred_provider,
-    get_vision_capabilities,
 )
 from app.db import Database
 from app.providers import get_ai_manager
+from app.services.config_service import ConfigService
 from app.tools import multimodal_tools
 from datetime import datetime
 import threading
@@ -74,7 +74,7 @@ def welcome_banner():
     active_session = Database.get_active_session()
     time_now = datetime.now().strftime("%H:%M")
 
-    vision_capabilities = get_vision_capabilities()
+    vision_capabilities = ConfigService.get_vision_capabilities()
     multimodal_status = []
     if vision_capabilities["has_vision"]:
         multimodal_status.append("Vision")
@@ -145,7 +145,7 @@ class YuzuCompanionAgent:
     @property
     def vision_capabilities(self):
         if self._vision_capabilities_cache is None:
-            self._vision_capabilities_cache = get_vision_capabilities()
+            self._vision_capabilities_cache = ConfigService.get_vision_capabilities()
         return self._vision_capabilities_cache
 
     def load_config(self):
@@ -484,6 +484,8 @@ class YuzuCompanionAgent:
     def show_status_info(self):
         active_session = Database.get_active_session()
         session_memory = Database.get_session_memory(active_session["id"])
+        
+        vision_caps = ConfigService.get_vision_capabilities()
 
         status_table = Table(show_header=False, title="Current Status", style="blue")
         status_table.add_column("Field", style="cyan")
@@ -508,12 +510,12 @@ class YuzuCompanionAgent:
         )
         status_table.add_row(
             "Vision",
-            "Available" if self.vision_capabilities["has_vision"] else "Unavailable",
+            "Available" if vision_caps["has_vision"] else "Unavailable",
         )
         status_table.add_row(
             "Image Generation",
             "Available"
-            if self.vision_capabilities["has_image_generation"]
+            if vision_caps["has_image_generation"]
             else "Unavailable",
         )
 
@@ -621,7 +623,7 @@ class YuzuCompanionAgent:
             }
         )
         if self._vision_capabilities_cache is None:
-            self._vision_capabilities_cache = get_vision_capabilities()
+            self._vision_capabilities_cache = ConfigService.get_vision_capabilities()
 
     def display_user_message_panel(self, user_message: str):
         console.print("-" * 60)

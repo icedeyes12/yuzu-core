@@ -21,23 +21,9 @@ from app.app import (
     get_vision_capabilities,
     set_vision_model,
 )
-from app.db import Database
+from app.db import Database, get_profile_async, get_active_session_async, get_chat_history_async, get_session_memory_async, get_api_keys_async
 from app.providers import get_ai_manager
-from app.db import (
-    get_active_session_async,
-    get_all_sessions_async,
-    create_session_async,
-    switch_session_async,
-    rename_session_async,
-    delete_session_async,
-    get_session_memory_async,
-    get_chat_history_async,
-    clear_session_messages_async,
-    add_message_async,
-    get_profile_async,
-    update_profile_async,
-    get_api_keys_async,
-)
+from app.services.config_service import ConfigService
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -132,40 +118,7 @@ class GlobalKnowledgeUpdateRequest(BaseModel):
 async def api_get_config():
     """Single source of truth for frontend configuration."""
     try:
-        ai_manager = get_ai_manager()
-        available_providers = ai_manager.get_available_providers()
-        all_models = ai_manager.get_all_models()
-        vision_capabilities = get_vision_capabilities()
-
-        profile = Database.get_profile()
-        providers_config = profile.get("providers_config", {})
-        current_provider = providers_config.get("preferred_provider", "ollama")
-        current_model = providers_config.get("preferred_model", "glm-4.6:cloud")
-        vision_prefs = providers_config.get("vision_model_preferences", {})
-
-        from app.tools.multimodal import multimodal_tools
-
-        vision_models_by_provider = {}
-        for provider in ["chutes", "openrouter"]:
-            vision_models_by_provider[provider] = (
-                multimodal_tools.get_available_vision_models(provider)
-            )
-
-        return {
-            "status": "success",
-            "ai_providers": {
-                "available_providers": available_providers,
-                "all_models": all_models,
-                "current_provider": current_provider,
-                "current_model": current_model,
-            },
-            "vision": {
-                "capabilities": vision_capabilities,
-                "models_by_provider": vision_models_by_provider,
-                "current_provider": vision_prefs.get("provider"),
-                "current_model": vision_prefs.get("model"),
-            },
-        }
+        return ConfigService.get_frontend_config()
     except Exception as e:
         print(f"Error getting config: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -205,40 +158,10 @@ async def api_get_profile():
                 })
         session_memory = await get_session_memory_async(active_session["id"])
 
-        ai_manager = get_ai_manager()
-        available_providers = ai_manager.get_available_providers()
-        all_models = ai_manager.get_all_models()
-
-        providers_config = profile.get("providers_config", {})
-        current_provider = providers_config.get("preferred_provider", "ollama")
-        current_model = providers_config.get("preferred_model", "glm-4.6:cloud")
-
         api_keys = await get_api_keys_async()
-        vision_capabilities = get_vision_capabilities()
-
-        profile_dict = {
-            "id": profile["id"],
-            "display_name": profile["display_name"],
-            "partner_name": profile["partner_name"],
-            "affection": profile["affection"],
-            "theme": profile["theme"],
-            "memory": profile["memory"],
-            "session_history": profile["session_history"],
-            "global_knowledge": profile["global_knowledge"],
-            "providers_config": profile["providers_config"],
-            "context": profile["context"],
-            "image_model": profile["image_model"],
-            "vision_model": profile["vision_model"],
-            "vision_model_preferences": profile.get("providers_config", {}).get(
-                "vision_model_preferences", {}
-            ),
-            "created_at": profile["created_at"].isoformat()
-            if profile["created_at"]
-            else None,
-            "updated_at": profile["updated_at"].isoformat()
-            if profile["updated_at"]
-            else None,
-        }
+        profile_dict = ConfigService.format_profile_dict(profile)
+        ai_providers_payload = ConfigService.get_ai_providers_payload(profile)
+        vision_capabilities = ConfigService.get_vision_capabilities()
 
         return {
             **profile_dict,
@@ -246,12 +169,7 @@ async def api_get_profile():
             "api_keys": api_keys,
             "active_session": active_session,
             "session_memory": session_memory,
-            "ai_providers": {
-                "available_providers": available_providers,
-                "all_models": all_models,
-                "current_provider": current_provider,
-                "current_model": current_model,
-            },
+            "ai_providers": ai_providers_payload,
             "multimodal_capabilities": vision_capabilities,
         }
     except Exception as e:

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 import threading
-from app.db import get_api_key
+from app.providers import get_ai_manager
 
 
 CHUTES_EMBED_ENDPOINT = (
@@ -21,10 +21,13 @@ _thread_local = threading.local()
 def _get_session():
     """Get or create a thread-local requests session."""
     if not hasattr(_thread_local, "session") or _thread_local.session is None:
-        # Try Zo secret env var first (more reliable), fallback to DB
-        api_key = os.environ.get("CHUTES_API_KEY") or get_api_key("chutes")
+        manager = get_ai_manager()
+        chutes = manager.providers.get("chutes")
+        api_key = chutes.api_key if chutes else None
+        
         if not api_key:
             return None
+            
         _thread_local.session = __import__("requests").Session()
         _thread_local.session.headers.update(
             {

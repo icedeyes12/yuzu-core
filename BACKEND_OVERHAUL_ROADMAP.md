@@ -35,24 +35,24 @@ This roadmap outlines the systematic restructuring of the `yuzu-companion` backe
 ## Phase 2: Provider & Config Canonization
 *Unify how the system handles external AI services and configuration state.*
 
-- [ ] **One Provider Manager**
-    - [ ] Convert `app/providers.py` into a package `app/providers/`.
-        - [ ] Create `app/providers/base.py` and extract `AIProvider` and `AIProviderManager`.
-        - [ ] Create `app/providers/ollama.py` and extract `OllamaProvider`.
-        - [ ] Create `app/providers/cerebras.py` and extract `CerebrasProvider`.
-        - [ ] Create `app/providers/openrouter.py` and extract `OpenRouterProvider`.
-        - [ ] Create `app/providers/chutes.py` and extract `ChutesProvider`.
-    - [ ] Centralize API key lookup:
-        - [ ] Update `app/providers/base.py` to handle common `api_key` retrieval from DB.
-        - [ ] Remove manual lookup logic from `app/memory/embedder.py`.
-        - [ ] Remove manual lookup logic from `app/profile_analysis.py`.
+- [x] **One Provider Manager**
+    - [x] Convert `app/providers.py` into a package `app/providers/`.
+        - [x] Create `app/providers/base.py` and extract `AIProvider` and `AIProviderManager`.
+        - [x] Create `app/providers/ollama.py` and extract `OllamaProvider`.
+        - [x] Create `app/providers/cerebras.py` and extract `CerebrasProvider`.
+        - [x] Create `app/providers/openrouter.py` and extract `OpenRouterProvider`.
+        - [x] Create `app/providers/chutes.py` and extract `ChutesProvider`.
+    - [x] Centralize API key lookup:
+        - [x] Update `app/providers/base.py` to handle common `api_key` retrieval from DB.
+        - [x] Remove manual lookup logic from `app/memory/embedder.py`.
+        - [x] Remove manual lookup logic from `app/profile_analysis.py`.
 
-- [ ] **Single Config Payload (SSOT)**
-    - [ ] Create `app/services/config_service.py`.
-    - [ ] Move logic for building `ai_providers` and `vision` JSON from `api_get_config`.
-    - [ ] Move logic for building `profile_dict` from `api_get_profile`.
-    - [ ] Implement a unified `get_frontend_config()` that satisfies both web and CLI needs.
-    - [ ] Ensure `main.py` uses this service for its "status" display.
+- [x] **Single Config Payload (SSOT)**
+    - [x] Create `app/services/config_service.py`.
+    - [x] Move logic for building `ai_providers` and `vision` JSON from `api_get_config`.
+    - [x] Move logic for building `profile_dict` from `api_get_profile`.
+    - [x] Implement a unified `get_frontend_config()` that satisfies both web and CLI needs.
+    - [x] Ensure `main.py` uses this service for its "status" display.
 
 ## Phase 3: Service Layer Extraction
 *Strip business logic out of the API routes and orchestrator.*

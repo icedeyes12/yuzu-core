@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any
 
 from app.db import Database
+from app.providers import get_ai_manager
 from app.llm_client import chutes_chat
 from app.logging_config import get_logger
 
@@ -134,7 +135,11 @@ def summarize_memory(
         return False
 
     convo_count = sum(1 for m in history if m["role"] in ("user", "assistant"))
-    api_key = (Database.get_api_keys() or {}).get("openrouter")
+    
+    manager = get_ai_manager()
+    openrouter = manager.providers.get("openrouter")
+    api_key = openrouter.api_key if openrouter else None
+    
     if not api_key:
         return False
 
@@ -450,7 +455,10 @@ def summarize_global_player_profile() -> bool:
         conversation_text = "".join(blocks)
         log.info("trimmed oldest session, now %d chars", len(conversation_text))
 
-    api_key = Database.get_api_key("chutes")
+    manager = get_ai_manager()
+    chutes = manager.providers.get("chutes")
+    api_key = chutes.api_key if chutes else None
+    
     if not api_key:
         log.error("no chutes API key configured")
         return False

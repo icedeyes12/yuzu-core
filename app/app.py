@@ -35,6 +35,7 @@ from app.profile_analysis import (
     summarize_memory,
 )
 from app.providers import get_ai_manager, reload_ai_manager
+from app.services.config_service import ConfigService
 from app.session_lifecycle import (
     UserContext,
     auto_name_session_if_needed,
@@ -83,27 +84,7 @@ def set_vision_model(provider: str, model: str) -> str:
 
 
 def get_vision_capabilities() -> dict[str, object]:
-    from app.tools import multimodal_tools
-
-    capabilities: dict[str, object] = {
-        "has_vision": False,
-        "vision_provider": None,
-        "vision_model": None,
-        "has_image_generation": False,
-        "image_generation_provider": None,
-    }
-
-    vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
-    if vision_provider:
-        capabilities["has_vision"] = True
-        capabilities["vision_provider"] = vision_provider
-        capabilities["vision_model"] = vision_model
-
-    if "openrouter" in (Database.get_api_keys() or {}):
-        capabilities["has_image_generation"] = True
-        capabilities["image_generation_provider"] = "openrouter"
-
-    return capabilities
+    return ConfigService.get_vision_capabilities()
 
 
 # ---------------------------------------------------------------------------
