@@ -48,6 +48,20 @@ class SessionDeleteRequest(BaseModel):
     session_id: int = Field(..., gt=0, description="Session ID to delete")
 
 
+@router.get("/chat_history")
+async def api_get_chat_history(session_id: int | None = None):
+    """Get chat history for a specific session or the active session."""
+    try:
+        if session_id:
+            chat_history = await get_chat_history_async(session_id=session_id)
+        else:
+            chat_history = await get_chat_history_async()
+        return {"status": "success", "chat_history": chat_history}
+    except Exception as e:
+        log.error("Error getting chat history: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/sessions/list")
 async def api_list_sessions():
     try:
