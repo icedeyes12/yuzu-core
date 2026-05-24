@@ -10,6 +10,26 @@ const MESSAGES_PER_PAGE = 30;
 // ==================== STREAMING STATE ====================
 let currentStreamMessage = null;
 let currentAbortController = null;
+let currentStreamMessageId = null; // [FIX] Track message ID being streamed
+
+// ==================== MESSAGE ID TRACKING ====================
+/**
+ * Generate a unique message ID for DOM tracking.
+ * Format: msg_<timestamp>_<random>
+ */
+function generateMessageId() {
+	return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Find an existing message element by its data-message-id.
+ * @param {string} messageId - The message ID to find
+ * @returns {HTMLElement|null}
+ */
+function _findMessageById(messageId) {
+	if (!messageId) return null;
+	return document.querySelector(`[data-message-id="${messageId}"]`);
+}
 
 // ==================== URL ROUTING MANAGER ====================
 /**
@@ -94,7 +114,7 @@ class RouterManager {
  */
 class BackgroundStreamManager {
 	constructor() {
-		// Map of sessionId -> { buffer, controller, messageElement, accumulatedText }
+		// Map of sessionId -> { buffer, controller, messageElement, accumulatedText, messageId }
 		this.activeStreams = new Map();
 	}
 
@@ -103,12 +123,14 @@ class BackgroundStreamManager {
 	 * @param {number} sessionId - Session ID
 	 * @param {AbortController} controller - AbortController for the stream
 	 * @param {HTMLElement} messageElement - The message DOM element
+	 * @param {string} messageId - Unique message ID for DOM tracking
 	 */
-	startStream(sessionId, controller, messageElement) {
+	startStream(sessionId, controller, messageElement, messageId) {
 		this.activeStreams.set(sessionId, {
 			buffer: [],
 			controller,
 			messageElement,
+			messageId, // [FIX] Track message ID
 			accumulatedText: "",
 			isPaused: false,
 		});
@@ -122,6 +144,27 @@ class BackgroundStreamManager {
 	 */
 	hasActiveStream(sessionId) {
 		return this.activeStreams.has(sessionId);
+	}
+
+	/**
+	 * Check if ANY session is currently generating.
+	 * Used for UI state enforcement (Stop button visibility).
+	 * @returns {boolean}
+	 */
+	isGenerating(sessionId = null) {
+		if (sessionId !== null) {
+			return this.activeStreams.has(sessionId);
+		}
+		return this.activeStreams.size > 0;
+	}
+
+	/**
+	 * Get the active stream for a session.
+	 * @param {number} sessionId - Session ID
+	 * @returns {object|null}
+	 */
+	getStream(sessionId) {
+		return this.activeStreams.get(sessionId) || null;
 	}
 
 	/**
@@ -428,21 +471,51 @@ class MultimodalManager {
 			return;
 		}
 
-		// Create abort controller for this request
-		currentAbortController = new AbortController();
+		// [FIX] Get current session ID from router
+		const sessionId = router.currentSessionId;
+
+		// [FIX] Check if there's already an active stream for this session
+		// This prevents duplicate bubbles on page reload mid-generation
+		const existingStream = backgroundStreams.getStream(sessionId);
+		if (existingStream?.messageElement) {
+			console.log(`[Stream] Resuming existing stream for session ${sessionId}`);
+			currentStreamMessage = existingStream.messageElement;
+			currentStreamMessageId = existingStream.messageId;
+			currentAbortController = existingStream.controller;
+			// Don't create a new message element, reuse the existing one
+		} else {
+			// Create abort controller for this request
+			currentAbortController = new AbortController();
+
+			// [FIX] Generate message ID for tracking
+			currentStreamMessageId = generateMessageId();
+
+			// Show typing indicator as in-flow message
+			showTypingIndicator();
+
+			// Create streaming message (hidden until first chunk - typing indicator still visible)
+			// Create AI message element with unique ID
+			currentStreamMessage = this.createStreamingMessageElement(
+				"ai",
+				currentStreamMessageId,
+			);
+			currentStreamMessage.style.display = "none";
+			chatContainer.appendChild(currentStreamMessage);
+
+			// [FIX] Start tracking with BackgroundStreamManager
+			if (sessionId) {
+				backgroundStreams.startStream(
+					sessionId,
+					currentAbortController,
+					currentStreamMessage,
+					currentStreamMessageId,
+				);
+			}
+		}
+
 		const signal = currentAbortController.signal;
-
-		// Show typing indicator as in-flow message
-		showTypingIndicator();
-
-		// Create streaming message (hidden until first chunk - typing indicator still visible)
-		// Create AI message element
-		currentStreamMessage = this.createStreamingMessageElement("ai");
-		currentStreamMessage.style.display = "none";
-		chatContainer.appendChild(currentStreamMessage);
-
 		const contentDiv = currentStreamMessage.querySelector(".message-content");
-		let accumulatedText = "";
+		let accumulatedText = existingStream?.accumulatedText || "";
 
 		try {
 			let response;
@@ -502,6 +575,11 @@ class MultimodalManager {
 								// Immediately append and render - NO debounce
 								accumulatedText += json.chunk;
 
+								// [FIX] Update BackgroundStreamManager
+								if (sessionId) {
+									backgroundStreams.updateText(sessionId, accumulatedText);
+								}
+
 								// Render immediately - real-time streaming
 								// renderStreamChunk already does full markdown rendering
 								this.renderStreamChunk(contentDiv, accumulatedText);
@@ -526,6 +604,12 @@ class MultimodalManager {
 			// Final processing after stream completes
 			// Render final content with isComplete=true to ensure all mermaid blocks render
 			this.renderStreamChunk(contentDiv, accumulatedText, true);
+
+			// [FIX] Mark stream as complete
+			currentStreamMessage.removeAttribute("data-streaming");
+			if (sessionId) {
+				backgroundStreams.completeStream(sessionId);
+			}
 
 			// Update copy button handler with full content
 			if (currentStreamMessage) {
@@ -565,17 +649,26 @@ class MultimodalManager {
 					contentDiv.innerHTML = `${renderer.render(accumulatedText)}\n\n*[Stopped]*`;
 					this.renderStreamChunk(contentDiv, accumulatedText, true);
 				}
+				// [FIX] Cancel in BackgroundStreamManager
+				if (sessionId) {
+					backgroundStreams.cancelStream(sessionId);
+				}
 			} else {
 				console.error("Stream error:", error);
 				if (contentDiv) {
 					contentDiv.textContent =
 						"Sorry, I encountered an error processing your message.";
 				}
+				// [FIX] Cancel in BackgroundStreamManager
+				if (sessionId) {
+					backgroundStreams.cancelStream(sessionId);
+				}
 			}
 		} finally {
 			hideTypingIndicator();
 			this.cleanupStreamState();
 			currentAbortController = null;
+			currentStreamMessageId = null;
 			isProcessingMessage = false;
 			this.isSending = false;
 			this.setSendButtonState("ready");
@@ -606,10 +699,14 @@ class MultimodalManager {
 		}
 	}
 
-	createStreamingMessageElement(role) {
+	createStreamingMessageElement(role, messageId = null) {
 		const msg = document.createElement("div");
 		msg.className = `message ${role}`;
 		msg.setAttribute("data-streaming", "true");
+
+		// [FIX] Set unique message ID for DOM tracking
+		const msgId = messageId || generateMessageId();
+		msg.setAttribute("data-message-id", msgId);
 
 		// User messages use nested bubble structure: wrapper > bubble + footer
 		// AI messages keep the original flat structure
@@ -708,6 +805,7 @@ class MultimodalManager {
 
 	cleanupStreamState() {
 		currentStreamMessage = null;
+		currentStreamMessageId = null;
 	}
 
 	async handleImageGeneration(prompt) {
@@ -1633,6 +1731,29 @@ function initializeChat() {
 
 	// Load session name
 	loadCurrentSessionName();
+
+	// Check if returning to a session with active stream
+	if (urlSessionId && backgroundStreams.hasActiveStream(urlSessionId)) {
+		console.log(`[Init] Resuming active stream for session ${urlSessionId}`);
+		const chatContainer = document.getElementById("chatContainer");
+		const stream = backgroundStreams.resumeStream(urlSessionId, chatContainer);
+
+		if (stream) {
+			// Re-attach to current streaming state
+			currentStreamMessage = stream.messageElement;
+			currentAbortController = stream.controller;
+			currentStreamMessageId = stream.messageId;
+			isProcessingMessage = true;
+
+			// Restore UI state
+			if (window.multimodal) {
+				window.multimodal.setSendButtonState("sending");
+			}
+
+			// Don't reload history, stream will continue
+			return;
+		}
+	}
 
 	// Load history - use URL session if available
 	if (urlSessionId) {
