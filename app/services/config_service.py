@@ -44,7 +44,7 @@ class ConfigService:
 
         return {
             "available_providers": ai_manager.get_available_providers(),
-            "all_models": ai_manager.get_all_models(),
+            "all_models": await ai_manager.get_all_models(),
             "current_provider": providers_config.get("preferred_provider", "ollama"),
             "current_model": providers_config.get("preferred_model", "glm-4.6:cloud"),
         }
