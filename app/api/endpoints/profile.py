@@ -180,7 +180,7 @@ async def api_list_providers():
     try:
         ai_manager = await get_ai_manager()
         available_providers = ai_manager.get_available_providers()
-        all_models = ai_manager.get_all_models()
+        all_models = await ai_manager.get_all_models()
 
         profile = await Database.get_profile_async()
         providers_config = profile.get("providers_config", {})
