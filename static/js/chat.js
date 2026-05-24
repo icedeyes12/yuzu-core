@@ -474,71 +474,79 @@ class MultimodalManager {
 	}
 
 	async sendMessageStreaming(message, images = []) {
-		const chatContainer = document.getElementById("chatContainer");
-
-		if (!chatContainer) {
-			console.error("Chat container not found");
-			isProcessingMessage = false;
-			this.setSendButtonState("ready");
-			return;
-		}
-
-		// [CRITICAL] Get session ID and track it
-		const sessionId = router.currentSessionId;
-		backgroundStreams.setActiveView(sessionId);
-
-		// [FIX] Check if there's already an active stream for this session
-		// This prevents duplicate bubbles on page reload mid-generation
-		const existingStream = backgroundStreams.getStream(sessionId);
-		if (existingStream?.isActive) {
-			console.log(`[Stream] Resuming existing stream for session ${sessionId}`);
-			// Find existing message element
-			const existingElement = _findMessageById(existingStream.messageId);
-			if (existingElement) {
-				currentStreamMessage = existingElement;
-				// Flush existing buffer
-				this.renderStreamChunk(
-					currentStreamMessage.querySelector(".message-content"),
-					existingStream.buffer,
-				);
-			} else {
-				// Create new element with the same ID
-				currentStreamMessage = this.createStreamingMessageElement(
-					"ai",
-					existingStream.messageId,
-				);
-				chatContainer.appendChild(currentStreamMessage);
-				this.renderStreamChunk(
-					currentStreamMessage.querySelector(".message-content"),
-					existingStream.buffer,
-				);
-			}
-			// Don't start a new fetch, the existing SSE reader is still running
-			return;
-		}
-
-		// [FIX] Generate message ID for tracking
-		const messageId = generateMessageId();
-		currentStreamMessageId = messageId;
-
-		// Create abort controller for this request
-		currentAbortController = new AbortController();
-
-		// Register stream with background manager BEFORE starting fetch
-		backgroundStreams.startStream(sessionId, currentAbortController, messageId);
-
-		// Show typing indicator as in-flow message
-		showTypingIndicator();
-
-		// Create streaming message element with unique ID
-		currentStreamMessage = this.createStreamingMessageElement("ai", messageId);
-		currentStreamMessage.style.display = "none";
-		chatContainer.appendChild(currentStreamMessage);
-
-		const contentDiv = currentStreamMessage.querySelector(".message-content");
-		let localBuffer = ""; // Local buffer for this stream instance
-
 		try {
+			const chatContainer = document.getElementById("chatContainer");
+
+			if (!chatContainer) {
+				console.error("Chat container not found");
+				isProcessingMessage = false;
+				this.setSendButtonState("ready");
+				return;
+			}
+
+			// [CRITICAL] Get session ID and track it
+			const sessionId = router.currentSessionId;
+			backgroundStreams.setActiveView(sessionId);
+
+			// [FIX] Check if there's already an active stream for this session
+			// This prevents duplicate bubbles on page reload mid-generation
+			const existingStream = backgroundStreams.getStream(sessionId);
+			if (existingStream?.isActive) {
+				console.log(
+					`[Stream] Resuming existing stream for session ${sessionId}`,
+				);
+				// Find existing message element
+				const existingElement = _findMessageById(existingStream.messageId);
+				if (existingElement) {
+					currentStreamMessage = existingElement;
+					// Flush existing buffer
+					this.renderStreamChunk(
+						currentStreamMessage.querySelector(".message-content"),
+						existingStream.buffer,
+					);
+				} else {
+					// Create new element with the same ID
+					currentStreamMessage = this.createStreamingMessageElement(
+						"ai",
+						existingStream.messageId,
+					);
+					chatContainer.appendChild(currentStreamMessage);
+					this.renderStreamChunk(
+						currentStreamMessage.querySelector(".message-content"),
+						existingStream.buffer,
+					);
+				}
+				// Don't start a new fetch, the existing SSE reader is still running
+				return;
+			}
+
+			// [FIX] Generate message ID for tracking
+			const messageId = generateMessageId();
+
+			// Create abort controller for this request
+			currentAbortController = new AbortController();
+
+			// Register stream with background manager BEFORE starting fetch
+			backgroundStreams.startStream(
+				sessionId,
+				currentAbortController,
+				messageId,
+			);
+
+			// Show typing indicator as in-flow message
+			showTypingIndicator();
+
+			// Create streaming message element with unique ID
+			currentStreamMessage = this.createStreamingMessageElement(
+				"ai",
+				messageId,
+			);
+			currentStreamMessage.style.display = "none";
+			chatContainer.appendChild(currentStreamMessage);
+
+			const contentDiv = currentStreamMessage.querySelector(".message-content");
+			let localBuffer = ""; // Local buffer for this stream instance
+
 			const formData = new FormData();
 			formData.append("message", message);
 			images.forEach((blob, index) => {
@@ -621,7 +629,10 @@ class MultimodalManager {
 				hideTypingIndicator();
 				addMessage("ai", `Error: ${error.message}`);
 			}
-			backgroundStreams.cancelStream(sessionId);
+			const sessionId = router?.currentSessionId;
+			if (sessionId) {
+				backgroundStreams.cancelStream(sessionId);
+			}
 		} finally {
 			this.cleanupStreamState();
 			this.setSendButtonState("ready");
