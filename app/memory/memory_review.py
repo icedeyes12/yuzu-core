@@ -72,10 +72,10 @@ _REVIEW_BATCH_SIZE = 20
 
 
 def _get_ai_manager():
-    """Lazy-import to avoid circular imports."""
-    from app import get_ai_manager
-
-    return get_ai_manager()
+    """Lazy-import to avoid circular imports. Sync wrapper for async get_ai_manager."""
+    from app.providers import get_ai_manager
+    import asyncio
+    return asyncio.run(get_ai_manager())
 
 
 def mark_retrieved_as_pending_review(

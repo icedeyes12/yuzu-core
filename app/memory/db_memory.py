@@ -296,6 +296,11 @@ def get_fact_by_id(id: int) -> dict | None:
     return pg_fetchone(SQL_FACT_SELECT_BY_ID, (id,))
 
 
+async def get_fact_by_id_async(id: int) -> dict | None:
+    """Async version of get_fact_by_id."""
+    return await pg_fetchone_async(SQL_FACT_SELECT_BY_ID, (id,))
+
+
 def get_facts_by_session(
     session_id: int | None,
     fact_type: str | None = None,

@@ -72,7 +72,7 @@ class ApiKeyRemoveRequest(BaseModel):
 async def api_get_config():
     """Single source of truth for frontend configuration."""
     try:
-        return ConfigService.get_frontend_config()
+        return await ConfigService.get_frontend_config()
     except Exception as e:
         log.error("Error getting config: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -109,7 +109,7 @@ async def api_get_profile():
 
         api_keys = await get_api_keys_async()
         profile_dict = ConfigService.format_profile_dict(profile)
-        ai_providers_payload = ConfigService.get_ai_providers_payload(profile)
+        ai_providers_payload = await ConfigService.get_ai_providers_payload(profile)
         vision_capabilities = ConfigService.get_vision_capabilities()
 
         return {
@@ -178,7 +178,7 @@ async def api_remove_api_key(request: ApiKeyRemoveRequest):
 @router.get("/providers/list")
 async def api_list_providers():
     try:
-        ai_manager = get_ai_manager()
+        ai_manager = await get_ai_manager()
         available_providers = ai_manager.get_available_providers()
         all_models = ai_manager.get_all_models()
 
@@ -214,7 +214,7 @@ async def api_set_preferred_provider(request: ProviderSetRequest):
 @router.post("/providers/test_connection")
 async def api_test_provider_connection(request: ProviderTestRequest):
     try:
-        ai_manager = get_ai_manager()
+        ai_manager = await get_ai_manager()
         provider = ai_manager.providers.get(request.provider_name)
         if not provider:
             return {

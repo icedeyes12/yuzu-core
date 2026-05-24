@@ -191,10 +191,10 @@ async def mark_segmentation_done_async(session_id: int, count: int) -> None:
 
 
 def _get_ai_manager():
-    """Lazy-import to avoid circular imports."""
+    """Lazy-import to avoid circular imports. Sync wrapper for async get_ai_manager."""
     from app.providers import get_ai_manager
-
-    return get_ai_manager()
+    import asyncio
+    return asyncio.run(get_ai_manager())
 
 
 async def _get_ai_manager_async():

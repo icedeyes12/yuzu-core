@@ -35,11 +35,11 @@ class ConfigService:
         return capabilities
 
     @staticmethod
-    def get_ai_providers_payload(profile: dict | None = None) -> dict[str, Any]:
+    async def get_ai_providers_payload(profile: dict | None = None) -> dict[str, Any]:
         if profile is None:
-            profile = Database.get_profile()
+            profile = await Database.get_profile_async()
 
-        ai_manager = get_ai_manager()
+        ai_manager = await get_ai_manager()
         providers_config = profile.get("providers_config", {})
 
         return {
@@ -74,12 +74,12 @@ class ConfigService:
         }
 
     @staticmethod
-    def get_frontend_config() -> dict[str, Any]:
+    async def get_frontend_config() -> dict[str, Any]:
         """Unified frontend configuration for web and CLI."""
-        profile = Database.get_profile()
+        profile = await Database.get_profile_async()
         return {
             "status": "success",
-            "ai_providers": ConfigService.get_ai_providers_payload(profile),
+            "ai_providers": await ConfigService.get_ai_providers_payload(profile),
             "vision": ConfigService.get_vision_payload(profile),
         }
 

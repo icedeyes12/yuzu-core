@@ -363,7 +363,7 @@ async def add_message_async(
 async def update_message_async(message_id: int, content: str) -> bool:
     """Update the content of an existing message (async)."""
     try:
-        await pg_execute_async(SQL_MESSAGE_UPDATE, (content, message_id))
+        await pg_execute_async(SQL_MESSAGE_UPDATE, (content, None, message_id))
         return True
     except Exception as e:
         log.error("update_message_async failed: %s", e)
