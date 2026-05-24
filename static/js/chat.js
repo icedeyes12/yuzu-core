@@ -10,7 +10,7 @@ const MESSAGES_PER_PAGE = 30;
 // ==================== STREAMING STATE ====================
 let currentStreamMessage = null;
 let currentAbortController = null;
-let currentStreamMessageId = null; // [FIX] Track message ID being streamed
+// Note: Session tracking is now handled by BackgroundStreamManager.activeViewSessionId
 
 // ==================== MESSAGE ID TRACKING ====================
 /**
@@ -109,104 +109,92 @@ class RouterManager {
 
 // ==================== BACKGROUND STREAM MANAGER ====================
 /**
- * Manages SSE stream buffering for session switches mid-generation.
- * Allows streams to continue in background and resume on return.
+ * CRITICAL: Manages SSE stream buffering INDEPENDENT of DOM.
+ * The SSE reader loop ALWAYS buffers here. DOM is just a "view".
+ *
+ * Key principle: The stream never stops buffering just because we switched sessions.
+ * The activeViewSessionId determines which session's buffer gets rendered to DOM.
  */
 class BackgroundStreamManager {
 	constructor() {
-		// Map of sessionId -> { buffer, controller, messageElement, accumulatedText, messageId }
-		this.activeStreams = new Map();
+		// Map of sessionId -> {
+		//   buffer: string,           // Accumulated text chunks
+		//   controller: AbortController,
+		//   messageId: string,        // DOM tracking ID
+		//   isActive: boolean,        // Stream still running?
+		//   isComplete: boolean       // Stream finished?
+		// }
+		this.streams = new Map();
+		this.activeViewSessionId = null; // Which session is currently visible in DOM
 	}
 
 	/**
-	 * Start tracking a stream for a session.
+	 * Start a new stream buffer for a session.
 	 * @param {number} sessionId - Session ID
 	 * @param {AbortController} controller - AbortController for the stream
-	 * @param {HTMLElement} messageElement - The message DOM element
 	 * @param {string} messageId - Unique message ID for DOM tracking
 	 */
-	startStream(sessionId, controller, messageElement, messageId) {
-		this.activeStreams.set(sessionId, {
-			buffer: [],
+	startStream(sessionId, controller, messageId) {
+		this.streams.set(sessionId, {
+			buffer: "",
 			controller,
-			messageElement,
-			messageId, // [FIX] Track message ID
-			accumulatedText: "",
-			isPaused: false,
+			messageId,
+			isActive: true,
+			isComplete: false,
 		});
-		console.log(`[BackgroundStream] Started tracking session ${sessionId}`);
+		console.log(
+			`[StreamManager] Started stream for session ${sessionId}, messageId: ${messageId}`,
+		);
 	}
 
 	/**
-	 * Check if a session has an active stream.
+	 * Append a chunk to the buffer. ALWAYS called by SSE reader, regardless of active session.
 	 * @param {number} sessionId - Session ID
-	 * @returns {boolean}
+	 * @param {string} chunk - Text chunk to append
+	 * @returns {string|null} The full accumulated text, or null if stream not found
 	 */
-	hasActiveStream(sessionId) {
-		return this.activeStreams.has(sessionId);
-	}
-
-	/**
-	 * Check if ANY session is currently generating.
-	 * Used for UI state enforcement (Stop button visibility).
-	 * @returns {boolean}
-	 */
-	isGenerating(sessionId = null) {
-		if (sessionId !== null) {
-			return this.activeStreams.has(sessionId);
+	appendChunk(sessionId, chunk) {
+		const stream = this.streams.get(sessionId);
+		if (!stream) {
+			console.warn(`[StreamManager] No stream found for session ${sessionId}`);
+			return null;
 		}
-		return this.activeStreams.size > 0;
+
+		stream.buffer += chunk;
+
+		// Only return buffer if this is the active view
+		if (sessionId === this.activeViewSessionId) {
+			return stream.buffer;
+		}
+
+		// Stream is running in background - don't return, just buffer
+		console.log(
+			`[StreamManager] Background buffering for session ${sessionId}, buffer length: ${stream.buffer.length}`,
+		);
+		return null;
 	}
 
 	/**
-	 * Get the active stream for a session.
+	 * Get the current buffer for a session.
 	 * @param {number} sessionId - Session ID
-	 * @returns {object|null}
+	 * @returns {string} The accumulated buffer
 	 */
-	getStream(sessionId) {
-		return this.activeStreams.get(sessionId) || null;
+	getBuffer(sessionId) {
+		const stream = this.streams.get(sessionId);
+		return stream?.buffer || "";
 	}
 
 	/**
-	 * Pause a stream (keep alive, buffer chunks).
-	 * Called when switching away from a session with active generation.
+	 * Mark a stream as complete.
 	 * @param {number} sessionId - Session ID
 	 */
-	pauseStream(sessionId) {
-		const stream = this.activeStreams.get(sessionId);
+	completeStream(sessionId) {
+		const stream = this.streams.get(sessionId);
 		if (stream) {
-			stream.isPaused = true;
-			// Hide the message element from DOM
-			if (stream.messageElement?.parentNode) {
-				stream.messageElement.dataset.paused = "true";
-			}
-			console.log(`[BackgroundStream] Paused stream for session ${sessionId}`);
+			stream.isActive = false;
+			stream.isComplete = true;
+			console.log(`[StreamManager] Completed stream for session ${sessionId}`);
 		}
-	}
-
-	/**
-	 * Resume a paused stream.
-	 * Called when returning to a session with buffered content.
-	 * @param {number} sessionId - Session ID
-	 * @param {HTMLElement} chatContainer - The chat container to append to
-	 * @returns {object|null} Stream data or null if not found
-	 */
-	resumeStream(sessionId, chatContainer) {
-		const stream = this.activeStreams.get(sessionId);
-		if (!stream) return null;
-
-		stream.isPaused = false;
-
-		// Re-attach message element to DOM
-		if (stream.messageElement) {
-			stream.messageElement.dataset.paused = "false";
-			if (!stream.messageElement.parentNode && chatContainer) {
-				chatContainer.appendChild(stream.messageElement);
-			}
-		}
-
-		console.log(`[BackgroundStream] Resumed stream for session ${sessionId}`);
-		return stream;
 	}
 
 	/**
@@ -214,37 +202,61 @@ class BackgroundStreamManager {
 	 * @param {number} sessionId - Session ID
 	 */
 	cancelStream(sessionId) {
-		const stream = this.activeStreams.get(sessionId);
+		const stream = this.streams.get(sessionId);
 		if (stream) {
 			if (stream.controller && !stream.controller.signal.aborted) {
 				stream.controller.abort();
 			}
-			this.activeStreams.delete(sessionId);
-			console.log(
-				`[BackgroundStream] Cancelled stream for session ${sessionId}`,
-			);
+			this.streams.delete(sessionId);
+			console.log(`[StreamManager] Cancelled stream for session ${sessionId}`);
 		}
 	}
 
 	/**
-	 * Complete and clean up a stream.
+	 * Check if a session has an active (still running) stream.
 	 * @param {number} sessionId - Session ID
+	 * @returns {boolean}
 	 */
-	completeStream(sessionId) {
-		this.activeStreams.delete(sessionId);
-		console.log(`[BackgroundStream] Completed stream for session ${sessionId}`);
+	hasActiveStream(sessionId) {
+		const stream = this.streams.get(sessionId);
+		return stream?.isActive === true;
 	}
 
 	/**
-	 * Update accumulated text for a stream.
+	 * Check if a session has any stream (active or completed).
 	 * @param {number} sessionId - Session ID
-	 * @param {string} text - Accumulated text
+	 * @returns {boolean}
 	 */
-	updateText(sessionId, text) {
-		const stream = this.activeStreams.get(sessionId);
-		if (stream) {
-			stream.accumulatedText = text;
+	hasStream(sessionId) {
+		return this.streams.has(sessionId);
+	}
+
+	/**
+	 * Get stream info.
+	 * @param {number} sessionId - Session ID
+	 * @returns {object|null}
+	 */
+	getStream(sessionId) {
+		return this.streams.get(sessionId) || null;
+	}
+
+	/**
+	 * Set which session is currently visible in DOM.
+	 * @param {number} sessionId - Session ID
+	 */
+	setActiveView(sessionId) {
+		this.activeViewSessionId = sessionId;
+	}
+
+	/**
+	 * Check if ANY session is currently generating.
+	 * @returns {boolean}
+	 */
+	isAnyGenerating() {
+		for (const stream of this.streams.values()) {
+			if (stream.isActive) return true;
 		}
+		return false;
 	}
 }
 
@@ -471,76 +483,73 @@ class MultimodalManager {
 			return;
 		}
 
-		// [FIX] Get current session ID from router
+		// [CRITICAL] Get session ID and track it
 		const sessionId = router.currentSessionId;
+		backgroundStreams.setActiveView(sessionId);
 
 		// [FIX] Check if there's already an active stream for this session
 		// This prevents duplicate bubbles on page reload mid-generation
 		const existingStream = backgroundStreams.getStream(sessionId);
-		if (existingStream?.messageElement) {
+		if (existingStream?.isActive) {
 			console.log(`[Stream] Resuming existing stream for session ${sessionId}`);
-			currentStreamMessage = existingStream.messageElement;
-			currentStreamMessageId = existingStream.messageId;
-			currentAbortController = existingStream.controller;
-			// Don't create a new message element, reuse the existing one
-		} else {
-			// Create abort controller for this request
-			currentAbortController = new AbortController();
-
-			// [FIX] Generate message ID for tracking
-			currentStreamMessageId = generateMessageId();
-
-			// Show typing indicator as in-flow message
-			showTypingIndicator();
-
-			// Create streaming message (hidden until first chunk - typing indicator still visible)
-			// Create AI message element with unique ID
-			currentStreamMessage = this.createStreamingMessageElement(
-				"ai",
-				currentStreamMessageId,
-			);
-			currentStreamMessage.style.display = "none";
-			chatContainer.appendChild(currentStreamMessage);
-
-			// [FIX] Start tracking with BackgroundStreamManager
-			if (sessionId) {
-				backgroundStreams.startStream(
-					sessionId,
-					currentAbortController,
-					currentStreamMessage,
-					currentStreamMessageId,
+			// Find existing message element
+			const existingElement = _findMessageById(existingStream.messageId);
+			if (existingElement) {
+				currentStreamMessage = existingElement;
+				// Flush existing buffer
+				this.renderStreamChunk(
+					currentStreamMessage.querySelector(".message-content"),
+					existingStream.buffer,
+				);
+			} else {
+				// Create new element with the same ID
+				currentStreamMessage = this.createStreamingMessageElement(
+					"ai",
+					existingStream.messageId,
+				);
+				chatContainer.appendChild(currentStreamMessage);
+				this.renderStreamChunk(
+					currentStreamMessage.querySelector(".message-content"),
+					existingStream.buffer,
 				);
 			}
+			// Don't start a new fetch, the existing SSE reader is still running
+			return;
 		}
 
-		const signal = currentAbortController.signal;
+		// [FIX] Generate message ID for tracking
+		const messageId = generateMessageId();
+		currentStreamMessageId = messageId;
+
+		// Create abort controller for this request
+		currentAbortController = new AbortController();
+
+		// Register stream with background manager BEFORE starting fetch
+		backgroundStreams.startStream(sessionId, currentAbortController, messageId);
+
+		// Show typing indicator as in-flow message
+		showTypingIndicator();
+
+		// Create streaming message element with unique ID
+		currentStreamMessage = this.createStreamingMessageElement("ai", messageId);
+		currentStreamMessage.style.display = "none";
+		chatContainer.appendChild(currentStreamMessage);
+
 		const contentDiv = currentStreamMessage.querySelector(".message-content");
-		let accumulatedText = existingStream?.accumulatedText || "";
+		let localBuffer = ""; // Local buffer for this stream instance
 
 		try {
-			let response;
-			if (images && images.length > 0) {
-				// Use FormData for images
-				const formData = new FormData();
-				formData.append("message", message || "");
-				images.forEach((img) => {
-					formData.append("images", img);
-				});
+			const formData = new FormData();
+			formData.append("message", message);
+			images.forEach((blob, index) => {
+				formData.append(`image_${index}`, blob);
+			});
 
-				response = await fetch("/api/send_message_stream", {
-					method: "POST",
-					body: formData,
-					signal,
-				});
-			} else {
-				// Standard JSON for text-only
-				response = await fetch("/api/send_message_stream", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ message }),
-					signal,
-				});
-			}
+			const response = await fetch("/api/send_message_stream", {
+				method: "POST",
+				body: formData,
+				signal: currentAbortController.signal,
+			});
 
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -549,49 +558,46 @@ class MultimodalManager {
 			const reader = response.body.getReader();
 			const decoder = new TextDecoder();
 			let firstChunk = true;
-			let sseBuffer = ""; // [FIX] Tail-buffer nahan chunk yang kepotong
+			let sseBuffer = "";
 
 			while (true) {
 				const { done, value } = await reader.read();
-				if (done) break;
+
+				if (done) {
+					// Stream complete
+					backgroundStreams.completeStream(sessionId);
+					break;
+				}
 
 				const chunk = decoder.decode(value, { stream: true });
-				sseBuffer += chunk; // Masuk buffer
+				sseBuffer += chunk;
 				const lines = sseBuffer.split("\n");
-				sseBuffer = lines.pop(); // Tahan string yg belum komplit
+				sseBuffer = lines.pop();
 
 				for (const line of lines) {
 					if (line.startsWith("data: ")) {
 						try {
 							const json = JSON.parse(line.slice(6));
 							if (json.chunk) {
-								// Hide typing indicator and show message on first real content
 								if (firstChunk) {
 									hideTypingIndicator();
 									currentStreamMessage.style.display = "";
 									firstChunk = false;
 								}
 
-								// Immediately append and render - NO debounce
-								accumulatedText += json.chunk;
+								// [CRITICAL] ALWAYS buffer to BackgroundStreamManager
+								// This happens regardless of which session is currently active
+								localBuffer += json.chunk;
+								backgroundStreams.appendChunk(sessionId, json.chunk);
 
-								// [FIX] Update BackgroundStreamManager
-								if (sessionId) {
-									backgroundStreams.updateText(sessionId, accumulatedText);
-								}
-
-								// Render immediately - real-time streaming
-								// renderStreamChunk already does full markdown rendering
-								this.renderStreamChunk(contentDiv, accumulatedText);
-								scrollToBottom();
-
-								// [UNIFIED] If the chunk contains the vision error message, handle it
-								if (
-									accumulatedText.includes(
-										"[System] Current model does not support vision",
-									)
-								) {
-									// It's a validation error, keep it in the stream
+								// [CRITICAL] Only update DOM if this session is the active view
+								if (sessionId === backgroundStreams.activeViewSessionId) {
+									this.renderStreamChunk(contentDiv, localBuffer);
+									scrollToBottom();
+								} else {
+									console.log(
+										`[Stream] Session ${sessionId} buffering in background (${localBuffer.length} chars)`,
+									);
 								}
 							}
 						} catch (_e) {
@@ -601,77 +607,25 @@ class MultimodalManager {
 				}
 			}
 
-			// Final processing after stream completes
-			// Render final content with isComplete=true to ensure all mermaid blocks render
-			this.renderStreamChunk(contentDiv, accumulatedText, true);
-
-			// [FIX] Mark stream as complete
-			currentStreamMessage.removeAttribute("data-streaming");
-			if (sessionId) {
-				backgroundStreams.completeStream(sessionId);
+			// Final render with isComplete=true
+			if (sessionId === backgroundStreams.activeViewSessionId) {
+				this.renderStreamChunk(contentDiv, localBuffer, true);
 			}
 
-			// Update copy button handler with full content
-			if (currentStreamMessage) {
-				const copyBtn = currentStreamMessage.querySelector(".copy-message-btn");
-				if (copyBtn) {
-					copyBtn.onclick = () => {
-						navigator.clipboard
-							.writeText(accumulatedText)
-							.then(() => {
-								copyBtn.innerHTML = `
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="20 6 9 17 4 12"></polyline>
-                                </svg>
-                            `;
-								setTimeout(() => {
-									copyBtn.innerHTML = `
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                    </svg>
-                                `;
-								}, 2000);
-							})
-							.catch((err) => console.error("Copy failed:", err));
-					};
-				}
-			}
+			this.clearInput();
 		} catch (error) {
-			// Handle abort gracefully
 			if (error.name === "AbortError") {
 				console.log("Stream aborted by user");
-				// Show partial message or remove it
-				if (currentStreamMessage && !accumulatedText) {
-					currentStreamMessage.remove();
-				} else if (contentDiv && accumulatedText) {
-					// Show partial response with indicator
-					contentDiv.innerHTML = `${renderer.render(accumulatedText)}\n\n*[Stopped]*`;
-					this.renderStreamChunk(contentDiv, accumulatedText, true);
-				}
-				// [FIX] Cancel in BackgroundStreamManager
-				if (sessionId) {
-					backgroundStreams.cancelStream(sessionId);
-				}
 			} else {
 				console.error("Stream error:", error);
-				if (contentDiv) {
-					contentDiv.textContent =
-						"Sorry, I encountered an error processing your message.";
-				}
-				// [FIX] Cancel in BackgroundStreamManager
-				if (sessionId) {
-					backgroundStreams.cancelStream(sessionId);
-				}
+				hideTypingIndicator();
+				addMessage("ai", `Error: ${error.message}`);
 			}
+			backgroundStreams.cancelStream(sessionId);
 		} finally {
-			hideTypingIndicator();
 			this.cleanupStreamState();
-			currentAbortController = null;
-			currentStreamMessageId = null;
-			isProcessingMessage = false;
-			this.isSending = false;
 			this.setSendButtonState("ready");
+			isProcessingMessage = false;
 		}
 	}
 
@@ -704,9 +658,12 @@ class MultimodalManager {
 		msg.className = `message ${role}`;
 		msg.setAttribute("data-streaming", "true");
 
-		// [FIX] Set unique message ID for DOM tracking
-		const msgId = messageId || generateMessageId();
-		msg.setAttribute("data-message-id", msgId);
+		// [CRITICAL] Set message ID for DOM tracking
+		if (messageId) {
+			msg.setAttribute("data-message-id", messageId);
+		} else {
+			msg.setAttribute("data-message-id", generateMessageId());
+		}
 
 		// User messages use nested bubble structure: wrapper > bubble + footer
 		// AI messages keep the original flat structure
@@ -805,7 +762,8 @@ class MultimodalManager {
 
 	cleanupStreamState() {
 		currentStreamMessage = null;
-		currentStreamMessageId = null;
+		// Note: Session tracking is handled by BackgroundStreamManager.activeViewSessionId
+		// Don't clear currentAbortController - it's tracked by BackgroundStreamManager
 	}
 
 	async handleImageGeneration(prompt) {
@@ -1451,20 +1409,20 @@ function getCurrentTime24h() {
 // ==================== CHAT HISTORY WITH PAGINATION ====================
 async function loadChatHistory(sessionId = null) {
 	const chatContainer = document.getElementById("chatContainer");
-	if (!chatContainer) {
-		console.error("Cannot load history: chat container not found!");
-		return;
-	}
+	if (!chatContainer) return;
+
+	// Show skeleton loading
+	showChatSkeleton();
+	setTimeout(scrollToBottom, 50);
 
 	try {
-		// Show skeleton loading
-		showChatSkeleton();
-		setTimeout(scrollToBottom, 100);
-
 		// Build URL with optional session ID
-		const url = "/api/get_profile";
+		const url = sessionId
+			? `/api/chat_history?session_id=${sessionId}`
+			: "/api/chat_history";
+
+		// Switch session on backend if needed
 		if (sessionId) {
-			// Fetch specific session's history
 			const switchRes = await fetch("/api/sessions/switch", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -1485,6 +1443,12 @@ async function loadChatHistory(sessionId = null) {
 		// Hide skeleton before rendering real content
 		hideChatSkeleton();
 
+		// [TEXT OVERLAP FALLBACK] Check for active stream
+		const activeStream = sessionId
+			? backgroundStreams.getStream(sessionId)
+			: null;
+		const hasActiveStream = activeStream?.isActive;
+
 		if (history.length > 0) {
 			chatContainer.innerHTML = "";
 			console.log(`Processing ${history.length} messages from history`);
@@ -1494,7 +1458,19 @@ async function loadChatHistory(sessionId = null) {
 
 			const fragment = document.createDocumentFragment();
 
-			messagesToShow.forEach((msg) => {
+			messagesToShow.forEach((msg, index) => {
+				// [TEXT OVERLAP FALLBACK] Skip last AI message if we have an active stream
+				// The stream will provide the complete/continuing content
+				const isLastMessage = index === messagesToShow.length - 1;
+				const isAIMessage = msg.role !== "user";
+
+				if (hasActiveStream && isLastMessage && isAIMessage) {
+					console.log(
+						`[History] Skipping last AI message - active stream will handle it`,
+					);
+					return; // Skip this message
+				}
+
 				if (isRenderableHistoryRole(msg.role)) {
 					console.log("[History] Raw message before render:", {
 						role: msg.role,
@@ -1510,6 +1486,47 @@ async function loadChatHistory(sessionId = null) {
 			});
 
 			chatContainer.appendChild(fragment);
+
+			// [TEXT OVERLAP FALLBACK] If we have an active stream, create/fetch its message element
+			if (hasActiveStream) {
+				console.log(`[History] Creating message element for active stream`);
+				let streamElement = _findMessageById(activeStream.messageId);
+
+				if (!streamElement) {
+					streamElement = document.createElement("div");
+					streamElement.className = "message ai";
+					streamElement.setAttribute("data-streaming", "true");
+					streamElement.setAttribute("data-message-id", activeStream.messageId);
+					streamElement.innerHTML = `<div class="message-content"></div>`;
+					chatContainer.appendChild(streamElement);
+				}
+
+				// Flush buffer
+				const contentDiv = streamElement.querySelector(".message-content");
+				if (contentDiv && activeStream.buffer) {
+					console.log(
+						`[History] Flushing ${activeStream.buffer.length} chars from stream buffer`,
+					);
+					if (window.multimodal) {
+						window.multimodal.renderStreamChunk(
+							contentDiv,
+							activeStream.buffer,
+						);
+					} else {
+						contentDiv.innerHTML = activeStream.buffer;
+					}
+				}
+
+				// Re-attach global state
+				currentStreamMessage = streamElement;
+				currentAbortController = activeStream.controller;
+				isProcessingMessage = true;
+
+				// Restore UI state
+				if (window.multimodal) {
+					window.multimodal.setSendButtonState("sending");
+				}
+			}
 
 			// Apply syntax highlighting to all code blocks after rendering
 			setTimeout(() => {
@@ -1732,17 +1749,46 @@ function initializeChat() {
 	// Load session name
 	loadCurrentSessionName();
 
+	// [CRITICAL] Set active view to URL session (or null)
+	backgroundStreams.setActiveView(urlSessionId);
+
 	// Check if returning to a session with active stream
 	if (urlSessionId && backgroundStreams.hasActiveStream(urlSessionId)) {
-		console.log(`[Init] Resuming active stream for session ${urlSessionId}`);
-		const chatContainer = document.getElementById("chatContainer");
-		const stream = backgroundStreams.resumeStream(urlSessionId, chatContainer);
+		console.log(
+			`[Init] Session ${urlSessionId} has active stream, resuming...`,
+		);
 
-		if (stream) {
-			// Re-attach to current streaming state
-			currentStreamMessage = stream.messageElement;
+		const stream = backgroundStreams.getStream(urlSessionId);
+		const chatContainer = document.getElementById("chatContainer");
+
+		if (stream && chatContainer) {
+			// Find or create message element
+			let messageElement = _findMessageById(stream.messageId);
+
+			if (!messageElement) {
+				// Create message element
+				messageElement = document.createElement("div");
+				messageElement.className = "message ai";
+				messageElement.setAttribute("data-streaming", "true");
+				messageElement.setAttribute("data-message-id", stream.messageId);
+				messageElement.innerHTML = `<div class="message-content"></div>`;
+				chatContainer.appendChild(messageElement);
+			}
+
+			// Flush buffer
+			const contentDiv = messageElement.querySelector(".message-content");
+			if (contentDiv && stream.buffer) {
+				console.log(
+					`[Init] Flushing ${stream.buffer.length} chars from buffer`,
+				);
+				// Use simple text rendering for init, full render will happen on next chunk
+				contentDiv.innerHTML = stream.buffer;
+				scrollToBottom();
+			}
+
+			// Re-attach global state
+			currentStreamMessage = messageElement;
 			currentAbortController = stream.controller;
-			currentStreamMessageId = stream.messageId;
 			isProcessingMessage = true;
 
 			// Restore UI state
@@ -1750,12 +1796,15 @@ function initializeChat() {
 				window.multimodal.setSendButtonState("sending");
 			}
 
-			// Don't reload history, stream will continue
+			// Don't load history - stream is active
+			// Initialize multimodal and return
+			window.multimodal = new MultimodalManager();
+			window.multimodal.init();
 			return;
 		}
 	}
 
-	// Load history - use URL session if available
+	// Normal initialization - load history
 	if (urlSessionId) {
 		loadChatHistory(urlSessionId);
 	} else {
@@ -1831,33 +1880,66 @@ function hideTypingIndicator(force = false) {
 async function handleSessionSwitch(sessionId, updateURL = true) {
 	console.log(`[Chat] Switching to session ${sessionId}`);
 
-	// Check for active stream in current session
-	if (isProcessingMessage && currentAbortController) {
-		const currentSession = router.currentSessionId;
-		if (currentSession && backgroundStreams.hasActiveStream(currentSession)) {
-			// Pause stream instead of canceling
-			backgroundStreams.pauseStream(currentSession);
-		}
-	}
+	// [CRITICAL] Set active view BEFORE any DOM operations
+	backgroundStreams.setActiveView(sessionId);
 
-	// Check if target session has a paused stream
-	if (backgroundStreams.hasActiveStream(sessionId)) {
+	// Check if target session has an active stream
+	const stream = backgroundStreams.getStream(sessionId);
+	if (stream?.isActive) {
+		console.log(`[Chat] Session ${sessionId} has active stream, resuming...`);
+
+		// Update URL if needed
+		if (updateURL) {
+			router.updateURL(sessionId);
+		}
+
 		const chatContainer = document.getElementById("chatContainer");
-		const stream = backgroundStreams.resumeStream(sessionId, chatContainer);
 
-		if (stream) {
-			// Re-attach to current streaming state
-			currentStreamMessage = stream.messageElement;
-			currentAbortController = stream.controller;
-			// Don't reload history, just continue the stream
-			if (updateURL) {
-				router.updateURL(sessionId);
+		// Check if we need to create or find the message element
+		let messageElement = _findMessageById(stream.messageId);
+
+		if (!messageElement) {
+			// Create the message element
+			messageElement = window.multimodal?.createStreamingMessageElement?.(
+				"ai",
+				stream.messageId,
+			);
+			if (messageElement && chatContainer) {
+				messageElement.style.display = "";
+				chatContainer.appendChild(messageElement);
 			}
-			return;
+		} else if (!messageElement.parentNode && chatContainer) {
+			// Re-attach to DOM
+			chatContainer.appendChild(messageElement);
+			messageElement.style.display = "";
 		}
+
+		// [CRITICAL] Flush entire buffer to DOM
+		if (messageElement) {
+			const contentDiv = messageElement.querySelector(".message-content");
+			if (contentDiv && stream.buffer) {
+				console.log(`[Chat] Flushing ${stream.buffer.length} chars to DOM`);
+				window.multimodal?.renderStreamChunk?.(contentDiv, stream.buffer);
+				scrollToBottom();
+			}
+		}
+
+		// [CRITICAL] Re-attach global state for SSE updates
+		// The SSE reader loop is still running and will now update DOM since activeViewSessionId matches
+		currentStreamMessage = messageElement;
+		currentAbortController = stream.controller;
+		isProcessingMessage = true;
+
+		// [CRITICAL] Restore UI state - show Stop button and lock input
+		if (window.multimodal) {
+			window.multimodal.setSendButtonState("sending");
+		}
+
+		// Don't reload history - stream is still running and will update DOM live
+		return;
 	}
 
-	// Normal session switch: reload history
+	// No active stream for this session - do normal history load
 	if (updateURL) {
 		router.updateURL(sessionId);
 	}
