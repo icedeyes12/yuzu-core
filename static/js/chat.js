@@ -544,7 +544,8 @@ class MultimodalManager {
 			currentStreamMessage.style.display = "none";
 			chatContainer.appendChild(currentStreamMessage);
 
-			const contentDiv = currentStreamMessage.querySelector(".message-content");
+			// [DOM REBIND FIX] Store messageId, look up contentDiv dynamically
+			// This prevents stale references when DOM is rebuilt
 			let localBuffer = ""; // Local buffer for this stream instance
 
 			const formData = new FormData();
@@ -587,12 +588,6 @@ class MultimodalManager {
 						try {
 							const json = JSON.parse(line.slice(6));
 							if (json.chunk) {
-								if (firstChunk) {
-									hideTypingIndicator();
-									currentStreamMessage.style.display = "";
-									firstChunk = false;
-								}
-
 								// [CRITICAL] ALWAYS buffer to BackgroundStreamManager
 								// This happens regardless of which session is currently active
 								localBuffer += json.chunk;
@@ -600,8 +595,18 @@ class MultimodalManager {
 
 								// [CRITICAL] Only update DOM if this session is the active view
 								if (sessionId === backgroundStreams.activeViewSessionId) {
-									this.renderStreamChunk(contentDiv, localBuffer);
-									scrollToBottom();
+									// [DOM REBIND FIX] Look up contentDiv dynamically by messageId
+									const contentDiv = this._getContentDivForMessage(messageId);
+									if (contentDiv) {
+										if (firstChunk) {
+											hideTypingIndicator();
+											const msgEl = contentDiv.closest(".message");
+											if (msgEl) msgEl.style.display = "";
+											firstChunk = false;
+										}
+										this.renderStreamChunk(contentDiv, localBuffer);
+										scrollToBottom();
+									}
 								} else {
 									console.log(
 										`[Stream] Session ${sessionId} buffering in background (${localBuffer.length} chars)`,
@@ -617,7 +622,10 @@ class MultimodalManager {
 
 			// Final render with isComplete=true
 			if (sessionId === backgroundStreams.activeViewSessionId) {
-				this.renderStreamChunk(contentDiv, localBuffer, true);
+				const contentDiv = this._getContentDivForMessage(messageId);
+				if (contentDiv) {
+					this.renderStreamChunk(contentDiv, localBuffer, true);
+				}
 			}
 
 			this.clearInput();
@@ -638,6 +646,12 @@ class MultimodalManager {
 			this.setSendButtonState("ready");
 			isProcessingMessage = false;
 		}
+	}
+
+	_getContentDivForMessage(messageId) {
+		if (!messageId) return null;
+		const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
+		return msgEl?.querySelector(".message-content") || null;
 	}
 
 	renderStreamChunk(contentDiv, text, isComplete = false) {
@@ -1503,7 +1517,12 @@ async function loadChatHistory(sessionId = null) {
 
 			// [TEXT OVERLAP FALLBACK] If we have an active stream, create/fetch its message element
 			if (hasActiveStream) {
-				console.log(`[History] Creating message element for active stream`);
+				// [DOM REBIND FIX] Tell stream manager this session is now active
+				backgroundStreams.setActiveView(sessionId);
+
+				console.log(
+					`[History] Rebinding active stream for session ${sessionId}`,
+				);
 				let streamElement = _findMessageById(activeStream.messageId);
 
 				if (!streamElement) {
@@ -1515,7 +1534,7 @@ async function loadChatHistory(sessionId = null) {
 					chatContainer.appendChild(streamElement);
 				}
 
-				// Flush buffer
+				// Flush buffer with markdown rendering
 				const contentDiv = streamElement.querySelector(".message-content");
 				if (contentDiv && activeStream.buffer) {
 					console.log(
@@ -1531,7 +1550,7 @@ async function loadChatHistory(sessionId = null) {
 					}
 				}
 
-				// Re-attach global state
+				// Re-attach global state for legacy compatibility
 				currentStreamMessage = streamElement;
 				currentAbortController = activeStream.controller;
 				isProcessingMessage = true;
@@ -1897,67 +1916,13 @@ async function handleSessionSwitch(sessionId, updateURL = true) {
 	// [CRITICAL] Set active view BEFORE any DOM operations
 	backgroundStreams.setActiveView(sessionId);
 
-	// Check if target session has an active stream
-	const stream = backgroundStreams.getStream(sessionId);
-	if (stream?.isActive) {
-		console.log(`[Chat] Session ${sessionId} has active stream, resuming...`);
-
-		// Update URL if needed
-		if (updateURL) {
-			router.updateURL(sessionId);
-		}
-
-		const chatContainer = document.getElementById("chatContainer");
-
-		// Check if we need to create or find the message element
-		let messageElement = _findMessageById(stream.messageId);
-
-		if (!messageElement) {
-			// Create the message element
-			messageElement = window.multimodal?.createStreamingMessageElement?.(
-				"ai",
-				stream.messageId,
-			);
-			if (messageElement && chatContainer) {
-				messageElement.style.display = "";
-				chatContainer.appendChild(messageElement);
-			}
-		} else if (!messageElement.parentNode && chatContainer) {
-			// Re-attach to DOM
-			chatContainer.appendChild(messageElement);
-			messageElement.style.display = "";
-		}
-
-		// [CRITICAL] Flush entire buffer to DOM
-		if (messageElement) {
-			const contentDiv = messageElement.querySelector(".message-content");
-			if (contentDiv && stream.buffer) {
-				console.log(`[Chat] Flushing ${stream.buffer.length} chars to DOM`);
-				window.multimodal?.renderStreamChunk?.(contentDiv, stream.buffer);
-				scrollToBottom();
-			}
-		}
-
-		// [CRITICAL] Re-attach global state for SSE updates
-		// The SSE reader loop is still running and will now update DOM since activeViewSessionId matches
-		currentStreamMessage = messageElement;
-		currentAbortController = stream.controller;
-		isProcessingMessage = true;
-
-		// [CRITICAL] Restore UI state - show Stop button and lock input
-		if (window.multimodal) {
-			window.multimodal.setSendButtonState("sending");
-		}
-
-		// Don't reload history - stream is still running and will update DOM live
-		return;
-	}
-
-	// No active stream for this session - do normal history load
+	// Update URL if needed
 	if (updateURL) {
 		router.updateURL(sessionId);
 	}
 
+	// [DOM REBIND FIX] Always load history, let loadChatHistory handle stream rebinding
+	// This ensures previous messages are shown even when there's an active stream
 	await loadChatHistory(sessionId);
 }
 
