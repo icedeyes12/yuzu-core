@@ -110,6 +110,39 @@ function switchTheme(theme) {
 	console.log(`Switched to ${theme} theme`);
 }
 
+// ==================== SKELETON LOADING ====================
+/**
+ * Show skeleton loading for session list.
+ */
+function showSessionsSkeleton() {
+	const sessionsList = document.getElementById("sidebarSessionsList");
+	if (!sessionsList) return;
+
+	sessionsList.innerHTML = `
+		<div class="skeleton-session">
+			<div class="skeleton skeleton-session-name"></div>
+			<div class="skeleton skeleton-session-meta"></div>
+		</div>
+		<div class="skeleton-session">
+			<div class="skeleton skeleton-session-name"></div>
+			<div class="skeleton skeleton-session-meta"></div>
+		</div>
+		<div class="skeleton-session">
+			<div class="skeleton skeleton-session-name"></div>
+			<div class="skeleton skeleton-session-meta"></div>
+		</div>
+	`;
+}
+
+/**
+ * Hide skeleton (called when real data arrives).
+ * Note: Skeletons are replaced by real content in loadSidebarSessions.
+ */
+// eslint-disable-next-line no-unused-vars
+function _hideSessionsSkeleton() {
+	// Skeletons are replaced by real content in loadSidebarSessions
+}
+
 // Enhanced session loading with action buttons - MARKDOWN SAFE
 function loadSidebarSessions() {
 	const sessionSection = document.getElementById("sessionSection");
@@ -119,9 +152,15 @@ function loadSidebarSessions() {
 
 	sessionSection.style.display = "block";
 
+	// Show skeleton while loading
+	showSessionsSkeleton();
+
 	fetch("/api/sessions/list")
 		.then((response) => response.json())
 		.then((data) => {
+			// Clear skeleton
+			sessionsList.innerHTML = "";
+
 			if (data.sessions && data.sessions.length > 0) {
 				// Clear existing content safely
 				sessionsList.innerHTML = "";
@@ -284,9 +323,17 @@ function createNewSession() {
 				loadSidebarSessions();
 				toggleSidebar();
 
-				// If on chat page, reload
-				if (window.location.pathname === "/chat") {
-					window.location.reload();
+				// Use router to update URL if available
+				if (window.router) {
+					window.router.updateURL(data.session_id);
+				}
+
+				// If on chat page, use handleSessionSwitch instead of reload
+				if (
+					window.location.pathname === "/chat" &&
+					window.handleSessionSwitch
+				) {
+					window.handleSessionSwitch(data.session_id);
 				} else {
 					window.location.href = "/chat";
 				}
@@ -299,6 +346,28 @@ function createNewSession() {
 }
 
 function switchSession(sessionId) {
+	// Check for active stream before switching
+	if (window.backgroundStreams && window.router) {
+		const currentSession = window.router.currentSessionId;
+		if (
+			currentSession &&
+			window.backgroundStreams.hasActiveStream(currentSession)
+		) {
+			// Stream will be paused by handleSessionSwitch
+			console.log(
+				`[Sidebar] Active stream in session ${currentSession}, pausing`,
+			);
+		}
+	}
+
+	// Use handleSessionSwitch if available (no page reload)
+	if (window.handleSessionSwitch) {
+		window.handleSessionSwitch(sessionId);
+		toggleSidebar();
+		return;
+	}
+
+	// Fallback: traditional page reload
 	fetch("/api/sessions/switch", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },

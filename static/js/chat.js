@@ -11,6 +11,243 @@ const MESSAGES_PER_PAGE = 30;
 let currentStreamMessage = null;
 let currentAbortController = null;
 
+// ==================== URL ROUTING MANAGER ====================
+/**
+ * Handles URL-based session routing for shareable URLs.
+ * Enables /chat?session=123 style navigation without page reloads.
+ */
+class RouterManager {
+	constructor() {
+		this.currentSessionId = null;
+		this.isInitialized = false;
+	}
+
+	/**
+	 * Initialize router from current URL on page load.
+	 * @returns {number|null} Session ID from URL or null
+	 */
+	initFromURL() {
+		const params = new URLSearchParams(window.location.search);
+		const sessionId = params.get("session");
+
+		if (sessionId) {
+			this.currentSessionId = parseInt(sessionId, 10);
+			console.log(
+				`[Router] Initialized with session ${this.currentSessionId} from URL`,
+			);
+		}
+
+		this.isInitialized = true;
+		this.setupPopStateHandler();
+		return this.currentSessionId;
+	}
+
+	/**
+	 * Update URL to reflect current session without page reload.
+	 * @param {number} sessionId - Session ID to set in URL
+	 */
+	updateURL(sessionId) {
+		if (!sessionId || sessionId === this.currentSessionId) return;
+
+		this.currentSessionId = sessionId;
+		const url = new URL(window.location.href);
+		url.searchParams.set("session", sessionId.toString());
+
+		window.history.pushState({ sessionId }, "", url);
+		console.log(`[Router] URL updated to session ${sessionId}`);
+	}
+
+	/**
+	 * Clear session parameter from URL.
+	 */
+	clearURL() {
+		const url = new URL(window.location.href);
+		url.searchParams.delete("session");
+		window.history.pushState({}, "", url);
+		this.currentSessionId = null;
+	}
+
+	/**
+	 * Setup browser back/forward navigation handler.
+	 */
+	setupPopStateHandler() {
+		window.addEventListener("popstate", (_event) => {
+			const params = new URLSearchParams(window.location.search);
+			const sessionId = params.get("session");
+
+			if (sessionId && parseInt(sessionId, 10) !== this.currentSessionId) {
+				console.log(`[Router] PopState: switching to session ${sessionId}`);
+				this.currentSessionId = parseInt(sessionId, 10);
+				// Trigger session switch without pushState
+				if (typeof window.handleSessionSwitch === "function") {
+					window.handleSessionSwitch(this.currentSessionId, false);
+				}
+			}
+		});
+	}
+}
+
+// ==================== BACKGROUND STREAM MANAGER ====================
+/**
+ * Manages SSE stream buffering for session switches mid-generation.
+ * Allows streams to continue in background and resume on return.
+ */
+class BackgroundStreamManager {
+	constructor() {
+		// Map of sessionId -> { buffer, controller, messageElement, accumulatedText }
+		this.activeStreams = new Map();
+	}
+
+	/**
+	 * Start tracking a stream for a session.
+	 * @param {number} sessionId - Session ID
+	 * @param {AbortController} controller - AbortController for the stream
+	 * @param {HTMLElement} messageElement - The message DOM element
+	 */
+	startStream(sessionId, controller, messageElement) {
+		this.activeStreams.set(sessionId, {
+			buffer: [],
+			controller,
+			messageElement,
+			accumulatedText: "",
+			isPaused: false,
+		});
+		console.log(`[BackgroundStream] Started tracking session ${sessionId}`);
+	}
+
+	/**
+	 * Check if a session has an active stream.
+	 * @param {number} sessionId - Session ID
+	 * @returns {boolean}
+	 */
+	hasActiveStream(sessionId) {
+		return this.activeStreams.has(sessionId);
+	}
+
+	/**
+	 * Pause a stream (keep alive, buffer chunks).
+	 * Called when switching away from a session with active generation.
+	 * @param {number} sessionId - Session ID
+	 */
+	pauseStream(sessionId) {
+		const stream = this.activeStreams.get(sessionId);
+		if (stream) {
+			stream.isPaused = true;
+			// Hide the message element from DOM
+			if (stream.messageElement?.parentNode) {
+				stream.messageElement.dataset.paused = "true";
+			}
+			console.log(`[BackgroundStream] Paused stream for session ${sessionId}`);
+		}
+	}
+
+	/**
+	 * Resume a paused stream.
+	 * Called when returning to a session with buffered content.
+	 * @param {number} sessionId - Session ID
+	 * @param {HTMLElement} chatContainer - The chat container to append to
+	 * @returns {object|null} Stream data or null if not found
+	 */
+	resumeStream(sessionId, chatContainer) {
+		const stream = this.activeStreams.get(sessionId);
+		if (!stream) return null;
+
+		stream.isPaused = false;
+
+		// Re-attach message element to DOM
+		if (stream.messageElement) {
+			stream.messageElement.dataset.paused = "false";
+			if (!stream.messageElement.parentNode && chatContainer) {
+				chatContainer.appendChild(stream.messageElement);
+			}
+		}
+
+		console.log(`[BackgroundStream] Resumed stream for session ${sessionId}`);
+		return stream;
+	}
+
+	/**
+	 * Cancel a stream.
+	 * @param {number} sessionId - Session ID
+	 */
+	cancelStream(sessionId) {
+		const stream = this.activeStreams.get(sessionId);
+		if (stream) {
+			if (stream.controller && !stream.controller.signal.aborted) {
+				stream.controller.abort();
+			}
+			this.activeStreams.delete(sessionId);
+			console.log(
+				`[BackgroundStream] Cancelled stream for session ${sessionId}`,
+			);
+		}
+	}
+
+	/**
+	 * Complete and clean up a stream.
+	 * @param {number} sessionId - Session ID
+	 */
+	completeStream(sessionId) {
+		this.activeStreams.delete(sessionId);
+		console.log(`[BackgroundStream] Completed stream for session ${sessionId}`);
+	}
+
+	/**
+	 * Update accumulated text for a stream.
+	 * @param {number} sessionId - Session ID
+	 * @param {string} text - Accumulated text
+	 */
+	updateText(sessionId, text) {
+		const stream = this.activeStreams.get(sessionId);
+		if (stream) {
+			stream.accumulatedText = text;
+		}
+	}
+}
+
+// Global instances
+const router = new RouterManager();
+const backgroundStreams = new BackgroundStreamManager();
+
+// ==================== SKELETON LOADING ====================
+/**
+ * Show skeleton loading state in chat container.
+ */
+function showChatSkeleton() {
+	const chatContainer = document.getElementById("chatContainer");
+	if (!chatContainer) return;
+
+	chatContainer.innerHTML = `
+		<div class="skeleton-message ai">
+			<div class="skeleton skeleton-message-line"></div>
+			<div class="skeleton skeleton-message-line"></div>
+			<div class="skeleton skeleton-message-line"></div>
+		</div>
+		<div class="skeleton-message user">
+			<div class="skeleton skeleton-message-line"></div>
+			<div class="skeleton skeleton-message-line"></div>
+		</div>
+		<div class="skeleton-message ai">
+			<div class="skeleton skeleton-message-line"></div>
+			<div class="skeleton skeleton-message-line"></div>
+			<div class="skeleton skeleton-message-line"></div>
+		</div>
+	`;
+}
+
+/**
+ * Hide skeleton and prepare for real content.
+ */
+function hideChatSkeleton() {
+	const chatContainer = document.getElementById("chatContainer");
+	if (!chatContainer) return;
+
+	const skeletons = chatContainer.querySelectorAll(".skeleton-message");
+	for (const s of skeletons) {
+		s.remove();
+	}
+}
+
 // ==================== MULTIMODAL MANAGER ====================
 class MultimodalManager {
 	constructor() {
@@ -1114,7 +1351,7 @@ function getCurrentTime24h() {
 }
 
 // ==================== CHAT HISTORY WITH PAGINATION ====================
-async function loadChatHistory() {
+async function loadChatHistory(sessionId = null) {
 	const chatContainer = document.getElementById("chatContainer");
 	if (!chatContainer) {
 		console.error("Cannot load history: chat container not found!");
@@ -1122,13 +1359,33 @@ async function loadChatHistory() {
 	}
 
 	try {
-		chatContainer.innerHTML =
-			'<div class="loading">Loading recent messages...</div>';
+		// Show skeleton loading
+		showChatSkeleton();
 		setTimeout(scrollToBottom, 100);
 
-		const res = await fetch("/api/get_profile");
+		// Build URL with optional session ID
+		const url = "/api/get_profile";
+		if (sessionId) {
+			// Fetch specific session's history
+			const switchRes = await fetch("/api/sessions/switch", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ session_id: sessionId }),
+			});
+
+			if (!switchRes.ok) {
+				console.warn(
+					`Failed to switch to session ${sessionId}, loading default`,
+				);
+			}
+		}
+
+		const res = await fetch(url);
 		const data = await res.json();
 		const history = data.chat_history || [];
+
+		// Hide skeleton before rendering real content
+		hideChatSkeleton();
 
 		if (history.length > 0) {
 			chatContainer.innerHTML = "";
@@ -1371,11 +1628,18 @@ function initializeChat() {
 	// Initialize input behavior
 	initializeInputBehavior();
 
+	// Initialize URL router
+	const urlSessionId = router.initFromURL();
+
 	// Load session name
 	loadCurrentSessionName();
 
-	// Load history
-	loadChatHistory();
+	// Load history - use URL session if available
+	if (urlSessionId) {
+		loadChatHistory(urlSessionId);
+	} else {
+		loadChatHistory();
+	}
 
 	// Initialize multimodal
 	window.multimodal = new MultimodalManager();
@@ -1438,6 +1702,48 @@ function hideTypingIndicator(force = false) {
 	}
 }
 
+/**
+ * Handle session switch from URL or sidebar.
+ * @param {number} sessionId - Target session ID
+ * @param {boolean} updateURL - Whether to update browser URL (default: true)
+ */
+async function handleSessionSwitch(sessionId, updateURL = true) {
+	console.log(`[Chat] Switching to session ${sessionId}`);
+
+	// Check for active stream in current session
+	if (isProcessingMessage && currentAbortController) {
+		const currentSession = router.currentSessionId;
+		if (currentSession && backgroundStreams.hasActiveStream(currentSession)) {
+			// Pause stream instead of canceling
+			backgroundStreams.pauseStream(currentSession);
+		}
+	}
+
+	// Check if target session has a paused stream
+	if (backgroundStreams.hasActiveStream(sessionId)) {
+		const chatContainer = document.getElementById("chatContainer");
+		const stream = backgroundStreams.resumeStream(sessionId, chatContainer);
+
+		if (stream) {
+			// Re-attach to current streaming state
+			currentStreamMessage = stream.messageElement;
+			currentAbortController = stream.controller;
+			// Don't reload history, just continue the stream
+			if (updateURL) {
+				router.updateURL(sessionId);
+			}
+			return;
+		}
+	}
+
+	// Normal session switch: reload history
+	if (updateURL) {
+		router.updateURL(sessionId);
+	}
+
+	await loadChatHistory(sessionId);
+}
+
 // Start when page loads
 window.onload = () => {
 	initializeChat();
@@ -1448,3 +1754,6 @@ window.addMessage = addMessage;
 window.scrollToBottom = scrollToBottom;
 window.copyFullMessage = copyFullMessage;
 window.loadChatHistory = loadChatHistory;
+window.handleSessionSwitch = handleSessionSwitch;
+window.router = router;
+window.backgroundStreams = backgroundStreams;
