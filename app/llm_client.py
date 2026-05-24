@@ -245,6 +245,9 @@ async def generate_ai_response(
 
     raw_response is the full API response dict, used for tool-call parsing.
     Legacy /command detection lives in the orchestrator.
+    
+    NOTE: build_messages() fetches full history including the just-persisted
+    user message. We do NOT re-append user_message to avoid duplication.
     """
     if session_id is None:
         session_id = (await Database.get_active_session_async())["id"]
@@ -259,25 +262,14 @@ async def generate_ai_response(
         await Database.add_message_async("system", error_msg, session_id=session_id)
         return error_msg, None
 
+    # build_messages() fetches history which ALREADY contains the user message
+    # (persisted by orchestrator before calling this function)
     messages = await build_messages(
         profile, session_id, interface, user_message, include_image_paths=True
     )
-    if user_message and user_message.strip():
-        # Note: image_paths will be populated by orchestrator and available in history if needed,
-        # but for the current message we might need to handle it if build_messages doesn't.
-        # However, build_messages typically handles history.
-        # For the CURRENT turn's message:
-        cached_images = []
-        try:
-            from app.orchestrator import _cache_images_from_message
-
-            cached_images = _cache_images_from_message(user_message)
-        except ImportError:
-            pass
-
-        messages.append(
-            {"role": "user", "content": user_message, "image_paths": cached_images}
-        )
+    
+    # DO NOT re-append user_message here - it's already in history
+    # The history from build_messages() is authoritative
 
     # Apply the Interceptor Hook
     messages = multimodal_tools.inject_vision_context(messages, model)
@@ -349,6 +341,9 @@ async def generate_ai_response_streaming(
     non-streaming variant, then dispatches via the provider's streaming
     API. Yields raw provider chunks; the orchestrator is responsible for
     filtering /command preambles and post-processing.
+    
+    NOTE: build_messages() fetches full history including the just-persisted
+    user message. We do NOT re-append user_message to avoid duplication.
     """
     if session_id is None:
         session_id = (await Database.get_active_session_async())["id"]
@@ -364,21 +359,14 @@ async def generate_ai_response_streaming(
         yield error_msg
         return
 
+    # build_messages() fetches history which ALREADY contains the user message
+    # (persisted by orchestrator before calling this function)
     messages = await build_messages(
         profile, session_id, interface, user_message, include_image_paths=True
     )
-    if user_message and user_message.strip():
-        cached_images = []
-        try:
-            from app.orchestrator import _cache_images_from_message
-
-            cached_images = _cache_images_from_message(user_message)
-        except ImportError:
-            pass
-
-        messages.append(
-            {"role": "user", "content": user_message, "image_paths": cached_images}
-        )
+    
+    # DO NOT re-append user_message here - it's already in history
+    # The history from build_messages() is authoritative
 
     # Apply the Interceptor Hook
     messages = multimodal_tools.inject_vision_context(messages, resolved_model)
