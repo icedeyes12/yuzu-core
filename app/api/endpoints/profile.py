@@ -81,18 +81,13 @@ async def api_get_config():
 @router.get("/get_profile")
 async def api_get_profile():
     try:
-        log.info("api_get_profile: starting")
         profile = await get_profile_async()
-        log.info("api_get_profile: got profile")
         active_session = await get_active_session_async()
-        log.info(f"api_get_profile: got active_session type={type(active_session)}")
         session_id = active_session["id"]
         chat_history = await get_chat_history_async(session_id=session_id, limit=None)
-        log.info(f"api_get_profile: got chat_history type={type(chat_history)}")
 
         # Inject ongoing stream if it exists
         active_buf = await StreamManager.get_stream(session_id)
-        log.info(f"api_get_profile: got active_buf type={type(active_buf)}")
         if active_buf and active_buf.full_content:
             # Check if the last message in history is already this response
             last_msg = chat_history[-1] if chat_history else None

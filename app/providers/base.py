@@ -135,7 +135,10 @@ class AIProviderManager:
     async def get_all_models(self) -> dict[str, list[str]]:
         all_models = {}
         for provider_name, provider in self.providers.items():
-            all_models[provider_name] = await provider.get_models()
+            if asyncio.iscoroutinefunction(provider.get_models):
+                all_models[provider_name] = await provider.get_models()
+            else:
+                all_models[provider_name] = provider.get_models()
         return all_models
 
     async def send_message(
