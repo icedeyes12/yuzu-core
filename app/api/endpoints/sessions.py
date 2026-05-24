@@ -55,7 +55,11 @@ async def api_get_chat_history(session_id: int | None = None):
         if session_id:
             chat_history = await get_chat_history_async(session_id=session_id)
         else:
-            chat_history = await get_chat_history_async()
+            active_session = await get_active_session_async()
+            if active_session:
+                chat_history = await get_chat_history_async(active_session["id"])
+            else:
+                chat_history = await get_chat_history_async()
         return {"status": "success", "chat_history": chat_history}
     except Exception as e:
         log.error("Error getting chat history: %s", e)

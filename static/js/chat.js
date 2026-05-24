@@ -1437,6 +1437,9 @@ async function loadChatHistory(sessionId = null) {
 		}
 
 		const res = await fetch(url);
+		if (!res.ok) {
+			throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+		}
 		const data = await res.json();
 		const history = data.chat_history || [];
 
