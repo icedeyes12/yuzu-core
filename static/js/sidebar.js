@@ -353,14 +353,26 @@ function switchSession(sessionId) {
 			currentSession &&
 			window.backgroundStreams.hasActiveStream(currentSession)
 		) {
-			// Stream will be paused by handleSessionSwitch
 			console.log(
 				`[Sidebar] Active stream in session ${currentSession}, pausing`,
 			);
 		}
 	}
 
-	// Use handleSessionSwitch if available (no page reload)
+	// [CROSS-PAGE FIX] If we're not on the chat page, navigate to chat with session param
+	const isOnChatPage =
+		window.location.pathname === "/chat" ||
+		window.location.pathname === "/chat/";
+
+	if (!isOnChatPage) {
+		// Navigate to chat page with session parameter
+		// The chat page will handle loading the session via URL param
+		window.location.href = `/chat?session=${sessionId}`;
+		toggleSidebar();
+		return;
+	}
+
+	// Use handleSessionSwitch if available (we're on chat page)
 	if (window.handleSessionSwitch) {
 		window.handleSessionSwitch(sessionId);
 		toggleSidebar();
@@ -377,11 +389,7 @@ function switchSession(sessionId) {
 		.then((data) => {
 			if (data.status === "success") {
 				toggleSidebar();
-
-				// Reload if on chat page
-				if (window.location.pathname === "/chat") {
-					window.location.reload();
-				}
+				window.location.href = `/chat?session=${sessionId}`;
 			}
 		})
 		.catch((error) => {

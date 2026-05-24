@@ -604,7 +604,10 @@ class MultimodalManager {
 											if (msgEl) msgEl.style.display = "";
 											firstChunk = false;
 										}
-										this.renderStreamChunk(contentDiv, localBuffer);
+										this.renderStreamChunk(
+											contentDiv,
+											backgroundStreams.getBuffer(sessionId),
+										);
 										scrollToBottom();
 									}
 								} else {
