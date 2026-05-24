@@ -693,16 +693,24 @@ class MultimodalTools:
                             text_content = part.get("text", "")
                             break
 
+                # Check for missing files first and add placeholders
+                missing_placeholders = []
+                valid_paths = []
+                for path in image_paths:
+                    if not os.path.exists(path):
+                        missing_placeholders.append(f"[Image file unavailable: {path}]")
+                    else:
+                        valid_paths.append(path)
+
+                if missing_placeholders:
+                    text_content += "\n" + "\n".join(missing_placeholders)
+
                 new_content = [
                     {"type": "text", "text": text_content or "What's in these images?"}
                 ]
 
-                for path in image_paths:
+                for path in valid_paths:
                     try:
-                        # Resizing/Compression to prevent 413 Payload Too Large
-                        if not os.path.exists(path):
-                            continue
-
                         with Image.open(path) as img:
                             # Resize if larger than 1024px
                             if max(img.size) > 1024:

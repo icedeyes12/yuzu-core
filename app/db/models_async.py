@@ -339,17 +339,20 @@ async def add_message_async(
     session_id: int,
     role: str,
     content: str,
-    image_paths: str | None = None,  # noqa: ARG001 - column not yet wired
+    image_paths: list[str] | None = None,
 ) -> int | None:
     """Insert a message row, bump the session's message_count, return id.
 
     Timestamp is set by database NOW() to ensure ordering coherence.
     """
+    import json
+
+    paths_json = json.dumps(image_paths or [])
     try:
         async with AsyncPgSession() as s:
             row = await s.execute_returning(
                 SQL_MESSAGE_INSERT,
-                (session_id, role, content, image_paths),  # 4 params for 4 placeholders
+                (session_id, role, content, paths_json),
             )
             if row:
                 await increment_message_count_async(session_id)
