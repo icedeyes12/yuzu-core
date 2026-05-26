@@ -1,0 +1,34 @@
+/* FILE: static/css/components/scroll-button.css */
+/* DESCRIPTION: Scroll to bottom button styling */
+
+/* ==================== SCROLL TO BOTTOM BUTTON ==================== */
+.scroll-to-bottom-btn {
+	position: fixed;
+	right: 20px;
+	z-index: 1000;
+	width: 48px;
+	height: 48px;
+	border-radius: 50%;
+	background: var(--accent-primary);
+	color: white;
+	border: none;
+	cursor: pointer;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.3s ease;
+	/* Dynamic positioning - calculated by JavaScript based on input area height */
+	bottom: 100px;
+}
+
+.scroll-to-bottom-btn:hover {
+	transform: scale(1.1);
+	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.scroll-to-bottom-btn.hidden {
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+}

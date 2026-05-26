@@ -1,0 +1,337 @@
+/* FILE: static/css/components/messages.css */
+/* DESCRIPTION: Chat container, message bubbles, and markdown content styling */
+
+/* ==================== CHAT CONTAINER ==================== */
+.chat-container {
+	flex: 1;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scroll-behavior: smooth;
+	padding-top: 56px;
+	padding-bottom: 7rem;
+	padding-left: 0.8rem;
+	padding-right: 0.8rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.8rem;
+	background: var(--bg-color);
+	-webkit-overflow-scrolling: touch;
+	box-sizing: border-box;
+}
+
+/* ==================== MESSAGES ==================== */
+.message {
+	position: relative;
+	max-width: 85%;
+	padding: 0.8rem 1rem;
+	border-radius: 12px;
+	animation: fadeIn 0.3s ease;
+	word-wrap: break-word;
+	overflow-wrap: break-word;
+}
+
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* === USER MESSAGES: NESTED BUBBLE STRUCTURE === */
+.message.user {
+	align-self: flex-end;
+	margin-left: auto;
+	background: transparent;
+	border: none;
+	padding: 0;
+}
+
+.message-bubble {
+	background: var(--user-bubble);
+	border: 1px solid var(--border-color);
+	border-radius: 12px;
+	padding: 0.8rem 1rem;
+	word-wrap: break-word;
+	overflow-wrap: break-word;
+}
+
+.message-footer--user {
+	justify-content: flex-end;
+	margin-top: 0.25rem;
+	padding: 0 0.25rem;
+}
+
+/* === ASSISTANT MESSAGES: ORIGINAL FLAT STRUCTURE === */
+.message.ai {
+	align-self: flex-start;
+	background: transparent;
+	border: none;
+	max-width: 95%;
+	padding: 1rem 0.5rem;
+}
+
+.message-content {
+	color: var(--text-color);
+	line-height: 1.6;
+	font-size: 0.95rem;
+}
+
+.timestamp {
+	font-size: 0.7rem;
+	color: var(--text-secondary);
+	opacity: 0.7;
+}
+
+.message-footer {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-top: 0.5rem;
+	gap: 0.5rem;
+}
+
+/* Copy full message button */
+.copy-message-btn {
+	background: var(--bg-secondary);
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	padding: 6px;
+	cursor: pointer;
+	opacity: 0.7;
+	transition: all 0.2s ease;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.message:hover .copy-message-btn {
+	opacity: 1;
+}
+
+.copy-message-btn:hover {
+	background: var(--accent-primary);
+	color: white;
+	border-color: var(--accent-primary);
+}
+
+.copy-message-btn.copied {
+	background: var(--accent-tertiary);
+	color: white;
+	border-color: var(--accent-tertiary);
+}
+
+/* ==================== MARKDOWN CONTENT ==================== */
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4,
+.message-content h5,
+.message-content h6 {
+	color: var(--text-color);
+	margin: 1rem 0 0.5rem;
+	font-weight: 600;
+}
+
+.message-content h1 {
+	font-size: 1.8rem;
+}
+.message-content h2 {
+	font-size: 1.5rem;
+}
+.message-content h3 {
+	font-size: 1.3rem;
+}
+.message-content h4 {
+	font-size: 1.1rem;
+}
+.message-content h5 {
+	font-size: 1rem;
+}
+.message-content h6 {
+	font-size: 0.9rem;
+}
+
+.message-content p {
+	margin: 0.5rem 0;
+}
+
+.message-content ul,
+.message-content ol {
+	margin: 0.5rem 0;
+	padding-left: 1.5rem;
+}
+
+.message-content li {
+	margin: 0.3rem 0;
+}
+
+.message-content blockquote {
+	border-left: 4px solid var(--accent-primary);
+	margin: 0.8rem 0;
+	padding: 0.5rem 1rem;
+	background: var(--bg-secondary);
+	border-radius: 4px;
+	font-style: italic;
+}
+
+/* Callout blocks */
+.message-content .callout {
+	border-left: 4px solid;
+	padding: 0.6rem 0.8rem;
+	border-radius: 6px;
+	margin: 0.6rem 0;
+	font-style: normal;
+}
+
+.message-content .callout-note {
+	border-color: var(--accent-primary);
+	background: rgba(106, 169, 255, 0.08);
+}
+
+.message-content .callout-info {
+	border-color: var(--accent-primary);
+	background: rgba(106, 169, 255, 0.08);
+}
+
+.message-content .callout-tip {
+	border-color: var(--accent-tertiary);
+	background: rgba(76, 175, 80, 0.08);
+}
+
+.message-content .callout-warning {
+	border-color: var(--accent-secondary);
+	background: rgba(255, 179, 71, 0.08);
+}
+
+.message-content .callout-caution {
+	border-color: var(--tool-error);
+	background: rgba(255, 107, 107, 0.08);
+}
+
+.message-content .callout-important {
+	border-color: var(--accent-primary);
+	background: rgba(155, 89, 182, 0.08);
+}
+
+/* Table container */
+.message-content .table-container {
+	overflow-x: auto;
+	margin: 0.8rem 0;
+	border-radius: 6px;
+	border: 1px solid var(--border-color);
+	background: var(--bg-secondary);
+}
+
+.table-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 0.5rem 1rem;
+	background: rgba(0, 0, 0, 0.2);
+	border-bottom: 1px solid var(--border-color);
+}
+
+.table-label {
+	font-size: 0.75rem;
+	color: var(--text-secondary);
+	text-transform: uppercase;
+	font-weight: 600;
+}
+
+.copy-table-btn {
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	background: transparent;
+	border: 1px solid var(--border-color);
+	border-radius: 4px;
+	padding: 0.3rem 0.6rem;
+	font-size: 0.75rem;
+	color: var(--text-color);
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.copy-table-btn:hover {
+	background: var(--accent-primary);
+	color: white;
+	border-color: var(--accent-primary);
+}
+
+.copy-table-btn.copied {
+	background: var(--accent-tertiary);
+	color: white;
+	border-color: var(--accent-tertiary);
+}
+
+.message-content .table-container table {
+	margin: 0;
+	border: none;
+	border-radius: 0;
+	width: 100%;
+	display: table;
+}
+
+.message-content th,
+.message-content td {
+	border: 1px solid var(--border-color);
+	padding: 0.5rem;
+	text-align: left;
+}
+
+.message-content th {
+	background: var(--bg-secondary);
+	font-weight: 600;
+}
+
+.message-content details {
+	margin: 0.8rem 0;
+	padding: 0.5rem;
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	background: var(--bg-secondary);
+}
+
+.message-content summary {
+	cursor: pointer;
+	font-weight: 600;
+	padding: 0.3rem;
+}
+
+.message-content img,
+.markdown-image {
+	max-width: none;
+	height: auto;
+	border-radius: 8px;
+	margin: 0.8rem 0;
+	display: block;
+}
+
+.image-error {
+	padding: 1rem;
+	margin: 0.8rem 0;
+	border-radius: 8px;
+	background: rgba(255, 69, 58, 0.1);
+	border: 1px solid rgba(255, 69, 58, 0.3);
+	color: var(--tool-error);
+	font-size: 0.9rem;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.render-error {
+	margin: 0.5rem 0;
+	padding: 0.75rem;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 69, 58, 0.3);
+	background: rgba(255, 69, 58, 0.1);
+	color: var(--text-color);
+	white-space: pre-wrap;
+	word-break: break-word;
+}

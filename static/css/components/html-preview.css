@@ -1,0 +1,308 @@
+/* FILE: static/css/components/html-preview.css */
+/* DESCRIPTION: HTML preview modal and console panel styling */
+
+/* ==================== HTML PREVIEW CONTAINER ==================== */
+.html-preview-container {
+	margin: 1rem 0;
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	overflow: hidden;
+	background: var(--bg-secondary);
+}
+
+.html-preview-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 0.5rem 1rem;
+	background: rgba(0, 0, 0, 0.2);
+	border-bottom: 1px solid var(--border-color);
+}
+
+.html-preview-label {
+	font-size: 0.75rem;
+	color: var(--text-secondary);
+	text-transform: uppercase;
+	font-weight: 600;
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.html-preview-label svg {
+	width: 14px;
+	height: 14px;
+}
+
+.preview-btn {
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	padding: 0.3rem 0.7rem;
+	background: var(--accent-primary);
+	color: white;
+	border: none;
+	border-radius: 6px;
+	font-size: 0.8rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.preview-btn:hover {
+	background: var(--accent-primary);
+	transform: scale(1.02);
+}
+
+.preview-btn.active {
+	background: var(--accent-tertiary);
+}
+
+.preview-btn svg {
+	width: 14px;
+	height: 14px;
+}
+
+.preview-iframe {
+	width: 100%;
+	height: 70vh;
+	min-height: 300px;
+	max-height: calc(100vh - 200px);
+	border: none;
+	border-radius: 0 0 8px 8px;
+	background: white;
+	display: block;
+	overflow: auto;
+	flex: 1;
+}
+
+.preview-placeholder {
+	padding: 1rem 1rem 0.8rem;
+	color: var(--text-secondary);
+	font-size: 0.85rem;
+	font-style: italic;
+}
+
+.preview-error {
+	padding: 1rem;
+	color: var(--tool-error);
+	font-size: 0.85rem;
+}
+
+/* ==================== HTML PREVIEW MODAL ==================== */
+#html-preview-modal {
+	display: none;
+	position: fixed;
+	inset: 0;
+	z-index: 9999;
+	align-items: center;
+	justify-content: center;
+}
+
+#html-preview-modal.active {
+	display: flex;
+}
+
+.html-modal-backdrop {
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.6);
+	backdrop-filter: blur(4px);
+}
+
+.html-modal-content {
+	position: relative;
+	width: min(95vw, 900px);
+	height: 85vh;
+	max-height: 80vh;
+	background: var(--bg-color);
+	border: 1px solid var(--border-color, #333);
+	border-radius: 12px;
+	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.html-modal-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 12px 16px;
+	border-bottom: 1px solid var(--border-color, #333);
+	background: rgba(0, 0, 0, 0.2);
+	flex-shrink: 0;
+}
+
+.html-modal-title {
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--text-color);
+}
+
+.html-modal-close {
+	background: transparent;
+	border: none;
+	color: var(--text-secondary, #888);
+	cursor: pointer;
+	padding: 4px;
+	border-radius: 4px;
+	display: flex;
+	align-items: center;
+}
+
+.html-modal-close:hover {
+	color: var(--text-color, #fff);
+	background: rgba(255, 255, 255, 0.1);
+}
+
+.html-modal-body {
+	flex: 1;
+	overflow: hidden;
+	background: #fff;
+	min-height: 300px;
+	max-height: 60vh;
+}
+
+.html-modal-body iframe {
+	width: 100%;
+	height: 100%;
+	border: none;
+	background: #fff;
+}
+
+.html-modal-actions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.html-modal-btn {
+	background: transparent;
+	border: 1px solid var(--border-color, #444);
+	border-radius: 6px;
+	color: var(--text-secondary, #888);
+	cursor: pointer;
+	padding: 5px 7px;
+	display: flex;
+	align-items: center;
+	transition: all 0.2s;
+}
+
+.html-modal-btn:hover {
+	background: rgba(255, 255, 255, 0.1);
+	color: var(--text-color);
+	border-color: var(--text-secondary, #888);
+}
+
+.html-modal-btn.active {
+	background: rgba(255, 105, 180, 0.2);
+	color: var(--accent-primary);
+	border-color: var(--accent-primary);
+}
+
+/* Fullscreen mode */
+#html-preview-modal.fullscreen .html-modal-content {
+	width: 100vw;
+	height: 100vh;
+	max-width: 100vw;
+	max-height: 100vh;
+	border-radius: 0;
+	margin: 0;
+}
+
+#html-preview-modal.fullscreen .preview-iframe {
+	height: 100vh;
+	max-height: 100vh;
+}
+
+.preview-body-light {
+	background: var(--bg-color);
+}
+
+.preview-body-dark iframe {
+	background: var(--bg-color);
+}
+
+/* ==================== CONSOLE PANEL ==================== */
+.console-panel {
+	border-top: 1px solid var(--border-color);
+	background: var(--bg-color);
+	max-height: 100px;
+	overflow-y: auto;
+	font-family: "Hack", "Fira Code", "Consolas", monospace;
+	font-size: 11px;
+	line-height: 1.5;
+	display: none;
+	flex-shrink: 0;
+}
+
+.console-panel.visible {
+	display: block;
+}
+
+.console-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 4px 8px;
+	background: var(--card-bg);
+	border-bottom: 1px solid var(--border-color);
+	position: sticky;
+	top: 0;
+}
+
+.console-header span {
+	font-size: 10px;
+	color: var(--text-secondary);
+	font-family: sans-serif;
+	text-transform: uppercase;
+	font-weight: 600;
+}
+
+.console-clear {
+	background: none;
+	border: none;
+	color: var(--text-secondary);
+	cursor: pointer;
+	font-size: 10px;
+	padding: 2px 6px;
+	border-radius: 4px;
+}
+
+.console-clear:hover {
+	background: var(--bg-secondary);
+	color: var(--text-color);
+}
+
+.console-line {
+	padding: 2px 8px;
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+.console-line.log {
+	color: var(--text-color);
+}
+
+.console-line.warn {
+	color: var(--accent-secondary);
+	background: rgba(210, 153, 34, 0.1);
+}
+
+.console-line.error {
+	color: var(--tool-error);
+	background: rgba(248, 81, 73, 0.1);
+}
+
+.console-line.info {
+	color: var(--accent-primary);
+}
+
+.console-empty {
+	padding: 8px;
+	color: var(--text-secondary);
+	font-style: italic;
+	font-family: sans-serif;
+	font-size: 11px;
+}

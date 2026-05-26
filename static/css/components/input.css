@@ -1,0 +1,81 @@
+/* FILE: static/css/components/input.css */
+/* DESCRIPTION: Chat input area styling */
+
+/* ==================== INPUT AREA ==================== */
+.input-area {
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	z-index: 100;
+	display: flex;
+	align-items: flex-end;
+	gap: 0.5rem;
+	padding: 0.8rem 1rem;
+	background: var(--header-bg);
+	border-top: 1px solid var(--border-color);
+	backdrop-filter: blur(10px);
+}
+
+#messageInput {
+	flex: 1;
+	min-height: 42px;
+	max-height: 400px;
+	padding: 0.7rem 1rem;
+	border: 2px solid var(--border-color);
+	border-radius: 20px;
+	background: var(--bg-secondary);
+	color: var(--text-color);
+	font-size: 0.95rem;
+	font-family: inherit;
+	resize: none;
+	overflow-y: auto;
+}
+
+#messageInput:focus {
+	outline: none;
+	border-color: var(--accent-primary);
+}
+
+#sendButton {
+	min-width: 70px;
+	height: 42px;
+	background: var(--accent-primary);
+	color: white;
+	border: none;
+	border-radius: 20px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	flex-shrink: 0;
+}
+
+#sendButton:hover {
+	background: var(--accent-primary);
+	transform: scale(1.05);
+}
+
+#sendButton:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+#sendButton.stop-mode {
+	background: #dc3545;
+	animation: pulse-stop 1.5s infinite;
+}
+
+#sendButton.stop-mode:hover {
+	background: #c82333;
+	transform: scale(1.05);
+}
+
+@keyframes pulse-stop {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+	}
+	50% {
+		box-shadow: 0 0 0 8px rgba(220, 53, 69, 0);
+	}
+}
