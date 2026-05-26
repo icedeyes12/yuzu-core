@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -120,7 +121,8 @@ class ConfigService:
         if model_name:
             config["preferred_model"] = model_name
         Database.update_profile({"providers_config": config})
-        reload_ai_manager()
+        # Run async reload in sync context
+        asyncio.run(reload_ai_manager())
 
         suffix = f" with model: {model_name}" if model_name else ""
         return f"Preferred provider set to: {provider_name}{suffix}"
@@ -131,4 +133,29 @@ class ConfigService:
         config = profile.get("providers_config") or {}
         config["vision_model_preferences"] = {"provider": provider, "model": model}
         Database.update_profile({"providers_config": config})
+        return f"Vision model set to: {provider}/{model}"
+
+    @staticmethod
+    async def set_preferred_provider_async(
+        provider_name: str, model_name: str | None = None
+    ) -> str:
+        """Async version for web API endpoints."""
+        profile = await Database.get_profile_async()
+        config = profile.get("providers_config") or {}
+        config["preferred_provider"] = provider_name
+        if model_name:
+            config["preferred_model"] = model_name
+        await Database.update_profile_async({"providers_config": config})
+        await reload_ai_manager()
+
+        suffix = f" with model: {model_name}" if model_name else ""
+        return f"Preferred provider set to: {provider_name}{suffix}"
+
+    @staticmethod
+    async def set_vision_model_async(provider: str, model: str) -> str:
+        """Async version for web API endpoints."""
+        profile = await Database.get_profile_async()
+        config = profile.get("providers_config") or {}
+        config["vision_model_preferences"] = {"provider": provider, "model": model}
+        await Database.update_profile_async({"providers_config": config})
         return f"Vision model set to: {provider}/{model}"

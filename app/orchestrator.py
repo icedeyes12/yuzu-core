@@ -536,10 +536,11 @@ async def handle_user_message_streaming(
     provider: str | None = None,
     model: str | None = None,
     abort_check: callable[[], bool] | None = None,
+    image_paths: list[str] | None = None,
 ) -> AsyncIterator[str]:
     """Streaming entrypoint (async)."""
     profile = await Database.get_profile_async()
-    if not user_message.strip():
+    if not user_message.strip() and not image_paths:
         yield "Please enter a message!"
         return
 
@@ -551,9 +552,16 @@ async def handle_user_message_streaming(
         session_id = active_session["id"]
     else:
         active_session = {"id": session_id}
+    
+    # Cache any images referenced in the message (URLs, etc.)
     cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
+    
+    # Merge with explicitly provided image_paths
+    all_image_paths = list(cached_images) if cached_images else []
+    if image_paths:
+        all_image_paths.extend(image_paths)
 
-    await _persist_user_async(user_message, session_id, cached_images)
+    await _persist_user_async(user_message, session_id, all_image_paths or None)
 
     # Fast-path: user typed /imagine directly
     stripped = user_message.strip()

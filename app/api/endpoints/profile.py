@@ -202,7 +202,7 @@ async def api_list_providers():
 @router.post("/providers/set_preferred")
 async def api_set_preferred_provider(request: ProviderSetRequest):
     try:
-        result = ConfigService.set_preferred_provider(
+        result = await ConfigService.set_preferred_provider_async(
             request.provider_name, request.model_name
         )
         return {"status": "success", "message": result}
@@ -221,7 +221,7 @@ async def api_test_provider_connection(request: ProviderTestRequest):
                 "status": "error",
                 "message": f"Provider {request.provider_name} not found",
             }
-        is_connected = provider.test_connection()
+        is_connected = await provider.test_connection()
         return {
             "status": "success",
             "provider": request.provider_name,
@@ -246,7 +246,7 @@ async def api_get_vision_capabilities():
 @router.post("/providers/set_vision_model")
 async def api_set_vision_model(request: VisionModelSetRequest):
     try:
-        result = ConfigService.set_vision_model(request.provider, request.model)
+        result = await ConfigService.set_vision_model_async(request.provider, request.model)
         return {"status": "success", "message": result}
     except Exception as e:
         log.error("Error setting vision model: %s", e)

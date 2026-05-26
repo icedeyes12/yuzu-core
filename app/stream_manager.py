@@ -24,12 +24,14 @@ class StreamBuffer:
         interface: str = "web",
         provider: Optional[str] = None,
         model: Optional[str] = None,
+        image_paths: Optional[List[str]] = None,
     ):
         self.session_id = session_id
         self.user_message = user_message
         self.interface = interface
         self.provider = provider
         self.model = model
+        self.image_paths = image_paths or []
 
         self.full_content = ""
         self.queues: List[asyncio.Queue] = []
@@ -50,6 +52,7 @@ class StreamBuffer:
                 session_id=self.session_id,
                 provider=self.provider,
                 model=self.model,
+                image_paths=self.image_paths,
             ):
                 async with self.lock:
                     self.full_content += chunk
@@ -105,6 +108,7 @@ class StreamManager:
         interface: str = "web",
         provider: Optional[str] = None,
         model: Optional[str] = None,
+        image_paths: Optional[List[str]] = None,
     ) -> StreamBuffer:
         """Start a new stream or return an existing one."""
         async with cls._lock:
@@ -115,7 +119,9 @@ class StreamManager:
                     old_stream.task.cancel()
                 del cls._streams[session_id]
 
-            stream = StreamBuffer(session_id, user_message, interface, provider, model)
+            stream = StreamBuffer(
+                session_id, user_message, interface, provider, model, image_paths
+            )
             cls._streams[session_id] = stream
 
             # Ensure cleanup loop is running

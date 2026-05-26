@@ -268,8 +268,8 @@ export class MultimodalManager {
 
 			const formData = new FormData();
 			formData.append("message", message);
-			images.forEach((blob, index) => {
-				formData.append(`image_${index}`, blob);
+			images.forEach((blob) => {
+				formData.append("images", blob);
 			});
 
 			const response = await fetch("/api/send_message_stream", {

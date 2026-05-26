@@ -22,8 +22,11 @@ class ChatService:
 
     @staticmethod
     async def process_image_uploads(images: list[UploadFile]) -> list[str]:
-        """Save uploaded images and return their markdown references."""
-        image_markdowns = []
+        """Save uploaded images and return their file paths.
+        
+        Returns list of saved file paths like ['static/uploads/20250526_123456_0_image.png']
+        """
+        saved_paths = []
         if not images:
             return []
 
@@ -40,17 +43,24 @@ class ChatService:
                         for c in image_file.filename
                         if c.isalnum() or c in (".", "-", "_")
                     ).rstrip()
+                    # Determine extension from content type or filename
+                    ext = Path(safe_filename).suffix.lower()
+                    if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
+                        ext = ".png"
+                        safe_filename = f"{Path(safe_filename).stem}{ext}"
+                    
                     filename = f"{timestamp}_{i}_{safe_filename}"
                     filepath = uploads_dir / filename
 
                     content = await image_file.read()
                     filepath.write_bytes(content)
 
-                    image_markdowns.append(f"![Uploaded Image](uploads/{filename})")
+                    saved_paths.append(str(filepath))
+                    log.info(f"[Upload] Saved image: {filepath}")
                 except Exception as e:
                     log.error(f"Error saving uploaded image {image_file.filename}: {e}")
 
-        return image_markdowns
+        return saved_paths
 
     @staticmethod
     async def get_stream_generator(
@@ -62,18 +72,22 @@ class ChatService:
     ) -> AsyncIterator[str]:
         """
         Start a streaming message response (async).
+        Images are saved to disk and paths are passed to the orchestrator.
         """
+        image_paths = []
         if images:
-            image_markdowns = await ChatService.process_image_uploads(images)
-            if image_markdowns:
-                user_message = (
-                    f"{user_message}\n\n" + "\n".join(image_markdowns)
-                    if user_message
-                    else "\n".join(image_markdowns)
-                )
+            image_paths = await ChatService.process_image_uploads(images)
 
         active_session = await get_active_session_async()
         session_id = active_session["id"]
+
+        # Build markdown for display in history
+        if image_paths:
+            image_markdown = "\n".join([f"![Uploaded Image]({path})" for path in image_paths])
+            if user_message:
+                user_message = f"{user_message}\n\n{image_markdown}"
+            else:
+                user_message = image_markdown
 
         buffer = await StreamManager.start_stream(
             session_id,
@@ -81,6 +95,7 @@ class ChatService:
             interface=interface,
             provider=provider,
             model=model,
+            image_paths=image_paths,  # Pass paths for vision context
         )
 
         q = buffer.subscribe()
