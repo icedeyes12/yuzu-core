@@ -23,6 +23,7 @@ from app.memory.db_memory import (
 from app.memory.extractor import upsert_semantic_memory_async
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)  # Enable debug logging for PCL
 
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -190,6 +191,9 @@ async def calibrate_and_extract_async(
     prediction_text = predicted_content or "No prediction (cold start)."
     facts_context = _build_facts_context(existing_facts)
 
+    logger.debug(f"CALIBRATE: {len(actual_messages)} messages, {len(existing_facts)} existing facts")
+    logger.debug(f"PREDICTION: {prediction_text[:200]}...")
+
     system_prompt = """You are a deterministic knowledge auditor. Compare a topic prediction, existing facts, and an actual conversation log. Output a JSON array of audit actions ONLY.
 
 ## OUTPUT FORMAT (JSON array ONLY, no other text)
@@ -235,13 +239,17 @@ Apply the deterministic action rules to extract any new, updated, reinforced, or
             max_tokens=800,
         )
         if not response:
+            logger.warning("CALIBRATE: _internal_llm_call returned None")
             return []
+
+        logger.debug(f"CALIBRATE LLM response ({len(response)} chars): {response[:500]}...")
 
         import json
 
         try:
             actions = json.loads(response)
         except json.JSONDecodeError:
+            logger.warning("CALIBRATE: JSON decode failed, attempting truncation repair")
             actions = []
             for i in range(len(response), 0, -1):
                 try:
@@ -252,7 +260,10 @@ Apply the deterministic action rules to extract any new, updated, reinforced, or
                     continue
 
         if not isinstance(actions, list):
+            logger.warning(f"CALIBRATE: parsed actions is not a list: {type(actions)}")
             return []
+
+        logger.info(f"CALIBRATE: extracted {len(actions)} raw actions")
 
         # Validate and normalize categories
         valid_categories = {
@@ -327,8 +338,11 @@ async def consolidate_facts_async(
     """Apply extracted knowledge actions (async)."""
     counts = {"new": 0, "reinforced": 0, "updated": 0, "invalidated": 0}
 
+    logger.info(f"CONSOLIDATE: {len(extracted)} actions to process")
+
     # Pre-count existing facts per category to enforce caps
     category_counts = await _get_category_counts_async(session_id)
+    logger.debug(f"CONSOLIDATE: category counts: {category_counts}")
 
     for item in extracted:
         fact_text = item.get("fact", "")
@@ -416,16 +430,21 @@ async def run_predict_calibrate_async(
 ) -> dict | None:
     """Run full PCL pipeline (async)."""
     if not messages:
+        logger.warning("PCL: No messages provided, skipping")
         return None
+
+    logger.info(f"PCL: Starting for session {session_id}, episode {episode_id}")
 
     try:
         # 1. Load existing semantic facts
         existing = await load_relevant_semantic_facts_async(session_id)
+        logger.debug(f"PCL: Loaded {len(existing)} existing facts")
 
         # 2. PREDICT
         predicted = await predict_episode_content_async(
             existing, episode_summary, segment_messages=messages
         )
+        logger.debug(f"PCL: Prediction result: {predicted[:100] if predicted else 'None'}...")
 
         # 3. CALIBRATE
         extracted = await calibrate_and_extract_async(predicted, messages, existing)

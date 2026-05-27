@@ -195,10 +195,13 @@ class AIProviderManager:
 
     async def _internal_llm_call(self, messages: list[dict], **kwargs) -> str | None:
         if "chutes" not in self.providers:
+            logger.warning("[INT] chutes provider not available")
             return None
         provider = self.providers["chutes"]
         MAIN_MODEL = "google/gemma-4-31B-turbo-TEE"
         FALLBACK_MODEL = "Qwen/Qwen3.6-27B-TEE"
+
+        logger.debug(f"[INT] Starting with {MAIN_MODEL}, {len(messages)} messages")
 
         def _is_connection_error(error: str | None) -> bool:
             if not error:
@@ -220,8 +223,10 @@ class AIProviderManager:
                 messages, MAIN_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs
             )
             if result:
+                logger.debug(f"[INT] Success with {MAIN_MODEL}: {len(result)} chars")
                 return result
             last_error = getattr(provider, "_last_error", None)
+            logger.warning(f"[INT] {MAIN_MODEL} failed (attempt {attempt+1}): {last_error}")
             if not _is_connection_error(last_error):
                 break
             if attempt < 2:
@@ -232,12 +237,16 @@ class AIProviderManager:
                 messages, FALLBACK_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs
             )
             if result:
+                logger.debug(f"[INT] Success with {FALLBACK_MODEL}: {len(result)} chars")
                 return result
             last_error = getattr(provider, "_last_error", None)
+            logger.warning(f"[INT] {FALLBACK_MODEL} failed (attempt {attempt+1}): {last_error}")
             if not _is_connection_error(last_error):
                 break
             if attempt < 1:
                 await asyncio.sleep(0.5)
+        
+        logger.error("[INT] All models failed, returning None")
         return None
 
     async def auto_send_message(self, messages: list[dict], **kwargs) -> str | None:
