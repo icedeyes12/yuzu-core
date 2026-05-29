@@ -742,7 +742,7 @@ async def run_memory_review_async(session_id: int) -> dict:
     Returns summary: {reviewed: n, ratings: {...}}
     """
     from app.memory.memory_review import review_memory_async
-    from app.memory.db_memory import get_facts_by_session_async, FACT_TYPE_STATIC
+    from app.memory.db_memory import FACT_TYPE_STATIC, get_facts_by_session_async
 
     try:
         # Get facts pending review
@@ -792,51 +792,36 @@ async def run_memory_pipeline_async(session_id: int, message_count: int) -> dict
     Returns summary: {segments: n, episodes: n, pcl_runs: n}
     """
     from app.db import get_session_messages_async, get_memory_state_async
-    from app.memory.db_memory import get_facts_by_session_async, FACT_TYPE_DYNAMIC
 
     logger.info(f"Starting for session {session_id}, count={message_count}")
 
-    # Get current total count for marking done
+    # Get current state for tracking
     state = await get_memory_state_async(session_id)
-    last_count = state.get("last_segmented_count", 0) or 0
-    current_total = last_count  # Will be updated below
+    last_segmented_count = state.get("last_segmented_count", 0) or 0
 
     try:
-        # Get messages
+        # Get ALL messages (we'll filter by count, not by episode ID)
         all_messages = await get_session_messages_async(session_id, limit=10000)
         if not all_messages:
             return {"segments": 0, "episodes": 0, "pcl_runs": 0}
 
-        # Find where we left off
-        segments = await get_facts_by_session_async(
-            session_id, fact_type=FACT_TYPE_DYNAMIC, limit=100
-        )
-        segments = [
-            s
-            for s in segments
-            if s.get("metadata", {}).get("source_table") == "episodic_memories"
+        # Filter to user/assistant messages only
+        conversation_messages = [
+            m for m in all_messages if m.get("role") in ("user", "assistant")
         ]
 
-        if segments:
-            last_end_id = max(
-                s.get("metadata", {}).get("end_message_id", 0) for s in segments
-            )
-        else:
-            last_end_id = 0
-
-        # Filter to unsegmented messages
-        unsegmented = [
-            m
-            for m in all_messages
-            if m.get("id", 0) > last_end_id and m.get("role") in ("user", "assistant")
-        ]
-
-        # Get actual count of unsegmented messages for marking
+        # CRITICAL: Only process messages AFTER last_segmented_count
+        # This prevents double-segmentation
+        unsegmented = conversation_messages[last_segmented_count:]
         unsegmented_count = len(unsegmented)
-        current_total = last_count + unsegmented_count
+
+        # Update current total for marking done
+        current_total = last_segmented_count + unsegmented_count
 
         if unsegmented_count < MIN_MESSAGES:
-            logger.debug(f"Only {unsegmented_count} unsegmented msgs, skipping")
+            logger.debug(
+                f"Only {unsegmented_count} unsegmented msgs (count-based), skipping"
+            )
             # Still mark done with current total so we don't re-check these
             await mark_segmentation_done_async(session_id, current_total)
             return {"segments": 0, "episodes": 0, "pcl_runs": 0}

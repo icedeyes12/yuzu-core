@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryService:
-    _PIPELINE_CHECK_INTERVAL = 5
+    _PIPELINE_CHECK_INTERVAL = 50  # Match WINDOW_MAX to avoid unnecessary checks
 
     @staticmethod
     async def _summarize_if_needed_async(
