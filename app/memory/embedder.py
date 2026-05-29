@@ -59,7 +59,7 @@ async def embed_texts_async(
     # Use rate limiter - embedding shares global Chutes rate limit
     async with client:
         try:
-            async with _rate_limit_provider("chutes", "embedding"):
+            async with _rate_limit_provider("chutes", "embedding", "embedding"):
                 resp = await client.post(
                     CHUTES_EMBED_ENDPOINT, json=payload, timeout=timeout
                 )

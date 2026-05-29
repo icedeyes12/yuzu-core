@@ -61,7 +61,7 @@ class ChutesProvider(AIProvider):
         return self.available_models
 
     async def send_message(
-        self, messages: list[dict], model: str, **kwargs
+        self, messages: list[dict], model: str, source: str = "llm", **kwargs
     ) -> str | None:
         """Send message with retry logic and model fallback.
 
@@ -116,7 +116,7 @@ class ChutesProvider(AIProvider):
                 error_msg = None
 
                 # Rate-limited HTTP request (lock held during request only)
-                async with _rate_limit_provider("chutes", current_model):
+                async with _rate_limit_provider("chutes", current_model, source):
                     result = await self._chutes_raw(current_model, messages, kwargs)
                     status = result[0]
                     data = result[1] if len(result) > 1 else None
@@ -223,7 +223,7 @@ class ChutesProvider(AIProvider):
                 return (0, None, str(e))
 
     async def send_message_streaming(
-        self, messages: list[dict], model: str, **kwargs
+        self, messages: list[dict], model: str, source: str = "llm", **kwargs
     ) -> AsyncGenerator[str, None]:
         if not self.api_key or model not in self.available_models:
             reason = (
@@ -271,7 +271,7 @@ class ChutesProvider(AIProvider):
                 "stream": True,
             }
 
-            async with _rate_limit_provider("chutes", model):
+            async with _rate_limit_provider("chutes", model, source):
                 async with httpx.AsyncClient() as client:
                     async with client.stream(
                         "POST",

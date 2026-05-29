@@ -82,6 +82,13 @@ async def _memory_llm_call(ai_manager, messages: list[dict], **kwargs) -> str | 
     """
     global _last_memory_llm_call
 
+    # Log context size before making the call
+    total_chars = sum(
+        len(m.get("content", "")) if isinstance(m.get("content"), str) else 0
+        for m in messages
+    )
+    logger.debug(f"[MEMORY_LLM] Sending {total_chars} chars to LLM...")
+
     async with _MEMORY_LLM_SEMAPHORE:
         # Enforce minimum delay between calls
         now = time.time()
@@ -90,8 +97,16 @@ async def _memory_llm_call(ai_manager, messages: list[dict], **kwargs) -> str | 
             await asyncio.sleep(_MEMORY_LLM_DELAY - elapsed)
 
         try:
-            result = await ai_manager._internal_llm_call(messages, **kwargs)
+            result = await ai_manager._internal_llm_call(
+                messages, source="memory_pipeline", **kwargs
+            )
             _last_memory_llm_call = time.time()
+            if result:
+                logger.debug(f"[MEMORY_LLM] Response received: {len(result)} chars")
+            else:
+                logger.warning(
+                    "[MEMORY_LLM] LLM returned None - possible context overflow"
+                )
             return result
         except Exception as e:
             logger.warning(f"[Memory LLM] Call failed: {e}")

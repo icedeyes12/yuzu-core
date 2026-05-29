@@ -46,66 +46,45 @@ def _get_model_semaphore(model: str) -> asyncio.Semaphore:
 
 
 @asynccontextmanager
-async def _rate_limit_provider(provider: str, model: str):
+async def _rate_limit_provider(provider: str, model: str, source: str = "llm"):
     """Context manager for provider-level rate limiting.
 
-    Holds BOTH provider-global and per-model semaphores during HTTP request.
-    This prevents concurrent requests that cause 429 errors.
-
-    IMPORTANT: The lock is released BEFORE any retry sleep to avoid blocking
-    the provider queue. Retry logic should be OUTSIDE this context manager.
-
     Args:
-        provider: Provider name (e.g., "chutes", "openrouter", "ollama")
-        model: Model name (e.g., "google/gemma-4-31B-turbo-TEE")
-
-    Usage:
-        for attempt in range(max_retries):
-            async with _rate_limit_provider("chutes", model):
-                response = await client.post(...)
-                if response.status == 429:
-                    # Lock released here, sleep outside
-                    break  # Exit context manager, then sleep and retry
-            if response.status == 429 and attempt < max_retries - 1:
-                await asyncio.sleep(backoff)  # Sleep OUTSIDE lock
-                continue
+        provider: Provider name (e.g., "chutes", "openrouter")
+        model: Model name for per-model rate limiting
+        source: Source context for logging (e.g., "chat", "pcl_memory", "embedding")
     """
-    global _PROVIDER_LAST_CALL
-
-    # Get provider-specific rate limit
-    rate_limit = _PROVIDER_RATE_LIMITS.get(provider, _PROVIDER_RATE_LIMITS["default"])
+    provider_sem = _get_provider_semaphore(provider)
+    model_sem = _get_model_semaphore(model)
 
     # Acquire provider-global semaphore first
-    provider_sem = _get_provider_semaphore(provider)
-    await provider_sem.acquire()
-    try:
-        # Enforce provider-global delay
-        now = time.time()
-        elapsed = now - _PROVIDER_LAST_CALL.get(provider, 0)
-        if elapsed < rate_limit:
-            await asyncio.sleep(rate_limit - elapsed)
-        _PROVIDER_LAST_CALL[provider] = time.time()
+    async with provider_sem:
+        # Enforce provider-level delay
+        provider_delay = _PROVIDER_RATE_LIMITS.get(
+            provider, _PROVIDER_RATE_LIMITS["default"]
+        )
+        if provider in _PROVIDER_LAST_CALL:
+            elapsed = time.time() - _PROVIDER_LAST_CALL[provider]
+            if elapsed < provider_delay:
+                await asyncio.sleep(provider_delay - elapsed)
 
-        # Acquire per-model semaphore
-        model_sem = _get_model_semaphore(model)
-        await model_sem.acquire()
-        try:
-            # Enforce per-model delay
-            now = time.time()
-            elapsed = now - _MODEL_LAST_CALL.get(model, 0)
-            if elapsed < _MODEL_RATE_LIMIT:
-                await asyncio.sleep(_MODEL_RATE_LIMIT - elapsed)
-            _MODEL_LAST_CALL[model] = time.time()
+        # Acquire model-specific semaphore
+        async with model_sem:
+            # Enforce model-level delay
+            if model in _MODEL_LAST_CALL:
+                elapsed = time.time() - _MODEL_LAST_CALL[model]
+                if elapsed < _MODEL_RATE_LIMIT:
+                    await asyncio.sleep(_MODEL_RATE_LIMIT - elapsed)
 
-            # Yield control - HTTP request happens here
-            yield
+            # Log the action with context
+            logger.info(f"[{source.upper()}] Requesting {provider}/{model}...")
 
-        finally:
-            # Release per-model semaphore after HTTP
-            model_sem.release()
-    finally:
-        # Release provider-global semaphore after HTTP
-        provider_sem.release()
+            try:
+                yield
+            finally:
+                # Update timestamps
+                _PROVIDER_LAST_CALL[provider] = time.time()
+                _MODEL_LAST_CALL[model] = time.time()
 
 
 # ── Retry with exponential backoff (429 handling) ─────────────────────────────
@@ -202,20 +181,20 @@ class AIProvider:
         raise NotImplementedError
 
     async def send_message(
-        self, messages: list[dict], model: str, **kwargs
+        self, messages: list[dict], model: str, source: str = "llm", **kwargs
     ) -> str | None:
         raise NotImplementedError
 
     async def send_message_raw(
-        self, messages: list[dict], model: str, **kwargs
+        self, messages: list[dict], model: str, source: str = "llm", **kwargs
     ) -> dict | None:
-        text = await self.send_message(messages, model, **kwargs)
+        text = await self.send_message(messages, model, source=source, **kwargs)
         if text is not None:
             return {"choices": [{"message": {"content": text, "tool_calls": []}}]}
         return None
 
     async def send_message_streaming(
-        self, messages: list[dict], model: str, **kwargs
+        self, messages: list[dict], model: str, source: str = "llm", **kwargs
     ) -> AsyncGenerator[str, None]:
         raise NotImplementedError
         yield ""  # Keep as async generator
@@ -324,13 +303,18 @@ class AIProviderManager:
         return None
 
     async def send_message_raw(
-        self, provider_name: str, model: str, messages: list[dict], **kwargs
+        self,
+        provider_name: str,
+        model: str,
+        messages: list[dict],
+        source: str = "llm",
+        **kwargs,
     ) -> dict | None:
         if provider_name not in self.providers:
             return None
         provider = self.providers[provider_name]
         start_time = time.time()
-        raw = await provider.send_message_raw(messages, model, **kwargs)
+        raw = await provider.send_message_raw(messages, model, source=source, **kwargs)
         response_time = time.time() - start_time
         if raw is not None:
             return raw
@@ -340,7 +324,12 @@ class AIProviderManager:
         return None
 
     async def send_message_streaming(
-        self, provider_name: str, model: str, messages: list[dict], **kwargs
+        self,
+        provider_name: str,
+        model: str,
+        messages: list[dict],
+        source: str = "llm",
+        **kwargs,
     ) -> AsyncGenerator[str, None]:
         if provider_name not in self.providers:
             yield ""
@@ -348,7 +337,7 @@ class AIProviderManager:
         provider = self.providers[provider_name]
         try:
             async for chunk in provider.send_message_streaming(
-                messages, model, **kwargs
+                messages, model, source=source, **kwargs
             ):
                 yield chunk
         except Exception as e:
@@ -359,7 +348,9 @@ class AIProviderManager:
         "Qwen/Qwen3-235B-A22B-Thinking-2507",
     ]
 
-    async def _internal_llm_call(self, messages: list[dict], **kwargs) -> str | None:
+    async def _internal_llm_call(
+        self, messages: list[dict], source: str = "internal", **kwargs
+    ) -> str | None:
         if "chutes" not in self.providers:
             logger.warning("[INT] chutes provider not available")
             return None
@@ -386,7 +377,7 @@ class AIProviderManager:
 
         for attempt in range(3):
             result = await provider.send_message(
-                messages, MAIN_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs
+                messages, MAIN_MODEL, source=source, skip_vision=True, **kwargs
             )
             if result:
                 logger.debug(f"[INT] Success with {MAIN_MODEL}: {len(result)} chars")
@@ -400,23 +391,15 @@ class AIProviderManager:
             if attempt < 2:
                 await asyncio.sleep(0.5)
 
-        for attempt in range(2):
-            result = await provider.send_message(
-                messages, FALLBACK_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs
-            )
-            if result:
-                logger.debug(
-                    f"[INT] Success with {FALLBACK_MODEL}: {len(result)} chars"
-                )
-                return result
-            last_error = getattr(provider, "_last_error", None)
-            logger.warning(
-                f"[INT] {FALLBACK_MODEL} failed (attempt {attempt + 1}): {last_error}"
-            )
-            if not _is_connection_error(last_error):
-                break
-            if attempt < 1:
-                await asyncio.sleep(0.5)
+        logger.warning(f"[INT] Falling back to {FALLBACK_MODEL}")
+        result = await provider.send_message(
+            messages, FALLBACK_MODEL, source=source, skip_vision=True, **kwargs
+        )
+        if result:
+            logger.debug(f"[INT] Success with {FALLBACK_MODEL}: {len(result)} chars")
+            return result
+        last_error = getattr(provider, "_last_error", None)
+        logger.warning(f"[INT] {FALLBACK_MODEL} failed: {last_error}")
 
         logger.error("[INT] All models failed, returning None")
         return None

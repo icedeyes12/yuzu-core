@@ -26,6 +26,7 @@ from app.visual_context import (
 log = get_logger(__name__)
 
 CHUTES_URL = "https://llm.chutes.ai/v1/chat/completions"
+CHUTES_MODEL = "google/gemma-4-31B-turbo-TEE"  # Default model for chutes_chat
 _DEFAULT_HEADERS = {
     "Content-Type": "application/json",
     "HTTP-Referer": "https://github.com/icedeyes12/yuzu-companion",
@@ -39,17 +40,18 @@ _DEFAULT_HEADERS = {
 
 async def chutes_chat(
     prompt: str,
+    model: str = CHUTES_MODEL,
     *,
-    api_key: str,
-    model: str,
     system: str | None = None,
-    title: str = "Yuzu",
-    temperature: float = 0.3,
-    max_tokens: int = 1000,
-    timeout: int = 60,
+    title: str = "chutes_chat",
+    api_key: str | None = None,
+    temperature: float = 0.7,
+    max_tokens: int = 2048,
+    timeout: float = 90.0,
     fallback_models: Iterable[str] = (),
     max_429_retries: int = 3,
     backoff_base: float = 2.0,
+    source: str = "helper",
 ) -> str | None:
     """POST a single-turn prompt to the Chutes API. Try *fallback_models* on failure.
 
@@ -73,7 +75,7 @@ async def chutes_chat(
         for candidate in (model, *fallback_models):
             for retry in range(max_429_retries):
                 try:
-                    async with _rate_limit_provider("chutes", candidate):
+                    async with _rate_limit_provider("chutes", candidate, source):
                         response = await client.post(
                             CHUTES_URL,
                             headers=headers,
@@ -200,6 +202,7 @@ async def _send_to_provider(
     messages: list[dict[str, Any]],
     *,
     image_context: list[dict[str, Any]] | None,
+    source: str = "chat",
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single LLM dispatch with timing log. Returns (text, raw_response)."""
     ai_manager = await get_ai_manager()
@@ -216,7 +219,7 @@ async def _send_to_provider(
     raw_response: dict[str, Any] | None = None
     try:
         raw_response = await ai_manager.send_message_raw(
-            provider, model, messages, timeout=180, tools=schemas
+            provider, model, messages, source=source, timeout=180, tools=schemas
         )
     except Exception as e:  # noqa: BLE001
         log.error("send_message exception (%s/%s): %s", provider, model, e)
@@ -306,7 +309,11 @@ async def generate_ai_response(
     _inject_persistent_visual(messages, user_message, session_id)
 
     text, raw = await _send_to_provider(
-        provider, model, messages, image_context=image_content_for_context
+        provider,
+        model,
+        messages,
+        image_context=image_content_for_context,
+        source="chat",
     )
     return text, raw
 
@@ -317,6 +324,7 @@ async def _stream_from_provider(
     messages: list[dict[str, Any]],
     *,
     image_context: list[dict[str, Any]] | None,
+    source: str = "chat",
 ) -> AsyncIterator[str]:
     """Yield raw chunks from the provider's streaming API."""
     ai_manager = await get_ai_manager()
@@ -330,7 +338,7 @@ async def _stream_from_provider(
     received = 0
     try:
         async for chunk in ai_manager.send_message_streaming(
-            provider, model, messages, timeout=180
+            provider, model, messages, source=source, timeout=180
         ):
             if chunk:
                 received += len(chunk)
@@ -406,5 +414,6 @@ async def generate_ai_response_streaming(
         resolved_model,
         messages,
         image_context=image_content_for_context,
+        source="chat",
     ):
         yield chunk
