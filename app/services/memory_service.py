@@ -18,6 +18,22 @@ class MemoryService:
     _PIPELINE_CHECK_INTERVAL = 5
 
     @staticmethod
+    async def _summarize_if_needed_async(
+        profile: dict[str, Any],
+        user_message: str,
+        final_response: str,
+        session_id: int,
+    ) -> None:
+        """Internal: check and summarize if needed (fire-and-forget)."""
+        try:
+            if await should_summarize_memory_async(profile, user_message, session_id):
+                await summarize_memory_async(
+                    profile, user_message, final_response, session_id
+                )
+        except Exception as e:
+            logger.warning(f"Session summarization failed: {e}")
+
+    @staticmethod
     async def run_per_message_checks_async(
         profile: dict[str, Any],
         user_message: str,
@@ -28,16 +44,22 @@ class MemoryService:
         """Trigger session summarization and background pipeline if needed (async)."""
         # Session auto-naming is handled by SessionService, called by orchestrator
 
-        # 1. Check for session context summary
-        if await should_summarize_memory_async(profile, user_message, session_id):
-            await summarize_memory_async(
+        # 1. Check for session context summary (fire-and-forget to not block)
+        import asyncio
+
+        asyncio.create_task(
+            MemoryService._summarize_if_needed_async(
                 profile, user_message, final_response, session_id
             )
+        )
 
         # 2. Throttle and trigger background memory pipeline (segmentation, PCL, review)
         msg_count = await Database.get_session_messages_count_async(session_id)
         if msg_count % MemoryService._PIPELINE_CHECK_INTERVAL == 0:
-            await MemoryService.trigger_pipeline_async(session_id)
+            # Fire-and-forget: don't block main conversation
+            import asyncio
+
+            asyncio.create_task(MemoryService.trigger_pipeline_async(session_id))
 
     @staticmethod
     async def trigger_pipeline_async(session_id: int) -> bool:

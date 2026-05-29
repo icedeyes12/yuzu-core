@@ -23,7 +23,7 @@ _IDLE_THRESHOLD_HOURS = 1
 _SUMMARY_TRIGGER_INTERVAL = 100
 
 _SUMMARY_MODEL = "google/gemma-4-31B-turbo-TEE"
-_SUMMARY_FALLBACKS = ("Qwen/Qwen3-235B-A22B-Instruct-2507-TEE",)
+_SUMMARY_FALLBACKS = ("Qwen/Qwen3-235B-A22B-Thinking-2507",)
 
 
 def detect_important_content(message: str) -> bool:
