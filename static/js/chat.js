@@ -30,7 +30,7 @@ window.backgroundStreams = backgroundStreams;
 // ==================== SESSION NAME LOADING ====================
 async function loadCurrentSessionName() {
 	try {
-		const response = await fetch("/api/get_profile");
+		const response = await fetch("/api/profile");
 		const data = await response.json();
 
 		const sessionNameElement = document.getElementById("sessionName");

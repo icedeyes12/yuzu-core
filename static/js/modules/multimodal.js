@@ -184,16 +184,6 @@ export class MultimodalManager {
 		}
 	}
 
-	async handleChatMessage(text) {
-		// DEPRECATED: Unified into handleUnifiedMessage
-		return this.handleUnifiedMessage(text);
-	}
-
-	async handleImageMessage(text) {
-		// DEPRECATED: Unified into handleUnifiedMessage
-		return this.handleUnifiedMessage(text);
-	}
-
 	async sendMessageStreaming(message, images = []) {
 		try {
 			const chatContainer = document.getElementById("chatContainer");
@@ -542,7 +532,7 @@ export class MultimodalManager {
 			}
 
 			// Create streaming message element
-			const chatContainer = document.getElementById("chat-container");
+			const chatContainer = document.getElementById("chatContainer");
 			setCurrentStreamMessage(this.createStreamingMessageElement("ai"));
 			currentStreamMessage.style.display = "none";
 			chatContainer.appendChild(currentStreamMessage);

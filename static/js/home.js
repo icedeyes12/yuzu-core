@@ -66,7 +66,7 @@ function initializeHomePage() {
 
 async function loadRecentSessions() {
 	try {
-		const response = await fetch("/api/get_profile");
+		const response = await fetch("/api/profile");
 		const data = await response.json();
 
 		const sessionsContainer = document.getElementById("recent-sessions");

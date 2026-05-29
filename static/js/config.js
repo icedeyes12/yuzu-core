@@ -37,7 +37,7 @@ async function loadAppConfig() {
 // Load profile data with proper global profile display
 async function loadProfileData() {
 	try {
-		const response = await fetch("/api/get_profile");
+		const response = await fetch("/api/profile");
 		const data = await response.json();
 
 		console.log("Full profile data:", data);
@@ -396,7 +396,7 @@ function setupEventListeners() {
 // Load image model on page load
 async function loadImageModel() {
 	try {
-		const response = await fetch("/api/get_profile");
+		const response = await fetch("/api/profile");
 		const data = await response.json();
 
 		const imageModel = data.image_model || "hunyuan";
@@ -710,7 +710,7 @@ async function saveProfileSettings() {
 
 async function loadAPIKeys() {
 	try {
-		const response = await fetch("/api/get_profile");
+		const response = await fetch("/api/profile");
 		const data = await response.json();
 
 		const keysList = document.getElementById("keys-list");
@@ -1043,7 +1043,7 @@ async function clearChatHistory() {
 // Global knowledge functions
 async function loadGlobalKnowledge() {
 	try {
-		const response = await fetch("/api/get_profile");
+		const response = await fetch("/api/profile");
 		const data = await response.json();
 
 		const globalKnowledge = data.global_knowledge || {};
@@ -1189,7 +1189,7 @@ window.showSuccess = showSuccess;
 // Location functions
 async function loadLocation() {
 	try {
-		const response = await fetch("/api/get_profile");
+		const response = await fetch("/api/profile");
 		const data = await response.json();
 		const ctx = data.context || {};
 		const loc = ctx.location || {};

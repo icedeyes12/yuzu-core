@@ -260,7 +260,7 @@ function renameSession(sessionId, newName) {
 				const sessionNameElement = document.getElementById("sessionName");
 				if (sessionNameElement) {
 					// Check if we're on the chat page and this is the active session
-					fetch("/api/get_profile")
+					fetch("/api/profile")
 						.then((response) => response.json())
 						.then((profileData) => {
 							if (
@@ -423,7 +423,7 @@ function switchSession(sessionId) {
  * @param {number|null} sessionId - Session ID being switched (null to clear all)
  * @param {boolean} isLoading - Whether to show loading state
  */
-function _setSessionSwitchingVisual(sessionId, isLoading) {
+function _setSessionSwitchingVisual(_sessionId, isLoading) {
 	const sessionsList = document.getElementById("sidebarSessionsList");
 	if (!sessionsList) return;
 

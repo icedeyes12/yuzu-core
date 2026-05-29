@@ -44,8 +44,16 @@ export function initializeInputBehavior() {
 	// Initial layout update
 	updateDynamicLayout();
 
-	// Update on window resize
-	window.addEventListener("resize", updateDynamicLayout);
+	// Update on window resize (debounced 150ms)
+	let resizeTimeout;
+	window.addEventListener("resize", () => {
+		if (!resizeTimeout) {
+			resizeTimeout = setTimeout(() => {
+				resizeTimeout = null;
+				updateDynamicLayout();
+			}, 150);
+		}
+	});
 
 	// Use ResizeObserver for reliable input area height detection
 	const inputArea = input.closest(".input-area");
