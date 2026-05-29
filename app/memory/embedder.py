@@ -7,6 +7,7 @@ from __future__ import annotations
 import httpx
 import asyncio
 from app.providers import get_ai_manager
+from app.providers.base import _rate_limit_provider
 
 
 CHUTES_EMBED_ENDPOINT = (
@@ -36,7 +37,10 @@ async def _get_client():
 async def embed_texts_async(
     texts, model=None, dimensions=None, encoding_format="float", timeout=30
 ):
-    """Embed a list of strings via Chutes API (async). Returns list of embedding lists."""
+    """Embed a list of strings via Chutes API (async). Returns list of embedding lists.
+
+    Rate-limited to prevent 429 errors from concurrent embedding + LLM requests.
+    """
     client = await _get_client()
     if client is None:
         raise RuntimeError("Chutes API key not configured")
@@ -52,11 +56,13 @@ async def embed_texts_async(
     }
     payload["encoding_format"] = encoding_format
 
+    # Use rate limiter - embedding shares global Chutes rate limit
     async with client:
         try:
-            resp = await client.post(
-                CHUTES_EMBED_ENDPOINT, json=payload, timeout=timeout
-            )
+            async with _rate_limit_provider("chutes", "embedding"):
+                resp = await client.post(
+                    CHUTES_EMBED_ENDPOINT, json=payload, timeout=timeout
+                )
             resp.raise_for_status()
             data = resp.json()["data"]
             results = [item["embedding"] for item in data]

@@ -5,7 +5,7 @@ import logging
 import httpx
 import asyncio
 from typing import AsyncGenerator
-from app.providers.base import AIProvider, _rate_limit_chutes
+from app.providers.base import AIProvider, _rate_limit_provider
 from app.tools import multimodal_tools
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,14 @@ class ChutesProvider(AIProvider):
     async def send_message(
         self, messages: list[dict], model: str, **kwargs
     ) -> str | None:
+        """Send message with retry logic and model fallback.
+
+        Retry architecture:
+        1. Outer loop: Model selection/fallback
+        2. Inner loop: 429 retry with exponential backoff
+
+        IMPORTANT: Sleep happens OUTSIDE rate limit lock to not block queue.
+        """
         if not self.api_key or model not in self.available_models:
             return None
 
@@ -76,15 +84,19 @@ class ChutesProvider(AIProvider):
 
         attempt = 0
         last_error = None
-        max_attempts = 3
+        max_model_attempts = 3
+        max_429_retries = 3
+        backoff_base = 2.0  # 2s, 4s, 8s
 
-        while attempt < max_attempts:
+        tried_models = set()
+
+        while attempt < max_model_attempts:
             attempt += 1
             current_model = model if attempt == 1 else None
 
+            # Model fallback selection
             if current_model is None:
-                tried = {model}
-                priority = [m for m in self.available_models if m not in tried]
+                priority = [m for m in self.available_models if m not in tried_models]
                 qwen_first = sorted(priority, key=lambda m: 0 if "Qwen" in m else 1)
                 for candidate in qwen_first:
                     if explicit_model and candidate == model_hint:
@@ -95,32 +107,60 @@ class ChutesProvider(AIProvider):
             if not current_model:
                 break
 
-            async with _rate_limit_chutes(current_model):
-                result = await self._chutes_raw(current_model, messages, kwargs)
-            status = result[0]
-            data = result[1]
+            tried_models.add(current_model)
 
-            if status == 200:
-                self._last_error = None
-                return data
+            # ── Inner loop: 429 retry with exponential backoff ──
+            for retry in range(max_429_retries):
+                status = None
+                data = None
+                error_msg = None
 
-            last_error = result[2] if len(result) > 2 else str(status)
-            self._last_error = last_error
-            if status not in retryable_codes:
-                return None
+                # Rate-limited HTTP request (lock held during request only)
+                async with _rate_limit_provider("chutes", current_model):
+                    result = await self._chutes_raw(current_model, messages, kwargs)
+                    status = result[0]
+                    data = result[1] if len(result) > 1 else None
+                    error_msg = result[2] if len(result) > 2 else str(status)
 
-            # Add delay before retrying another model (especially after 429)
-            if status == 429:
-                logger.warning(
-                    f"Rate limited on {current_model}, waiting 2s before retry..."
-                )
-                await asyncio.sleep(2.0)
-            elif attempt < max_attempts:
+                # Handle success
+                if status == 200:
+                    self._last_error = None
+                    return data
+
+                last_error = error_msg
+                self._last_error = last_error
+
+                # Handle 429 with exponential backoff OUTSIDE lock
+                if status == 429:
+                    if retry < max_429_retries - 1:
+                        backoff = backoff_base * (2**retry)  # 2s, 4s
+                        logger.warning(
+                            f"{log_prefix} 429 on {current_model}, "
+                            f"retry {retry + 1}/{max_429_retries} in {backoff}s..."
+                        )
+                        await asyncio.sleep(backoff)
+                        continue  # Retry same model
+                    else:
+                        logger.warning(
+                            f"{log_prefix} Max 429 retries for {current_model}, "
+                            f"trying another model..."
+                        )
+                        break  # Try different model
+
+                # Non-429 errors - try another model
+                if status not in retryable_codes:
+                    return None
+
+                # Server errors - try another model
+                break
+
+            # Delay before trying next model
+            if attempt < max_model_attempts:
                 await asyncio.sleep(0.5)
-
-            logger.debug(
-                f"{log_prefix} {current_model} failed ({status}), retrying with another model..."
-            )
+                logger.debug(
+                    f"{log_prefix} {current_model} failed ({status}), "
+                    f"trying another model..."
+                )
 
         logger.debug(f"{log_prefix} All models exhausted, last error: {last_error}")
         return None
@@ -231,7 +271,7 @@ class ChutesProvider(AIProvider):
                 "stream": True,
             }
 
-            async with _rate_limit_chutes(model):
+            async with _rate_limit_provider("chutes", model):
                 async with httpx.AsyncClient() as client:
                     async with client.stream(
                         "POST",

@@ -11,15 +11,31 @@ from app.tools import multimodal_tools
 
 logger = logging.getLogger(__name__)
 
-# Global rate limiting for model access
+# ── Provider-level rate limiting (generalized) ───────────────────────────────
+# Each provider gets its own semaphore and rate limit config
+
+_PROVIDER_SEMAPHORES: dict[str, asyncio.Semaphore] = {}
+_PROVIDER_LAST_CALL: dict[str, float] = {}
+_PROVIDER_RATE_LIMITS: dict[str, float] = {
+    "chutes": 0.5,  # 0.5s between Chutes requests (strict)
+    "openrouter": 0.3,  # 0.3s between OpenRouter requests
+    "ollama": 0.1,  # 0.1s for local Ollama (relaxed)
+    # Default for unknown providers
+    "default": 0.5,
+}
+
+# ── Model-level rate limiting ───────────────────────────────────────────────
+
 _MODEL_SEMAPHORES: dict[str, asyncio.Semaphore] = {}
 _MODEL_LAST_CALL: dict[str, float] = {}
 _MODEL_RATE_LIMIT = 1.0  # Min 1s between calls to same model
 
-# Chutes API global rate limiting
-_CHUTES_GLOBAL_SEMAPHORE = asyncio.Semaphore(1)  # Only 1 request at a time
-_CHUTES_LAST_CALL = 0.0
-_CHUTES_GLOBAL_RATE_LIMIT = 0.5  # Min 0.5s between ALL Chutes requests
+
+def _get_provider_semaphore(provider: str) -> asyncio.Semaphore:
+    """Get or create a semaphore for a specific provider."""
+    if provider not in _PROVIDER_SEMAPHORES:
+        _PROVIDER_SEMAPHORES[provider] = asyncio.Semaphore(1)
+    return _PROVIDER_SEMAPHORES[provider]
 
 
 def _get_model_semaphore(model: str) -> asyncio.Semaphore:
@@ -30,33 +46,51 @@ def _get_model_semaphore(model: str) -> asyncio.Semaphore:
 
 
 @asynccontextmanager
-async def _rate_limit_chutes(model: str):
-    """Context manager for Chutes rate limiting.
+async def _rate_limit_provider(provider: str, model: str):
+    """Context manager for provider-level rate limiting.
 
-    Holds BOTH global and per-model semaphores during HTTP request.
+    Holds BOTH provider-global and per-model semaphores during HTTP request.
     This prevents concurrent requests that cause 429 errors.
 
-    Usage:
-        async with _rate_limit_chutes(model):
-            # Make HTTP request here
-            response = await client.post(...)
-    """
-    global _CHUTES_LAST_CALL
+    IMPORTANT: The lock is released BEFORE any retry sleep to avoid blocking
+    the provider queue. Retry logic should be OUTSIDE this context manager.
 
-    # Acquire global semaphore first
-    await _CHUTES_GLOBAL_SEMAPHORE.acquire()
+    Args:
+        provider: Provider name (e.g., "chutes", "openrouter", "ollama")
+        model: Model name (e.g., "google/gemma-4-31B-turbo-TEE")
+
+    Usage:
+        for attempt in range(max_retries):
+            async with _rate_limit_provider("chutes", model):
+                response = await client.post(...)
+                if response.status == 429:
+                    # Lock released here, sleep outside
+                    break  # Exit context manager, then sleep and retry
+            if response.status == 429 and attempt < max_retries - 1:
+                await asyncio.sleep(backoff)  # Sleep OUTSIDE lock
+                continue
+    """
+    global _PROVIDER_LAST_CALL
+
+    # Get provider-specific rate limit
+    rate_limit = _PROVIDER_RATE_LIMITS.get(provider, _PROVIDER_RATE_LIMITS["default"])
+
+    # Acquire provider-global semaphore first
+    provider_sem = _get_provider_semaphore(provider)
+    await provider_sem.acquire()
     try:
-        # Enforce global delay
+        # Enforce provider-global delay
         now = time.time()
-        elapsed = now - _CHUTES_LAST_CALL
-        if elapsed < _CHUTES_GLOBAL_RATE_LIMIT:
-            await asyncio.sleep(_CHUTES_GLOBAL_RATE_LIMIT - elapsed)
-        _CHUTES_LAST_CALL = time.time()
+        elapsed = now - _PROVIDER_LAST_CALL.get(provider, 0)
+        if elapsed < rate_limit:
+            await asyncio.sleep(rate_limit - elapsed)
+        _PROVIDER_LAST_CALL[provider] = time.time()
 
         # Acquire per-model semaphore
-        sem = _get_model_semaphore(model)
-        await sem.acquire()
+        model_sem = _get_model_semaphore(model)
+        await model_sem.acquire()
         try:
+            # Enforce per-model delay
             now = time.time()
             elapsed = now - _MODEL_LAST_CALL.get(model, 0)
             if elapsed < _MODEL_RATE_LIMIT:
@@ -68,10 +102,79 @@ async def _rate_limit_chutes(model: str):
 
         finally:
             # Release per-model semaphore after HTTP
-            sem.release()
+            model_sem.release()
     finally:
-        # Release global semaphore after HTTP
-        _CHUTES_GLOBAL_SEMAPHORE.release()
+        # Release provider-global semaphore after HTTP
+        provider_sem.release()
+
+
+# ── Retry with exponential backoff (429 handling) ─────────────────────────────
+
+
+async def _retry_with_backoff(
+    func,
+    provider: str,
+    model: str,
+    max_retries: int = 3,
+    backoff_base: float = 2.0,
+    **kwargs,
+):
+    """Execute function with retry logic for 429 errors.
+
+    IMPORTANT: This function releases the rate limit lock BEFORE sleeping,
+    allowing other requests to proceed during the backoff period.
+
+    Args:
+        func: Async function to call (e.g., _chutes_raw)
+        provider: Provider name for rate limiting
+        model: Model name for rate limiting
+        max_retries: Maximum retry attempts (default: 3)
+        backoff_base: Base backoff in seconds (default: 2.0, doubles each retry)
+        **kwargs: Arguments to pass to func
+
+    Returns:
+        Result from func, or raises exception after max retries
+
+    Example backoff sequence: 2s, 4s, 8s (if max_retries=3)
+    """
+    last_error = None
+
+    for attempt in range(max_retries):
+        should_retry = False
+        backoff = backoff_base * (2**attempt) if attempt > 0 else 0
+
+        try:
+            async with _rate_limit_provider(provider, model):
+                result = await func(**kwargs)
+
+                # Check if result indicates 429
+                if isinstance(result, tuple) and len(result) >= 1:
+                    status = result[0]
+                    if status == 429:
+                        should_retry = True
+                        last_error = "HTTP 429: Rate limited"
+                        logger.warning(
+                            f"[{provider}] 429 on {model}, "
+                            f"attempt {attempt + 1}/{max_retries}"
+                        )
+
+        except Exception as e:
+            last_error = str(e)
+            logger.error(f"[{provider}] Request failed: {e}")
+            raise
+
+        if should_retry and attempt < max_retries - 1:
+            # Sleep OUTSIDE the lock to not block other requests
+            logger.info(f"[{provider}] Backing off for {backoff}s...")
+            await asyncio.sleep(backoff)
+            continue
+
+        return result
+
+    raise Exception(f"Max retries ({max_retries}) exceeded: {last_error}")
+
+
+# ── AIProvider base class ───────────────────────────────────────────────────
 
 
 class AIProvider:

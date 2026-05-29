@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any, Iterable, AsyncIterator
 
@@ -14,6 +15,7 @@ from app.db import Database
 from app.logging_config import get_logger
 from app.prompts import build_messages
 from app.providers import get_ai_manager
+from app.providers.base import _rate_limit_provider
 from app.tools import multimodal_tools
 from app.tools.registry import get_tool_definitions
 from app.visual_context import (
@@ -46,6 +48,8 @@ async def chutes_chat(
     max_tokens: int = 1000,
     timeout: int = 60,
     fallback_models: Iterable[str] = (),
+    max_429_retries: int = 3,
+    backoff_base: float = 2.0,
 ) -> str | None:
     """POST a single-turn prompt to the Chutes API. Try *fallback_models* on failure.
 
@@ -67,36 +71,46 @@ async def chutes_chat(
 
     async with httpx.AsyncClient() as client:
         for candidate in (model, *fallback_models):
-            try:
-                response = await client.post(
-                    CHUTES_URL,
-                    headers=headers,
-                    json={
-                        "model": candidate,
-                        "messages": messages,
-                        "temperature": temperature,
-                        "max_tokens": max_tokens,
-                        "stream": False,
-                    },
-                    timeout=timeout,
-                )
-            except httpx.RequestError as e:
-                log.warning("chutes call failed for %s: %s", candidate, e)
-                continue
-
-            if response.status_code == 200:
+            for retry in range(max_429_retries):
                 try:
-                    return response.json()["choices"][0]["message"]["content"].strip()
-                except (KeyError, IndexError, ValueError) as e:
-                    log.warning("chutes response parse failed for %s: %s", candidate, e)
+                    async with _rate_limit_provider("chutes", candidate):
+                        response = await client.post(
+                            CHUTES_URL,
+                            headers=headers,
+                            json={
+                                "model": candidate,
+                                "messages": messages,
+                                "temperature": temperature,
+                                "max_tokens": max_tokens,
+                                "stream": False,
+                            },
+                            timeout=timeout,
+                        )
+                except httpx.RequestError as e:
+                    log.warning("chutes call failed for %s: %s", candidate, e)
                     continue
 
-            log.warning(
-                "chutes %s -> HTTP %s: %s",
-                candidate,
-                response.status_code,
-                response.text[:200],
-            )
+                if response.status_code == 200:
+                    try:
+                        return response.json()["choices"][0]["message"][
+                            "content"
+                        ].strip()
+                    except (KeyError, IndexError, ValueError) as e:
+                        log.warning(
+                            "chutes response parse failed for %s: %s", candidate, e
+                        )
+                        continue
+
+                if response.status_code == 429 and retry < max_429_retries - 1:
+                    await asyncio.sleep(backoff_base**retry)
+                    continue
+
+                log.warning(
+                    "chutes %s -> HTTP %s: %s",
+                    candidate,
+                    response.status_code,
+                    response.text[:200],
+                )
 
     return None
 
