@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-import time
 from pathlib import Path
 from typing import Any, AsyncIterator
 
@@ -584,12 +583,8 @@ async def handle_user_message_streaming(
             )
             return
 
-    # Collect streamed response
+    # Collect streamed response - RAM only, no intermediate DB writes
     response_chunks: list[str] = []
-    assistant_msg_id = await Database.add_message_async(
-        "assistant", "", session_id=session_id
-    )
-    last_db_update = time.time()
 
     try:
         async for chunk in generate_ai_response_streaming(
@@ -597,37 +592,22 @@ async def handle_user_message_streaming(
         ):
             if chunk:
                 if abort_check and abort_check():
-                    if response_chunks:
-                        await Database.update_message_async(
-                            assistant_msg_id, "".join(response_chunks)
-                        )
+                    # StreamBuffer will handle persistence of partial content
                     return
 
                 response_chunks.append(chunk)
-
-                now = time.time()
-                if now - last_db_update > 2.0:
-                    await Database.update_message_async(
-                        assistant_msg_id, "".join(response_chunks)
-                    )
-                    last_db_update = now
-
                 yield chunk
     except Exception as e:
         log.error("[stream] error in first pass: %s", e)
-        if response_chunks:
-            await Database.update_message_async(
-                assistant_msg_id, "".join(response_chunks)
-            )
+        # StreamBuffer will handle persistence of partial content
         raise
 
     full_response = "".join(response_chunks)
-    await Database.update_message_async(assistant_msg_id, full_response)
 
     if not _clean(full_response):
         fallback = _EMPTY_RESPONSE_FALLBACK
         yield fallback
-        await Database.update_message_async(assistant_msg_id, fallback)
+        # Note: fallback is yielded but not persisted here - StreamBuffer handles it
         await _post_turn_async(
             profile, user_message, fallback, session_id, active_session
         )
@@ -682,8 +662,6 @@ async def handle_user_message_streaming(
 
         synthesis_chunks: list[str] = []
         full_synthesis = ""
-        synthesis_msg_id = None
-        last_synth_update = time.time()
 
         try:
             async for chunk in _stream_synthesis_async(
@@ -691,26 +669,11 @@ async def handle_user_message_streaming(
             ):
                 if chunk:
                     if abort_check and abort_check():
-                        if full_synthesis and synthesis_msg_id:
-                            await Database.update_message_async(
-                                synthesis_msg_id, full_synthesis
-                            )
+                        # StreamBuffer will handle persistence
                         return
 
                     synthesis_chunks.append(chunk)
                     full_synthesis += chunk
-
-                    if synthesis_msg_id is None:
-                        synthesis_msg_id = await Database.add_message_async(
-                            "assistant", "", session_id=session_id
-                        )
-
-                    now = time.time()
-                    if now - last_synth_update > 2.0:
-                        await Database.update_message_async(
-                            synthesis_msg_id, full_synthesis
-                        )
-                        last_synth_update = now
 
                     yield (
                         "\n\n" + chunk
@@ -719,16 +682,10 @@ async def handle_user_message_streaming(
                     )
         except Exception as e:
             log.error("[stream] error in synthesis loop: %s", e)
-            if full_synthesis and synthesis_msg_id:
-                await Database.update_message_async(synthesis_msg_id, full_synthesis)
+            # StreamBuffer will handle persistence
             raise
 
         synthesis = _clean(full_synthesis) if full_synthesis else None
-
-        if full_synthesis and synthesis_msg_id:
-            await Database.update_message_async(
-                synthesis_msg_id, full_synthesis, image_paths=all_generated_paths
-            )
 
         if not synthesis:
             await _post_turn_async(

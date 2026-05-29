@@ -1,6 +1,7 @@
 # FILE: app/stream_manager.py
 # DESCRIPTION: Backend state management for streaming responses.
 #              Allows clients to disconnect and reconnect to ongoing streams.
+#              RAM-only buffering with single DB write on completion.
 
 from __future__ import annotations
 
@@ -15,7 +16,12 @@ log = logging.getLogger(__name__)
 
 
 class StreamBuffer:
-    """Async streaming buffer that handles chunk accumulation and persistence."""
+    """Async streaming buffer that handles chunk accumulation and persistence.
+
+    RAM-only buffering during active generation.
+    Single DB write on completion/interruption.
+    Self-cleanup after persistence.
+    """
 
     def __init__(
         self,
@@ -39,12 +45,47 @@ class StreamBuffer:
         self.is_finished = False
         self.start_time = time.time()
         self.last_activity = self.start_time
+        self.error: Optional[str] = None
 
         # Start the background task
         self.task = asyncio.create_task(self._process())
 
+    async def _persist_to_db(self, content: str, is_error: bool = False) -> None:
+        """Persist the final assistant message to database.
+
+        Single DB write after stream completes or is interrupted.
+        Called from finally block to ensure cleanup.
+        """
+        if not content and not is_error:
+            return
+
+        try:
+            from app.db import Database
+
+            final_content = content
+            if is_error and content:
+                final_content = f"{content}\n\n*[Stream Interrupted/Error]*"
+
+            # Single insert - no placeholder, direct final content
+            await Database.add_message_async(
+                "assistant",
+                final_content,
+                session_id=self.session_id,
+            )
+            log.info(
+                f"[Stream] Persisted {len(final_content)} chars to DB for session {self.session_id}"
+            )
+
+        except Exception as e:
+            log.error(f"[Stream] Failed to persist to DB: {e}", exc_info=True)
+
     async def _process(self):
-        """Asynchronously process chunks from the orchestrator."""
+        """Asynchronously process chunks from the orchestrator.
+
+        RAM-only accumulation during streaming.
+        Single DB write on completion/interruption.
+        Self-cleanup in finally block.
+        """
         try:
             async for chunk in handle_user_message_streaming(
                 self.user_message,
@@ -66,14 +107,46 @@ class StreamBuffer:
                 for q in self.queues:
                     await q.put(None)
 
-        except Exception as e:
-            log.error(f"Stream error for session {self.session_id}: {e}", exc_info=True)
+            # Persist successful completion
+            await self._persist_to_db(self.full_content, is_error=False)
+
+        except asyncio.CancelledError:
+            # Stream was cancelled (user switched session, etc.)
+            log.info(f"[Stream] Cancelled for session {self.session_id}")
             async with self.lock:
                 self.is_finished = True
-                error_msg = f"\n[System Error] Stream interrupted: {str(e)}"
+                self.error = "Stream cancelled"
+                # Send partial content + None to subscribers
+                if self.full_content:
+                    for q in self.queues:
+                        await q.put("\n\n*[Stream Interrupted]*")
+                        await q.put(None)
+                else:
+                    for q in self.queues:
+                        await q.put(None)
+
+            # Persist partial content with interruption marker
+            await self._persist_to_db(self.full_content, is_error=True)
+
+        except Exception as e:
+            log.error(
+                f"[Stream] Error for session {self.session_id}: {e}", exc_info=True
+            )
+            async with self.lock:
+                self.is_finished = True
+                self.error = str(e)
+                error_msg = f"\n\n*[Stream Error: {str(e)}]*"
                 for q in self.queues:
-                    await q.put(error_msg)
+                    if self.full_content:
+                        await q.put(error_msg)
                     await q.put(None)
+
+            # Persist partial content with error marker
+            await self._persist_to_db(self.full_content, is_error=True)
+
+        finally:
+            # Self-cleanup: remove from StreamManager to prevent RAM leaks
+            await StreamManager._cleanup_stream(self.session_id)
 
     def subscribe(self) -> asyncio.Queue:
         """Create a new async queue for a client to consume chunks."""
@@ -94,7 +167,11 @@ class StreamBuffer:
 
 
 class StreamManager:
-    """Global manager for active streams."""
+    """Global manager for active streams.
+
+    Streams persist in RAM during active generation.
+    Cleanup happens automatically after stream completes (via finally block).
+    """
 
     _streams: Dict[int, StreamBuffer] = {}
     _lock = asyncio.Lock()
@@ -112,19 +189,20 @@ class StreamManager:
     ) -> StreamBuffer:
         """Start a new stream or return an existing one."""
         async with cls._lock:
-            # Cleanup old stream if exists
+            # Cleanup old stream if exists (it will self-cleanup in finally)
             if session_id in cls._streams:
                 old_stream = cls._streams[session_id]
                 if not old_stream.is_finished:
+                    # Cancel the old stream - it will cleanup itself
                     old_stream.task.cancel()
-                del cls._streams[session_id]
+                # Don't delete here - let the finally block handle it
 
             stream = StreamBuffer(
                 session_id, user_message, interface, provider, model, image_paths
             )
             cls._streams[session_id] = stream
 
-            # Ensure cleanup loop is running
+            # Ensure cleanup loop is running (fallback for orphaned streams)
             if cls._cleanup_task is None or cls._cleanup_task.done():
                 cls._cleanup_task = asyncio.create_task(cls._cleanup_loop())
 
@@ -137,8 +215,20 @@ class StreamManager:
             return cls._streams.get(session_id)
 
     @classmethod
+    async def _cleanup_stream(cls, session_id: int):
+        """Remove a stream from the manager (called from StreamBuffer finally block)."""
+        async with cls._lock:
+            if session_id in cls._streams:
+                del cls._streams[session_id]
+                log.debug(f"[StreamManager] Cleaned up stream for session {session_id}")
+
+    @classmethod
     async def _cleanup_loop(cls):
-        """Periodically remove finished or inactive streams."""
+        """Periodically remove orphaned streams (fallback safety net).
+
+        Most streams cleanup via the finally block in _process().
+        This catches any that slip through (e.g., task cancellation before finally).
+        """
         while True:
             await asyncio.sleep(60)
             now = time.time()
@@ -155,6 +245,7 @@ class StreamManager:
 
                 for sid in to_delete:
                     del cls._streams[sid]
+                    log.debug(f"[StreamManager] Cleanup loop removed session {sid}")
 
                 if not cls._streams:
                     cls._cleanup_task = None
