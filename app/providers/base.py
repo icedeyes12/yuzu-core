@@ -15,6 +15,11 @@ _MODEL_SEMAPHORES: dict[str, asyncio.Semaphore] = {}
 _MODEL_LAST_CALL: dict[str, float] = {}
 _MODEL_RATE_LIMIT = 1.0  # Min 1s between calls to same model
 
+# Global rate limit for ALL Chutes calls (per-user API limit)
+_CHUTES_GLOBAL_SEMAPHORE: asyncio.Semaphore | None = None
+_CHUTES_LAST_CALL: float = 0
+_CHUTES_GLOBAL_RATE_LIMIT = 0.5  # Min 0.5s between ANY Chutes API calls
+
 
 def _get_model_semaphore(model: str) -> asyncio.Semaphore:
     """Get or create a semaphore for a specific model."""
@@ -24,15 +29,45 @@ def _get_model_semaphore(model: str) -> asyncio.Semaphore:
 
 
 async def _rate_limit_model(model: str) -> asyncio.Semaphore:
-    """Acquire rate limit for model and return semaphore for later release."""
-    sem = _get_model_semaphore(model)
-    await sem.acquire()
-    now = time.time()
-    elapsed = now - _MODEL_LAST_CALL.get(model, 0)
-    if elapsed < _MODEL_RATE_LIMIT:
-        await asyncio.sleep(_MODEL_RATE_LIMIT - elapsed)
-    _MODEL_LAST_CALL[model] = time.time()
-    return sem  # Caller must release after HTTP request
+    """Acquire rate limit for model and return semaphore for later release.
+
+    Enforces BOTH:
+    1. Per-model rate limit (1s between calls to same model)
+    2. Global Chutes rate limit (0.5s between ANY Chutes calls)
+    """
+    global _CHUTES_GLOBAL_SEMAPHORE, _CHUTES_LAST_CALL
+
+    # Create global semaphore if needed
+    if _CHUTES_GLOBAL_SEMAPHORE is None:
+        _CHUTES_GLOBAL_SEMAPHORE = asyncio.Semaphore(1)
+
+    # Acquire global semaphore first (for API-wide rate limit)
+    await _CHUTES_GLOBAL_SEMAPHORE.acquire()
+    try:
+        # Enforce global delay
+        now = time.time()
+        elapsed = now - _CHUTES_LAST_CALL
+        if elapsed < _CHUTES_GLOBAL_RATE_LIMIT:
+            await asyncio.sleep(_CHUTES_GLOBAL_RATE_LIMIT - elapsed)
+        _CHUTES_LAST_CALL = time.time()
+
+        # Now acquire per-model semaphore
+        sem = _get_model_semaphore(model)
+        await sem.acquire()
+        now = time.time()
+        elapsed = now - _MODEL_LAST_CALL.get(model, 0)
+        if elapsed < _MODEL_RATE_LIMIT:
+            await asyncio.sleep(_MODEL_RATE_LIMIT - elapsed)
+        _MODEL_LAST_CALL[model] = time.time()
+
+        # Release global semaphore (we've waited, let other requests proceed)
+        _CHUTES_GLOBAL_SEMAPHORE.release()
+
+        return sem  # Caller must release per-model semaphore after HTTP request
+    except Exception:
+        # Release global semaphore on error
+        _CHUTES_GLOBAL_SEMAPHORE.release()
+        raise
 
 
 class AIProvider:

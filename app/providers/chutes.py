@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import httpx
+import asyncio
 from typing import AsyncGenerator
 from app.providers.base import AIProvider, _rate_limit_model
 from app.tools import multimodal_tools
@@ -110,6 +111,15 @@ class ChutesProvider(AIProvider):
             self._last_error = last_error
             if status not in retryable_codes:
                 return None
+
+            # Add delay before retrying another model (especially after 429)
+            if status == 429:
+                logger.warning(
+                    f"Rate limited on {current_model}, waiting 2s before retry..."
+                )
+                await asyncio.sleep(2.0)
+            elif attempt < max_attempts:
+                await asyncio.sleep(0.5)
 
             logger.debug(
                 f"{log_prefix} {current_model} failed ({status}), retrying with another model..."
