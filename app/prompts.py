@@ -12,38 +12,6 @@ from app.logging_config import get_logger
 
 log = get_logger(__name__)
 
-# ── Deprecated: affection & closeness mode removed from system message ─────
-# _AFFECTION_THRESHOLDS: tuple[tuple[int, str], ...] = (
-#     (25, "distant but attentive"),
-#     (45, "reserved and observant"),
-#     (65, "comfortable and open"),
-#     (85, "close and warm"),
-#     (101, "deeply attuned and intimate"),
-# )
-#
-# def closeness_mode(affection: int) -> str:
-#     """Map an affection score to a closeness mode label."""
-#     for threshold, label in _AFFECTION_THRESHOLDS:
-#         if affection < threshold:
-#             return label
-#     return _AFFECTION_THRESHOLDS[-1][1]
-# ────────────────────────────────────────────────────────────────────────────
-
-
-def closeness_mode(affection: int) -> str:
-    """Map an affection score to a closeness mode label."""
-    _AFFECTION_THRESHOLDS: tuple[tuple[int, str], ...] = (
-        (25, "distant but attentive"),
-        (45, "reserved and observant"),
-        (65, "comfortable and open"),
-        (85, "close and warm"),
-        (101, "deeply attuned and intimate"),
-    )
-    for threshold, label in _AFFECTION_THRESHOLDS:
-        if affection < threshold:
-            return label
-    return _AFFECTION_THRESHOLDS[-1][1]
-
 
 def _truncate(text: str, limit: int = 120) -> str:
     return text if len(text) <= limit else text[:limit] + "..."
@@ -85,15 +53,6 @@ async def _retrieve_memories_async(
     except Exception as e:  # noqa: BLE001
         log.warning("combined memory retrieval async failed: %s", e)
         return [], "", ""
-
-
-def _retrieve_memories(
-    session_id: int, user_message: str | None
-) -> tuple[list[int], str, str]:
-    """Sync wrapper for _retrieve_memories_async."""
-    import asyncio
-
-    return asyncio.run(_retrieve_memories_async(session_id, user_message))
 
 
 async def _mark_facts_pending_async(static_ids: list[int], session_id: int) -> None:

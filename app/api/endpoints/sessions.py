@@ -102,7 +102,7 @@ async def api_switch_session(request: SessionSwitchRequest, http_request: Reques
         client_id = _get_session_id(http_request)
         SessionService.clear_client_session(client_id)
 
-        SessionService.start_session(interface="web")
+        await SessionService.start_session_async(interface="web")
 
         SessionService.mark_client_connected(client_id)
 
