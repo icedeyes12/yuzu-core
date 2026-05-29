@@ -94,8 +94,11 @@ class ChutesProvider(AIProvider):
             if not current_model:
                 break
 
-            await _rate_limit_model(current_model)
-            result = await self._chutes_raw(current_model, messages, kwargs)
+            sem = await _rate_limit_model(current_model)
+            try:
+                result = await self._chutes_raw(current_model, messages, kwargs)
+            finally:
+                sem.release()
             status = result[0]
             data = result[1]
 
@@ -163,9 +166,10 @@ class ChutesProvider(AIProvider):
                     timeout=kwargs.get("timeout", 120),
                 )
                 if response.status_code == 200:
+                    content = response.json()["choices"][0]["message"]["content"]
                     return (
                         200,
-                        response.json()["choices"][0]["message"]["content"].strip(),
+                        content.strip() if content else "",
                     )
                 return (response.status_code, None, response.text[:200])
             except Exception as e:
@@ -220,39 +224,47 @@ class ChutesProvider(AIProvider):
                 "stream": True,
             }
 
-            await _rate_limit_model(model)
-            async with httpx.AsyncClient() as client:
-                async with client.stream(
-                    "POST",
-                    self.base_url,
-                    headers=headers,
-                    json=payload,
-                    timeout=kwargs.get("timeout", 120),
-                ) as response:
-                    if response.status_code == 200:
-                        async for line in response.aiter_lines():
-                            if line and line.startswith("data: "):
-                                if line == "data: [DONE]":
-                                    break
-                                try:
-                                    json_data = json.loads(line[6:])
-                                    if (
-                                        "choices" in json_data
-                                        and len(json_data["choices"]) > 0
-                                    ):
-                                        delta = json_data["choices"][0].get("delta", {})
-                                        if "content" in delta and delta["content"]:
-                                            yield delta["content"]
-                                except (json.JSONDecodeError, KeyError):
-                                    continue
-                    else:
-                        logger.warning(
-                            "Chutes HTTP %d for model %s", response.status_code, model
-                        )
-                        yield (
-                            "\n[System] Chutes API returned HTTP "
-                            + str(response.status_code)
-                            + ". Please try again."
-                        )
+            sem = await _rate_limit_model(model)
+            try:
+                async with httpx.AsyncClient() as client:
+                    async with client.stream(
+                        "POST",
+                        self.base_url,
+                        headers=headers,
+                        json=payload,
+                        timeout=kwargs.get("timeout", 120),
+                    ) as response:
+                        if response.status_code == 200:
+                            async for line in response.aiter_lines():
+                                if line and line.startswith("data: "):
+                                    if line == "data: [DONE]":
+                                        break
+                                    try:
+                                        json_data = json.loads(line[6:])
+                                        if (
+                                            "choices" in json_data
+                                            and len(json_data["choices"]) > 0
+                                        ):
+                                            delta = json_data["choices"][0].get(
+                                                "delta", {}
+                                            )
+                                            if "content" in delta and delta["content"]:
+                                                yield delta["content"]
+                                    except (json.JSONDecodeError, KeyError):
+                                        continue
+                        else:
+                            logger.warning(
+                                "Chutes HTTP %d for model %s",
+                                response.status_code,
+                                model,
+                            )
+                            yield (
+                                "\n[System] Chutes API returned HTTP "
+                                + str(response.status_code)
+                                + ". Please try again."
+                            )
+            finally:
+                sem.release()
+
         except Exception as e:
             yield f"Error: {str(e)}"

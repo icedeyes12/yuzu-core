@@ -23,18 +23,16 @@ def _get_model_semaphore(model: str) -> asyncio.Semaphore:
     return _MODEL_SEMAPHORES[model]
 
 
-async def _rate_limit_model(model: str) -> None:
-    """Enforce rate limit per model."""
+async def _rate_limit_model(model: str) -> asyncio.Semaphore:
+    """Acquire rate limit for model and return semaphore for later release."""
     sem = _get_model_semaphore(model)
     await sem.acquire()
-    try:
-        now = time.time()
-        elapsed = now - _MODEL_LAST_CALL.get(model, 0)
-        if elapsed < _MODEL_RATE_LIMIT:
-            await asyncio.sleep(_MODEL_RATE_LIMIT - elapsed)
-        _MODEL_LAST_CALL[model] = time.time()
-    finally:
-        sem.release()
+    now = time.time()
+    elapsed = now - _MODEL_LAST_CALL.get(model, 0)
+    if elapsed < _MODEL_RATE_LIMIT:
+        await asyncio.sleep(_MODEL_RATE_LIMIT - elapsed)
+    _MODEL_LAST_CALL[model] = time.time()
+    return sem  # Caller must release after HTTP request
 
 
 class AIProvider:
@@ -245,7 +243,6 @@ class AIProviderManager:
             return any(r in error_lower for r in retryable)
 
         for attempt in range(3):
-            await _rate_limit_model(MAIN_MODEL)
             result = await provider.send_message(
                 messages, MAIN_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs
             )
@@ -262,7 +259,6 @@ class AIProviderManager:
                 await asyncio.sleep(0.5)
 
         for attempt in range(2):
-            await _rate_limit_model(FALLBACK_MODEL)
             result = await provider.send_message(
                 messages, FALLBACK_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs
             )
