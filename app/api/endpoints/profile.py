@@ -246,7 +246,9 @@ async def api_get_vision_capabilities():
 @router.post("/providers/set_vision_model")
 async def api_set_vision_model(request: VisionModelSetRequest):
     try:
-        result = await ConfigService.set_vision_model_async(request.provider, request.model)
+        result = await ConfigService.set_vision_model_async(
+            request.provider, request.model
+        )
         return {"status": "success", "message": result}
     except Exception as e:
         log.error("Error setting vision model: %s", e)

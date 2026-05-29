@@ -23,7 +23,7 @@ class ChatService:
     @staticmethod
     async def process_image_uploads(images: list[UploadFile]) -> list[str]:
         """Save uploaded images and return their file paths.
-        
+
         Returns list of saved file paths like ['static/uploads/20250526_123456_0_image.png']
         """
         saved_paths = []
@@ -48,7 +48,7 @@ class ChatService:
                     if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
                         ext = ".png"
                         safe_filename = f"{Path(safe_filename).stem}{ext}"
-                    
+
                     filename = f"{timestamp}_{i}_{safe_filename}"
                     filepath = uploads_dir / filename
 
@@ -83,7 +83,9 @@ class ChatService:
 
         # Build markdown for display in history
         if image_paths:
-            image_markdown = "\n".join([f"![Uploaded Image]({path})" for path in image_paths])
+            image_markdown = "\n".join(
+                [f"![Uploaded Image]({path})" for path in image_paths]
+            )
             if user_message:
                 user_message = f"{user_message}\n\n{image_markdown}"
             else:

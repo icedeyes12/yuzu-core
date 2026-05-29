@@ -1391,12 +1391,14 @@ class YuzuCompanionAgent:
 
         if last_user_msg and last_ai_reply:
             console.print("[dim]Generating session context...[/]")
-            if asyncio.run(summarize_memory_async(
-                self.profile,
-                last_user_msg["content"],
-                last_ai_reply["content"],
-                session_id,
-            )):
+            if asyncio.run(
+                summarize_memory_async(
+                    self.profile,
+                    last_user_msg["content"],
+                    last_ai_reply["content"],
+                    session_id,
+                )
+            ):
                 success("Session context updated!")
             else:
                 error("Session context update failed")

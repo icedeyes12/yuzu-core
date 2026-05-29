@@ -27,6 +27,7 @@ from app.memory.db_memory import (
     pg_execute,
     pg_execute_async,
 )
+from app.memory.memory import _memory_llm_call
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,7 @@ def _get_ai_manager():
     """Lazy-import to avoid circular imports. Sync wrapper for async get_ai_manager."""
     from app.providers import get_ai_manager
     import asyncio
+
     return asyncio.run(get_ai_manager())
 
 
@@ -287,7 +289,8 @@ Rate each fact (respond with JSON array only):"""
         from app.providers import get_ai_manager
 
         ai = await get_ai_manager()
-        response = await ai._internal_llm_call(
+        response = await _memory_llm_call(
+            ai,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},

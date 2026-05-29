@@ -16,14 +16,19 @@ class ChutesProvider(AIProvider):
         self.base_url = "https://llm.chutes.ai/v1/chat/completions"
         self._last_error = None
         self.available_models = [
-            "Qwen/Qwen3-VL-235B-A22B-Instruct",
-            "Qwen/Qwen3.5-397B-A17B-TEE",
-            "Qwen/Qwen3.6-27B-TEE",
             "google/gemma-4-31B-turbo-TEE",
+            "Qwen/Qwen3.6-27B-TEE",
+            "Qwen/Qwen3.5-397B-A17B-TEE",
+            "Qwen/Qwen3-32B-TEE",
+            "Qwen/Qwen3-235B-A22B-Thinking-2507",
             "deepseek-ai/DeepSeek-V3.2-TEE",
+            "MiniMaxAI/MiniMax-M2.5-TEE",
             "moonshotai/Kimi-K2.5-TEE",
             "moonshotai/Kimi-K2.6-TEE",
             "Qwen/Qwen2.5-Coder-32B-Instruct-TEE",
+            "unsloth/Mistral-Nemo-Instruct-2407-TEE",
+            "zai-org/GLM-5-TEE",
+            "zai-org/GLM-5.1-TEE",
         ]
 
     def _normalize_messages_for_chutes(self, messages: list[dict]) -> list[dict]:

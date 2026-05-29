@@ -190,7 +190,7 @@ class AIProviderManager:
 
     _PREFERRED_MODELS = [
         "Qwen/Qwen3.6-27B-TEE",
-        "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE",
+        "Qwen/Qwen3-235B-A22B-Thinking-2507",
     ]
 
     async def _internal_llm_call(self, messages: list[dict], **kwargs) -> str | None:
@@ -226,7 +226,9 @@ class AIProviderManager:
                 logger.debug(f"[INT] Success with {MAIN_MODEL}: {len(result)} chars")
                 return result
             last_error = getattr(provider, "_last_error", None)
-            logger.warning(f"[INT] {MAIN_MODEL} failed (attempt {attempt+1}): {last_error}")
+            logger.warning(
+                f"[INT] {MAIN_MODEL} failed (attempt {attempt + 1}): {last_error}"
+            )
             if not _is_connection_error(last_error):
                 break
             if attempt < 2:
@@ -237,15 +239,19 @@ class AIProviderManager:
                 messages, FALLBACK_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs
             )
             if result:
-                logger.debug(f"[INT] Success with {FALLBACK_MODEL}: {len(result)} chars")
+                logger.debug(
+                    f"[INT] Success with {FALLBACK_MODEL}: {len(result)} chars"
+                )
                 return result
             last_error = getattr(provider, "_last_error", None)
-            logger.warning(f"[INT] {FALLBACK_MODEL} failed (attempt {attempt+1}): {last_error}")
+            logger.warning(
+                f"[INT] {FALLBACK_MODEL} failed (attempt {attempt + 1}): {last_error}"
+            )
             if not _is_connection_error(last_error):
                 break
             if attempt < 1:
                 await asyncio.sleep(0.5)
-        
+
         logger.error("[INT] All models failed, returning None")
         return None
 

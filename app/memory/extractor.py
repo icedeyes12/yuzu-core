@@ -59,6 +59,7 @@ def _get_ai_manager():
     """Lazy-import to avoid circular imports. Sync wrapper for async get_ai_manager."""
     from app import get_ai_manager
     import asyncio
+
     return asyncio.run(get_ai_manager())
 
 

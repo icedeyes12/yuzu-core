@@ -245,7 +245,7 @@ async def generate_ai_response(
 
     raw_response is the full API response dict, used for tool-call parsing.
     Legacy /command detection lives in the orchestrator.
-    
+
     NOTE: build_messages() fetches full history including the just-persisted
     user message. We do NOT re-append user_message to avoid duplication.
     """
@@ -267,7 +267,7 @@ async def generate_ai_response(
     messages = await build_messages(
         profile, session_id, interface, user_message, include_image_paths=True
     )
-    
+
     # DO NOT re-append user_message here - it's already in history
     # The history from build_messages() is authoritative
 
@@ -341,7 +341,7 @@ async def generate_ai_response_streaming(
     non-streaming variant, then dispatches via the provider's streaming
     API. Yields raw provider chunks; the orchestrator is responsible for
     filtering /command preambles and post-processing.
-    
+
     NOTE: build_messages() fetches full history including the just-persisted
     user message. We do NOT re-append user_message to avoid duplication.
     """
@@ -364,7 +364,7 @@ async def generate_ai_response_streaming(
     messages = await build_messages(
         profile, session_id, interface, user_message, include_image_paths=True
     )
-    
+
     # DO NOT re-append user_message here - it's already in history
     # The history from build_messages() is authoritative
 

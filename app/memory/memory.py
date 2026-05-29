@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -44,6 +45,7 @@ __all__ = [
     "create_episode_and_pcl_async",
     "should_trigger_segmentation_async",
     "mark_segmentation_done_async",
+    "_memory_llm_call",
 ]
 
 logger = logging.getLogger(__name__)
@@ -63,6 +65,38 @@ IDLE_GATE_HOURS = (
 
 # Fence constants (aligned with plast-mem)
 FENCE_TTL_MINUTES = 120  # Stale job cleanup threshold
+
+# ── Rate limiting for memory pipeline ─────────────────────────────────────────
+_MEMORY_LLM_SEMAPHORE = asyncio.Semaphore(1)  # Only 1 concurrent memory LLM call
+_MEMORY_LLM_DELAY = 1.0  # Seconds between memory LLM calls
+_last_memory_llm_call = 0.0  # Timestamp of last call
+
+
+async def _memory_llm_call(ai_manager, messages: list[dict], **kwargs) -> str | None:
+    """Rate-limited LLM call for memory pipeline.
+
+    Ensures memory calls don't overwhelm the API:
+    - Max 1 concurrent call (semaphore)
+    - Min 1s between calls (delay)
+    - Graceful failure (returns None on error)
+    """
+    global _last_memory_llm_call
+
+    async with _MEMORY_LLM_SEMAPHORE:
+        # Enforce minimum delay between calls
+        now = time.time()
+        elapsed = now - _last_memory_llm_call
+        if elapsed < _MEMORY_LLM_DELAY:
+            await asyncio.sleep(_MEMORY_LLM_DELAY - elapsed)
+
+        try:
+            result = await ai_manager._internal_llm_call(messages, **kwargs)
+            _last_memory_llm_call = time.time()
+            return result
+        except Exception as e:
+            logger.warning(f"[Memory LLM] Call failed: {e}")
+            return None
+
 
 # ── Background state ─────────────────────────────────────────────────────────
 
@@ -194,6 +228,7 @@ def _get_ai_manager():
     """Lazy-import to avoid circular imports. Sync wrapper for async get_ai_manager."""
     from app.providers import get_ai_manager
     import asyncio
+
     return asyncio.run(get_ai_manager())
 
 
@@ -367,7 +402,8 @@ async def _llm_batch_segment_async(messages: list[dict]) -> list[dict]:
     system_prompt, user_prompt = _build_batch_segment_prompt(messages)
 
     try:
-        response = await ai._internal_llm_call(
+        response = await _memory_llm_call(
+            ai,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -503,7 +539,8 @@ async def _enhance_temporal_segments_async(
 Conversation:
 {conversation}"""
 
-            response = await ai._internal_llm_call(
+            response = await _memory_llm_call(
+                ai,
                 messages=[{"role": "user", "content": prompt}],
                 timeout=30,
                 max_tokens=600,  # Naik dari 300 ke 600

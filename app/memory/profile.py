@@ -284,6 +284,7 @@ def summarize_global_player_profile() -> bool:
         log.info("trimmed oldest session, now %d chars", len(conversation_text))
 
     import asyncio
+
     manager = asyncio.run(get_ai_manager())
     chutes = manager.providers.get("chutes")
     api_key = chutes.api_key if chutes else None

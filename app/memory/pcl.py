@@ -21,6 +21,7 @@ from app.memory.db_memory import (
     FACT_TYPE_STATIC,
 )
 from app.memory.extractor import upsert_semantic_memory_async
+from app.memory.memory import _memory_llm_call
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  # Enable debug logging for PCL
@@ -113,7 +114,8 @@ Episode summary to predict:
 Based on the existing knowledge and episode summary, list the topics that are likely to appear in this episode. Return ONLY a JSON array of topic strings."""
 
     try:
-        response = await ai_manager._internal_llm_call(
+        response = await _memory_llm_call(
+            ai_manager,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -191,7 +193,9 @@ async def calibrate_and_extract_async(
     prediction_text = predicted_content or "No prediction (cold start)."
     facts_context = _build_facts_context(existing_facts)
 
-    logger.debug(f"CALIBRATE: {len(actual_messages)} messages, {len(existing_facts)} existing facts")
+    logger.debug(
+        f"CALIBRATE: {len(actual_messages)} messages, {len(existing_facts)} existing facts"
+    )
     logger.debug(f"PREDICTION: {prediction_text[:200]}...")
 
     system_prompt = """You are a deterministic knowledge auditor. Compare a topic prediction, existing facts, and an actual conversation log. Output a JSON array of audit actions ONLY.
@@ -230,7 +234,8 @@ Actual conversation:
 Apply the deterministic action rules to extract any new, updated, reinforced, or invalidated facts. Return a JSON array of actions."""
 
     try:
-        response = await ai_manager._internal_llm_call(
+        response = await _memory_llm_call(
+            ai_manager,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -239,17 +244,21 @@ Apply the deterministic action rules to extract any new, updated, reinforced, or
             max_tokens=800,
         )
         if not response:
-            logger.warning("CALIBRATE: _internal_llm_call returned None")
+            logger.warning("CALIBRATE: _memory_llm_call returned None")
             return []
 
-        logger.debug(f"CALIBRATE LLM response ({len(response)} chars): {response[:500]}...")
+        logger.debug(
+            f"CALIBRATE LLM response ({len(response)} chars): {response[:500]}..."
+        )
 
         import json
 
         try:
             actions = json.loads(response)
         except json.JSONDecodeError:
-            logger.warning("CALIBRATE: JSON decode failed, attempting truncation repair")
+            logger.warning(
+                "CALIBRATE: JSON decode failed, attempting truncation repair"
+            )
             actions = []
             for i in range(len(response), 0, -1):
                 try:
@@ -444,7 +453,9 @@ async def run_predict_calibrate_async(
         predicted = await predict_episode_content_async(
             existing, episode_summary, segment_messages=messages
         )
-        logger.debug(f"PCL: Prediction result: {predicted[:100] if predicted else 'None'}...")
+        logger.debug(
+            f"PCL: Prediction result: {predicted[:100] if predicted else 'None'}..."
+        )
 
         # 3. CALIBRATE
         extracted = await calibrate_and_extract_async(predicted, messages, existing)
