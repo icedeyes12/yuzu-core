@@ -10,6 +10,32 @@ from app.tools import multimodal_tools
 
 logger = logging.getLogger(__name__)
 
+# Global rate limiting for model access
+_MODEL_SEMAPHORES: dict[str, asyncio.Semaphore] = {}
+_MODEL_LAST_CALL: dict[str, float] = {}
+_MODEL_RATE_LIMIT = 1.0  # Min 1s between calls to same model
+
+
+def _get_model_semaphore(model: str) -> asyncio.Semaphore:
+    """Get or create a semaphore for a specific model."""
+    if model not in _MODEL_SEMAPHORES:
+        _MODEL_SEMAPHORES[model] = asyncio.Semaphore(1)
+    return _MODEL_SEMAPHORES[model]
+
+
+async def _rate_limit_model(model: str) -> None:
+    """Enforce rate limit per model."""
+    sem = _get_model_semaphore(model)
+    await sem.acquire()
+    try:
+        now = time.time()
+        elapsed = now - _MODEL_LAST_CALL.get(model, 0)
+        if elapsed < _MODEL_RATE_LIMIT:
+            await asyncio.sleep(_MODEL_RATE_LIMIT - elapsed)
+        _MODEL_LAST_CALL[model] = time.time()
+    finally:
+        sem.release()
+
 
 class AIProvider:
     def __init__(self, name: str, config: dict | None = None):
@@ -219,6 +245,7 @@ class AIProviderManager:
             return any(r in error_lower for r in retryable)
 
         for attempt in range(3):
+            await _rate_limit_model(MAIN_MODEL)
             result = await provider.send_message(
                 messages, MAIN_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs
             )
@@ -235,6 +262,7 @@ class AIProviderManager:
                 await asyncio.sleep(0.5)
 
         for attempt in range(2):
+            await _rate_limit_model(FALLBACK_MODEL)
             result = await provider.send_message(
                 messages, FALLBACK_MODEL, log_prefix="[INT]", skip_vision=True, **kwargs
             )

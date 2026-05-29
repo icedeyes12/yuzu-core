@@ -4,7 +4,7 @@ import json
 import logging
 import httpx
 from typing import AsyncGenerator
-from app.providers.base import AIProvider
+from app.providers.base import AIProvider, _rate_limit_model
 from app.tools import multimodal_tools
 
 logger = logging.getLogger(__name__)
@@ -94,6 +94,7 @@ class ChutesProvider(AIProvider):
             if not current_model:
                 break
 
+            await _rate_limit_model(current_model)
             result = await self._chutes_raw(current_model, messages, kwargs)
             status = result[0]
             data = result[1]
@@ -219,6 +220,7 @@ class ChutesProvider(AIProvider):
                 "stream": True,
             }
 
+            await _rate_limit_model(model)
             async with httpx.AsyncClient() as client:
                 async with client.stream(
                     "POST",
