@@ -78,11 +78,14 @@ async def api_get_config():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/get_profile")
-async def api_get_profile():
+@router.get("/profile")
+async def api_get_profile(session_id: int | None = None):
     try:
         profile = await get_profile_async()
-        active_session = await get_active_session_async()
+        if session_id is None:
+            active_session = await get_active_session_async()
+        else:
+            active_session = {"id": session_id}
         session_id = active_session["id"]
         chat_history = await get_chat_history_async(session_id=session_id, limit=None)
 

@@ -168,10 +168,13 @@ async def api_delete_session(request: SessionDeleteRequest):
 
 
 @router.post("/clear_chat")
-async def api_clear_chat(request: Request):
+async def api_clear_chat(request: Request, session_id: int | None = None):
     try:
-        active_session = await get_active_session_async()
-        session_id = active_session["id"]
+        if session_id:
+            session_id = session_id
+        else:
+            active_session = await get_active_session_async()
+            session_id = active_session["id"]
 
         await clear_session_messages_async(session_id)
 

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from app.db import Database
 from app.services.memory_service import MemoryService
 from app.logging_config import get_logger
@@ -131,6 +131,16 @@ async def api_run_memory_decay():
     except Exception as e:
         log.error("Error running memory decay: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/memory/store")
+async def api_store_memory(request: Request, session_id: int | None = None):
+    pass
+
+
+@router.get("/memory/retrieve")
+async def api_retrieve_memory(request: Request, session_id: int | None = None):
+    pass
 
 
 @router.get("/memory_stats")
