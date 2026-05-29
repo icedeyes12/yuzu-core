@@ -5,7 +5,7 @@ import logging
 import httpx
 import asyncio
 from typing import AsyncGenerator
-from app.providers.base import AIProvider, _rate_limit_model
+from app.providers.base import AIProvider, _rate_limit_chutes
 from app.tools import multimodal_tools
 
 logger = logging.getLogger(__name__)
@@ -95,11 +95,8 @@ class ChutesProvider(AIProvider):
             if not current_model:
                 break
 
-            sem = await _rate_limit_model(current_model)
-            try:
+            async with _rate_limit_chutes(current_model):
                 result = await self._chutes_raw(current_model, messages, kwargs)
-            finally:
-                sem.release()
             status = result[0]
             data = result[1]
 
@@ -234,8 +231,7 @@ class ChutesProvider(AIProvider):
                 "stream": True,
             }
 
-            sem = await _rate_limit_model(model)
-            try:
+            async with _rate_limit_chutes(model):
                 async with httpx.AsyncClient() as client:
                     async with client.stream(
                         "POST",
@@ -273,8 +269,6 @@ class ChutesProvider(AIProvider):
                                 + str(response.status_code)
                                 + ". Please try again."
                             )
-            finally:
-                sem.release()
 
         except Exception as e:
             yield f"Error: {str(e)}"
