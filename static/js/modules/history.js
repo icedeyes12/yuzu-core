@@ -10,6 +10,26 @@ import { scrollToBottom } from "./scroll.js";
 import { hideChatSkeleton, showChatSkeleton } from "./skeleton.js";
 import { MESSAGES_PER_PAGE } from "./state.js";
 
+// Session switching guardrails
+let _isLoadingHistory = false;
+let _pendingSessionId = null;
+
+/**
+ * Check if a history load is currently in progress.
+ * @returns {boolean}
+ */
+export function isHistoryLoading() {
+	return _isLoadingHistory;
+}
+
+/**
+ * Get the session ID currently being loaded (if any).
+ * @returns {number|null}
+ */
+export function getPendingSessionId() {
+	return _pendingSessionId;
+}
+
 /**
  * Load chat history for a session.
  * @param {number|null} sessionId - Session ID to load
@@ -17,6 +37,18 @@ import { MESSAGES_PER_PAGE } from "./state.js";
 export async function loadChatHistory(sessionId = null) {
 	const chatContainer = document.getElementById("chatContainer");
 	if (!chatContainer) return;
+
+	// Guard: Prevent concurrent history loads
+	if (_isLoadingHistory) {
+		console.log(
+			`[History] Load already in progress for session ${_pendingSessionId}, ignoring request for ${sessionId}`,
+		);
+		return;
+	}
+
+	// Mark as loading
+	_isLoadingHistory = true;
+	_pendingSessionId = sessionId;
 
 	// Show skeleton loading
 	showChatSkeleton();
@@ -196,6 +228,10 @@ export async function loadChatHistory(sessionId = null) {
 		if (typeof window.updateDynamicLayout === "function") {
 			window.updateDynamicLayout();
 		}
+	} finally {
+		// Reset loading state
+		_isLoadingHistory = false;
+		_pendingSessionId = null;
 	}
 }
 

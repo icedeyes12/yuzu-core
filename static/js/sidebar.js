@@ -2,6 +2,11 @@
 // DESCRIPTION: Unified sidebar management with session actions
 let _currentTheme = "stellar-night-suisei";
 
+// Session switching guardrails
+let _isSessionSwitching = false;
+let _sessionSwitchCooldown = false;
+const SESSION_SWITCH_DEBOUNCE_MS = 300;
+
 function toggleSidebar() {
 	const sidebar = document.getElementById("mainSidebar");
 	const overlay = document.getElementById("sidebarOverlay");
@@ -346,6 +351,18 @@ function createNewSession() {
 }
 
 function switchSession(sessionId) {
+	// Guard: Prevent rapid clicking
+	if (_sessionSwitchCooldown) {
+		console.log("[Sidebar] Session switch cooldown active, ignoring click");
+		return;
+	}
+
+	// Guard: Prevent double-switching while another is in progress
+	if (_isSessionSwitching) {
+		console.log("[Sidebar] Session switch already in progress, ignoring click");
+		return;
+	}
+
 	// Check for active stream before switching
 	if (window.backgroundStreams && window.router) {
 		const currentSession = window.router.currentSessionId;
@@ -366,36 +383,61 @@ function switchSession(sessionId) {
 
 	if (!isOnChatPage) {
 		// Navigate to chat page with session parameter
-		// The chat page will handle loading the session via URL param
 		window.location.href = `/chat?session=${sessionId}`;
 		toggleSidebar();
 		return;
 	}
 
-	// Use handleSessionSwitch if available (we're on chat page)
+	// Start cooldown
+	_sessionSwitchCooldown = true;
+	setTimeout(() => {
+		_sessionSwitchCooldown = false;
+	}, SESSION_SWITCH_DEBOUNCE_MS);
+
+	// Set switching state and visual feedback
+	_isSessionSwitching = true;
+	_setSessionSwitchingVisual(sessionId, true);
+
+	// Delegate to handleSessionSwitch if available (we're on chat page)
 	if (window.handleSessionSwitch) {
 		window.handleSessionSwitch(sessionId);
 		toggleSidebar();
+		// Note: _isSessionSwitching will be reset by handleSessionSwitch completion
+		// But we also reset here as a safety fallback
+		setTimeout(() => {
+			_isSessionSwitching = false;
+			_setSessionSwitchingVisual(sessionId, false);
+		}, 1000);
 		return;
 	}
 
-	// Fallback: traditional page reload
-	fetch("/api/sessions/switch", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ session_id: sessionId }),
-	})
-		.then((response) => response.json())
-		.then((data) => {
-			if (data.status === "success") {
-				toggleSidebar();
-				window.location.href = `/chat?session=${sessionId}`;
-			}
-		})
-		.catch((error) => {
-			console.error("Error switching session:", error);
-			alert("Failed to switch session");
-		});
+	// No handleSessionSwitch available - this shouldn't happen on chat page
+	// Reset state and log warning
+	_isSessionSwitching = false;
+	_setSessionSwitchingVisual(sessionId, false);
+	console.warn("[Sidebar] handleSessionSwitch not available on chat page");
+}
+
+/**
+ * Set visual loading state for session items.
+ * @param {number|null} sessionId - Session ID being switched (null to clear all)
+ * @param {boolean} isLoading - Whether to show loading state
+ */
+function _setSessionSwitchingVisual(sessionId, isLoading) {
+	const sessionsList = document.getElementById("sidebarSessionsList");
+	if (!sessionsList) return;
+
+	// Remove all switching states first
+	sessionsList.querySelectorAll(".sidebar-session-item").forEach((item) => {
+		item.classList.remove("switching");
+	});
+
+	// If loading, add switching class to all items (prevents clicks via CSS)
+	if (isLoading) {
+		sessionsList.classList.add("switching-active");
+	} else {
+		sessionsList.classList.remove("switching-active");
+	}
 }
 
 // Helper functions

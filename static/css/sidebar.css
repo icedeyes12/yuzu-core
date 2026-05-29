@@ -295,6 +295,19 @@
 	border-color: var(--accent-primary);
 }
 
+/* Session switching state */
+#sidebarSessionsList.switching-active .sidebar-session-item {
+	pointer-events: none;
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.sidebar-session-item.switching {
+	opacity: 0.5;
+	cursor: wait;
+	pointer-events: none;
+}
+
 .session-content {
 	flex: 1;
 	min-width: 0;
