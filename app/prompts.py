@@ -4,13 +4,66 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 import os
 from app.db import Database
 from app.logging_config import get_logger
 
 log = get_logger(__name__)
+
+
+def _format_relative_time(timestamp_str: str | None) -> str:
+    """Convert ISO timestamp to human-readable relative time (timezone-aware).
+
+    Uses pure Python datetime math. Treats naive timestamps as UTC.
+    Example: "2 hours ago", "3 days ago", "Just now"
+    """
+    if not timestamp_str:
+        return "Unknown"
+
+    try:
+        # Clean and parse timestamp
+        ts_str = timestamp_str.strip()
+        if not ts_str:
+            return "Unknown"
+
+        # Handle various ISO formats
+        if "T" in ts_str:
+            # ISO format: "2026-05-22T14:30:00"
+            iso_str = ts_str.split("+")[0].split(".")[0]
+            past = datetime.fromisoformat(iso_str)
+        else:
+            # Simple format: "2026-05-22 14:30:00"
+            iso_str = ts_str.split("+")[0].split(".")[0]
+            past = datetime.fromisoformat(iso_str)
+
+        # If naive, assume UTC
+        if past.tzinfo is None:
+            past = past.replace(tzinfo=timezone.utc)
+
+        now = datetime.now(timezone.utc)
+        seconds = int((now - past).total_seconds())
+
+        if seconds < 60:
+            return "Just now"
+        elif seconds < 3600:
+            minutes = seconds // 60
+            return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+        elif seconds < 86400:
+            hours = seconds // 3600
+            return f"{hours} hour{'s' if hours != 1 else ''} ago"
+        elif seconds < 604800:
+            days = seconds // 86400
+            return f"{days} day{'s' if days != 1 else ''} ago"
+        elif seconds < 2592000:
+            weeks = seconds // 604800
+            return f"{weeks} week{'s' if weeks != 1 else ''} ago"
+        else:
+            months = seconds // 2592000
+            return f"{months} month{'s' if months != 1 else ''} ago"
+    except (ValueError, AttributeError):
+        return "Unknown"
 
 
 def _truncate(text: str, limit: int = 120) -> str:
@@ -159,13 +212,40 @@ def _global_knowledge_block(profile: dict[str, Any]) -> str:
 
 
 async def _session_events_block_async(session_id: int) -> str:
-    events = (
-        await Database.get_recent_sessions_for_session_async(session_id, limit=3) or []
+    """Build meta-awareness block with recent session context.
+
+    Fetches the 5 most recently active sessions (excluding current) to give
+    the LLM awareness of session-switching patterns without historical log noise.
+    """
+    sessions = await Database.get_recent_active_sessions_async(
+        current_session_id=session_id, limit=5
     )
-    if not events:
-        return "\n\nCURRENT SESSION EVENTS:"
-    lines = [f"- {e['content']} at {e['timestamp']}" for e in events]
-    return "\n\nCURRENT SESSION EVENTS:\n" + "\n".join(lines)
+
+    if not sessions:
+        return """
+[META-AWARENESS: SESSION STATE]
+Session context unavailable.
+**Context Rule:** The user switching sessions implies changing the topic, NOT a period of absence. Do NOT act surprised or say 'long time no see' if the user was active in ANY session recently.
+""".strip()
+
+    lines = ["\n[META-AWARENESS: SESSION STATE]"]
+
+    for s in sessions:
+        session_id = s.get("id", "?")
+        name = s.get("name", "Unnamed Session")
+        rel_time = _format_relative_time(s.get("updated_at"))
+
+        lines.append(f"  - [Session {session_id}: {name}] | Last active: {rel_time}")
+
+    # Add the required context rule
+    lines.append("")
+    lines.append(
+        "**Context Rule:** The user switching sessions implies changing the topic, "
+        "NOT a period of absence. Do NOT act surprised or say 'long time no see' "
+        "if the user was active in ANY session recently."
+    )
+
+    return "\n".join(lines)
 
 
 async def build_system_message_async(
@@ -175,7 +255,7 @@ async def build_system_message_async(
     user_message: str | None,
 ) -> str:
     """Render the full system prompt for a chat turn (async)."""
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    current_time = datetime.now().strftime("%A, %Y-%m-%d %H:%M:%S")
 
     # Combined retrieval - single embedding call for both static and dynamic
     static_ids, static_context, dynamic_context = await _retrieve_memories_async(

@@ -209,11 +209,26 @@ async def _send_to_provider(
     schemas = _unique_tool_schemas()
 
     if image_context and provider in ai_manager.providers:
-        v_provider, v_model = multimodal_tools.get_best_vision_provider()
-        if v_provider and v_model:
-            log.info("2nd-pass vision: %s/%s", v_provider, v_model)
-            provider, model = v_provider, v_model
-            schemas = []  # vision models don't accept tool schemas
+        # Capability check: prefer native vision model if available
+        if multimodal_tools.is_vision_model(model, provider):
+            log.info(
+                "2nd-pass: %s/%s is vision-capable, reusing for image synthesis",
+                provider,
+                model,
+            )
+        else:
+            # Current model lacks vision support, use fallback
+            v_provider, v_model = multimodal_tools.get_best_vision_provider()
+            if v_provider and v_model:
+                log.info(
+                    "2nd-pass vision fallback: %s/%s (non-vision) -> %s/%s",
+                    provider,
+                    model,
+                    v_provider,
+                    v_model,
+                )
+                provider, model = v_provider, v_model
+                schemas = []  # vision models don't accept tool schemas
 
     started = time.time()
     raw_response: dict[str, Any] | None = None
@@ -330,10 +345,25 @@ async def _stream_from_provider(
     ai_manager = await get_ai_manager()
 
     if image_context and provider in ai_manager.providers:
-        v_provider, v_model = multimodal_tools.get_best_vision_provider()
-        if v_provider and v_model:
-            log.info("streaming 2nd-pass vision: %s/%s", v_provider, v_model)
-            provider, model = v_provider, v_model
+        # Capability check: prefer native vision model if available
+        if multimodal_tools.is_vision_model(model, provider):
+            log.info(
+                "streaming 2nd-pass: %s/%s is vision-capable, reusing for image synthesis",
+                provider,
+                model,
+            )
+        else:
+            # Current model lacks vision support, use fallback
+            v_provider, v_model = multimodal_tools.get_best_vision_provider()
+            if v_provider and v_model:
+                log.info(
+                    "streaming 2nd-pass vision fallback: %s/%s (non-vision) -> %s/%s",
+                    provider,
+                    model,
+                    v_provider,
+                    v_model,
+                )
+                provider, model = v_provider, v_model
 
     received = 0
     try:

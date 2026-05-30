@@ -279,6 +279,14 @@ SQL_SESSION_RENAME = "UPDATE chat_sessions SET name = %s, updated_at = %s WHERE 
 
 SQL_SESSION_DELETE = "UPDATE chat_sessions SET deleted_at = NOW() WHERE id = %s"
 
+SQL_SESSIONS_RECENT_ACTIVE = """
+SELECT id, name, updated_at, message_count, is_active
+FROM chat_sessions
+WHERE deleted_at IS NULL AND id != %s
+ORDER BY updated_at DESC
+LIMIT %s
+"""
+
 SQL_SESSION_UPDATE_MEMORY = (
     "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s"
 )
@@ -699,6 +707,7 @@ __all__ = [
     # Sessions
     "SQL_SESSION_SELECT_ACTIVE",
     "SQL_SESSION_INSERT",
+    "SQL_SESSIONS_RECENT_ACTIVE",
     "SQL_SESSION_SELECT_ALL",
     "SQL_SESSION_DEACTIVATE_ALL",
     "SQL_SESSION_ACTIVATE_ONE",

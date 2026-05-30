@@ -58,6 +58,7 @@ from app.db.queries import (
     SQL_SESSION_SELECT_ACTIVE,
     SQL_SESSION_SELECT_ALL,
     SQL_SESSION_UPDATE_MEMORY,
+    SQL_SESSIONS_RECENT_ACTIVE,
     TOOL_ROLES,
     build_encryption_status,
     build_profile_update,
@@ -449,6 +450,29 @@ async def get_recent_sessions_for_session_async(
     return [parse_event_row(r) for r in rows]
 
 
+async def get_recent_active_sessions_async(
+    current_session_id: int, limit: int = 5
+) -> list[dict]:
+    """Fetch recently active sessions for meta-awareness block.
+
+    Returns sessions ordered by last activity, excluding the current session.
+    Used by the LLM context system to show session-switching context.
+    """
+    rows = await pg_fetchall_async(
+        SQL_SESSIONS_RECENT_ACTIVE, (current_session_id, limit)
+    )
+    return [
+        {
+            "id": r.get("id"),
+            "name": r.get("name", "Unnamed Session"),
+            "updated_at": str(r.get("updated_at", "")),
+            "message_count": r.get("message_count", 0),
+            "is_active": r.get("is_active", False),
+        }
+        for r in rows
+    ]
+
+
 async def get_session_conversation_summary_async(
     session_id: int, limit: int = 20
 ) -> str:
@@ -585,6 +609,7 @@ __all__ = [
     "add_session_event_async",
     "get_recent_sessions_async",
     "get_recent_sessions_for_session_async",
+    "get_recent_active_sessions_async",
     "get_session_conversation_summary_async",
     "add_image_tools_message_async",
     "add_tool_result_async",

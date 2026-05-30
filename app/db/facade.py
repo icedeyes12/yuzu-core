@@ -38,6 +38,7 @@ from app.db.models import (
     get_profile as _pg_get_profile,
     get_recent_sessions as _pg_get_recent_sessions,
     get_recent_sessions_for_session as _pg_get_recent_sessions_for_session,
+    get_recent_active_sessions_async as _pg_get_recent_active_sessions_async,
     get_session_conversation_summary as _pg_get_session_conversation_summary,
     get_session_memory as _pg_get_session_memory,
     get_session_messages as _pg_get_session_messages,
@@ -210,6 +211,9 @@ class Database:
     get_recent_sessions_for_session = _proxy(_pg_get_recent_sessions_for_session)
     get_recent_sessions_for_session_async = _proxy_async(
         _pg_get_recent_sessions_for_session_async
+    )
+    get_recent_active_sessions_async = _proxy_async(
+        _pg_get_recent_active_sessions_async
     )
 
     # ── Encryption status (pure passthroughs) ────────────────────────────────
