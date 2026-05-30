@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import httpx
 import requests
-from typing import Generator
+from typing import AsyncGenerator
 from app.providers.base import AIProvider
 from app.tools import multimodal_tools
 
@@ -170,38 +171,41 @@ class OpenRouterProvider(AIProvider):
             )
             return None
 
-    def send_message_streaming(
+    async def send_message_streaming(
         self, messages: list[dict], model: str, **kwargs
-    ) -> Generator[str, None, None]:
+    ) -> AsyncGenerator[str, None]:
         if not self.api_key or model not in self.available_models:
             yield ""
             return
 
         try:
             headers, payload = self._prepare_payload(messages, model, True, **kwargs)
-            response = requests.post(
-                self.base_url,
-                headers=headers,
-                json=payload,
-                timeout=kwargs.get("timeout", 180),
-                stream=True,
-            )
-
-            if response.status_code == 200:
-                for line in response.iter_lines():
-                    if line and line.startswith(b"data: "):
-                        if line == b"data: [DONE]":
-                            break
-                        try:
-                            json_data = json.loads(line[6:])
-                            if "choices" in json_data and len(json_data["choices"]) > 0:
-                                delta = json_data["choices"][0].get("delta", {})
-                                if "content" in delta and delta["content"]:
-                                    yield delta["content"]
-                        except (json.JSONDecodeError, KeyError):
-                            continue
-            else:
-                yield ""
+            async with httpx.AsyncClient() as client:
+                async with client.stream(
+                    "POST",
+                    self.base_url,
+                    headers=headers,
+                    json=payload,
+                    timeout=kwargs.get("timeout", 180),
+                ) as response:
+                    if response.status == 200:
+                        async for line in response.aiter_lines():
+                            if line and line.startswith(b"data: "):
+                                if line == b"data: [DONE]":
+                                    break
+                                try:
+                                    json_data = json.loads(line[6:])
+                                    if (
+                                        "choices" in json_data
+                                        and len(json_data["choices"]) > 0
+                                    ):
+                                        delta = json_data["choices"][0].get("delta", {})
+                                        if "content" in delta and delta["content"]:
+                                            yield delta["content"]
+                                except (json.JSONDecodeError, KeyError):
+                                    continue
+                    else:
+                        yield ""
         except Exception as e:
             yield f"Error: {str(e)}"
 

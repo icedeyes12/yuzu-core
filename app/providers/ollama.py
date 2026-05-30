@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import requests
-from typing import Generator
+import httpx
+from typing import AsyncGenerator
 from app.providers.base import AIProvider
 
 
@@ -65,9 +66,9 @@ class OllamaProvider(AIProvider):
         except Exception:
             return None
 
-    def send_message_streaming(
+    async def send_message_streaming(
         self, messages: list[dict], model: str, **kwargs
-    ) -> Generator[str, None, None]:
+    ) -> AsyncGenerator[str, None]:
         if model not in self.available_models:
             yield ""
             return
@@ -92,27 +93,27 @@ class OllamaProvider(AIProvider):
                 },
             }
 
-            response = requests.post(
-                f"{self.base_url}/api/chat",
-                json=payload,
-                timeout=kwargs.get("timeout", 180),
-                stream=True,
-            )
-
-            if response.status_code == 200:
-                for line in response.iter_lines():
-                    if line:
-                        try:
-                            json_data = json.loads(line.decode("utf-8"))
-                            if (
-                                "message" in json_data
-                                and "content" in json_data["message"]
-                            ):
-                                yield json_data["message"]["content"]
-                        except json.JSONDecodeError:
-                            continue
-            else:
-                yield ""
+            async with httpx.AsyncClient() as client:
+                async with client.stream(
+                    "POST",
+                    f"{self.base_url}/api/chat",
+                    json=payload,
+                    timeout=kwargs.get("timeout", 180),
+                ) as response:
+                    if response.status_code == 200:
+                        async for line in response.aiter_lines():
+                            if line:
+                                try:
+                                    json_data = json.loads(line.decode("utf-8"))
+                                    if (
+                                        "message" in json_data
+                                        and "content" in json_data["message"]
+                                    ):
+                                        yield json_data["message"]["content"]
+                                except json.JSONDecodeError:
+                                    continue
+                    else:
+                        yield ""
 
         except Exception as e:
             yield f"Error: {str(e)}"
