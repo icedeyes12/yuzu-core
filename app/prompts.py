@@ -510,7 +510,6 @@ Memory Context: {memory_block}
 Current Time: {current_time}
 Location: {await _location_block_async()}
 Interface: {_interface_block(interface)}
-Memory Context: {memory_block}
 Session Metadata: {await _session_events_block_async(session_id)}
 """.strip()
 
