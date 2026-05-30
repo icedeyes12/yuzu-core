@@ -459,7 +459,7 @@ LIMIT %s
 SQL_MESSAGE_HISTORY_FOR_AI_ASC_LIMIT = """
 SELECT id, role, content, image_paths, timestamp
 FROM messages
-WHERE session_id = %s
+WHERE session_id = %s AND role IN ('user', 'assistant')
 ORDER BY timestamp ASC
 LIMIT %s
 """
@@ -467,7 +467,7 @@ LIMIT %s
 SQL_MESSAGE_HISTORY_FOR_AI_DESC_LIMIT = """
 SELECT id, role, content, image_paths, timestamp
 FROM messages
-WHERE session_id = %s
+WHERE session_id = %s AND role IN ('user', 'assistant')
 ORDER BY timestamp DESC
 LIMIT %s
 """
@@ -475,7 +475,7 @@ LIMIT %s
 SQL_MESSAGE_HISTORY_FOR_AI_ASC_ALL = """
 SELECT id, role, content, image_paths, timestamp
 FROM messages
-WHERE session_id = %s
+WHERE session_id = %s AND role IN ('user', 'assistant')
 ORDER BY timestamp ASC
 """
 
@@ -579,17 +579,21 @@ def _format_user_timestamp(ts: Any) -> str:
 def format_ai_history_rows(
     rows: list[dict], include_image_paths: bool = False
 ) -> list[dict]:
-    """Convert raw message rows into the AI-context message list.
+    """Format message rows for AI consumption.
 
-    Behavior preserved exactly from the previous duplicated implementations:
-      * 'event_log' rows are skipped.
-      * 'user' rows get an appended formatted timestamp.
-      * 'assistant' / 'system' rows pass through unchanged.
-      * tool-role rows pass through with their original custom role.
-        Provider normalization will convert them to 'assistant' with [role] prefix.
+    Filters out system messages to prevent log/context pollution.
     """
+    if not rows:
+        return []
+
+    # Defensive filter: exclude system messages
+    filtered_rows = [r for r in rows if r.get("role") != "system"]
+
+    if not filtered_rows:
+        return []
+
     formatted: list[dict] = []
-    for msg in rows:
+    for msg in filtered_rows:
         role = msg.get("role", "")
         content = msg.get("content", "")
         image_paths = parse_json(msg.get("image_paths", "[]"))

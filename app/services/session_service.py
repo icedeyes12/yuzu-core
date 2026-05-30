@@ -36,19 +36,17 @@ class SessionService:
 
     @staticmethod
     def start_session(interface: str = "terminal") -> dict[str, Any]:
-        """Mark the active session as started and run any wake-up tasks."""
+        """Mark the active session as started (sync).
+
+        DEPRECATED: No longer creates connection log messages.
+        """
         profile = Database.get_profile()
-        active_session = Database.get_active_session()
-        session_id = active_session["id"]
+        _ = Database.get_active_session()  # Session already active
 
-        sessions = Database.get_all_sessions() or []
-        last_active = SessionService._last_active_timestamp(sessions, session_id)
+        # Connection logging removed to prevent context pollution
+        # The LLM does not need timestamped connection logs in its context
 
-        connection_msg = SessionService.generate_connection_msg(
-            profile["display_name"], interface, last_active, len(sessions)
-        )
-        Database.add_message("system", connection_msg, session_id)
-
+        # Update session history count only
         history = profile.get("session_history") or {}
         history["current_session"] = {
             "start_time": datetime.now().isoformat(),
@@ -59,7 +57,6 @@ class SessionService:
         history["total_sessions"] = (history.get("total_sessions") or 0) + 1
         Database.update_profile({"session_history": history})
 
-        SessionService._bootstrap_memory(session_id)
         return profile
 
     @staticmethod
@@ -136,19 +133,17 @@ class SessionService:
 
     @staticmethod
     async def start_session_async(interface: str = "terminal") -> dict[str, Any]:
-        """Mark the active session as started and run any wake-up tasks (async)."""
+        """Mark the active session as started (async).
+
+        DEPRECATED: No longer creates connection log messages.
+        """
         profile = await Database.get_profile_async()
-        active_session = await Database.get_active_session_async()
-        session_id = active_session["id"]
+        _ = await Database.get_active_session_async()  # Session already active
 
-        sessions = await Database.get_all_sessions_async() or []
-        last_active = SessionService._last_active_timestamp(sessions, session_id)
+        # Connection logging removed to prevent context pollution
+        # The LLM does not need timestamped connection logs in its context
 
-        connection_msg = SessionService.generate_connection_msg(
-            profile["display_name"], interface, last_active, len(sessions)
-        )
-        await Database.add_message_async("system", connection_msg, session_id)
-
+        # Update session history count only
         history = profile.get("session_history") or {}
         history["current_session"] = {
             "start_time": datetime.now().isoformat(),
@@ -159,7 +154,6 @@ class SessionService:
         history["total_sessions"] = (history.get("total_sessions") or 0) + 1
         await Database.update_profile_async({"session_history": history})
 
-        await SessionService._bootstrap_memory_async(session_id)
         return profile
 
     @staticmethod
@@ -357,3 +351,53 @@ class SessionService:
                     else short
                 )
         return None
+
+    @staticmethod
+    def init_new_session(
+        interface: str = "terminal",
+        profile: dict | None = None,
+        sessions: list | None = None,
+    ) -> dict:
+        """Initialize a new session for the given interface.
+
+        DEPRECATED: No longer creates connection log messages to avoid
+        context pollution in the LLM prompt.
+        """
+        if not profile:
+            profile = Database.get_profile()
+        active_session = Database.get_active_session()
+
+        # Connection logging removed to prevent context pollution
+        # The LLM does not need timestamped connection logs in its context
+
+        # Update session history count only
+        sessions = sessions or Database.get_all_sessions() or []
+        history = (profile.get("session_history") or 0) + 1
+        Database.update_profile({"session_history": history})
+
+        return active_session
+
+    @staticmethod
+    async def init_new_session_async(
+        interface: str = "terminal",
+        profile: dict | None = None,
+        sessions: list | None = None,
+    ) -> dict:
+        """Initialize a new session for the given interface (async).
+
+        DEPRECATED: No longer creates connection log messages to avoid
+        context pollution in the LLM prompt.
+        """
+        if not profile:
+            profile = await Database.get_profile_async()
+        active_session = await Database.get_active_session_async()
+
+        # Connection logging removed to prevent context pollution
+        # The LLM does not need timestamped connection logs in its context
+
+        # Update session history count only
+        sessions = sessions or await Database.get_all_sessions_async() or []
+        history = (profile.get("session_history") or 0) + 1
+        await Database.update_profile_async({"session_history": history})
+
+        return active_session
