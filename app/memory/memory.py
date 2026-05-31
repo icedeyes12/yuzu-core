@@ -67,7 +67,8 @@ IDLE_GATE_HOURS = (
 FENCE_TTL_MINUTES = 120  # Stale job cleanup threshold
 
 # ── Rate limiting for memory pipeline ─────────────────────────────────────────
-_MEMORY_LLM_SEMAPHORE = asyncio.Semaphore(1)  # Only 1 concurrent memory LLM call
+# Removed semaphore to avoid event-loop binding issues
+# Rate limiting is handled by _last_memory_llm_call delay below
 _MEMORY_LLM_DELAY = 1.0  # Seconds between memory LLM calls
 _last_memory_llm_call = 0.0  # Timestamp of last call
 
@@ -76,9 +77,7 @@ async def _memory_llm_call(ai_manager, messages: list[dict], **kwargs) -> str | 
     """Rate-limited LLM call for memory pipeline.
 
     Ensures memory calls don't overwhelm the API:
-    - Max 1 concurrent call (semaphore)
     - Min 1s between calls (delay)
-    - Graceful failure (returns None on error)
     """
     global _last_memory_llm_call
 
@@ -89,28 +88,27 @@ async def _memory_llm_call(ai_manager, messages: list[dict], **kwargs) -> str | 
     )
     logger.debug(f"[MEMORY_LLM] Sending {total_chars} chars to LLM...")
 
-    async with _MEMORY_LLM_SEMAPHORE:
-        # Enforce minimum delay between calls
-        now = time.time()
-        elapsed = now - _last_memory_llm_call
-        if elapsed < _MEMORY_LLM_DELAY:
-            await asyncio.sleep(_MEMORY_LLM_DELAY - elapsed)
+    # Enforce minimum delay between calls
+    now = time.time()
+    elapsed = now - _last_memory_llm_call
+    if elapsed < _MEMORY_LLM_DELAY:
+        await asyncio.sleep(_MEMORY_LLM_DELAY - elapsed)
 
-        try:
-            result = await ai_manager._internal_llm_call(
-                messages, source="memory_pipeline", **kwargs
+    try:
+        result = await ai_manager._internal_llm_call(
+            messages, source="memory_pipeline", **kwargs
+        )
+        _last_memory_llm_call = time.time()
+        if result:
+            logger.debug(f"[MEMORY_LLM] Response received: {len(result)} chars")
+        else:
+            logger.warning(
+                "[MEMORY_LLM] LLM returned None - possible context overflow"
             )
-            _last_memory_llm_call = time.time()
-            if result:
-                logger.debug(f"[MEMORY_LLM] Response received: {len(result)} chars")
-            else:
-                logger.warning(
-                    "[MEMORY_LLM] LLM returned None - possible context overflow"
-                )
-            return result
-        except Exception as e:
-            logger.warning(f"[Memory LLM] Call failed: {e}")
-            return None
+        return result
+    except Exception as e:
+        logger.warning(f"[Memory LLM] Call failed: {e}")
+        return None
 
 
 # ── Background state ─────────────────────────────────────────────────────────
