@@ -190,8 +190,8 @@ class OpenRouterProvider(AIProvider):
                 ) as response:
                     if response.status_code == 200:
                         async for line in response.aiter_lines():
-                            if line and line.startswith(b"data: "):
-                                if line == b"data: [DONE]":
+                            if line and line.startswith("data: "):
+                                if line == "data: [DONE]":
                                     break
                                 try:
                                     json_data = json.loads(line[6:])

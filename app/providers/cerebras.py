@@ -116,7 +116,9 @@ class CerebrasProvider(AIProvider):
                         import json
 
                         async for line in response.aiter_lines():
-                            if line and line.startswith(b"data: "):
+                            if line and line.startswith("data: "):
+                                if line == "data: [DONE]":
+                                    break
                                 try:
                                     json_data = json.loads(line[6:])
                                     if (

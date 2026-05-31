@@ -104,7 +104,7 @@ class OllamaProvider(AIProvider):
                         async for line in response.aiter_lines():
                             if line:
                                 try:
-                                    json_data = json.loads(line.decode("utf-8"))
+                                    json_data = json.loads(line)
                                     if (
                                         "message" in json_data
                                         and "content" in json_data["message"]
