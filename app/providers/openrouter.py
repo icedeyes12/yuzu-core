@@ -188,7 +188,7 @@ class OpenRouterProvider(AIProvider):
                     json=payload,
                     timeout=kwargs.get("timeout", 180),
                 ) as response:
-                    if response.status == 200:
+                    if response.status_code == 200:
                         async for line in response.aiter_lines():
                             if line and line.startswith(b"data: "):
                                 if line == b"data: [DONE]":
