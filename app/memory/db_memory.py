@@ -150,7 +150,6 @@ def save_fact(
                     Json(meta),
                     datetime.now(),
                     datetime.now(),
-                    datetime.now(),
                 ),
             )
             return row["id"] if row else None
@@ -501,7 +500,6 @@ async def save_fact_async(
                     content,
                     vec_literal,
                     Json(meta),
-                    datetime.now(),
                     datetime.now(),
                     datetime.now(),
                 ),

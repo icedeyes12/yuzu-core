@@ -68,8 +68,8 @@ SQL_FACT_DUP_CHECK_BY_CONTENT = (
 
 SQL_FACT_INSERT = """
 INSERT INTO semantic_facts
-    (fact_type, content, embedding, metadata, valid_at, created_at, last_accessed)
-VALUES (%s, %s, %s::vector, %s, %s, %s, %s)
+    (fact_type, content, embedding, metadata, created_at, last_accessed)
+VALUES (%s, %s, %s::vector, %s, %s, %s)
 RETURNING id
 """
 
