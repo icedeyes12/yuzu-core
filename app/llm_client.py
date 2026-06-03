@@ -272,6 +272,7 @@ async def generate_ai_response(
     interface: str = "terminal",
     session_id: int | None = None,
     image_content_for_context: list[dict[str, Any]] | None = None,
+    ephemeral_context: list[dict[str, str]] | None = None,
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single (text, raw_response) AI generation pass.
 
@@ -280,6 +281,9 @@ async def generate_ai_response(
 
     NOTE: build_messages() fetches full history including the just-persisted
     user message. We do NOT re-append user_message to avoid duplication.
+    
+    ephemeral_context: In-memory context (assistant tool calls + results)
+    not yet persisted to DB. Stitched after build_messages() for synthesis.
     """
     if session_id is None:
         session_id = (await Database.get_active_session_async())["id"]
@@ -299,6 +303,10 @@ async def generate_ai_response(
     messages = await build_messages(
         profile, session_id, interface, user_message, include_image_paths=True
     )
+
+    # Stitch in-memory context (assistant tool calls + results) not yet in DB
+    if ephemeral_context:
+        messages.extend(ephemeral_context)
 
     # DO NOT re-append user_message here - it's already in history
     # The history from build_messages() is authoritative
@@ -386,6 +394,7 @@ async def generate_ai_response_streaming(
     provider: str | None = None,
     model: str | None = None,
     image_content_for_context: list[dict[str, Any]] | None = None,
+    ephemeral_context: list[dict[str, str]] | None = None,
 ) -> AsyncIterator[str]:
     """Stream a response from the configured provider chunk by chunk.
 
@@ -416,6 +425,10 @@ async def generate_ai_response_streaming(
     messages = await build_messages(
         profile, session_id, interface, user_message, include_image_paths=True
     )
+
+    # Stitch in-memory context (assistant tool calls + results) not yet in DB
+    if ephemeral_context:
+        messages.extend(ephemeral_context)
 
     # DO NOT re-append user_message here - it's already in history
     # The history from build_messages() is authoritative

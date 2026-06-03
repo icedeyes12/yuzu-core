@@ -333,12 +333,18 @@ async def _run_synthesis_async(
     session_id: int,
     interface: str,
     tool_markdown: str,
+    ephemeral_context: list[dict[str, str]] | None = None,
 ) -> str | None:
-    """Run a 2nd LLM pass to narrate around the tool result (async)."""
+    """Run a 2nd LLM pass to narrate around the tool result (async).
+    
+    ephemeral_context: In-memory conversation turns not yet in DB.
+    """
     image_context = await _build_image_context_async(tool_markdown, session_id)
 
     text, _ = await generate_ai_response(
-        profile, "", interface, session_id, image_content_for_context=image_context
+        profile, "", interface, session_id, 
+        image_content_for_context=image_context,
+        ephemeral_context=ephemeral_context,
     )
     if not text or not text.strip():
         return None
@@ -351,8 +357,14 @@ async def _stream_synthesis_async(
     session_id: int,
     interface: str,
     tool_markdown: str,
+    ephemeral_context: list[dict[str, str]] | None = None,
 ) -> AsyncIterator[str]:
-    """Stream the 2nd LLM pass (async)."""
+    """Stream the 2nd LLM pass (async).
+    
+    ephemeral_context: In-memory conversation turns not yet in DB.
+    Contains the assistant's first-pass response with <tool> blocks
+    and the tool results, ensuring the LLM has full context.
+    """
     image_context = await _build_image_context_async(tool_markdown, session_id)
 
     async for chunk in generate_ai_response_streaming(
@@ -361,6 +373,7 @@ async def _stream_synthesis_async(
         interface,
         session_id,
         image_content_for_context=image_context,
+        ephemeral_context=ephemeral_context,
     ):
         yield chunk
 
@@ -502,8 +515,15 @@ async def handle_user_message(user_message: str, interface: str = "terminal") ->
                 [parse_image_path(tool_markdown)] if is_image_tool else None
             )
 
+            # Build ephemeral context for synthesis
+            ephemeral_context = [
+                {"role": "assistant", "content": text_response},
+                {"role": "user", "content": tool_markdown},
+            ]
+
             synthesis = await _run_synthesis_async(
-                profile, session_id, interface, tool_markdown
+                profile, session_id, interface, tool_markdown,
+                ephemeral_context=ephemeral_context,
             )
 
             if synthesis:
@@ -644,6 +664,13 @@ async def handle_user_message_streaming(
 
     combined_tool_markdown = "\n\n".join(tool_markdowns)
 
+    # Build ephemeral context: first-pass assistant response + tool results
+    # This ensures the LLM has full conversation context not yet in DB
+    ephemeral_context: list[dict[str, str]] = [
+        {"role": "assistant", "content": full_response},
+        {"role": "user", "content": combined_tool_markdown},
+    ]
+
     current_synthesis_context = combined_tool_markdown
     all_generated_paths = []
     for tm in tool_markdowns:
@@ -665,7 +692,8 @@ async def handle_user_message_streaming(
 
         try:
             async for chunk in _stream_synthesis_async(
-                profile, session_id, interface, current_synthesis_context
+                profile, session_id, interface, current_synthesis_context,
+                ephemeral_context=ephemeral_context,
             ):
                 if chunk:
                     if abort_check and abort_check():
@@ -717,6 +745,9 @@ async def handle_user_message_streaming(
             )
             return
 
+        # Append synthesis + next tool results to ephemeral context for next iteration
+        ephemeral_context.append({"role": "assistant", "content": synthesis})
+        
         next_results = await execute_commands(next_commands, session_id=session_id)
         next_markdowns: list[str] = []
         any_image_tool = False
@@ -731,7 +762,9 @@ async def handle_user_message_streaming(
                 all_generated_paths.append(p)
             yield "\n\n" + tm
 
-        current_synthesis_context = "\n\n".join(next_markdowns)
+        next_combined = "\n\n".join(next_markdowns)
+        ephemeral_context.append({"role": "user", "content": next_combined})
+        current_synthesis_context = next_combined
 
     await _post_turn_async(
         profile,
