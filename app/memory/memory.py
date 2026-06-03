@@ -69,7 +69,7 @@ FENCE_TTL_MINUTES = 120  # Stale job cleanup threshold
 # ── Rate limiting for memory pipeline ─────────────────────────────────────────
 # Removed semaphore to avoid event-loop binding issues
 # Rate limiting is handled by _last_memory_llm_call delay below
-_MEMORY_LLM_DELAY = 1.0  # Seconds between memory LLM calls
+_MEMORY_LLM_DELAY = 3.0  # Seconds between memory LLM calls
 _last_memory_llm_call = 0.0  # Timestamp of last call
 
 

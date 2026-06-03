@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import asyncio
+import time
 from typing import Any
 
 from app.db import Database
@@ -9,13 +11,18 @@ from app.memory.summarization import (
     summarize_memory_async,
 )
 from app.memory.profile import summarize_global_player_profile
-from app.memory.memory import trigger_memory_pipeline_async
+from app.memory.memory import trigger_memory_pipeline_async, _is_fence_active_async
 
 logger = logging.getLogger(__name__)
 
 
 class MemoryService:
     _PIPELINE_CHECK_INTERVAL = 50  # Match WINDOW_MAX to avoid unnecessary checks
+    _MIN_TRIGGER_INTERVAL = 300  # 5 minutes debounce
+    
+    # Class-level state for concurrency and debounce
+    _LAST_PIPELINE_TRIGGER: dict[int, float] = {}
+    _PIPELINE_SEMAPHORE = asyncio.Semaphore(2)  # Max 2 concurrent pipelines globally
 
     @staticmethod
     async def _summarize_if_needed_async(
@@ -45,8 +52,6 @@ class MemoryService:
         # Session auto-naming is handled by SessionService, called by orchestrator
 
         # 1. Check for session context summary (fire-and-forget to not block)
-        import asyncio
-
         asyncio.create_task(
             MemoryService._summarize_if_needed_async(
                 profile, user_message, final_response, session_id
@@ -56,20 +61,34 @@ class MemoryService:
         # 2. Throttle and trigger background memory pipeline (segmentation, PCL, review)
         msg_count = await Database.get_session_messages_count_async(session_id)
         if msg_count % MemoryService._PIPELINE_CHECK_INTERVAL == 0:
-            # Fire-and-forget: don't block main conversation
-            import asyncio
-
-            asyncio.create_task(MemoryService.trigger_pipeline_async(session_id))
+            # Check if fence is already active BEFORE spawning task
+            if not await _is_fence_active_async(session_id):
+                # Fire-and-forget: don't block main conversation
+                asyncio.create_task(MemoryService.trigger_pipeline_async(session_id))
 
     @staticmethod
     async def trigger_pipeline_async(session_id: int) -> bool:
         """Check and trigger background memory pipeline (async)."""
-        try:
-            count = await Database.get_session_messages_count_async(session_id)
-            return await trigger_memory_pipeline_async(session_id, count)
-        except Exception as e:
-            logger.warning(f"Memory pipeline trigger failed: {e}")
-            return False
+        # Strictly limit concurrent pipelines globally
+        async with MemoryService._PIPELINE_SEMAPHORE:
+            try:
+                # Debounce: check last trigger time for this session
+                now = time.time()
+                last_trigger = MemoryService._LAST_PIPELINE_TRIGGER.get(session_id, 0)
+                if now - last_trigger < MemoryService._MIN_TRIGGER_INTERVAL:
+                    logger.debug(f"Pipeline trigger debounced for session {session_id}")
+                    return False
+
+                count = await Database.get_session_messages_count_async(session_id)
+                triggered = await trigger_memory_pipeline_async(session_id, count)
+                
+                if triggered:
+                    MemoryService._LAST_PIPELINE_TRIGGER[session_id] = now
+                    
+                return triggered
+            except Exception as e:
+                logger.warning(f"Memory pipeline trigger failed: {e}")
+                return False
 
     @staticmethod
     async def summarize_session_async(
