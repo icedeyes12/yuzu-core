@@ -72,6 +72,8 @@ export function createMessageElement(role, content, timestamp = null) {
 
 		const copyBtn = document.createElement("button");
 		copyBtn.className = "copy-message-btn";
+		copyBtn.setAttribute("data-action", "copy-message");
+		copyBtn.setAttribute("data-message-content", content);
 		copyBtn.title = "Copy full message";
 		copyBtn.innerHTML = `
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -79,7 +81,8 @@ export function createMessageElement(role, content, timestamp = null) {
 				<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
 			</svg>
 		`;
-		copyBtn.onclick = () => copyFullMessage(content);
+		// Note: onclick removed - event delegation handles copy in renderer.js
+		// Content is passed via data-message-content attribute or looked up dynami
 		footer.appendChild(copyBtn);
 
 		msg.appendChild(footer);
@@ -121,6 +124,8 @@ export function createMessageElement(role, content, timestamp = null) {
 
 		const copyBtn = document.createElement("button");
 		copyBtn.className = "copy-message-btn";
+		copyBtn.setAttribute("data-action", "copy-message");
+		copyBtn.setAttribute("data-message-content", content);
 		copyBtn.title = "Copy full message";
 		copyBtn.innerHTML = `
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -128,7 +133,8 @@ export function createMessageElement(role, content, timestamp = null) {
 				<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
 			</svg>
 		`;
-		copyBtn.onclick = () => copyFullMessage(content);
+		// Note: onclick removed - event delegation handles copy in renderer.js
+		// Content is passed via data-message-content attribute or looked up dynami
 		footer.appendChild(copyBtn);
 
 		msg.appendChild(footer);

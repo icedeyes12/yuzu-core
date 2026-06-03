@@ -454,6 +454,7 @@ export class MultimodalManager {
 
 		const copyBtn = document.createElement("button");
 		copyBtn.className = "copy-message-btn";
+		copyBtn.setAttribute("data-action", "copy-message");
 		copyBtn.title = "Copy full message";
 		copyBtn.innerHTML = `
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -485,12 +486,13 @@ export class MultimodalManager {
 			renderer.initializeMermaidDiagrams(contentDiv);
 		}
 
-		// Update copy button handler
+		// Update copy button handler - use data-action instead of onclick
 		if (currentStreamMessage) {
 			const copyBtn = currentStreamMessage.querySelector(".copy-message-btn");
 			if (copyBtn) {
-				// Uses centralized copyFullMessage which internally uses ClipboardUtils
-				copyBtn.onclick = () => copyFullMessage(finalContent);
+				// Set data attribute for event delegation
+				copyBtn.setAttribute("data-action", "copy-message");
+				copyBtn.setAttribute("data-message-content", finalContent);
 			}
 			currentStreamMessage.removeAttribute("data-streaming");
 		}
