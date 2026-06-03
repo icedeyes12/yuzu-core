@@ -213,29 +213,23 @@ def _global_knowledge_block(profile: dict[str, Any]) -> str:
 
 async def _session_events_block_async(session_id: int) -> str:
     """Build meta-awareness block with recent session context.
-
-    Fetches the 5 most recently active sessions (excluding current) to give
-    the LLM awareness of session-switching patterns without historical log noise.
+    Strictly returns state data. Behavioral rules are handled in the main prompt.
     """
     sessions = await Database.get_recent_active_sessions_async(
         current_session_id=session_id, limit=5
     )
 
-    if not sessions:
-        return """
-[META-AWARENESS: SESSION STATE]
-Session context unavailable.
-**Context Rule:** The user switching sessions implies changing the topic, NOT a period of absence. Do NOT act surprised or say 'long time no see' if the user was active in ANY session recently.
-""".strip()
+    lines = ["\n[SESSION TOPOLOGY]"]
 
-    lines = ["\n[META-AWARENESS: SESSION STATE]"]
+    if not sessions:
+        lines.append("  - No other active sessions in memory.")
+        return "\n".join(lines)
 
     for s in sessions:
-        session_id = s.get("id", "?")
+        s_id = s.get("id", "?")
         name = s.get("name", "Unnamed Session")
         rel_time = _format_relative_time(s.get("updated_at"))
-
-        lines.append(f"  - [Session {session_id}: {name}] | Last active: {rel_time}")
+        lines.append(f"  - Session [{s_id}] '{name}' (Last active: {rel_time})")
 
     return "\n".join(lines)
 
@@ -394,6 +388,7 @@ Location: {await _location_block_async()}
 Interface: {_interface_block(interface)}
 Session Metadata: {await _session_events_block_async(session_id)}
 """.strip()
+
 
 async def build_messages(
     profile: dict[str, Any],

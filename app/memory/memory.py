@@ -102,9 +102,7 @@ async def _memory_llm_call(ai_manager, messages: list[dict], **kwargs) -> str | 
         if result:
             logger.debug(f"[MEMORY_LLM] Response received: {len(result)} chars")
         else:
-            logger.warning(
-                "[MEMORY_LLM] LLM returned None - possible context overflow"
-            )
+            logger.warning("[MEMORY_LLM] LLM returned None - possible context overflow")
         return result
     except Exception as e:
         logger.warning(f"[Memory LLM] Call failed: {e}")
