@@ -618,6 +618,9 @@ async def handle_user_message_streaming(
 
                 response_chunks.append(chunk)
                 yield chunk
+    except asyncio.CancelledError:
+        log.info("[stream] cancelled in first pass - propagating to StreamBuffer")
+        raise
     except Exception as e:
         log.error("[stream] error in first pass: %s", e)
         # StreamBuffer will handle persistence of partial content
@@ -711,6 +714,9 @@ async def handle_user_message_streaming(
                         if any_image_tool and not synthesis_chunks[:-1]
                         else chunk
                     )
+        except asyncio.CancelledError:
+            log.info("[stream] cancelled in synthesis loop - propagating to StreamBuffer")
+            raise
         except Exception as e:
             log.error("[stream] error in synthesis loop: %s", e)
             # StreamBuffer will handle persistence

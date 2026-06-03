@@ -340,6 +340,10 @@ class AIProviderManager:
                 messages, model, source=source, **kwargs
             ):
                 yield chunk
+        except asyncio.CancelledError:
+            # Propagate cancellation - do NOT catch it here
+            # This ensures the HTTP stream is properly closed
+            raise
         except Exception as e:
             yield f"Streaming error: {str(e)}"
 

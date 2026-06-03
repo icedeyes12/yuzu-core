@@ -310,5 +310,7 @@ class ChutesProvider(AIProvider):
                                 + ". Please try again."
                             )
 
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             yield f"Error: {str(e)}"

@@ -381,6 +381,10 @@ async def _stream_from_provider(
             if chunk:
                 received += len(chunk)
                 yield chunk
+    except asyncio.CancelledError:
+        # Stream was cancelled (user clicked Stop) - propagate up
+        log.info("stream cancelled by user at llm_client layer (%d chars received)", received)
+        raise
     except Exception as e:  # noqa: BLE001
         log.error("streaming exception (%s/%s): %s", provider, model, e)
         return
