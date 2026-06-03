@@ -595,7 +595,8 @@ async def handle_user_message_streaming(
             tool_markdown = ""
             for tool_name, result in results:
                 tool_markdown = result.get("markdown", str(result))
-                await _persist_tool_result_async(tool_name, tool_markdown, session_id)
+                # NOTE: Fast-path tool result NOT persisted to DB anymore.
+                # StreamBuffer handles final persistence.
                 yield tool_markdown
 
             await _post_turn_async(
@@ -655,7 +656,9 @@ async def handle_user_message_streaming(
     for tool_name, result in results:
         tool_markdown = result.get("markdown", str(result))
         tool_markdowns.append(tool_markdown)
-        await _persist_tool_result_async(tool_name, tool_markdown, session_id)
+        # NOTE: Tool results NOT persisted to DB mid-stream anymore.
+        # StreamBuffer saves the final combined assistant message at stream end.
+        # ephemeral_context carries tool results for synthesis loops.
 
         if parse_image_path(tool_markdown) is not None:
             any_image_tool = True
@@ -755,7 +758,8 @@ async def handle_user_message_streaming(
         for tool_name, result in next_results:
             tm = result.get("markdown", str(result))
             next_markdowns.append(tm)
-            await _persist_tool_result_async(tool_name, tm, session_id)
+            # NOTE: Tool results NOT persisted to DB mid-stream anymore.
+            # StreamBuffer saves the final combined assistant message at stream end.
             p = parse_image_path(tm)
             if p:
                 any_image_tool = True

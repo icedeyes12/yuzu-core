@@ -102,6 +102,7 @@ document.addEventListener("click", (event) => {
 	// Handle copy-message
 	const copyMsgBtn = target.closest('[data-action="copy-message"]');
 	if (copyMsgBtn) {
+		// Try to get content from data-message-content attr
 		const content = copyMsgBtn.getAttribute("data-message-content") || "";
 		ClipboardUtils.copyText(content, copyMsgBtn);
 		return;
