@@ -26,6 +26,7 @@ class ChutesProvider(AIProvider):
             "MiniMaxAI/MiniMax-M2.5-TEE",
             "moonshotai/Kimi-K2.5-TEE",
             "moonshotai/Kimi-K2.6-TEE",
+            "Nemotron-3-Nano-Omni-30B-TEE",
             "Qwen/Qwen2.5-Coder-32B-Instruct-TEE",
             "unsloth/Mistral-Nemo-Instruct-2407-TEE",
             "zai-org/GLM-5-TEE",
