@@ -11,7 +11,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from datetime import datetime
 from psycopg.types.json import Json
 from app.memory.db_memory import (
@@ -46,6 +48,54 @@ _CATEGORY_CAPS = {
 }
 
 
+# ── JSON Extraction Utilities ─────────────────────────────────────────────────
+
+def _extract_json_from_markdown(text: str) -> str:
+    """Extract JSON payload from markdown-wrapped or plain text response.
+    
+    Handles:
+    - Markdown code blocks: ```json ... ``` or ``` ... ```
+    - Plain JSON arrays/objects
+    - Mixed content with JSON embedded
+    
+    Returns:
+        Cleaned JSON string ready for json.loads()
+    
+    Raises:
+        ValueError: If no valid JSON structure found
+    """
+    if not text or not text.strip():
+        raise ValueError("Empty response")
+    
+    cleaned = text.strip()
+    
+    # Try to extract from markdown code blocks first
+    # Pattern: ```json ... ``` or ``` ... ```
+    markdown_pattern = r'```(?:json)?\s*([\s\S]*?)\s*```'
+    match = re.search(markdown_pattern, cleaned)
+    
+    if match:
+        # Found markdown block, extract contents
+        extracted = match.group(1).strip()
+        if extracted:
+            return extracted
+    
+    # Fallback: Find first [ and last ] for arrays
+    if '[' in cleaned and ']' in cleaned:
+        start = cleaned.find('[')
+        end = cleaned.rfind(']') + 1
+        return cleaned[start:end]
+    
+    # Fallback: Find first { and last } for objects
+    if '{' in cleaned and '}' in cleaned:
+        start = cleaned.find('{')
+        end = cleaned.rfind('}') + 1
+        return cleaned[start:end]
+    
+    # No JSON structure found
+    raise ValueError(f"No JSON structure found in response: {cleaned[:200]}")
+
+
 # ── 1. Load relevant facts ────────────────────────────────────────────────────
 
 
@@ -63,15 +113,16 @@ async def load_relevant_semantic_facts_async(
 
 
 def _build_facts_context(facts: list[dict]) -> str:
-    """Format facts for the prediction prompt."""
+    """Format facts for the calibration prompt with stable fact IDs"""
     if not facts:
         return "No existing semantic knowledge."
     lines = []
     for f in facts:
+        fact_id = f.get("id", "unknown")
         meta = f.get("metadata", {})
         content = f.get("content", "")
         category = meta.get("category", meta.get("relation", "unknown"))
-        lines.append(f"- [{category}] {content}")
+        lines.append(f"- [ID: {fact_id}] [Category: {category}] {content}")
     return "\n".join(lines)
 
 
@@ -210,9 +261,9 @@ Return exactly a JSON array of objects. Each object has the keys: fact, category
 ]
 
 ## DETERMINISTIC ACTION RULES (apply the FIRST matching rule)
-1. **invalidate**: If a fact in EXISTING knowledge directly contradicts a statement in ACTUAL conversation. MUST set "source_id" to the contradicted fact's ID.
-2. **update**: If a statement provides more specific/different detail for an EXISTING fact. Example pattern: existing="User likes music", actual="User likes jazz" → update. MUST set "source_id" to the refined fact's ID.
-3. **reinforce**: If a fact appears in BOTH prediction topics AND actual conversation, AND matches an EXISTING fact. MUST set "source_id" to the confirmed fact's ID.
+1. **invalidate**: If a fact in EXISTING knowledge directly contradicts a statement in ACTUAL conversation. MUST set "source_id" to the EXACT fact ID from the Existing Knowledge list (e.g., if you see "[ID: 42]", source_id must be 42). Never invent a fact ID.
+2. **update**: If a statement provides more specific/different detail for an EXISTING fact. Example pattern: existing="User likes music", actual="User likes jazz" → update. MUST set "source_id" to the EXACT fact ID from the Existing Knowledge list. Never invent a fact ID.
+3. **reinforce**: If a fact appears in BOTH prediction topics AND actual conversation, AND matches an EXISTING fact. MUST set "source_id" to the EXACT fact ID from the Existing Knowledge list. Never invent a fact ID.
 4. **new**: If a statement appears in ACTUAL conversation, is NOT in prediction topics, AND NOT in EXISTING facts. "source_id" must be null.
 
 ## STRICT OPERATIONAL RULES
@@ -220,7 +271,9 @@ Return exactly a JSON array of objects. Each object has the keys: fact, category
 - The "fact" field must be a self-contained, standalone statement of truth that passes: persistent, specific, useful, independent.
 - Extract ONLY facts that trigger one of the four actions. Ignore trivial statements.
 - If NO rules are triggered, output: []
-- Output the JSON array ONLY. No markdown, no explanation, no surrounding text."""
+- Output the JSON array ONLY. No markdown, no explanation, no surrounding text.
+- CRITICAL: For reinforce, update, or invalidate actions, you MUST use the EXACT fact ID from the Existing Knowledge list (the number after "[ID:"). Never invent or guess a fact ID.
+"""
 
     user_prompt = f"""Prediction (topics we expected):
 {prediction_text}
@@ -251,22 +304,14 @@ Apply the deterministic action rules to extract any new, updated, reinforced, or
             f"CALIBRATE LLM response ({len(response)} chars): {response[:500]}..."
         )
 
-        import json
-
+        # Extract JSON from markdown or plain text
         try:
-            actions = json.loads(response)
-        except json.JSONDecodeError:
-            logger.warning(
-                "CALIBRATE: JSON decode failed, attempting truncation repair"
-            )
-            actions = []
-            for i in range(len(response), 0, -1):
-                try:
-                    actions = json.loads(response[:i])
-                    if isinstance(actions, list):
-                        break
-                except json.JSONDecodeError:
-                    continue
+            cleaned_json = _extract_json_from_markdown(response)
+            actions = json.loads(cleaned_json)
+        except (ValueError, json.JSONDecodeError) as e:
+            logger.warning(f"CALIBRATE: JSON extraction failed: {e}")
+            logger.debug(f"CALIBRATE: Raw response: {response}")
+            return []
 
         if not isinstance(actions, list):
             logger.warning(f"CALIBRATE: parsed actions is not a list: {type(actions)}")
