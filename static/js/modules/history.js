@@ -1,6 +1,7 @@
 // FILE: static/js/modules/history.js
 // DESCRIPTION: Chat history loading with pagination
 
+import { captureDetailsState, restoreDetailsState } from "./dom-utils.js";
 import {
 	createMessageElement,
 	findMessageById,
@@ -160,7 +161,11 @@ export async function loadChatHistory(sessionId = null) {
 							activeStream.buffer,
 						);
 					} else {
+						// [ACCORDION PRESERVATION] Capture state before innerHTML update
+						const detailsStates = captureDetailsState(contentDiv);
 						contentDiv.innerHTML = activeStream.buffer;
+						// [ACCORDION PRESERVATION] Restore state after innerHTML update
+						restoreDetailsState(contentDiv, detailsStates);
 					}
 				}
 

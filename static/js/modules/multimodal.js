@@ -1,6 +1,7 @@
 // FILE: static/js/modules/multimodal.js
 // DESCRIPTION: Multimodal manager for image upload, generation, and streaming
 
+import { captureDetailsState, restoreDetailsState } from "./dom-utils.js";
 import { addMessage } from "./messages.js";
 import { router } from "./router.js";
 import { scrollToBottom } from "./scroll.js";
@@ -366,8 +367,8 @@ export class MultimodalManager {
 	}
 
 	renderStreamChunk(contentDiv, text, isComplete = false) {
-		// [STREAMING PRESERVATION] Capture current <details> open states
-		const detailsStates = this._captureDetailsStates(contentDiv);
+		// [ACCORDION PRESERVATION] Capture current <details> open states (index-based)
+		const detailsStates = captureDetailsState(contentDiv);
 
 		// For streaming: render markdown incrementally
 		// Use streaming-aware render to handle incomplete mermaid blocks
@@ -377,8 +378,8 @@ export class MultimodalManager {
 				? renderer.render(text)
 				: renderer.renderStreaming(text, true);
 
-			// [STREAMING PRESERVATION] Restore <details> open states after innerHTML update
-			this._restoreDetailsStates(contentDiv, detailsStates);
+			// [ACCORDION PRESERVATION] Restore <details> open states after innerHTML update
+			restoreDetailsState(contentDiv, detailsStates);
 
 			// Initialize mermaid diagrams (placeholders are skipped automatically)
 			if (renderer.isMermaidReady) {
@@ -392,47 +393,6 @@ export class MultimodalManager {
 		} else {
 			// Fallback: just show raw text
 			contentDiv.textContent = text;
-		}
-	}
-
-	/**
-	 * [STREAMING PRESERVATION] Captures open state of all <details> elements
-	 * @param {HTMLElement} container - Message content container
-	 * @returns {Map<string, boolean>} Map of summary text -> open state
-	 */
-	_captureDetailsStates(container) {
-		const states = new Map();
-		if (!container) return states;
-
-		const detailsElements = container.querySelectorAll("details");
-		for (const details of detailsElements) {
-			const summary = details.querySelector("summary");
-			if (summary) {
-				const key = summary.textContent.trim().substring(0, 100);
-				states.set(key, details.open);
-			}
-		}
-		return states;
-	}
-
-	/**
-	 * [STREAMING PRESERVATION] Restores open state of <details> elements
-	 * @param {HTMLElement} container - Message content container
-	 * @param {Map<string, boolean>} states - Map of summary text -> open state
-	 */
-	_restoreDetailsStates(container, states) {
-		if (!container || !states || states.size === 0) return;
-
-		const detailsElements = container.querySelectorAll("details");
-		for (const details of detailsElements) {
-			const summary = details.querySelector("summary");
-			if (summary) {
-				const key = summary.textContent.trim().substring(0, 100);
-				const wasOpen = states.get(key);
-				if (wasOpen !== undefined) {
-					details.open = wasOpen;
-				}
-			}
 		}
 	}
 
@@ -518,6 +478,9 @@ export class MultimodalManager {
 	finalizeStreamMessage(contentDiv, finalContent) {
 		if (!contentDiv) return;
 
+		// [ACCORDION PRESERVATION] Capture state before final render
+		const detailsStates = captureDetailsState(contentDiv);
+
 		// Final render with full markdown processing
 		contentDiv.innerHTML = renderer.render(finalContent);
 
@@ -543,6 +506,9 @@ export class MultimodalManager {
 			}
 			currentStreamMessage.removeAttribute("data-streaming");
 		}
+
+		// [ACCORDION PRESERVATION] Restore state after render
+		restoreDetailsState(contentDiv, detailsStates);
 	}
 
 	cleanupStreamState() {
