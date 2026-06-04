@@ -142,17 +142,20 @@ async def predict_episode_content_async(
 
     facts_context = _build_facts_context(existing_facts)
 
-    system_prompt = """You are a topic mapper. Given a set of known facts, produce a JSON array of likely discussion topics derived DIRECTLY from those facts.
+    system_prompt = """You are a predictive memory system. Given a set of known facts and an episode summary, produce a JSON array of detailed predictions about what specific information or context the episode should contain.
 
 ## OUTPUT FORMAT (JSON array ONLY, no other text)
-Return exactly a JSON array of strings. Each string is a topic.
+Return exactly a JSON array of strings. Each string is a detailed prediction sentence.
 
 ## FORMAT ILLUSTRATION (placeholders only, never copy these values)
-["<topic1>", "<topic2>"]
+["<User will discuss their current project involving Simulacra initialization>", "<User will mention encounter data persistence and memory bank architecture>", "<User will ask about tracking pushed/not-pushed API status>"]
 
 ## RULES
-- Derive topics ONLY from the provided facts. Do not invent.
-- If a fact says 'User works as chef', the topic can be 'User occupation'. Never invent 'User is a sushi chef at Restaurant X'.
+- Produce detailed, specific predictions derived from the known facts and episode context.
+- Each prediction should be a full sentence describing what information or context the episode should contain.
+- Base predictions on fact patterns: if a fact mentions "Simulacra initialization", predict discussion about "Simulacra initialization process, timestamps, or error states".
+- If facts mention technical work, predict specific technical details, error messages, or configuration values.
+- Do NOT invent new entities, products, or topics not grounded in the facts.
 - If no facts are provided, output: ["No prior knowledge — cold start"]
 - Output the JSON array ONLY. No markdown, no explanation."""
 
@@ -162,7 +165,7 @@ Return exactly a JSON array of strings. Each string is a topic.
 Episode summary to predict:
 \"\"\"{episode_summary}\"\"\"
 
-Based on the existing knowledge and episode summary, list the topics that are likely to appear in this episode. Return ONLY a JSON array of topic strings."""
+Based on the existing knowledge and episode summary, produce detailed predictions of what specific information or context the episode should contain. Return ONLY a JSON array of detailed prediction sentences."""
 
     try:
         response = await _memory_llm_call(
@@ -196,7 +199,7 @@ def _build_messages_context(messages: list[dict]) -> str:
                 c.get("text", "") for c in content if c.get("type") == "text"
             )
         label = "User" if role == "user" else "AI"
-        lines.append(f"{label}: {content[:300]}")
+        lines.append(f"{label}: {content}")
     return "\n".join(lines)
 
 
@@ -230,6 +233,7 @@ async def calibrate_and_extract_async(
     predicted_content: str | None,
     actual_messages: list[dict],
     existing_facts: list[dict],
+    episode_summary: str | None = None,
 ) -> list[dict]:
     """CALIBRATE (async)."""
     try:
@@ -275,7 +279,10 @@ Return exactly a JSON array of objects. Each object has the keys: fact, category
 - CRITICAL: For reinforce, update, or invalidate actions, you MUST use the EXACT fact ID from the Existing Knowledge list (the number after "[ID:"). Never invent or guess a fact ID.
 """
 
-    user_prompt = f"""Prediction (topics we expected):
+    user_prompt = f"""Episode summary:
+\"\"\"{episode_summary}\"\"\"
+
+Prediction (topics we expected):
 {prediction_text}
 
 Existing knowledge:
@@ -503,7 +510,9 @@ async def run_predict_calibrate_async(
         )
 
         # 3. CALIBRATE
-        extracted = await calibrate_and_extract_async(predicted, messages, existing)
+        extracted = await calibrate_and_extract_async(
+            predicted, messages, existing, episode_summary=episode_summary
+        )
 
         if not extracted:
             logger.info(
