@@ -561,6 +561,68 @@ class MessageRenderer {
 		return result;
 	}
 
+	/**
+	 * Preprocess cognitive trace blocks (<think>, <analysis>, <decision>)
+	 * into collapsible <details> elements for cleaner UI.
+	 * @param {string} text - Raw markdown text
+	 * @returns {string} Text with cognitive blocks converted to HTML
+	 */
+	preprocessCognitiveBlocks(text) {
+		if (!text) return text;
+		const sourceText = typeof text === "string" ? text : String(text || "");
+
+		// Cognitive block configurations
+		const cognitiveBlocks = [
+			{ tag: "think", label: "💭 Thinking...", icon: "💭" },
+			{ tag: "analysis", label: "🔍 Analysis", icon: "🔍" },
+			{ tag: "decision", label: "⚡ Decision", icon: "⚡" },
+		];
+
+		let result = sourceText;
+
+		for (const { tag, label } of cognitiveBlocks) {
+			// Pattern matches both closed tags and unclosed tags (streaming)
+			// Uses [\s\S] with 's' flag equivalent for multiline matching
+			const openPattern = new RegExp(`<${tag}>`, "gi");
+			const closePattern = new RegExp(`</${tag}>`, "gi");
+			
+			// Count open and close tags to handle streaming edge case
+			const openCount = (result.match(openPattern) || []).length;
+			const closeCount = (result.match(closePattern) || []).length;
+
+			// Full pattern for complete blocks (closed tags)
+			const fullPattern = new RegExp(
+				`<${tag}>([\\s\\S]*?)<\\/${tag}>`,
+				"gi"
+			);
+
+			result = result.replace(fullPattern, (_match, content) => {
+				const trimmedContent = content.trim();
+				if (!trimmedContent) return "";
+				const escapedContent = this.escapeHtml(trimmedContent);
+				return `<details class="cognitive-block cognitive-${tag}"><summary>${label}</summary><div class="cognitive-content">${escapedContent}</div></details>`;
+			});
+
+			// Handle unclosed tags during streaming (no closing tag yet)
+			// This regex matches <tag> without a matching </tag>
+			if (openCount > closeCount) {
+				const unclosedPattern = new RegExp(
+					`<${tag}>([\\s\\S]*?)$`,
+					"gi"
+				);
+				result = result.replace(unclosedPattern, (_match, content) => {
+					const trimmedContent = content.trim();
+					if (!trimmedContent) return "";
+					const escapedContent = this.escapeHtml(trimmedContent);
+					// Render as collapsed during streaming
+					return `<details class="cognitive-block cognitive-${tag} cognitive-streaming"><summary>${label}...</summary><div class="cognitive-content">${escapedContent}</div></details>`;
+				});
+			}
+		}
+
+		return result;
+	}
+
 	async initializeMermaidDiagrams(container) {
 		if (!this.isMermaidReady) return;
 
@@ -766,6 +828,9 @@ class MessageRenderer {
 		try {
 			// PRE-PROCESS: Handle <tool> blocks BEFORE markdown parsing
 			let processedMarkdown = this.preprocessToolBlocks(safeMarkdown);
+
+			// PRE-PROCESS: Handle cognitive trace blocks (think, analysis, decision)
+			processedMarkdown = this.preprocessCognitiveBlocks(processedMarkdown);
 
 			// Pre-process: Convert plain text image patterns to markdown
 			processedMarkdown = this.preprocessGeneratedImages(processedMarkdown);

@@ -1055,3 +1055,81 @@
 .katex-display::-webkit-scrollbar-thumb:hover {
 	background: var(--accent-primary);
 }
+
+/* ========================================
+   COGNITIVE TRACE BLOCKS (think, analysis, decision)
+   Seamless collapsible containers for AI reasoning transparency
+   ======================================== */
+
+.message-content .cognitive-block {
+	margin: 0.5rem 0;
+	border-radius: 6px;
+	background: rgba(255, 255, 255, 0.03);
+	border-left: 2px solid var(--border-primary, rgba(255, 255, 255, 0.1));
+	transition: background 0.2s ease;
+}
+
+.message-content .cognitive-block summary {
+	padding: 0.4rem 0.8rem;
+	font-size: 0.85rem;
+	color: var(--text-muted, rgba(255, 255, 255, 0.6));
+	cursor: pointer;
+	user-select: none;
+	outline: none;
+	list-style: none;
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.message-content .cognitive-block summary::-webkit-details-marker {
+	display: none;
+}
+
+.message-content .cognitive-block summary::before {
+	content: "▶";
+	font-size: 0.7rem;
+	transition: transform 0.2s ease;
+}
+
+.message-content .cognitive-block[open] summary::before {
+	transform: rotate(90deg);
+}
+
+.message-content .cognitive-block summary:hover {
+	background: rgba(255, 255, 255, 0.04);
+}
+
+.message-content .cognitive-block[open] summary {
+	border-bottom: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+}
+
+.message-content .cognitive-content {
+	padding: 0.6rem 0.8rem;
+	font-size: 0.85rem;
+	color: var(--text-muted, rgba(255, 255, 255, 0.65));
+	line-height: 1.5;
+	white-space: pre-wrap;
+	font-family: inherit;
+	max-height: 300px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: var(--border-primary, rgba(255, 255, 255, 0.1)) transparent;
+}
+
+.message-content .cognitive-content::-webkit-scrollbar {
+	width: 5px;
+}
+
+.message-content .cognitive-content::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.message-content .cognitive-content::-webkit-scrollbar-thumb {
+	background: var(--border-primary, rgba(255, 255, 255, 0.15));
+	border-radius: 10px;
+}
+
+.message-content .cognitive-content::-webkit-scrollbar-thumb:hover {
+	background: var(--border-primary, rgba(255, 255, 255, 0.25));
+}
