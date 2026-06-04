@@ -585,16 +585,13 @@ class MessageRenderer {
 			// Uses [\s\S] with 's' flag equivalent for multiline matching
 			const openPattern = new RegExp(`<${tag}>`, "gi");
 			const closePattern = new RegExp(`</${tag}>`, "gi");
-			
+
 			// Count open and close tags to handle streaming edge case
 			const openCount = (result.match(openPattern) || []).length;
 			const closeCount = (result.match(closePattern) || []).length;
 
 			// Full pattern for complete blocks (closed tags)
-			const fullPattern = new RegExp(
-				`<${tag}>([\\s\\S]*?)<\\/${tag}>`,
-				"gi"
-			);
+			const fullPattern = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, "gi");
 
 			result = result.replace(fullPattern, (_match, content) => {
 				const trimmedContent = content.trim();
@@ -606,10 +603,7 @@ class MessageRenderer {
 			// Handle unclosed tags during streaming (no closing tag yet)
 			// This regex matches <tag> without a matching </tag>
 			if (openCount > closeCount) {
-				const unclosedPattern = new RegExp(
-					`<${tag}>([\\s\\S]*?)$`,
-					"gi"
-				);
+				const unclosedPattern = new RegExp(`<${tag}>([\\s\\S]*?)$`, "gi");
 				result = result.replace(unclosedPattern, (_match, content) => {
 					const trimmedContent = content.trim();
 					if (!trimmedContent) return "";
