@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class MemoryService:
     _PIPELINE_CHECK_INTERVAL = 50  # Match WINDOW_MAX to avoid unnecessary checks
     _MIN_TRIGGER_INTERVAL = 300  # 5 minutes debounce
-    
+
     # Class-level state for concurrency and debounce
     _LAST_PIPELINE_TRIGGER: dict[int, float] = {}
     _PIPELINE_SEMAPHORE = asyncio.Semaphore(2)  # Max 2 concurrent pipelines globally
@@ -81,10 +81,10 @@ class MemoryService:
 
                 count = await Database.get_session_messages_count_async(session_id)
                 triggered = await trigger_memory_pipeline_async(session_id, count)
-                
+
                 if triggered:
                     MemoryService._LAST_PIPELINE_TRIGGER[session_id] = now
-                    
+
                 return triggered
             except Exception as e:
                 logger.warning(f"Memory pipeline trigger failed: {e}")

@@ -386,18 +386,18 @@ class AIProviderManager:
             if result:
                 logger.debug(f"[INT] Success with {MAIN_MODEL}: {len(result)} chars")
                 return result
-            
+
             last_error = getattr(provider, "_last_error", None)
-            
+
             # Calculate backoff: 1s, 2s, 4s (using 2 ** attempt since attempt starts at 0)
             backoff = 2**attempt
             logger.warning(
                 f"[INT] {MAIN_MODEL} failed (attempt {attempt + 1}): {last_error}. Retrying in {backoff}s..."
             )
-            
+
             if not _is_connection_error(last_error):
                 break
-            
+
             await asyncio.sleep(backoff)
 
         # Mandatory cooldown before trying fallback model

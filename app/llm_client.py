@@ -281,7 +281,7 @@ async def generate_ai_response(
 
     NOTE: build_messages() fetches full history including the just-persisted
     user message. We do NOT re-append user_message to avoid duplication.
-    
+
     ephemeral_context: In-memory context (assistant tool calls + results)
     not yet persisted to DB. Stitched after build_messages() for synthesis.
     """
@@ -383,7 +383,9 @@ async def _stream_from_provider(
                 yield chunk
     except asyncio.CancelledError:
         # Stream was cancelled (user clicked Stop) - propagate up
-        log.info("stream cancelled by user at llm_client layer (%d chars received)", received)
+        log.info(
+            "stream cancelled by user at llm_client layer (%d chars received)", received
+        )
         raise
     except Exception as e:  # noqa: BLE001
         log.error("streaming exception (%s/%s): %s", provider, model, e)

@@ -336,13 +336,16 @@ async def _run_synthesis_async(
     ephemeral_context: list[dict[str, str]] | None = None,
 ) -> str | None:
     """Run a 2nd LLM pass to narrate around the tool result (async).
-    
+
     ephemeral_context: In-memory conversation turns not yet in DB.
     """
     image_context = await _build_image_context_async(tool_markdown, session_id)
 
     text, _ = await generate_ai_response(
-        profile, "", interface, session_id, 
+        profile,
+        "",
+        interface,
+        session_id,
         image_content_for_context=image_context,
         ephemeral_context=ephemeral_context,
     )
@@ -360,7 +363,7 @@ async def _stream_synthesis_async(
     ephemeral_context: list[dict[str, str]] | None = None,
 ) -> AsyncIterator[str]:
     """Stream the 2nd LLM pass (async).
-    
+
     ephemeral_context: In-memory conversation turns not yet in DB.
     Contains the assistant's first-pass response with <tool> blocks
     and the tool results, ensuring the LLM has full context.
@@ -522,7 +525,10 @@ async def handle_user_message(user_message: str, interface: str = "terminal") ->
             ]
 
             synthesis = await _run_synthesis_async(
-                profile, session_id, interface, tool_markdown,
+                profile,
+                session_id,
+                interface,
+                tool_markdown,
                 ephemeral_context=ephemeral_context,
             )
 
@@ -698,7 +704,10 @@ async def handle_user_message_streaming(
 
         try:
             async for chunk in _stream_synthesis_async(
-                profile, session_id, interface, current_synthesis_context,
+                profile,
+                session_id,
+                interface,
+                current_synthesis_context,
                 ephemeral_context=ephemeral_context,
             ):
                 if chunk:
@@ -715,7 +724,9 @@ async def handle_user_message_streaming(
                         else chunk
                     )
         except asyncio.CancelledError:
-            log.info("[stream] cancelled in synthesis loop - propagating to StreamBuffer")
+            log.info(
+                "[stream] cancelled in synthesis loop - propagating to StreamBuffer"
+            )
             raise
         except Exception as e:
             log.error("[stream] error in synthesis loop: %s", e)
@@ -756,7 +767,7 @@ async def handle_user_message_streaming(
 
         # Append synthesis + next tool results to ephemeral context for next iteration
         ephemeral_context.append({"role": "assistant", "content": synthesis})
-        
+
         next_results = await execute_commands(next_commands, session_id=session_id)
         next_markdowns: list[str] = []
         any_image_tool = False
