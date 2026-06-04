@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 # ── Provider-level rate limiting (generalized) ───────────────────────────────
 # Each provider gets its own semaphore and rate limit config
+# NOTE: Semaphores are created lazily via async getters to ensure they bind
+# to the active event loop at creation time, not at module import time.
 
 _PROVIDER_SEMAPHORES: dict[str, asyncio.Semaphore] = {}
 _PROVIDER_LAST_CALL: dict[str, float] = {}
@@ -31,15 +33,23 @@ _MODEL_LAST_CALL: dict[str, float] = {}
 _MODEL_RATE_LIMIT = 1.0  # Min 1s between calls to same model
 
 
-def _get_provider_semaphore(provider: str) -> asyncio.Semaphore:
-    """Get or create a semaphore for a specific provider."""
+async def _get_provider_semaphore_async(provider: str) -> asyncio.Semaphore:
+    """Get or create a semaphore for a specific provider (async).
+    
+    Creates the semaphore lazily in the current event loop to avoid
+    cross-loop binding issues.
+    """
     if provider not in _PROVIDER_SEMAPHORES:
         _PROVIDER_SEMAPHORES[provider] = asyncio.Semaphore(1)
     return _PROVIDER_SEMAPHORES[provider]
 
 
-def _get_model_semaphore(model: str) -> asyncio.Semaphore:
-    """Get or create a semaphore for a specific model."""
+async def _get_model_semaphore_async(model: str) -> asyncio.Semaphore:
+    """Get or create a semaphore for a specific model (async).
+    
+    Creates the semaphore lazily in the current event loop to avoid
+    cross-loop binding issues.
+    """
     if model not in _MODEL_SEMAPHORES:
         _MODEL_SEMAPHORES[model] = asyncio.Semaphore(1)
     return _MODEL_SEMAPHORES[model]
@@ -54,8 +64,8 @@ async def _rate_limit_provider(provider: str, model: str, source: str = "llm"):
         model: Model name for per-model rate limiting
         source: Source context for logging (e.g., "chat", "pcl_memory", "embedding")
     """
-    provider_sem = _get_provider_semaphore(provider)
-    model_sem = _get_model_semaphore(model)
+    provider_sem = await _get_provider_semaphore_async(provider)
+    model_sem = await _get_model_semaphore_async(model)
 
     # Acquire provider-global semaphore first
     async with provider_sem:

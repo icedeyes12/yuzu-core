@@ -72,12 +72,14 @@ _MAX_DIFFICULTY = 4.0
 _REVIEW_BATCH_SIZE = 20
 
 
-def _get_ai_manager():
-    """Lazy-import to avoid circular imports. Sync wrapper for async get_ai_manager."""
+async def _get_ai_manager_async():
+    """Lazy-import to avoid circular imports. Async version only.
+    
+    NOTE: All callers must be async and await this function.
+    """
     from app.providers import get_ai_manager
-    import asyncio
 
-    return asyncio.run(get_ai_manager())
+    return await get_ai_manager()
 
 
 def mark_retrieved_as_pending_review(
@@ -165,85 +167,22 @@ def _rate_facts_batch(
     facts: list[dict],
     conversation_context: str,
 ) -> dict[int, str]:
-    """Rate multiple facts in a single LLM call.
-
-    Args:
-        facts: list of {id, content, category} dicts
-        conversation_context: recent conversation text
-
-    Returns:
-        dict mapping fact_id -> rating ("again"/"hard"/"good"/"easy")
+    """Rate multiple facts in a single LLM call (sync wrapper).
+    
+    DEPRECATED: Use async version _rate_facts_batch_async instead.
+    This sync wrapper exists only for legacy compatibility.
     """
     if not facts:
         return {}
 
-    import json
-    import re
-
-    # Build facts list for prompt
-    facts_text = "\n".join(
-        f"[{i + 1}] ID={f['id']}: {f['content'][:200]} (category: {f.get('category', 'unknown')})"
-        for i, f in enumerate(facts)
-    )
-
-    system_prompt = """You are a memory relevance reviewer. Rate each memory's relevance to the conversation.
-
-Ratings:
-- **again**: NOT used — noise, irrelevant, incorrect
-- **hard**: Tangentially related — weak connection
-- **good**: Directly relevant — influenced conversation helpfully
-- **easy**: CORE PILLAR — essential to conversation
-
-Respond with ONLY a JSON array of objects:
-[{"id": 123, "rating": "good"}, {"id": 124, "rating": "again"}, ...]
-
-Rate ALL facts. Use exactly: "again", "hard", "good", or "easy"."""
-
-    user_prompt = f"""Conversation context:
-{conversation_context[:1000]}
-
-Facts to rate:
-{facts_text}
-
-Rate each fact (respond with JSON array only):"""
-
     try:
-        ai = _get_ai_manager()
-        response = ai._internal_llm_call(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            timeout=30,
-            max_tokens=500,
-        )
-        if not response:
-            return {}
-
-        # Parse JSON response
-        try:
-            ratings = json.loads(response.strip())
-        except json.JSONDecodeError:
-            match = re.search(r"\[.*\]", response, re.DOTALL)
-            if match:
-                ratings = json.loads(match.group(0))
-            else:
-                logger.warning(f"Could not parse batch ratings: {response[:100]}")
-                return {}
-
-        # Build result dict
-        result = {}
-        valid_ratings = {"again", "hard", "good", "easy"}
-        for item in ratings:
-            if isinstance(item, dict) and "id" in item and "rating" in item:
-                rating = item["rating"].lower().strip()
-                if rating in valid_ratings:
-                    result[item["id"]] = rating
-
-        return result
-
-    except Exception as e:
-        logger.warning(f"Batch rating failed: {e}")
+        # For sync callers, use the async implementation via asyncio.run
+        # This is acceptable for the sync compatibility layer
+        import asyncio
+        return asyncio.run(_rate_facts_batch_async(facts, conversation_context))
+    except RuntimeError as e:
+        # If there's already a running loop, we can't use asyncio.run
+        logger.warning(f"Cannot call sync version from async context: {e}")
         return {}
 
 
@@ -698,8 +637,16 @@ def review_memory(
     for i in range(0, len(facts_to_rate), _REVIEW_BATCH_SIZE):
         batch = facts_to_rate[i : i + _REVIEW_BATCH_SIZE]
 
-        # Rate batch
-        ratings = _rate_facts_batch(batch, conversation_context)
+        # Rate batch - use async version since review_memory is already sync
+        # and we're in a sync context (this function is for sync compatibility)
+        import asyncio
+        try:
+            ratings = asyncio.run(_rate_facts_batch_async(batch, conversation_context))
+        except RuntimeError:
+            # Already in async context - this shouldn't happen in sync path
+            # but handle gracefully
+            logger.error("sync review_memory called from async context")
+            ratings = {}
 
         # Update FSRS params for each fact
         for fact in batch:

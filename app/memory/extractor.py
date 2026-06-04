@@ -55,12 +55,8 @@ _EMOTIONAL_KEYWORDS = [
 ]
 
 
-def _get_ai_manager():
-    """Lazy-import to avoid circular imports. Sync wrapper for async get_ai_manager."""
-    from app import get_ai_manager
-    import asyncio
-
-    return asyncio.run(get_ai_manager())
+# NOTE: No sync _get_ai_manager helper - use async functions throughout
+# All semantic memory operations should use async versions
 
 
 # ── Semantic extraction (LLM-only) ──────────────────────────────────────────────

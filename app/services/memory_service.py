@@ -22,7 +22,17 @@ class MemoryService:
 
     # Class-level state for concurrency and debounce
     _LAST_PIPELINE_TRIGGER: dict[int, float] = {}
-    _PIPELINE_SEMAPHORE = asyncio.Semaphore(2)  # Max 2 concurrent pipelines globally
+    
+    # NOTE: Semaphore is created lazily in _get_pipeline_semaphore() to ensure
+    # it binds to the active event loop at creation time
+    _pipeline_semaphore: asyncio.Semaphore | None = None
+    
+    @staticmethod
+    async def _get_pipeline_semaphore() -> asyncio.Semaphore:
+        """Get or create pipeline semaphore lazily in the active event loop."""
+        if MemoryService._pipeline_semaphore is None:
+            MemoryService._pipeline_semaphore = asyncio.Semaphore(2)
+        return MemoryService._pipeline_semaphore
 
     @staticmethod
     async def _summarize_if_needed_async(
@@ -69,8 +79,11 @@ class MemoryService:
     @staticmethod
     async def trigger_pipeline_async(session_id: int) -> bool:
         """Check and trigger background memory pipeline (async)."""
+        # Get semaphore lazily in the active event loop
+        semaphore = await MemoryService._get_pipeline_semaphore()
+        
         # Strictly limit concurrent pipelines globally
-        async with MemoryService._PIPELINE_SEMAPHORE:
+        async with semaphore:
             try:
                 # Debounce: check last trigger time for this session
                 now = time.time()

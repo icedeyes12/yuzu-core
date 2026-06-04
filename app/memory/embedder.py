@@ -81,7 +81,12 @@ async def embed_texts_async(
 def embed_texts(
     texts, model=None, dimensions=None, encoding_format="float", timeout=30
 ):
-    """Legacy sync wrapper (not recommended in async loop)."""
+    """Legacy sync wrapper for embed_texts_async.
+    
+    NOTE: This uses asyncio.run() which creates a new event loop.
+    This is acceptable for legacy sync callers but NOT recommended
+    when already inside an async context - use embed_texts_async instead.
+    """
     return asyncio.run(
         embed_texts_async(texts, model, dimensions, encoding_format, timeout)
     )
@@ -97,7 +102,12 @@ async def embed_text_async(text, timeout=30, **kwargs):
 
 
 def embed_text(text, timeout=30, **kwargs):
-    """Legacy sync wrapper."""
+    """Legacy sync wrapper for embed_text_async.
+    
+    NOTE: This uses asyncio.run() which creates a new event loop.
+    This is acceptable for legacy sync callers but NOT recommended
+    when already inside an async context - use embed_text_async instead.
+    """
     return asyncio.run(embed_text_async(text, timeout, **kwargs))
 
 
