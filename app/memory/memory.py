@@ -237,7 +237,7 @@ async def mark_segmentation_done_async(session_id: int, count: int) -> None:
 
 async def _get_ai_manager_async():
     """Lazy-import to avoid circular imports. Async version only.
-    
+
     NOTE: All callers must be async and await this function.
     Sync callers are NOT supported - use async/await throughout.
     """

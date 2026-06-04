@@ -231,11 +231,12 @@ def _global_analysis_call(prompt: str, api_key: str) -> str | None:
 
 def summarize_global_player_profile() -> bool:
     """Analyze ALL conversation history across ALL sessions and update the profile.
-    
+
     NOTE: This is a SYNC function that wraps the async implementation.
     Uses asyncio.run() which is acceptable for a top-level sync entry point.
     """
     import asyncio
+
     return asyncio.run(_summarize_global_player_profile_async())
 
 

@@ -35,7 +35,7 @@ _MODEL_RATE_LIMIT = 1.0  # Min 1s between calls to same model
 
 async def _get_provider_semaphore_async(provider: str) -> asyncio.Semaphore:
     """Get or create a semaphore for a specific provider (async).
-    
+
     Creates the semaphore lazily in the current event loop to avoid
     cross-loop binding issues.
     """
@@ -46,7 +46,7 @@ async def _get_provider_semaphore_async(provider: str) -> asyncio.Semaphore:
 
 async def _get_model_semaphore_async(model: str) -> asyncio.Semaphore:
     """Get or create a semaphore for a specific model (async).
-    
+
     Creates the semaphore lazily in the current event loop to avoid
     cross-loop binding issues.
     """

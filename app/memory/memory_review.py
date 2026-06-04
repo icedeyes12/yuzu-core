@@ -74,7 +74,7 @@ _REVIEW_BATCH_SIZE = 20
 
 async def _get_ai_manager_async():
     """Lazy-import to avoid circular imports. Async version only.
-    
+
     NOTE: All callers must be async and await this function.
     """
     from app.providers import get_ai_manager
@@ -168,7 +168,7 @@ def _rate_facts_batch(
     conversation_context: str,
 ) -> dict[int, str]:
     """Rate multiple facts in a single LLM call (sync wrapper).
-    
+
     DEPRECATED: Use async version _rate_facts_batch_async instead.
     This sync wrapper exists only for legacy compatibility.
     """
@@ -179,6 +179,7 @@ def _rate_facts_batch(
         # For sync callers, use the async implementation via asyncio.run
         # This is acceptable for the sync compatibility layer
         import asyncio
+
         return asyncio.run(_rate_facts_batch_async(facts, conversation_context))
     except RuntimeError as e:
         # If there's already a running loop, we can't use asyncio.run
@@ -640,6 +641,7 @@ def review_memory(
         # Rate batch - use async version since review_memory is already sync
         # and we're in a sync context (this function is for sync compatibility)
         import asyncio
+
         try:
             ratings = asyncio.run(_rate_facts_batch_async(batch, conversation_context))
         except RuntimeError:
