@@ -104,7 +104,7 @@ SCHEMA_DDL: tuple[str, ...] = (
         global_knowledge JSONB NOT NULL DEFAULT '{}',
         providers_config JSONB NOT NULL DEFAULT '{}',
         context JSONB NOT NULL DEFAULT '{}',
-        image_model VARCHAR(50) NOT NULL DEFAULT 'hunyuan',
+        image_model VARCHAR(50) NOT NULL DEFAULT 'qwen_image',
         vision_model VARCHAR(100) NOT NULL DEFAULT 'moonshotai/kimi-k2.5',
         timestamp TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -245,7 +245,7 @@ def parse_profile_row(row: dict | None) -> dict:
         "global_knowledge": row.get("global_knowledge") or {},  # JSONB
         "providers_config": row.get("providers_config") or {},  # JSONB
         "context": row.get("context") or {},  # JSONB
-        "image_model": row.get("image_model", "hunyuan"),
+        "image_model": row.get("image_model", "qwen_image"),
         "vision_model": row.get("vision_model", "moonshotai/kimi-k2.5"),
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),

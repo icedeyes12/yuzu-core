@@ -14,9 +14,8 @@ from app.db import Database
 
 logger = logging.getLogger(__name__)
 
-HUNYUAN_ENDPOINT = "https://chutes-hunyuan-image-3.chutes.ai/generate"
 Z_TURBO_ENDPOINT = "https://chutes-z-image-turbo.chutes.ai/generate"
-QWEN_IMAGE_ENDPOINT = "https://image.chutes.ai/generate"
+QWEN_IMAGE_ENDPOINT = "https://vonkaiser-qwen-image-2512.chutes.ai/generate"
 
 
 TOOL_DEFINITION = ToolDefinition(
@@ -60,25 +59,15 @@ async def execute(arguments, **kwargs):
                 partner_name,
             )
 
-        image_model = profile.get("image_model", "hunyuan")
+        image_model = profile.get("image_model", "qwen_image")
         logger.debug(f"[IMAGE TOOL] Model: {image_model}")
 
-        if image_model == "qwen_image":
-            endpoint = QWEN_IMAGE_ENDPOINT
-            payload = {
-                "model": "Qwen-Image-2512",
-                "prompt": prompt,
-                "negative_prompt": "cartoon, anime, bad anatomy, blurry, distorted, low quality, watermark, text",
-                "guidance_scale": 7.5,
-                "width": 1024,
-                "height": 1024,
-                "num_inference_steps": 20,
-            }
-        elif image_model == "z_turbo":
+        if image_model == "z_turbo":
             endpoint = Z_TURBO_ENDPOINT
             payload = {"prompt": prompt}
         else:
-            endpoint = HUNYUAN_ENDPOINT
+            # Default: qwen_image
+            endpoint = QWEN_IMAGE_ENDPOINT
             payload = {"prompt": prompt}
 
         logger.debug(f"[IMAGE TOOL] Endpoint: {endpoint}")

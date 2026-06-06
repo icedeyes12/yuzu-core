@@ -60,7 +60,7 @@ class TestProfileParsers:
             "global_knowledge": {},
             "providers_config": {"preferred_provider": "chutes"},
             "context": "{}",
-            "image_model": "hunyuan",
+            "image_model": "qwen_image",
             "vision_model": "kimi-k2.5",
             "created_at": None,
             "updated_at": None,
