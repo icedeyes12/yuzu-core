@@ -583,7 +583,7 @@ async function saveImageModel() {
 		const response = await fetch("/api/update_profile", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ image_model: imageModel }),
+			body: JSON.stringify({ updates: { image_model: imageModel } }),
 		});
 		if (response.ok) {
 			showSuccess("Image model saved successfully!");
