@@ -32,6 +32,7 @@ _TOOL_CLOSE = "</tool>"
 _STRING_ARG_TOOLS: dict[str, str] = {
     "imagine": "prompt",
     "image_generate": "prompt",  # Same as imagine (alias resolution)
+    "image_edit": "prompt",  # Image edit tool
     "http_request": "url",  # HTTP request tool
     "request": "url",  # Alias for http_request
     "memory_store": "fact",
@@ -318,6 +319,7 @@ def _parse_args(tool_name: str, raw_args: str) -> dict[str, Any]:
 
     Supports:
     - String-arg tools: Just pass the raw string as the keyed arg
+    - Multi-arg tools: Parse key=value pairs
     - JSON args: Parse as JSON if it looks like JSON
     - Key=value pairs: Parse as key=value; key2="value with spaces"
     """
@@ -326,6 +328,11 @@ def _parse_args(tool_name: str, raw_args: str) -> dict[str, Any]:
         raw_args = raw_args[:5000]
 
     raw_args = raw_args.strip()
+
+    # Multi-arg tools: need key=value parsing
+    if tool_name in ("image_edit",):
+        # Parse key="value" or key=value pairs
+        return _parse_key_value_args(raw_args)
 
     # String-arg tools: single argument mapped to a specific key
     if tool_name in _STRING_ARG_TOOLS:
