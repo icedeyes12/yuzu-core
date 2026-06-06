@@ -14,7 +14,7 @@ from app.db import Database
 
 logger = logging.getLogger(__name__)
 
-Z_TURBO_ENDPOINT = "https://chutes-z-image-turbo.chutes.ai/generate"
+Z_TURBO_ENDPOINT = "https://vonkaiser-z-image-turbo.chutes.ai/generate"
 QWEN_IMAGE_ENDPOINT = "https://vonkaiser-qwen-image-2512.chutes.ai/generate"
 
 
