@@ -399,7 +399,7 @@ async function loadImageModel() {
 		const response = await fetch("/api/profile");
 		const data = await response.json();
 
-		const imageModel = data.image_model || "hunyuan";
+		const imageModel = data.image_model || "qwen_image";
 		document.getElementById("image-model").value = imageModel;
 
 		console.log("Image model loaded:", imageModel);
@@ -579,10 +579,11 @@ async function saveImageModel() {
 	btn.disabled = true;
 
 	try {
+		const imageModel = select.value === "qwen_image" ? "qwen_image" : select.value;
 		const response = await fetch("/api/update_profile", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ image_model: select.value }),
+			body: JSON.stringify({ image_model: imageModel }),
 		});
 		if (response.ok) {
 			showSuccess("Image model saved successfully!");
