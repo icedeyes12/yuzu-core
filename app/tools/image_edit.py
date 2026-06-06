@@ -161,10 +161,12 @@ async def execute(arguments, **kwargs) -> dict:
         logger.debug(f"[IMAGE EDIT] Editing: {image_path}")
         logger.debug(f"[IMAGE EDIT] Prompt: {prompt}")
 
-        # Try with base64 image first
+        # Qwen Image Edit expects: {"input_args": {"prompt": "...", "image_b64s": ["..."]}}
         payload = {
-            "prompt": prompt,
-            "image": image_base64,
+            "input_args": {
+                "prompt": prompt,
+                "image_b64s": [image_base64],
+            }
         }
 
         headers = {
@@ -180,20 +182,8 @@ async def execute(arguments, **kwargs) -> dict:
                 timeout=300,
             )
 
-        # If 422/400, try without image (maybe provider uses session state)
-        if response.status_code in (400, 422):
-            logger.debug(f"[IMAGE EDIT] Retry without image param (status {response.status_code})")
-            payload = {"prompt": prompt}
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    QWEN_IMAGE_EDIT_ENDPOINT,
-                    headers=headers,
-                    json=payload,
-                    timeout=300,
-                )
-
         if response.status_code != 200:
-            logger.debug(f"[IMAGE EDIT] API error {response.status_code}: {response.text[:200]}")
+            logger.debug(f"[IMAGE EDIT] API error {response.status_code}: {response.text[:500]}")
             return error_result(
                 f"API error {response.status_code}",
                 TOOL_DEFINITION,
