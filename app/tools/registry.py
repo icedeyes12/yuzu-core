@@ -37,6 +37,10 @@ def _load_tool_module(tool_name: str):
             from app.tools import image_generate
 
             _TOOL_MODULES[tool_name] = image_generate
+        elif tool_name == "image_edit":
+            from app.tools import image_edit
+
+            _TOOL_MODULES[tool_name] = image_edit
         elif tool_name == "imagine":
             # Alias for image_generate
             from app.tools import image_generate
@@ -97,6 +101,13 @@ def _collect_definitions():
         _TOOL_DEFINITIONS["imagine"] = image_generate.TOOL_DEFINITION  # alias
     except Exception as e:
         logger.info(f"[registry] Failed to load image_generate definition: {e}")
+
+    try:
+        from app.tools import image_edit
+
+        _TOOL_DEFINITIONS["image_edit"] = image_edit.TOOL_DEFINITION
+    except Exception as e:
+        logger.info(f"[registry] Failed to load image_edit definition: {e}")
 
     try:
         from app.tools import http_request
