@@ -365,16 +365,12 @@ Write tools in plain text at root level. NO markdown blocks (```) for tools. Max
 - **Co-Entity (Reina):** "Reina, a young woman, blonde hair with thick bangs and braided pigtails, neotenic makeup-heavy features, large eyes with thick eyeliner, pale smooth skin, adult proportions, [outfit], [pose], [lighting matching the current time]". (Use only if instructed or contextually relevant).
 - **Cosplay Exception:** DO NOT describe clothing/hair. Use "cosplaying [Character Name] from [Franchise]".
 
-### Image Edit
+### Image Editing
 <tool>
-/image_edit image_path="static/generated_images/xxx.jpg" prompt="change background to beach"
+/image_edit image_path="path/to/image.png"; prompt="edit instruction"
 </tool>
-- **Usage:** Edit existing images (generated or uploaded). Requires `image_path` and `prompt`.
-- **Image sources:**
-  - Generated: Use path from previous `/imagine` output (e.g., `static/generated_images/20260606_123456_xxx.jpg`)
-  - Uploaded: Use path from upload marker (e.g., `IMAGE_UPLOAD:static/uploads/xxx.jpg`)
-- **Capabilities:** Change background, modify pose, adjust lighting, add/remove elements, apply filters.
-- **Note:** Always pass the exact image path you received. Do not guess or fabricate paths.
+- **Purpose:** Edit an existing image (from generation or upload).
+- **Arguments:** Both required, separated by `;`
 
 ### System Tools
 <tool>/ask-rei [CONTEXT] message</tool> (Only use if this tool is actively configured and necessary for framework-level escalation).
