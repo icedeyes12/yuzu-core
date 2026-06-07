@@ -106,7 +106,7 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
 
     Rules:
         - Tool blocks are delimited by <command> and </command> tags
-        - **Line-start require**: <command> must be at line start, </command> at line end
+        - **Line-start require**: <command> at line start, </command> at line end
         - This prevents accidental parsing of inline `<command>` mentions in narrative
         - Content inside tags is stripped of leading/trailing whitespace
         - Empty tool blocks are ignored
@@ -202,7 +202,7 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
                         j += 1
 
                     if found_close and content_lines:
-                        # Join lines preserving indentation, strip only trailing whitespace
+                        # Join lines preserving indentation, strip trailing whitespace
                         content = "\n".join(content_lines).strip()
                         if content:
                             matches.append(content)
@@ -548,7 +548,7 @@ def format_observation(results: list[tuple[str, dict[str, Any]]]) -> str:
 
 
 def parse_image_path(formatted_result: str) -> str | None:
-    """Extract and validate a generated-image path from a tool-contract markdown blob."""
+    """Extract and validate a generated-image path from markdown blob."""
     if not formatted_result:
         return None
 
@@ -597,80 +597,14 @@ def extract_markdown_image_path(response_text: str) -> str | None:
 
 
 # --------------------------------------------------------------------
-# Legacy Compatibility (deprecated, will be removed)
+# Legacy Compatibility (REMOVED - deprecated functions deleted)
 # --------------------------------------------------------------------
-
-# These are kept for backward compatibility during transition
-# but should not be used in new code
-
-
-def detect_command(
-    text: str, scan_mode: str = "first_line"
-) -> dict[str, str] | list[dict[str, str]] | None:
-    """DEPRECATED: Use parse_tool_blocks() instead.
-
-    This function is kept for backward compatibility but will be removed.
-    It now checks for both <command> blocks and legacy /command format.
-    """
-    log.warning("detect_command() is deprecated, use parse_tool_blocks() instead")
-
-    # Try new tool block format first
-    commands, _ = parse_tool_blocks(text)
-    if commands:
-        parsed = [_parse_command_string(cmd) for cmd in commands]
-        parsed = [p for p in parsed if p]  # Filter out None
-        if len(parsed) == 1:
-            return parsed[0]
-        return parsed if parsed else None
-
-    # Fall back to legacy /command detection
-    if not text:
-        return None
-
-    lines = text.strip().split("\n")
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("/"):
-            result = _parse_command_string(stripped)
-            if result:
-                return result
-        # Stop after first non-empty line for first_line mode
-        if stripped and scan_mode == "first_line":
-            break
-
-    return None
-
-
-async def execute_command(
-    command_info: dict[str, str] | list[dict[str, str]],
-    session_id: int | None = None,
-) -> tuple[str, dict[str, Any]] | list[tuple[str, dict[str, Any]]]:
-    """DEPRECATED: Use execute_commands() instead.
-
-    This function is kept for backward compatibility.
-    """
-    log.warning("execute_command() is deprecated, use execute_commands() instead")
-
-    if isinstance(command_info, list):
-        command_strs = []
-        for cmd in command_info:
-            if cmd.get("full_command"):
-                command_strs.append(cmd["full_command"])
-            elif cmd.get("command"):
-                args = cmd.get("args", "")
-                command_strs.append(f"/{cmd['command']} {args}".strip())
-        return await execute_commands(command_strs, session_id)
-
-    # Single command
-    if command_info.get("full_command"):
-        command_str = command_info["full_command"]
-    else:
-        args = command_info.get("args", "")
-        command_str = f"/{command_info['command']} {args}".strip()
-
-    results = await execute_commands([command_str], session_id)
-    return results[0] if results else ("unknown", {"ok": False, "error": "No command"})
-
+# The following deprecated functions have been removed:
+# - detect_command(): Use parse_tool_blocks() instead
+# - execute_command(): Use execute_commands() instead
+#
+# All tool invocation must now use the <command>...</command> block protocol
+# via parse_tool_blocks() + execute_commands().
 
 # --------------------------------------------------------------------
 # StreamFilter - REMOVED

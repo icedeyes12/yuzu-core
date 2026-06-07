@@ -443,8 +443,10 @@ async def consolidate_facts_async(
                     session_id, entity, relation, fact_text, episode_id=episode_id
                 )
                 counts["updated"] += 1
-            except Exception:
-                pass
+            except Exception as e:
+                # DUPLICATE FIX: Log and continue instead of silently passing
+                logger.warning(f"CONSOLIDATE update failed for source_id={source_id}: {e}")
+                continue
 
         elif action == "reinforce" and source_id:
             try:
@@ -466,8 +468,10 @@ async def consolidate_facts_async(
                         (datetime.now(), Json(meta), source_id),
                     )
                     counts["reinforced"] += 1
-            except Exception:
-                pass
+            except Exception as e:
+                # DUPLICATE FIX: Log and continue instead of silently passing
+                logger.warning(f"CONSOLIDATE reinforce failed for source_id={source_id}: {e}")
+                continue
 
         else:  # action == "new"
             try:
@@ -475,8 +479,10 @@ async def consolidate_facts_async(
                     session_id, entity, relation, fact_text, episode_id=episode_id
                 )
                 counts["new"] += 1
-            except Exception:
-                pass
+            except Exception as e:
+                # DUPLICATE FIX: Log and continue instead of silently passing
+                logger.warning(f"CONSOLIDATE new failed for fact: {fact_text[:50]}: {e}")
+                continue
 
     return counts
 

@@ -42,6 +42,9 @@ _MD_IMAGE_PATTERN = re.compile(r"!\[[^\]]{0,200}\]\(([^)]{1,200})\)")
 # Maximum orchestration loops to prevent runaway execution
 _MAX_ORCHESTRATION_LOOPS = 30
 
+# Stream fence timeout - incomplete streams abandoned after this duration (seconds)
+_STREAM_FENCE_TIMEOUT = 300  # 5 minutes
+
 # Allowed image directories (resolved at module load, not runtime)
 _BASE_DIR = Path(__file__).resolve().parent.parent
 _ALLOWED_IMAGE_DIRS = [
@@ -150,7 +153,7 @@ def _cache_uploaded_images(message: str) -> list[str]:
 
 
 def _cache_images_from_message(message: str) -> list[str]:
-    """Resolve any image references in *message* to local cache paths, with validation."""
+    """Resolve image references in message to local cache paths, with validation."""
     uploaded = _cache_uploaded_images(message)
     if uploaded:
         return uploaded
@@ -434,7 +437,7 @@ async def handle_user_message(user_message: str, interface: str = "terminal") ->
 
     active_session = await Database.get_active_session_async()
     session_id = active_session["id"]
-    # Assuming _cache_images_from_message is relatively fast (local check + potential small download)
+    # Assuming _cache_images_from_message is fast (local check + small download)
     # If it downloads, it should be async. Let's check multimodal_tools.
     cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
 
@@ -556,6 +559,70 @@ async def handle_user_message(user_message: str, interface: str = "terminal") ->
     return text_response
 
 
+class StreamFence:
+    """Prevents race conditions between user message persistence and stream completion.
+    
+    Each stream gets a unique fence ID that must be cleared after successful completion.
+    Abandoned fences expire after timeout to prevent deadlocks.
+    """
+    _fences: dict[int, dict[str, Any]] = {}  # session_id -> fence_info
+    _lock = asyncio.Lock()
+    
+    @classmethod
+    async def acquire(cls, session_id: int, user_msg_id: int) -> str:
+        """Acquire a fence for a streaming session. Returns fence_id."""
+        import uuid
+        fence_id = str(uuid.uuid4())[:8]
+        async with cls._lock:
+            cls._fences[session_id] = {
+                "fence_id": fence_id,
+                "user_msg_id": user_msg_id,
+                "acquired_at": asyncio.get_event_loop().time(),
+                "completed": False,
+            }
+        return fence_id
+    
+    @classmethod
+    async def complete(cls, session_id: int, fence_id: str) -> bool:
+        """Mark fence as completed, allowing persistence."""
+        async with cls._lock:
+            if session_id in cls._fences:
+                fence = cls._fences[session_id]
+                if fence["fence_id"] == fence_id:
+                    fence["completed"] = True
+                    return True
+        return False
+    
+    @classmethod
+    async def is_completed(cls, session_id: int) -> bool:
+        """Check if fence is completed or expired."""
+        async with cls._lock:
+            if session_id not in cls._fences:
+                return True  # No fence = already cleared
+            
+            fence = cls._fences[session_id]
+            elapsed = asyncio.get_event_loop().time() - fence["acquired_at"]
+            
+            # If completed or expired, clear it
+            if fence["completed"] or elapsed > _STREAM_FENCE_TIMEOUT:
+                del cls._fences[session_id]
+                return True
+            
+            return False
+    
+    @classmethod
+    async def cleanup_expired(cls) -> None:
+        """Remove all expired fences."""
+        async with cls._lock:
+            now = asyncio.get_event_loop().time()
+            expired = [
+                sid for sid, fence in cls._fences.items()
+                if now - fence["acquired_at"] > _STREAM_FENCE_TIMEOUT
+            ]
+            for sid in expired:
+                del cls._fences[sid]
+
+
 async def handle_user_message_streaming(
     user_message: str,
     interface: str = "terminal",
@@ -565,7 +632,11 @@ async def handle_user_message_streaming(
     abort_check: callable[[], bool] | None = None,
     image_paths: list[str] | None = None,
 ) -> AsyncIterator[str]:
-    """Streaming entrypoint (async)."""
+    """Streaming entrypoint (async) with fence protection.
+    
+    FENCE PROTECTION: Wraps user message persistence in a fence to prevent
+    ghost turns if stream is interrupted before completion.
+    """
     profile = await Database.get_profile_async()
     if not user_message.strip() and not image_paths:
         yield "Please enter a message!"
@@ -588,29 +659,12 @@ async def handle_user_message_streaming(
     if image_paths:
         all_image_paths.extend(image_paths)
 
-    await _persist_user_async(user_message, session_id, all_image_paths or None)
-
-    # Fast-path: user typed /imagine directly
-    stripped = user_message.strip()
-    if stripped.startswith("/imagine ") or stripped.startswith("<command>"):
-        commands, _ = parse_tool_blocks(stripped)
-        if commands or stripped.startswith("/imagine"):
-            if stripped.startswith("/imagine"):
-                commands = [stripped]
-
-            results = await execute_commands(commands, session_id=session_id)
-
-            tool_markdown = ""
-            for tool_name, result in results:
-                tool_markdown = result.get("markdown", str(result))
-                # NOTE: Fast-path tool result NOT persisted to DB anymore.
-                # StreamBuffer handles final persistence.
-                yield tool_markdown
-
-            await _post_turn_async(
-                profile, user_message, tool_markdown, session_id, active_session
-            )
-            return
+    # FENCE: Acquire fence before persisting user message
+    user_msg_id = await _persist_user_async(
+        user_message, session_id, all_image_paths or None
+    )
+    fence_id = await StreamFence.acquire(session_id, user_msg_id or 0)
+    log.info(f"[stream] fence {fence_id} acquired for session {session_id}")
 
     # Collect streamed response - RAM only, no intermediate DB writes
     response_chunks: list[str] = []
@@ -621,16 +675,21 @@ async def handle_user_message_streaming(
         ):
             if chunk:
                 if abort_check and abort_check():
-                    # StreamBuffer will handle persistence of partial content
+                    log.info(f"[stream] abort detected, fence {fence_id} not completed")
+                    # Fence remains incomplete - will be cleaned up by timeout
                     return
 
                 response_chunks.append(chunk)
                 yield chunk
     except asyncio.CancelledError:
         log.info("[stream] cancelled in first pass - propagating to StreamBuffer")
+        # FENCE: Incomplete - will be cleaned up by timeout
+        log.warning(f"[stream] fence {fence_id} incomplete due to cancellation")
         raise
     except Exception as e:
         log.error("[stream] error in first pass: %s", e)
+        # FENCE: Incomplete - will be cleaned up by timeout
+        log.warning(f"[stream] fence {fence_id} incomplete due to error: {e}")
         # StreamBuffer will handle persistence of partial content
         raise
 
@@ -639,19 +698,25 @@ async def handle_user_message_streaming(
     if not _clean(full_response):
         fallback = _EMPTY_RESPONSE_FALLBACK
         yield fallback
-        # Note: fallback is yielded but not persisted here - StreamBuffer handles it
+        # FENCE: Mark as completed to allow persistence
+        await StreamFence.complete(session_id, fence_id)
+        log.info(f"[stream] fence {fence_id} completed with fallback")
         await _post_turn_async(
             profile, user_message, fallback, session_id, active_session
         )
         return
 
     if is_markdown_image_shortcut(full_response):
+        await StreamFence.complete(session_id, fence_id)
         yield IMAGE_SHORTCUT_WARNING
         return
 
     commands, clean_text = parse_tool_blocks(full_response)
 
     if not commands:
+        # FENCE: Mark as completed
+        await StreamFence.complete(session_id, fence_id)
+        log.debug(f"[stream] fence {fence_id} completed (no tools)")
         await _post_turn_async(
             profile, user_message, full_response, session_id, active_session
         )
@@ -738,6 +803,8 @@ async def handle_user_message_streaming(
         synthesis = _clean(full_synthesis) if full_synthesis else None
 
         if not synthesis:
+            # FENCE: Mark as completed
+            await StreamFence.complete(session_id, fence_id)
             await _post_turn_async(
                 profile,
                 user_message,
@@ -753,6 +820,9 @@ async def handle_user_message_streaming(
                 if any_image_tool
                 else synthesis
             )
+            # FENCE: Mark as completed
+            await StreamFence.complete(session_id, fence_id)
+            log.info(f"[stream] fence {fence_id} completed (final synthesis)")
             await _post_turn_async(
                 profile, user_message, final_response, session_id, active_session
             )
@@ -789,6 +859,8 @@ async def handle_user_message_streaming(
         ephemeral_context.append({"role": "user", "content": next_combined})
         current_synthesis_context = next_combined
 
+    # Final cleanup
+    await StreamFence.complete(session_id, fence_id)
     await _post_turn_async(
         profile,
         user_message,

@@ -13,8 +13,7 @@ logger = logging.getLogger(__name__)
 
 # ── Provider-level rate limiting (generalized) ───────────────────────────────
 # Each provider gets its own semaphore and rate limit config
-# NOTE: Semaphores are created lazily via async getters to ensure they bind
-# to the active event loop at creation time, not at module import time.
+# CRITICAL: Semaphores MUST be created per-event-loop to prevent cross-loop binding
 
 _PROVIDER_SEMAPHORES: dict[str, asyncio.Semaphore] = {}
 _PROVIDER_LAST_CALL: dict[str, float] = {}
@@ -32,26 +31,47 @@ _MODEL_SEMAPHORES: dict[str, asyncio.Semaphore] = {}
 _MODEL_LAST_CALL: dict[str, float] = {}
 _MODEL_RATE_LIMIT = 1.0  # Min 1s between calls to same model
 
+# Track which event loop each semaphore belongs to
+_SEMAPHORE_LOOPS: dict[str, int] = {}  # semaphore_key -> loop_id
+
 
 async def _get_provider_semaphore_async(provider: str) -> asyncio.Semaphore:
     """Get or create a semaphore for a specific provider (async).
-
-    Creates the semaphore lazily in the current event loop to avoid
-    cross-loop binding issues.
+    
+    CRITICAL: Creates semaphore in current event loop to prevent cross-loop binding.
+    If the event loop changed (e.g., after FastAPI reload), recreate the semaphore.
     """
-    if provider not in _PROVIDER_SEMAPHORES:
-        _PROVIDER_SEMAPHORES[provider] = asyncio.Semaphore(1)
+    current_loop_id = id(asyncio.get_event_loop())
+    
+    # Check if semaphore exists and belongs to current loop
+    if provider in _PROVIDER_SEMAPHORES:
+        if _SEMAPHORE_LOOPS.get(provider) == current_loop_id:
+            return _PROVIDER_SEMAPHORES[provider]
+        # Loop changed - recreate semaphore
+        logger.debug(f"[RateLimit] Event loop changed for {provider}, recreating semaphore")
+    
+    # Create new semaphore in current loop
+    _PROVIDER_SEMAPHORES[provider] = asyncio.Semaphore(1)
+    _SEMAPHORE_LOOPS[provider] = current_loop_id
     return _PROVIDER_SEMAPHORES[provider]
 
 
 async def _get_model_semaphore_async(model: str) -> asyncio.Semaphore:
     """Get or create a semaphore for a specific model (async).
-
-    Creates the semaphore lazily in the current event loop to avoid
-    cross-loop binding issues.
+    
+    CRITICAL: Creates semaphore in current event loop to prevent cross-loop binding.
     """
-    if model not in _MODEL_SEMAPHORES:
-        _MODEL_SEMAPHORES[model] = asyncio.Semaphore(1)
+    current_loop_id = id(asyncio.get_event_loop())
+    sem_key = f"model:{model}"
+    
+    if sem_key in _MODEL_SEMAPHORES:
+        if _SEMAPHORE_LOOPS.get(sem_key) == current_loop_id:
+            return _MODEL_SEMAPHORES[sem_key]
+        # Loop changed - recreate semaphore
+        logger.debug(f"[RateLimit] Event loop changed for model {model}, recreating semaphore")
+    
+    _MODEL_SEMAPHORES[model] = asyncio.Semaphore(1)
+    _SEMAPHORE_LOOPS[sem_key] = current_loop_id
     return _MODEL_SEMAPHORES[model]
 
 
