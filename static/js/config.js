@@ -579,7 +579,8 @@ async function saveImageModel() {
 	btn.disabled = true;
 
 	try {
-		const imageModel = select.value === "qwen_image" ? "qwen_image" : select.value;
+		const imageModel =
+			select.value === "qwen_image" ? "qwen_image" : select.value;
 		const response = await fetch("/api/update_profile", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },

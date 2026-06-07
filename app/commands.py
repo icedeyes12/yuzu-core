@@ -25,8 +25,8 @@ _MAX_TOOL_BLOCKS = 3
 
 # Tool block parsing - uses string methods instead of regex to prevent ReDoS
 # Opening and closing tags
-_TOOL_OPEN = "<tool>"
-_TOOL_CLOSE = "</tool>"
+_TOOL_OPEN = "<command>"
+_TOOL_CLOSE = "</command>"
 
 # Tools whose argument is a free-form string keyed by a specific field.
 _STRING_ARG_TOOLS: dict[str, str] = {
@@ -70,7 +70,7 @@ _MARKDOWN_IMAGE_ANY = re.compile(r"!\[[^\]]{0,200}\]\(([^)]{1,200})\)")
 # Image shortcut warning
 IMAGE_SHORTCUT_WARNING = (
     "\n\nImage output detected via incorrect method. "
-    "Please use <tool>/imagine [prompt]</tool> for image generation."
+    "Please use <command>imagine [prompt]</command> for image generation."
 )
 
 
@@ -92,7 +92,7 @@ def _safe_regex_search(pattern: re.Pattern, text: str) -> re.Match | None:
 
 
 def parse_tool_blocks(text: str) -> tuple[list[str], str]:
-    """Parse <tool>...</tool> blocks from LLM response.
+    """Parse <command>...</command> blocks from LLM response.
 
     This is the core parser for the new tool invocation protocol.
 
@@ -105,9 +105,9 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
         - clean_text: Original text with all tool blocks removed
 
     Rules:
-        - Tool blocks are delimited by <tool> and </tool> tags
-        - **Line-start require**: <tool> must be at line start, </tool> at line end
-        - This prevents accidental parsing of inline `<tool>` mentions in narrative
+        - Tool blocks are delimited by <command> and </command> tags
+        - **Line-start require**: <command> must be at line start, </command> at line end
+        - This prevents accidental parsing of inline `<command>` mentions in narrative
         - Content inside tags is stripped of leading/trailing whitespace
         - Empty tool blocks are ignored
         - Maximum 3 tool blocks per response (extras ignored)
@@ -115,9 +115,9 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
     Example:
         Input:
             Baik saya cek dulu
-            <tool>
+            <command>
             ls -la
-            </tool>
+            </command>
             Mari tunggu hasilnya
 
         Output:
@@ -245,18 +245,18 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
 
 
 def has_tool_blocks(text: str) -> bool:
-    """Check if text contains any <tool>...</tool> blocks.
+    """Check if text contains any <command>...</command> blocks.
 
     Uses same line-start requirement as parse_tool_blocks():
-    - <tool> must be at line start (after optional whitespace)
-    - </tool> must be at line end (only whitespace after)
+    - <command> must be at line start (after optional whitespace)
+    - </command> must be at line end (only whitespace after)
     """
     if not text:
         return False
     if len(text) > _REGEX_INPUT_LIMIT:
         text = text[:_REGEX_INPUT_LIMIT]
 
-    if "<tool>" in text and "</tool>" in text:
+    if "<command>" in text and "</command>" in text:
         return True
 
     lines = text.split("\n")
@@ -610,7 +610,7 @@ def detect_command(
     """DEPRECATED: Use parse_tool_blocks() instead.
 
     This function is kept for backward compatibility but will be removed.
-    It now checks for both <tool> blocks and legacy /command format.
+    It now checks for both <command> blocks and legacy /command format.
     """
     log.warning("detect_command() is deprecated, use parse_tool_blocks() instead")
 

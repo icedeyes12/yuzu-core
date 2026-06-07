@@ -125,7 +125,6 @@ class TestArgumentReordering:
 
 class TestProxiedMethods:
     def test_get_profile_proxies_directly(self, monkeypatch):
-
         monkeypatch.setattr(
             Database,
             "get_profile",

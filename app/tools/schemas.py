@@ -74,8 +74,8 @@ class ToolDefinition:
 # --------------------------------------------------------------------
 # Every tool's execute() MUST return this shape:
 #
-#   {"ok": True,  "data": {...}, "markdown": "<details>...</details>"}
-#   {"ok": False, "error": "...", "markdown": "<details>...</details>"}
+#   {"ok": True,  "data": {...}, "markdown": "<tools>...</tools>"}
+#   {"ok": False, "error": "...", "markdown": "<tools>...</tools>"}
 #
 # markdown is the rendered output stored in DB and shown in UI.
 # --------------------------------------------------------------------
@@ -89,7 +89,7 @@ def build_tool_contract(
 ) -> str:
     """Build the unified markdown contract for tool output.
 
-    Returns a ``<details>`` block — the ONLY format stored in DB
+    Returns a ``<tools>`` block — the ONLY format stored in DB
     and rendered by the frontend.
     """
     quoted = []
@@ -111,14 +111,7 @@ def build_tool_contract(
     if raw:
         formatted_output += "\n\n" + "\n".join(raw)
 
-    return (
-        f"<details>\n"
-        f"<summary>🔧 {tool_def.role}</summary>\n"
-        f"\n"
-        f"{formatted_output}\n"
-        f"\n"
-        f"</details>"
-    )
+    return f"<tools>\n🔧 {tool_def.role}\n\n{formatted_output}\n\n</tools>"
 
 
 def ok_result(

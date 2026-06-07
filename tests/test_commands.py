@@ -1,6 +1,6 @@
 # FILE: tests/test_commands.py
 # DESCRIPTION: Pure-function tests for app.commands.
-#              Tests the <tool>...</tool> protocol parser.
+#              Tests the <command>...</command> protocol parser.
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from app.commands import (
 
 
 class TestParseToolBlocks:
-    """Tests for the core <tool> block parser."""
+    """Tests for the core <command> block parser."""
 
     def test_empty_text(self):
         commands, clean_text = parse_tool_blocks("")
@@ -30,27 +30,27 @@ class TestParseToolBlocks:
 
     def test_single_tool_block(self):
         text = """Baik saya cek dulu
-<tool>
+<command>
 ls -la
-</tool>
+</command>
 Mari tunggu hasilnya"""
         commands, clean_text = parse_tool_blocks(text)
         assert commands == ["ls -la"]
         assert "Baik saya cek dulu" in clean_text
         assert "Mari tunggu hasilnya" in clean_text
-        assert "<tool>" not in clean_text
-        assert "</tool>" not in clean_text
+        assert "<command>" not in clean_text
+        assert "</command>" not in clean_text
 
     def test_multiple_tool_blocks(self):
-        text = """<tool>
+        text = """<command>
 echo "hello"
-</tool>
-<tool>
+</command>
+<command>
 pwd
-</tool>
-<tool>
+</command>
+<command>
 ls
-</tool>"""
+</command>"""
         commands, clean_text = parse_tool_blocks(text)
         assert len(commands) == 3
         assert commands[0] == 'echo "hello"'
@@ -59,52 +59,52 @@ ls
 
     def test_max_three_tool_blocks(self):
         """More than 3 tool blocks should be ignored."""
-        text = """<tool>cmd1</tool>
-<tool>cmd2</tool>
-<tool>cmd3</tool>
-<tool>cmd4</tool>
-<tool>cmd5</tool>"""
+        text = """<command>cmd1</command>
+<command>cmd2</command>
+<command>cmd3</command>
+<command>cmd4</command>
+<command>cmd5</command>"""
         commands, clean_text = parse_tool_blocks(text)
         assert len(commands) == 3
         assert commands == ["cmd1", "cmd2", "cmd3"]
 
     def test_empty_tool_block_ignored(self):
-        text = """<tool>
+        text = """<command>
    
-</tool>
-<tool>
+</command>
+<command>
 echo "real"
-</tool>"""
+</command>"""
         commands, clean_text = parse_tool_blocks(text)
         assert len(commands) == 1
         assert commands[0] == 'echo "real"'
 
     def test_multiline_command(self):
-        text = """<tool>
+        text = """<command>
 for i in 1 2 3; do
     echo $i
 done
-</tool>"""
+</command>"""
         commands, clean_text = parse_tool_blocks(text)
         assert len(commands) == 1
         assert "for i in 1 2 3" in commands[0]
         assert "echo $i" in commands[0]
 
     def test_whitespace_stripped(self):
-        text = """<tool>
+        text = """<command>
    
    ls -la   
    
-</tool>"""
+</command>"""
         commands, clean_text = parse_tool_blocks(text)
         assert commands == ["ls -la"]
 
     def test_preserves_conversational_text(self):
         text = """Baik saya akan cek filenya.
 
-<tool>
+<command>
 cat config.json
-</tool>
+</command>
 
 Ini hasilnya ya."""
         commands, clean_text = parse_tool_blocks(text)
@@ -113,13 +113,13 @@ Ini hasilnya ya."""
         assert "Ini hasilnya ya" in clean_text
 
     def test_no_nested_tool_support(self):
-        """Nested <tool> tags are not supported - outer block wins."""
-        text = """<tool>
-outer <tool>inner</tool> command
-</tool>"""
+        """Nested <command> tags are not supported - outer block wins."""
+        text = """<command>
+outer <command>inner</command> command
+</command>"""
         commands, clean_text = parse_tool_blocks(text)
-        # Behavior: regex is non-greedy, so it matches first <tool>...</tool>
-        # The inner <tool> is just text inside the outer block
+        # Behavior: regex is non-greedy, so it matches first <command>...</command>
+        # The inner <command> is just text inside the outer block
         assert len(commands) == 1
         assert "outer" in commands[0]
         # The "inner" is just text, not parsed as a separate block
@@ -129,7 +129,7 @@ class TestHasToolBlocks:
     """Tests for the has_tool_blocks helper."""
 
     def test_returns_true_for_tool_blocks(self):
-        assert has_tool_blocks("<tool>ls</tool>") is True
+        assert has_tool_blocks("<command>ls</command>") is True
 
     def test_returns_false_for_no_tool_blocks(self):
         assert has_tool_blocks("just text") is False
@@ -138,7 +138,7 @@ class TestHasToolBlocks:
         assert has_tool_blocks("") is False
 
     def test_returns_true_with_narration(self):
-        assert has_tool_blocks("hello <tool>cmd</tool> world") is True
+        assert has_tool_blocks("hello <command>cmd</command> world") is True
 
 
 class TestFormatObservation:

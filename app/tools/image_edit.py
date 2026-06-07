@@ -181,7 +181,9 @@ async def execute(arguments, **kwargs) -> dict:
             )
 
         if response.status_code != 200:
-            logger.debug(f"[IMAGE EDIT] API error {response.status_code}: {response.text[:500]}")
+            logger.debug(
+                f"[IMAGE EDIT] API error {response.status_code}: {response.text[:500]}"
+            )
             return error_result(
                 f"API error {response.status_code}",
                 TOOL_DEFINITION,

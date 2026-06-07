@@ -365,7 +365,7 @@ async def _stream_synthesis_async(
     """Stream the 2nd LLM pass (async).
 
     ephemeral_context: In-memory conversation turns not yet in DB.
-    Contains the assistant's first-pass response with <tool> blocks
+    Contains the assistant's first-pass response with <command> blocks
     and the tool results, ensuring the LLM has full context.
     """
     image_context = await _build_image_context_async(tool_markdown, session_id)
@@ -438,7 +438,7 @@ async def handle_user_message(user_message: str, interface: str = "terminal") ->
 
     # Fast-path: user typed /imagine directly
     stripped = user_message.strip()
-    if stripped.startswith("/imagine ") or stripped.startswith("<tool>"):
+    if stripped.startswith("/imagine ") or stripped.startswith("<command>"):
         commands, _ = parse_tool_blocks(stripped)
         if commands or stripped.startswith("/imagine"):
             if stripped.startswith("/imagine"):
@@ -590,7 +590,7 @@ async def handle_user_message_streaming(
 
     # Fast-path: user typed /imagine directly
     stripped = user_message.strip()
-    if stripped.startswith("/imagine ") or stripped.startswith("<tool>"):
+    if stripped.startswith("/imagine ") or stripped.startswith("<command>"):
         commands, _ = parse_tool_blocks(stripped)
         if commands or stripped.startswith("/imagine"):
             if stripped.startswith("/imagine"):

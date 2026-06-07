@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, AsyncIterator
 
 from app.orchestrator import handle_user_message_streaming
 
@@ -79,6 +79,65 @@ class StreamBuffer:
         except Exception as e:
             log.error(f"[Stream] Failed to persist to DB: {e}", exc_info=True)
 
+    async def _filter_tools_stream(self, stream) -> AsyncIterator[str]:
+        """Stateful filter to aggressively drop <tools>...</tools> blocks.
+
+        Prevents hallucinated <tools> tags from reaching the client or being
+        saved to the database context history.
+        """
+        filter_buffer = ""
+        in_tools_block = False
+
+        async for chunk in stream:
+            if not chunk:
+                continue
+
+            if in_tools_block:
+                filter_buffer += chunk
+                if "</tools>" in filter_buffer:
+                    idx = filter_buffer.find("</tools>") + len("</tools>")
+                    chunk_after = filter_buffer[idx:]
+                    filter_buffer = chunk_after
+                    in_tools_block = False
+                    # We continue so that chunk_after goes through the prefix check
+                continue
+
+            filter_buffer += chunk
+
+            while filter_buffer and not in_tools_block:
+                if "<tools>" in filter_buffer:
+                    idx = filter_buffer.find("<tools>")
+                    safe_part = filter_buffer[:idx]
+                    if safe_part:
+                        yield safe_part
+
+                    filter_buffer = filter_buffer[idx:]
+                    in_tools_block = True
+
+                    if "</tools>" in filter_buffer:
+                        close_idx = filter_buffer.find("</tools>") + len("</tools>")
+                        filter_buffer = filter_buffer[close_idx:]
+                        in_tools_block = False
+                    continue
+
+                # Check if buffer ends with a partial "<tools>" tag
+                potential_match = False
+                for i in range(1, len("<tools>")):
+                    if filter_buffer.endswith("<tools>"[:i]):
+                        potential_match = True
+                        break
+
+                if potential_match:
+                    # Wait for more chunks to confirm
+                    break
+                else:
+                    yield filter_buffer
+                    filter_buffer = ""
+
+        # Flush any remaining buffer if we're not inside a tools block
+        if filter_buffer and not in_tools_block:
+            yield filter_buffer
+
     async def _process(self):
         """Asynchronously process chunks from the orchestrator.
 
@@ -87,14 +146,16 @@ class StreamBuffer:
         Self-cleanup in finally block.
         """
         try:
-            async for chunk in handle_user_message_streaming(
+            raw_stream = handle_user_message_streaming(
                 self.user_message,
                 interface=self.interface,
                 session_id=self.session_id,
                 provider=self.provider,
                 model=self.model,
                 image_paths=self.image_paths,
-            ):
+            )
+
+            async for chunk in self._filter_tools_stream(raw_stream):
                 async with self.lock:
                     self.full_content += chunk
                     self.last_activity = time.time()

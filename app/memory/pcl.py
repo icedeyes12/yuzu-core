@@ -50,48 +50,49 @@ _CATEGORY_CAPS = {
 
 # ── JSON Extraction Utilities ─────────────────────────────────────────────────
 
+
 def _extract_json_from_markdown(text: str) -> str:
     """Extract JSON payload from markdown-wrapped or plain text response.
-    
+
     Handles:
     - Markdown code blocks: ```json ... ``` or ``` ... ```
     - Plain JSON arrays/objects
     - Mixed content with JSON embedded
-    
+
     Returns:
         Cleaned JSON string ready for json.loads()
-    
+
     Raises:
         ValueError: If no valid JSON structure found
     """
     if not text or not text.strip():
         raise ValueError("Empty response")
-    
+
     cleaned = text.strip()
-    
+
     # Try to extract from markdown code blocks first
     # Pattern: ```json ... ``` or ``` ... ```
-    markdown_pattern = r'```(?:json)?\s*([\s\S]*?)\s*```'
+    markdown_pattern = r"```(?:json)?\s*([\s\S]*?)\s*```"
     match = re.search(markdown_pattern, cleaned)
-    
+
     if match:
         # Found markdown block, extract contents
         extracted = match.group(1).strip()
         if extracted:
             return extracted
-    
+
     # Fallback: Find first [ and last ] for arrays
-    if '[' in cleaned and ']' in cleaned:
-        start = cleaned.find('[')
-        end = cleaned.rfind(']') + 1
+    if "[" in cleaned and "]" in cleaned:
+        start = cleaned.find("[")
+        end = cleaned.rfind("]") + 1
         return cleaned[start:end]
-    
+
     # Fallback: Find first { and last } for objects
-    if '{' in cleaned and '}' in cleaned:
-        start = cleaned.find('{')
-        end = cleaned.rfind('}') + 1
+    if "{" in cleaned and "}" in cleaned:
+        start = cleaned.find("{")
+        end = cleaned.rfind("}") + 1
         return cleaned[start:end]
-    
+
     # No JSON structure found
     raise ValueError(f"No JSON structure found in response: {cleaned[:200]}")
 

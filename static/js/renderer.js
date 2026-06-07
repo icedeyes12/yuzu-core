@@ -533,9 +533,9 @@ class MessageRenderer {
 		if (!text) return text;
 		const sourceText = typeof text === "string" ? text : String(text || "");
 
-		// Pattern to match <tool>...</tool> blocks (including multiline)
-		// Also handles unclosed <tool> tags during streaming
-		const toolPattern = /<tool>([\s\S]*?)(?:<\/tool>|$)/g;
+		// Pattern to match <tools>...</tools> blocks (including multiline)
+		// Also handles unclosed <tools> tags during streaming
+		const toolPattern = /<tools>([\s\S]*?)(?:<\/tools>|$)/g;
 
 		const result = sourceText.replace(toolPattern, (_match, content) => {
 			const trimmedContent = content.trim();
@@ -555,7 +555,7 @@ class MessageRenderer {
 
 			// Create details element
 			// Note: 'open' attribute makes it expanded by default
-			return `<details class="tool-execution" open><summary>🛠️ ${escapedLabel}</summary><div class="tool-content"><pre><code>${escapedContent}</code></pre></div></details>`;
+			return `<details class="tool-execution" open><summary>${escapedLabel}</summary><div class="tool-content"><pre><code>${escapedContent}</code></pre></div></details>`;
 		});
 
 		return result;
