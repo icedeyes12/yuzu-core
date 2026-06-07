@@ -935,88 +935,86 @@
 	color: var(--text-muted, #666);
 }
 
-/* ========================================
-   TOOL EXECUTION (COLLAPSIBLE)
-   ======================================== */
+/* ==================== SYSTEM ACTION BLOCKS ==================== */
+/* Seamless, mobile-friendly containers for command and tool blocks */
 
-.message-content .tool-execution {
-	margin: 0.8rem 0;
-	border-radius: 8px;
-	background: var(--tool-execution-bg, var(--code-bg));
-	border: 1px solid var(--brain-box-border, var(--border-ai));
+.system-action-block {
+	background: rgba(255, 255, 255, 0.03);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 12px;
+	margin: 8px 0;
 	overflow: hidden;
 }
 
-.message-content .tool-execution summary {
-	padding: 0.6rem 1rem;
-	cursor: pointer;
-	font-weight: 600;
-	font-size: 0.85rem;
-	color: var(--brain-box-text, var(--accent-primary));
-	background: rgba(0, 0, 0, 0.2);
-	list-style: none;
-	transition: background 0.2s ease;
+.command-block {
+	border-left: 3px solid #8b5cf6; /* subtle purple */
+}
+
+.tool-result-block {
+	border-left: 3px solid #3b82f6; /* subtle blue */
+}
+
+.action-header {
 	display: flex;
 	align-items: center;
+	padding: 8px 12px;
+	background: rgba(0, 0, 0, 0.2);
+	font-size: 0.85rem;
+	color: #a1a1aa;
+	font-family: sans-serif;
+	cursor: pointer;
 	gap: 0.5rem;
 }
 
-.message-content .tool-execution summary::-webkit-details-marker {
+.action-icon {
+	font-size: 1em;
+	opacity: 0.9;
+}
+
+.action-label {
+	font-weight: 500;
+	user-select: none;
+}
+
+.action-content {
+	padding: 12px;
+	font-size: 0.85rem;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+	color: var(--text-color, #e2e8f0);
+	line-height: 1.5;
+}
+
+.code-font {
+	font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+	color: #e2e8f0;
+}
+
+/* Remove default focus outlines on summary */
+.system-action-block summary {
+	outline: none;
+}
+
+.system-action-block summary::-webkit-details-marker {
 	display: none;
 }
 
-.message-content .tool-execution summary:hover {
+.system-action-block summary::marker {
+	display: none;
+}
+
+.system-action-block summary:focus {
+	outline: none;
+}
+
+/* Hover state for tool result header */
+.tool-result-block summary:hover {
 	background: rgba(0, 0, 0, 0.3);
 }
 
-.message-content .tool-execution[open] summary {
-	border-bottom: 1px solid var(--brain-box-border, var(--border-ai));
-}
-
-.message-content .tool-content {
-	padding: 0;
-	max-height: 350px;
-	overflow-y: auto;
-	scrollbar-width: thin;
-	scrollbar-color: var(--accent-primary) transparent;
-}
-
-.message-content .tool-content pre {
-	margin: 0;
-	padding: 1rem;
-	white-space: pre-wrap;
-	word-break: break-all;
-	font-family: "JetBrains Mono", "Hack", monospace;
-	font-size: 0.85rem;
-	background: transparent;
-	border: none;
-}
-
-/* Tool content code - specific override without !important */
-.message-content pre.tool-content code {
-	background: transparent;
-	padding: 0;
-	border: none;
-	color: var(--text-color);
-}
-
-/* Slim Scrollbar for Tool Content */
-.message-content .tool-content::-webkit-scrollbar {
-	width: 6px;
-	height: 6px;
-}
-
-.message-content .tool-content::-webkit-scrollbar-track {
-	background: transparent;
-}
-
-.message-content .tool-content::-webkit-scrollbar-thumb {
-	background: var(--border-primary);
-	border-radius: 10px;
-}
-
-.message-content .tool-content::-webkit-scrollbar-thumb:hover {
-	background: var(--accent-primary);
+/* Open state border */
+.system-action-block[open] summary {
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* ========================================

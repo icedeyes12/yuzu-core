@@ -336,95 +336,84 @@
 	word-break: break-word;
 }
 
-/* ==================== COMMAND BADGES ==================== */
-/* Inline styled command badges for tool invocation */
-.command-badge {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.3rem;
-	background: rgba(76, 175, 80, 0.15);
-	border-left: 3px solid #4CAF50;
-	padding: 0.4rem 0.7rem;
-	margin: 0.3rem 0;
-	border-radius: 4px;
-	font-family: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
-	font-size: 0.85em;
-	color: var(--text-color);
-	white-space: pre-wrap;
-	word-break: break-word;
-}
+/* ==================== SYSTEM ACTION BLOCKS ==================== */
+/* Seamless, mobile-friendly containers for command and tool blocks */
 
-.command-badge::before {
-	content: '⚙️ ';
-	font-size: 0.9em;
-	opacity: 0.8;
-}
-
-/* Dark theme adjustments */
-[data-theme="dark"] .command-badge,
-[data-theme="stellar-night-suisei"] .command-badge,
-[data-theme="tokyonight"] .command-badge,
-[data-theme="dark-lavender"] .command-badge {
-	background: rgba(76, 175, 80, 0.1);
-	border-left-color: #66BB6A;
-}
-
-/* ==================== TOOL EXECUTION BLOCKS ==================== */
-/* Details/accordion for tool results */
-.tool-execution {
-	margin: 0.8rem 0;
-	border: 1px solid var(--border-secondary);
-	border-radius: 8px;
+.system-action-block {
+	background: rgba(255, 255, 255, 0.03);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 12px;
+	margin: 8px 0;
 	overflow: hidden;
-	background: var(--bg-secondary);
 }
 
-.tool-execution summary {
-	padding: 0.7rem 1rem;
-	background: var(--bg-tertiary);
-	cursor: pointer;
-	font-weight: 500;
-	font-size: 0.9em;
-	user-select: none;
-	list-style: none;
+.command-block {
+	border-left: 3px solid #8b5cf6; /* subtle purple */
+}
+
+.tool-result-block {
+	border-left: 3px solid #3b82f6; /* subtle blue */
+}
+
+.action-header {
 	display: flex;
 	align-items: center;
+	padding: 8px 12px;
+	background: rgba(0, 0, 0, 0.2);
+	font-size: 0.85rem;
+	color: #a1a1aa;
+	font-family: sans-serif;
+	cursor: pointer;
 	gap: 0.5rem;
 }
 
-.tool-execution summary::-webkit-details-marker {
-	display: none;
-}
-
-.tool-execution summary::before {
-	content: '🔧 ';
+.action-icon {
 	font-size: 1em;
+	opacity: 0.9;
 }
 
-.tool-execution summary:hover {
-	background: var(--bg-hover);
+.action-label {
+	font-weight: 500;
+	user-select: none;
 }
 
-.tool-execution .tool-content {
-	padding: 0.8rem 1rem;
-	max-height: 400px;
-	overflow-y: auto;
-}
-
-.tool-execution .tool-content pre {
-	margin: 0;
-	padding: 0;
-	background: transparent;
-}
-
-.tool-execution .tool-content code {
-	font-size: 0.85em;
+.action-content {
+	padding: 12px;
+	font-size: 0.85rem;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+	color: var(--text-color, #e2e8f0);
 	line-height: 1.5;
 }
 
-/* Allow images in tool content to render properly */
-.tool-execution .tool-content img {
-	max-width: 100%;
-	border-radius: 8px;
-	margin: 0.5rem 0;
+.code-font {
+	font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+	color: #e2e8f0;
+}
+
+/* Remove default focus outlines on summary */
+.system-action-block summary {
+	outline: none;
+}
+
+.system-action-block summary::-webkit-details-marker {
+	display: none;
+}
+
+.system-action-block summary::marker {
+	display: none;
+}
+
+.system-action-block summary:focus {
+	outline: none;
+}
+
+/* Hover state for tool result header */
+.tool-result-block summary:hover {
+	background: rgba(0, 0, 0, 0.3);
+}
+
+/* Open state border */
+.system-action-block[open] summary {
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }

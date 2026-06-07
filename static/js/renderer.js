@@ -542,25 +542,17 @@ class MessageRenderer {
 			const trimmedContent = content.trim();
 			if (!trimmedContent) return "";
 
-			// Extract first line for label
-			const lines = trimmedContent.split("\n");
-			const firstLine = lines[0].trim();
-			const label =
-				firstLine.length > 60
-					? `${firstLine.substring(0, 57)}...`
-					: firstLine || "Tool Execution";
+			// Escape the content for safe display
+			const escapedContent = this.escapeHtml(trimmedContent);
 
-			// Escape only the label, NOT the content
-			// Content may contain HTML (like <img> tags from image generation)
-			const escapedLabel = this.escapeHtml(label);
-			
-			// DO NOT escape content - tool output should render HTML
-			// Tool outputs come from backend and are trusted
-			const unescapedContent = trimmedContent;
-
-			// Create details element
-			// Note: 'open' attribute makes it expanded by default
-			return `<details class="tool-execution" open><summary>${escapedLabel}</summary><div class="tool-content">${unescapedContent}</div></details>`;
+			// Create semantic tool result block with vertical layout
+			return `<details class="system-action-block tool-result-block">
+				<summary class="action-header">
+					<span class="action-icon">🔧</span>
+					<span class="action-label">Result / Observation</span>
+				</summary>
+				<div class="action-content">${escapedContent}</div>
+			</details>`;
 		});
 
 		return result;
@@ -586,8 +578,14 @@ class MessageRenderer {
 			// Escape the command content for safe display
 			const escapedContent = this.escapeHtml(trimmedContent);
 
-			// Create styled command badge
-			return `<div class="command-badge" style="background: rgba(76, 175, 80, 0.15); padding: 8px 12px; border-left: 3px solid #4CAF50; margin: 8px 0; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.9em; border-radius: 4px; overflow-x: auto;"><span style="color: #4CAF50; font-weight: bold;">⚙️ Command:</span> <code style="background: none; padding: 0;">${escapedContent}</code></div>`;
+			// Create semantic command block with vertical layout (no inline styles)
+			return `<div class="system-action-block command-block">
+				<div class="action-header">
+					<span class="action-icon">⚙️</span>
+					<span class="action-label">System Action</span>
+				</div>
+				<div class="action-content code-font">${escapedContent}</div>
+			</div>`;
 		});
 
 		return result;
