@@ -535,23 +535,20 @@ class MessageRenderer {
 		const sourceText = typeof text === "string" ? text : String(text || "");
 
 		// Pattern to match <tools>...</tools> blocks (including multiline)
-		// Also handles unclosed <tools> tags during streaming
 		const toolPattern = /<tools>([\s\S]*?)(?:<\/tools>|$)/g;
 
 		const result = sourceText.replace(toolPattern, (_match, content) => {
 			const trimmedContent = content.trim();
 			if (!trimmedContent) return "";
 
-			// Escape the content for safe display
-			const escapedContent = this.escapeHtml(trimmedContent);
+			// DO NOT escape content - tool output may contain HTML like <img> tags
+			// Tool outputs come from backend and are trusted
+			const unescapedContent = trimmedContent;
 
-			// Create semantic tool result block with vertical layout
+			// Minimalist header without emojis
 			return `<details class="system-action-block tool-result-block">
-				<summary class="action-header">
-					<span class="action-icon">🔧</span>
-					<span class="action-label">Result / Observation</span>
-				</summary>
-				<div class="action-content">${escapedContent}</div>
+				<summary class="action-header">Tool</summary>
+				<div class="action-content">${unescapedContent}</div>
 			</details>`;
 		});
 
@@ -575,15 +572,12 @@ class MessageRenderer {
 			const trimmedContent = content.trim();
 			if (!trimmedContent) return "";
 
-			// Escape the command content for safe display
+			// Escape command content for safe display
 			const escapedContent = this.escapeHtml(trimmedContent);
 
-			// Create semantic command block with vertical layout (no inline styles)
+			// Minimalist header without emojis
 			return `<div class="system-action-block command-block">
-				<div class="action-header">
-					<span class="action-icon">⚙️</span>
-					<span class="action-label">System Action</span>
-				</div>
+				<div class="action-header">Command</div>
 				<div class="action-content code-font">${escapedContent}</div>
 			</div>`;
 		});

@@ -940,18 +940,18 @@
 
 .system-action-block {
 	background: rgba(255, 255, 255, 0.03);
-	border: 1px solid rgba(255, 255, 255, 0.1);
+	border: 1px solid var(--border-ai, rgba(255, 255, 255, 0.1));
 	border-radius: 12px;
 	margin: 8px 0;
 	overflow: hidden;
 }
 
 .command-block {
-	border-left: 3px solid #8b5cf6; /* subtle purple */
+	border-left: 3px solid var(--accent-secondary, #8b5cf6);
 }
 
 .tool-result-block {
-	border-left: 3px solid #3b82f6; /* subtle blue */
+	border-left: 3px solid var(--accent-primary, #3b82f6);
 }
 
 .action-header {
@@ -959,20 +959,13 @@
 	align-items: center;
 	padding: 8px 12px;
 	background: rgba(0, 0, 0, 0.2);
-	font-size: 0.85rem;
-	color: #a1a1aa;
+	font-size: 0.8rem;
+	color: var(--text-muted, #a1a1aa);
 	font-family: sans-serif;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
 	cursor: pointer;
-	gap: 0.5rem;
-}
-
-.action-icon {
-	font-size: 1em;
-	opacity: 0.9;
-}
-
-.action-label {
-	font-weight: 500;
 	user-select: none;
 }
 
@@ -986,8 +979,7 @@
 }
 
 .code-font {
-	font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
-	color: #e2e8f0;
+	font-family: "JetBrains Mono", "Fira Code", "Consolas", "Monaco", monospace;
 }
 
 /* Remove default focus outlines on summary */
@@ -1009,12 +1001,12 @@
 
 /* Hover state for tool result header */
 .tool-result-block summary:hover {
-	background: rgba(0, 0, 0, 0.3);
+	background: rgba(255, 255, 255, 0.05);
 }
 
 /* Open state border */
 .system-action-block[open] summary {
-	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	border-bottom: 1px solid var(--border-ai, rgba(255, 255, 255, 0.1));
 }
 
 /* ========================================
