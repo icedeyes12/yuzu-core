@@ -12,6 +12,73 @@ from app.logging_config import get_logger
 
 log = get_logger(__name__)
 
+# ── Token Limits ══════════════════════════════
+MAX_HISTORY_TOKENS = 6000
+
+
+
+def _estimate_tokens(text: str) -> int:
+    """Estimate token count for text.
+    
+    Uses 3 chars per token (conservative for mixed content).
+    """
+    if not text:
+        return 0
+    return len(text) // 3
+
+
+def _trim_history_to_token_limit(
+    messages: list[dict],
+    max_tokens: int = MAX_HISTORY_TOKENS,
+) -> list[dict]:
+    """Trim message history to fit within token budget.
+    
+    Starts from recent messages and works backwards,
+    keeping as many messages as fit within the limit.
+    Preserves at least last 2 messages for context.
+    
+    Args:
+        messages: List of message dicts with 'content' key
+        max_tokens: Maximum tokens allowed for history
+        
+    Returns:
+        Trimmed list of messages
+    """
+    if not messages:
+        return messages
+    
+    # Calculate total tokens
+    total_tokens = sum(_estimate_tokens(m.get('content', '')) for m in messages)
+    
+    if total_tokens <= max_tokens:
+        return messages
+    
+    # Need to trim - keep most recent messages
+    log.info(f"[Prompt] Trimming history: {total_tokens} > {max_tokens} tokens")
+    
+    trimmed = []
+    token_count = 0
+    
+    # Work backwards from most recent
+    for msg in reversed(messages):
+        msg_tokens = _estimate_tokens(msg.get('content', ''))
+        
+        # Always keep at least last 2 messages
+        if len(trimmed) < 2:
+            trimmed.insert(0, msg)
+            token_count += msg_tokens
+        elif token_count + msg_tokens <= max_tokens:
+            trimmed.insert(0, msg)
+            token_count += msg_tokens
+        else:
+            break
+    
+    log.info(
+        f"[Prompt] Trimmed: {len(messages)}->{len(trimmed)} msgs, "
+        f"{total_tokens}->{token_count} tok"
+    )
+    return trimmed
+
 
 def _format_relative_time(timestamp_str: str | None) -> str:
     """Convert ISO timestamp to human-readable relative time (timezone-aware).
@@ -465,15 +532,18 @@ async def build_messages(
         profile, session_id, interface, user_message
     )
     
-    # REDUCED LIMIT: 120 -> 80 messages (saves ~20k tokens on average)
+    # HARD CAP: Limit history to max 6000 tokens
     history = (
         await Database.get_chat_history_for_ai_async(
             session_id=session_id,
-            limit=80,  # Reduced from 120
+            limit=100,  #.Fetch more, then trim by tokens
             recent=True,
             include_image_paths=include_image_paths,
         )
     ) or []
+    
+    # Apply token-based trimming
+    history = _trim_history_to_token_limit(history, MAX_HISTORY_TOKENS)
     
     return [{"role": "system", "content": system_message}] + [
         {
