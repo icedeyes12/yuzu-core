@@ -182,6 +182,7 @@ class MessageRenderer {
 		// Check if highlight.js is available
 		if (typeof hljs !== "undefined") {
 			this.isHighlightReady = true;
+			hljs.configure({ ignoreUnescapedHTML: true });
 		} else {
 			console.warn("highlight.js not loaded");
 		}

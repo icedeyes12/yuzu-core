@@ -32,6 +32,8 @@ class MultimodalTools:
                 "moonshotai/Kimi-K2.5-TEE",
                 "moonshotai/Kimi-K2.6-TEE",
                 "Qwen/Qwen3.5-397B-A17B-TEE",
+                "zai-org/GLM-5-TEE",
+                "zai-org/GLM-5.1-TEE",
             ],
             "openrouter": ["moonshotai/kimi-k2.6"],
         }
