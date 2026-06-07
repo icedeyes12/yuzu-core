@@ -35,7 +35,7 @@ flowchart TB
     subgraph Orchestrator["orchestrator.py (Core Pipeline)"]
         O1["1. Image cache detection"]
         O2["2. LLM dispatch (llm_client.py)"]
-        O3["3. Tool-call parsing (native + legacy /command)"]
+        O3["3. Tool-call parsing (<command> tags)"]
         O4["4. Tool execution (tools/registry.py)"]
         O5["5. Synthesis pass (2nd LLM call)"]
         O6["6. Post-turn: memory pipeline + cache cleanup"]
@@ -303,8 +303,7 @@ orchestrator.handle_user_message()
     │           └─ AIProviderManager → Ollama/Cerebras/OpenRouter/Chutes
     │
     ├─► Response processing
-    │     ├─ Native tool_calls? → _execute_tool_calls() → _run_synthesis()
-    │     ├─ Legacy /command?   → execute_command()     → _run_synthesis()
+    │     ├─ <command> tag detected? → execute_tool() → _run_synthesis()
     │     └─ Plain text         → persist + return
     │
     └─► _post_turn()
@@ -331,9 +330,9 @@ orchestrator.handle_user_message_streaming()
     │     └─ YES → execute_tool → yield markdown
     │
     ├─► StreamFilter.buffering               [commands.py]
-    │     ├─ Buffer chunks until first-line /command confirmed/ruled out
+    │     ├─ Buffer chunks until <command> presence is confirmed or ruled out
     │     ├─ No command → yield chunks live
-    │     └─ Command detected → suppress command line, execute tool, stream synthesis
+    │     └─ Command detected → suppress command tag, execute tool, stream synthesis
     │
     ├─► generate_ai_response_streaming()      [llm_client.py]
     │     └─ Same message building as sync path
@@ -404,23 +403,19 @@ retrieval.retrieve_memories_combined()         [retrieval.py]
 ### 5.5 Tool Execution
 
 ```markdown
-LLM Response (text or tool_calls)
+LLM Response (contains <command> tag)
     │
-    ├─ Native tool_calls?                     [orchestrator.py]
-    │     └─ _parse_raw_tool_calls() → _execute_tool_calls()
-    │
-    ├─ Legacy /command?                       [commands.py]
-    │     └─ detect_command() → execute_command()
+    ├─ <command> tag parsed                   [commands.py]
+    │     └─ detect_command() → parse arguments
     │
     ▼
 tools.registry.execute_tool()                  [registry.py]
     │
-    ├─► Resolve alias (imagine→image_generate, request→http_request)
     ├─► Lazy-load tool module
     ├─► Inject session_id if needed
     ├─► module.execute(arguments, session_id)
     │
-    └─► Return {"ok": bool, "data": {}, "markdown": "<details>..."}
+    └─► Return {"ok": bool, "data": {}, "markdown": "<tools>...</tools>"}
           │
           ├─ Terminal tool (image_generate) → return directly
           └─ Non-terminal tool → synthesis pass (2nd LLM call)
@@ -439,28 +434,27 @@ orchestrator._cache_images_from_message()
     └─ Upload? → validate path (traversal protection)
     │
     ▼
-llm_client._apply_vision_routing()
+llm_client.generate_ai_response()
     │
-    ├─ Images detected? → Route to OpenRouter (moonshotai/kimi-k2.5)
-    └─ No images? → Use configured provider
-    │
-    ▼
-Vision analysis → attached to conversation context
+    ├─ Images detected? → Route to Vision Model (Kimi-K2.5, Gemma-4, Qwen-VL)
+    └─ multimodal.inject_vision_context()
+          └─ Two-pass global cap: Max 3 recent images across history
+          └─ is_tool_loop flag protects context eviction during internal agent loops
 ```
 
 ```markdown
-/imagine Command
+<command>image_generate "prompt"</command>
     │
     ▼
 tools.image_generate.execute()
     │
-    ├─ Chutes image API (HunYuan / Z-Turbo / Qwen)
+    ├─ Chutes image API (Qwen Image Gen)
     ├─ Save → static/generated_images/
     └─ Return markdown with image path
     │
     ▼
 visual_context.store_visual_context()
-    └─ Store base64 for 3 follow-up turns
+    └─ Store base64 for follow-up turns (lifespan counter protected by is_tool_loop)
 ```
 
 ### 5.7 Streaming State Lifecycle
@@ -664,6 +658,9 @@ Browser                                    Server
 ```
 
 The transport is stateful rather than purely request-scoped. Generation continues in a background thread, and the active `StreamManager` buffer remains available for reconnect and profile reload paths until completion or TTL expiration.
+
+### State Preservation & Re-rendering
+During SSE streaming, the DOM is incrementally updated. To prevent UI state resets (e.g., collapsed/expanded `<details>` or `<tools>` accordions snapping closed on every chunk), the frontend uses **universal index-based boolean arrays** to track the state of interactive elements. On every render tick, `renderer.js` dynamically reads the DOM and restores these boolean states. Copy button states and Highlight.js DOM bindings are also dynamically re-attached to ensure interactive consistency without full DOM thrashing.
 
 ### Rendering Pipeline
 

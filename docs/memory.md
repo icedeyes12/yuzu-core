@@ -191,9 +191,10 @@ sequenceDiagram
     SEG->>PCL: run_predict_calibrate(episode, messages)
     PCL->>LLM: PREDICT: predict_episode_content(existing_facts, title)
     LLM-->>PCL: predicted content
-    PCL->>LLM: CALIBRATE: calibrate_and_extract(predicted, actual_messages)
-    LLM-->>PCL: {fact, category, action}
-    PCL->>DB: consolidate_facts() → new | reinforce | update | invalidate
+    PCL->>LLM: CALIBRATE: calibrate_and_extract(predicted, actual_messages, with_fact_ids)
+    LLM-->>PCL: Markdown containing JSON: [{fact, category, action, fact_id}]
+    PCL->>PCL: strip_markdown_fences_and_parse()
+    PCL->>DB: consolidate_facts() → new | reinforce (by fact_id) | update (by fact_id) | invalidate (by fact_id)
     DB-->>PCL: applied
     PCL->>DB: Mark episode consolidated_at=NOW()
 ```
@@ -203,9 +204,12 @@ sequenceDiagram
 | Action | When | Behavior |
 | --- | --- | --- |
 | `new` | No duplicate found | Insert with embedding + source_episodic_ids |
-| `reinforce` | Duplicate (cosine distance &lt; 0.05) | Append to source_episodic_ids, bump confidence |
-| `update` | Same fact, new nuance | Invalidate old, insert new version |
-| `invalidate` | Contradicted | Set invalid_at=NOW() on old fact |
+| `reinforce` | Duplicate/Strengthen existing fact | Requires valid `fact_id`. Appends to source_episodic_ids, bumps confidence |
+| `update` | Same fact, new nuance | Requires valid `fact_id`. Invalidates old, inserts new version referencing the old fact |
+| `invalidate` | Contradicted | Requires valid `fact_id`. Sets invalid_at=NOW() on old fact |
+
+### JSON Extraction from Markdown
+The PCL pipeline enforces stable JSON parsing by stripping markdown fences (e.g., ` ```json ` blocks) from the LLM's response before deserialization, ensuring reliable fact extraction even if the model hallucinates formatting.
 
 ### 8-Category Taxonomy
 

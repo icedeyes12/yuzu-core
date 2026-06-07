@@ -55,11 +55,19 @@ Business logic extracted from endpoints into `app/services/`:
 ```
 1. Image cache detection
 2. LLM dispatch (app/llm_client.py)
-3. Tool-call parsing (app/commands.py)
+3. Tool-call parsing (<command> tags via app/commands.py)
 4. Tool execution (app/tools/registry.py)
 5. Synthesis pass (2nd LLM call)
-6. Post-turn: memory pipeline + cache cleanup
+6. Post-turn: async memory pipeline + cache cleanup
 ```
+
+## Concurrency Guidelines (Async-Native)
+
+Following recent refactors, Yuzu-Companion mandates strict async-native patterns to avoid event loop blocking and deadlocks:
+
+1. **No nested `asyncio.run()`**: Do not spin up isolated event loops. Use `async/await` naturally down the call stack.
+2. **Lazy Semaphores**: If limiting concurrency, use `asyncio.Semaphore`. Initialize them lazily inside the event loop (e.g., inside an async method or factory) rather than globally, to prevent cross-loop attachment errors.
+3. **Database Access**: Use `AsyncPgSession` from `app/db/connection.py` for all I/O bound queries.
 
 ## What Was Removed
 
