@@ -135,11 +135,11 @@ def _apply_vision_routing(
 
 
 def _inject_persistent_visual(
-    messages: list[dict[str, Any]], user_message: str, session_id: int | None
+    messages: list[dict[str, Any]], user_message: str, session_id: int | None, is_tool_loop: bool = False
 ) -> None:
     if not (session_id and has_visual_reference(user_message)):
         return
-    prev_b64, prev_mime = consume_visual_context(session_id)
+    prev_b64, prev_mime = consume_visual_context(session_id, is_tool_loop=is_tool_loop)
     if not (prev_b64 and prev_mime):
         return
     messages.append(
@@ -273,6 +273,7 @@ async def generate_ai_response(
     session_id: int | None = None,
     image_content_for_context: list[dict[str, Any]] | None = None,
     ephemeral_context: list[dict[str, str]] | None = None,
+    is_tool_loop: bool = False,
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single (text, raw_response) AI generation pass.
 
@@ -329,7 +330,7 @@ async def generate_ai_response(
             }
         )
 
-    _inject_persistent_visual(messages, user_message, session_id)
+    _inject_persistent_visual(messages, user_message, session_id, is_tool_loop=is_tool_loop)
 
     text, raw = await _send_to_provider(
         provider,
@@ -401,6 +402,7 @@ async def generate_ai_response_streaming(
     model: str | None = None,
     image_content_for_context: list[dict[str, Any]] | None = None,
     ephemeral_context: list[dict[str, str]] | None = None,
+    is_tool_loop: bool = False,
 ) -> AsyncIterator[str]:
     """Stream a response from the configured provider chunk by chunk.
 
@@ -456,7 +458,7 @@ async def generate_ai_response_streaming(
             }
         )
 
-    _inject_persistent_visual(messages, user_message, session_id)
+    _inject_persistent_visual(messages, user_message, session_id, is_tool_loop=is_tool_loop)
 
     async for chunk in _stream_from_provider(
         resolved_provider,

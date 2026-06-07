@@ -348,6 +348,7 @@ async def _run_synthesis_async(
         session_id,
         image_content_for_context=image_context,
         ephemeral_context=ephemeral_context,
+        is_tool_loop=True,
     )
     if not text or not text.strip():
         return None
@@ -377,6 +378,7 @@ async def _stream_synthesis_async(
         session_id,
         image_content_for_context=image_context,
         ephemeral_context=ephemeral_context,
+        is_tool_loop=True,
     ):
         yield chunk
 

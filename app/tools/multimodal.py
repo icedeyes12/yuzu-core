@@ -673,6 +673,25 @@ class MultimodalTools:
         if not self.is_vision_model(current_model):
             return messages
 
+        # Phase 1: Determine the 3 most recent valid image paths globally across history
+        allowed_global_paths = []
+        for msg in reversed(messages):
+            role = msg.get("role")
+            image_paths = msg.get("image_paths")
+
+            if role == "user" and image_paths:
+                # We defer processing to a second pass, just keeping track of paths
+                for path in reversed(image_paths):
+                    if os.path.exists(path) and path not in allowed_global_paths:
+                        allowed_global_paths.append(path)
+                        if len(allowed_global_paths) >= 3:
+                            break
+            if len(allowed_global_paths) >= 3:
+                break
+
+        # Convert back to a set for fast lookup
+        allowed_path_set = set(allowed_global_paths)
+
         new_messages = []
         for msg in messages:
             role = msg.get("role")
@@ -698,7 +717,7 @@ class MultimodalTools:
                 for path in image_paths:
                     if not os.path.exists(path):
                         missing_placeholders.append(f"[Image file unavailable: {path}]")
-                    else:
+                    elif path in allowed_path_set:
                         valid_paths.append(path)
 
                 if missing_placeholders:

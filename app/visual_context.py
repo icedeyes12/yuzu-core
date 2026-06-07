@@ -26,8 +26,8 @@ def store_visual_context(session_id: int, image_base64: str, mime: str) -> None:
         }
 
 
-def consume_visual_context(session_id: int) -> tuple[str | None, str | None]:
-    """Return stored visual context if available and decrement turn counter.
+def consume_visual_context(session_id: int, is_tool_loop: bool = False) -> tuple[str | None, str | None]:
+    """Return stored visual context if available and conditionally decrement turn counter.
 
     Returns (base64, mime) or (None, None). Thread-safe.
     """
@@ -36,7 +36,10 @@ def consume_visual_context(session_id: int) -> tuple[str | None, str | None]:
         if not ctx or ctx["turns_left"] <= 0:
             _visual_context_buffer.pop(session_id, None)
             return None, None
-        ctx["turns_left"] -= 1
+        
+        if not is_tool_loop:
+            ctx["turns_left"] -= 1
+            
         if ctx["turns_left"] <= 0:
             _visual_context_buffer.pop(session_id, None)
         return ctx["base64"], ctx["mime"]
