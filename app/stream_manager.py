@@ -169,6 +169,38 @@ class StreamBuffer:
         if q in self.queues:
             self.queues.remove(q)
 
+    def get_checksum(self) -> str:
+        """Return checksum of full_content for integrity validation.
+        
+        Uses xxhash if available, falls back to hash() for simplicity.
+        MiRO: Informational - this checksum allows frontend to validate its buffer.
+        """
+        if not self.full_content:
+            return ""
+        
+        try:
+            import hashlib
+            # SHA-256 untuk integrity check (first 16 chars only for compactness)
+            return hashlib.sha256(self.full_content.encode('utf-8')).hexdigest()[:16]
+        except Exception:
+            return str(hash(self.full_content))[:16]
+
+    def get_status(self) -> dict:
+        """Return stream status for API endpoint.
+        
+        Informational: Provides buffer state for frontend sync validation.
+        """
+        return {
+            "session_id": self.session_id,
+            "is_finished": self.is_finished,
+            "is_error": self.error is not None,
+            "error": self.error,
+            "buffer_length": len(self.full_content),
+            "checksum": self.get_checksum(),
+            "started_at": self.start_time,
+            "last_activity": self.last_activity,
+        }
+
 
 class StreamManager:
     """Global manager for active streams.

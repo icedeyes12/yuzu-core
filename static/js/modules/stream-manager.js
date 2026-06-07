@@ -7,6 +7,8 @@
  *
  * Key principle: The stream never stops buffering just because we switched sessions.
  * The activeViewSessionId determines which session's buffer gets rendered to DOM.
+ * 
+ * SYNC MECHANISM: After stream completes, frontend syncs with backend to validate integrity.
  */
 export class BackgroundStreamManager {
 	constructor() {
@@ -19,6 +21,7 @@ export class BackgroundStreamManager {
 		// }
 		this.streams = new Map();
 		this.activeViewSessionId = null; // Which session is currently visible in DOM
+		this._listeners = new Map(); // Event emitter for sync notifications
 	}
 
 	/**
@@ -87,6 +90,9 @@ export class BackgroundStreamManager {
 			stream.isActive = false;
 			stream.isComplete = true;
 			console.log(`[StreamManager] Completed stream for session ${sessionId}`);
+			
+			// BACKGROUND SYNC: Validate buffer after completion
+			this.syncWithBackend(sessionId);
 		}
 	}
 
@@ -150,6 +156,92 @@ export class BackgroundStreamManager {
 			if (stream.isActive) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Background sync: Validate frontend buffer against backend after stream completion.
+	 * This ensures frontend optimistic rendering matches backend's single source of truth.
+	 * @param {number} sessionId - Session ID
+	 * @returns {Promise<{valid: boolean, checksum: string, backend_length: number}>}
+	 */
+	async syncWithBackend(sessionId) {
+		try {
+			const response = await fetch(`/api/stream/${sessionId}/sync`);
+			if (!response.ok) {
+				console.warn(`[StreamManager] Sync failed for session ${sessionId}: HTTP ${response.status}`);
+				return { valid: false };
+			}
+
+			const data = await response.json();
+			const stream = this.streams.get(sessionId);
+
+			if (stream && stream.buffer) {
+				// Generate checksum from frontend
+				const frontendChecksum = await this.generateChecksum(stream.buffer);
+				const valid = frontendChecksum === data.checksum;
+
+				console.log(
+					`[StreamManager] Sync ${valid ? '✓' : '✗'} for session ${sessionId}`,
+					`frontend: ${stream.buffer.length} chars, backend: ${data.length} chars`
+				);
+
+				// If mismatch, replace with backend version
+				if (!valid && data.content) {
+					console.warn(`[StreamManager] Buffer mismatch, replacing with backend version`);
+					stream.buffer = data.content;
+					// Trigger re-render if this is active view
+					if (sessionId === this.activeViewSessionId) {
+						this.emit('resync', sessionId, data.content);
+					}
+				}
+
+				return { 
+					valid,
+					checksum: data.checksum,
+					backend_length: data.length
+				};
+			}
+
+			return { valid: false };
+		} catch (error) {
+			console.error(`[StreamManager] Sync error:`, error);
+			return { valid: false };
+		}
+	}
+
+	/**
+	 * Generate checksum for buffer validation.
+	 * Uses SHA-256 via Web Crypto API, returns first 16 hex chars.
+	 * @param {string} content - Content to hash
+	 * @returns {Promise<string>} Checksum string
+	 */
+	async generateChecksum(content) {
+		try {
+			const encoder = new TextEncoder();
+			const data = encoder.encode(content);
+			const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+			const hashArray = Array.from(new Uint8Array(hashBuffer));
+			const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+			return hashHex.substring(0, 16); // First 16 chars only
+		} catch (error) {
+			console.error('[StreamManager] Checksum error:', error);
+			return '';
+		}
+	}
+
+	/**
+	 * Event emitter for sync notifications.
+	 */
+	on(event, callback) {
+		if (!this._listeners.has(event)) {
+			this._listeners.set(event, []);
+		}
+		this._listeners.get(event).push(callback);
+	}
+
+	emit(event, ...args) {
+		const callbacks = this._listeners.get(event) || [];
+		callbacks.forEach(cb => cb(...args));
 	}
 }
 
