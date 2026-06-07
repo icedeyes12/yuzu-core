@@ -550,13 +550,44 @@ class MessageRenderer {
 					? `${firstLine.substring(0, 57)}...`
 					: firstLine || "Tool Execution";
 
-			// Escape content for HTML
+			// Escape only the label, NOT the content
+			// Content may contain HTML (like <img> tags from image generation)
 			const escapedLabel = this.escapeHtml(label);
-			const escapedContent = this.escapeHtml(trimmedContent);
+			
+			// DO NOT escape content - tool output should render HTML
+			// Tool outputs come from backend and are trusted
+			const unescapedContent = trimmedContent;
 
 			// Create details element
 			// Note: 'open' attribute makes it expanded by default
-			return `<details class="tool-execution" open><summary>${escapedLabel}</summary><div class="tool-content"><pre><code>${escapedContent}</code></pre></div></details>`;
+			return `<details class="tool-execution" open><summary>${escapedLabel}</summary><div class="tool-content">${unescapedContent}</div></details>`;
+		});
+
+		return result;
+	}
+
+	/**
+	 * Preprocess <command>...</command> blocks into styled UI badges.
+	 * CRITICAL: This must run BEFORE marked.js to prevent tag stripping.
+	 * @param {string} text - Raw markdown text
+	 * @returns {string} Text with command blocks converted to styled HTML
+	 */
+	preprocessCommandBlocks(text) {
+		if (!text) return text;
+		const sourceText = typeof text === "string" ? text : String(text || "");
+
+		// Pattern to match <command>...</command> blocks
+		const commandPattern = /<command>([\s\S]*?)<\/command>/g;
+
+		const result = sourceText.replace(commandPattern, (_match, content) => {
+			const trimmedContent = content.trim();
+			if (!trimmedContent) return "";
+
+			// Escape the command content for safe display
+			const escapedContent = this.escapeHtml(trimmedContent);
+
+			// Create styled command badge
+			return `<div class="command-badge" style="background: rgba(76, 175, 80, 0.15); padding: 8px 12px; border-left: 3px solid #4CAF50; margin: 8px 0; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.9em; border-radius: 4px; overflow-x: auto;"><span style="color: #4CAF50; font-weight: bold;">⚙️ Command:</span> <code style="background: none; padding: 0;">${escapedContent}</code></div>`;
 		});
 
 		return result;
@@ -821,8 +852,11 @@ class MessageRenderer {
 		}
 
 		try {
-			// PRE-PROCESS: Handle <tool> blocks BEFORE markdown parsing
-			let processedMarkdown = this.preprocessToolBlocks(safeMarkdown);
+			// PRE-PROCESS: Handle <command> blocks FIRST (before markdown)
+			let processedMarkdown = this.preprocessCommandBlocks(safeMarkdown);
+
+			// PRE-PROCESS: Handle <tools> blocks
+			processedMarkdown = this.preprocessToolBlocks(processedMarkdown);
 
 			// PRE-PROCESS: Handle cognitive trace blocks (think, analysis, decision)
 			processedMarkdown = this.preprocessCognitiveBlocks(processedMarkdown);
