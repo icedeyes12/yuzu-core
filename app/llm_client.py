@@ -135,7 +135,10 @@ def _apply_vision_routing(
 
 
 def _inject_persistent_visual(
-    messages: list[dict[str, Any]], user_message: str, session_id: int | None, is_tool_loop: bool = False
+    messages: list[dict[str, Any]],
+    user_message: str,
+    session_id: int | None,
+    is_tool_loop: bool = False,
 ) -> None:
     if not (session_id and has_visual_reference(user_message)):
         return
@@ -330,7 +333,9 @@ async def generate_ai_response(
             }
         )
 
-    _inject_persistent_visual(messages, user_message, session_id, is_tool_loop=is_tool_loop)
+    _inject_persistent_visual(
+        messages, user_message, session_id, is_tool_loop=is_tool_loop
+    )
 
     text, raw = await _send_to_provider(
         provider,
@@ -458,7 +463,9 @@ async def generate_ai_response_streaming(
             }
         )
 
-    _inject_persistent_visual(messages, user_message, session_id, is_tool_loop=is_tool_loop)
+    _inject_persistent_visual(
+        messages, user_message, session_id, is_tool_loop=is_tool_loop
+    )
 
     async for chunk in _stream_from_provider(
         resolved_provider,
