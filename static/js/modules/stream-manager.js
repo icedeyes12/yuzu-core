@@ -85,6 +85,12 @@ export class BackgroundStreamManager {
 	 * @param {number} sessionId - Session ID
 	 */
 	completeStream(sessionId) {
+		// GUARD: Prevent operations on invalid sessionId
+		if (!sessionId || sessionId === "null" || sessionId === "undefined") {
+			console.warn("[StreamManager] Complete stream aborted: Invalid session ID", sessionId);
+			return;
+		}
+
 		const stream = this.streams.get(sessionId);
 		if (stream) {
 			stream.isActive = false;
@@ -165,6 +171,12 @@ export class BackgroundStreamManager {
 	 * @returns {Promise<{valid: boolean, checksum: string, backend_length: number}>}
 	 */
 	async syncWithBackend(sessionId) {
+		// GUARD: Prevent API calls with invalid sessionId
+		if (!sessionId || sessionId === "null" || sessionId === "undefined") {
+			console.warn("[StreamManager] Sync aborted: Invalid session ID", sessionId);
+			return { valid: false };
+		}
+
 		try {
 			const response = await fetch(`/api/stream/${sessionId}/sync`);
 			if (!response.ok) {

@@ -3,7 +3,8 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Path
+from typing import Optional
 
 from app.stream_manager import StreamManager
 from app.logging_config import get_logger
@@ -14,55 +15,67 @@ router = APIRouter(prefix="/stream", tags=["stream"])
 
 
 @router.get("/{session_id}/status")
-async def get_stream_status(session_id: int):
-    """Get stream buffer status for frontend sync validation.
-    
-    Informational: Returns buffer state to allow frontend validation.
-    Frontend can call this after stream completion to verify integrity.
-    
-    Returns:
-        - is_finished: bool - Stream completed
-        - is_error: bool - Stream encountered error
-        - buffer_length: int - Character count
-        - checksum: str - SHA-256 hash (first 16 chars)
-        - last_activity: float - Unix timestamp
-    """
-    stream = await StreamManager.get_stream(session_id)
-    
-    if not stream:
-        raise HTTPException(status_code=404, detail="Stream not found")
-    
-    return stream.get_status()
+async def get_stream_status(
+	session_id: int = Path(..., description="Session ID", ge=1)
+):
+	"""Get current stream status and buffer state for a session.
+	
+	Used by frontend to check if stream is still active or completed.
+	"""
+	try:
+		stream = await StreamManager.get_stream(session_id)
+		
+		if not stream:
+			return {
+				"active": False,
+				"completed": False,
+				"length": 0,
+				"error": "No active stream for this session"
+			}
+		
+		return {
+			"active": not stream.is_finished,
+			"completed": stream.is_finished,
+			"length": len(stream.full_content),
+			"has_error": stream.error is not None,
+		}
+	
+	except Exception as e:
+		log.error(f"[StreamAPI] Status check failed for session {session_id}: {e}")
+		raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{session_id}/sync")
-async def sync_stream_buffer(session_id: int):
-    """Sync with backend stream buffer for integrity validation.
-    
-    Informational: Called by frontend after stream completes to validate
-    that its local buffer matches backend's canonical buffer.
-    
-    Frontend should:
-    1. Wait for stream completion
-    2. Call this endpoint
-    3. Compare checksums
-    4. If mismatch, reload from DB
-    
-    Returns:
-        - full_content: str - Complete buffered text
-        - checksum: str - Hash for validation
-        - buffer_length: int - Character count
-    """
-    stream = await StreamManager.get_stream(session_id)
-    
-    if not stream:
-        raise HTTPException(status_code=404, detail="Stream not found")
-    
-    if not stream.is_finished:
-        raise HTTPException(status_code=400, detail="Stream still active")
-    
-    return {
-        "full_content": stream.full_content,
-        "checksum": stream.get_checksum(),
-        "buffer_length": len(stream.full_content),
-    }
+async def sync_stream_buffer(
+	session_id: int = Path(..., description="Session ID", ge=1)
+):
+	"""Sync frontend buffer with backend and return validation checksum.
+	
+	Used after stream completion to ensure frontend buffer matches backend.
+	If mismatch detected, frontend can request full content replacement.
+	"""
+	try:
+		stream = await StreamManager.get_stream(session_id)
+		
+		if not stream:
+			return {
+				"valid": False,
+				"error": "No stream found for this session",
+				"length": 0,
+				"checksum": ""
+			}
+		
+		# Get backend checksum and length
+		checksum = stream.get_checksum()
+		length = len(stream.full_content)
+		
+		return {
+			"valid": True,
+			"length": length,
+			"checksum": checksum,
+			"completed": stream.is_finished,
+		}
+	
+	except Exception as e:
+		log.error(f"[StreamAPI] Sync failed for session {session_id}: {e}")
+		raise HTTPException(status_code=500, detail="Internal server error")

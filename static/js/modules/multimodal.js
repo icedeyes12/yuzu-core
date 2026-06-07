@@ -196,8 +196,17 @@ export class MultimodalManager {
 				return;
 			}
 
-			// [CRITICAL] Get session ID and track it
+			// [CRITICAL] Get session ID and validate it
 			const sessionId = router.currentSessionId;
+			
+			// GUARD: Prevent streaming without valid session
+			if (!sessionId || sessionId === "null" || sessionId === "undefined") {
+				console.error("[Multimodal] Cannot send message: Invalid session ID", sessionId);
+				setIsProcessingMessage(false);
+				this.setSendButtonState("ready");
+				return;
+			}
+			
 			backgroundStreams.setActiveView(sessionId);
 
 			// [FIX] Check if there's already an active stream for this session
