@@ -127,48 +127,49 @@ async def _get_cached_memory_state_async(session_id: int) -> dict:
 
 async def _try_set_fence_async(session_id: int, fence_count: int) -> bool:
     """Atomically set fence for a session (async).
-    
+
     CRITICAL: Uses database-level locking to prevent race conditions.
     Only one pipeline can be active per session at a time.
     """
     now = datetime.now()
-    
+
     # Get current state with FOR UPDATE lock
     state = await pg_fetchone_async(
-        "SELECT memory_state FROM chat_sessions WHERE id = %s FOR UPDATE",
-        (session_id,)
+        "SELECT memory_state FROM chat_sessions WHERE id = %s FOR UPDATE", (session_id,)
     )
-    
+
     if not state:
         return False
-    
+
     ms = state.get("memory_state") or {}
-    
+
     existing_count = ms.get("in_progress_fence_count")
     existing_since = ms.get("in_progress_fence_since")
-    
+
     if existing_count is not None and existing_since is not None:
         try:
             existing_dt = datetime.fromisoformat(existing_since)
             age = now - existing_dt
             if age <= timedelta(minutes=FENCE_TTL_MINUTES):
                 # Active fence exists - reject
-                logger.debug(f"Fence active for session {session_id}, age={age.seconds}s")
+                logger.debug(
+                    f"Fence active for session {session_id}, age={age.seconds}s"
+                )
                 return False
             # Fence is stale - clear it
             logger.info(f"Clearing stale fence for session {session_id}")
         except (ValueError, TypeError):
             pass
-    
+
     # Set new fence atomically
     ms["in_progress_fence_count"] = fence_count
     ms["in_progress_fence_since"] = now.isoformat()
-    
+
     await pg_execute_async(
         "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s",
         (json.dumps(ms), datetime.now(), session_id),
     )
-    
+
     logger.debug(f"Fence acquired for session {session_id}, count={fence_count}")
     return True
 
@@ -177,22 +178,21 @@ async def _clear_fence_async(session_id: int) -> None:
     """Clear fence atomically (async)."""
     # Get current state with FOR UPDATE lock
     state = await pg_fetchone_async(
-        "SELECT memory_state FROM chat_sessions WHERE id = %s FOR UPDATE",
-        (session_id,)
+        "SELECT memory_state FROM chat_sessions WHERE id = %s FOR UPDATE", (session_id,)
     )
-    
+
     if not state:
         return
-    
+
     ms = state.get("memory_state") or {}
     ms["in_progress_fence_count"] = None
     ms["in_progress_fence_since"] = None
-    
+
     await pg_execute_async(
         "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s",
         (json.dumps(ms), datetime.now(), session_id),
     )
-    
+
     logger.debug(f"Fence cleared for session {session_id}")
 
 
@@ -201,10 +201,10 @@ async def _is_fence_active_async(session_id: int) -> bool:
     state = await _get_cached_memory_state_async(session_id)
     existing_count = state.get("in_progress_fence_count")
     existing_since = state.get("in_progress_fence_since")
-    
+
     if existing_count is None or existing_since is None:
         return False
-    
+
     try:
         existing_dt = datetime.fromisoformat(existing_since)
         age = datetime.now() - existing_dt

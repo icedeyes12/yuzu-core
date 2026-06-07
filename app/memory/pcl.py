@@ -445,7 +445,9 @@ async def consolidate_facts_async(
                 counts["updated"] += 1
             except Exception as e:
                 # DUPLICATE FIX: Log and continue instead of silently passing
-                logger.warning(f"CONSOLIDATE update failed for source_id={source_id}: {e}")
+                logger.warning(
+                    f"CONSOLIDATE update failed for source_id={source_id}: {e}"
+                )
                 continue
 
         elif action == "reinforce" and source_id:
@@ -470,7 +472,9 @@ async def consolidate_facts_async(
                     counts["reinforced"] += 1
             except Exception as e:
                 # DUPLICATE FIX: Log and continue instead of silently passing
-                logger.warning(f"CONSOLIDATE reinforce failed for source_id={source_id}: {e}")
+                logger.warning(
+                    f"CONSOLIDATE reinforce failed for source_id={source_id}: {e}"
+                )
                 continue
 
         else:  # action == "new"
@@ -481,7 +485,9 @@ async def consolidate_facts_async(
                 counts["new"] += 1
             except Exception as e:
                 # DUPLICATE FIX: Log and continue instead of silently passing
-                logger.warning(f"CONSOLIDATE new failed for fact: {fact_text[:50]}: {e}")
+                logger.warning(
+                    f"CONSOLIDATE new failed for fact: {fact_text[:50]}: {e}"
+                )
                 continue
 
     return counts

@@ -561,17 +561,19 @@ async def handle_user_message(user_message: str, interface: str = "terminal") ->
 
 class StreamFence:
     """Prevents race conditions between user message persistence and stream completion.
-    
+
     Each stream gets a unique fence ID that must be cleared after successful completion.
     Abandoned fences expire after timeout to prevent deadlocks.
     """
+
     _fences: dict[int, dict[str, Any]] = {}  # session_id -> fence_info
     _lock = asyncio.Lock()
-    
+
     @classmethod
     async def acquire(cls, session_id: int, user_msg_id: int) -> str:
         """Acquire a fence for a streaming session. Returns fence_id."""
         import uuid
+
         fence_id = str(uuid.uuid4())[:8]
         async with cls._lock:
             cls._fences[session_id] = {
@@ -581,7 +583,7 @@ class StreamFence:
                 "completed": False,
             }
         return fence_id
-    
+
     @classmethod
     async def complete(cls, session_id: int, fence_id: str) -> bool:
         """Mark fence as completed, allowing persistence."""
@@ -592,31 +594,32 @@ class StreamFence:
                     fence["completed"] = True
                     return True
         return False
-    
+
     @classmethod
     async def is_completed(cls, session_id: int) -> bool:
         """Check if fence is completed or expired."""
         async with cls._lock:
             if session_id not in cls._fences:
                 return True  # No fence = already cleared
-            
+
             fence = cls._fences[session_id]
             elapsed = asyncio.get_event_loop().time() - fence["acquired_at"]
-            
+
             # If completed or expired, clear it
             if fence["completed"] or elapsed > _STREAM_FENCE_TIMEOUT:
                 del cls._fences[session_id]
                 return True
-            
+
             return False
-    
+
     @classmethod
     async def cleanup_expired(cls) -> None:
         """Remove all expired fences."""
         async with cls._lock:
             now = asyncio.get_event_loop().time()
             expired = [
-                sid for sid, fence in cls._fences.items()
+                sid
+                for sid, fence in cls._fences.items()
                 if now - fence["acquired_at"] > _STREAM_FENCE_TIMEOUT
             ]
             for sid in expired:
@@ -633,7 +636,7 @@ async def handle_user_message_streaming(
     image_paths: list[str] | None = None,
 ) -> AsyncIterator[str]:
     """Streaming entrypoint (async) with fence protection.
-    
+
     FENCE PROTECTION: Wraps user message persistence in a fence to prevent
     ghost turns if stream is interrupted before completion.
     """

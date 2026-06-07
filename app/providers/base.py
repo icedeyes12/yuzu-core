@@ -37,19 +37,21 @@ _SEMAPHORE_LOOPS: dict[str, int] = {}  # semaphore_key -> loop_id
 
 async def _get_provider_semaphore_async(provider: str) -> asyncio.Semaphore:
     """Get or create a semaphore for a specific provider (async).
-    
+
     CRITICAL: Creates semaphore in current event loop to prevent cross-loop binding.
     If the event loop changed (e.g., after FastAPI reload), recreate the semaphore.
     """
     current_loop_id = id(asyncio.get_event_loop())
-    
+
     # Check if semaphore exists and belongs to current loop
     if provider in _PROVIDER_SEMAPHORES:
         if _SEMAPHORE_LOOPS.get(provider) == current_loop_id:
             return _PROVIDER_SEMAPHORES[provider]
         # Loop changed - recreate semaphore
-        logger.debug(f"[RateLimit] Event loop changed for {provider}, recreating semaphore")
-    
+        logger.debug(
+            f"[RateLimit] Event loop changed for {provider}, recreating semaphore"
+        )
+
     # Create new semaphore in current loop
     _PROVIDER_SEMAPHORES[provider] = asyncio.Semaphore(1)
     _SEMAPHORE_LOOPS[provider] = current_loop_id
@@ -58,18 +60,20 @@ async def _get_provider_semaphore_async(provider: str) -> asyncio.Semaphore:
 
 async def _get_model_semaphore_async(model: str) -> asyncio.Semaphore:
     """Get or create a semaphore for a specific model (async).
-    
+
     CRITICAL: Creates semaphore in current event loop to prevent cross-loop binding.
     """
     current_loop_id = id(asyncio.get_event_loop())
     sem_key = f"model:{model}"
-    
+
     if sem_key in _MODEL_SEMAPHORES:
         if _SEMAPHORE_LOOPS.get(sem_key) == current_loop_id:
             return _MODEL_SEMAPHORES[sem_key]
         # Loop changed - recreate semaphore
-        logger.debug(f"[RateLimit] Event loop changed for model {model}, recreating semaphore")
-    
+        logger.debug(
+            f"[RateLimit] Event loop changed for model {model}, recreating semaphore"
+        )
+
     _MODEL_SEMAPHORES[model] = asyncio.Semaphore(1)
     _SEMAPHORE_LOOPS[sem_key] = current_loop_id
     return _MODEL_SEMAPHORES[model]
