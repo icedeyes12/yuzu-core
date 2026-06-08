@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 TOOL_DEFINITION = ToolDefinition(
     name="memory_search",
     description="Search the user's stored memories and facts across all categories. "
-                "Returns relevant memories ranked by relevance.",
+    "Returns relevant memories ranked by relevance.",
     role="memory_search_tools",
     parameters=[
         ToolParam(
@@ -27,12 +27,12 @@ TOOL_DEFINITION = ToolDefinition(
 )
 
 
-def execute(arguments, **kwargs):
+async def execute(arguments, **kwargs):
     session_id = kwargs.get("session_id")
-    from app.database import get_profile
-    from app.memory.retrieval import retrieve_memory, format_memory
+    from app.db import Database
+    from app.memory.retrieval import retrieve_memory_async, format_memory
 
-    profile = get_profile() or {}
+    profile = await Database.get_profile_async() or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     query = arguments.get("query", "") or ""
@@ -47,7 +47,7 @@ def execute(arguments, **kwargs):
         )
 
     try:
-        memory_bundle = retrieve_memory(session_id=session_id, query=query)
+        memory_bundle = await retrieve_memory_async(session_id=session_id, query=query)
     except Exception as e:
         logger.warning(f"[memory_search] Retrieval failed: {e}")
         return error_result(

@@ -1,75 +1,197 @@
 # FILE: tests/test_commands.py
 # DESCRIPTION: Pure-function tests for app.commands.
+#              Tests the <command>...</command> protocol parser.
 
 from __future__ import annotations
 
 from app.commands import (
-    detect_command,
-    extract_markdown_image_path,
-    is_markdown_image_shortcut,
+    execute_commands,
+    format_observation,
+    has_tool_blocks,
     parse_image_path,
+    parse_tool_blocks,
 )
 
 
-class TestDetectCommand:
-    def test_returns_none_for_empty(self):
-        assert detect_command("") is None
-        assert detect_command(None) is None
-        assert detect_command("   \n  ") is None
+class TestParseToolBlocks:
+    """Tests for the core <command> block parser."""
 
-    def test_returns_none_when_no_leading_slash(self):
-        assert detect_command("hello there") is None
-        # Note: leading whitespace is stripped by .strip(), so this IS a command
-        result = detect_command("  /imagine cat")
-        assert result == {"command": "imagine", "args": "cat", "full_command": "/imagine cat"}
+    def test_empty_text(self):
+        commands, clean_text = parse_tool_blocks("")
+        assert commands == []
+        assert clean_text == ""
 
-    def test_parses_command_without_args(self):
-        result = detect_command("/help")
-        assert result == {"command": "help", "args": "", "full_command": "/help"}
+    def test_no_tool_blocks(self):
+        text = "Hello there, this is just plain text.\nNo tools here."
+        commands, clean_text = parse_tool_blocks(text)
+        assert commands == []
+        assert "Hello there" in clean_text
+        assert "No tools here" in clean_text
 
-    def test_parses_command_with_args(self):
-        result = detect_command("/imagine a fluffy cat\nrest of response")
-        assert result == {
-            "command": "imagine",
-            "args": "a fluffy cat",
-            "full_command": "/imagine a fluffy cat",
-        }
+    def test_single_tool_block(self):
+        text = """Baik saya cek dulu
+<command>
+ls -la
+</command>
+Mari tunggu hasilnya"""
+        commands, clean_text = parse_tool_blocks(text)
+        assert commands == ["ls -la"]
+        assert "Baik saya cek dulu" in clean_text
+        assert "Mari tunggu hasilnya" in clean_text
+        assert "<command>" not in clean_text
+        assert "</command>" not in clean_text
 
-    def test_only_inspects_first_line(self):
-        text = "hello\n/imagine cat"
-        assert detect_command(text) is None
+    def test_multiple_tool_blocks(self):
+        text = """<command>
+echo "hello"
+</command>
+<command>
+pwd
+</command>
+<command>
+ls
+</command>"""
+        commands, clean_text = parse_tool_blocks(text)
+        assert len(commands) == 3
+        assert commands[0] == 'echo "hello"'
+        assert commands[1] == "pwd"
+        assert commands[2] == "ls"
+
+    def test_max_three_tool_blocks(self):
+        """More than 3 tool blocks should be ignored."""
+        text = """<command>cmd1</command>
+<command>cmd2</command>
+<command>cmd3</command>
+<command>cmd4</command>
+<command>cmd5</command>"""
+        commands, clean_text = parse_tool_blocks(text)
+        assert len(commands) == 3
+        assert commands == ["cmd1", "cmd2", "cmd3"]
+
+    def test_empty_tool_block_ignored(self):
+        text = """<command>
+   
+</command>
+<command>
+echo "real"
+</command>"""
+        commands, clean_text = parse_tool_blocks(text)
+        assert len(commands) == 1
+        assert commands[0] == 'echo "real"'
+
+    def test_multiline_command(self):
+        text = """<command>
+for i in 1 2 3; do
+    echo $i
+done
+</command>"""
+        commands, clean_text = parse_tool_blocks(text)
+        assert len(commands) == 1
+        assert "for i in 1 2 3" in commands[0]
+        assert "echo $i" in commands[0]
+
+    def test_whitespace_stripped(self):
+        text = """<command>
+   
+   ls -la   
+   
+</command>"""
+        commands, clean_text = parse_tool_blocks(text)
+        assert commands == ["ls -la"]
+
+    def test_preserves_conversational_text(self):
+        text = """Baik saya akan cek filenya.
+
+<command>
+cat config.json
+</command>
+
+Ini hasilnya ya."""
+        commands, clean_text = parse_tool_blocks(text)
+        assert commands == ["cat config.json"]
+        assert "Baik saya akan cek filenya" in clean_text
+        assert "Ini hasilnya ya" in clean_text
+
+    def test_no_nested_tool_support(self):
+        """Nested <command> tags are not supported - outer block wins."""
+        text = """<command>
+outer <command>inner</command> command
+</command>"""
+        commands, clean_text = parse_tool_blocks(text)
+        # Behavior: regex is non-greedy, so it matches first <command>...</command>
+        # The inner <command> is just text inside the outer block
+        assert len(commands) == 1
+        assert "outer" in commands[0]
+        # The "inner" is just text, not parsed as a separate block
 
 
-class TestMarkdownImageShortcut:
-    def test_detects_static_path(self):
-        assert is_markdown_image_shortcut(
-            "![generated](static/generated_images/foo.png)"
-        )
+class TestHasToolBlocks:
+    """Tests for the has_tool_blocks helper."""
 
-    def test_detects_uploads_path(self):
-        assert is_markdown_image_shortcut("![alt](uploads/foo.jpg)")
+    def test_returns_true_for_tool_blocks(self):
+        assert has_tool_blocks("<command>ls</command>") is True
 
-    def test_ignores_remote_url(self):
-        assert not is_markdown_image_shortcut(
-            "![alt](https://example.com/foo.png)"
-        )
+    def test_returns_false_for_no_tool_blocks(self):
+        assert has_tool_blocks("just text") is False
 
-    def test_ignores_empty(self):
-        assert not is_markdown_image_shortcut("")
-        assert not is_markdown_image_shortcut(None)
+    def test_returns_false_for_empty(self):
+        assert has_tool_blocks("") is False
 
-    def test_extract_path_returns_first_match(self):
-        text = "text ![a](x.png) and ![b](y.png)"
-        assert extract_markdown_image_path(text) == "x.png"
+    def test_returns_true_with_narration(self):
+        assert has_tool_blocks("hello <command>cmd</command> world") is True
 
-    def test_extract_path_returns_none_when_absent(self):
-        assert extract_markdown_image_path("no image here") is None
+
+class TestFormatObservation:
+    """Tests for the observation formatter."""
+
+    def test_single_success_result(self):
+        results = [
+            (
+                "bash",
+                {
+                    "ok": True,
+                    "data": {
+                        "command": "ls",
+                        "exit_code": 0,
+                        "stdout": "file1.txt\nfile2.txt",
+                        "stderr": "",
+                    },
+                },
+            )
+        ]
+        obs = format_observation(results)
+        assert "<SYSTEM_OBSERVATION>" in obs
+        assert "</SYSTEM_OBSERVATION>" in obs
+        assert "Command 1:" in obs
+        assert "TOOL: bash" in obs
+        assert "STATUS: SUCCESS" in obs
+        assert "COMMAND: ls" in obs
+        assert "EXIT_CODE: 0" in obs
+        assert "file1.txt" in obs
+
+    def test_multiple_results(self):
+        results = [
+            ("bash", {"ok": True, "data": {"exit_code": 0, "stdout": "ok"}}),
+            ("bash", {"ok": False, "error": "Command failed"}),
+        ]
+        obs = format_observation(results)
+        assert "Command 1:" in obs
+        assert "Command 2:" in obs
+        assert "STATUS: SUCCESS" in obs
+        assert "STATUS: FAILED" in obs
+        assert "ERROR: Command failed" in obs
+
+    def test_empty_results(self):
+        obs = format_observation([])
+        assert obs == ""
 
 
 class TestParseImagePath:
+    """Tests for image path extraction from tool results."""
+
     def test_extracts_generated_image_src(self):
         contract = (
-            '<details><summary>image_tools</summary>'
+            "<details><summary>shell_tools</summary>"
             '<img src="static/generated_images/abc.png" /></details>'
         )
         assert parse_image_path(contract) == "static/generated_images/abc.png"
@@ -79,62 +201,17 @@ class TestParseImagePath:
         assert parse_image_path("") is None
 
 
-class TestToolAliases:
-    def test_imagine_maps_to_image_generate(self):
-        from app.commands import _TOOL_ALIASES
-        assert _TOOL_ALIASES["imagine"] == "image_generate"
+class TestExecuteCommands:
+    """Tests for command execution (integration-ish)."""
 
-    def test_image_generate_maps_to_self(self):
-        from app.commands import _TOOL_ALIASES
-        assert _TOOL_ALIASES["image_generate"] == "image_generate"
+    def test_empty_commands(self):
+        results = execute_commands([])
+        assert results == []
 
-
-class TestNativeToolCallParsing:
-    def test_parse_raw_tool_calls_none(self):
-        from app.orchestrator import _parse_raw_tool_calls
-        assert _parse_raw_tool_calls("chutes", None) == []
-
-    def test_parse_raw_tool_calls_empty(self):
-        from app.orchestrator import _parse_raw_tool_calls
-        assert _parse_raw_tool_calls("chutes", {}) == []
-
-    def test_parse_raw_tool_calls_unknown_provider(self):
-        from app.orchestrator import _parse_raw_tool_calls
-        import json
-        args_str = json.dumps({"prompt": "cat"})
-        raw = {"choices": [{"message": {"content": "", "tool_calls": [{"id": "1", "function": {"name": "image_generate", "arguments": args_str}}]}}]}
-        assert _parse_raw_tool_calls("nonexistent", raw) == []
-
-    def test_parse_raw_tool_calls_with_mock_provider(self):
-        """Test _parse_raw_tool_calls with a mocked provider that supports tool calls."""
-        from app.orchestrator import _parse_raw_tool_calls
-        from unittest.mock import MagicMock, patch
-        import json
-
-        args_str = json.dumps({"prompt": "a fluffy cat"})
-        raw = {"choices": [{"message": {"content": "", "tool_calls": [{"id": "call_1", "function": {"name": "image_generate", "arguments": args_str}}]}}]}
-
-        mock_provider = MagicMock()
-        mock_provider.parse_tool_calls.return_value = [
-            {"id": "call_1", "name": "image_generate", "arguments": {"prompt": "a fluffy cat"}}
-        ]
-        mock_manager = MagicMock()
-        mock_manager.providers.get.return_value = mock_provider
-
-        with patch("app.providers.get_ai_manager", return_value=mock_manager):
-            result = _parse_raw_tool_calls("any_provider", raw)
-
-        assert len(result) == 1
-        assert result[0]["name"] == "image_generate"
-        assert result[0]["arguments"]["prompt"] == "a fluffy cat"
-
-    def test_parse_raw_tool_calls_no_tool_calls(self):
-        from app.orchestrator import _parse_raw_tool_calls
-        raw = {"choices": [{"message": {"content": "just text", "tool_calls": []}}]}
-        assert _parse_raw_tool_calls("openrouter", raw) == []
-
-    def test_parse_raw_tool_calls_chutes_returns_empty(self):
-        from app.orchestrator import _parse_raw_tool_calls
-        raw = {"choices": [{"message": {"content": "/imagine cat"}}]}
-        # Chutes doesn't support native tool calls, so parse returns empty
-        assert _parse_raw_tool_calls("chutes", raw) == []
+    def test_invalid_command_format(self):
+        """Invalid command string should return error result."""
+        results = execute_commands(["   "])  # Empty/whitespace command
+        assert len(results) == 1
+        tool_name, result = results[0]
+        assert tool_name == "unknown"
+        assert result.get("ok") is False

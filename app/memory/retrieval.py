@@ -21,11 +21,14 @@ from app.memory.db_memory import (
     search_similar_async,
     get_facts_by_session_async,
     update_last_accessed_async,
+    search_trgm_async,
+    search_tsv_async,
 )
 from app.memory.db_memory_queries import (
-    FACT_TYPE_STATIC, FACT_TYPE_DYNAMIC,
+    FACT_TYPE_STATIC,
+    FACT_TYPE_DYNAMIC,
 )
-from app.database import get_session_messages
+from app.db import get_session_messages
 
 logger = logging.getLogger(__name__)
 
@@ -38,17 +41,17 @@ _MIN_QUERY_LEN_FOR_EMBEDDING = 4  # Skip embedding for queries shorter than this
 
 def _get_cached_embedding(query: str) -> list[float] | None:
     """Get embedding with request-scoped cache.
-    
+
     Prevents duplicate embedding calls for same query within single request.
     Returns None for queries shorter than _MIN_QUERY_LEN_FOR_EMBEDDING.
     """
     if len(query.strip()) < _MIN_QUERY_LEN_FOR_EMBEDDING:
         return None  # Skip embedding for short queries
-    
+
     cache_key = f"embedding_{hash(query)}"
     if hasattr(_embedding_cache, cache_key):
         return getattr(_embedding_cache, cache_key)
-    
+
     vec = _embed_query(query)
     setattr(_embedding_cache, cache_key, vec)
     return vec
@@ -65,28 +68,60 @@ def _clear_embedding_cache() -> None:
 
 
 _TEMPORAL_CUES = [
-    "kemarin", "minggu lalu", "waktu itu", "terakhir", "pas aku",
-    "last time", "yesterday", "last week", "before", "remember when",
-    "dulu", "tadi", "bulan lalu", "tahun lalu", "pernah",
-    "last month", "last year", "earlier", "previously", "ago"
+    "kemarin",
+    "minggu lalu",
+    "waktu itu",
+    "terakhir",
+    "pas aku",
+    "last time",
+    "yesterday",
+    "last week",
+    "before",
+    "remember when",
+    "dulu",
+    "tadi",
+    "bulan lalu",
+    "tahun lalu",
+    "pernah",
+    "last month",
+    "last year",
+    "earlier",
+    "previously",
+    "ago",
 ]
 _MONTH_NAMES = {
-    "januari": 1, "februari": 2, "maret": 3, "april": 4,
-    "mei": 5, "juni": 6, "juli": 7, "agustus": 8,
-    "september": 9, "oktober": 10, "november": 11, "desember": 12,
-    "january": 1, "february": 2, "march": 3, "may": 5,
-    "june": 6, "july": 7, "august": 8, "october": 10, "december": 12,
+    "januari": 1,
+    "februari": 2,
+    "maret": 3,
+    "april": 4,
+    "mei": 5,
+    "juni": 6,
+    "juli": 7,
+    "agustus": 8,
+    "september": 9,
+    "oktober": 10,
+    "november": 11,
+    "desember": 12,
+    "january": 1,
+    "february": 2,
+    "march": 3,
+    "may": 5,
+    "june": 6,
+    "july": 7,
+    "august": 8,
+    "october": 10,
+    "december": 12,
 }
 _RELATIVE_CUES = {
-    "kemarin":     lambda now: (now - timedelta(days=1), now),
-    "yesterday":   lambda now: (now - timedelta(days=1), now),
-    "tadi":        lambda now: (now.replace(hour=0, minute=0, second=0), now),
+    "kemarin": lambda now: (now - timedelta(days=1), now),
+    "yesterday": lambda now: (now - timedelta(days=1), now),
+    "tadi": lambda now: (now.replace(hour=0, minute=0, second=0), now),
     "minggu lalu": lambda now: (now - timedelta(weeks=1), now),
-    "last week":   lambda now: (now - timedelta(weeks=1), now),
-    "bulan lalu":  lambda now: (now - timedelta(days=30), now),
-    "last month":  lambda now: (now - timedelta(days=30), now),
-    "tahun lalu":  lambda now: (now - timedelta(days=365), now),
-    "last year":   lambda now: (now - timedelta(days=365), now),
+    "last week": lambda now: (now - timedelta(weeks=1), now),
+    "bulan lalu": lambda now: (now - timedelta(days=30), now),
+    "last month": lambda now: (now - timedelta(days=30), now),
+    "tahun lalu": lambda now: (now - timedelta(days=365), now),
+    "last year": lambda now: (now - timedelta(days=365), now),
 }
 
 
@@ -117,8 +152,8 @@ def _search_temporal_messages(session_id, start, end, limit=200):
     """Search messages within a time window using PostgreSQL."""
     results = []
     try:
-        start_str = start.strftime('%Y-%m-%d %H:%M:%S')
-        end_str = end.strftime('%Y-%m-%d %H:%M:%S')
+        start_str = start.strftime("%Y-%m-%d %H:%M:%S")
+        end_str = end.strftime("%Y-%m-%d %H:%M:%S")
 
         messages = get_session_messages(session_id, limit=limit)
 
@@ -131,15 +166,18 @@ def _search_temporal_messages(session_id, start, end, limit=200):
             if msg.get("content_encrypted"):
                 try:
                     from app.encryption import encryptor
+
                     content = encryptor.decrypt(content)
                 except Exception:
                     content = "[ENCRYPTED]"
 
-            results.append({
-                "timestamp": ts,
-                "role": msg.get("role"),
-                "content": content[:500],
-            })
+            results.append(
+                {
+                    "timestamp": ts,
+                    "role": msg.get("role"),
+                    "content": content[:500],
+                }
+            )
     except Exception as e:
         logger.warning(f"Temporal scan failed: {e}")
     return results
@@ -152,10 +190,10 @@ def _recency_factor(last_accessed) -> float:
     now = datetime.now()
     if isinstance(last_accessed, str):
         try:
-            last_accessed = datetime.strptime(last_accessed, '%Y-%m-%d %H:%M:%S.%f')
+            last_accessed = datetime.strptime(last_accessed, "%Y-%m-%d %H:%M:%S.%f")
         except ValueError:
             try:
-                last_accessed = datetime.strptime(last_accessed, '%Y-%m-%d %H:%M:%S')
+                last_accessed = datetime.strptime(last_accessed, "%Y-%m-%d %H:%M:%S")
             except ValueError:
                 return 0.1
     delta_hours = (now - last_accessed).total_seconds() / 3600.0
@@ -179,6 +217,7 @@ def _fsrs_retrievability(r: dict) -> float:
     # Try fsrs library first
     try:
         from fsrs import Card, State as FsrsState
+
         fsrs_available = True
     except ImportError:
         fsrs_available = False
@@ -214,7 +253,10 @@ def _fsrs_retrievability(r: dict) -> float:
                 try:
                     # Handle various ISO formats
                     last_reviewed_str = last_reviewed.replace("Z", "+00:00")
-                    if "+" not in last_reviewed_str and "-" not in last_reviewed_str[-6:]:
+                    if (
+                        "+" not in last_reviewed_str
+                        and "-" not in last_reviewed_str[-6:]
+                    ):
                         # No timezone, add UTC
                         last_reviewed_str += "+00:00"
                     last_review_dt = datetime.fromisoformat(last_reviewed_str)
@@ -233,17 +275,29 @@ def _fsrs_retrievability(r: dict) -> float:
                         # PostgreSQL format: 'YYYY-MM-DD HH:MM:SS.mmmmmm'
                         if isinstance(la, str):
                             # Try ISO format first (with T separator)
-                            if 'T' in la:
-                                last_review_dt = datetime.fromisoformat(la.replace('Z', '+00:00'))
+                            if "T" in la:
+                                last_review_dt = datetime.fromisoformat(
+                                    la.replace("Z", "+00:00")
+                                )
                             else:
                                 # PostgreSQL format - use strptime
                                 try:
-                                    last_review_dt = datetime.strptime(la, '%Y-%m-%d %H:%M:%S.%f')
+                                    last_review_dt = datetime.strptime(
+                                        la, "%Y-%m-%d %H:%M:%S.%f"
+                                    )
                                 except ValueError:
-                                    last_review_dt = datetime.strptime(la, '%Y-%m-%d %H:%M:%S')
-                                last_review_dt = last_review_dt.replace(tzinfo=timezone.utc)
+                                    last_review_dt = datetime.strptime(
+                                        la, "%Y-%m-%d %H:%M:%S"
+                                    )
+                                last_review_dt = last_review_dt.replace(
+                                    tzinfo=timezone.utc
+                                )
                         elif isinstance(la, datetime):
-                            last_review_dt = la.replace(tzinfo=timezone.utc) if la.tzinfo is None else la
+                            last_review_dt = (
+                                la.replace(tzinfo=timezone.utc)
+                                if la.tzinfo is None
+                                else la
+                            )
                     except Exception:
                         pass
 
@@ -255,7 +309,7 @@ def _fsrs_retrievability(r: dict) -> float:
                     due=due,
                     last_review=last_review_dt,
                 )
-                
+
                 # Get retrievability using correct API
                 retrievability = fsrs.get_card_retrievability(card)
                 return max(retrievability, 0.1)
@@ -271,10 +325,10 @@ def _fsrs_retrievability(r: dict) -> float:
     now = datetime.now()
     if isinstance(last_accessed, str):
         try:
-            last_accessed = datetime.strptime(last_accessed, '%Y-%m-%d %H:%M:%S.%f')
+            last_accessed = datetime.strptime(last_accessed, "%Y-%m-%d %H:%M:%S.%f")
         except ValueError:
             try:
-                last_accessed = datetime.strptime(last_accessed, '%Y-%m-%d %H:%M:%S')
+                last_accessed = datetime.strptime(last_accessed, "%Y-%m-%d %H:%M:%S")
             except ValueError:
                 return 0.1
 
@@ -299,12 +353,13 @@ def _episodic_score_adjustment(r: dict) -> float:
 
 def _embed_query(text: str) -> list[float] | None:
     """Embed a query string via Chutes API with hard timeout protection.
-    
+
     Returns None on failure (embedding unavailable, will fall back to trigram search).
     Never blocks longer than 35 seconds.
     """
     try:
         from app.memory.embedder import embed_text
+
         return embed_text(text, timeout=30)
     except TimeoutError:
         logger.warning("Embedding timed out after 30s - falling back to trigram search")
@@ -314,7 +369,9 @@ def _embed_query(text: str) -> list[float] | None:
         return None
 
 
-def _hybrid_rrf_merge(channel_results: dict[str, list[dict]], k: int = 60) -> list[dict]:
+def _hybrid_rrf_merge(
+    channel_results: dict[str, list[dict]], k: int = 60
+) -> list[dict]:
     """
     N-channel Reciprocal Rank Fusion — merges ranked lists from multiple search channels.
 
@@ -407,7 +464,9 @@ def retrieve_static_memories(query=None, limit=15):
     3-channel hybrid: vector + trigram + tsvector, merged via RRF.
     """
     if not query:
-        results = get_facts_by_session(session_id=None, fact_type=FACT_TYPE_STATIC, limit=limit)
+        results = get_facts_by_session(
+            session_id=None, fact_type=FACT_TYPE_STATIC, limit=limit
+        )
         parsed = [_parse_fact_content(r) for r in results]
         parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
         if parsed:
@@ -418,11 +477,15 @@ def retrieve_static_memories(query=None, limit=15):
     keyword = query.strip()
 
     # Channel 1: vector (pgvector)
-    vec_results = search_similar(
-        embedding=query_vec,
-        fact_type=FACT_TYPE_STATIC,
-        limit=limit,
-    ) if query_vec else []
+    vec_results = (
+        search_similar(
+            embedding=query_vec,
+            fact_type=FACT_TYPE_STATIC,
+            limit=limit,
+        )
+        if query_vec
+        else []
+    )
 
     # Channel 2: trigram fuzzy (pg_trgm)
     trgm_results = search_trgm(
@@ -471,9 +534,12 @@ def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
     3-channel hybrid: vector + trigram + tsvector, merged via RRF.
     """
     if not query:
-        all_dynamic = get_facts_by_session(session_id=session_id, fact_type=FACT_TYPE_DYNAMIC, limit=limit * 3)
+        all_dynamic = get_facts_by_session(
+            session_id=session_id, fact_type=FACT_TYPE_DYNAMIC, limit=limit * 3
+        )
         results = [
-            r for r in all_dynamic
+            r
+            for r in all_dynamic
             if r.get("metadata", {}).get("source_table") == "episodic_memories"
         ][:limit]
         parsed = [_parse_fact_content(r) for r in results]
@@ -486,13 +552,17 @@ def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
     keyword = query.strip()
 
     # Channel 1: vector (pgvector)
-    vec_results = search_similar(
-        embedding=query_vec,
-        session_id=session_id,
-        fact_type=FACT_TYPE_DYNAMIC,
-        metadata_filter={"source_table": "episodic_memories"},
-        limit=limit,
-    ) if query_vec else []
+    vec_results = (
+        search_similar(
+            embedding=query_vec,
+            session_id=session_id,
+            fact_type=FACT_TYPE_DYNAMIC,
+            metadata_filter={"source_table": "episodic_memories"},
+            limit=limit,
+        )
+        if query_vec
+        else []
+    )
 
     # Channel 2: trigram fuzzy (pg_trgm)
     trgm_results = search_trgm(
@@ -539,6 +609,7 @@ def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
 
 # ── Combined retrieval (single embedding call for both static + dynamic) ───────
 
+
 def retrieve_memories_combined(
     session_id: int,
     query: str | None = None,
@@ -546,10 +617,10 @@ def retrieve_memories_combined(
     dynamic_limit: int = 5,
 ) -> tuple[list[dict], list[dict]]:
     """Retrieve static and dynamic memories with single embedding call.
-    
+
     Optimized for per-turn retrieval: computes embedding once and reuses
     for both static and dynamic searches.
-    
+
     Returns:
         (static_memories, dynamic_memories) tuple
     """
@@ -558,25 +629,31 @@ def retrieve_memories_combined(
         static = retrieve_static_memories(query=None, limit=static_limit)
         dynamic = retrieve_dynamic_memories(session_id, query=None, limit=dynamic_limit)
         return static, dynamic
-    
+
     # Short query = skip embedding, use trigram only
     query_len = len(query.strip())
     if query_len < _MIN_QUERY_LEN_FOR_EMBEDDING:
         # Fall back to individual functions which handle no-embedding case
         static = retrieve_static_memories(query=query, limit=static_limit)
-        dynamic = retrieve_dynamic_memories(session_id, query=query, limit=dynamic_limit)
+        dynamic = retrieve_dynamic_memories(
+            session_id, query=query, limit=dynamic_limit
+        )
         return static, dynamic
-    
+
     # Single embedding for both retrievals
     query_vec = _get_cached_embedding(query)
     keyword = query.strip()
-    
+
     # Static channels
-    vec_results_static = search_similar(
-        embedding=query_vec,
-        fact_type=FACT_TYPE_STATIC,
-        limit=static_limit,
-    ) if query_vec else []
+    vec_results_static = (
+        search_similar(
+            embedding=query_vec,
+            fact_type=FACT_TYPE_STATIC,
+            limit=static_limit,
+        )
+        if query_vec
+        else []
+    )
     trgm_results_static = search_trgm(
         query=keyword,
         fact_type=FACT_TYPE_STATIC,
@@ -587,15 +664,19 @@ def retrieve_memories_combined(
         fact_type=FACT_TYPE_STATIC,
         limit=static_limit,
     )
-    
+
     # Dynamic channels
-    vec_results_dynamic = search_similar(
-        embedding=query_vec,
-        session_id=session_id,
-        fact_type=FACT_TYPE_DYNAMIC,
-        metadata_filter={"source_table": "episodic_memories"},
-        limit=dynamic_limit,
-    ) if query_vec else []
+    vec_results_dynamic = (
+        search_similar(
+            embedding=query_vec,
+            session_id=session_id,
+            fact_type=FACT_TYPE_DYNAMIC,
+            metadata_filter={"source_table": "episodic_memories"},
+            limit=dynamic_limit,
+        )
+        if query_vec
+        else []
+    )
     trgm_results_dynamic = search_trgm(
         query=keyword,
         session_id=session_id,
@@ -608,19 +689,25 @@ def retrieve_memories_combined(
         fact_type=FACT_TYPE_DYNAMIC,
         limit=dynamic_limit,
     )
-    
+
     # Merge via RRF
-    static_merged = _hybrid_rrf_merge({
-        "vector": vec_results_static,
-        "trigram": trgm_results_static,
-        "tsvector": tsv_results_static,
-    }, k=60)
-    dynamic_merged = _hybrid_rrf_merge({
-        "vector": vec_results_dynamic,
-        "trigram": trgm_results_dynamic,
-        "tsvector": tsv_results_dynamic,
-    }, k=60)
-    
+    static_merged = _hybrid_rrf_merge(
+        {
+            "vector": vec_results_static,
+            "trigram": trgm_results_static,
+            "tsvector": tsv_results_static,
+        },
+        k=60,
+    )
+    dynamic_merged = _hybrid_rrf_merge(
+        {
+            "vector": vec_results_dynamic,
+            "trigram": trgm_results_dynamic,
+            "tsvector": tsv_results_dynamic,
+        },
+        k=60,
+    )
+
     # Parse and deduplicate
     seen_static, static_parsed = set(), []
     for r in static_merged:
@@ -629,7 +716,7 @@ def retrieve_memories_combined(
         seen_static.add(r["id"])
         static_parsed.append(_parse_fact_content(r))
     static_parsed = static_parsed[:static_limit]
-    
+
     seen_dynamic, dynamic_parsed = set(), []
     for r in dynamic_merged:
         if r["id"] in seen_dynamic:
@@ -637,13 +724,13 @@ def retrieve_memories_combined(
         seen_dynamic.add(r["id"])
         dynamic_parsed.append(_parse_fact_content(r))
     dynamic_parsed = dynamic_parsed[:dynamic_limit]
-    
+
     # Update last accessed
     if static_parsed:
         update_last_accessed([m["id"] for m in static_parsed])
     if dynamic_parsed:
         update_last_accessed([m["id"] for m in dynamic_parsed])
-    
+
     return static_parsed, dynamic_parsed
 
 
@@ -652,11 +739,10 @@ retrieve_semantic_memories = retrieve_static_memories
 retrieve_episodic_memories = retrieve_dynamic_memories
 
 
-
 def retrieve_segments(session_id: int, query=None, limit: int = 10):
     """
     Retrieve conversation segments for a session.
-    
+
     Segments are stored as fact_type=dynamic with source_table='conversation_segments'.
     They represent raw message windows, not semantic facts.
     """
@@ -680,7 +766,8 @@ def retrieve_segments(session_id: int, query=None, limit: int = 10):
         # Filter: must be real segments (not old garbage with "No summary" content)
         _NO_SUMMARY_PATTERNS = ("no summary found", "no summary", "tidak ada ringkasan")
         results = [
-            r for r in all_dynamic
+            r
+            for r in all_dynamic
             if r.get("metadata", {}).get("source_table") == "conversation_segments"
             and r.get("content")
             and len(r.get("content", "")) > 15
@@ -741,7 +828,6 @@ def retrieve_memory(session_id: int, query=None):
     }
 
 
-
 def _format_static_context(static: list[dict]) -> str:
     """
     Format static (semantic) memories for system prompt injection.
@@ -761,7 +847,9 @@ def _format_static_context(static: list[dict]) -> str:
     return "\n".join(parts)
 
 
-def retrieve_for_context(session_id: int, query: str | None = None, limit: int = 10) -> tuple[list[int], str]:
+def retrieve_for_context(
+    session_id: int, query: str | None = None, limit: int = 10
+) -> tuple[list[int], str]:
     """
     Retrieve ONLY static semantic memories for pre-LLM system prompt injection.
     Does NOT mark facts as pending_review — this is the "clean" path
@@ -832,38 +920,69 @@ def format_memory(memory_bundle):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
+async def _get_cached_embedding_async(query: str) -> list[float] | None:
+    """Get embedding with request-scoped cache (async)."""
+    if len(query.strip()) < _MIN_QUERY_LEN_FOR_EMBEDDING:
+        return None
+
+    cache_key = f"embedding_{hash(query)}"
+    if hasattr(_embedding_cache, cache_key):
+        return getattr(_embedding_cache, cache_key)
+
+    vec = await _embed_query_async(query)
+    setattr(_embedding_cache, cache_key, vec)
+    return vec
+
+
+async def _embed_query_async(text: str) -> list[float] | None:
+    """Embed a query string via Chutes API with hard timeout protection (async)."""
+    try:
+        from app.memory.embedder import embed_text_async
+
+        return await embed_text_async(text, timeout=30)
+    except Exception as e:
+        logger.warning(f"Query embedding async failed: {e}")
+        return None
+
+
 async def retrieve_static_memories_async(query=None, limit=15):
     """
     Async version of retrieve_static_memories.
     3-channel hybrid: vector + trigram + tsvector, merged via RRF.
     """
     if not query:
-        results = await get_facts_by_session_async(session_id=None, fact_type=FACT_TYPE_STATIC, limit=limit)
+        results = await get_facts_by_session_async(
+            session_id=None, fact_type=FACT_TYPE_STATIC, limit=limit
+        )
         parsed = [_parse_fact_content(r) for r in results]
         parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
         if parsed:
             await update_last_accessed_async([m["id"] for m in parsed])
         return parsed
 
-    query_vec = _embed_query(query)
+    query_vec = await _get_cached_embedding_async(query)  # CACHED
     keyword = query.strip()
 
     # Channel 1: vector (pgvector)
-    vec_results = await search_similar_async(
-        embedding=query_vec,
-        fact_type=FACT_TYPE_STATIC,
-        limit=limit,
-    ) if query_vec else []
+    vec_results = (
+        await search_similar_async(
+            embedding=query_vec,
+            fact_type=FACT_TYPE_STATIC,
+            limit=limit,
+        )
+        if query_vec
+        else []
+    )
 
-    # Channel 2: trigram fuzzy (pg_trgm) - still sync, runs in thread
-    trgm_results = search_trgm(
+    # Channel 2: trigram fuzzy (pg_trgm)
+    trgm_results = await search_trgm_async(
         query=keyword,
         fact_type=FACT_TYPE_STATIC,
         limit=limit,
     )
 
-    # Channel 3: tsvector full-text - still sync
-    tsv_results = search_tsv(
+    # Channel 3: tsvector full-text
+    tsv_results = await search_tsv_async(
         query=keyword,
         fact_type=FACT_TYPE_STATIC,
         limit=limit,
@@ -901,9 +1020,12 @@ async def retrieve_dynamic_memories_async(session_id: int, query=None, limit=10)
     3-channel hybrid: vector + trigram + tsvector, merged via RRF.
     """
     if not query:
-        all_dynamic = await get_facts_by_session_async(session_id=session_id, fact_type=FACT_TYPE_DYNAMIC, limit=limit * 3)
+        all_dynamic = await get_facts_by_session_async(
+            session_id=session_id, fact_type=FACT_TYPE_DYNAMIC, limit=limit * 3
+        )
         results = [
-            r for r in all_dynamic
+            r
+            for r in all_dynamic
             if r.get("metadata", {}).get("source_table") == "episodic_memories"
         ][:limit]
         parsed = [_parse_fact_content(r) for r in results]
@@ -912,28 +1034,34 @@ async def retrieve_dynamic_memories_async(session_id: int, query=None, limit=10)
             await update_last_accessed_async([m["id"] for m in parsed])
         return parsed
 
-    query_vec = _embed_query(query)
+    query_vec = await _get_cached_embedding_async(
+        query
+    )  # CACHED - reuses same embedding
     keyword = query.strip()
 
     # Channel 1: vector (pgvector)
-    vec_results = await search_similar_async(
-        embedding=query_vec,
-        session_id=session_id,
-        fact_type=FACT_TYPE_DYNAMIC,
-        metadata_filter={"source_table": "episodic_memories"},
-        limit=limit,
-    ) if query_vec else []
+    vec_results = (
+        await search_similar_async(
+            embedding=query_vec,
+            session_id=session_id,
+            fact_type=FACT_TYPE_DYNAMIC,
+            metadata_filter={"source_table": "episodic_memories"},
+            limit=limit,
+        )
+        if query_vec
+        else []
+    )
 
-    # Channel 2: trigram fuzzy - still sync
-    trgm_results = search_trgm(
+    # Channel 2: trigram fuzzy
+    trgm_results = await search_trgm_async(
         query=keyword,
         session_id=session_id,
         fact_type=FACT_TYPE_DYNAMIC,
         limit=limit,
     )
 
-    # Channel 3: tsvector full-text - still sync
-    tsv_results = search_tsv(
+    # Channel 3: tsvector full-text
+    tsv_results = await search_tsv_async(
         query=keyword,
         session_id=session_id,
         fact_type=FACT_TYPE_DYNAMIC,
@@ -978,7 +1106,9 @@ async def retrieve_memory_async(session_id: int, query=None):
         static = []
 
     try:
-        dynamic = await retrieve_dynamic_memories_async(session_id, query=query, limit=10)
+        dynamic = await retrieve_dynamic_memories_async(
+            session_id, query=query, limit=10
+        )
     except Exception as e:
         logger.warning(f"Dynamic memory retrieval async failed: {e}")
         dynamic = []
@@ -1000,7 +1130,9 @@ async def retrieve_memory_async(session_id: int, query=None):
     }
 
 
-async def retrieve_for_context_async(session_id: int, query: str | None = None, limit: int = 10) -> tuple[list[int], str]:
+async def retrieve_for_context_async(
+    session_id: int, query: str | None = None, limit: int = 10
+) -> tuple[list[int], str]:
     """
     Async version of retrieve_for_context.
     Retrieve ONLY static semantic memories for pre-LLM system prompt injection.
@@ -1012,3 +1144,21 @@ async def retrieve_for_context_async(session_id: int, query: str | None = None, 
         return [], ""
     ids = [m["id"] for m in static]
     return ids, _format_static_context(static)
+
+
+async def retrieve_memories_combined_async(
+    session_id: int,
+    query: str | None = None,
+    static_limit: int = 10,
+    dynamic_limit: int = 5,
+) -> tuple[list[dict], list[dict]]:
+    """Async wrapper for retrieve_memories_combined using asyncio.to_thread."""
+    import asyncio
+
+    return await asyncio.to_thread(
+        retrieve_memories_combined,
+        session_id,
+        query,
+        static_limit,
+        dynamic_limit,
+    )

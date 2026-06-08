@@ -37,7 +37,7 @@ async function loadAppConfig() {
 // Load profile data with proper global profile display
 async function loadProfileData() {
 	try {
-		const response = await fetch("/api/get_profile");
+		const response = await fetch("/api/profile");
 		const data = await response.json();
 
 		console.log("Full profile data:", data);
@@ -396,10 +396,10 @@ function setupEventListeners() {
 // Load image model on page load
 async function loadImageModel() {
 	try {
-		const response = await fetch("/api/get_profile");
+		const response = await fetch("/api/profile");
 		const data = await response.json();
 
-		const imageModel = data.image_model || "hunyuan";
+		const imageModel = data.image_model || "qwen_image";
 		document.getElementById("image-model").value = imageModel;
 
 		console.log("Image model loaded:", imageModel);
@@ -579,10 +579,12 @@ async function saveImageModel() {
 	btn.disabled = true;
 
 	try {
+		const imageModel =
+			select.value === "qwen_image" ? "qwen_image" : select.value;
 		const response = await fetch("/api/update_profile", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ image_model: select.value }),
+			body: JSON.stringify({ updates: { image_model: imageModel } }),
 		});
 		if (response.ok) {
 			showSuccess("Image model saved successfully!");
@@ -710,7 +712,7 @@ async function saveProfileSettings() {
 
 async function loadAPIKeys() {
 	try {
-		const response = await fetch("/api/get_profile");
+		const response = await fetch("/api/profile");
 		const data = await response.json();
 
 		const keysList = document.getElementById("keys-list");
@@ -1043,7 +1045,7 @@ async function clearChatHistory() {
 // Global knowledge functions
 async function loadGlobalKnowledge() {
 	try {
-		const response = await fetch("/api/get_profile");
+		const response = await fetch("/api/profile");
 		const data = await response.json();
 
 		const globalKnowledge = data.global_knowledge || {};
@@ -1189,7 +1191,7 @@ window.showSuccess = showSuccess;
 // Location functions
 async function loadLocation() {
 	try {
-		const response = await fetch("/api/get_profile");
+		const response = await fetch("/api/profile");
 		const data = await response.json();
 		const ctx = data.context || {};
 		const loc = ctx.location || {};

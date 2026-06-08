@@ -1,10 +1,220 @@
 // FILE: static/js/renderer.js
 // DESCRIPTION: Markdown renderer using marked.js with syntax highlighting
+
+// ==================== CENTRALIZED CLIPBOARD UTILITY ====================
+// Single source of truth for all copy-to-clipboard operations.
+// Provides consistent visual feedback across code blocks, tables, and messages.
+const ClipboardUtils = {
+	// SVG icons for consistent button appearance
+	ICONS: {
+		copy: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+			<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+		</svg>`,
+		check: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			<polyline points="20 6 9 17 4 12"></polyline>
+		</svg>`,
+	},
+
+	// Default feedback duration in milliseconds
+	FEEDBACK_DURATION: 2000,
+
+	/**
+	 * Copy text to clipboard with optional button feedback.
+	 * The button param receives visual success feedback (icon change + "Copied!" text).
+	 * @param {string} text - Text to copy
+	 * @param {HTMLElement} [button] - Optional button element for visual feedback
+	 * @param {object} [options] - Optional configuration
+	 * @param {number} [options.duration] - Feedback duration in ms (default: 2000)
+	 * @param {string} [options.successText] - Text to show on success (default: "Copied!")
+	 * @returns {Promise<boolean>} - True if copy succeeded
+	 */
+	async copyText(text, button = null, options = {}) {
+		const { duration = this.FEEDBACK_DURATION, successText = "Copied!" } =
+			options;
+
+		try {
+			await navigator.clipboard.writeText(text);
+			console.log("Copied to clipboard");
+
+			if (button) {
+				this._showSuccess(button, successText, duration);
+			}
+			return true;
+		} catch (err) {
+			console.error("Failed to copy to clipboard:", err);
+			return false;
+		}
+	},
+
+	/**
+	 * Show success feedback on a button element.
+	 * Restores original content after the specified duration.
+	 * @private
+	 */
+	_showSuccess(button, successText, duration) {
+		const originalHTML = button.innerHTML;
+		button.innerHTML = `${this.ICONS.check}${successText}`;
+		button.classList.add("copied");
+
+		setTimeout(() => {
+			button.innerHTML = originalHTML;
+			button.classList.remove("copied");
+		}, duration);
+	},
+};
+
+// ==================== EVENT DELEGATION FOR COPY BUTTONS ====================
+// Single click handler on document for all dynamically-added copy buttons
+document.addEventListener("click", (event) => {
+	const target = event.target;
+
+	// Handle copy-code-btn
+	const copyCodeBtn = target.closest('[data-action="copy-code"]');
+	if (copyCodeBtn) {
+		const codeBlock = copyCodeBtn.closest(".code-block-container");
+		const code = codeBlock?.querySelector("code")?.textContent || "";
+		ClipboardUtils.copyText(code, copyCodeBtn);
+		return;
+	}
+
+	// Handle copy-mermaid-code
+	const copyMermaidBtn = target.closest('[data-action="copy-mermaid-code"]');
+	if (copyMermaidBtn) {
+		const encodedCode = copyMermaidBtn.getAttribute("data-mermaid-code") || "";
+		const code = decodeURIComponent(encodedCode);
+		ClipboardUtils.copyText(code, copyMermaidBtn);
+		return;
+	}
+
+	// Handle copy-table
+	const copyTableBtn = target.closest('[data-action="copy-table"]');
+	if (copyTableBtn) {
+		const table = copyTableBtn
+			.closest(".table-container")
+			?.querySelector("table");
+		if (table) {
+			copyTable(table, copyTableBtn);
+		}
+		return;
+	}
+
+	// Handle copy-message
+	const copyMsgBtn = target.closest('[data-action="copy-message"]');
+	if (copyMsgBtn) {
+		// Try to get content from data-message-content attr
+		const content = copyMsgBtn.getAttribute("data-message-content") || "";
+		ClipboardUtils.copyText(content, copyMsgBtn);
+		return;
+	}
+
+	// Handle HTML preview
+	const previewBtn = target.closest('[data-action="preview-html"]');
+	if (previewBtn) {
+		const encodedCode = previewBtn.getAttribute("data-code") || "";
+		showHtmlPreviewModal(encodedCode);
+		return;
+	}
+});
+
+/**
+ * Copy table content as TSV
+ */
+function copyTable(table, button) {
+	const rows = table.querySelectorAll("tr");
+	const tsvLines = [];
+
+	rows.forEach((row) => {
+		const cells = row.querySelectorAll("th, td");
+		const cellTexts = Array.from(cells).map((cell) => {
+			return cell.textContent.trim().replace(/\n/g, " ");
+		});
+		tsvLines.push(cellTexts.join("\t"));
+	});
+
+	const tsv = tsvLines.join("\n");
+	ClipboardUtils.copyText(tsv, button);
+}
+
+/**
+ * Show HTML preview modal
+ */
+function showHtmlPreviewModal(encodedCode) {
+	const rawCode = decodeURIComponent(encodedCode || "");
+	const modal = document.getElementById("html-preview-modal");
+	const iframe = document.getElementById("preview-iframe");
+	if (!modal || !iframe || !rawCode) return;
+
+	// Unescape HTML entities (code may be double-encoded from marked.js escaping)
+	const code = rawCode
+		.replace(/&lt;/g, "<")
+		.replace(/&gt;/g, ">")
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.replace(/&#x27;/g, "'")
+		.replace(/&amp;/g, "&");
+
+	modal.classList.add("active");
+	document.body.style.overflow = "hidden";
+	iframe.srcdoc = code;
+}
+
+// ==================== MERMAID DEBOUNCE ENGINE ====================
+// Global debounce wrapper for mermaid rendering during streaming
+// Prevents UI freeze from synchronous mermaid.run() calls on every chunk
+let mermaidRenderTimeout = null;
+
+/**
+ * Debounced mermaid rendering.
+ * Collects unprocessed mermaid blocks and renders them after stream settles.
+ * @param {HTMLElement} container - Container element to search for mermaid blocks
+ * @param {number} delay - Debounce delay in ms (default: 300)
+ */
+function debouncedMermaidRender(container, delay = 300) {
+	if (mermaidRenderTimeout) {
+		clearTimeout(mermaidRenderTimeout);
+	}
+
+	mermaidRenderTimeout = setTimeout(() => {
+		try {
+			// Query for unprocessed mermaid blocks
+			const unprocessed = container.querySelectorAll(
+				'.language-mermaid:not([data-processed="true"])',
+			);
+
+			if (unprocessed.length === 0) return;
+
+			console.log(
+				`[Mermaid Debounce] Rendering ${unprocessed.length} diagram(s)`,
+			);
+
+			// Process each mermaid block
+			unprocessed.forEach(async (el) => {
+				try {
+					await mermaid.run({ nodes: [el] });
+					el.setAttribute("data-processed", "true");
+				} catch (error) {
+					console.error("[Mermaid Debounce] Render error:", error);
+					const errorMsg = error.message || "Unknown error";
+					el.innerHTML = `<pre class="mermaid-error">Mermaid Error: ${errorMsg}\n\n${el.textContent}</pre>`;
+					el.setAttribute("data-processed", "true");
+				}
+			});
+		} catch (e) {
+			console.error("[Mermaid Debounce] Error:", e);
+		} finally {
+			mermaidRenderTimeout = null;
+		}
+	}, delay);
+}
+
+// ==================== RENDERER CLASS ====================
 class MessageRenderer {
 	constructor() {
 		this.isMermaidReady = false;
 		this.isMarkedReady = false;
 		this.isHighlightReady = false;
+		this.isKatexReady = false;
 		this.initializeLibraries();
 	}
 
@@ -21,6 +231,7 @@ class MessageRenderer {
 		// Check if highlight.js is available
 		if (typeof hljs !== "undefined") {
 			this.isHighlightReady = true;
+			hljs.configure({ ignoreUnescapedHTML: true });
 		} else {
 			console.warn("highlight.js not loaded");
 		}
@@ -50,6 +261,12 @@ class MessageRenderer {
 			});
 			this.isMermaidReady = true;
 			console.log("Mermaid initialized successfully");
+		}
+
+		// Check if KaTeX is available
+		if (typeof katex !== "undefined") {
+			this.isKatexReady = true;
+			console.log("KaTeX initialized successfully");
 		}
 	}
 
@@ -203,6 +420,63 @@ class MessageRenderer {
 		// Configure marked renderer
 		const renderer = new marked.Renderer();
 
+		// Custom math extension for KaTeX
+		const mathExtension = {
+			name: "math",
+			level: "inline",
+			start(src) {
+				return src.indexOf("$");
+			},
+			tokenizer(src, _tokens) {
+				// Block math: $$ ... $$
+				const blockRule = /^\$\$([\s\S]+?)\$\$/;
+				const blockMatch = blockRule.exec(src);
+				if (blockMatch) {
+					return {
+						type: "math",
+						raw: blockMatch[0],
+						text: blockMatch[1].trim(),
+						displayMode: true,
+					};
+				}
+
+				// Inline math: $ ... $
+				// Requirements: $ followed by non-space, ends with non-space followed by $
+				// Negative lookahead for digit to handle $50 and $100 cases
+				const inlineRule = /^\$([^\s$][^$]*?[^\s$])\$(?!\d)/;
+				const inlineRuleSimple = /^\$([^$\s])\$(?!\d)/;
+
+				const inlineMatch = inlineRule.exec(src) || inlineRuleSimple.exec(src);
+				if (inlineMatch) {
+					return {
+						type: "math",
+						raw: inlineMatch[0],
+						text: inlineMatch[1],
+						displayMode: false,
+					};
+				}
+				return undefined;
+			},
+			renderer(token) {
+				if (typeof katex === "undefined") return token.raw;
+				try {
+					return katex.renderToString(token.text, {
+						displayMode: token.displayMode,
+						throwOnError: false,
+						output: "html",
+					});
+				} catch (err) {
+					console.error("KaTeX rendering error:", err);
+					return token.raw;
+				}
+			},
+		};
+
+		// Register extensions
+		marked.use({
+			extensions: [mathExtension],
+		});
+
 		// Custom code block renderer
 		// Marked v18 passes an object {text, lang} instead of (code, language)
 		renderer.code = (codeOrToken, languageOrUndefined) => {
@@ -223,10 +497,11 @@ class MessageRenderer {
 			if (normalizedLang === "mermaid" && this.isMermaidReady) {
 				const id = `mermaid-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 				const mermaidCode = this.escapeHtml(code);
+				// Mermaid copy button uses data-action for event delegation
 				return `<div class="mermaid-container" data-mermaid-id="${id}">
                     <div class="code-block-header">
                         <span class="code-language">mermaid</span>
-                        <button class="copy-code-btn" onclick="navigator.clipboard.writeText(decodeURIComponent('${encodeURIComponent(code)}')).then(() => { this.innerHTML='<svg width=\\'16\\' height=\\'16\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><polyline points=\\'20 6 9 17 4 12\\'></polyline></svg>Copied!'; this.classList.add('copied'); setTimeout(() => { this.innerHTML='<svg width=\\'16\\' height=\\'16\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><rect x=\\'9\\' y=\\'9\\' width=\\'13\\' height=\\'13\\' rx=\\'2\\' ry=\\'2\\'></rect><path d=\\'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\\'></path></svg>Copy'; this.classList.remove('copied'); }, 2000); })">
+                        <button class="copy-code-btn" data-action="copy-mermaid-code" data-mermaid-code="${encodeURIComponent(code)}">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -258,9 +533,10 @@ class MessageRenderer {
 				: this.escapeHtml(code);
 			const displayLabel = originalLabel || fallbackLang;
 			const previewBtn = isHtml
-				? `<button class="preview-code-btn" data-code="${encodeURIComponent(btnRawCode)}" onclick="renderer.showHtmlPreviewModal(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8z"/><circle cx="12" cy="12" r="3"/></svg>Preview</button>`
+				? `<button class="preview-code-btn" data-action="preview-html" data-code="${encodeURIComponent(btnRawCode)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8z"/><circle cx="12" cy="12" r="3"/></svg>Preview</button>`
 				: "";
-			return `<div class="code-block-container"><div class="code-block-header"><span class="code-language">${displayLabel}</span>${previewBtn}<button class="copy-code-btn" onclick="renderer.copyCode(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>Copy</button></div><pre><code class="hljs language-${highlightLang}">${highlighted}</code></pre></div>`;
+			// Copy button uses data-action for event delegation
+			return `<div class="code-block-container"><div class="code-block-header"><span class="code-language">${displayLabel}</span>${previewBtn}<button class="copy-code-btn" data-action="copy-code"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>Copy</button></div><pre><code class="hljs language-${highlightLang}">${highlighted}</code></pre></div>`;
 		};
 
 		// Custom image renderer to ensure images render as <img> elements
@@ -295,9 +571,152 @@ class MessageRenderer {
 		});
 	}
 
-	async initializeMermaidDiagrams(container) {
+	// ==================== TOOL BLOCK PRE-PARSER ====================
+	/**
+	 * Pre-process <tool> blocks at string level BEFORE markdown parsing.
+	 * This replaces the MutationObserver approach with direct string manipulation.
+	 * Handles both complete and incomplete tool blocks during streaming.
+	 * @param {string} text - Raw markdown text
+	 * @returns {string} Text with tool blocks converted to HTML
+	 */
+	preprocessToolBlocks(text) {
+		if (!text) return text;
+		const sourceText = typeof text === "string" ? text : String(text || "");
+
+		// Pattern to match <tools>...</tools> blocks (including multiline)
+		const toolPattern = /<tools>([\s\S]*?)(?:<\/tools>|$)/g;
+
+		const result = sourceText.replace(toolPattern, (_match, content) => {
+			const trimmedContent = content.trim();
+			if (!trimmedContent) return "";
+
+			// DO NOT escape content - tool output may contain HTML like <img> tags
+			// Tool outputs come from backend and are trusted
+			const unescapedContent = trimmedContent;
+
+			// Minimalist header without emojis
+			return `<details class="system-action-block tool-result-block">
+				<summary class="action-header">Tool</summary>
+				<div class="action-content">${unescapedContent}</div>
+			</details>`;
+		});
+
+		return result;
+	}
+
+	/**
+	 * Preprocess <command>...</command> blocks into styled UI badges.
+	 * CRITICAL: This must run BEFORE marked.js to prevent tag stripping.
+	 * STREAMING SUPPORT: Also handles UNCLOSED command blocks during active streaming.
+	 * @param {string} text - Raw markdown text
+	 * @returns {string} Text with command blocks converted to styled HTML
+	 */
+	preprocessCommandBlocks(text) {
+		if (!text) return text;
+		const sourceText = typeof text === "string" ? text : String(text || "");
+
+		// PHASE 1: Handle fully closed <command>...</command> blocks
+		const closedPattern = /<command>([\s\S]*?)<\/command>/gi;
+		let result = sourceText.replace(closedPattern, (_match, content) => {
+			const trimmedContent = content.trim();
+			if (!trimmedContent) return "";
+
+			// Escape command content for safe display
+			const escapedContent = this.escapeHtml(trimmedContent);
+
+			// Minimalist header without emojis
+			return `<div class="system-action-block command-block">
+				<div class="action-header">Command</div>
+				<div class="action-content code-font">${escapedContent}</div>
+			</div>`;
+		});
+
+		// PHASE 2: Handle UNCLOSED command blocks (streaming state)
+		// This regex matches <command> that reaches end of string without closing tag
+		const unclosedPattern = /<command>([\s\S]*)$/gi;
+		result = result.replace(unclosedPattern, (_match, content) => {
+			const trimmedContent = content.trim();
+			if (!trimmedContent) return "";
+
+			// Escape command content for safe display
+			const escapedContent = this.escapeHtml(trimmedContent);
+
+			// Same structure as closed version, DOM parser safe
+			return `<div class="system-action-block command-block command-streaming">
+				<div class="action-header">Command</div>
+				<div class="action-content code-font">${escapedContent}</div>
+			</div>`;
+		});
+
+		return result;
+	}
+
+	/**
+	 * Preprocess cognitive trace blocks (<think>, <analysis>, <decision>)
+	 * into collapsible <details> elements for cleaner UI.
+	 * @param {string} text - Raw markdown text
+	 * @returns {string} Text with cognitive blocks converted to HTML
+	 */
+	preprocessCognitiveBlocks(text) {
+		if (!text) return text;
+		const sourceText = typeof text === "string" ? text : String(text || "");
+
+		// Cognitive block configurations
+		const cognitiveBlocks = [
+			{ tag: "think", label: "💭 Thinking...", icon: "💭" },
+			{ tag: "analysis", label: "🔍 Analysis", icon: "🔍" },
+			{ tag: "decision", label: "⚡ Decision", icon: "⚡" },
+		];
+
+		let result = sourceText;
+
+		for (const { tag, label } of cognitiveBlocks) {
+			// Pattern matches both closed tags and unclosed tags (streaming)
+			// Uses [\s\S] with 's' flag equivalent for multiline matching
+			const openPattern = new RegExp(`<${tag}>`, "gi");
+			const closePattern = new RegExp(`</${tag}>`, "gi");
+
+			// Count open and close tags to handle streaming edge case
+			const openCount = (result.match(openPattern) || []).length;
+			const closeCount = (result.match(closePattern) || []).length;
+
+			// Full pattern for complete blocks (closed tags)
+			const fullPattern = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, "gi");
+
+			result = result.replace(fullPattern, (_match, content) => {
+				const trimmedContent = content.trim();
+				if (!trimmedContent) return "";
+				const escapedContent = this.escapeHtml(trimmedContent);
+				return `<details class="cognitive-block cognitive-${tag}"><summary>${label}</summary><div class="cognitive-content">${escapedContent}</div></details>`;
+			});
+
+			// Handle unclosed tags during streaming (no closing tag yet)
+			// This regex matches <tag> without a matching </tag>
+			if (openCount > closeCount) {
+				const unclosedPattern = new RegExp(`<${tag}>([\\s\\S]*?)$`, "gi");
+				result = result.replace(unclosedPattern, (_match, content) => {
+					const trimmedContent = content.trim();
+					if (!trimmedContent) return "";
+					const escapedContent = this.escapeHtml(trimmedContent);
+					// Render as collapsed during streaming
+					return `<details class="cognitive-block cognitive-${tag} cognitive-streaming"><summary>${label}...</summary><div class="cognitive-content">${escapedContent}</div></details>`;
+				});
+			}
+		}
+
+		return result;
+	}
+
+	async initializeMermaidDiagrams(container, useDebounce = false) {
 		if (!this.isMermaidReady) return;
 
+		// If debounce requested, use the global debounce wrapper
+		if (useDebounce) {
+			debouncedMermaidRender(container);
+			return;
+		}
+
+		// Direct (non-debounced) rendering for completed streams
 		const mermaidElements = container.querySelectorAll(
 			".mermaid:not([data-processed])",
 		);
@@ -319,17 +738,15 @@ class MessageRenderer {
 	}
 
 	initializeTableCopyButtons(container) {
-		// Find all tables that don't already have a copy button
+		// Tables now use data-action attributes, no inline handlers needed
+		// This method can be simplified or removed
 		const tables = container.querySelectorAll("table:not([data-copy-btn])");
 
 		tables.forEach((table) => {
-			// Mark as processed
 			table.setAttribute("data-copy-btn", "true");
 
-			// Create wrapper if not already wrapped
 			const existingWrapper = table.closest(".table-container");
 			if (existingWrapper) {
-				// Already wrapped, add button to header if not present
 				const existingHeader = existingWrapper.querySelector(".table-header");
 				if (
 					existingHeader &&
@@ -337,6 +754,7 @@ class MessageRenderer {
 				) {
 					const copyBtn = document.createElement("button");
 					copyBtn.className = "copy-table-btn";
+					copyBtn.setAttribute("data-action", "copy-table");
 					copyBtn.title = "Copy table";
 					copyBtn.innerHTML = `
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -345,58 +763,10 @@ class MessageRenderer {
                         </svg>
                         Copy
                     `;
-					copyBtn.onclick = (e) => {
-						e.preventDefault();
-						this.copyTable(table);
-					};
 					existingHeader.appendChild(copyBtn);
 				}
 			}
 		});
-	}
-
-	copyTable(table) {
-		// Convert table to TSV (tab-separated values)
-		const rows = table.querySelectorAll("tr");
-		const tsvLines = [];
-
-		rows.forEach((row) => {
-			const cells = row.querySelectorAll("th, td");
-			const cellTexts = Array.from(cells).map((cell) => {
-				// Get text content, replace newlines with spaces
-				return cell.textContent.trim().replace(/\n/g, " ");
-			});
-			tsvLines.push(cellTexts.join("\t"));
-		});
-
-		const tsv = tsvLines.join("\n");
-
-		navigator.clipboard
-			.writeText(tsv)
-			.then(() => {
-				// Show success feedback
-				const wrapper = table.closest(".table-container");
-				if (wrapper) {
-					const copyBtn = wrapper.querySelector(".copy-table-btn");
-					if (copyBtn) {
-						const originalHTML = copyBtn.innerHTML;
-						copyBtn.innerHTML = `
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                        Copied!
-                    `;
-						copyBtn.classList.add("copied");
-						setTimeout(() => {
-							copyBtn.innerHTML = originalHTML;
-							copyBtn.classList.remove("copied");
-						}, 2000);
-					}
-				}
-			})
-			.catch((err) => {
-				console.error("Failed to copy table:", err);
-			});
 	}
 
 	escapeHtml(text) {
@@ -547,8 +917,17 @@ class MessageRenderer {
 		}
 
 		try {
+			// PRE-PROCESS: Handle <command> blocks FIRST (before markdown)
+			let processedMarkdown = this.preprocessCommandBlocks(safeMarkdown);
+
+			// PRE-PROCESS: Handle <tools> blocks
+			processedMarkdown = this.preprocessToolBlocks(processedMarkdown);
+
+			// PRE-PROCESS: Handle cognitive trace blocks (think, analysis, decision)
+			processedMarkdown = this.preprocessCognitiveBlocks(processedMarkdown);
+
 			// Pre-process: Convert plain text image patterns to markdown
-			const processedMarkdown = this.preprocessGeneratedImages(safeMarkdown);
+			processedMarkdown = this.preprocessGeneratedImages(processedMarkdown);
 
 			// Parse markdown
 			let html = marked.parse(processedMarkdown);
@@ -561,6 +940,26 @@ class MessageRenderer {
 			console.error("Render error:", error, safeMarkdown);
 			return `<pre class="render-error">${this.escapeHtml(safeMarkdown)}</pre>`;
 		}
+	}
+
+	// DEPRECATED: MutationObserver removed - tool blocks are now pre-parsed
+	static toolObserver = null;
+	static toolObserverInitialized = false;
+
+	// Static escape method kept for backwards compatibility
+	static escapeHtmlStatic(text) {
+		const div = document.createElement("div");
+		div.textContent = text;
+		return div.innerHTML;
+	}
+
+	// initToolObserver disabled - now handled by preprocessToolBlocks in render()
+	static initToolObserver() {
+		// Disabled: Tool blocks are now pre-parsed before markdown rendering
+		// See preprocessToolBlocks() method
+		console.log(
+			"[Renderer] Tool MutationObserver disabled - using pre-parsing instead",
+		);
 	}
 
 	preprocessGeneratedImages(text) {
@@ -615,12 +1014,12 @@ class MessageRenderer {
 				const wrapper = document.createElement("div");
 				wrapper.className = "table-container";
 
-				// Add header with copy button
+				// Add header with copy button (using data-action for event delegation)
 				const header = document.createElement("div");
 				header.className = "table-header";
 				header.innerHTML = `
                     <span class="table-label">Table</span>
-                    <button class="copy-table-btn" onclick="renderer.copyTable(this.closest('.table-container').querySelector('table'))">
+                    <button class="copy-table-btn" data-action="copy-table">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -673,7 +1072,8 @@ class MessageRenderer {
 
 	renderWithoutMarked(markdown) {
 		try {
-			const processed = this.preprocessGeneratedImages(markdown);
+			let processed = this.preprocessToolBlocks(markdown);
+			processed = this.preprocessGeneratedImages(processed);
 			let html = this.escapeHtml(processed);
 
 			html = html.replace(
@@ -698,28 +1098,18 @@ class MessageRenderer {
 
 	copyCode(button) {
 		const codeBlock = button.closest(".code-block-container");
-		const code = codeBlock.querySelector("code").textContent;
+		const code = codeBlock?.querySelector("code")?.textContent || "";
+		ClipboardUtils.copyText(code, button);
+	}
 
-		navigator.clipboard
-			.writeText(code)
-			.then(() => {
-				const originalText = button.innerHTML;
-				button.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                Copied!
-            `;
-				button.classList.add("copied");
-
-				setTimeout(() => {
-					button.innerHTML = originalText;
-					button.classList.remove("copied");
-				}, 2000);
-			})
-			.catch((err) => {
-				console.error("Failed to copy code:", err);
-			});
+	/**
+	 * Copy mermaid diagram source code.
+	 * Used by the copy button in mermaid code blocks.
+	 */
+	copyMermaidCode(button) {
+		const encodedCode = button.getAttribute("data-mermaid-code") || "";
+		const code = decodeURIComponent(encodedCode);
+		ClipboardUtils.copyText(code, button);
 	}
 
 	renderMessage(content, _isUser = false) {
@@ -728,7 +1118,7 @@ class MessageRenderer {
 
 	containsImageMarkdown(content) {
 		if (!content) return false;
-		return /!\s*\[[^\]]*\]\s*\n?\s*\([^)]+\)/.test(String(content));
+		return /!\s*\[[^\]]*\]\s*\n?\s*\(([^)]+)\)/.test(String(content));
 	}
 
 	// ==================== STREAMING-AWARE RENDERING ====================
@@ -892,22 +1282,7 @@ class MessageRenderer {
 
 	showHtmlPreviewModal(btn) {
 		const rawCode = decodeURIComponent(btn.dataset.code || "");
-		const modal = document.getElementById("html-preview-modal");
-		const iframe = document.getElementById("preview-iframe");
-		if (!modal || !iframe || !rawCode) return;
-		// Unescape HTML entities (code may be double-encoded from marked.js escaping)
-		const code = rawCode
-			.replace(/&lt;/g, "<")
-			.replace(/&gt;/g, ">")
-			.replace(/&quot;/g, '"')
-			.replace(/&#39;/g, "'")
-			.replace(/&#x27;/g, "'")
-			.replace(/&amp;/g, "&");
-		// Allow srcdoc to handle the rest (don't over-unescape)
-		modal.classList.add("active");
-		document.body.style.overflow = "hidden";
-		// srcdoc handles HTML natively - just pass the unescaped code
-		iframe.srcdoc = code;
+		showHtmlPreviewModal(encodeURIComponent(rawCode));
 	}
 
 	closeHtmlModal() {
@@ -987,13 +1362,31 @@ class MessageRenderer {
 // Create global renderer instance
 const renderer = new MessageRenderer();
 
-// === HTML Preview Modal ===
+// Expose ClipboardUtils globally for use by other scripts (e.g., chat.js)
+window.ClipboardUtils = ClipboardUtils;
+
+// NOTE: Tool MutationObserver removed - tools are now pre-parsed via preprocessToolBlocks()
+// Event delegation for copy buttons is handled at the top of the file (see line 68)
+// === HTML Preview Modal Close Handler ===
 document.addEventListener("click", (e) => {
-	var btn = e.target.closest(".preview-code-btn");
-	if (!btn) return;
-	var rawCode = btn.getAttribute("data-code") || "";
-	try {
-		rawCode = decodeURIComponent(rawCode);
-	} catch (_err) {}
-	if (rawCode) renderer.showHtmlPreviewModal(rawCode);
+	if (
+		e.target.closest(".modal-close-btn") ||
+		e.target.id === "modal-backdrop"
+	) {
+		renderer.closeHtmlModal();
+	}
+});
+
+// === Theme Toggle for Preview ===
+document.addEventListener("click", (e) => {
+	if (e.target.closest("#theme-toggle-btn")) {
+		renderer.togglePreviewTheme();
+	}
+});
+
+// === Fullscreen Toggle for Preview ===
+document.addEventListener("click", (e) => {
+	if (e.target.closest("#fullscreen-toggle-btn")) {
+		renderer.togglePreviewFullscreen();
+	}
 });

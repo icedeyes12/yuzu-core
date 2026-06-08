@@ -94,6 +94,7 @@ app/
 ├── profile_analysis.py
 ├── prompts.py
 ├── providers.py
+├── stream_manager.py         # Background stream buffers and reconnect state
 └── visual_context.py
 ```
 
@@ -117,6 +118,8 @@ The single entry point for handling user messages. Coordinates:
 3. **Standard tool calling** — `tool_calls` from LLM + legacy `/command` fallback
 4. Memory pipeline triggering
 5. Response generation via provider selection
+
+Streaming execution now runs in a background worker thread, with cooperative cancellation via `abort_check` and a 30-iteration orchestration ceiling.
 
 ### `file app.py` — Core Application Facade
 
@@ -149,6 +152,10 @@ Minimal entry point that sets up the web server:
 
 All API endpoints are defined in `file app/api/routes.py`.
 
+### `file stream_manager.py` — Streaming State Coordinator
+
+`StreamManager` owns in-flight stream buffers outside the request thread. It accumulates chunks, replays buffered output to reconnecting clients, and retires stale buffers after a fixed TTL. The API layer reads from it during reconnect and profile reload paths, while the orchestrator worker thread writes into it as generation advances.
+
 ---
 
 ## API Routing
@@ -165,8 +172,8 @@ All `/api/*` endpoints (\~700 lines):
 | --- | --- | --- |
 | `/api/config` | GET | Frontend SSOT for vision models |
 | `/api/send_message` | POST | Synchronous message handling |
-| `/api/send_message_stream` | POST | Streaming message handling |
-| `/api/get_profile` | GET | Profile data |
+| `/api/send_message_stream` | POST | Streaming message handling with state reattachment |
+| `/api/get_profile` | GET | Profile data with active stream recovery |
 | `/api/providers/*` | \* | Provider management |
 | `/api/sessions/*` | \* | Session CRUD |
 | `/api/memory_stats` | GET | Memory statistics |
@@ -190,6 +197,8 @@ Returns dynamic configuration for the frontend:
 ```
 
 This eliminates hardcoded vision model lists in `file static/js/config.js`.
+
+The streaming endpoints support state reattachment. When a background stream is still active, `/api/send_message_stream` and `/api/get_profile` can surface the live buffer content so the UI can recover after a disconnect or reload without losing the partial assistant response.
 
 ---
 

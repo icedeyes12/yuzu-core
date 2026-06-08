@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.6] - 2026-05-22
+
+### Changed
+- Decoupled streaming orchestration from the HTTP request lifecycle by moving `handle_user_message_streaming()` into background worker threads.
+- Added cooperative cancellation via `abort_check` so an active stream can stop cleanly when it is superseded or explicitly finished.
+- Added lazy synthesis record creation to avoid inserting empty assistant rows before content exists.
+- Introduced `StreamManager` as a singleton stream buffer cache with a 15-minute buffer TTL, incremental chunk accumulation, and periodic database persistence every 2 seconds.
+- Added reconnectable stream state reattachment in `/api/send_message_stream` and `/api/get_profile`, including live buffer injection with sentinel message ID `-99` for UI recovery after reload.
+- Increased the orchestration loop ceiling to 30 iterations to support the extended agentic state machine.
+- Updated database write paths to support incremental `update_message` operations through pooled connections.
+
 ## [3.0.5] - 2026-05-13
 
 ### Changed
@@ -236,7 +247,7 @@ This release modernizes the codebase for Python 3.13 while maintaining backward 
 
 | Category | Files |
 | --- | --- |
-| Core | `file app/app.py`, `file app/providers.py`, `file app/database.py`, `file web.py`, `file main.py` |
+| Core | `file app/app.py`, `file app/providers.py`, `file app.db.py`, `file web.py`, `file main.py` |
 | Tools | All `file app/tools/*.py` (7 files) |
 | Memory | All `file app/memory/*.py` (10 files) |
 | API | `file app/api/routes.py`, `file app/api/__init__.py` |
@@ -282,7 +293,7 @@ This is a **major refactor** focused on simplicity, clarity, and maintainability
 
 #### Stage 2: Database Simplification
 
-- **`file app/database.py`**: **DELETED** — removed passthrough wrapper
+- **`file app.db.py`**: **DELETED** — removed passthrough wrapper
 - All callers migrated to direct `db_pg_models` imports
 
 #### Stage 3: db_pg Cleanup
@@ -554,7 +565,7 @@ All **GitHub Advanced Security alerts resolved**:
 
 ### Changed — Database Interface
 
-- **`file app/database.py`**: Refactored as thin delegate layer
+- **`file app.db.py`**: Refactored as thin delegate layer
   - All operations delegate to `file db_pg_models.py`
   - ORM models removed: `SemanticMemory`, `EpisodicMemory`, `ConversationSegment` → deprecated
   - `Profile`, `ChatSession`, `Message`, `APIKey` tables remain (via psycopg2)
@@ -656,7 +667,7 @@ All **GitHub Advanced Security alerts resolved**:
 
 ### Added — FastAPI Database Support
 
-- `file app/database.py`: Added `get_db()` generator for FastAPI `Depends()` dependency injection
+- `file app.db.py`: Added `get_db()` generator for FastAPI `Depends()` dependency injection
   - Maintains compatibility with legacy `get_db_session()` context manager
 
 ### Migrated — Entry Point
@@ -696,7 +707,7 @@ All **GitHub Advanced Security alerts resolved**:
 ### Fixed — Memory System (Medium)
 
 - **M1**: Inconsistent `confidence`/`importance` across creation paths — standardized to `confidence=0.7, importance=0.7` in `upsert_semantic_memory` and all migration paths
-- **M3**: `file models.py` was empty and misleading — now properly re-exports `SemanticMemory`, `EpisodicMemory`, `ConversationSegment` from `app.database` with `__all__`
+- **M3**: `file models.py` was empty and misleading — now properly re-exports `SemanticMemory`, `EpisodicMemory`, `ConversationSegment` from `app.db` with `__all__`
 - **M4**: `source_episode_id` misattributed — all facts in a batch were tagged with `batch[0]["id"]`; fixed to round-robin per-episode attribution
 - **M5**: Inconsistent dedup strategy between `memory_store` tool and `upsert_semantic_memory` — resolved (both now use cosine similarity >0.95)
 

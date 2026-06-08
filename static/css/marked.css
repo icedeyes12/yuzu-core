@@ -900,12 +900,16 @@
 	width: 32px;
 	height: 32px;
 	color: var(--accent-primary);
-	animation: mermaidSpin 1s linear infinite;
+	animation: mermaidPulse 1.2s ease-in-out infinite;
 }
 
-@keyframes mermaidSpin {
-	from { transform: rotate(0deg); }
-	to { transform: rotate(360deg); }
+@keyframes mermaidPulse {
+	0%, 100% {
+		opacity: 0.4;
+	}
+	50% {
+		opacity: 1.0;
+	}
 }
 
 .mermaid-loader-dots {
@@ -929,4 +933,193 @@
 
 [data-theme="light"] .mermaid-placeholder-text {
 	color: var(--text-muted, #666);
+}
+
+/* ==================== SYSTEM ACTION BLOCKS ==================== */
+/* Seamless, mobile-friendly containers for command and tool blocks */
+
+.system-action-block {
+	background: rgba(255, 255, 255, 0.03);
+	border: 1px solid var(--border-ai, rgba(255, 255, 255, 0.1));
+	border-radius: 12px;
+	margin: 8px 0;
+	overflow: hidden;
+}
+
+.command-block {
+	border-left: 3px solid var(--accent-secondary, #8b5cf6);
+}
+
+.tool-result-block {
+	border-left: 3px solid var(--accent-primary, #3b82f6);
+}
+
+.action-header {
+	display: flex;
+	align-items: center;
+	padding: 8px 12px;
+	background: rgba(0, 0, 0, 0.2);
+	font-size: 0.8rem;
+	color: var(--text-muted, #a1a1aa);
+	font-family: sans-serif;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	cursor: pointer;
+	user-select: none;
+}
+
+.action-content {
+	padding: 12px;
+	font-size: 0.85rem;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+	color: var(--text-color, #e2e8f0);
+	line-height: 1.5;
+}
+
+.code-font {
+	font-family: "JetBrains Mono", "Fira Code", "Consolas", "Monaco", monospace;
+}
+
+/* Remove default focus outlines on summary */
+.system-action-block summary {
+	outline: none;
+}
+
+.system-action-block summary::-webkit-details-marker {
+	display: none;
+}
+
+.system-action-block summary::marker {
+	display: none;
+}
+
+.system-action-block summary:focus {
+	outline: none;
+}
+
+/* Hover state for tool result header */
+.tool-result-block summary:hover {
+	background: rgba(255, 255, 255, 0.05);
+}
+
+/* Open state border */
+.system-action-block[open] summary {
+	border-bottom: 1px solid var(--border-ai, rgba(255, 255, 255, 0.1));
+}
+
+/* ========================================
+   KATEX MATH RENDERING
+   ======================================== */
+
+.message-content .katex-display {
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding: 0.8rem 0;
+	margin: 0.5rem 0;
+	scrollbar-width: thin;
+	scrollbar-color: var(--border-primary) transparent;
+}
+
+/* Inherit theme colors for better visibility */
+.katex {
+	color: inherit;
+	font-size: 1.1em;
+}
+
+/* Custom slim scrollbar for math display */
+.katex-display::-webkit-scrollbar {
+	height: 6px;
+}
+
+.katex-display::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.katex-display::-webkit-scrollbar-thumb {
+	background: var(--border-primary);
+	border-radius: 10px;
+}
+
+.katex-display::-webkit-scrollbar-thumb:hover {
+	background: var(--accent-primary);
+}
+
+/* ========================================
+   COGNITIVE TRACE BLOCKS (think, analysis, decision)
+   Seamless collapsible containers for AI reasoning transparency
+   ======================================== */
+
+.message-content .cognitive-block {
+	margin: 0.5rem 0;
+	border-radius: 6px;
+	background: rgba(255, 255, 255, 0.03);
+	border-left: 2px solid var(--border-primary, rgba(255, 255, 255, 0.1));
+	transition: background 0.2s ease;
+}
+
+.message-content .cognitive-block summary {
+	padding: 0.4rem 0.8rem;
+	font-size: 0.85rem;
+	color: var(--text-muted, rgba(255, 255, 255, 0.6));
+	cursor: pointer;
+	user-select: none;
+	outline: none;
+	list-style: none;
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.message-content .cognitive-block summary::-webkit-details-marker {
+	display: none;
+}
+
+.message-content .cognitive-block summary::before {
+	content: "▶";
+	font-size: 0.7rem;
+	transition: transform 0.2s ease;
+}
+
+.message-content .cognitive-block[open] summary::before {
+	transform: rotate(90deg);
+}
+
+.message-content .cognitive-block summary:hover {
+	background: rgba(255, 255, 255, 0.04);
+}
+
+.message-content .cognitive-block[open] summary {
+	border-bottom: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+}
+
+.message-content .cognitive-content {
+	padding: 0.6rem 0.8rem;
+	font-size: 0.85rem;
+	color: var(--text-muted, rgba(255, 255, 255, 0.65));
+	line-height: 1.5;
+	white-space: pre-wrap;
+	font-family: inherit;
+	max-height: 300px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: var(--border-primary, rgba(255, 255, 255, 0.1)) transparent;
+}
+
+.message-content .cognitive-content::-webkit-scrollbar {
+	width: 5px;
+}
+
+.message-content .cognitive-content::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.message-content .cognitive-content::-webkit-scrollbar-thumb {
+	background: var(--border-primary, rgba(255, 255, 255, 0.15));
+	border-radius: 10px;
+}
+
+.message-content .cognitive-content::-webkit-scrollbar-thumb:hover {
+	background: var(--border-primary, rgba(255, 255, 255, 0.25));
 }

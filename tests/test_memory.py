@@ -171,4 +171,4 @@ class TestConstants:
         assert FACT_TYPE_DYNAMIC == "dynamic"
 
     def test_embedding_dim(self):
-        assert EMBEDDING_DIM == 1024
+        assert EMBEDDING_DIM == 4096

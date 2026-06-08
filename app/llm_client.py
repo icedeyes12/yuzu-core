@@ -5,15 +5,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
-from typing import Any, Iterable, Iterator
+from typing import Any, Iterable, AsyncIterator
 
-import requests
+import httpx
 
-from app.database import Database
+from app.db import Database
 from app.logging_config import get_logger
 from app.prompts import build_messages
 from app.providers import get_ai_manager
+from app.providers.base import _rate_limit_provider
 from app.tools import multimodal_tools
 from app.tools.registry import get_tool_definitions
 from app.visual_context import (
@@ -24,6 +26,7 @@ from app.visual_context import (
 log = get_logger(__name__)
 
 CHUTES_URL = "https://llm.chutes.ai/v1/chat/completions"
+CHUTES_MODEL = "google/gemma-4-31B-turbo-TEE"  # Default model for chutes_chat
 _DEFAULT_HEADERS = {
     "Content-Type": "application/json",
     "HTTP-Referer": "https://github.com/icedeyes12/yuzu-companion",
@@ -35,17 +38,20 @@ _DEFAULT_HEADERS = {
 # ---------------------------------------------------------------------------
 
 
-def chutes_chat(
+async def chutes_chat(
     prompt: str,
+    model: str = CHUTES_MODEL,
     *,
-    api_key: str,
-    model: str,
     system: str | None = None,
-    title: str = "Yuzu",
-    temperature: float = 0.3,
-    max_tokens: int = 1000,
-    timeout: int = 60,
+    title: str = "chutes_chat",
+    api_key: str | None = None,
+    temperature: float = 0.7,
+    max_tokens: int = 2048,
+    timeout: float = 90.0,
     fallback_models: Iterable[str] = (),
+    max_429_retries: int = 3,
+    backoff_base: float = 2.0,
+    source: str = "helper",
 ) -> str | None:
     """POST a single-turn prompt to the Chutes API. Try *fallback_models* on failure.
 
@@ -59,36 +65,54 @@ def chutes_chat(
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
-    headers = {**_DEFAULT_HEADERS, "X-Title": title, "Authorization": f"Bearer {api_key}"}
+    headers = {
+        **_DEFAULT_HEADERS,
+        "X-Title": title,
+        "Authorization": f"Bearer {api_key}",
+    }
 
-    for candidate in (model, *fallback_models):
-        try:
-            response = requests.post(
-                CHUTES_URL,
-                headers=headers,
-                json={
-                    "model": candidate,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "stream": False,
-                },
-                timeout=timeout,
-            )
-        except requests.RequestException as e:
-            log.warning("chutes call failed for %s: %s", candidate, e)
-            continue
+    async with httpx.AsyncClient() as client:
+        for candidate in (model, *fallback_models):
+            for retry in range(max_429_retries):
+                try:
+                    async with _rate_limit_provider("chutes", candidate, source):
+                        response = await client.post(
+                            CHUTES_URL,
+                            headers=headers,
+                            json={
+                                "model": candidate,
+                                "messages": messages,
+                                "temperature": temperature,
+                                "max_tokens": max_tokens,
+                                "stream": False,
+                            },
+                            timeout=timeout,
+                        )
+                except httpx.RequestError as e:
+                    log.warning("chutes call failed for %s: %s", candidate, e)
+                    continue
 
-        if response.status_code == 200:
-            try:
-                return response.json()["choices"][0]["message"]["content"].strip()
-            except (KeyError, IndexError, ValueError) as e:
-                log.warning("chutes response parse failed for %s: %s", candidate, e)
-                continue
+                if response.status_code == 200:
+                    try:
+                        return response.json()["choices"][0]["message"][
+                            "content"
+                        ].strip()
+                    except (KeyError, IndexError, ValueError) as e:
+                        log.warning(
+                            "chutes response parse failed for %s: %s", candidate, e
+                        )
+                        continue
 
-        log.warning(
-            "chutes %s -> HTTP %s: %s", candidate, response.status_code, response.text[:200]
-        )
+                if response.status_code == 429 and retry < max_429_retries - 1:
+                    await asyncio.sleep(backoff_base**retry)
+                    continue
+
+                log.warning(
+                    "chutes %s -> HTTP %s: %s",
+                    candidate,
+                    response.status_code,
+                    response.text[:200],
+                )
 
     return None
 
@@ -106,51 +130,29 @@ def _apply_vision_routing(
     image_content_for_context: list[dict[str, Any]] | None,
 ) -> tuple[list[dict[str, Any]], str, str]:
     """Switch to vision provider/model when needed and rewrite the last user msg."""
-    if image_content_for_context is not None:
-        vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
-        if vision_provider and vision_model:
-            log.info(
-                "force-switch to vision %s/%s for image_tools output",
-                vision_provider,
-                vision_model,
-            )
-            messages.append(
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Here's the generated image for your reference."},
-                        *image_content_for_context,
-                    ],
-                }
-            )
-            return messages, vision_provider, vision_model
-
-    if not multimodal_tools.should_use_vision(user_message, provider, model):
-        return messages, provider, model
-
-    vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
-    if not (vision_provider and vision_model):
-        return messages, provider, model
-
-    vision_messages = multimodal_tools.format_vision_message(user_message)
-    if messages and messages[-1].get("role") == "user":
-        messages = messages[:-1] + vision_messages
-    return messages, vision_provider, vision_model
+    # DEPRECATED: Automatic vision model switching is removed in favor of manual configuration and validation.
+    return messages, provider, model
 
 
 def _inject_persistent_visual(
-    messages: list[dict[str, Any]], user_message: str, session_id: int | None
+    messages: list[dict[str, Any]],
+    user_message: str,
+    session_id: int | None,
+    is_tool_loop: bool = False,
 ) -> None:
     if not (session_id and has_visual_reference(user_message)):
         return
-    prev_b64, prev_mime = consume_visual_context(session_id)
+    prev_b64, prev_mime = consume_visual_context(session_id, is_tool_loop=is_tool_loop)
     if not (prev_b64 and prev_mime):
         return
     messages.append(
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": "[Previous image context re-attached for comparison]"},
+                {
+                    "type": "text",
+                    "text": "[Previous image context re-attached for comparison]",
+                },
                 {
                     "type": "image_url",
                     "image_url": {"url": f"data:{prev_mime};base64,{prev_b64}"},
@@ -197,29 +199,45 @@ def _resolve_provider(
     )
 
 
-def _send_to_provider(
+async def _send_to_provider(
     provider: str,
     model: str,
     messages: list[dict[str, Any]],
     *,
     image_context: list[dict[str, Any]] | None,
+    source: str = "chat",
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single LLM dispatch with timing log. Returns (text, raw_response)."""
-    ai_manager = get_ai_manager()
+    ai_manager = await get_ai_manager()
     schemas = _unique_tool_schemas()
 
     if image_context and provider in ai_manager.providers:
-        v_provider, v_model = multimodal_tools.get_best_vision_provider()
-        if v_provider and v_model:
-            log.info("2nd-pass vision: %s/%s", v_provider, v_model)
-            provider, model = v_provider, v_model
-            schemas = []  # vision models don't accept tool schemas
+        # Capability check: prefer native vision model if available
+        if multimodal_tools.is_vision_model(model, provider):
+            log.info(
+                "2nd-pass: %s/%s is vision-capable, reusing for image synthesis",
+                provider,
+                model,
+            )
+        else:
+            # Current model lacks vision support, use fallback
+            v_provider, v_model = multimodal_tools.get_best_vision_provider()
+            if v_provider and v_model:
+                log.info(
+                    "2nd-pass vision fallback: %s/%s (non-vision) -> %s/%s",
+                    provider,
+                    model,
+                    v_provider,
+                    v_model,
+                )
+                provider, model = v_provider, v_model
+                schemas = []  # vision models don't accept tool schemas
 
     started = time.time()
     raw_response: dict[str, Any] | None = None
     try:
-        raw_response = ai_manager.send_message_raw(
-            provider, model, messages, timeout=180, tools=schemas
+        raw_response = await ai_manager.send_message_raw(
+            provider, model, messages, source=source, timeout=180, tools=schemas
         )
     except Exception as e:  # noqa: BLE001
         log.error("send_message exception (%s/%s): %s", provider, model, e)
@@ -240,7 +258,10 @@ def _send_to_provider(
     if text:
         log.info(
             "chat %s/%s | tools=%d | %.1fs ok",
-            provider, model, len(schemas), duration,
+            provider,
+            model,
+            len(schemas),
+            duration,
         )
         return text, raw_response
 
@@ -248,74 +269,136 @@ def _send_to_provider(
     return text, raw_response
 
 
-def generate_ai_response(
+async def generate_ai_response(
     profile: dict[str, Any],
     user_message: str,
     interface: str = "terminal",
     session_id: int | None = None,
     image_content_for_context: list[dict[str, Any]] | None = None,
+    ephemeral_context: list[dict[str, str]] | None = None,
+    is_tool_loop: bool = False,
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single (text, raw_response) AI generation pass.
 
     raw_response is the full API response dict, used for tool-call parsing.
     Legacy /command detection lives in the orchestrator.
+
+    NOTE: build_messages() fetches full history including the just-persisted
+    user message. We do NOT re-append user_message to avoid duplication.
+
+    ephemeral_context: In-memory context (assistant tool calls + results)
+    not yet persisted to DB. Stitched after build_messages() for synthesis.
     """
     if session_id is None:
-        session_id = Database.get_active_session()["id"]
+        session_id = (await Database.get_active_session_async())["id"]
 
     provider, model = _resolve_provider(profile, None, None)
-    messages = build_messages(profile, session_id, interface, user_message)
-    if user_message and user_message.strip():
-        messages.append({"role": "user", "content": user_message})
 
-    messages, provider, model = _apply_vision_routing(
-        messages, user_message, provider, model, image_content_for_context
+    # Validation: If images are present but model is not vision-capable, abort
+    if multimodal_tools.has_images(
+        user_message
+    ) and not multimodal_tools.is_vision_model(model):
+        error_msg = "[System] Current model does not support vision. Please reconfigure your active model to a multimodal one first~ :3"
+        await Database.add_message_async("system", error_msg, session_id=session_id)
+        return error_msg, None
+
+    # build_messages() fetches history which ALREADY contains the user message
+    # (persisted by orchestrator before calling this function)
+    messages = await build_messages(
+        profile, session_id, interface, user_message, include_image_paths=True
     )
-    _inject_persistent_visual(messages, user_message, session_id)
 
-    text, raw = _send_to_provider(
-        provider, model, messages, image_context=image_content_for_context
+    # Stitch in-memory context (assistant tool calls + results) not yet in DB
+    if ephemeral_context:
+        messages.extend(ephemeral_context)
+
+    # DO NOT re-append user_message here - it's already in history
+    # The history from build_messages() is authoritative
+
+    # Apply the Interceptor Hook
+    messages = multimodal_tools.inject_vision_context(messages, model)
+
+    if image_content_for_context:
+        # 2nd pass synthesis often has image context from tool results
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Here's the generated image for your reference.",
+                    },
+                    *image_content_for_context,
+                ],
+            }
+        )
+
+    _inject_persistent_visual(
+        messages, user_message, session_id, is_tool_loop=is_tool_loop
+    )
+
+    text, raw = await _send_to_provider(
+        provider,
+        model,
+        messages,
+        image_context=image_content_for_context,
+        source="chat",
     )
     return text, raw
 
 
-def _stream_from_provider(
+async def _stream_from_provider(
     provider: str,
     model: str,
     messages: list[dict[str, Any]],
     *,
     image_context: list[dict[str, Any]] | None,
-) -> Iterator[str]:
+    source: str = "chat",
+) -> AsyncIterator[str]:
     """Yield raw chunks from the provider's streaming API."""
-    ai_manager = get_ai_manager()
+    ai_manager = await get_ai_manager()
 
     if image_context and provider in ai_manager.providers:
-        v_provider, v_model = multimodal_tools.get_best_vision_provider()
-        if v_provider and v_model:
-            log.info("streaming 2nd-pass vision: %s/%s", v_provider, v_model)
-            provider, model = v_provider, v_model
+        # Capability check: prefer native vision model if available
+        if multimodal_tools.is_vision_model(model, provider):
+            log.info(
+                "streaming 2nd-pass: %s/%s is vision-capable, reusing for image synthesis",
+                provider,
+                model,
+            )
+        else:
+            # Current model lacks vision support, use fallback
+            v_provider, v_model = multimodal_tools.get_best_vision_provider()
+            if v_provider and v_model:
+                log.info(
+                    "streaming 2nd-pass vision fallback: %s/%s (non-vision) -> %s/%s",
+                    provider,
+                    model,
+                    v_provider,
+                    v_model,
+                )
+                provider, model = v_provider, v_model
 
-    started = time.time()
     received = 0
     try:
-        for chunk in ai_manager.send_message_streaming(
-            provider, model, messages, timeout=180
+        async for chunk in ai_manager.send_message_streaming(
+            provider, model, messages, source=source, timeout=180
         ):
             if chunk:
                 received += len(chunk)
                 yield chunk
+    except asyncio.CancelledError:
+        # Stream was cancelled (user clicked Stop) - propagate up
+        log.info(
+            "stream cancelled by user at llm_client layer (%d chars received)", received
+        )
+        raise
     except Exception as e:  # noqa: BLE001
         log.error("streaming exception (%s/%s): %s", provider, model, e)
         return
 
-    duration = time.time() - started
-    log.info(
-        "chat (stream) %s/%s | chars=%d | %.1fs",
-        provider, model, received, duration,
-    )
 
-
-def generate_ai_response_streaming(
+async def generate_ai_response_streaming(
     profile: dict[str, Any],
     user_message: str,
     interface: str = "terminal",
@@ -323,30 +406,72 @@ def generate_ai_response_streaming(
     provider: str | None = None,
     model: str | None = None,
     image_content_for_context: list[dict[str, Any]] | None = None,
-) -> Iterator[str]:
+    ephemeral_context: list[dict[str, str]] | None = None,
+    is_tool_loop: bool = False,
+) -> AsyncIterator[str]:
     """Stream a response from the configured provider chunk by chunk.
 
     Performs the same context assembly and vision routing as the
     non-streaming variant, then dispatches via the provider's streaming
     API. Yields raw provider chunks; the orchestrator is responsible for
     filtering /command preambles and post-processing.
+
+    NOTE: build_messages() fetches full history including the just-persisted
+    user message. We do NOT re-append user_message to avoid duplication.
     """
     if session_id is None:
-        session_id = Database.get_active_session()["id"]
+        session_id = (await Database.get_active_session_async())["id"]
 
     resolved_provider, resolved_model = _resolve_provider(profile, provider, model)
-    messages = build_messages(profile, session_id, interface, user_message)
-    if user_message and user_message.strip():
-        messages.append({"role": "user", "content": user_message})
 
-    messages, resolved_provider, resolved_model = _apply_vision_routing(
-        messages, user_message, resolved_provider, resolved_model, image_content_for_context
+    # Validation: If images are present but model is not vision-capable, abort
+    if multimodal_tools.has_images(
+        user_message
+    ) and not multimodal_tools.is_vision_model(resolved_model):
+        error_msg = "[System] Current model does not support vision. Please reconfigure your active model to a multimodal one first~ :3"
+        await Database.add_message_async("system", error_msg, session_id=session_id)
+        yield error_msg
+        return
+
+    # build_messages() fetches history which ALREADY contains the user message
+    # (persisted by orchestrator before calling this function)
+    messages = await build_messages(
+        profile, session_id, interface, user_message, include_image_paths=True
     )
-    _inject_persistent_visual(messages, user_message, session_id)
 
-    yield from _stream_from_provider(
+    # Stitch in-memory context (assistant tool calls + results) not yet in DB
+    if ephemeral_context:
+        messages.extend(ephemeral_context)
+
+    # DO NOT re-append user_message here - it's already in history
+    # The history from build_messages() is authoritative
+
+    # Apply the Interceptor Hook
+    messages = multimodal_tools.inject_vision_context(messages, resolved_model)
+
+    if image_content_for_context:
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Here's the generated image for your reference.",
+                    },
+                    *image_content_for_context,
+                ],
+            }
+        )
+
+    _inject_persistent_visual(
+        messages, user_message, session_id, is_tool_loop=is_tool_loop
+    )
+
+    async for chunk in _stream_from_provider(
         resolved_provider,
         resolved_model,
         messages,
         image_context=image_content_for_context,
-    )
+        source="chat",
+    ):
+        yield chunk

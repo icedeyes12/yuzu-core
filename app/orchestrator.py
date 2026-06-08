@@ -1,27 +1,32 @@
 # FILE: app/orchestrator.py
 # DESCRIPTION: Single entrypoint for handling user messages.
-#              Coordinates: LLM call -> tool detection -> tool exec -> synthesis.
+#              Implements Thought → Action → Observation agentic loop.
+#              Uses <tool>...</tool> protocol for tool invocation.
 
 from __future__ import annotations
 
+import asyncio
+import os
 import re
-from typing import Any, Iterator
+from pathlib import Path
+from typing import Any, AsyncIterator
 
 from app.commands import (
     IMAGE_SHORTCUT_WARNING,
-    StreamFilter,
-    detect_command,
-    execute_command,
-    extract_markdown_image_path,
+    execute_commands,
+    has_tool_blocks,
     is_markdown_image_shortcut,
     parse_image_path,
+    parse_tool_blocks,
 )
-from app.database import Database
+from app.db import Database
 from app.llm_client import (
     generate_ai_response,
     generate_ai_response_streaming,
 )
 from app.logging_config import get_logger
+from app.services.session_service import SessionService
+from app.services.memory_service import MemoryService
 from app.tools import multimodal_tools
 from app.tools.registry import get_tool_role
 from app.visual_context import store_visual_context
@@ -29,130 +34,143 @@ from app.visual_context import store_visual_context
 log = get_logger(__name__)
 
 _TIMESTAMP_SUFFIX = re.compile(r"\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$")
-_NESTED_COMMAND_PREFIXES = ("/request", "/imagine")
 _EMPTY_RESPONSE_FALLBACK = "I'm having trouble responding right now. Please try again."
 _MD_IMAGE_PATTERN = re.compile(r"!\[[^\]]{0,200}\]\(([^)]{1,200})\)")
 
+# Services
 
-# ---------------------------------------------------------------------------
-# Image-cache helpers (used to attach uploaded/markdown images to user msgs)
-# ---------------------------------------------------------------------------
+# Maximum orchestration loops to prevent runaway execution
+_MAX_ORCHESTRATION_LOOPS = 30
+
+# Stream fence timeout - incomplete streams abandoned after this duration (seconds)
+_STREAM_FENCE_TIMEOUT = 300  # 5 minutes
+
+# Allowed image directories (resolved at module load, not runtime)
+_BASE_DIR = Path(__file__).resolve().parent.parent
+_ALLOWED_IMAGE_DIRS = [
+    (_BASE_DIR / "static").resolve(),
+    (_BASE_DIR / "static" / "uploads").resolve(),
+    (_BASE_DIR / "static" / "generated_images").resolve(),
+    (_BASE_DIR / "uploads").resolve(),
+    (_BASE_DIR / "generated_images").resolve(),
+]
+_ALLOWED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+
+
+def _validate_image_path_safely(user_path: str) -> Path | None:
+    """Validate a user-provided image path by searching trusted directories.
+
+    SECURITY: This function NEVER constructs paths from user input directly.
+    Instead, it extracts ONLY the filename (using os.path.basename) and
+    searches for it in pre-defined trusted directories.
+
+    This breaks the CodeQL taint chain completely - no part of the user's
+    path string is used in path construction.
+
+    Returns:
+        Path object if valid image found, None otherwise.
+    """
+    if not user_path or not isinstance(user_path, str):
+        return None
+
+    # SECURITY: Extract ONLY the filename - this removes all directory components
+    # and ensures no path traversal is possible. The filename is just a string
+    # that we use to search in OUR trusted directories.
+    filename = os.path.basename(user_path.replace("\\", "/"))
+
+    if not filename:
+        return None
+
+    # Validate filename is not dangerous (defensive)
+    if filename.startswith(".") or ".." in filename:
+        log.warning("suspicious filename rejected: %s", filename[:50])
+        return None
+
+    # Check extension
+    ext = Path(filename).suffix.lower()
+    if ext not in _ALLOWED_IMAGE_EXTS:
+        return None
+
+    # SECURITY: Search ONLY in pre-resolved trusted directories
+    # We construct paths using our constants, NOT user input
+    for trusted_dir in _ALLOWED_IMAGE_DIRS:
+        # Construct candidate using TRUSTED base + filename only
+        candidate = trusted_dir / filename
+
+        try:
+            # Resolve and verify
+            resolved = candidate.resolve()
+
+            # Must exist and be a regular file
+            if not resolved.is_file():
+                continue
+
+            # Verify resolved path is still within trusted_dir
+            # (handles symlinks that might escape)
+            try:
+                rel = os.path.relpath(str(resolved), str(trusted_dir))
+                if rel.startswith(".."):
+                    log.warning("path escaped trusted dir: %s", filename[:50])
+                    continue
+            except ValueError:
+                continue
+
+            # Additional symlink check
+            if resolved.is_symlink():
+                log.warning("symlink rejected: %s", filename[:50])
+                continue
+
+            return resolved
+
+        except (OSError, ValueError):
+            continue
+
+    return None
+
+
+# --------------------------------------------------------------------
+# Image-cache helpers
+# --------------------------------------------------------------------
 
 
 def _cache_uploaded_images(message: str) -> list[str]:
     """Extract image paths from uploaded-images marker, with path validation."""
     if "UPLOADED_IMAGES:" not in message or "IMAGE_UPLOAD:" not in message:
         return []
-    
-    import os
+
     paths: list[str] = []
-    
-    # Allowed directories for image paths
-    allowed_dirs = ("static/", "uploads/", "generated_images/")
-    
+
     for line in message.split("\n"):
         if line.startswith("IMAGE_UPLOAD:"):
-            candidate = line[len("IMAGE_UPLOAD:"):].strip()
-            
-            # Security: validate path is within allowed directories
-            # Prevent path traversal attacks
-            if not candidate:
-                continue
-            
-            # Normalize path to prevent traversal
-            candidate = os.path.normpath(candidate)
-            
-            # Check for path traversal attempts
-            if candidate.startswith("..") or candidate.startswith("/"):
-                log.warning("rejected path traversal attempt: %s", candidate[:50])
-                continue
-            
-            # Verify path is within allowed directories
-            if not any(candidate.startswith(d) for d in allowed_dirs):
-                log.warning("rejected path outside allowed dirs: %s", candidate[:50])
-                continue
-            
-            if os.path.isfile(candidate):
-                paths.append(candidate)
-    
+            user_path = line[len("IMAGE_UPLOAD:") :].strip()
+
+            # Use the safe validator
+            validated = _validate_image_path_safely(user_path)
+            if validated:
+                paths.append(str(validated))
+
     return paths
 
 
-# ---------------------------------------------------------------------------
-# Native tool-call helpers
-# ---------------------------------------------------------------------------
-
-def _parse_raw_tool_calls(
-    provider_name: str, raw_response: dict | None
-) -> list[dict]:
-    """Parse tool_calls from a raw provider API response.
-
-    Returns list of {"name": str, "arguments": dict} for each tool call.
-    """
-    if not raw_response:
-        return []
-    try:
-        from app.providers import get_ai_manager
-        manager = get_ai_manager()
-        provider = manager.providers.get(provider_name)
-        if not provider:
-            return []
-        calls = provider.parse_tool_calls(raw_response)
-        return [{"name": c["name"], "arguments": c["arguments"]} for c in calls if c.get("name")]
-    except Exception:
-        return []
-
-
-def _execute_tool_calls(
-    tool_calls: list[dict], session_id: int
-) -> list[tuple[str, dict]]:
-    """Execute a list of tool calls and return results."""
-    from app.commands import _TOOL_ALIASES
-    from app.tools.registry import execute_tool, is_terminal_tool
-
-    results: list[tuple[str, dict]] = []
-    for tc in tool_calls:
-        raw_name = tc["name"]
-        tool_name = _TOOL_ALIASES.get(raw_name, raw_name)
-        arguments = tc.get("arguments", {})
-        log.info("native tool_call: %s %s", tool_name, arguments)
-        result = execute_tool(tool_name, arguments, session_id=session_id)
-        results.append((tool_name, result))
-        if is_terminal_tool(tool_name) and result.get("ok"):
-            break  # terminal tool succeeded, stop processing
-    return results
-
-
 def _cache_images_from_message(message: str) -> list[str]:
-    """Resolve any image references in *message* to local cache paths, with validation."""
-    import os
+    """Resolve image references in message to local cache paths, with validation."""
     uploaded = _cache_uploaded_images(message)
     if uploaded:
         return uploaded
 
-    # Allowed directories for image paths
-    allowed_dirs = ("static/", "uploads/", "generated_images/")
-    
     cached: list[str] = []
     for match in _MD_IMAGE_PATTERN.finditer(message):
         source = match.group(1)
-        
+
         # Limit source length to prevent ReDoS
         if len(source) > 500:
             source = source[:500]
-        
+
         if source.startswith(("static/", "uploads/", "generated_images/")):
-            local = source if source.startswith("static/") else f"static/{source}"
-            
-            # Security: validate normalized path
-            local = os.path.normpath(local)
-            if not any(local.startswith(d) for d in allowed_dirs):
-                continue
-            if ".." in local or local.startswith("/"):
-                continue
-                
-            if os.path.isfile(local):
-                cached.append(local)
+            # Use the safe validator
+            validated = _validate_image_path_safely(source)
+            if validated:
+                cached.append(str(validated))
         else:
             local = multimodal_tools.download_image_to_cache(source)
             if local:
@@ -169,268 +187,511 @@ def _cache_images_from_message(message: str) -> list[str]:
 def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
     """Return (base64, mime) for a generated image file, or (None, None)."""
     import base64
-    import os
-    if not os.path.exists(image_path):
-        log.warning("image not found: %s", image_path)
+
+    # Use the safe validator - this is the key for CodeQL
+    validated_path = _validate_image_path_safely(image_path)
+    if not validated_path:
         return None, None
+
     try:
-        with open(image_path, "rb") as f:
-            data = base64.b64encode(f.read()).decode("utf-8")
+        data = base64.b64encode(validated_path.read_bytes()).decode("utf-8")
     except OSError as e:
-        log.warning("image read failed (%s): %s", image_path, e)
+        log.warning("image read failed (%s): %s", validated_path, e)
         return None, None
-    mime = "image/png" if image_path.lower().endswith(".png") else "image/jpeg"
+
+    suffix = validated_path.suffix.lower()
+    if suffix == ".png":
+        mime = "image/png"
+    elif suffix == ".gif":
+        mime = "image/gif"
+    else:
+        mime = "image/jpeg"
     return data, mime
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------
+# Native tool-call helpers (for providers that support it)
+# --------------------------------------------------------------------
+
+
+async def _parse_raw_tool_calls_async(
+    provider_name: str, raw_response: dict | None
+) -> list[dict]:
+    """Parse tool_calls from a raw provider API response (async)."""
+    if not raw_response:
+        return []
+    try:
+        from app.providers import get_ai_manager
+
+        manager = await get_ai_manager()
+        provider = manager.providers.get(provider_name)
+        if not provider:
+            return []
+        calls = provider.parse_tool_calls(raw_response)
+        return [
+            {"name": c["name"], "arguments": c["arguments"]}
+            for c in calls
+            if c.get("name")
+        ]
+    except Exception:
+        return []
+
+
+async def _execute_tool_calls_async(
+    tool_calls: list[dict], session_id: int
+) -> list[tuple[str, dict]]:
+    """Execute a list of tool calls and return results (async)."""
+    from app.commands import _TOOL_ALIASES
+    from app.tools.registry import execute_tool, is_terminal_tool
+
+    results: list[tuple[str, dict]] = []
+    for tc in tool_calls:
+        raw_name = tc["name"]
+        tool_name = _TOOL_ALIASES.get(raw_name, raw_name)
+        arguments = tc.get("arguments", {})
+        log.info("native tool_call: %s %s", tool_name, arguments)
+        result = await execute_tool(tool_name, arguments, session_id=session_id)
+        results.append((tool_name, result))
+        if is_terminal_tool(tool_name) and result.get("ok"):
+            break
+    return results
+
+
+# --------------------------------------------------------------------
 # Response post-processing
-# ---------------------------------------------------------------------------
-
-
-def _strip_command_line(text: str, cmd_info: dict[str, str]) -> str:
-    """Remove the first /command line from response, return narration text.
-    
-    Used to separate the LLM's narration/acknowledgment from its tool invocation.
-    """
-    if not text or not cmd_info:
-        return text or ""
-    
-    lines = text.split("\n")
-    full_cmd = cmd_info.get("full_command", "")
-    
-    # Remove first line if it matches the command
-    if lines and lines[0].strip() == full_cmd:
-        lines = lines[1:]
-    
-    return "\n".join(lines).strip()
-
-
-def _strip_all_command_lines(text: str, commands: list[dict[str, str]]) -> str:
-    """Remove all /command lines from response, return narration text.
-    
-    Used for batch command execution to extract narration before commands.
-    """
-    if not text or not commands:
-        return text or ""
-    
-    # Collect all full_command strings to remove
-    full_cmds = {cmd.get("full_command", "") for cmd in commands if cmd.get("full_command")}
-    
-    # Filter out lines that match any command
-    lines = text.split("\n")
-    filtered = [line for line in lines if line.strip() not in full_cmds]
-    
-    return "\n".join(filtered).strip()
+# --------------------------------------------------------------------
 
 
 def _clean(text: str) -> str:
     return _TIMESTAMP_SUFFIX.sub("", text).strip()
 
 
-def _persist_user(
+async def _persist_user_async(
     message: str, session_id: int, image_paths: list[str] | None
 ) -> None:
-    Database.add_message(
+    await Database.add_message_async(
         "user", message, session_id=session_id, image_paths=image_paths or None
     )
 
 
-def _persist_tool_result(
-    tool_name: str, markdown: str, session_id: int
+async def _persist_assistant_async(
+    content: str, session_id: int, image_paths: list[str] | None = None
 ) -> None:
-    Database.add_message(get_tool_role(tool_name), markdown, session_id=session_id)
-
-
-def _strip_nested_commands(text: str) -> str:
-    """Remove leading-slash command lines from a synthesis response."""
-    return "\n".join(
-        line
-        for line in text.split("\n")
-        if not line.strip().startswith(_NESTED_COMMAND_PREFIXES)
+    """Persist an assistant response, with optional image paths (async)."""
+    await Database.add_message_async(
+        "assistant", content, session_id=session_id, image_paths=image_paths
     )
 
 
-# ---------------------------------------------------------------------------
-# Synthesis pass (2nd LLM call after a tool ran)
-# ---------------------------------------------------------------------------
+async def _persist_tool_result_async(
+    tool_name: str, markdown: str, session_id: int
+) -> None:
+    """Persist a tool result (async)."""
+    from app.commands import parse_image_path
+
+    image_paths = []
+    path = parse_image_path(markdown)
+    if path:
+        image_paths.append(path)
+
+    await Database.add_message_async(
+        get_tool_role(tool_name),
+        markdown,
+        session_id=session_id,
+        image_paths=image_paths or None,
+    )
 
 
-def _build_image_context(
+async def _persist_observation_async(observation: str, session_id: int) -> None:
+    """Persist a system observation as an internal message (async)."""
+    await Database.add_message_async(
+        "system_observation", observation, session_id=session_id
+    )
+
+
+# --------------------------------------------------------------------
+# Synthesis pass (2nd LLM call after tools ran)
+# --------------------------------------------------------------------
+
+
+async def _build_image_context_async(
     tool_markdown: str, session_id: int
 ) -> list[dict[str, Any]] | None:
     image_path = parse_image_path(tool_markdown)
     if not image_path:
         return None
-    b64, mime = _load_image_base64(image_path)
+    # Assuming _load_image_base64 is fast or run it in thread if needed
+    # It reads bytes, so better to use asyncio.to_thread if it's not already
+    b64, mime = await asyncio.to_thread(_load_image_base64, image_path)
     if not (b64 and mime):
         return None
+    # Assuming store_visual_context is fast/local
     store_visual_context(session_id, b64, mime)
     log.info("attached generated image to synthesis pass")
     return [{"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}]
 
 
-def _run_synthesis(
+async def _run_synthesis_async(
     profile: dict[str, Any],
     session_id: int,
     interface: str,
     tool_markdown: str,
+    ephemeral_context: list[dict[str, str]] | None = None,
 ) -> str | None:
-    """Run a 2nd LLM pass to narrate around the tool result.
+    """Run a 2nd LLM pass to narrate around the tool result (async).
 
-    Returns the cleaned synthesis text, or None when the LLM returned nothing.
+    ephemeral_context: In-memory conversation turns not yet in DB.
     """
-    text, _ = generate_ai_response(
-        profile, "", interface, session_id, image_content_for_context=None
+    image_context = await _build_image_context_async(tool_markdown, session_id)
+
+    text, _ = await generate_ai_response(
+        profile,
+        "",
+        interface,
+        session_id,
+        image_content_for_context=image_context,
+        ephemeral_context=ephemeral_context,
+        is_tool_loop=True,
     )
     if not text or not text.strip():
         return None
 
-    cleaned = _clean(text)
-    nested = detect_command(cleaned)
-    if nested:
-        log.info("executing nested command: /%s", nested["command"])
-        tool_name, nested_result = execute_command(nested, session_id=session_id)
-        nested_md = nested_result.get("markdown", str(nested_result))
-        _persist_tool_result(tool_name, nested_md, session_id)
-        cleaned = nested_md
-    return cleaned
+    return _clean(text)
 
 
-def _stream_synthesis(
+async def _stream_synthesis_async(
     profile: dict[str, Any],
     session_id: int,
     interface: str,
     tool_markdown: str,
-) -> Iterator[tuple[str, str]]:
-    """Stream the 2nd LLM pass.
+    ephemeral_context: list[dict[str, str]] | None = None,
+) -> AsyncIterator[str]:
+    """Stream the 2nd LLM pass (async).
 
-    Yields (chunk, full_so_far) tuples. The orchestrator can pass `chunk`
-    straight to the consumer and persist `full_so_far` once the stream ends.
-    On nested-command detection we fall back to the non-streaming
-    _run_synthesis path because nested execution is structural, not a
-    streaming concern.
+    ephemeral_context: In-memory conversation turns not yet in DB.
+    Contains the assistant's first-pass response with <command> blocks
+    and the tool results, ensuring the LLM has full context.
     """
-    sf = StreamFilter()
-    accumulated: list[str] = []
-    for chunk in generate_ai_response_streaming(
-        profile, "", interface, session_id,
-        image_content_for_context=None,
+    image_context = await _build_image_context_async(tool_markdown, session_id)
+
+    async for chunk in generate_ai_response_streaming(
+        profile,
+        "",
+        interface,
+        session_id,
+        image_content_for_context=image_context,
+        ephemeral_context=ephemeral_context,
+        is_tool_loop=True,
     ):
-        for safe in sf.feed(chunk):
-            accumulated.append(safe)
-            yield safe, "".join(accumulated)
-    for safe in sf.flush():
-        accumulated.append(safe)
-        yield safe, "".join(accumulated)
+        yield chunk
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------
 # Per-turn side effects
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------
 
-# Throttle: only check pipeline every Nth message (reduces gate checks by 80%)
 _PIPELINE_CHECK_INTERVAL = 5
 
 
-def _post_turn(
+async def _post_turn_async(
     profile: dict[str, Any],
     user_message: str,
     final_response: str,
     session_id: int,
     active_session: dict[str, Any],
 ) -> None:
-    """Auto-rename session, summarize memory, trigger memory pipeline."""
-    from app.session_lifecycle import auto_name_session_if_needed
-    from app.profile_analysis import (
-        should_summarize_memory,
-        summarize_memory,
+    """Auto-rename session, summarize memory, trigger memory pipeline (async)."""
+    # Auto-rename via service
+    await SessionService.auto_name_session_if_needed_async(session_id, active_session)
+
+    # Memory checks via service
+    await MemoryService.run_per_message_checks_async(
+        profile, user_message, final_response, session_id, active_session
     )
 
-    auto_name_session_if_needed(session_id, active_session)
-    if should_summarize_memory(profile, user_message, session_id):
-        summarize_memory(profile, user_message, final_response, session_id)
-    
-    # Throttle: only check pipeline every Nth message
-    msg_count = Database.get_session_messages_count(session_id)
-    if msg_count % _PIPELINE_CHECK_INTERVAL == 0:
-        _trigger_memory_pipeline(session_id)
-    
     # Clear request-scoped caches
     try:
         from app.memory.memory import _clear_request_cache
+
         _clear_request_cache(session_id)
     except Exception:
         pass
     try:
         from app.memory.retrieval import _clear_embedding_cache
+
         _clear_embedding_cache()
     except Exception:
         pass
 
 
-def _trigger_memory_pipeline(session_id: int) -> None:
-    try:
-        from app.memory.memory import trigger_memory_pipeline_async
-        count = Database.get_session_messages_count(session_id)
-        if not trigger_memory_pipeline_async(session_id, count):
-            log.info("memory pipeline skipped (count=%s)", count)
-    except Exception as e:  # noqa: BLE001
-        log.warning("memory pipeline trigger failed: %s", e)
+# --------------------------------------------------------------------
+# Streaming orchestration helpers
+# --------------------------------------------------------------------
 
 
-# ---------------------------------------------------------------------------
-# Public entry points
-# ---------------------------------------------------------------------------
+async def _process_tool_commands_async(
+    full_response: str,
+    session_id: int,
+) -> tuple[str, bool, list[str]]:
+    """Parse and execute tool commands, yielding tool markdown chunks.
 
+    Yields:
+        tuple of (tool_markdown, is_image_tool, generated_paths)
 
-def handle_user_message(user_message: str, interface: str = "terminal") -> str:
-    """Process a user message end-to-end and return the assistant reply.
-
-    Guarantees:
-      - Exactly ONE primary LLM call per turn (plus optional synthesis pass).
-      - At most ONE tool execution per turn.
-      - At most ONE synthesis pass (with one level of nested-command recursion).
-      - Final response is never empty.
-      - Image tools are terminal: no plain-text synthesis without the image.
+    Returns:
+        Combined tool markdown string and list of all generated image paths.
     """
-    profile = Database.get_profile()
+    commands, clean_text = parse_tool_blocks(full_response)
+
+    if not commands:
+        return ("", False, [])
+
+    log.info("[stream] found %d tool block(s)", len(commands))
+
+    results = await execute_commands(commands, session_id=session_id)
+
+    tool_markdowns: list[str] = []
+    any_image_tool = False
+    all_generated_paths: list[str] = []
+
+    for tool_name, result in results:
+        tool_markdown = result.get("markdown", str(result))
+        tool_markdowns.append(tool_markdown)
+
+        p = parse_image_path(tool_markdown)
+        if p is not None:
+            any_image_tool = True
+            all_generated_paths.append(p)
+
+    combined_tool_markdown = "\n\n".join(tool_markdowns)
+
+    # Return results for coordination
+    return (combined_tool_markdown, any_image_tool, all_generated_paths)
+
+
+async def _run_orchestration_loop_async(
+    profile: dict[str, Any],
+    session_id: int,
+    interface: str,
+    current_synthesis_context: str,
+    ephemeral_context: list[dict[str, str]],
+    any_image_tool: bool,
+    fence_id: int,
+    abort_check: callable[[], bool] | None,
+    user_message: str,
+    active_session: dict[str, Any],
+) -> AsyncIterator[str]:
+    """Run the orchestration loop for synthesis with tool block detection.
+
+    Handles iterative synthesis passes that may contain additional tool blocks.
+    Continues until synthesis has no more tool blocks or max loops reached.
+
+    Yields:
+        Synthesis chunks and tool result markdown.
+    """
+    loop_count = 0
+    all_generated_paths: list[str] = []
+
+    while loop_count < _MAX_ORCHESTRATION_LOOPS:
+        loop_count += 1
+        log.info("[stream] orchestration loop %d", loop_count)
+
+        if abort_check and abort_check():
+            return
+
+        synthesis_chunks: list[str] = []
+        full_synthesis = ""
+
+        try:
+            async for chunk in _stream_synthesis_async(
+                profile,
+                session_id,
+                interface,
+                current_synthesis_context,
+                ephemeral_context=ephemeral_context,
+            ):
+                if chunk:
+                    if abort_check and abort_check():
+                        return
+
+                    synthesis_chunks.append(chunk)
+                    full_synthesis += chunk
+
+                    # Yield chunk with proper formatting
+                    yield (
+                        "\n\n" + chunk
+                        if any_image_tool and not synthesis_chunks[:-1]
+                        else chunk
+                    )
+        except asyncio.CancelledError:
+            log.info(
+                "[stream] cancelled in synthesis loop - propagating to StreamBuffer"
+            )
+            raise
+        except Exception as e:
+            log.error("[stream] error in synthesis loop: %s", e)
+            raise
+
+        synthesis = _clean(full_synthesis) if full_synthesis else None
+
+        if not synthesis:
+            await StreamFence.complete(session_id, fence_id)
+            await _post_turn_async(
+                profile,
+                user_message,
+                current_synthesis_context,
+                session_id,
+                active_session,
+            )
+            return
+
+        if not has_tool_blocks(synthesis):
+            final_response = (
+                f"{current_synthesis_context}\n\n{synthesis}"
+                if any_image_tool
+                else synthesis
+            )
+            await StreamFence.complete(session_id, fence_id)
+            log.info(f"[stream] fence {fence_id} completed (final synthesis)")
+            await _post_turn_async(
+                profile, user_message, final_response, session_id, active_session
+            )
+            return
+
+        log.info("[stream] synthesis contains tool blocks, continuing loop")
+
+        next_commands, _ = parse_tool_blocks(synthesis)
+        if not next_commands:
+            await _post_turn_async(
+                profile, user_message, synthesis, session_id, active_session
+            )
+            return
+
+        # Append synthesis + next tool results to ephemeral context
+        ephemeral_context.append({"role": "assistant", "content": synthesis})
+
+        next_results = await execute_commands(next_commands, session_id=session_id)
+        next_markdowns: list[str] = []
+        any_image_tool = False
+
+        for tool_name, result in next_results:
+            tm = result.get("markdown", str(result))
+            next_markdowns.append(tm)
+            p = parse_image_path(tm)
+            if p:
+                any_image_tool = True
+                all_generated_paths.append(p)
+            yield "\n\n" + tm
+
+        next_combined = "\n\n".join(next_markdowns)
+        ephemeral_context.append({"role": "user", "content": next_combined})
+        current_synthesis_context = next_combined
+
+    # Max loops reached
+    await StreamFence.complete(session_id, fence_id)
+    await _post_turn_async(
+        profile,
+        user_message,
+        synthesis or current_synthesis_context,
+        session_id,
+        active_session,
+    )
+
+
+async def _finalize_and_persist_async(
+    session_id: int,
+    fence_id: int,
+    profile: dict[str, Any],
+    user_message: str,
+    final_response: str,
+    active_session: dict[str, Any],
+) -> None:
+    """Complete the stream fence and persist final state.
+
+    This is the final cleanup step for a completed stream.
+    """
+    await StreamFence.complete(session_id, fence_id)
+    log.info(f"[stream] fence {fence_id} completed")
+    await _post_turn_async(
+        profile, user_message, final_response, session_id, active_session
+    )
+
+
+# --------------------------------------------------------------------
+# Public entry points
+# --------------------------------------------------------------------
+
+
+async def handle_user_message(user_message: str, interface: str = "terminal") -> str:
+    """Process a user message end-to-end and return the assistant reply (async)."""
+    profile = await Database.get_profile_async()
     if not user_message.strip():
         return "Please enter a message!"
 
-    active_session = Database.get_active_session()
+    active_session = await Database.get_active_session_async()
     session_id = active_session["id"]
-    cached_images = _cache_images_from_message(user_message)
+    # Assuming _cache_images_from_message is fast (local check + small download)
+    # If it downloads, it should be async. Let's check multimodal_tools.
+    cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
 
-    # Fast-path: user typed /imagine directly — execute tool without LLM round-trip
+    # Fast-path: user typed /imagine directly
     stripped = user_message.strip()
-    if stripped.startswith("/imagine"):
-        prompt = stripped[len("/imagine"):].strip()
-        if prompt:
-            from app.commands import _TOOL_ALIASES, _parse_args
-            from app.tools.registry import execute_tool
-            raw_name = "imagine"
-            tool_name = _TOOL_ALIASES.get(raw_name, raw_name)
-            args = _parse_args(raw_name, prompt)
-            tool_result = execute_tool(tool_name, args, session_id=session_id)
-            tool_markdown = tool_result.get("markdown", str(tool_result))
-            _persist_tool_result(tool_name, tool_markdown, session_id)
-            _post_turn(profile, user_message, tool_markdown, session_id, active_session)
-            return tool_markdown
-        else:
-            return "Please provide a prompt after /imagine. Example: /imagine a cute anime cat"
+    if stripped.startswith("/imagine ") or stripped.startswith("<command>"):
+        commands, _ = parse_tool_blocks(stripped)
+        if commands or stripped.startswith("/imagine"):
+            if stripped.startswith("/imagine"):
+                commands = [stripped]
 
-    provider_name = (profile.get("providers_config") or {}).get("preferred_provider", "ollama")
+            await _persist_user_async(user_message, session_id, cached_images)
+
+            results = await execute_commands(commands, session_id=session_id)
+            tool_markdowns = []
+
+            for tool_name, result in results:
+                tool_markdown = result.get("markdown", str(result))
+                tool_markdowns.append(tool_markdown)
+                await _persist_tool_result_async(tool_name, tool_markdown, session_id)
+
+            combined = "\n\n".join(tool_markdowns)
+
+            generated_paths = []
+            for tm in tool_markdowns:
+                path = parse_image_path(tm)
+                if path:
+                    generated_paths.append(path)
+
+            # Run synthesis
+            synthesis = await _run_synthesis_async(
+                profile, session_id, interface, combined
+            )
+            if synthesis:
+                await _persist_assistant_async(synthesis, session_id, generated_paths)
+                final = (
+                    f"{combined}\n\n{synthesis}"
+                    if parse_image_path(combined)
+                    else synthesis
+                )
+            else:
+                final = combined
+
+            await _post_turn_async(
+                profile, user_message, final, session_id, active_session
+            )
+            return final
+
+    provider_name = (profile.get("providers_config") or {}).get(
+        "preferred_provider", "ollama"
+    )
 
     try:
-        text_response, raw_api_response = generate_ai_response(
+        text_response, raw_api_response = await generate_ai_response(
             profile, user_message, interface, session_id
         )
     except Exception:
-        _persist_user(user_message, session_id, cached_images)
+        await _persist_user_async(user_message, session_id, cached_images)
         raise
 
-    _persist_user(user_message, session_id, cached_images)
+    await _persist_user_async(user_message, session_id, cached_images)
 
     if text_response is None:
         log.error("AI provider returned None")
@@ -439,246 +700,253 @@ def handle_user_message(user_message: str, interface: str = "terminal") -> str:
     text_response = _clean(text_response) or _EMPTY_RESPONSE_FALLBACK
 
     if is_markdown_image_shortcut(text_response):
-        log.warning(
-            "intercepted markdown image shortcut: %s",
-            extract_markdown_image_path(text_response),
-        )
         return IMAGE_SHORTCUT_WARNING
 
-    # Try native tool-call execution first (for providers that support it)
-    native_tool_executed = False
-    tool_results: list[tuple[str, dict]] = []
-    tool_calls = _parse_raw_tool_calls(provider_name, raw_api_response)
+    # Try native tool-call execution first
+    tool_calls = await _parse_raw_tool_calls_async(provider_name, raw_api_response)
     if tool_calls:
-        tool_results = _execute_tool_calls(tool_calls, session_id)
+        tool_results = await _execute_tool_calls_async(tool_calls, session_id)
         if tool_results:
-            native_tool_executed = True
             tool_name, tool_result = tool_results[0]
             tool_markdown = tool_result.get("markdown", str(tool_result))
-            _persist_tool_result(tool_name, tool_markdown, session_id)
+            await _persist_tool_result_async(tool_name, tool_markdown, session_id)
 
             is_image_tool = parse_image_path(tool_markdown) is not None
-            synthesis = _run_synthesis(
-                profile, session_id, interface, tool_markdown
+            generated_paths = (
+                [parse_image_path(tool_markdown)] if is_image_tool else None
+            )
+
+            # Build ephemeral context for synthesis
+            ephemeral_context = [
+                {"role": "assistant", "content": text_response},
+                {"role": "user", "content": tool_markdown},
+            ]
+
+            synthesis = await _run_synthesis_async(
+                profile,
+                session_id,
+                interface,
+                tool_markdown,
+                ephemeral_context=ephemeral_context,
             )
 
             if synthesis:
-                Database.add_message("assistant", synthesis, session_id=session_id)
+                await _persist_assistant_async(synthesis, session_id, generated_paths)
                 final_response = (
                     f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
                 )
-                _post_turn(profile, user_message, final_response, session_id, active_session)
+                await _post_turn_async(
+                    profile, user_message, final_response, session_id, active_session
+                )
                 return final_response
 
-            _post_turn(profile, user_message, tool_markdown, session_id, active_session)
+            await _post_turn_async(
+                profile, user_message, tool_markdown, session_id, active_session
+            )
             return tool_markdown
 
-    if not native_tool_executed:
-        # Detect commands with full-text scan for naked commands
-        cmd_info = detect_command(text_response, scan_mode="all_naked")
-        if not cmd_info:
-            Database.add_message("assistant", text_response, session_id=session_id)
-            _post_turn(profile, user_message, text_response, session_id, active_session)
-            return text_response
-
-        # Check if batch (list) or single (dict)
-        is_batch = isinstance(cmd_info, list)
-        commands = cmd_info if is_batch else [cmd_info]
-
-        # /command path - persist narration BEFORE tool execution
-        narration = _strip_all_command_lines(text_response, commands) if is_batch else _strip_command_line(text_response, cmd_info)
-        if narration:
-            Database.add_message("assistant", narration, session_id=session_id)
-
-        # Execute all commands in batch
-        tool_results_raw = execute_command(cmd_info, session_id=session_id)
-        
-        # Normalize to list for consistent processing
-        if not is_batch:
-            tool_results_raw = [tool_results_raw]
-        
-        # Process all tool results
-        tool_markdowns: list[str] = []
-        any_image_tool = False
-        for tool_name, tool_result in tool_results_raw:
-            tool_markdown = tool_result.get("markdown", str(tool_result))
-            tool_markdowns.append(tool_markdown)
-            _persist_tool_result(tool_name, tool_markdown, session_id)
-            if parse_image_path(tool_markdown) is not None:
-                any_image_tool = True
-
-        # Combine all tool markdowns
-        combined_tool_markdown = "\n\n".join(tool_markdowns)
-
-        # Single synthesis with all results combined
-        synthesis = _run_synthesis(
-            profile, session_id, interface, combined_tool_markdown
-        )
-
-        if synthesis:
-            Database.add_message("assistant", synthesis, session_id=session_id)
-            final_response = (
-                f"{combined_tool_markdown}\n\n{synthesis}" if any_image_tool else synthesis
-            )
-            _post_turn(profile, user_message, final_response, session_id, active_session)
-            return final_response
-
-        _post_turn(profile, user_message, combined_tool_markdown, session_id, active_session)
-        return combined_tool_markdown
+    await _persist_assistant_async(text_response, session_id)
+    await _post_turn_async(
+        profile, user_message, text_response, session_id, active_session
+    )
+    return text_response
 
 
-def handle_user_message_streaming(
+class StreamFence:
+    """Prevents race conditions between user message persistence and stream completion.
+
+    Each stream gets a unique fence ID that must be cleared after successful completion.
+    Abandoned fences expire after timeout to prevent deadlocks.
+    """
+
+    _fences: dict[int, dict[str, Any]] = {}  # session_id -> fence_info
+    _lock = asyncio.Lock()
+
+    @classmethod
+    async def acquire(cls, session_id: int, user_msg_id: int) -> str:
+        """Acquire a fence for a streaming session. Returns fence_id."""
+        import uuid
+
+        fence_id = str(uuid.uuid4())[:8]
+        async with cls._lock:
+            cls._fences[session_id] = {
+                "fence_id": fence_id,
+                "user_msg_id": user_msg_id,
+                "acquired_at": asyncio.get_event_loop().time(),
+                "completed": False,
+            }
+        return fence_id
+
+    @classmethod
+    async def complete(cls, session_id: int, fence_id: str) -> bool:
+        """Mark fence as completed, allowing persistence."""
+        async with cls._lock:
+            if session_id in cls._fences:
+                fence = cls._fences[session_id]
+                if fence["fence_id"] == fence_id:
+                    fence["completed"] = True
+                    return True
+        return False
+
+    @classmethod
+    async def is_completed(cls, session_id: int) -> bool:
+        """Check if fence is completed or expired."""
+        async with cls._lock:
+            if session_id not in cls._fences:
+                return True  # No fence = already cleared
+
+            fence = cls._fences[session_id]
+            elapsed = asyncio.get_event_loop().time() - fence["acquired_at"]
+
+            # If completed or expired, clear it
+            if fence["completed"] or elapsed > _STREAM_FENCE_TIMEOUT:
+                del cls._fences[session_id]
+                return True
+
+            return False
+
+    @classmethod
+    async def cleanup_expired(cls) -> None:
+        """Remove all expired fences."""
+        async with cls._lock:
+            now = asyncio.get_event_loop().time()
+            expired = [
+                sid
+                for sid, fence in cls._fences.items()
+                if now - fence["acquired_at"] > _STREAM_FENCE_TIMEOUT
+            ]
+            for sid in expired:
+                del cls._fences[sid]
+
+
+async def handle_user_message_streaming(
     user_message: str,
     interface: str = "terminal",
+    session_id: int | None = None,
     provider: str | None = None,
     model: str | None = None,
-) -> Iterator[str]:
-    """Streaming entrypoint with true incremental chunk delivery.
+    abort_check: callable[[], bool] | None = None,
+    image_paths: list[str] | None = None,
+) -> AsyncIterator[str]:
+    """Streaming entrypoint (async) with fence protection.
 
-    Behavior:
-      - If user message starts with /imagine: execute tool directly, stream result.
-      - Buffers chunks only until a leading /command on the first
-        line can be confirmed or ruled out.
-      - When NO command: streams every subsequent chunk live.
-      - When a /command IS detected: suppresses the command line, executes
-        the tool, emits the tool result, then streams the synthesis pass
-        live.
+    FENCE PROTECTION: Wraps user message persistence in a fence to prevent
+    ghost turns if stream is interrupted before completion.
+
+    COORDINATOR: Delegates tool execution to _process_tool_commands_async,
+    synthesis loops to _run_orchestration_loop_async, and finalization
+    to _finalize_and_persist_async.
     """
-    profile = Database.get_profile()
-    if not user_message.strip():
+    profile = await Database.get_profile_async()
+    if not user_message.strip() and not image_paths:
         yield "Please enter a message!"
         return
 
-    active_session = Database.get_active_session()
-    session_id = active_session["id"]
-    cached_images = _cache_images_from_message(user_message)
+    if abort_check and abort_check():
+        return
 
-    # Fast-path: user typed /imagine directly — execute tool without LLM round-trip
-    stripped = user_message.strip()
-    if stripped.startswith("/imagine"):
-        prompt = stripped[len("/imagine"):].strip()
-        if prompt:
-            from app.commands import _TOOL_ALIASES, _parse_args
-            from app.tools.registry import execute_tool
-            raw_name = "imagine"
-            tool_name = _TOOL_ALIASES.get(raw_name, raw_name)
-            args = _parse_args(raw_name, prompt)
-            tool_result = execute_tool(tool_name, args, session_id=session_id)
-            tool_markdown = tool_result.get("markdown", str(tool_result))
-            _persist_tool_result(tool_name, tool_markdown, session_id)
-            yield tool_markdown
-            _post_turn(profile, user_message, tool_markdown, session_id, active_session)
-            return
-        else:
-            yield "Please provide a prompt after /imagine. Example: /imagine a cute anime cat"
-            return
+    if session_id is None:
+        active_session = await Database.get_active_session_async()
+        session_id = active_session["id"]
+    else:
+        active_session = {"id": session_id}
 
-    sf = StreamFilter()
-    visible_chunks: list[str] = []
+    # Cache any images referenced in the message (URLs, etc.)
+    cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
+
+    # Merge with explicitly provided image_paths
+    all_image_paths = list(cached_images) if cached_images else []
+    if image_paths:
+        all_image_paths.extend(image_paths)
+
+    # FENCE: Acquire fence before persisting user message
+    user_msg_id = await _persist_user_async(
+        user_message, session_id, all_image_paths or None
+    )
+    fence_id = await StreamFence.acquire(session_id, user_msg_id or 0)
+    log.info(f"[stream] fence {fence_id} acquired for session {session_id}")
+
+    # === PHASE 1: Initial LLM response streaming ===
+    response_chunks: list[str] = []
+
     try:
-        for chunk in generate_ai_response_streaming(
+        async for chunk in generate_ai_response_streaming(
             profile, user_message, interface, session_id, provider, model
         ):
-            for safe in sf.feed(chunk):
-                visible_chunks.append(safe)
-                yield safe
-        for safe in sf.flush():
-            visible_chunks.append(safe)
-            yield safe
-    except Exception:
-        _persist_user(user_message, session_id, cached_images)
+            if chunk:
+                if abort_check and abort_check():
+                    log.info(f"[stream] abort detected, fence {fence_id} not completed")
+                    return
+
+                response_chunks.append(chunk)
+                yield chunk
+    except asyncio.CancelledError:
+        log.info("[stream] cancelled in first pass - propagating to StreamBuffer")
+        log.warning(f"[stream] fence {fence_id} incomplete due to cancellation")
+        raise
+    except Exception as e:
+        log.error("[stream] error in first pass: %s", e)
+        log.warning(f"[stream] fence {fence_id} incomplete due to error: {e}")
         raise
 
-    _persist_user(user_message, session_id, cached_images)
+    full_response = "".join(response_chunks)
 
-    full_response = _clean(sf.full_text) or _EMPTY_RESPONSE_FALLBACK
-    visible_response = _clean("".join(visible_chunks))
-
-    log.info("[stream] full_response=%r, sf.command=%s, len=%d",
-             full_response[:200], sf.command, len(full_response))
-
-    if is_markdown_image_shortcut(full_response):
-        log.warning(
-            "intercepted markdown image shortcut (stream): %s",
-            extract_markdown_image_path(full_response),
+    # === PHASE 2: Handle empty response ===
+    if not _clean(full_response):
+        await _finalize_and_persist_async(
+            session_id,
+            fence_id,
+            profile,
+            user_message,
+            _EMPTY_RESPONSE_FALLBACK,
+            active_session,
         )
+        yield _EMPTY_RESPONSE_FALLBACK
+        return
+
+    # === PHASE 3: Handle markdown image shortcut ===
+    if is_markdown_image_shortcut(full_response):
+        await StreamFence.complete(session_id, fence_id)
         yield IMAGE_SHORTCUT_WARNING
         return
 
-    # Fallback: detect commands with full-text scan for naked commands
-    cmd_info = sf.get_commands(scan_mode="all_naked")
-    if not cmd_info:
-        cmd_info = sf.command
+    # === PHASE 4: Parse and execute tool commands ===
+    tool_result = await _process_tool_commands_async(full_response, session_id)
+    combined_tool_markdown, any_image_tool, all_generated_paths = tool_result
 
-    if not cmd_info:
-        # Plain response - already streamed live. Persist and finish.
-        text = visible_response or _EMPTY_RESPONSE_FALLBACK
-        Database.add_message("assistant", text, session_id=session_id)
-        _post_turn(profile, user_message, text, session_id, active_session)
+    # Yield tool markdown chunks
+    if combined_tool_markdown:
+        yield "\n\n" + combined_tool_markdown
+
+    # === PHASE 5: Build ephemeral context for synthesis ===
+    ephemeral_context: list[dict[str, str]] = [
+        {"role": "assistant", "content": full_response},
+        {"role": "user", "content": combined_tool_markdown},
+    ]
+
+    current_synthesis_context = combined_tool_markdown
+    # all_generated_paths is already a list from _process_tool_commands_async
+
+    if not combined_tool_markdown:
+        # No tool output, just finalize
+        await _finalize_and_persist_async(
+            session_id, fence_id, profile, user_message, full_response, active_session
+        )
         return
 
-    # Check if batch (list) or single (dict)
-    is_batch = isinstance(cmd_info, list)
-    commands = cmd_info if is_batch else [cmd_info]
+    # === PHASE 6: Run orchestration loop (synthesis with potential tool blocks) ===
+    async for chunk in _run_orchestration_loop_async(
+        profile=profile,
+        session_id=session_id,
+        interface=interface,
+        current_synthesis_context=current_synthesis_context,
+        ephemeral_context=ephemeral_context,
+        any_image_tool=any_image_tool,
+        fence_id=fence_id,
+        abort_check=abort_check,
+        user_message=user_message,
+        active_session=active_session,
+    ):
+        yield chunk
 
-    # Tool path - persist narration BEFORE executing the detected command(s).
-    # visible_response has first command line stripped by StreamFilter (if on first line).
-    # For batch commands found mid-text, strip all command lines.
-    if is_batch:
-        narration = _strip_all_command_lines(full_response, commands)
-    else:
-        narration = visible_response.strip() if visible_response else ""
-    
-    if narration:
-        Database.add_message("assistant", narration, session_id=session_id)
-
-    # Execute all commands in batch
-    tool_results_raw = execute_command(cmd_info, session_id=session_id)
-    
-    # Normalize to list for consistent processing
-    if not is_batch:
-        tool_results_raw = [tool_results_raw]
-    
-    # Process all tool results and yield each
-    tool_markdowns: list[str] = []
-    any_image_tool = False
-    for tool_name, tool_result in tool_results_raw:
-        tool_markdown = tool_result.get("markdown", str(tool_result))
-        tool_markdowns.append(tool_markdown)
-        _persist_tool_result(tool_name, tool_markdown, session_id)
-        if parse_image_path(tool_markdown) is not None:
-            any_image_tool = True
-        # Yield each tool result
-        yield "\n\n" + tool_markdown
-
-    # Combine all tool markdowns for synthesis
-    combined_tool_markdown = "\n\n".join(tool_markdowns)
-
-    # Single synthesis with all results combined
-    synthesis_chunks: list[str] = []
-    full_synthesis = ""
-    yielded_synthesis_header = False
-    try:
-        for chunk, full in _stream_synthesis(
-            profile, session_id, interface, combined_tool_markdown
-        ):
-            synthesis_chunks.append(chunk)
-            full_synthesis = full
-            if not yielded_synthesis_header:
-                yield "\n\n" + chunk if any_image_tool else chunk
-                yielded_synthesis_header = True
-            else:
-                yield chunk
-    except Exception as e:  # noqa: BLE001
-        log.warning("synthesis stream failed, no narration yielded: %s", e)
-
-    synthesis = _clean(full_synthesis) if full_synthesis else None
-
-    if synthesis:
-        Database.add_message("assistant", synthesis, session_id=session_id)
-        final_response = (
-            f"{combined_tool_markdown}\n\n{synthesis}" if any_image_tool else synthesis
-        )
-        _post_turn(profile, user_message, final_response, session_id, active_session)
-    else:
-        _post_turn(profile, user_message, combined_tool_markdown, session_id, active_session)
+    return  # Orchestration loop handles finalization

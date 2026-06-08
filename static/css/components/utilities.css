@@ -1,0 +1,121 @@
+/* FILE: static/css/components/utilities.css */
+/* DESCRIPTION: UI polish, transitions, and accessibility utilities */
+
+/* ==================== UI POLISH ==================== */
+#sendButton,
+.sidebar-btn,
+.multimodal-toggle-btn,
+.upload-btn,
+.image-action-btn {
+	transition:
+		transform 0.15s ease,
+		box-shadow 0.2s ease,
+		background-color 0.2s ease,
+		border-color 0.2s ease;
+}
+
+#sendButton:hover:not(:disabled),
+.sidebar-btn:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+#messageInput {
+	transition:
+		border-color 0.2s ease,
+		box-shadow 0.2s ease;
+}
+
+#messageInput:focus {
+	box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
+}
+
+.message {
+	transition:
+		transform 0.2s ease,
+		box-shadow 0.2s ease;
+}
+
+.scroll-to-bottom-btn {
+	transition:
+		transform 0.2s ease,
+		opacity 0.2s ease,
+		box-shadow 0.2s ease;
+}
+
+.scroll-to-bottom-btn:hover {
+	transform: scale(1.1);
+	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.code-block-header,
+.mermaid-header {
+	transition: background-color 0.2s ease;
+}
+
+.sidebar-session-item,
+.sidebar-link {
+	transition:
+		transform 0.2s ease,
+		background-color 0.2s ease,
+		border-color 0.2s ease;
+}
+
+.dropdown-option,
+.dropdown-selected {
+	transition:
+		background-color 0.15s ease,
+		border-color 0.2s ease;
+}
+
+body {
+	transition:
+		background-color 0.4s ease,
+		color 0.3s ease;
+}
+
+.code-block-container,
+.message,
+.card,
+.config-section,
+.brain-box,
+.tool-execution,
+.agentic-status-bar {
+	transition:
+		background-color 0.3s ease,
+		border-color 0.3s ease,
+		box-shadow 0.3s ease;
+}
+
+/* ==================== MERMAID DIAGRAMS ==================== */
+.mermaid-error {
+	margin: 0.5rem 0;
+	padding: 0.75rem;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 69, 58, 0.3);
+	background: rgba(255, 69, 58, 0.1);
+	color: var(--text-color);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+/* ==================== ACCESSIBILITY ==================== */
+*:focus-visible {
+	outline: 2px solid var(--accent-primary);
+	outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms;
+		animation-iteration-count: 1;
+		transition-duration: 0.01ms;
+	}
+
+	.skeleton {
+		animation: none;
+		background: var(--surface-elevated, var(--card-bg));
+	}
+}

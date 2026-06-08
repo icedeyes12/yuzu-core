@@ -1,0 +1,66 @@
+/* FILE: static/css/components/code-blocks.css */
+/* DESCRIPTION: Code block styling with copy functionality */
+
+/* ==================== CODE BLOCKS ==================== */
+.code-block-container {
+	margin: 1rem 0;
+	border-radius: 8px;
+	overflow: hidden;
+	background: var(--code-bg);
+	border: 1px solid var(--border-color);
+}
+
+.code-block-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 0.5rem 1rem;
+	background: rgba(0, 0, 0, 0.2);
+	border-bottom: 1px solid var(--border-color);
+}
+
+.code-language {
+	font-size: 0.75rem;
+	color: var(--text-secondary);
+	text-transform: uppercase;
+	font-weight: 600;
+}
+
+.copy-code-btn {
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	background: transparent;
+	border: 1px solid var(--border-color);
+	border-radius: 4px;
+	padding: 0.3rem 0.6rem;
+	font-size: 0.75rem;
+	color: var(--text-color);
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.copy-code-btn:hover {
+	background: var(--accent-primary);
+	color: white;
+	border-color: var(--accent-primary);
+}
+
+.copy-code-btn.copied {
+	background: var(--accent-tertiary);
+	color: white;
+	border-color: var(--accent-tertiary);
+}
+
+.code-block-container pre {
+	margin: 0;
+	padding: 1rem;
+	overflow-x: auto;
+	background: transparent;
+}
+
+.code-block-container code {
+	font-family: "Hack", "Fira Code", "Consolas", "Monaco", monospace;
+	font-size: 0.9rem;
+	line-height: 1.5;
+}

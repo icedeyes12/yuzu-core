@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Optional
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -29,29 +30,59 @@ _TOOL_DEFINITIONS: dict = {}
 _DEFINITIONS_INITIALIZED = False
 
 
-
 def _load_tool_module(tool_name: str):
     """Lazy-import a tool module by name."""
     if tool_name not in _TOOL_MODULES:
         if tool_name == "image_generate":
             from app.tools import image_generate
+
             _TOOL_MODULES[tool_name] = image_generate
+        elif tool_name == "image_edit":
+            from app.tools import image_edit
+
+            _TOOL_MODULES[tool_name] = image_edit
         elif tool_name == "imagine":
             # Alias for image_generate
             from app.tools import image_generate
+
             _TOOL_MODULES[tool_name] = image_generate
         elif tool_name == "request" or tool_name == "http_request":
             from app.tools import http_request
+
             _TOOL_MODULES[tool_name] = http_request
         elif tool_name == "memory_store":
             from app.tools import memory_store
+
             _TOOL_MODULES[tool_name] = memory_store
         elif tool_name == "memory_search":
             from app.tools import memory_search
+
             _TOOL_MODULES[tool_name] = memory_search
         elif tool_name == "multimodal":
             from app.tools import multimodal
+
             _TOOL_MODULES[tool_name] = multimodal
+        # File system tools
+        elif tool_name in ("read", "write", "ls", "mkdir", "rm"):
+            from app.tools import fs_operations
+
+            _TOOL_MODULES[tool_name] = fs_operations
+        elif tool_name == "bash":
+            from app.tools import shell_exec
+
+            _TOOL_MODULES[tool_name] = shell_exec
+        elif tool_name == "python":
+            from app.tools import python_exec
+
+            _TOOL_MODULES[tool_name] = python_exec
+        elif tool_name == "sql":
+            from app.tools import db_query
+
+            _TOOL_MODULES[tool_name] = db_query
+        elif tool_name == "ask_rei":
+            from app.tools import ask_rei
+
+            _TOOL_MODULES[tool_name] = ask_rei
         else:
             return None
     return _TOOL_MODULES.get(tool_name)
@@ -65,13 +96,22 @@ def _collect_definitions():
 
     try:
         from app.tools import image_generate
+
         _TOOL_DEFINITIONS["image_generate"] = image_generate.TOOL_DEFINITION
         _TOOL_DEFINITIONS["imagine"] = image_generate.TOOL_DEFINITION  # alias
     except Exception as e:
         logger.info(f"[registry] Failed to load image_generate definition: {e}")
 
     try:
+        from app.tools import image_edit
+
+        _TOOL_DEFINITIONS["image_edit"] = image_edit.TOOL_DEFINITION
+    except Exception as e:
+        logger.info(f"[registry] Failed to load image_edit definition: {e}")
+
+    try:
         from app.tools import http_request
+
         _TOOL_DEFINITIONS["http_request"] = http_request.TOOL_DEFINITION
         _TOOL_DEFINITIONS["request"] = http_request.TOOL_DEFINITION  # alias
     except Exception as e:
@@ -79,15 +119,64 @@ def _collect_definitions():
 
     try:
         from app.tools import memory_store
+
         _TOOL_DEFINITIONS["memory_store"] = memory_store.TOOL_DEFINITION
     except Exception as e:
         logger.info(f"[registry] Failed to load memory_store definition: {e}")
 
     try:
         from app.tools import memory_search
+
         _TOOL_DEFINITIONS["memory_search"] = memory_search.TOOL_DEFINITION
     except Exception as e:
         logger.info(f"[registry] Failed to load memory_search definition: {e}")
+
+    # File system tools
+    try:
+        from app.tools import fs_operations
+
+        for name in ["read", "write", "ls", "mkdir", "rm"]:
+            _TOOL_DEFINITIONS[name] = getattr(fs_operations, f"TOOL_{name.upper()}")
+        _TOOL_MODULES["fs_operations"] = fs_operations
+    except Exception as e:
+        logger.info(f"[registry] Failed to load fs_operations definitions: {e}")
+
+    # Shell execution tool
+    try:
+        from app.tools import shell_exec
+
+        for name, defn in shell_exec.TOOL_DEFINITION.items():
+            _TOOL_DEFINITIONS[name] = defn
+        _TOOL_MODULES["shell_exec"] = shell_exec
+    except Exception as e:
+        logger.info(f"[registry] Failed to load shell_exec definition: {e}")
+
+    # Python execution tool
+    try:
+        from app.tools import python_exec
+
+        _TOOL_DEFINITIONS["python"] = python_exec.TOOL_DEFINITION
+        _TOOL_MODULES["python_exec"] = python_exec
+    except Exception as e:
+        logger.info(f"[registry] Failed to load python_exec definition: {e}")
+
+    # SQL query tool
+    try:
+        from app.tools import db_query
+
+        _TOOL_DEFINITIONS["sql"] = db_query.TOOL_DEFINITION
+        _TOOL_MODULES["db_query"] = db_query
+    except Exception as e:
+        logger.info(f"[registry] Failed to load db_query definition: {e}")
+
+    # Ask Rei tool
+    try:
+        from app.tools import ask_rei
+
+        _TOOL_DEFINITIONS["ask_rei"] = ask_rei.TOOL_DEFINITION
+        _TOOL_MODULES["ask_rei"] = ask_rei
+    except Exception as e:
+        logger.info(f"[registry] Failed to load ask_rei definition: {e}")
 
     _DEFINITIONS_INITIALIZED = True
 
@@ -138,15 +227,15 @@ def is_terminal_tool(tool_name: str) -> bool:
 # --------------------------------------------------------------------
 
 
-
-
 # --------------------------------------------------------------------
 # Main dispatch
 # --------------------------------------------------------------------
 
 
-def execute_tool(tool_name: str, arguments: dict, session_id: Optional[str] = None) -> dict:
-    """Dispatch a tool call and return a structured result dict.
+async def execute_tool(
+    tool_name: str, arguments: dict, session_id: Optional[str] = None
+) -> dict:
+    """Dispatch a tool call and return a structured result dict (async).
 
     This is the SINGLE source of truth for tool dispatch.
     All tool execution MUST go through this function.
@@ -167,7 +256,10 @@ def execute_tool(tool_name: str, arguments: dict, session_id: Optional[str] = No
             "markdown": build_tool_contract(
                 ToolDefinition(name="", description="", role=f"{tool_name}_tools"),
                 f"/{tool_name}",
-                ["Error: Unknown tool. Available tools: " + ", ".join(_TOOL_DEFINITIONS.keys())],
+                [
+                    "Error: Unknown tool. Available tools: "
+                    + ", ".join(_TOOL_DEFINITIONS.keys())
+                ],
                 "Yuzu",
             ),
         }
@@ -182,11 +274,19 @@ def execute_tool(tool_name: str, arguments: dict, session_id: Optional[str] = No
             f"Tool module unavailable: {tool_name}",
             tool_def,
             f"/{tool_name}",
-            _get_partner_name(),
+            await _get_partner_name_async(),
         )
 
     try:
-        result = module.execute(arguments, session_id=session_id)
+        if asyncio.iscoroutinefunction(module.execute):
+            result = await module.execute(
+                arguments, session_id=session_id, tool_name=tool_name
+            )
+        else:
+            # Fallback for sync tools - run in thread to avoid blocking loop
+            result = await asyncio.to_thread(
+                module.execute, arguments, session_id=session_id, tool_name=tool_name
+            )
 
         # New-style structured result (already a dict with ok/data/markdown)
         if isinstance(result, dict) and "ok" in result:
@@ -208,7 +308,7 @@ def execute_tool(tool_name: str, arguments: dict, session_id: Optional[str] = No
                 ToolDefinition(name="", description="", role=tool_def.role),
                 f"/{tool_name}",
                 [str(result)],
-                _get_partner_name(),
+                await _get_partner_name_async(),
             ),
         }
 
@@ -218,15 +318,21 @@ def execute_tool(tool_name: str, arguments: dict, session_id: Optional[str] = No
             "Tool execution failed. Please try again later.",
             tool_def,
             f"/{tool_name}",
-            _get_partner_name(),
+            await _get_partner_name_async(),
         )
 
 
-def _get_partner_name() -> str:
-    """Get partner name from profile for error messages."""
+async def _get_partner_name_async() -> str:
+    """Get partner name from profile for error messages (async)."""
     try:
-        from app.database import get_profile
-        profile = get_profile() or {}
+        from app.db import Database
+
+        profile = await Database.get_profile_async() or {}
         return profile.get("partner_name", "Yuzu")
     except Exception:
         return "Yuzu"
+
+
+def _get_partner_name() -> str:
+    """Legacy sync wrapper."""
+    return asyncio.run(_get_partner_name_async())

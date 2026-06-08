@@ -20,6 +20,11 @@
     
     <!-- Highlight.js CSS - Tomorrow Night Blue theme -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/tomorrow-night-blue.min.css">
+    
+    <!-- KaTeX for LaTeX rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 </head>
 <body>
     <!-- Unified Sidebar -->
@@ -165,7 +170,7 @@
     <!-- Our scripts -->
     <script src="{{ url_for('static', path='js/sidebar.js') }}"></script>
     <script src="{{ url_for('static', path='js/renderer.js') }}"></script>
-    <script src="{{ url_for('static', path='js/chat.js') }}"></script>
+    <script type="module" src="{{ url_for('static', path='js/chat.js') }}"></script>
 <!-- HTML Preview Modal -->
 <div id="html-preview-modal">
   <div class="html-modal-backdrop" onclick="renderer.closeHtmlModal()"></div>

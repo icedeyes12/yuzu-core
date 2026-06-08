@@ -5,8 +5,9 @@ Usage:
     yuzu "hai apa kabar"           # send message, show reply
     yuzu -h 10                      # show last 10 messages
     yuzu -s 37 "hai"                # use specific session (default: 37)
-    yuzu --seal "hai"               # send with digital signature
-    yuzu --seal --sig "custom"      # seal + custom signature
+    yuzu --seal "hai"               # send with digital signature at end
+    yuzu --sig "custom" "hai"       # custom signature prefix
+    yuzu --seal --sig "custom" "hai"  # both signature and seal
 """
 
 import argparse
@@ -44,15 +45,22 @@ def get_seal() -> str:
             "location": f"{city}, {region}, {country} ({loc})",
             "ip": ip,
             "timestamp": timestamp,
-            "hash": SEAL_HASH
+            "hash": SEAL_HASH,
         }
     }
     return json.dumps(seal, separators=(",", ":"))
 
 
-def get_history(session_id: int, limit: int = 20, url: str = DEFAULT_URL, timeout: int = DEFAULT_TIMEOUT_GET) -> list[dict]:
+def get_history(
+    session_id: int,
+    limit: int = 20,
+    url: str = DEFAULT_URL,
+    timeout: int = DEFAULT_TIMEOUT_GET,
+) -> list[dict]:
     """Get last N messages from session."""
-    requests.post(f"{url}/api/sessions/switch", json={"session_id": session_id}, timeout=timeout)
+    requests.post(
+        f"{url}/api/sessions/switch", json={"session_id": session_id}, timeout=timeout
+    )
     resp = requests.get(f"{url}/api/get_profile", timeout=timeout)
     data = resp.json()
     history = data.get("chat_history", [])
@@ -60,25 +68,41 @@ def get_history(session_id: int, limit: int = 20, url: str = DEFAULT_URL, timeou
     return history[-limit:] if limit else history
 
 
-def send_message(session_id: int, message: str, url: str = DEFAULT_URL,
-                 signature: str = "", timeout: int = DEFAULT_TIMEOUT_POST,
-                 interface: str = "Maintenance Terminal") -> str:
-    """Send message to yuzu-companion."""
+def send_message(
+    session_id: int,
+    message: str,
+    url: str = DEFAULT_URL,
+    signature: str = "",
+    seal: str = "",
+    timeout: int = DEFAULT_TIMEOUT_POST,
+    interface: str = "Maintenance Terminal",
+) -> str:
+    """Send message to yuzu-companion.
+
+    Format: [signature] message {seal}
+    """
+    parts = []
+
+    # Add signature prefix if provided
     if signature:
-        message = f"[{signature}] {message}"
+        parts.append(f"[{signature}]")
 
-    requests.post(f"{url}/api/sessions/switch", json={"session_id": session_id}, timeout=timeout)
+    # Add message
+    parts.append(message)
 
-    payload = {
-        "message": message,
-        "interface": interface
-    }
+    # Add seal suffix if provided
+    if seal:
+        parts.append(seal)
 
-    resp = requests.post(
-        f"{url}/api/send_message",
-        json=payload,
-        timeout=timeout
+    full_message = " ".join(parts)
+
+    requests.post(
+        f"{url}/api/sessions/switch", json={"session_id": session_id}, timeout=timeout
     )
+
+    payload = {"message": full_message, "interface": interface}
+
+    resp = requests.post(f"{url}/api/send_message", json=payload, timeout=timeout)
     data = resp.json()
     return data.get("reply", "(no reply)")
 
@@ -100,20 +124,38 @@ def format_history(history: list[dict], max_len: int = 0) -> str:
 def main():
     parser = argparse.ArgumentParser(description="Chat with yuzu-companion")
     parser.add_argument("message", nargs="?", help="Message to send")
-    parser.add_argument("-s", "--session", type=int, default=DEFAULT_SESSION, help="Session ID")
-    parser.add_argument("-H", "--history", type=int, metavar="N", help="Show last N messages")
+    parser.add_argument(
+        "-s", "--session", type=int, default=DEFAULT_SESSION, help="Session ID"
+    )
+    parser.add_argument(
+        "-H", "--history", type=int, metavar="N", help="Show last N messages"
+    )
     parser.add_argument("-u", "--url", default=DEFAULT_URL, help="API URL")
-    parser.add_argument("--sig", "--signature", dest="signature", default="", help="Add [signature] prefix to message")
-    parser.add_argument("--seal", action="store_true", help="Generate and prepend digital signature JSON")
-    parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_GET, help="Timeout for GET requests (history)")
-    parser.add_argument("--post-timeout", type=int, default=DEFAULT_TIMEOUT_POST, help="Timeout for POST requests (send message)")
+    parser.add_argument(
+        "--sig",
+        "--signature",
+        dest="signature",
+        default="",
+        help="Add [signature] prefix to message",
+    )
+    parser.add_argument(
+        "--seal",
+        action="store_true",
+        help="Generate and append digital signature JSON at end",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=DEFAULT_TIMEOUT_GET,
+        help="Timeout for GET requests (history)",
+    )
+    parser.add_argument(
+        "--post-timeout",
+        type=int,
+        default=DEFAULT_TIMEOUT_POST,
+        help="Timeout for POST requests (send message)",
+    )
     args = parser.parse_args()
-
-    # Build signature
-    signature = args.signature
-    if args.seal:
-        seal = get_seal()
-        signature = seal
 
     # Show history mode
     if args.history:
@@ -132,12 +174,24 @@ def main():
             print(format_history(history))
             print()
 
-        sig_display = f"[{signature}] " if signature else ""
+        # Build display for what we're sending
+        sig_display = f"[{args.signature}] " if args.signature else ""
+        seal_display = f" {get_seal()}" if args.seal else ""
         print(f"=== Sending to session {args.session} ===")
-        print(f"[user] {sig_display}{args.message}")
+        print(f"[user] {sig_display}{args.message}{seal_display}")
         print()
 
-        reply = send_message(args.session, args.message, args.url, signature, args.post_timeout)
+        # Get seal if requested
+        seal = get_seal() if args.seal else ""
+
+        reply = send_message(
+            args.session,
+            args.message,
+            args.url,
+            args.signature,
+            seal,
+            args.post_timeout,
+        )
         print(f"[yuzu] {reply}")
         return
 

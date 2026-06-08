@@ -2,6 +2,11 @@
 // DESCRIPTION: Unified sidebar management with session actions
 let _currentTheme = "stellar-night-suisei";
 
+// Session switching guardrails
+let _isSessionSwitching = false;
+let _sessionSwitchCooldown = false;
+const SESSION_SWITCH_DEBOUNCE_MS = 300;
+
 function toggleSidebar() {
 	const sidebar = document.getElementById("mainSidebar");
 	const overlay = document.getElementById("sidebarOverlay");
@@ -110,6 +115,39 @@ function switchTheme(theme) {
 	console.log(`Switched to ${theme} theme`);
 }
 
+// ==================== SKELETON LOADING ====================
+/**
+ * Show skeleton loading for session list.
+ */
+function showSessionsSkeleton() {
+	const sessionsList = document.getElementById("sidebarSessionsList");
+	if (!sessionsList) return;
+
+	sessionsList.innerHTML = `
+		<div class="skeleton-session">
+			<div class="skeleton skeleton-session-name"></div>
+			<div class="skeleton skeleton-session-meta"></div>
+		</div>
+		<div class="skeleton-session">
+			<div class="skeleton skeleton-session-name"></div>
+			<div class="skeleton skeleton-session-meta"></div>
+		</div>
+		<div class="skeleton-session">
+			<div class="skeleton skeleton-session-name"></div>
+			<div class="skeleton skeleton-session-meta"></div>
+		</div>
+	`;
+}
+
+/**
+ * Hide skeleton (called when real data arrives).
+ * Note: Skeletons are replaced by real content in loadSidebarSessions.
+ */
+// eslint-disable-next-line no-unused-vars
+function _hideSessionsSkeleton() {
+	// Skeletons are replaced by real content in loadSidebarSessions
+}
+
 // Enhanced session loading with action buttons - MARKDOWN SAFE
 function loadSidebarSessions() {
 	const sessionSection = document.getElementById("sessionSection");
@@ -119,9 +157,15 @@ function loadSidebarSessions() {
 
 	sessionSection.style.display = "block";
 
+	// Show skeleton while loading
+	showSessionsSkeleton();
+
 	fetch("/api/sessions/list")
 		.then((response) => response.json())
 		.then((data) => {
+			// Clear skeleton
+			sessionsList.innerHTML = "";
+
 			if (data.sessions && data.sessions.length > 0) {
 				// Clear existing content safely
 				sessionsList.innerHTML = "";
@@ -216,7 +260,7 @@ function renameSession(sessionId, newName) {
 				const sessionNameElement = document.getElementById("sessionName");
 				if (sessionNameElement) {
 					// Check if we're on the chat page and this is the active session
-					fetch("/api/get_profile")
+					fetch("/api/profile")
 						.then((response) => response.json())
 						.then((profileData) => {
 							if (
@@ -284,9 +328,17 @@ function createNewSession() {
 				loadSidebarSessions();
 				toggleSidebar();
 
-				// If on chat page, reload
-				if (window.location.pathname === "/chat") {
-					window.location.reload();
+				// Use router to update URL if available
+				if (window.router) {
+					window.router.updateURL(data.session_id);
+				}
+
+				// If on chat page, use handleSessionSwitch instead of reload
+				if (
+					window.location.pathname === "/chat" &&
+					window.handleSessionSwitch
+				) {
+					window.handleSessionSwitch(data.session_id);
 				} else {
 					window.location.href = "/chat";
 				}
@@ -299,26 +351,93 @@ function createNewSession() {
 }
 
 function switchSession(sessionId) {
-	fetch("/api/sessions/switch", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ session_id: sessionId }),
-	})
-		.then((response) => response.json())
-		.then((data) => {
-			if (data.status === "success") {
-				toggleSidebar();
+	// Guard: Prevent rapid clicking
+	if (_sessionSwitchCooldown) {
+		console.log("[Sidebar] Session switch cooldown active, ignoring click");
+		return;
+	}
 
-				// Reload if on chat page
-				if (window.location.pathname === "/chat") {
-					window.location.reload();
-				}
-			}
-		})
-		.catch((error) => {
-			console.error("Error switching session:", error);
-			alert("Failed to switch session");
-		});
+	// Guard: Prevent double-switching while another is in progress
+	if (_isSessionSwitching) {
+		console.log("[Sidebar] Session switch already in progress, ignoring click");
+		return;
+	}
+
+	// Check for active stream before switching
+	if (window.backgroundStreams && window.router) {
+		const currentSession = window.router.currentSessionId;
+		if (
+			currentSession &&
+			window.backgroundStreams.hasActiveStream(currentSession)
+		) {
+			console.log(
+				`[Sidebar] Active stream in session ${currentSession}, pausing`,
+			);
+		}
+	}
+
+	// [CROSS-PAGE FIX] If we're not on the chat page, navigate to chat with session param
+	const isOnChatPage =
+		window.location.pathname === "/chat" ||
+		window.location.pathname === "/chat/";
+
+	if (!isOnChatPage) {
+		// Navigate to chat page with session parameter
+		window.location.href = `/chat?session=${sessionId}`;
+		toggleSidebar();
+		return;
+	}
+
+	// Start cooldown
+	_sessionSwitchCooldown = true;
+	setTimeout(() => {
+		_sessionSwitchCooldown = false;
+	}, SESSION_SWITCH_DEBOUNCE_MS);
+
+	// Set switching state and visual feedback
+	_isSessionSwitching = true;
+	_setSessionSwitchingVisual(sessionId, true);
+
+	// Delegate to handleSessionSwitch if available (we're on chat page)
+	if (window.handleSessionSwitch) {
+		window.handleSessionSwitch(sessionId);
+		toggleSidebar();
+		// Note: _isSessionSwitching will be reset by handleSessionSwitch completion
+		// But we also reset here as a safety fallback
+		setTimeout(() => {
+			_isSessionSwitching = false;
+			_setSessionSwitchingVisual(sessionId, false);
+		}, 1000);
+		return;
+	}
+
+	// No handleSessionSwitch available - this shouldn't happen on chat page
+	// Reset state and log warning
+	_isSessionSwitching = false;
+	_setSessionSwitchingVisual(sessionId, false);
+	console.warn("[Sidebar] handleSessionSwitch not available on chat page");
+}
+
+/**
+ * Set visual loading state for session items.
+ * @param {number|null} sessionId - Session ID being switched (null to clear all)
+ * @param {boolean} isLoading - Whether to show loading state
+ */
+function _setSessionSwitchingVisual(_sessionId, isLoading) {
+	const sessionsList = document.getElementById("sidebarSessionsList");
+	if (!sessionsList) return;
+
+	// Remove all switching states first
+	sessionsList.querySelectorAll(".sidebar-session-item").forEach((item) => {
+		item.classList.remove("switching");
+	});
+
+	// If loading, add switching class to all items (prevents clicks via CSS)
+	if (isLoading) {
+		sessionsList.classList.add("switching-active");
+	} else {
+		sessionsList.classList.remove("switching-active");
+	}
 }
 
 // Helper functions

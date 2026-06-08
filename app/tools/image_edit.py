@@ -161,12 +161,10 @@ async def execute(arguments, **kwargs) -> dict:
         logger.debug(f"[IMAGE EDIT] Editing: {image_path}")
         logger.debug(f"[IMAGE EDIT] Prompt: {prompt}")
 
-        # Qwen Image Edit expects: {"input_args": {"prompt": "...", "image_b64s": ["..."]}}
+        # Qwen Image Edit expects flat payload (NOT input_args wrapper)
         payload = {
-            "input_args": {
-                "prompt": prompt,
-                "image_b64s": [image_base64],
-            }
+            "prompt": prompt,
+            "image_b64s": [image_base64],
         }
 
         headers = {
@@ -183,7 +181,9 @@ async def execute(arguments, **kwargs) -> dict:
             )
 
         if response.status_code != 200:
-            logger.debug(f"[IMAGE EDIT] API error {response.status_code}: {response.text[:500]}")
+            logger.debug(
+                f"[IMAGE EDIT] API error {response.status_code}: {response.text[:500]}"
+            )
             return error_result(
                 f"API error {response.status_code}",
                 TOOL_DEFINITION,

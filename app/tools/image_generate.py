@@ -5,22 +5,23 @@ from __future__ import annotations
 
 import logging
 import os
-import requests
+import httpx
+import asyncio
+from pathlib import Path
 from datetime import datetime
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
-from app.database import get_profile, get_api_keys
+from app.db import Database
 
 logger = logging.getLogger(__name__)
 
-HUNYUAN_ENDPOINT = "https://chutes-hunyuan-image-3.chutes.ai/generate"
-Z_TURBO_ENDPOINT = "https://chutes-z-image-turbo.chutes.ai/generate"
-QWEN_IMAGE_ENDPOINT = "https://image.chutes.ai/generate"
+Z_TURBO_ENDPOINT = "https://vonkaiser-z-image-turbo.chutes.ai/generate"
+QWEN_IMAGE_ENDPOINT = "https://vonkaiser-qwen-image-2512.chutes.ai/generate"
 
 
 TOOL_DEFINITION = ToolDefinition(
     name="image_generate",
     description="Generate an image from a text prompt using AI diffusion models. "
-                "Returns the generated image displayed inline.",
+    "Returns the generated image displayed inline.",
     role="image_tools",
     parameters=[
         ToolParam(
@@ -34,7 +35,7 @@ TOOL_DEFINITION = ToolDefinition(
 )
 
 
-def execute(arguments, **kwargs):
+async def execute(arguments, **kwargs):
     prompt = arguments.get("prompt", "")
     if not prompt:
         return error_result(
@@ -44,12 +45,12 @@ def execute(arguments, **kwargs):
             "Yuzu",
         )
 
-    profile = get_profile() or {}
+    profile = await Database.get_profile_async() or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     try:
-        api_keys = get_api_keys()
-        api_key = api_keys.get('chutes')
+        api_keys = await Database.get_api_keys_async()
+        api_key = api_keys.get("chutes")
         if not api_key:
             return error_result(
                 "No Chutes API key available",
@@ -58,41 +59,31 @@ def execute(arguments, **kwargs):
                 partner_name,
             )
 
-        image_model = profile.get("image_model", "hunyuan")
+        image_model = profile.get("image_model", "qwen_image")
         logger.debug(f"[IMAGE TOOL] Model: {image_model}")
 
-        if image_model == "qwen_image":
-            endpoint = QWEN_IMAGE_ENDPOINT
-            payload = {
-                "model": "Qwen-Image-2512",
-                "prompt": prompt,
-                "negative_prompt": "cartoon, anime, bad anatomy, blurry, distorted, low quality, watermark, text",
-                "guidance_scale": 7.5,
-                "width": 1024,
-                "height": 1024,
-                "num_inference_steps": 20,
-            }
-        elif image_model == "z_turbo":
+        if image_model == "z_turbo":
             endpoint = Z_TURBO_ENDPOINT
             payload = {"prompt": prompt}
         else:
-            endpoint = HUNYUAN_ENDPOINT
+            # Default: qwen_image
+            endpoint = QWEN_IMAGE_ENDPOINT
             payload = {"prompt": prompt}
 
         logger.debug(f"[IMAGE TOOL] Endpoint: {endpoint}")
-        logger.debug(f"[IMAGE TOOL] Generating image (prompt length: {len(prompt)} chars)")
+        logger.debug(
+            f"[IMAGE TOOL] Generating image (prompt length: {len(prompt)} chars)"
+        )
 
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
-        response = requests.post(
-            endpoint,
-            headers=headers,
-            json=payload,
-            timeout=300
-        )
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                endpoint, headers=headers, json=payload, timeout=300
+            )
 
         if response.status_code != 200:
             logger.debug(f"[IMAGE TOOL] API error {response.status_code}")
@@ -103,25 +94,26 @@ def execute(arguments, **kwargs):
                 partner_name,
             )
 
-        images_dir = os.path.abspath(os.path.join("static", "generated_images"))
-        os.makedirs(images_dir, exist_ok=True)
+        images_dir = Path("static/generated_images").resolve()
+        images_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_prompt = "".join(
-            c for c in prompt[:30] if c.isascii() and (c.isalnum() or c in (" ", "-", "_"))
+            c
+            for c in prompt[:30]
+            if c.isascii() and (c.isalnum() or c in (" ", "-", "_"))
         ).strip()
         if not safe_prompt:
             safe_prompt = "image"
         ext = "jpg" if image_model == "qwen_image" else "png"
         filename = f"{timestamp}_{safe_prompt}.{ext}"
 
-        candidate_path = os.path.join(images_dir, filename)
-        filepath = os.path.abspath(os.path.normpath(candidate_path))
-        if not filepath.startswith(images_dir + os.sep):
+        filepath = (images_dir / filename).resolve()
+        if not str(filepath).startswith(str(images_dir) + os.sep):
             raise ValueError("Unsafe output path")
 
-        with open(filepath, 'wb') as f:
-            f.write(response.content)
+        # Use asyncio.to_thread for file I/O
+        await asyncio.to_thread(filepath.write_bytes, response.content)
 
         logger.debug(f"[IMAGE TOOL] Saved: {filepath}")
 
@@ -139,7 +131,7 @@ def execute(arguments, **kwargs):
 
     except Exception as e:
         logger.debug(f"[IMAGE TOOL] Exception: {str(e)}")
-        profile = get_profile() or {}
+        profile = await Database.get_profile_async() or {}
         partner_name = profile.get("partner_name", "Yuzu")
         return error_result(
             "Image generation failed. Please try again later.",

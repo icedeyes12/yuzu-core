@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from app.database import (
+from app.db import (
     ALL_TOOL_ROLES,
     DEFAULT_PROFILE_PARAMS,
     SCHEMA_DDL,
@@ -55,12 +55,12 @@ class TestProfileParsers:
             "partner_name": "Yuzu",
             "affection": 75,
             "theme": "dark",
-            "memory_json": '{"x": 1}',
-            "session_history_json": "{}",
-            "global_knowledge_json": "{}",
-            "providers_config_json": '{"preferred_provider": "chutes"}',
+            "memory_state": {"x": 1},
+            "session_history": {},
+            "global_knowledge": {},
+            "providers_config": {"preferred_provider": "chutes"},
             "context": "{}",
-            "image_model": "hunyuan",
+            "image_model": "qwen_image",
             "vision_model": "kimi-k2.5",
             "created_at": None,
             "updated_at": None,
@@ -96,7 +96,7 @@ class TestBuildProfileUpdate:
         result = build_profile_update({"memory": {"a": 1}})
         assert result is not None
         query, params = result
-        assert "memory_json = %s" in query
+        assert "memory_state = %s" in query
         assert params[0] == '{"a": 1}'
 
     def test_affection_coerced_to_int(self):
@@ -107,7 +107,7 @@ class TestBuildProfileUpdate:
 
     def test_default_profile_params_match_columns(self):
         # 9 placeholders before timestamp/updated_at
-        assert len(DEFAULT_PROFILE_PARAMS) == 9
+        assert len(DEFAULT_PROFILE_PARAMS) == 11
 
 
 class TestSessionParsers:
@@ -136,7 +136,9 @@ class TestSessionParsers:
 
 class TestApiKeyDecryption:
     def test_unencrypted_passes_through(self):
-        rows = [{"key_name": "openrouter", "key_value": "sk-plain", "key_encrypted": False}]
+        rows = [
+            {"key_name": "openrouter", "key_value": "sk-plain", "key_encrypted": False}
+        ]
         out = decrypt_api_key_rows(rows)
         assert out == {"openrouter": "sk-plain"}
 
@@ -186,7 +188,7 @@ class TestToolContractParsers:
     def test_extract_command_from_contract(self):
         contract = (
             "<details><summary>image_tools</summary>\n"
-            "```bash\n$ /imagine a cat\n```\n"
+            "```bash\nuser@host$ /imagine a cat\n```\n"
             "result\n</details>"
         )
         extract_command_from_contract = extract_command_from_markdown_contract
@@ -212,8 +214,7 @@ class TestToolContractParsers:
 
     def test_extract_raw_result_strips_html(self):
         assert (
-            extract_raw_result_from_markdown_contract("<b>bold</b> text")
-            == "bold text"
+            extract_raw_result_from_markdown_contract("<b>bold</b> text") == "bold text"
         )
 
 
@@ -235,7 +236,7 @@ class TestFormatAiHistoryRows:
             {"role": "assistant", "content": "hello"}
         ]
 
-    def test_tool_role_expands_to_two_entries(self):
+    def test_tool_role_passes_through(self):
         contract = (
             "<details><summary>image_tools</summary>\n"
             "```bash\n$ /imagine cat\n```\n"
@@ -244,10 +245,9 @@ class TestFormatAiHistoryRows:
         )
         rows = [{"role": "image_tools", "content": contract, "timestamp": ""}]
         out = format_ai_history_rows(rows)
-        assert len(out) == 2
-        assert out[0]["role"] == "assistant"
-        assert out[0]["content"] == "/imagine cat"
-        assert out[1]["role"] == "image_tools"
+        assert len(out) == 1
+        assert out[0]["role"] == "image_tools"
+        assert out[0]["content"] == "image_url"
 
 
 class TestEncryptionStatus:
@@ -257,11 +257,17 @@ class TestEncryptionStatus:
         assert out["api_keys"]["encrypted"] == 0
 
     def test_build_encryption_status_populated(self):
-        out = build_encryption_status(
-            {"cnt": 100}, {"cnt": 5}, {"cnt": 3}, {"cnt": 3}
-        )
-        assert out["messages"] == {"total": 100, "encrypted": 5, "policy": "NO_ENCRYPTION"}
-        assert out["api_keys"] == {"total": 3, "encrypted": 3, "policy": "FULL_ENCRYPTION"}
+        out = build_encryption_status({"cnt": 100}, {"cnt": 5}, {"cnt": 3}, {"cnt": 3})
+        assert out["messages"] == {
+            "total": 100,
+            "encrypted": 5,
+            "policy": "NO_ENCRYPTION",
+        }
+        assert out["api_keys"] == {
+            "total": 3,
+            "encrypted": 3,
+            "policy": "FULL_ENCRYPTION",
+        }
 
 
 class TestToolRoleHelpers:
@@ -275,7 +281,16 @@ class TestToolRoleHelpers:
 
     def test_all_tool_roles_dedup(self):
         # imagine + image_generate both map to image_tools, dedup -> 2 unique
-        assert sorted(ALL_TOOL_ROLES) == ["image_tools", "request_tools"]
+        assert sorted(ALL_TOOL_ROLES) == [
+            "ask_rei_tools",
+            "fs_tools",
+            "image_tools",
+            "memory_tools",
+            "python_tools",
+            "request_tools",
+            "shell_tools",
+            "sql_tools",
+        ]
 
     def test_tool_roles_dict_is_complete(self):
         assert "imagine" in TOOL_ROLES
@@ -294,4 +309,4 @@ class TestMisc:
         assert "api_keys" in full
         assert "messages" in full
         # 4 tables + 3 indexes = 7 statements
-        assert len(SCHEMA_DDL) == 7
+        assert len(SCHEMA_DDL) == 9

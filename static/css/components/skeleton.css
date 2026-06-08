@@ -1,0 +1,113 @@
+/* FILE: static/css/components/skeleton.css */
+/* DESCRIPTION: Skeleton loading animations for chat and sidebar */
+
+/* ==================== SKELETON BASE ==================== */
+.skeleton {
+	background: linear-gradient(
+		90deg,
+		var(--surface-elevated, var(--card-bg)) 25%,
+		var(--surface-hover, rgba(255, 255, 255, 0.05)) 50%,
+		var(--surface-elevated, var(--card-bg)) 75%
+	);
+	background-size: 200% 100%;
+	animation: skeleton-shimmer 1.5s ease-in-out infinite;
+	border-radius: var(--radius-md, 8px);
+}
+
+@keyframes skeleton-shimmer {
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
+}
+
+/* ==================== CHAT SKELETON ==================== */
+.skeleton-message {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	padding: 0.8rem 1rem;
+	border-radius: 12px;
+	background: var(--message-ai-bg);
+	border: 1px solid var(--border-ai);
+	animation: fadeIn 0.3s ease;
+}
+
+.skeleton-message.user {
+	align-self: flex-end;
+	background: var(--message-user-bg);
+	border: 1px solid var(--border-user);
+}
+
+.skeleton-avatar {
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+}
+
+.skeleton-text {
+	height: 14px;
+	border-radius: var(--radius-sm, 4px);
+}
+
+.skeleton-text.short {
+	width: 60%;
+}
+
+.skeleton-text.medium {
+	width: 80%;
+}
+
+.skeleton-text.long {
+	width: 95%;
+}
+
+/* ==================== SIDEBAR SKELETON ==================== */
+.skeleton-sidebar-item {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.75rem 1rem;
+	border-radius: var(--radius-md, 8px);
+	background: var(--surface-elevated, var(--card-bg));
+	margin-bottom: 0.5rem;
+}
+
+.skeleton-sidebar-icon {
+	width: 24px;
+	height: 24px;
+	border-radius: var(--radius-sm, 4px);
+}
+
+.skeleton-sidebar-text {
+	flex: 1;
+	height: 12px;
+	border-radius: var(--radius-sm, 4px);
+}
+
+.skeleton-sidebar-meta {
+	width: 60px;
+	height: 10px;
+	border-radius: var(--radius-sm, 4px);
+}
+
+/* ==================== SKELETON VARIANTS ==================== */
+.skeleton-code {
+	height: 100px;
+	border-radius: var(--radius-md, 8px);
+	margin: 0.5rem 0;
+}
+
+.skeleton-image {
+	height: 200px;
+	border-radius: var(--radius-md, 8px);
+	margin: 0.5rem 0;
+}
+
+.skeleton-name {
+	width: 80px;
+	height: 16px;
+	border-radius: var(--radius-sm, 4px);
+}

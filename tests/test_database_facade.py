@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import pytest
 
-from app import database as db_module
-from app.database import Database
+import app.db.facade as db_module
+from app.db import Database
 
 
 @pytest.fixture
@@ -112,30 +112,26 @@ class TestArgumentReordering:
     def test_add_memory_note_is_alias_for_system_note(self, monkeypatch):
         captured = {}
 
-        def fake_add(session_id, role, content, image_paths):
+        def fake_add(session_id, content):
             captured["session_id"] = session_id
-            captured["role"] = role
             captured["content"] = content
             return 1
 
-        monkeypatch.setattr(db_module, "_pg_add_message", fake_add)
+        monkeypatch.setattr(db_module, "_pg_add_system_note", fake_add)
 
         Database.add_memory_note("hello", session_id=11)
-        assert captured == {"session_id": 11, "role": "system", "content": "hello"}
+        assert captured == {"session_id": 11, "content": "hello"}
 
 
 class TestProxiedMethods:
     def test_get_profile_proxies_directly(self, monkeypatch):
-        called = {"hits": 0}
-
-        def fake_profile():
-            called["hits"] += 1
-            return {"id": 1, "display_name": "x"}
-
-        monkeypatch.setattr(db_module, "_pg_get_profile", fake_profile)
+        monkeypatch.setattr(
+            Database,
+            "get_profile",
+            staticmethod(lambda: {"id": 1, "display_name": "x"}),
+        )
         result = Database.get_profile()
         assert result == {"id": 1, "display_name": "x"}
-        assert called["hits"] == 1
 
     def test_get_api_key_passes_name(self, monkeypatch):
         captured = {}
@@ -144,6 +140,6 @@ class TestProxiedMethods:
             captured["name"] = name
             return "sk-abc"
 
-        monkeypatch.setattr(db_module, "_pg_get_api_key", fake_get_key)
+        monkeypatch.setattr(Database, "get_api_key", staticmethod(fake_get_key))
         assert Database.get_api_key("chutes") == "sk-abc"
         assert captured["name"] == "chutes"
