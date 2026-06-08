@@ -198,15 +198,18 @@ export class MultimodalManager {
 
 			// [CRITICAL] Get session ID and validate it
 			const sessionId = router.currentSessionId;
-			
+
 			// GUARD: Prevent streaming without valid session
 			if (!sessionId || sessionId === "null" || sessionId === "undefined") {
-				console.error("[Multimodal] Cannot send message: Invalid session ID", sessionId);
+				console.error(
+					"[Multimodal] Cannot send message: Invalid session ID",
+					sessionId,
+				);
 				setIsProcessingMessage(false);
 				this.setSendButtonState("ready");
 				return;
 			}
-			
+
 			backgroundStreams.setActiveView(sessionId);
 
 			// [FIX] Check if there's already an active stream for this session
@@ -390,9 +393,10 @@ export class MultimodalManager {
 			// [ACCORDION PRESERVATION] Restore <details> open states after innerHTML update
 			restoreDetailsState(contentDiv, detailsStates);
 
-			// Initialize mermaid diagrams (placeholders are skipped automatically)
+			// Initialize mermaid diagrams with DEBOUNCE during streaming
+			// This prevents UI freeze from synchronous mermaid.run() on every chunk
 			if (renderer.isMermaidReady) {
-				renderer.initializeMermaidDiagrams(contentDiv);
+				renderer.initializeMermaidDiagrams(contentDiv, !isComplete);
 			}
 
 			// Initialize table copy buttons during streaming

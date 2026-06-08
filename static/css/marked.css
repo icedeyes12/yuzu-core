@@ -900,15 +900,15 @@
 	width: 32px;
 	height: 32px;
 	color: var(--accent-primary);
-	animation: mermaidSpin 1s linear infinite;
+	animation: mermaidPulse 1.2s ease-in-out infinite;
 }
 
-@keyframes mermaidSpin {
-	from {
-		transform: rotate(0deg);
+@keyframes mermaidPulse {
+	0%, 100% {
+		opacity: 0.4;
 	}
-	to {
-		transform: rotate(360deg);
+	50% {
+		opacity: 1.0;
 	}
 }
 

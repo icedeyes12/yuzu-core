@@ -159,6 +159,55 @@ function showHtmlPreviewModal(encodedCode) {
 	iframe.srcdoc = code;
 }
 
+// ==================== MERMAID DEBOUNCE ENGINE ====================
+// Global debounce wrapper for mermaid rendering during streaming
+// Prevents UI freeze from synchronous mermaid.run() calls on every chunk
+let mermaidRenderTimeout = null;
+
+/**
+ * Debounced mermaid rendering.
+ * Collects unprocessed mermaid blocks and renders them after stream settles.
+ * @param {HTMLElement} container - Container element to search for mermaid blocks
+ * @param {number} delay - Debounce delay in ms (default: 300)
+ */
+function debouncedMermaidRender(container, delay = 300) {
+	if (mermaidRenderTimeout) {
+		clearTimeout(mermaidRenderTimeout);
+	}
+
+	mermaidRenderTimeout = setTimeout(() => {
+		try {
+			// Query for unprocessed mermaid blocks
+			const unprocessed = container.querySelectorAll(
+				'.language-mermaid:not([data-processed="true"])',
+			);
+
+			if (unprocessed.length === 0) return;
+
+			console.log(
+				`[Mermaid Debounce] Rendering ${unprocessed.length} diagram(s)`,
+			);
+
+			// Process each mermaid block
+			unprocessed.forEach(async (el) => {
+				try {
+					await mermaid.run({ nodes: [el] });
+					el.setAttribute("data-processed", "true");
+				} catch (error) {
+					console.error("[Mermaid Debounce] Render error:", error);
+					const errorMsg = error.message || "Unknown error";
+					el.innerHTML = `<pre class="mermaid-error">Mermaid Error: ${errorMsg}\n\n${el.textContent}</pre>`;
+					el.setAttribute("data-processed", "true");
+				}
+			});
+		} catch (e) {
+			console.error("[Mermaid Debounce] Error:", e);
+		} finally {
+			mermaidRenderTimeout = null;
+		}
+	}, delay);
+}
+
 // ==================== RENDERER CLASS ====================
 class MessageRenderer {
 	constructor() {
@@ -641,9 +690,16 @@ class MessageRenderer {
 		return result;
 	}
 
-	async initializeMermaidDiagrams(container) {
+	async initializeMermaidDiagrams(container, useDebounce = false) {
 		if (!this.isMermaidReady) return;
 
+		// If debounce requested, use the global debounce wrapper
+		if (useDebounce) {
+			debouncedMermaidRender(container);
+			return;
+		}
+
+		// Direct (non-debounced) rendering for completed streams
 		const mermaidElements = container.querySelectorAll(
 			".mermaid:not([data-processed])",
 		);
