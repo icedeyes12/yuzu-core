@@ -70,6 +70,14 @@ IDLE_GATE_HOURS = (
 # Fence constants (aligned with plast-mem)
 FENCE_TTL_MINUTES = 120  # Stale job cleanup threshold
 
+# ── Scope limits (safety net) ───────────────────────────────────────────────────
+# Prevent runaway processing by limiting messages processed per pipeline run
+MAX_MESSAGES_PER_RUN = 100  # Hard cap: process at most this many messages
+
+# Historical backlog detection threshold
+# If delta > this value, log warning and scope-limit instead of full process
+HISTORICAL_BACKLOG_THRESHOLD = 1000
+
 # ── Rate limiting for memory pipeline ─────────────────────────────────────────
 # Removed semaphore to avoid event-loop binding issues
 # Rate limiting is handled by _last_memory_llm_call delay below
@@ -233,13 +241,29 @@ async def _get_session_idle_hours_async(session_id: int) -> float | None:
 async def should_trigger_segmentation_async(
     session_id: int, current_count: int
 ) -> tuple[bool, int]:
-    """Check if segmentation should trigger (async)."""
+    """Check if segmentation should trigger (async).
+    
+    Returns:
+        (should_trigger, delta) tuple
+        
+    Safety checks:
+        - Blocks if fence is active
+        - Detects historical backlogs (>1000 messages) and logs warning
+    """
     if await _is_fence_active_async(session_id):
         return False, 0
 
     state = await _get_cached_memory_state_async(session_id)
     last_count = state.get("last_segmented_count", 0) or 0
     delta = current_count - last_count
+
+    # Historical backlog detection (safety net)
+    if delta > HISTORICAL_BACKLOG_THRESHOLD:
+        logger.warning(
+            f"⚠️ HISTORICAL BACKLOG DETECTED: session={session_id} "
+            f"delta={delta} > threshold={HISTORICAL_BACKLOG_THRESHOLD} "
+            f"— pipeline will scope-limit to {MAX_MESSAGES_PER_RUN} messages"
+        )
 
     if delta >= WINDOW_MAX:
         return True, delta
@@ -810,13 +834,17 @@ async def run_memory_pipeline_async(session_id: int, message_count: int) -> dict
     """Run the full memory pipeline for a session.
 
     Steps:
-      1. Get unsegmented messages
+      1. Get unsegmented messages (scope-limited to MAX_MESSAGES_PER_RUN)
       2. Batch segment (single LLM call)
       3. Create episodes + PCL per segment
       4. Run memory review if pending
       5. Clear fence and mark done
 
     Returns summary: {segments: n, episodes: n, pcl_runs: n}
+    
+    Safety net:
+      - Processes at most MAX_MESSAGES_PER_RUN messages per run
+      - Detects historical backlogs and logs warnings
     """
     from app.db import get_session_messages_async, get_memory_state_async
 
@@ -841,9 +869,25 @@ async def run_memory_pipeline_async(session_id: int, message_count: int) -> dict
         # This prevents double-segmentation
         unsegmented = conversation_messages[last_segmented_count:]
         unsegmented_count = len(unsegmented)
+        
+        # ── SCOPE LIMIT (safety net) ─────────────────────────────────────────────
+        # Process at most MAX_MESSAGES_PER_RUN to prevent runaway LLM calls
+        original_unsegmented_count = unsegmented_count
+        if unsegmented_count > MAX_MESSAGES_PER_RUN:
+            logger.warning(
+                f"⚠️ SCOPE LIMIT: session={session_id} "
+                f"unsegmented={unsegmented_count} > max={MAX_MESSAGES_PER_RUN} "
+                f"— processing first {MAX_MESSAGES_PER_RUN} messages only"
+            )
+            unsegmented = unsegmented[:MAX_MESSAGES_PER_RUN]
+            unsegmented_count = MAX_MESSAGES_PER_RUN
+        
+        # Track how many we're actually processing
+        processed_count = unsegmented_count
+        # ───────────────────────────────────────────────────────────────────────
 
-        # Update current total for marking done
-        current_total = last_segmented_count + unsegmented_count
+        # Update current total for marking done (account for scope limit)
+        current_total = last_segmented_count + processed_count
 
         if unsegmented_count < MIN_MESSAGES:
             logger.debug(
@@ -885,7 +929,17 @@ async def run_memory_pipeline_async(session_id: int, message_count: int) -> dict
             logger.warning(f"Memory review error: {e}")
 
         # Mark done - update last_segmented_count for next trigger calculation
+        # IMPORTANT: We increment by processed_count, not total messages,
+        # so we can process the rest in subsequent runs
         await mark_segmentation_done_async(session_id, current_total)
+        
+        # Log if there are remaining messages to process
+        remaining = original_unsegmented_count - processed_count
+        if remaining > 0:
+            logger.info(
+                f"Session {session_id}: processed {processed_count}/{original_unsegmented_count} "
+                f"messages, {remaining} remaining for next run"
+            )
 
         return {
             "segments": len(batch_result),
