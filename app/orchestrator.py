@@ -425,6 +425,199 @@ async def _post_turn_async(
 
 
 # --------------------------------------------------------------------
+# Streaming orchestration helpers
+# --------------------------------------------------------------------
+
+
+async def _process_tool_commands_async(
+    full_response: str,
+    session_id: int,
+) -> tuple[str, bool, list[str]]:
+    """Parse and execute tool commands, yielding tool markdown chunks.
+
+    Yields:
+        tuple of (tool_markdown, is_image_tool, generated_paths)
+
+    Returns:
+        Combined tool markdown string and list of all generated image paths.
+    """
+    commands, clean_text = parse_tool_blocks(full_response)
+
+    if not commands:
+        return ("", [], False)
+
+    log.info("[stream] found %d tool block(s)", len(commands))
+
+    results = await execute_commands(commands, session_id=session_id)
+
+    tool_markdowns: list[str] = []
+    any_image_tool = False
+    all_generated_paths: list[str] = []
+
+    for tool_name, result in results:
+        tool_markdown = result.get("markdown", str(result))
+        tool_markdowns.append(tool_markdown)
+
+        p = parse_image_path(tool_markdown)
+        if p is not None:
+            any_image_tool = True
+            all_generated_paths.append(p)
+
+    combined_tool_markdown = "\n\n".join(tool_markdowns)
+
+    # Return results for coordination
+    return (combined_tool_markdown, any_image_tool, all_generated_paths)
+
+
+async def _run_orchestration_loop_async(
+    profile: dict[str, Any],
+    session_id: int,
+    interface: str,
+    current_synthesis_context: str,
+    ephemeral_context: list[dict[str, str]],
+    any_image_tool: bool,
+    fence_id: int,
+    abort_check: callable[[], bool] | None,
+    user_message: str,
+    active_session: dict[str, Any],
+) -> AsyncIterator[str]:
+    """Run the orchestration loop for synthesis with tool block detection.
+
+    Handles iterative synthesis passes that may contain additional tool blocks.
+    Continues until synthesis has no more tool blocks or max loops reached.
+
+    Yields:
+        Synthesis chunks and tool result markdown.
+    """
+    loop_count = 0
+    all_generated_paths: list[str] = []
+
+    while loop_count < _MAX_ORCHESTRATION_LOOPS:
+        loop_count += 1
+        log.info("[stream] orchestration loop %d", loop_count)
+
+        if abort_check and abort_check():
+            return
+
+        synthesis_chunks: list[str] = []
+        full_synthesis = ""
+
+        try:
+            async for chunk in _stream_synthesis_async(
+                profile,
+                session_id,
+                interface,
+                current_synthesis_context,
+                ephemeral_context=ephemeral_context,
+            ):
+                if chunk:
+                    if abort_check and abort_check():
+                        return
+
+                    synthesis_chunks.append(chunk)
+                    full_synthesis += chunk
+
+                    # Yield chunk with proper formatting
+                    yield (
+                        "\n\n" + chunk
+                        if any_image_tool and not synthesis_chunks[:-1]
+                        else chunk
+                    )
+        except asyncio.CancelledError:
+            log.info(
+                "[stream] cancelled in synthesis loop - propagating to StreamBuffer"
+            )
+            raise
+        except Exception as e:
+            log.error("[stream] error in synthesis loop: %s", e)
+            raise
+
+        synthesis = _clean(full_synthesis) if full_synthesis else None
+
+        if not synthesis:
+            await StreamFence.complete(session_id, fence_id)
+            await _post_turn_async(
+                profile,
+                user_message,
+                current_synthesis_context,
+                session_id,
+                active_session,
+            )
+            return
+
+        if not has_tool_blocks(synthesis):
+            final_response = (
+                f"{current_synthesis_context}\n\n{synthesis}"
+                if any_image_tool
+                else synthesis
+            )
+            await StreamFence.complete(session_id, fence_id)
+            log.info(f"[stream] fence {fence_id} completed (final synthesis)")
+            await _post_turn_async(
+                profile, user_message, final_response, session_id, active_session
+            )
+            return
+
+        log.info("[stream] synthesis contains tool blocks, continuing loop")
+
+        next_commands, _ = parse_tool_blocks(synthesis)
+        if not next_commands:
+            await _post_turn_async(
+                profile, user_message, synthesis, session_id, active_session
+            )
+            return
+
+        # Append synthesis + next tool results to ephemeral context
+        ephemeral_context.append({"role": "assistant", "content": synthesis})
+
+        next_results = await execute_commands(next_commands, session_id=session_id)
+        next_markdowns: list[str] = []
+        any_image_tool = False
+
+        for tool_name, result in next_results:
+            tm = result.get("markdown", str(result))
+            next_markdowns.append(tm)
+            p = parse_image_path(tm)
+            if p:
+                any_image_tool = True
+                all_generated_paths.append(p)
+            yield "\n\n" + tm
+
+        next_combined = "\n\n".join(next_markdowns)
+        ephemeral_context.append({"role": "user", "content": next_combined})
+        current_synthesis_context = next_combined
+
+    # Max loops reached
+    await StreamFence.complete(session_id, fence_id)
+    await _post_turn_async(
+        profile,
+        user_message,
+        synthesis or current_synthesis_context,
+        session_id,
+        active_session,
+    )
+
+
+async def _finalize_and_persist_async(
+    session_id: int,
+    fence_id: int,
+    profile: dict[str, Any],
+    user_message: str,
+    final_response: str,
+    active_session: dict[str, Any],
+) -> None:
+    """Complete the stream fence and persist final state.
+
+    This is the final cleanup step for a completed stream.
+    """
+    await StreamFence.complete(session_id, fence_id)
+    log.info(f"[stream] fence {fence_id} completed")
+    await _post_turn_async(
+        profile, user_message, final_response, session_id, active_session
+    )
+
+
+# --------------------------------------------------------------------
 # Public entry points
 # --------------------------------------------------------------------
 
@@ -639,6 +832,10 @@ async def handle_user_message_streaming(
 
     FENCE PROTECTION: Wraps user message persistence in a fence to prevent
     ghost turns if stream is interrupted before completion.
+
+    COORDINATOR: Delegates tool execution to _process_tool_commands_async,
+    synthesis loops to _run_orchestration_loop_async, and finalization
+    to _finalize_and_persist_async.
     """
     profile = await Database.get_profile_async()
     if not user_message.strip() and not image_paths:
@@ -669,7 +866,7 @@ async def handle_user_message_streaming(
     fence_id = await StreamFence.acquire(session_id, user_msg_id or 0)
     log.info(f"[stream] fence {fence_id} acquired for session {session_id}")
 
-    # Collect streamed response - RAM only, no intermediate DB writes
+    # === PHASE 1: Initial LLM response streaming ===
     response_chunks: list[str] = []
 
     try:
@@ -679,195 +876,72 @@ async def handle_user_message_streaming(
             if chunk:
                 if abort_check and abort_check():
                     log.info(f"[stream] abort detected, fence {fence_id} not completed")
-                    # Fence remains incomplete - will be cleaned up by timeout
                     return
 
                 response_chunks.append(chunk)
                 yield chunk
     except asyncio.CancelledError:
         log.info("[stream] cancelled in first pass - propagating to StreamBuffer")
-        # FENCE: Incomplete - will be cleaned up by timeout
         log.warning(f"[stream] fence {fence_id} incomplete due to cancellation")
         raise
     except Exception as e:
         log.error("[stream] error in first pass: %s", e)
-        # FENCE: Incomplete - will be cleaned up by timeout
         log.warning(f"[stream] fence {fence_id} incomplete due to error: {e}")
-        # StreamBuffer will handle persistence of partial content
         raise
 
     full_response = "".join(response_chunks)
 
+    # === PHASE 2: Handle empty response ===
     if not _clean(full_response):
-        fallback = _EMPTY_RESPONSE_FALLBACK
-        yield fallback
-        # FENCE: Mark as completed to allow persistence
-        await StreamFence.complete(session_id, fence_id)
-        log.info(f"[stream] fence {fence_id} completed with fallback")
-        await _post_turn_async(
-            profile, user_message, fallback, session_id, active_session
+        await _finalize_and_persist_async(
+            session_id, fence_id, profile, user_message, _EMPTY_RESPONSE_FALLBACK, active_session
         )
+        yield _EMPTY_RESPONSE_FALLBACK
         return
 
+    # === PHASE 3: Handle markdown image shortcut ===
     if is_markdown_image_shortcut(full_response):
         await StreamFence.complete(session_id, fence_id)
         yield IMAGE_SHORTCUT_WARNING
         return
 
-    commands, clean_text = parse_tool_blocks(full_response)
+    # === PHASE 4: Parse and execute tool commands ===
+    tool_result = await _process_tool_commands_async(full_response, session_id)
+    combined_tool_markdown, any_image_tool, all_generated_paths = tool_result
 
-    if not commands:
-        # FENCE: Mark as completed
-        await StreamFence.complete(session_id, fence_id)
-        log.debug(f"[stream] fence {fence_id} completed (no tools)")
-        await _post_turn_async(
-            profile, user_message, full_response, session_id, active_session
-        )
-        return
+    # Yield tool markdown chunks
+    if combined_tool_markdown:
+        yield "\n\n" + combined_tool_markdown
 
-    log.info("[stream] found %d tool block(s)", len(commands))
-
-    results = await execute_commands(commands, session_id=session_id)
-
-    tool_markdowns: list[str] = []
-    any_image_tool = False
-
-    for tool_name, result in results:
-        tool_markdown = result.get("markdown", str(result))
-        tool_markdowns.append(tool_markdown)
-        # NOTE: Tool results NOT persisted to DB mid-stream anymore.
-        # StreamBuffer saves the final combined assistant message at stream end.
-        # ephemeral_context carries tool results for synthesis loops.
-
-        if parse_image_path(tool_markdown) is not None:
-            any_image_tool = True
-
-        yield "\n\n" + tool_markdown
-
-    combined_tool_markdown = "\n\n".join(tool_markdowns)
-
-    # Build ephemeral context: first-pass assistant response + tool results
-    # This ensures the LLM has full conversation context not yet in DB
+    # === PHASE 5: Build ephemeral context for synthesis ===
     ephemeral_context: list[dict[str, str]] = [
         {"role": "assistant", "content": full_response},
         {"role": "user", "content": combined_tool_markdown},
     ]
 
     current_synthesis_context = combined_tool_markdown
-    all_generated_paths = []
-    for tm in tool_markdowns:
-        p = parse_image_path(tm)
-        if p:
-            all_generated_paths.append(p)
+    all_generated_paths = list(all_generated_paths)
 
-    loop_count = 0
+    if not combined_tool_markdown:
+        # No tool output, just finalize
+        await _finalize_and_persist_async(
+            session_id, fence_id, profile, user_message, full_response, active_session
+        )
+        return
 
-    while loop_count < _MAX_ORCHESTRATION_LOOPS:
-        loop_count += 1
-        log.info("[stream] orchestration loop %d", loop_count)
+    # === PHASE 6: Run orchestration loop (synthesis with potential tool blocks) ===
+    async for chunk in _run_orchestration_loop_async(
+        profile=profile,
+        session_id=session_id,
+        interface=interface,
+        current_synthesis_context=current_synthesis_context,
+        ephemeral_context=ephemeral_context,
+        any_image_tool=any_image_tool,
+        fence_id=fence_id,
+        abort_check=abort_check,
+        user_message=user_message,
+        active_session=active_session,
+    ):
+        yield chunk
 
-        if abort_check and abort_check():
-            return
-
-        synthesis_chunks: list[str] = []
-        full_synthesis = ""
-
-        try:
-            async for chunk in _stream_synthesis_async(
-                profile,
-                session_id,
-                interface,
-                current_synthesis_context,
-                ephemeral_context=ephemeral_context,
-            ):
-                if chunk:
-                    if abort_check and abort_check():
-                        # StreamBuffer will handle persistence
-                        return
-
-                    synthesis_chunks.append(chunk)
-                    full_synthesis += chunk
-
-                    yield (
-                        "\n\n" + chunk
-                        if any_image_tool and not synthesis_chunks[:-1]
-                        else chunk
-                    )
-        except asyncio.CancelledError:
-            log.info(
-                "[stream] cancelled in synthesis loop - propagating to StreamBuffer"
-            )
-            raise
-        except Exception as e:
-            log.error("[stream] error in synthesis loop: %s", e)
-            # StreamBuffer will handle persistence
-            raise
-
-        synthesis = _clean(full_synthesis) if full_synthesis else None
-
-        if not synthesis:
-            # FENCE: Mark as completed
-            await StreamFence.complete(session_id, fence_id)
-            await _post_turn_async(
-                profile,
-                user_message,
-                current_synthesis_context,
-                session_id,
-                active_session,
-            )
-            return
-
-        if not has_tool_blocks(synthesis):
-            final_response = (
-                f"{current_synthesis_context}\n\n{synthesis}"
-                if any_image_tool
-                else synthesis
-            )
-            # FENCE: Mark as completed
-            await StreamFence.complete(session_id, fence_id)
-            log.info(f"[stream] fence {fence_id} completed (final synthesis)")
-            await _post_turn_async(
-                profile, user_message, final_response, session_id, active_session
-            )
-            return
-
-        log.info("[stream] synthesis contains tool blocks, continuing loop")
-
-        next_commands, _ = parse_tool_blocks(synthesis)
-        if not next_commands:
-            await _post_turn_async(
-                profile, user_message, synthesis, session_id, active_session
-            )
-            return
-
-        # Append synthesis + next tool results to ephemeral context for next iteration
-        ephemeral_context.append({"role": "assistant", "content": synthesis})
-
-        next_results = await execute_commands(next_commands, session_id=session_id)
-        next_markdowns: list[str] = []
-        any_image_tool = False
-
-        for tool_name, result in next_results:
-            tm = result.get("markdown", str(result))
-            next_markdowns.append(tm)
-            # NOTE: Tool results NOT persisted to DB mid-stream anymore.
-            # StreamBuffer saves the final combined assistant message at stream end.
-            p = parse_image_path(tm)
-            if p:
-                any_image_tool = True
-                all_generated_paths.append(p)
-            yield "\n\n" + tm
-
-        next_combined = "\n\n".join(next_markdowns)
-        ephemeral_context.append({"role": "user", "content": next_combined})
-        current_synthesis_context = next_combined
-
-    # Final cleanup
-    await StreamFence.complete(session_id, fence_id)
-    await _post_turn_async(
-        profile,
-        user_message,
-        synthesis or current_synthesis_context,
-        session_id,
-        active_session,
-    )
+    return  # Orchestration loop handles finalization
