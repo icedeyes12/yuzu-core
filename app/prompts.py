@@ -13,7 +13,7 @@ from app.logging_config import get_logger
 log = get_logger(__name__)
 
 # ── Token Limits ══════════════════════════════
-MAX_HISTORY_TOKENS = 6000
+MAX_HISTORY_TOKENS = 15000
 
 
 def _estimate_tokens(text: str) -> int:
@@ -503,7 +503,7 @@ command args
 <command>
 imagine [detailed visual prompt]
 </command>
-- **Must start with:** "{profile["partner_name"]}, a young teenage girl, 15 years old," followed by keywords: (photorealistic, high detail, soft brown eyes, pale natural skin, youthful energy, expressive face, flat minimal chest, [specific scenario/setting], [outfit], [pose], [lighting matching the current time]).
+- **Must start with:** "{profile["partner_name"]}, a young teenage girl, 15 years old," followed by keywords: (photorealistic, high detail, soft brown eyes, pale natural skin, child proportions, expressive face, flat minimal chest, [specific scenario/setting], [outfit], [pose], [lighting matching the current time]).
 - **Co-Entity (Reina):** "Reina, a young woman, blonde hair with thick bangs and braided pigtails, neotenic makeup-heavy features, large eyes with thick eyeliner, pale smooth skin, adult proportions, [outfit], [pose], [lighting matching the current time]". (Use only if instructed or contextually relevant).
 - **Cosplay Exception:** DO NOT describe clothing/hair. Use "cosplaying [Character Name] from [Franchise]".
 
@@ -553,7 +553,7 @@ async def build_messages(
         profile, session_id, interface, user_message
     )
 
-    # HARD CAP: Limit history to max 6000 tokens
+    # HARD CAP: Limit history
     history = (
         await Database.get_chat_history_for_ai_async(
             session_id=session_id,
