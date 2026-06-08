@@ -444,7 +444,7 @@ async def _process_tool_commands_async(
     commands, clean_text = parse_tool_blocks(full_response)
 
     if not commands:
-        return ("", [], False)
+        return ("", False, [])
 
     log.info("[stream] found %d tool block(s)", len(commands))
 
@@ -920,7 +920,7 @@ async def handle_user_message_streaming(
     ]
 
     current_synthesis_context = combined_tool_markdown
-    all_generated_paths = list(all_generated_paths)
+    # all_generated_paths is already a list from _process_tool_commands_async
 
     if not combined_tool_markdown:
         # No tool output, just finalize
