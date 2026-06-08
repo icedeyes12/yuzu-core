@@ -423,6 +423,15 @@ WHERE session_id = %s
 ORDER BY timestamp ASC
 """
 
+# Query messages after a specific ID (for memory pipeline ID-based tracking)
+SQL_MESSAGE_SELECT_AFTER_ID = """
+SELECT id, session_id, role, content, image_paths, timestamp
+FROM messages
+WHERE session_id = %s AND id > %s
+ORDER BY id ASC
+LIMIT %s
+"""
+
 SQL_MESSAGE_UPDATE = "UPDATE messages SET content = %s, image_paths = %s WHERE id = %s"
 
 SQL_MESSAGE_DELETE_FOR_SESSION = "DELETE FROM messages WHERE session_id = %s"

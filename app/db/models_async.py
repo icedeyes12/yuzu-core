@@ -40,6 +40,7 @@ from app.db.queries import (
     SQL_MESSAGE_RECENT_SYSTEM_GLOBAL,
     SQL_MESSAGE_SELECT_ASC_ALL,
     SQL_MESSAGE_SELECT_ASC_LIMIT,
+    SQL_MESSAGE_SELECT_AFTER_ID,
     SQL_MESSAGE_SELECT_CONTENT_BY_ID,
     SQL_MESSAGE_SELECT_DESC_LIMIT,
     SQL_MESSAGE_SELECT_ENCRYPTED,
@@ -389,6 +390,20 @@ async def get_session_messages_async(
     return [parse_message_row(r) for r in rows]
 
 
+async def get_session_messages_after_id_async(
+    session_id: int, after_message_id: int, limit: int = 1000
+) -> list[dict]:
+    """Fetch messages for a session after a specific message ID.
+
+    Used by memory pipeline for ID-based tracking. Returns messages
+    with id > after_message_id, ordered by id ascending.
+    """
+    rows = await pg_fetchall_async(
+        SQL_MESSAGE_SELECT_AFTER_ID, (session_id, after_message_id, limit)
+    )
+    return [parse_message_row(r) for r in rows]
+
+
 async def get_recent_messages_async(session_id: int, limit: int = 20) -> list[dict]:
     return await get_session_messages_async(session_id, limit)
 
@@ -602,6 +617,7 @@ __all__ = [
     "add_message_async",
     "update_message_async",
     "get_session_messages_async",
+    "get_session_messages_after_id_async",
     "get_recent_messages_async",
     "get_chat_history_async",
     "clear_session_messages_async",
