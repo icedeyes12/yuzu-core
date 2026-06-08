@@ -71,7 +71,8 @@ async def get_last_message_id_async(session_id: int) -> int | None:
                 (session_id,),
             )
             row = await cur.fetchone()
-            return row[0] if row else None
+            # row is a dict with row_factory, extract 'id' key
+            return row["id"] if row else None
 
 
 async def update_memory_state_async(
