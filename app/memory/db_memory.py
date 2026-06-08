@@ -63,6 +63,7 @@ from app.memory.db_memory_queries import (
     SQL_FACT_DUP_CHECK_BY_CONTENT,
     SQL_FACT_INSERT,
     SQL_FACT_SELECT_BY_ID,
+    SQL_FACT_SELECT_BY_IDS,
     SQL_FACT_SELECT_STATIC_LIMIT,
     SQL_FACT_UPDATE_METADATA,
     SQL_FACT_INVALIDATE,
@@ -298,6 +299,26 @@ def get_fact_by_id(id: int) -> dict | None:
 async def get_fact_by_id_async(id: int) -> dict | None:
     """Async version of get_fact_by_id."""
     return await pg_fetchone_async(SQL_FACT_SELECT_BY_ID, (id,))
+
+
+def get_facts_by_ids(ids: list[int]) -> list[dict]:
+    """Batch fetch facts by ID list (N+1 fix).
+    
+    Returns list of fact dicts. Missing IDs are simply not included.
+    """
+    if not ids:
+        return []
+    return pg_fetchall(SQL_FACT_SELECT_BY_IDS, (ids,))
+
+
+async def get_facts_by_ids_async(ids: list[int]) -> list[dict]:
+    """Batch fetch facts by ID list (async, N+1 fix).
+    
+    Returns list of fact dicts. Missing IDs are simply not included.
+    """
+    if not ids:
+        return []
+    return await pg_fetchall_async(SQL_FACT_SELECT_BY_IDS, (ids,))
 
 
 def get_facts_by_session(

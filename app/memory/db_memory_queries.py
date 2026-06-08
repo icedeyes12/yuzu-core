@@ -75,6 +75,9 @@ RETURNING id
 
 SQL_FACT_SELECT_BY_ID = "SELECT * FROM semantic_facts WHERE id=%s"
 
+# Batch query for multiple fact IDs (N+1 fix)
+SQL_FACT_SELECT_BY_IDS = "SELECT * FROM semantic_facts WHERE id = ANY(%s)"
+
 SQL_FACT_SELECT_STATIC_LIMIT = (
     "SELECT * FROM semantic_facts WHERE fact_type=%s LIMIT %s"
 )

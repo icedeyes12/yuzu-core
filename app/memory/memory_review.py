@@ -26,6 +26,8 @@ from app.memory.db_memory import (
     get_fact_by_id_async,
     pg_execute,
     pg_execute_async,
+    get_facts_by_ids,
+    get_facts_by_ids_async,
 )
 from app.memory.memory import _memory_llm_call
 
@@ -604,35 +606,37 @@ def review_memory(
     if not fact_ids:
         return counts
 
-    # Fetch all facts first
+    # BATCH FETCH: Get all facts in a single query (N+1 fix)
+    rows = get_facts_by_ids(fact_ids)
+    rows_by_id = {r["id"]: r for r in rows} if rows else {}
+
     facts_to_rate = []
     for fid in fact_ids:
-        try:
-            row = get_fact_by_id(fid)
-            if row:
-                # FSRS review only applies to episodic facts (dynamic)
-                # Skip semantic facts - they use temporal validity instead
-                fact_type = row.get("fact_type", "")
-                if fact_type == "static":
-                    # Clear pending_review for semantic facts
-                    meta = row.get("metadata", {}) or {}
-                    meta["pending_review"] = False
-                    pg_execute(
-                        "UPDATE semantic_facts SET pending_review=FALSE, metadata=%s WHERE id=%s",
-                        (Json(meta), fid),
-                    )
-                    continue
-
-                facts_to_rate.append(
-                    {
-                        "id": fid,
-                        "content": row.get("content", ""),
-                        "category": row.get("metadata", {}).get("category"),
-                    }
-                )
-        except Exception as e:
-            logger.warning(f"Could not fetch fact {fid}: {e}")
+        row = rows_by_id.get(fid)
+        if not row:
             counts["failed"] += 1
+            continue
+
+        # FSRS review only applies to episodic facts (dynamic)
+        # Skip semantic facts - they use temporal validity instead
+        fact_type = row.get("fact_type", "")
+        if fact_type == "static":
+            # Clear pending_review for semantic facts
+            meta = row.get("metadata", {}) or {}
+            meta["pending_review"] = False
+            pg_execute(
+                "UPDATE semantic_facts SET pending_review=FALSE, metadata=%s WHERE id=%s",
+                (Json(meta), fid),
+            )
+            continue
+
+        facts_to_rate.append(
+            {
+                "id": fid,
+                "content": row.get("content", ""),
+                "category": row.get("metadata", {}).get("category"),
+            }
+        )
 
     # Process in batches
     for i in range(0, len(facts_to_rate), _REVIEW_BATCH_SIZE):
@@ -679,31 +683,34 @@ async def review_memory_async(
     if not fact_ids:
         return {"again": 0, "hard": 0, "good": 0, "easy": 0, "failed": 0}
 
+    # BATCH FETCH: Get all facts in a single query (N+1 fix)
+    rows = await get_facts_by_ids_async(fact_ids)
+    rows_by_id = {r["id"]: r for r in rows} if rows else {}
+
     facts_to_rate = []
     for fid in fact_ids:
-        try:
-            row = await get_fact_by_id_async(fid)
-            if row:
-                fact_type = row.get("fact_type", "")
-                if fact_type == "static":
-                    meta = row.get("metadata", {}) or {}
-                    meta["pending_review"] = False
-                    await pg_execute_async(
-                        "UPDATE semantic_facts SET pending_review=FALSE, metadata=%s WHERE id=%s",
-                        (Json(meta), fid),
-                    )
-                    continue
-
-                facts_to_rate.append(
-                    {
-                        "id": fid,
-                        "content": row.get("content", ""),
-                        "category": row.get("metadata", {}).get("category"),
-                    }
-                )
-        except Exception as e:
-            logger.warning(f"Could not fetch fact {fid}: {e}")
+        row = rows_by_id.get(fid)
+        if not row:
             counts["failed"] += 1
+            continue
+
+        fact_type = row.get("fact_type", "")
+        if fact_type == "static":
+            meta = row.get("metadata", {}) or {}
+            meta["pending_review"] = False
+            await pg_execute_async(
+                "UPDATE semantic_facts SET pending_review=FALSE, metadata=%s WHERE id=%s",
+                (Json(meta), fid),
+            )
+            continue
+
+        facts_to_rate.append(
+            {
+                "id": fid,
+                "content": row.get("content", ""),
+                "category": row.get("metadata", {}).get("category"),
+            }
+        )
 
     # Process in batches
     for i in range(0, len(facts_to_rate), _REVIEW_BATCH_SIZE):
