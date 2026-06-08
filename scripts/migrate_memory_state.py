@@ -14,17 +14,20 @@ This script is idempotent - safe to run multiple times.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 import logging
-from datetime import datetime
-from pathlib import Path
+import os
 
-# Add parent directory to path for imports
+# Ensure app module is accessible
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.db.connection import get_async_pool
+from psycopg_pool import AsyncConnectionPool
+from psycopg.rows import dict_row
+
+# ── Logging ────────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,212 +37,217 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# ── Database connection (standalone, no app imports) ─────────────────────────────
+
+def _build_dsn() -> str:
+    """Build PostgreSQL DSN from environment."""
+    host = os.getenv("PGHOST", os.getenv("DB_HOST", "localhost"))
+    port = os.getenv("PGPORT", os.getenv("DB_PORT", "5432"))
+    dbname = os.getenv("PGDATABASE", os.getenv("DB_NAME", "yuzu"))
+    user = os.getenv("PGUSER", os.getenv("DB_USER", "postgres"))
+    password = os.getenv("PGPASSWORD", os.getenv("DB_PASSWORD", ""))
+    return f"host={host} port={port} dbname={dbname} user={user} password={password}"
+
+
+# Global pool - initialized once in main()
+_pool: AsyncConnectionPool | None = None
+
+
+async def _get_pool() -> AsyncConnectionPool:
+    """Get or create the async connection pool."""
+    global _pool
+    if _pool is None:
+        _pool = AsyncConnectionPool(
+            conninfo=_build_dsn(),
+            min_size=1,
+            max_size=3,
+            kwargs={"row_factory": dict_row},
+            open=False,
+        )
+        await _pool.open()
+        logger.info("Connection pool opened")
+    return _pool
+
+
 async def pg_fetchall_async(query: str, params: tuple = ()) -> list[dict]:
     """Execute a query and return all rows as dicts."""
-    pool = get_async_pool()
+    pool = await _get_pool()
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(query, params)
-            columns = [desc[0] for desc in cur.description]
             rows = await cur.fetchall()
-            return [dict(zip(columns, row)) for row in rows]
+            return list(rows)
 
 
 async def pg_fetchone_async(query: str, params: tuple = ()) -> dict | None:
     """Execute a query and return a single row as dict."""
-    pool = get_async_pool()
+    pool = await _get_pool()
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(query, params)
-            columns = [desc[0] for desc in cur.description]
             row = await cur.fetchone()
-            if row:
-                return dict(zip(columns, row))
-            return None
+            return row
 
 
 async def pg_execute_async(query: str, params: tuple = ()) -> None:
     """Execute a query without returning results."""
-    pool = get_async_pool()
+    pool = await _get_pool()
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(query, params)
+            await conn.commit()
 
 
 async def get_all_sessions_async() -> list[dict]:
-    """Fetch all sessions from database."""
+    """Fetch all sessions with their current memory_state."""
     return await pg_fetchall_async(
         "SELECT id, name, memory_state FROM chat_sessions ORDER BY id"
     )
 
 
-async def count_conversation_messages_async(session_id: int) -> int:
+async def get_message_count_async(session_id: int) -> int:
     """Count user and assistant messages for a session."""
     row = await pg_fetchone_async(
         """
-        SELECT COUNT(*) as cnt
+        SELECT COUNT(*) as count
         FROM messages
         WHERE session_id = %s AND role IN ('user', 'assistant')
         """,
         (session_id,),
     )
-    return row["cnt"] if row else 0
+    return row["count"] if row else 0
 
 
 async def update_memory_state_async(session_id: int, state: dict) -> None:
-    """
-    Update memory_state for a session.
-    
-    Merges with existing state using jsonb_set for atomicity.
-    """
-    # Build the jsonb_set path and value
-    # We need to set multiple keys, so we'll use a simpler approach:
-    # Get current state, merge, and update
-    current = await pg_fetchone_async(
-        "SELECT memory_state FROM chat_sessions WHERE id = %s",
+    """Update memory_state for a session (merge with existing)."""
+    # Fetch existing
+    row = await pg_fetchone_async(
+        "SELECT memory_state FROM chat_sessions WHERE id = %s FOR UPDATE",
         (session_id,),
     )
-    
-    if not current:
+    if not row:
         return
-    
-    existing = current.get("memory_state") or {}
-    if isinstance(existing, str):
-        try:
-            existing = json.loads(existing)
-        except json.JSONDecodeError:
-            existing = {}
-    
-    # Merge new state
+
+    existing = row.get("memory_state") or {}
     existing.update(state)
-    
+
     await pg_execute_async(
-        """
-        UPDATE chat_sessions
-        SET memory_state = %s::jsonb, updated_at = %s
-        WHERE id = %s
-        """,
-        (json.dumps(existing), datetime.now(), session_id),
+        "UPDATE chat_sessions SET memory_state = %s, updated_at = NOW() WHERE id = %s",
+        (json.dumps(existing), session_id),
     )
 
 
-async def migrate_session(session_id: int, session_name: str) -> tuple[int, int]:
+async def close_pool() -> None:
+    """Close the connection pool."""
+    global _pool
+    if _pool is not None:
+        await _pool.close()
+        _pool = None
+        logger.info("Connection pool closed")
+
+
+# ── Migration logic ─────────────────────────────────────────────────────────────
+
+
+async def migrate_session(session_id: int, session_name: str, dry_run: bool) -> dict:
     """
-    Migrate a single session's memory state.
-    
-    Returns (old_count, new_count) for reporting.
+    Reset memory_state.last_segmented_count for a single session.
+
+    Returns dict with migration details.
     """
     # Get current state
     row = await pg_fetchone_async(
         "SELECT memory_state FROM chat_sessions WHERE id = %s",
         (session_id,),
     )
-    
-    if not row:
-        logger.warning(f"Session {session_id} not found")
-        return (0, 0)
-    
-    memory_state = row.get("memory_state") or {}
-    if isinstance(memory_state, str):
-        try:
-            memory_state = json.loads(memory_state)
-        except json.JSONDecodeError:
-            memory_state = {}
-    
-    old_count = memory_state.get("last_segmented_count", 0) or 0
-    
-    # Count actual conversation messages
-    actual_count = await count_conversation_messages_async(session_id)
-    
-    # Update if different
-    if old_count != actual_count:
+    current_state = row.get("memory_state") or {} if row else {}
+    current_count = current_state.get("last_segmented_count", 0)
+
+    # Get actual message count
+    actual_count = await get_message_count_async(session_id)
+
+    result = {
+        "session_id": session_id,
+        "session_name": session_name,
+        "old_count": current_count,
+        "actual_count": actual_count,
+        "changed": current_count != actual_count,
+    }
+
+    if not dry_run and current_count != actual_count:
         await update_memory_state_async(
-            session_id,
-            {
-                "last_segmented_count": actual_count,
-                "last_segmented_at": datetime.now().isoformat(),
-                "migration_source": "emergency_reset_2026_06_09",
-            },
+            session_id, {"last_segmented_count": actual_count}
         )
-        return (old_count, actual_count)
-    
-    return (old_count, actual_count)
+        logger.info(
+            f"Session {session_id} ({session_name[:30]}): {current_count} → {actual_count}"
+        )
+
+    return result
 
 
-async def main() -> None:
+async def main():
     """Run the migration for all sessions."""
+    parser = argparse.ArgumentParser(description="Reset memory pipeline state")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Show what would change, don't write"
+    )
+    args = parser.parse_args()
+
     logger.info("=" * 60)
     logger.info("Memory Pipeline Emergency Reset Migration")
+    if args.dry_run:
+        logger.info("[DRY RUN - no changes will be written]")
     logger.info("=" * 60)
-    
-    # Initialize connection pool
-    logger.info("Initializing database connection pool...")
-    get_async_pool()
-    
+
     # Fetch all sessions
     logger.info("Fetching all sessions...")
     sessions = await get_all_sessions_async()
     logger.info(f"Found {len(sessions)} sessions")
-    
+
     if not sessions:
         logger.info("No sessions to migrate")
+        await close_pool()
         return
-    
+
     # Process each session
     results = []
     total_updated = 0
-    total_unchanged = 0
-    
+
     for session in sessions:
         session_id = session["id"]
-        session_name = session.get("name", "unnamed")
-        
-        old_count, new_count = await migrate_session(session_id, session_name)
-        
-        if old_count != new_count:
+        session_name = session.get("name", "Unnamed")
+
+        result = await migrate_session(
+            session_id, session_name, dry_run=args.dry_run
+        )
+        results.append(result)
+
+        if result["changed"]:
             total_updated += 1
-            logger.info(
-                f"Session {session_id} ({session_name}): "
-                f"{old_count} → {new_count} messages"
-            )
-        else:
-            total_unchanged += 1
-            logger.debug(
-                f"Session {session_id} ({session_name}): "
-                f"already at {new_count} messages"
-            )
-        
-        results.append({
-            "session_id": session_id,
-            "session_name": session_name,
-            "old_count": old_count,
-            "new_count": new_count,
-            "changed": old_count != new_count,
-        })
-    
+
+    # Close pool
+    await close_pool()
+
     # Summary
     logger.info("=" * 60)
-    logger.info("Migration Complete")
-    logger.info(f"  Total sessions: {len(sessions)}")
-    logger.info(f"  Updated: {total_updated}")
-    logger.info(f"  Unchanged: {total_unchanged}")
+    logger.info("SUMMARY")
     logger.info("=" * 60)
-    
-    # Write results to file for audit trail
-    output_file = Path(__file__).parent.parent / "migration_results.json"
-    with open(output_file, "w") as f:
-        json.dump(
-            {
-                "migration_timestamp": datetime.now().isoformat(),
-                "total_sessions": len(sessions),
-                "total_updated": total_updated,
-                "total_unchanged": total_unchanged,
-                "sessions": results,
-            },
-            f,
-            indent=2,
-        )
-    logger.info(f"Results written to {output_file}")
+    logger.info(f"Total sessions: {len(sessions)}")
+    logger.info(f"Sessions needing update: {total_updated}")
+
+    if args.dry_run:
+        logger.info("[DRY RUN - no changes written]")
+
+    # Show details for changed sessions
+    if total_updated > 0:
+        logger.info("")
+        logger.info("Changes:")
+        for r in results:
+            if r["changed"]:
+                logger.info(
+                    f"  Session {r['session_id']} ({r['session_name'][:30]}): "
+                    f"{r['old_count']} → {r['actual_count']}"
+                )
 
 
 if __name__ == "__main__":
