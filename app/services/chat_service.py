@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -110,6 +111,11 @@ class ChatService:
                 if chunk:
                     escaped_chunk = json.dumps(chunk)
                     yield f'data: {{"chunk": {escaped_chunk}}}\n\n'
+        except asyncio.CancelledError:
+            # Client disconnected - cancel the producer task
+            log.info(f"[Stream] Client disconnected for session {session_id}")
+            buffer.cancel()
+            raise
         finally:
             buffer.unsubscribe(q)
             # Re-trigger memory pipeline is handled in orchestrator via _post_turn

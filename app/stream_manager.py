@@ -165,9 +165,20 @@ class StreamBuffer:
         return q
 
     def unsubscribe(self, q: asyncio.Queue):
-        """Remove a subscriber queue."""
+        """Remove a subscriber queue and cancel stream if last subscriber."""
         if q in self.queues:
             self.queues.remove(q)
+        
+        # If no more subscribers and stream is active, cancel the producer
+        if not self.queues and not self.is_finished:
+            log.info(f"[StreamBuffer] Last subscriber disconnected, cancelling stream for session {self.session_id}")
+            self.cancel()
+
+    def cancel(self):
+        """Cancel the background producer task."""
+        if self.task and not self.task.done():
+            self.task.cancel()
+            log.info(f"[StreamBuffer] Cancelled producer task for session {self.session_id}")
 
     def get_checksum(self) -> str:
         """Return checksum of full_content for integrity validation.
