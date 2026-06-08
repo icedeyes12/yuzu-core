@@ -5,12 +5,12 @@ from __future__ import annotations
 
 import argparse
 import sys
-import logging
 from app.encryption import encryptor
+from app.logging_config import get_logger
 # from app.backup import BackupManager  # backup module not present
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def main():
@@ -51,7 +51,7 @@ def main():
         info = encryptor.get_key_info()
         logger.info("Encryption Key Information:")
         for key, value in info.items():
-            logger.info(f"  {key}: {value}")
+            logger.info("  %s: %s", key, value)
 
     elif args.test:
         logger.info("Testing encryption system...")
@@ -68,9 +68,9 @@ def main():
             decrypted = encryptor.decrypt(encrypted)
 
             if test_msg == decrypted:
-                logger.info(f"Test passed: '{test_msg}' -> encrypted -> decrypted")
+                logger.info("Test passed: '%s' -> encrypted -> decrypted", test_msg)
             else:
-                logger.error(f"Test failed: '{test_msg}' -> encryption test failed!")
+                logger.error("Test failed: '%s' -> encryption test failed!", test_msg)
                 all_passed = False
 
         if all_passed:
