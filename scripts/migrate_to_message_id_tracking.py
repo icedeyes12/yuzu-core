@@ -51,9 +51,9 @@ async def get_all_sessions_async() -> list[dict]:
             await cur.execute(
                 "SELECT id, name, memory_state FROM chat_sessions ORDER BY id"
             )
-            columns = [desc[0] for desc in cur.description]
             rows = await cur.fetchall()
-            return [dict(zip(columns, row)) for row in rows]
+            # rows are already dicts due to row_factory=dict_row
+            return list(rows)
 
 
 async def get_last_message_id_async(session_id: int) -> int | None:
