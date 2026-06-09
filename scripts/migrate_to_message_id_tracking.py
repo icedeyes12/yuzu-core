@@ -61,13 +61,9 @@ async def get_last_message_id_async(session_id: int) -> int | None:
     pool = await get_async_pool()
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
+            # Use %s placeholder with tuple parameter
             await cur.execute(
-                """
-                SELECT id FROM messages
-                WHERE session_id = %s AND role IN ('user', 'assistant')
-                ORDER BY id DESC
-                LIMIT 1
-                """,
+                "SELECT id FROM messages WHERE session_id = %s AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT 1",
                 (session_id,),
             )
             row = await cur.fetchone()
