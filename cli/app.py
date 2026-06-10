@@ -234,7 +234,7 @@ class YuzuTUI(App):
 
         try:
             # Stream response
-            async for chunk in self.client.stream_message(self._session_id, message):
+            async for chunk in self.client.stream_message(message):
                 full_response += chunk
                 self.call_later(self._update_response, full_response)
 
