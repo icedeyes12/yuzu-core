@@ -116,8 +116,8 @@ class YuzuTUI(App):
             log.info("Running health check...")
             is_healthy = await self.client.check_health()
 
-            # Need to query widgets from main thread
-            self.call_from_thread(self._update_health_status, is_healthy)
+            # Update UI via call_later (we're in async context)
+            self.call_later(self._update_health_status, is_healthy)
 
             if not is_healthy:
                 return
@@ -126,7 +126,7 @@ class YuzuTUI(App):
 
             # Load sessions
             sessions = await self.client.list_sessions()
-            self.call_from_thread(self._update_sessions, sessions)
+            self.call_later(self._update_sessions, sessions)
 
             log.info(f"Loaded {len(sessions)} sessions, active: {self._session_id}")
 
@@ -135,7 +135,7 @@ class YuzuTUI(App):
 
         except Exception as e:
             log.error(f"Init failed: {e}")
-            self.call_from_thread(self._show_error, f"Init error: {e}")
+            self.call_later(self._show_error, f"Init error: {e}")
 
     def _update_health_status(self, is_healthy: bool) -> None:
         """Update UI with health check result (called from main thread)."""
@@ -167,12 +167,12 @@ class YuzuTUI(App):
         """Load chat history for current session into ChatLog."""
         try:
             history = await self.client.get_history(self._session_id)
-            self.call_from_thread(self._display_history, history)
+            self.call_later(self._display_history, history)
             log.info(f"Loaded {len(history)} messages for session {self._session_id}")
 
         except Exception as e:
             log.error(f"Failed to load history: {e}")
-            self.call_from_thread(self._show_error, f"Could not load history: {e}")
+            self.call_later(self._show_error, f"Could not load history: {e}")
 
     def _display_history(self, history: list) -> None:
         """Display history in chat log (called from main thread)."""
@@ -214,10 +214,10 @@ class YuzuTUI(App):
         self._processing = True
 
         # Disable input (from main thread)
-        self.call_from_thread(self._set_input_state, False)
+        self.call_later(self._set_input_state, False)
 
         # Add placeholder message
-        self.call_from_thread(self._add_response_placeholder)
+        self.call_later(self._add_response_placeholder)
 
         full_response = ""
 
@@ -225,26 +225,26 @@ class YuzuTUI(App):
             # Stream response
             async for chunk in self.client.stream_message(self._session_id, message):
                 full_response += chunk
-                self.call_from_thread(self._update_response, full_response)
+                self.call_later(self._update_response, full_response)
 
             log.info(f"Response received: {len(full_response)} chars")
 
         except httpx.ConnectError:
-            self.call_from_thread(self._update_response, "❌ Connection failed")
+            self.call_later(self._update_response, "❌ Connection failed")
             log.error("Connection error")
 
         except httpx.TimeoutException:
-            self.call_from_thread(self._update_response, "❌ Request timed out")
+            self.call_later(self._update_response, "❌ Request timed out")
             log.error("Timeout")
 
         except Exception as e:
-            self.call_from_thread(self._update_response, f"❌ Error: {e}")
+            self.call_later(self._update_response, f"❌ Error: {e}")
             log.error(f"Send error: {e}")
 
         finally:
             # Re-enable input
             self._processing = False
-            self.call_from_thread(self._set_input_state, True)
+            self.call_later(self._set_input_state, True)
 
     def _set_input_state(self, enabled: bool) -> None:
         """Enable/disable input box (called from main thread)."""
