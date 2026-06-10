@@ -154,7 +154,6 @@ SessionList.desktop {
     dock: left;
     border-bottom: none;
     border-right: solid $panel;
-    max-height: none;
 }
 
 #chat-container.desktop {
