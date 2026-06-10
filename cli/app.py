@@ -48,7 +48,7 @@ class YuzuTUI(App):
         self.backend_url = backend_url
         self.client = YuzuClient(base_url=backend_url)
         self._processing = False
-        self._session_id: str = "default"
+        self._session_id: int = 1
         self._sidebar_visible = False
         log.info(f"YuzuTUI initialized with backend: {backend_url}")
 
@@ -153,10 +153,10 @@ class YuzuTUI(App):
         session_list.load_sessions(sessions)
 
         if sessions:
-            self._session_id = str(sessions[0].get("id", "default"))
+            self._session_id = sessions[0].get("id", 1)
             session_list.set_active_session(self._session_id)
         else:
-            self._session_id = "default"
+            self._session_id = 1
 
     def _show_error(self, message: str) -> None:
         """Show error in chat log (called from main thread)."""
