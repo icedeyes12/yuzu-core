@@ -1,0 +1,98 @@
+Metadata-Version: 2.4
+Name: yuzu-companion
+Version: 4.0.0
+Summary: AI companion system with memory, multimodal, and multi-provider support
+Author-email: icedeyes12 <banibaskara@gmail.com>
+License: MIT
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: psycopg[binary,pool]>=3.1
+Requires-Dist: pycryptodome>=3.20.0
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: fsrs>=6.3.1
+Requires-Dist: fastapi>=0.115.0
+Requires-Dist: uvicorn[standard]>=0.30.0
+Requires-Dist: pydantic>=2.8.0
+Requires-Dist: python-multipart>=0.0.9
+Requires-Dist: Jinja2>=3.1.0
+Requires-Dist: rich>=13.0.0
+Requires-Dist: prompt-toolkit>=3.0.0
+Requires-Dist: textual>=0.47.0
+Requires-Dist: requests>=2.33.0
+Requires-Dist: httpx>=0.27.0
+Dynamic: license-file
+
+# [PROJECT: HKKM - Yuzu Companion]
+
+
+---
+
+## What Even Is This?
+
+Honestly, what are you looking for here? This is just another AI project. 
+
+You know what's more interesting? Mending scroll **[Fesnuk](https://www.facebook.com/groups/programmerhandal/)**. Or maybe some cat videos on YouTube.
+
+Seriously, go scroll some social media. This code isn't going to entertain you like that latest meme trend.
+
+---
+
+## No Really, What Does It Do?
+
+It's an AI companion. It talks. It remembers things. Sometimes it generates images. 
+
+But let's be real - you're probably just here because you're bored. Might as well go watch some TikTok.
+
+---
+
+## Installation
+
+If you insist on actually installing this, go read [INSTALL.md](INSTALL.md) for instructions.
+
+But honestly, just ask ChatGPT. It will explain it better.
+
+---
+
+## For the 3 People Actually Reading This
+
+If you're still here, congratulations on your attention span. This is an intimate AI companion system with:
+
+- Emotional bonding protocols
+- Multimodal interaction (text + images)
+- Session-based memory
+- Encrypted conversations
+- Web and terminal interfaces
+
+But honestly, you could have just asked ChatGPT to explain it.
+
+---
+
+## Disclaimer
+
+All code is AI-generated. The developer just pressed some buttons and prayed.
+
+Now go away and do something more productive. Like scrolling through memes.
+
+---
+
+## Author
+
+### Project Lead
+- [Bani Baskara](https://github.com/icedeyes12/)
+
+### Team
+- [Aihara](https://github.com/icedeyes12/yuzu-companion)
+- [Claude](https://www.anthropic.com/)
+- [DeepSeek](https://www.deepseek.com/)
+- [Gemini](https://gemini.google.com/)
+- [GitHub Copilot](https://github.com/features/copilot)
+- [GPT](https://chatgpt.com/)
+- [KiloCode](https://kilocode.ai/)
+- [Moonshot ai](https://www.moonshot.cn/)
+- [Qwen](https://github.com/QwenLM/Qwen3-Coder)
+
+
+---
+
+©2025-2026 [HKKM project](https://guthib.com/icedeyes12/ | Built with love 💕

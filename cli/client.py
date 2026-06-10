@@ -46,7 +46,11 @@ class YuzuClient:
         return self._client
 
     async def check_health(self) -> bool:
-        """Check if the backend server is healthy."""
+        """Check if the backend server is healthy.
+
+        Returns:
+            True if backend responds with status 200, False otherwise.
+        """
         try:
             response = await self.client.get("/")
             return response.status_code == 200
@@ -64,12 +68,23 @@ class YuzuClient:
         data = response.json()
         return data.get("sessions", [])
 
-    async def stream_message(self, session_id: str, message: str) -> AsyncIterator[str]:
+    async def switch_session(self, session_id: int) -> None:
+        """Switch the active session on the backend.
+        
+        Args:
+            session_id: Session ID to activate
+        """
+        response = await self.client.post(
+            "/api/sessions/switch",
+            json={"session_id": session_id},
+        )
+        response.raise_for_status()
+
+    async def stream_message(self, message: str) -> AsyncIterator[str]:
         """
         Stream a chat message via SSE.
 
         Args:
-            session_id: Session identifier
             message: User message text
 
         Yields:
@@ -78,14 +93,14 @@ class YuzuClient:
         async with self.client.stream(
             "POST",
             "/api/send_message_stream",
-            json={"session_id": session_id, "message": message},
+            json={"message": message},
         ) as response:
             response.raise_for_status()
             async for line in response.aiter_lines():
                 if line.startswith("data:"):
                     yield line[5:].strip()
 
-    async def get_history(self, session_id: str, limit: int = 50) -> list[dict]:
+    async def get_history(self, session_id: int, limit: int = 50) -> list[dict]:
         """
         Fetch chat history for a session.
 

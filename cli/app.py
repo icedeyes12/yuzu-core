@@ -210,10 +210,21 @@ class YuzuTUI(App):
         asyncio.create_task(self._send_message(message))
 
     async def _send_message(self, message: str) -> None:
-        """Send message to backend and handle streaming response."""
+        """Send message to backend and handle streaming response.
+        """
         self._processing = True
 
-        # Disable input (from main thread)
+        # Switch to current session first
+        try:
+            await self.client.switch_session(self._session_id)
+            log.info(f"Switched to session {self._session_id}")
+        except Exception as e:
+            log.error(f"Failed to switch session: {e}")
+            self.call_later(self._show_error, f"Could not switch session: {e}")
+            self._processing = False
+            return
+
+        # Disable input
         self.call_later(self._set_input_state, False)
 
         # Add placeholder message
