@@ -32,16 +32,17 @@ log = get_logger(__name__)
 # FastAPI Lifespan — Database Pool Management
 # ---------------------------------------------------------------------------
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage DB pool lifecycle explicitly (startup → shutdown)."""
     # ── STARTUP ─────────────────────────────────────────────────────
     log.info("Starting Yuzu Companion...")
-    
+
     # Initialize pools explicitly (no lazy init)
     sync_pool = get_sync_pool()
     async_pool = await get_async_pool()
-    
+
     # Health check
     try:
         async with async_pool.connection() as conn:
@@ -50,24 +51,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         log.critical("Database unavailable: %s", e)
         raise
-    
+
     # Store pools in app state
     app.state.sync_pool = sync_pool
     app.state.async_pool = async_pool
-    
+
     log.info("Startup complete")
-    
+
     yield  # ── RUNTIME ──────────────────────────────────────────────
-    
+
     # ── SHUTDOWN ───────────────────────────────────────────────────
     log.info("Shutting down...")
-    
+
     try:
         await close_async_pool()
         log.info("Database pools closed")
     except Exception as e:
         log.error("Error closing pools: %s", e)
-    
+
     log.info("Shutdown complete")
 
 

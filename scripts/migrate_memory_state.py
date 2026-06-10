@@ -22,6 +22,7 @@ import os
 
 # Ensure app module is accessible
 import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from psycopg_pool import AsyncConnectionPool
@@ -38,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 # ── Database connection (standalone, no app imports) ─────────────────────────────
+
 
 def _build_dsn() -> str:
     """Build PostgreSQL DSN from environment."""
@@ -217,9 +219,7 @@ async def main():
         session_id = session["id"]
         session_name = session.get("name", "Unnamed")
 
-        result = await migrate_session(
-            session_id, session_name, dry_run=args.dry_run
-        )
+        result = await migrate_session(session_id, session_name, dry_run=args.dry_run)
         results.append(result)
 
         if result["changed"]:

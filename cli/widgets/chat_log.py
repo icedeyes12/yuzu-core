@@ -11,7 +11,7 @@ from textual.widgets import Static
 class ChatLog(ScrollableContainer):
     """
     Scrollable container for chat messages.
-    
+
     Displays messages with Markdown rendering and auto-scrolls to bottom.
     Supports streaming updates for assistant messages.
     """
@@ -35,7 +35,7 @@ class ChatLog(ScrollableContainer):
         Args:
             role: Message role (user/assistant/system)
             content: Message content (Markdown supported)
-            
+
         Returns:
             The created Static widget for further updates.
         """
@@ -50,7 +50,7 @@ class ChatLog(ScrollableContainer):
     def update_message(self, widget: Static, role: str, content: str) -> None:
         """
         Update an existing message widget with new content.
-        
+
         Used for streaming updates.
 
         Args:

@@ -11,7 +11,13 @@ from textual.containers import Container, Horizontal
 from textual.widgets import Header, Footer
 
 from cli.client import YuzuClient
-from cli.widgets import ChatLog, InputBox, MessageSubmitted, SessionList, SessionSelected
+from cli.widgets import (
+    ChatLog,
+    InputBox,
+    MessageSubmitted,
+    SessionList,
+    SessionSelected,
+)
 from app.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -20,11 +26,11 @@ log = get_logger(__name__)
 class YuzuTUI(App):
     """
     Main Textual TUI application with persistent chat interface.
-    
+
     Layout:
     - Left sidebar: SessionList
     - Right: ChatLog + InputBox
-    
+
     Backend communication via HTTP only (no DB imports).
     """
 
@@ -59,7 +65,7 @@ class YuzuTUI(App):
         log.info("YuzuTUI mounted and ready")
         self.title = "Yuzu Companion"
         self.sub_title = f"Backend: {self.backend_url}"
-        
+
         # Run async initialization
         self.run_worker(self._init_app(), exclusive=True)
 
@@ -68,33 +74,39 @@ class YuzuTUI(App):
         try:
             # Health check
             log.info("Running health check...")
-            is_healthy = await self.run_worker(self.client.check_health(), exclusive=False)
+            is_healthy = await self.run_worker(
+                self.client.check_health(), exclusive=False
+            )
             chat_log = self.query_one(ChatLog)
-            
+
             if not is_healthy:
-                chat_log.add_message("system", f"⚠️  Backend unreachable: {self.backend_url}")
+                chat_log.add_message(
+                    "system", f"⚠️  Backend unreachable: {self.backend_url}"
+                )
                 return
-            
+
             chat_log.add_message("system", f"✓ Connected to {self.backend_url}")
             log.info("Health check passed")
-            
+
             # Load sessions
             session_list = self.query_one(SessionList)
-            sessions = await self.run_worker(self.client.list_sessions(), exclusive=False)
+            sessions = await self.run_worker(
+                self.client.list_sessions(), exclusive=False
+            )
             session_list.load_sessions(sessions)
-            
+
             # Set initial session_id
             if sessions:
                 self._session_id = str(sessions[0].get("id", "default"))
                 session_list.set_active_session(self._session_id)
             else:
                 self._session_id = "default"
-            
+
             log.info(f"Loaded {len(sessions)} sessions, active: {self._session_id}")
-            
+
             # Load history for active session
             await self._load_history()
-            
+
         except Exception as e:
             log.error(f"Init failed: {e}")
             chat_log = self.query_one(ChatLog)
@@ -109,11 +121,11 @@ class YuzuTUI(App):
             )
             chat_log = self.query_one(ChatLog)
             chat_log.clear_messages()
-            
+
             if not history:
                 chat_log.add_message("system", "No previous messages")
                 return
-            
+
             for msg in history:
                 role = msg.get("role", "unknown")
                 content = msg.get("content", "")
@@ -123,9 +135,9 @@ class YuzuTUI(App):
                     chat_log.add_message("yuzuki", content)
                 else:
                     chat_log.add_message(role, content)
-            
+
             log.info(f"Loaded {len(history)} messages for session {self._session_id}")
-            
+
         except Exception as e:
             log.error(f"Failed to load history: {e}")
             chat_log = self.query_one(ChatLog)
@@ -135,14 +147,14 @@ class YuzuTUI(App):
         """Handle message submission: local echo + backend send."""
         if self._processing:
             return
-        
+
         message = event.message
         chat_log = self.query_one(ChatLog)
-        
+
         # Local echo
         chat_log.add_message("you", message)
         log.info(f"Message submitted: {message[:50]}...")
-        
+
         # Send to backend
         self.run_worker(self._send_message(message), exclusive=True)
 
@@ -151,35 +163,35 @@ class YuzuTUI(App):
         self._processing = True
         chat_log = self.query_one(ChatLog)
         input_box = self.query_one(InputBox)
-        
+
         # Disable input during processing
         input_box.disabled = True
         input_box.styles.opacity = 0.5
-        
+
         # Placeholder for response
         chat_log.add_message("yuzuki", "")
         full_response = ""
-        
+
         try:
             # Stream response
             async for chunk in self.client.stream_message(self._session_id, message):
                 full_response += chunk
                 chat_log.update_last_message("yuzuki", full_response)
-            
+
             log.info(f"Response received: {len(full_response)} chars")
-            
+
         except httpx.ConnectError:
             chat_log.update_last_message("yuzuki", "❌ Connection failed")
             log.error("Connection error")
-            
+
         except httpx.TimeoutException:
             chat_log.update_last_message("yuzuki", "❌ Request timed out")
             log.error("Timeout")
-            
+
         except Exception as e:
             chat_log.update_last_message("yuzuki", f"❌ Error: {e}")
             log.error(f"Send error: {e}")
-            
+
         finally:
             # Re-enable input
             self._processing = False
@@ -190,17 +202,17 @@ class YuzuTUI(App):
     def on_session_selected(self, event: SessionSelected) -> None:
         """Handle session selection: switch session, reload history."""
         session_id = event.session_id
-        
+
         if session_id == self._session_id:
             return  # No change
-        
+
         log.info(f"Session selected: {session_id}")
         self._session_id = session_id
-        
+
         # Update UI
         session_list = self.query_one(SessionList)
         session_list.set_active_session(session_id)
-        
+
         # Reload history
         self.run_worker(self._load_history(), exclusive=True)
 

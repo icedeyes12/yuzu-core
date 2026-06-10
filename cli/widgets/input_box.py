@@ -10,7 +10,7 @@ from textual.widgets import Input
 class InputBox(Input):
     """
     Input widget for user message entry.
-    
+
     Emits MessageSubmitted when user presses Enter.
     Automatically clears after submission.
     """

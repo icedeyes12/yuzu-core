@@ -19,7 +19,7 @@ class SessionSelected(Message):
 class SessionList(OptionList):
     """
     Sidebar widget displaying available chat sessions.
-    
+
     Emits SessionSelected when user clicks or presses Enter on a session.
     """
 
@@ -55,23 +55,23 @@ class SessionList(OptionList):
     def load_sessions(self, sessions: list[dict]) -> None:
         """
         Populate the session list from backend data.
-        
+
         Args:
             sessions: List of session dictionaries with 'id' and 'name' keys
         """
         self.clear_options()
-        
+
         if not sessions:
             # Create default session if none exist
             self.add_option(Option("default", id="default"))
             self._active_session_id = "default"
             return
-        
+
         for session in sessions:
             session_id = session.get("id", "unknown")
             session_name = session.get("name") or session_id
             self.add_option(Option(str(session_name), id=str(session_id)))
-        
+
         # Set first session as active
         if sessions:
             self._active_session_id = str(sessions[0].get("id", "default"))

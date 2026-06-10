@@ -12,12 +12,14 @@ import httpx
 class YuzuClient:
     """
     Async HTTP client for Yuzu Companion backend.
-    
+
     Thin-client that communicates exclusively via HTTP. Never imports
     database models or internal services.
     """
 
-    def __init__(self, base_url: str = "http://localhost:5000", timeout: float = 60.0) -> None:
+    def __init__(
+        self, base_url: str = "http://localhost:5000", timeout: float = 60.0
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
@@ -46,7 +48,7 @@ class YuzuClient:
     async def check_health(self) -> bool:
         """
         Check if the backend server is healthy.
-        
+
         Returns:
             True if backend responds with status 200, False otherwise.
         """
@@ -60,16 +62,14 @@ class YuzuClient:
         except Exception:
             return False
 
-    async def stream_message(
-        self, session_id: str, message: str
-    ) -> AsyncIterator[str]:
+    async def stream_message(self, session_id: str, message: str) -> AsyncIterator[str]:
         """
         Stream a chat message via SSE.
-        
+
         Args:
             session_id: Session identifier
             message: User message text
-            
+
         Yields:
             str: Each SSE data chunk
         """
@@ -86,11 +86,11 @@ class YuzuClient:
     async def get_history(self, session_id: str, limit: int = 50) -> list[dict]:
         """
         Fetch chat history for a session.
-        
+
         Args:
             session_id: Session identifier
             limit: Maximum number of messages to fetch
-            
+
         Returns:
             List of message dictionaries
         """

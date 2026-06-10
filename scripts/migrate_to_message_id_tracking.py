@@ -75,7 +75,9 @@ async def update_memory_state_async(
 ) -> bool:
     """Update memory_state with last_segmented_message_id."""
     if dry_run:
-        logger.info(f"  [DRY-RUN] Would set last_segmented_message_id={last_message_id}")
+        logger.info(
+            f"  [DRY-RUN] Would set last_segmented_message_id={last_message_id}"
+        )
         return True
 
     pool = await get_async_pool()
@@ -139,7 +141,9 @@ async def run_migration_async(dry_run: bool = False) -> dict:
         session_name = session.get("name", "Unknown")
         current_state = session.get("memory_state") or {}
 
-        logger.info(f"Processing session: id={session_id} (type: {type(session_id).__name__})")
+        logger.info(
+            f"Processing session: id={session_id} (type: {type(session_id).__name__})"
+        )
 
         # Get the last message ID
         last_msg_id = await get_last_message_id_async(session_id)
@@ -184,14 +188,16 @@ async def run_migration_async(dry_run: bool = False) -> dict:
         logger.info("")
         logger.info("This was a DRY-RUN. Run without --dry-run to apply changes.")
 
-    return {"sessions": len(sessions), "updated": updated_count, "skipped": skipped_count}
+    return {
+        "sessions": len(sessions),
+        "updated": updated_count,
+        "skipped": skipped_count,
+    }
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Migrate to message ID-based tracking"
-    )
+    parser = argparse.ArgumentParser(description="Migrate to message ID-based tracking")
     parser.add_argument(
         "--dry-run",
         action="store_true",

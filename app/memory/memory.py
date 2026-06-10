@@ -243,17 +243,17 @@ async def should_trigger_segmentation_async(
     session_id: int, current_count: int
 ) -> tuple[bool, int]:
     """Check if segmentation should trigger (async).
-    
+
     Uses message ID-based tracking to avoid count-vs-index dual-semantics.
-    
+
     Args:
         session_id: Session ID to check
         current_count: Current message count (used for fallback and logging)
-    
+
     Returns:
         (should_trigger: bool, delta: int) - whether to trigger pipeline
             and the delta (new messages since last_segmented_message_id)
-    
+
     Safety checks:
         - Blocks if fence is active
         - Detects historical backlogs (>1000 messages) and logs warning
@@ -262,10 +262,10 @@ async def should_trigger_segmentation_async(
         return False, 0
 
     state = await _get_cached_memory_state_async(session_id)
-    
+
     # ID-based delta calculation (preferred)
     last_message_id = state.get("last_segmented_message_id", 0) or 0
-    
+
     # Query actual message count after last_message_id
     if last_message_id > 0:
         try:
@@ -273,7 +273,9 @@ async def should_trigger_segmentation_async(
                 session_id, last_message_id, limit=10000
             )
             # Filter to conversation messages only
-            delta = len([m for m in messages_after if m.get("role") in ("user", "assistant")])
+            delta = len(
+                [m for m in messages_after if m.get("role") in ("user", "assistant")]
+            )
         except Exception as e:
             logger.warning(f"ID-based delta query failed, falling back to count: {e}")
             # Fallback to count-based
@@ -306,30 +308,28 @@ async def should_trigger_segmentation_async(
 
 
 async def mark_segmentation_done_async(
-    session_id: int, 
-    last_message_id: int = 0,
-    processed_count: int = 0
+    session_id: int, last_message_id: int = 0, processed_count: int = 0
 ) -> None:
     """Mark segmentation done (async).
-    
+
     Stores both message ID (preferred) and count (fallback) for tracking.
-    
+
     Args:
         session_id: Session ID to update
         last_message_id: ID of the last processed message (preferred)
         processed_count: Number of messages processed in this run
     """
     actual_total = await get_message_count_async(session_id)
-    
+
     state_update = {
         "last_segmented_count": actual_total,  # Keep for compatibility
         "last_segmented_at": datetime.now().isoformat(),
     }
-    
+
     # Store message ID if available
     if last_message_id > 0:
         state_update["last_segmented_message_id"] = last_message_id
-    
+
     await update_memory_state_async(session_id, state_update)
 
 
@@ -917,16 +917,18 @@ async def run_memory_pipeline_async(session_id: int, message_count: int) -> dict
                 m for m in all_messages if m.get("role") in ("user", "assistant")
             ]
             unsegmented = conversation_messages[last_count:]
-        
+
         # Filter to conversation messages only
         if not isinstance(unsegmented, list):
-            unsegmented = [m for m in all_messages if m.get("role") in ("user", "assistant")]
-        
+            unsegmented = [
+                m for m in all_messages if m.get("role") in ("user", "assistant")
+            ]
+
         if not unsegmented:
             return {"segments": 0, "episodes": 0, "pcl_runs": 0}
 
         unsegmented_count = len(unsegmented)
-        
+
         # ── SCOPE LIMIT (safety net) ─────────────────────────────────────────────
         # Process at most MAX_MESSAGES_PER_RUN to prevent runaway LLM calls
         original_unsegmented_count = unsegmented_count
@@ -938,15 +940,13 @@ async def run_memory_pipeline_async(session_id: int, message_count: int) -> dict
             )
             unsegmented = unsegmented[:MAX_MESSAGES_PER_RUN]
             unsegmented_count = MAX_MESSAGES_PER_RUN
-        
+
         # Track how many we're actually processing
         processed_count = unsegmented_count
         # ───────────────────────────────────────────────────────────────────────
 
         if unsegmented_count < MIN_MESSAGES:
-            logger.debug(
-                f"Only {unsegmented_count} unsegmented msgs, skipping"
-            )
+            logger.debug(f"Only {unsegmented_count} unsegmented msgs, skipping")
             # Mark done with the last message ID if available
             if unsegmented:
                 last_msg = unsegmented[-1]
@@ -993,9 +993,11 @@ async def run_memory_pipeline_async(session_id: int, message_count: int) -> dict
         # Mark done with the last processed message ID
         last_processed_msg = unsegmented[-1] if unsegmented else None
         last_processed_id = last_processed_msg.get("id", 0) if last_processed_msg else 0
-        
-        await mark_segmentation_done_async(session_id, last_processed_id, processed_count)
-        
+
+        await mark_segmentation_done_async(
+            session_id, last_processed_id, processed_count
+        )
+
         # Log if there are remaining messages to process
         remaining = original_unsegmented_count - processed_count
         if remaining > 0:
