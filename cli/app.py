@@ -193,13 +193,13 @@ class YuzuTUI(App):
             else:
                 chat_log.add_message(role, content)
 
-    def on_message_submitted(self, event: InputBox.MessageSubmitted) -> None:
+    def on_input_box_message_submitted(self, event: InputBox.MessageSubmitted) -> None:
         """Handle message submission from InputBox."""
         if self._processing:
             log.debug("Ignoring submit - already processing")
             return
 
-        message = event.message
+        message = event.content
         chat_log = self.query_one(ChatLog)
 
         # Local echo
@@ -278,7 +278,7 @@ class YuzuTUI(App):
         chat_log = self.query_one(ChatLog)
         chat_log.update_last_message("yuzuki", content)
 
-    def on_session_selected(self, event: SessionSelected) -> None:
+    def on_session_list_session_selected(self, event: SessionSelected) -> None:
         """Handle session selection: switch session, reload history."""
         session_id = event.session_id
 
