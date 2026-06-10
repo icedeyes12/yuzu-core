@@ -4,88 +4,66 @@
 from __future__ import annotations
 
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Static
+from textual.widgets import Header, Footer
+from textual.binding import Binding
+
+from .widgets.chat_log import ChatLog
+from .widgets.input_box import InputBox
+from .client import YuzuClient
 
 
 class YuzuTUI(App):
     """
-    Main Textual TUI application for Yuzu Companion.
+    Main TUI application for Yuzu Companion.
     
-    Thin-client that communicates with the FastAPI backend via HTTP.
+    Persistent chat client communicating via HTTP with FastAPI backend.
     """
 
-    CSS_PATH = None
     BINDINGS = [
-        ("ctrl+c", "quit", "Quit"),
-        ("ctrl+h", "check_health", "Check Health"),
+        Binding("ctrl+c", "quit", "Quit", show=True),
+        Binding("ctrl+l", "clear", "Clear", show=True),
+        Binding("f1", "toggle_help", "Help", show=True),
     ]
 
     def __init__(self, backend_url: str = "http://localhost:5000") -> None:
         super().__init__()
         self.backend_url = backend_url
+        self.client = YuzuClient(backend_url)
 
     def compose(self) -> ComposeResult:
         """Compose the main application layout."""
-        yield Header()
-        yield Static(
-            "Checking backend connection...",
-            id="status",
-        )
+        yield Header(name="Yuzu Companion")
+        yield ChatLog(id="chat-log")
+        yield InputBox(id="input-box", placeholder="Type a message...")
         yield Footer()
 
-    async def on_mount(self) -> None:
-        """Called when the app is mounted. Perform health check."""
-        from cli.client import YuzuClient
+    def on_mount(self) -> None:
+        """Initialize app after mounting."""
+        self.title = "Yuzu Companion"
+        self.sub_title = f"Backend: {self.backend_url}"
 
-        status_widget = self.query_one("#status", Static)
+    def on_input_box_message_submitted(self, event: InputBox.MessageSubmitted) -> None:
+        """Handle message submission from InputBox (local echo)."""
+        chat_log = self.query_one(ChatLog)
+        chat_log.add_message("user", event.content)
 
-        async with YuzuClient(self.backend_url) as client:
-            healthy = await client.check_health()
+    def action_clear(self) -> None:
+        """Clear all messages from the chat log."""
+        chat_log = self.query_one(ChatLog)
+        chat_log.clear_messages()
 
-        if healthy:
-            status_widget.update(
-                f"✓ Connected to backend: {self.backend_url}\n\n"
-                "Press Ctrl+H to recheck, Ctrl+C to quit."
-            )
-        else:
-            status_widget.update(
-                f"✗ Backend offline: {self.backend_url}\n\n"
-                "Start the server with: uvicorn main:app --host 0.0.0.0 --port 5000\n\n"
-                "Press Ctrl+H to retry, Ctrl+C to quit."
-            )
-
-    def action_check_health(self) -> None:
-        """Re-check backend health."""
-        self.call_after_refresh(self._recheck_health)
-
-    async def _recheck_health(self) -> None:
-        """Perform health check and update status."""
-        from cli.client import YuzuClient
-
-        status_widget = self.query_one("#status", Static)
-        status_widget.update("Rechecking backend connection...")
-
-        async with YuzuClient(self.backend_url) as client:
-            healthy = await client.check_health()
-
-        if healthy:
-            status_widget.update(
-                f"✓ Connected to backend: {self.backend_url}\n\n"
-                "Press Ctrl+H to recheck, Ctrl+C to quit."
-            )
-        else:
-            status_widget.update(
-                f"✗ Backend offline: {self.backend_url}\n\n"
-                "Start the server with: uvicorn main:app --host 0.0.0.0 --port 5000\n\n"
-                "Press Ctrl+H to retry, Ctrl+C to quit."
-            )
+    def action_toggle_help(self) -> None:
+        """Toggle help panel (placeholder)."""
+        self.bell()
 
 
 def run_app() -> None:
-    """Entry point for the Yuzu TUI application."""
+    """Entry point for the TUI application."""
     import os
-    
+
+    # Get backend URL from environment or use default
     backend_url = os.getenv("YUZU_BACKEND_URL", "http://localhost:5000")
+    
     app = YuzuTUI(backend_url=backend_url)
     app.run()
 
