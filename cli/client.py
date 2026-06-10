@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+import json
 
 import httpx
 
@@ -98,7 +99,17 @@ class YuzuClient:
             response.raise_for_status()
             async for line in response.aiter_lines():
                 if line.startswith("data:"):
-                    yield line[5:].strip()
+                    # Parse JSON to extract chunk value
+                    try:
+                        data_str = line[5:].strip()
+                        if data_str:
+                            data = json.loads(data_str)
+                            chunk = data.get("chunk", "")
+                            if chunk:
+                                yield chunk
+                    except json.JSONDecodeError:
+                        # Fallback: yield raw if not valid JSON
+                        yield line[5:].strip()
 
     async def get_history(self, session_id: int, limit: int = 50) -> list[dict]:
         """
