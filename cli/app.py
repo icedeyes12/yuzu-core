@@ -28,7 +28,7 @@ class YuzuTUI(App):
     Backend communication via HTTP only (no DB imports).
     """
 
-    CSS_PATH = None
+    CSS_PATH = "styles/app.tcss"
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit", show=True),
         Binding("ctrl+h", "toggle_help", "Help", show=True),

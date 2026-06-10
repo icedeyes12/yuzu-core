@@ -1,0 +1,129 @@
+/* 
+ * FILE: cli/styles/app.tcss
+ * DESCRIPTION: Styling for Yuzu Companion TUI — minimalist and clean.
+ */
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Main Layout
+   ────────────────────────────────────────────────────────────────────────── */
+
+#main-layout {
+    height: 1fr;
+    width: 100%;
+}
+
+SessionList {
+    width: 25;
+    dock: left;
+    height: 100%;
+    background: $surface;
+    border-right: solid $panel;
+    padding: 1;
+}
+
+#chat-container {
+    width: 1fr;
+    height: 100%;
+    layout: vertical;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Chat Log
+   ────────────────────────────────────────────────────────────────────────── */
+
+ChatLog {
+    height: 1fr;
+    width: 100%;
+    padding: 1;
+    background: $surface;
+    overflow-y: auto;
+}
+
+.message {
+    margin-bottom: 1;
+    padding: 1;
+}
+
+.message.user {
+    text-align: right;
+    color: $text-success;
+}
+
+.message.assistant {
+    text-align: left;
+    color: $text;
+}
+
+.message.system {
+    text-align: center;
+    color: $text-muted;
+    text-style: italic;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Input Box
+   ────────────────────────────────────────────────────────────────────────── */
+
+InputBox {
+    dock: bottom;
+    height: auto;
+    max-height: 5;
+    margin: 1 1;
+    padding: 1;
+    border-top: solid $panel;
+    background: $surface;
+}
+
+InputBox:focus {
+    border-top: solid $primary;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Session List
+   ────────────────────────────────────────────────────────────────────────── */
+
+SessionList {
+    background: $surface;
+}
+
+SessionList > .option {
+    padding: 1;
+    margin: 0;
+}
+
+SessionList > .option:hover {
+    background: $boost;
+}
+
+SessionList > .option.highlighted {
+    background: $accent;
+    color: $text;
+    text-style: bold;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Header / Footer
+   ────────────────────────────────────────────────────────────────────────── */
+
+Header {
+    dock: top;
+    background: $surface;
+    color: $text;
+    padding: 0 2;
+}
+
+Footer {
+    dock: bottom;
+    background: $surface;
+    color: $text-muted;
+    height: 1;
+    padding: 0 2;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Accessibility / Focus
+   ────────────────────────────────────────────────────────────────────────── */
+
+*:focus {
+    background: $boost;
+}
