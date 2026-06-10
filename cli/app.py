@@ -9,6 +9,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.widgets import Header, Footer
+from textual.work import work
 
 from cli.client import YuzuClient
 from cli.widgets import (
@@ -65,17 +66,19 @@ class YuzuTUI(App):
         self.title = "Yuzu Companion"
         self.sub_title = f"Backend: {self.backend_url}"
 
-        # Run async initialization
-        self.run_worker(self._init_app(), exclusive=True)
+        # Connect client and run initialization
+        self._init_app()
 
+    @work(exclusive=True)
     async def _init_app(self) -> None:
         """Perform health check, load sessions, and load initial history."""
         try:
+            # Connect client
+            await self.client.connect()
+            
             # Health check
             log.info("Running health check...")
-            is_healthy = await self.run_worker(
-                self.client.check_health(), exclusive=False
-            )
+            is_healthy = await self.client.check_health()
             chat_log = self.query_one(ChatLog)
 
             if not is_healthy:
@@ -89,9 +92,7 @@ class YuzuTUI(App):
 
             # Load sessions
             session_list = self.query_one(SessionList)
-            sessions = await self.run_worker(
-                self.client.list_sessions(), exclusive=False
-            )
+            sessions = await self.client.list_sessions()
             session_list.load_sessions(sessions)
 
             # Set initial session_id
@@ -111,13 +112,11 @@ class YuzuTUI(App):
             chat_log = self.query_one(ChatLog)
             chat_log.add_message("system", f"❌ Init error: {e}")
 
+    @work(exclusive=False)
     async def _load_history(self) -> None:
         """Load chat history for current session into ChatLog."""
         try:
-            history = await self.run_worker(
-                self.client.get_history(self._session_id),
-                exclusive=False,
-            )
+            history = await self.client.get_history(self._session_id)
             chat_log = self.query_one(ChatLog)
             chat_log.clear_messages()
 
@@ -155,8 +154,9 @@ class YuzuTUI(App):
         log.info(f"Message submitted: {message[:50]}...")
 
         # Send to backend
-        self.run_worker(self._send_message(message), exclusive=True)
+        self._send_message(message)
 
+    @work(exclusive=True)
     async def _send_message(self, message: str) -> None:
         """Send message to backend and handle streaming response."""
         self._processing = True
@@ -213,7 +213,7 @@ class YuzuTUI(App):
         session_list.set_active_session(session_id)
 
         # Reload history
-        self.run_worker(self._load_history(), exclusive=True)
+        self._load_history()
 
     def action_toggle_help(self) -> None:
         """Toggle help panel."""
