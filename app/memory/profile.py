@@ -191,7 +191,7 @@ Relationship Dynamics: [Provide analysis of the relationship dynamics between Us
 - Follow the EXACT format above - no additional sections"""
 
 
-def _global_analysis_call(prompt: str, api_key: str) -> str | None:
+async def _global_analysis_call(prompt: str, api_key: str) -> str | None:
     system = (
         "You are an expert psychologist and data analyst specializing in conversation "
         "analysis. Your task is to extract deep, meaningful insights from conversation "
@@ -199,7 +199,7 @@ def _global_analysis_call(prompt: str, api_key: str) -> str | None:
         "patterns and significant moments, and follow the output format EXACTLY as "
         "specified."
     )
-    primary = chutes_chat(
+    primary = await chutes_chat(
         prompt,
         api_key=api_key,
         model=_SUMMARY_MODEL,
@@ -216,7 +216,7 @@ def _global_analysis_call(prompt: str, api_key: str) -> str | None:
     shortened = (
         prompt[:15000] + "\n\n...[analysis limited due to free tier constraints]"
     )
-    return chutes_chat(
+    return await chutes_chat(
         shortened,
         api_key=api_key,
         model=_GLOBAL_FREE_FALLBACKS[0],
@@ -242,7 +242,7 @@ def summarize_global_player_profile() -> bool:
 
 async def _summarize_global_player_profile_async() -> bool:
     """Async implementation of global profile analysis."""
-    sessions = Database.get_all_sessions() or []
+    sessions = await Database.get_all_sessions_async() or []
     log.info("global profile analysis: %d sessions", len(sessions))
 
     max_per_session = 2000
@@ -260,7 +260,9 @@ async def _summarize_global_player_profile_async() -> bool:
     for session in sorted_sessions:
         sid = session["id"]
         name = session.get("name") or f"Session {sid}"
-        messages = Database.get_chat_history(session_id=sid, limit=None) or []
+        messages = (
+            await Database.get_chat_history_async(session_id=sid, limit=None) or []
+        )
         if not messages:
             continue
         selected, method = _select_session_messages(
@@ -302,7 +304,7 @@ async def _summarize_global_player_profile_async() -> bool:
         log.error("no chutes API key configured")
         return False
 
-    summary_text = _global_analysis_call(
+    summary_text = await _global_analysis_call(
         _build_global_analysis_prompt(conversation_text), api_key
     )
     if not summary_text:
@@ -317,10 +319,10 @@ async def _summarize_global_player_profile_async() -> bool:
     parsed["total_messages"] = total_messages
     parsed["analysis_chars"] = len(conversation_text)
 
-    profile = Database.get_profile() or {}
+    profile = await Database.get_profile_async() or {}
     merged = _merge_profile_data(profile.get("memory") or {}, parsed)
     try:
-        Database.update_profile({"memory": merged})
+        await Database.update_profile_async({"memory": merged})
     except Exception:
         log.exception("profile update failed")
         return False
