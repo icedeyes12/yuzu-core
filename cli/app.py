@@ -9,7 +9,7 @@ import httpx
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
-from textual.widgets import Header, Footer
+from textual.widgets import Header, Footer, Static
 
 from cli.client import YuzuClient
 from cli.widgets import (
@@ -50,6 +50,7 @@ class YuzuTUI(App):
         self._processing = False
         self._session_id: int = 1
         self._sidebar_visible = False
+        self._last_response_widget: Static | None
         log.info(f"YuzuTUI initialized with backend: {backend_url}")
 
     def compose(self) -> ComposeResult:
@@ -269,14 +270,16 @@ class YuzuTUI(App):
             input_box.styles.opacity = 0.5
 
     def _add_response_placeholder(self) -> None:
-        """Add empty yuzuki message (called from main thread)."""
+        """Add empty yuzuki message (called from main thread).
+        """
         chat_log = self.query_one(ChatLog)
-        chat_log.add_message("yuzuki", "")
+        self._last_response_widget = chat_log.add_message("yuzuki", "")
 
     def _update_response(self, content: str) -> None:
         """Update the last yuzuki message (called from main thread)."""
-        chat_log = self.query_one(ChatLog)
-        chat_log.update_last_message("yuzuki", content)
+        if self._last_response_widget:
+            chat_log = self.query_one(ChatLog)
+            chat_log.update_message(self._last_response_widget, "yuzuki", content)
 
     def on_session_list_session_selected(self, event: SessionSelected) -> None:
         """Handle session selection: switch session, reload history."""
