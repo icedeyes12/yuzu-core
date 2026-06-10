@@ -1,89 +1,32 @@
 /* 
  * FILE: cli/styles/app.tcss
- * DESCRIPTION: Styling for Yuzu Companion TUI — minimalist and clean.
+ * DESCRIPTION: Mobile-first responsive layout for Yuzu Companion TUI.
+ *              Adapts to narrow terminals (Termux on Android).
  */
 
 /* ──────────────────────────────────────────────────────────────────────────
-   Main Layout
+   Main Layout — Mobile First (default: narrow screens)
    ────────────────────────────────────────────────────────────────────────── */
 
 #main-layout {
     height: 1fr;
     width: 100%;
-}
-
-SessionList {
-    width: 25;
-    dock: left;
-    height: 100%;
-    background: $surface;
-    border-right: solid $panel;
-    padding: 1;
-}
-
-#chat-container {
-    width: 1fr;
-    height: 100%;
     layout: vertical;
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
-   Chat Log
-   ────────────────────────────────────────────────────────────────────────── */
-
-ChatLog {
-    height: 1fr;
-    width: 100%;
-    padding: 1;
-    background: $surface;
-    overflow-y: auto;
-}
-
-.message {
-    margin-bottom: 1;
-    padding: 1;
-}
-
-.message.user {
-    text-align: right;
-    color: $text-success;
-}
-
-.message.assistant {
-    text-align: left;
-    color: $text;
-}
-
-.message.system {
-    text-align: center;
-    color: $text-muted;
-    text-style: italic;
-}
-
-/* ──────────────────────────────────────────────────────────────────────────
-   Input Box
-   ────────────────────────────────────────────────────────────────────────── */
-
-InputBox {
-    dock: bottom;
-    height: auto;
-    max-height: 5;
-    margin: 1 1;
-    padding: 1;
-    border-top: solid $panel;
-    background: $surface;
-}
-
-InputBox:focus {
-    border-top: solid $primary;
-}
-
-/* ──────────────────────────────────────────────────────────────────────────
-   Session List
-   ────────────────────────────────────────────────────────────────────────── */
-
+/* Mobile: SessionList hidden by default, toggled via keyboard */
 SessionList {
+    display: none;
+    width: 100%;
+    height: auto;
+    max-height: 40%;
     background: $surface;
+    border-bottom: solid $panel;
+    padding: 1;
+}
+
+SessionList.visible {
+    display: block;
 }
 
 SessionList > .option {
@@ -102,28 +45,128 @@ SessionList > .option.highlighted {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
-   Header / Footer
+   Chat Container — Full screen on mobile
+   ────────────────────────────────────────────────────────────────────────── */
+
+#chat-container {
+    width: 100%;
+    height: 1fr;
+    layout: vertical;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Chat Log
+   ────────────────────────────────────────────────────────────────────────── */
+
+ChatLog {
+    height: 1fr;
+    width: 100%;
+    padding: 1;
+    background: $surface;
+    overflow-y: auto;
+}
+
+.message {
+    margin-bottom: 1;
+    padding: 1;
+    width: 100%;
+}
+
+.message.user {
+    text-align: left;
+    color: $text-success;
+}
+
+.message.assistant {
+    text-align: left;
+    color: $text;
+}
+
+.message.system {
+    text-align: center;
+    color: $text-muted;
+    text-style: italic;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Input Box — Fixed at bottom
+   ────────────────────────────────────────────────────────────────────────── */
+
+InputBox {
+    dock: bottom;
+    height: auto;
+    min-height: 3;
+    margin: 1;
+    padding: 1;
+    border: solid $panel;
+    background: $surface;
+}
+
+InputBox:focus {
+    border: solid $primary;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Header — Minimal on mobile
    ────────────────────────────────────────────────────────────────────────── */
 
 Header {
     dock: top;
     background: $surface;
-    color: $text;
-    padding: 0 2;
-}
-
-Footer {
-    dock: bottom;
-    background: $surface;
-    color: $text-muted;
+    color: $primary;
+    padding: 0 1;
     height: 1;
-    padding: 0 2;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
-   Accessibility / Focus
+   Footer — Status bar (compact)
+   ────────────────────────────────────────────────────────────────────────── */
+
+Footer {
+    dock: bottom;
+    background: $panel;
+    color: $text-muted;
+    height: 1;
+    padding: 0 1;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Focus States
    ────────────────────────────────────────────────────────────────────────── */
 
 *:focus {
     background: $boost;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Responsive: Wider screens (width > 80 columns)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@media (min-width: 80) {
+    #main-layout {
+        layout: horizontal;
+    }
+    
+    SessionList {
+        display: block;
+        width: 22;
+        height: 100%;
+        dock: left;
+        border-bottom: none;
+        border-right: solid $panel;
+        max-height: none;
+    }
+    
+    #chat-container {
+        width: 1fr;
+    }
+    
+    Header {
+        height: 1;
+        padding: 0 2;
+    }
+    
+    .message.user {
+        text-align: right;
+    }
 }

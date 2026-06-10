@@ -37,6 +37,7 @@ class YuzuTUI(App):
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit", show=True),
         Binding("ctrl+h", "toggle_help", "Help", show=True),
+        Binding("ctrl+s", "toggle_session_sidebar", "Sessions", show=True),
         Binding("tab", "focus_next", "Next", show=False),
         Binding("shift+tab", "focus_previous", "Prev", show=False),
     ]
@@ -47,6 +48,7 @@ class YuzuTUI(App):
         self.client = YuzuClient(base_url=backend_url)
         self._processing = False
         self._session_id: str = "default"
+        self._sidebar_visible = False
         log.info(f"YuzuTUI initialized with backend: {backend_url}")
 
     def compose(self) -> ComposeResult:
@@ -218,6 +220,23 @@ class YuzuTUI(App):
     def action_toggle_help(self) -> None:
         """Toggle help panel."""
         self.bell()
+
+    def action_toggle_session_sidebar(self) -> None:
+        """Toggle session sidebar visibility (for mobile layout)."""
+        try:
+            sidebar = self.query_one(SessionList)
+            self._sidebar_visible = not self._sidebar_visible
+            
+            if self._sidebar_visible:
+                sidebar.add_class("visible")
+                sidebar.focus()
+            else:
+                sidebar.remove_class("visible")
+                self.query_one(InputBox).focus()
+                
+            log.debug(f"Sidebar visible: {self._sidebar_visible}")
+        except Exception as e:
+            log.error(f"Failed to toggle sidebar: {e}")
 
 
 def run_app(backend_url: str = "http://localhost:5000") -> None:
