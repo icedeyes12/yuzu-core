@@ -9,7 +9,6 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.widgets import Header, Footer
-from textual.work import work
 
 from cli.client import YuzuClient
 from cli.widgets import (
@@ -66,10 +65,13 @@ class YuzuTUI(App):
         self.title = "Yuzu Companion"
         self.sub_title = f"Backend: {self.backend_url}"
 
-        # Connect client and run initialization
+        # Run initialization via set_timer to avoid blocking
+        self.set_timer(0.1, self._run_init_app)
+
+    def _run_init_app(self) -> None:
+        """Start the init worker."""
         self._init_app()
 
-    @work(exclusive=True)
     async def _init_app(self) -> None:
         """Perform health check, load sessions, and load initial history."""
         try:
@@ -112,7 +114,6 @@ class YuzuTUI(App):
             chat_log = self.query_one(ChatLog)
             chat_log.add_message("system", f"❌ Init error: {e}")
 
-    @work(exclusive=False)
     async def _load_history(self) -> None:
         """Load chat history for current session into ChatLog."""
         try:
@@ -153,10 +154,9 @@ class YuzuTUI(App):
         chat_log.add_message("you", message)
         log.info(f"Message submitted: {message[:50]}...")
 
-        # Send to backend
-        self._send_message(message)
+        # Send to backend via set_timer
+        self.set_timer(0.1, lambda: self._send_message(message))
 
-    @work(exclusive=True)
     async def _send_message(self, message: str) -> None:
         """Send message to backend and handle streaming response."""
         self._processing = True
@@ -212,8 +212,8 @@ class YuzuTUI(App):
         session_list = self.query_one(SessionList)
         session_list.set_active_session(session_id)
 
-        # Reload history
-        self._load_history()
+        # Reload history via set_timer
+        self.set_timer(0.1, self._load_history)
 
     def action_toggle_help(self) -> None:
         """Toggle help panel."""
