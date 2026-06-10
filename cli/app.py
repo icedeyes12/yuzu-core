@@ -44,7 +44,7 @@ class YuzuTUI(App):
     def __init__(self, backend_url: str = "http://localhost:5000") -> None:
         super().__init__()
         self.backend_url = backend_url
-        self.client = YuzuClient(backend_url=backend_url)
+        self.client = YuzuClient(base_url=backend_url)
         self._processing = False
         self._session_id: str = "default"
         log.info(f"YuzuTUI initialized with backend: {backend_url}")
