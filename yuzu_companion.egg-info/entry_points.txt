@@ -1,3 +1,0 @@
-[console_scripts]
-yuzu = cli.app:run_app
-yuzu-server = main:app
