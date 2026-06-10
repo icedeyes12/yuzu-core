@@ -97,12 +97,12 @@ class YuzuClient:
             List of message dictionaries
         """
         response = await self.client.get(
-            "/api/history",
+            "/api/chat_history",
             params={"session_id": session_id, "limit": limit},
         )
         response.raise_for_status()
         data = response.json()
-        return data.get("messages", [])
+        return data.get("chat_history", [])
 
     async def __aenter__(self) -> YuzuClient:
         """Async context manager entry."""
