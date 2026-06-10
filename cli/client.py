@@ -46,12 +46,7 @@ class YuzuClient:
         return self._client
 
     async def check_health(self) -> bool:
-        """
-        Check if the backend server is healthy.
-
-        Returns:
-            True if backend responds with status 200, False otherwise.
-        """
+        """Check if the backend server is healthy."""
         try:
             response = await self.client.get("/")
             return response.status_code == 200
@@ -61,6 +56,13 @@ class YuzuClient:
             return False
         except Exception:
             return False
+
+    async def list_sessions(self) -> list[dict]:
+        """Fetch list of all sessions."""
+        response = await self.client.get("/api/sessions/list")
+        response.raise_for_status()
+        data = response.json()
+        return data.get("sessions", [])
 
     async def stream_message(self, session_id: str, message: str) -> AsyncIterator[str]:
         """
