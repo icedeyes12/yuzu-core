@@ -696,3 +696,109 @@ Triggered by:
 ---
 
 *This document describes the structural blueprint of Yuzu Companion — what the system is and how the pieces fit together. For operational guidelines and safety rules, see `file AGENTS.md`.*
+
+---
+
+## 9. v4.0.0 Thin-Client TUI (2026-06)
+
+### Architecture Shift
+
+In v4.0.0, the system adopted a strict thin-client architecture:
+
+| Before | After |
+|--------|-------|
+| Legacy CLI (`main.py`) | Obsolete, retired |
+| Direct DB access in CLI | HTTP-only thin client |
+| Rich/prompt_toolkit TUI | Textual persistent TUI |
+
+### Entry Points
+
+```bash
+# Backend server (FastAPI + PostgreSQL)
+yuzu-server
+# or: python3 main.py
+
+# Thin-client TUI (Textual)
+yuzu
+# or: python3 -m cli.app
+```
+
+### Thin-Client Diagram
+
+```mermaid
+flowchart TB
+    subgraph TUI["Yuzu CLI (Textual)"]
+        APP[cli/app.py<br/>YuzuTUI]
+        W[cli/widgets/]
+        CLIENT[cli/client.py<br/>YuzuClient]
+    end
+    
+    subgraph Backend["Yuzu Server (FastAPI)"]
+        MAIN[main.py<br/>FastAPI + Lifespan]
+        DB[(PostgreSQL + pgvector)]
+        MEM[Memory System]
+        ORCH[Orchestrator]
+    end
+    
+    APP --> W
+    W --> CLIENT
+    CLIENT -.->|HTTP/SSE| MAIN
+    MAIN --> ORCH
+    ORCH --> DB
+    ORCH --> MEM
+```
+
+**Key invariant:** CLI never imports `app.db`, `app.memory`, or `app.orchestrator`. All data flows through `/api/*` endpoints.
+
+### CLI Directory
+
+```
+cli/
+├── app.py              # Textual TUI application
+├── client.py           # Async HTTP client (YuzuClient)
+├── widgets/
+│   ├── chat_log.py     # Scrollable Markdown chat
+│   ├── input_box.py    # Message input widget
+│   └── session_list.py # Session sidebar
+├── styles/
+│   └── app.tcss        # Textual CSS
+└── README.md           # CLI documentation
+```
+
+### Widget Communication
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant IB as InputBox
+    participant A as YuzuTUI
+    participant C as YuzuClient
+    participant S as FastAPI Backend
+    participant CL as ChatLog
+    
+    U->>IB: Type message + Enter
+    IB->>A: MessageSubmitted
+    A->>CL: add_message("user", text)
+    A->>C: stream_message(session_id, text)
+    C->>S: POST /api/send_message_stream (SSE)
+    S-->>C: SSE chunks
+    C-->>A: Chunks arrive
+    A->>CL: update_message("yuzuki", chunk)
+    S-->>C: SSE done
+    A->>CL: finalize_message()
+```
+
+### Packaging
+
+```toml
+[project.scripts]
+yuzu = "cli.app:run_app"
+yuzu-server = "main:app"
+```
+
+- `yuzu` — Thin-client TUI entry point
+- `yuzu-server` — FastAPI server entry point
+
+---
+
+*For CLI-specific documentation, see `file cli/README.md`.*

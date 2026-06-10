@@ -149,6 +149,7 @@ Minimal entry point that sets up the web server:
 - Static mounts (`/static`, `/uploads`, `/generated_images`)
 - HTML page routes (`/`, `/chat`, `/config`, `/about`)
 - Registers `api_router` from `file app/api/routes.py`
+- **Lifespan management** for DB pool initialization (v4.0.0+)
 
 All API endpoints are defined in `file app/api/routes.py`.
 
