@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import httpx
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -27,7 +28,7 @@ class YuzuTUI(App):
     Main Textual TUI application with persistent chat interface.
 
     Layout:
-    - Left sidebar: SessionList
+    - Left sidebar: SessionList (toggleable)
     - Right: ChatLog + InputBox
 
     Backend communication via HTTP only (no DB imports).
@@ -67,12 +68,9 @@ class YuzuTUI(App):
         self.title = "Yuzu Companion"
         self.sub_title = f"Backend: {self.backend_url}"
 
-        # Run initialization via set_timer to avoid blocking
-        self.set_timer(0.1, self._run_init_app)
-
-    def _run_init_app(self) -> None:
-        """Start the init worker."""
-        self._init_app()
+        # Use call_later to run async init in background
+        asyncio.create_task(self._init_app())
+        log.debug("Init task scheduled")
 
     async def _init_app(self) -> None:
         """Perform health check, load sessions, and load initial history."""
@@ -83,28 +81,18 @@ class YuzuTUI(App):
             # Health check
             log.info("Running health check...")
             is_healthy = await self.client.check_health()
-            chat_log = self.query_one(ChatLog)
+            
+            # Need to query widgets from main thread
+            self.call_from_thread(self._update_health_status, is_healthy)
 
             if not is_healthy:
-                chat_log.add_message(
-                    "system", f"⚠️  Backend unreachable: {self.backend_url}"
-                )
                 return
 
-            chat_log.add_message("system", f"✓ Connected to {self.backend_url}")
             log.info("Health check passed")
 
             # Load sessions
-            session_list = self.query_one(SessionList)
             sessions = await self.client.list_sessions()
-            session_list.load_sessions(sessions)
-
-            # Set initial session_id
-            if sessions:
-                self._session_id = str(sessions[0].get("id", "default"))
-                session_list.set_active_session(self._session_id)
-            else:
-                self._session_id = "default"
+            self.call_from_thread(self._update_sessions, sessions)
 
             log.info(f"Loaded {len(sessions)} sessions, active: {self._session_id}")
 
@@ -113,40 +101,66 @@ class YuzuTUI(App):
 
         except Exception as e:
             log.error(f"Init failed: {e}")
-            chat_log = self.query_one(ChatLog)
-            chat_log.add_message("system", f"❌ Init error: {e}")
+            self.call_from_thread(self._show_error, f"Init error: {e}")
+
+    def _update_health_status(self, is_healthy: bool) -> None:
+        """Update UI with health check result (called from main thread)."""
+        chat_log = self.query_one(ChatLog)
+        if is_healthy:
+            chat_log.add_message("system", f"✓ Connected to {self.backend_url}")
+        else:
+            chat_log.add_message("system", f"⚠️  Backend unreachable: {self.backend_url}")
+
+    def _update_sessions(self, sessions: list) -> None:
+        """Update session list UI (called from main thread)."""
+        session_list = self.query_one(SessionList)
+        session_list.load_sessions(sessions)
+
+        if sessions:
+            self._session_id = str(sessions[0].get("id", "default"))
+            session_list.set_active_session(self._session_id)
+        else:
+            self._session_id = "default"
+
+    def _show_error(self, message: str) -> None:
+        """Show error in chat log (called from main thread)."""
+        chat_log = self.query_one(ChatLog)
+        chat_log.add_message("system", f"❌ {message}")
 
     async def _load_history(self) -> None:
         """Load chat history for current session into ChatLog."""
         try:
             history = await self.client.get_history(self._session_id)
-            chat_log = self.query_one(ChatLog)
-            chat_log.clear_messages()
-
-            if not history:
-                chat_log.add_message("system", "No previous messages")
-                return
-
-            for msg in history:
-                role = msg.get("role", "unknown")
-                content = msg.get("content", "")
-                if role == "user":
-                    chat_log.add_message("you", content)
-                elif role == "assistant":
-                    chat_log.add_message("yuzuki", content)
-                else:
-                    chat_log.add_message(role, content)
-
+            self.call_from_thread(self._display_history, history)
             log.info(f"Loaded {len(history)} messages for session {self._session_id}")
 
         except Exception as e:
             log.error(f"Failed to load history: {e}")
-            chat_log = self.query_one(ChatLog)
-            chat_log.add_message("system", f"⚠️  Could not load history: {e}")
+            self.call_from_thread(self._show_error, f"Could not load history: {e}")
+
+    def _display_history(self, history: list) -> None:
+        """Display history in chat log (called from main thread)."""
+        chat_log = self.query_one(ChatLog)
+        chat_log.clear_messages()
+
+        if not history:
+            chat_log.add_message("system", "No previous messages")
+            return
+
+        for msg in history:
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
+            if role == "user":
+                chat_log.add_message("you", content)
+            elif role == "assistant":
+                chat_log.add_message("yuzuki", content)
+            else:
+                chat_log.add_message(role, content)
 
     def on_message_submitted(self, event: InputBox.MessageSubmitted) -> None:
         """Handle message submission from InputBox."""
         if self._processing:
+            log.debug("Ignoring submit - already processing")
             return
 
         message = event.message
@@ -156,49 +170,66 @@ class YuzuTUI(App):
         chat_log.add_message("you", message)
         log.info(f"Message submitted: {message[:50]}...")
 
-        # Send to backend via set_timer
-        self.set_timer(0.1, lambda: self._send_message(message))
+        # Send to backend in background task
+        asyncio.create_task(self._send_message(message))
 
     async def _send_message(self, message: str) -> None:
         """Send message to backend and handle streaming response."""
         self._processing = True
-        chat_log = self.query_one(ChatLog)
-        input_box = self.query_one(InputBox)
 
-        # Disable input during processing
-        input_box.disabled = True
-        input_box.styles.opacity = 0.5
+        # Disable input (from main thread)
+        self.call_from_thread(self._set_input_state, False)
 
-        # Placeholder for response
-        chat_log.add_message("yuzuki", "")
+        # Add placeholder message
+        self.call_from_thread(self._add_response_placeholder)
+
         full_response = ""
 
         try:
             # Stream response
             async for chunk in self.client.stream_message(self._session_id, message):
                 full_response += chunk
-                chat_log.update_last_message("yuzuki", full_response)
+                self.call_from_thread(self._update_response, full_response)
 
             log.info(f"Response received: {len(full_response)} chars")
 
         except httpx.ConnectError:
-            chat_log.update_last_message("yuzuki", "❌ Connection failed")
+            self.call_from_thread(self._update_response, "❌ Connection failed")
             log.error("Connection error")
 
         except httpx.TimeoutException:
-            chat_log.update_last_message("yuzuki", "❌ Request timed out")
+            self.call_from_thread(self._update_response, "❌ Request timed out")
             log.error("Timeout")
 
         except Exception as e:
-            chat_log.update_last_message("yuzuki", f"❌ Error: {e}")
+            self.call_from_thread(self._update_response, f"❌ Error: {e}")
             log.error(f"Send error: {e}")
 
         finally:
             # Re-enable input
             self._processing = False
+            self.call_from_thread(self._set_input_state, True)
+
+    def _set_input_state(self, enabled: bool) -> None:
+        """Enable/disable input box (called from main thread)."""
+        input_box = self.query_one(InputBox)
+        if enabled:
             input_box.disabled = False
             input_box.styles.opacity = 1.0
             input_box.focus()
+        else:
+            input_box.disabled = True
+            input_box.styles.opacity = 0.5
+
+    def _add_response_placeholder(self) -> None:
+        """Add empty yuzuki message (called from main thread)."""
+        chat_log = self.query_one(ChatLog)
+        chat_log.add_message("yuzuki", "")
+
+    def _update_response(self, content: str) -> None:
+        """Update the last yuzuki message (called from main thread)."""
+        chat_log = self.query_one(ChatLog)
+        chat_log.update_last_message("yuzuki", content)
 
     def on_session_selected(self, event: SessionSelected) -> None:
         """Handle session selection: switch session, reload history."""
@@ -214,8 +245,8 @@ class YuzuTUI(App):
         session_list = self.query_one(SessionList)
         session_list.set_active_session(session_id)
 
-        # Reload history via set_timer
-        self.set_timer(0.1, self._load_history)
+        # Reload history in background
+        asyncio.create_task(self._load_history())
 
     def action_toggle_help(self) -> None:
         """Toggle help panel."""
