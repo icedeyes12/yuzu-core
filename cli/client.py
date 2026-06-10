@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 import httpx
 
 
@@ -15,7 +17,7 @@ class YuzuClient:
     database models or internal services.
     """
 
-    def __init__(self, base_url: str = "http://localhost:5000", timeout: float = 30.0) -> None:
+    def __init__(self, base_url: str = "http://localhost:5000", timeout: float = 60.0) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
@@ -57,6 +59,48 @@ class YuzuClient:
             return False
         except Exception:
             return False
+
+    async def stream_message(
+        self, session_id: str, message: str
+    ) -> AsyncIterator[str]:
+        """
+        Stream a chat message via SSE.
+        
+        Args:
+            session_id: Session identifier
+            message: User message text
+            
+        Yields:
+            str: Each SSE data chunk
+        """
+        async with self.client.stream(
+            "POST",
+            "/api/send_message_stream",
+            json={"session_id": session_id, "message": message},
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if line.startswith("data:"):
+                    yield line[5:].strip()
+
+    async def get_history(self, session_id: str, limit: int = 50) -> list[dict]:
+        """
+        Fetch chat history for a session.
+        
+        Args:
+            session_id: Session identifier
+            limit: Maximum number of messages to fetch
+            
+        Returns:
+            List of message dictionaries
+        """
+        response = await self.client.get(
+            "/api/history",
+            params={"session_id": session_id, "limit": limit},
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data.get("messages", [])
 
     async def __aenter__(self) -> YuzuClient:
         """Async context manager entry."""
