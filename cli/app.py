@@ -77,11 +77,11 @@ class YuzuTUI(App):
         try:
             # Connect client
             await self.client.connect()
-            
+
             # Health check
             log.info("Running health check...")
             is_healthy = await self.client.check_health()
-            
+
             # Need to query widgets from main thread
             self.call_from_thread(self._update_health_status, is_healthy)
 
@@ -109,7 +109,9 @@ class YuzuTUI(App):
         if is_healthy:
             chat_log.add_message("system", f"✓ Connected to {self.backend_url}")
         else:
-            chat_log.add_message("system", f"⚠️  Backend unreachable: {self.backend_url}")
+            chat_log.add_message(
+                "system", f"⚠️  Backend unreachable: {self.backend_url}"
+            )
 
     def _update_sessions(self, sessions: list) -> None:
         """Update session list UI (called from main thread)."""
@@ -257,14 +259,14 @@ class YuzuTUI(App):
         try:
             sidebar = self.query_one(SessionList)
             self._sidebar_visible = not self._sidebar_visible
-            
+
             if self._sidebar_visible:
                 sidebar.add_class("visible")
                 sidebar.focus()
             else:
                 sidebar.remove_class("visible")
                 self.query_one(InputBox).focus()
-                
+
             log.debug(f"Sidebar visible: {self._sidebar_visible}")
         except Exception as e:
             log.error(f"Failed to toggle sidebar: {e}")
