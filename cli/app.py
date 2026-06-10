@@ -14,7 +14,6 @@ from cli.client import YuzuClient
 from cli.widgets import (
     ChatLog,
     InputBox,
-    MessageSubmitted,
     SessionList,
     SessionSelected,
 )
@@ -143,8 +142,8 @@ class YuzuTUI(App):
             chat_log = self.query_one(ChatLog)
             chat_log.add_message("system", f"⚠️  Could not load history: {e}")
 
-    def on_message_submitted(self, event: MessageSubmitted) -> None:
-        """Handle message submission: local echo + backend send."""
+    def on_message_submitted(self, event: InputBox.MessageSubmitted) -> None:
+        """Handle message submission from InputBox."""
         if self._processing:
             return
 
