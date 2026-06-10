@@ -22,7 +22,7 @@ class InputBox(Input):
         margin: 1 2;
         padding: 1;
         border: solid $primary;
-        background: $surface;
+        background: transparent;
     }
     InputBox:focus {
         border: double $accent;

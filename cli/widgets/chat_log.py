@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 from rich.markdown import Markdown
 from textual.containers import ScrollableContainer
 from textual.widgets import Static
@@ -21,7 +22,7 @@ class ChatLog(ScrollableContainer):
         height: 1fr;
         width: 100%;
         padding: 1;
-        background: $surface;
+        background: transparent;
     }
     .message {
         margin-bottom: 1;
@@ -39,8 +40,9 @@ class ChatLog(ScrollableContainer):
         Returns:
             The created Static widget for further updates.
         """
+        display_content = self._filter_hidden_tags(content)
         message_widget = Static(
-            Markdown(f"**{role}**: {content}"),
+            Markdown(f"**{role}**: {display_content}"),
             classes=f"message {role}",
         )
         self.mount(message_widget)
@@ -58,10 +60,23 @@ class ChatLog(ScrollableContainer):
             role: Message role (user/assistant/system)
             content: New message content
         """
-        widget.update(Markdown(f"**{role}**: {content}"))
+        display_content = self._filter_hidden_tags(content)
+        widget.update(Markdown(f"**{role}**: {display_content}"))
         self.scroll_end(animate=False)
 
     def clear_messages(self) -> None:
         """Remove all messages from the chat log."""
         for child in list(self.children):
             child.remove()
+
+    def filter_hidden_tags(self, text: str) -> str:
+        """
+        Filter out hidden tags from the text.
+
+        Args:
+            text: The text to filter
+
+        Returns:
+            The filtered text
+        """
+        return re.sub(r"<[^>]+>", "", text)

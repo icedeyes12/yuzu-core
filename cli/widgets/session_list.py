@@ -23,6 +23,8 @@ class SessionList(OptionList):
     Emits SessionSelected when user clicks or presses Enter on a session.
     """
 
+    ALLOW_SELECT = True  # Enable selection
+
     DEFAULT_CSS = """
     SessionList {
         width: 25;
