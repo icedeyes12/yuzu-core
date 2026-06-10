@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import httpx
+import time
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
@@ -51,6 +52,7 @@ class YuzuTUI(App):
         self._session_id: int = 1
         self._sidebar_visible = False
         self._last_response_widget: Static | None
+        self._response_start_time: float | None = None
         log.info(f"YuzuTUI initialized with backend: {backend_url}")
 
     def compose(self) -> ComposeResult:
@@ -270,16 +272,48 @@ class YuzuTUI(App):
             input_box.styles.opacity = 0.5
 
     def _add_response_placeholder(self) -> None:
-        """Add empty yuzuki message (called from main thread).
-        """
+        """Add typing indicator with spinner."""
+        self._response_start_time = time.time()
         chat_log = self.query_one(ChatLog)
-        self._last_response_widget = chat_log.add_message("yuzuki", "")
-
-    def _update_response(self, content: str) -> None:
-        """Update the last yuzuki message (called from main thread)."""
+        # Typing indicator with animated dots
+        self._last_response_widget = chat_log.add_message("yuzu", "⏳ Typing...")
+        
+        # Schedule spinner animation updates
+        self._update_spinner(0)
+    
+    def _update_spinner(self, count: int) -> None:
+        """Animate typing indicator spinner."""
+        if not self._processing or count > 30:  # Max 30 updates (30s timeout)
+            return
+        
+        spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        spinner = spinner_chars[count % len(spinner_chars)]
+        elapsed = time.time() - self._response_start_time if self._response_start_time else 0
+        
         if self._last_response_widget:
             chat_log = self.query_one(ChatLog)
-            chat_log.update_message(self._last_response_widget, "yuzuki", content)
+            chat_log.update_message(
+                self._last_response_widget, 
+                "yuzu", 
+                f"{spinner} Processing... ({elapsed:.1f}s)"
+            )
+        
+        # Schedule next update (every 0.1s)
+        self.call_later(self._update_spinner, count + 1)
+
+    def _update_response(self, content: str) -> None:
+        """Update response with elapsed time."""
+        if self._last_response_widget:
+            # Calculate elapsed time
+            if self._response_start_time:
+                elapsed = time.time() - self._response_start_time
+                # Show elapsed time in first update
+                if not content.startswith(("⏱", " <")):
+                    content = f"⏱ {elapsed:.1f}s\n\n{content}"
+                    self._response_start_time = None
+            
+            chat_log = self.query_one(ChatLog)
+            chat_log.update_message(self._last_response_widget, "yuzu", content)
 
     def on_session_list_session_selected(self, event: SessionSelected) -> None:
         """Handle session selection: switch session, reload history."""

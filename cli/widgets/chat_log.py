@@ -14,8 +14,11 @@ class ChatLog(ScrollableContainer):
     Scrollable container for chat messages.
 
     Displays messages with Markdown rendering and auto-scrolls to bottom.
-    Supports streaming updates for assistant messages.
+    Supports streaming updates for assistant messages with timer display.
     """
+
+    # Hidden tags that won't be displayed
+    HIDDEN_TAGS = ['<think>', '<analysis>', '<decision>', '<command>']
 
     DEFAULT_CSS = """
     ChatLog {
@@ -40,7 +43,7 @@ class ChatLog(ScrollableContainer):
         Returns:
             The created Static widget for further updates.
         """
-        display_content = self._filter_hidden_tags(content)
+        display_content = self._parse_and_render_content(content)
         message_widget = Static(
             Markdown(f"**{role}**: {display_content}"),
             classes=f"message {role}",
@@ -60,7 +63,7 @@ class ChatLog(ScrollableContainer):
             role: Message role (user/assistant/system)
             content: New message content
         """
-        display_content = self._filter_hidden_tags(content)
+        display_content = self._parse_and_render_content(content)
         widget.update(Markdown(f"**{role}**: {display_content}"))
         self.scroll_end(animate=False)
 
@@ -69,14 +72,21 @@ class ChatLog(ScrollableContainer):
         for child in list(self.children):
             child.remove()
 
-    def filter_hidden_tags(self, text: str) -> str:
+    @staticmethod
+    def _parse_and_render_content(content: str):
+        """Parse tags and mix of text/tags.
+        
+        Returns list of tuples: (role, content) where:
+        - ('text', plain_text) for normal text
+        - ('tag', tag_name, tag_content) for tagged blocks
         """
-        Filter out hidden tags from the text.
+        return re.sub(r"<[^>]+>", "", content)
 
-        Args:
-            text: The text to filter
-
-        Returns:
-            The filtered text
-        """
-        return re.sub(r"<[^>]+>", "", text)
+    @staticmethod
+    def _filter_hidden_tags(content: str) -> str:
+        """Remove hidden tags from content."""
+        result = content
+        for tag in ChatLog.HIDDEN_TAGS:
+            # Match both <tag>...</tag> and raw tag markers
+            result = re.sub(rf'{re.escape(tag)}.*?{re.escape(tag.replace("<", "</"))}', '', result, flags=re.DOTALL)
+        return result
