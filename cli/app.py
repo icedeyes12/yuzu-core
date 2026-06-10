@@ -68,9 +68,43 @@ class YuzuTUI(App):
         self.title = "Yuzu Companion"
         self.sub_title = f"Backend: {self.backend_url}"
 
+        # Detect screen size and apply desktop classes if needed
+        self._apply_responsive_layout()
+
         # Use call_later to run async init in background
         asyncio.create_task(self._init_app())
         log.debug("Init task scheduled")
+
+    def _apply_responsive_layout(self) -> None:
+        """Apply desktop or mobile classes based on terminal width."""
+        try:
+            # Get terminal width (fallback to 80 if detection fails)
+            import shutil
+            width = shutil.get_terminal_size().columns
+            
+            log.debug(f"Terminal width: {width} columns")
+            
+            # Desktop mode: width >= 80 columns
+            if width >= 80:
+                log.info("Applying desktop layout (width >= 80)")
+                main_layout = self.query_one("#main-layout")
+                main_layout.add_class("desktop")
+                
+                sidebar = self.query_one(SessionList)
+                sidebar.add_class("desktop")
+                sidebar.display = True  # Always visible on desktop
+                self._sidebar_visible = True
+                
+                chat_container = self.query_one("#chat-container")
+                chat_container.add_class("desktop")
+            else:
+                log.info("Applying mobile layout (width < 80)")
+                # Mobile mode: sidebar hidden by default, toggleable
+                self._sidebar_visible = False
+                
+        except Exception as e:
+            log.warning(f"Failed to detect terminal size: {e}, defaulting to mobile layout")
+            self._sidebar_visible = False
 
     async def _init_app(self) -> None:
         """Perform health check, load sessions, and load initial history."""
@@ -257,6 +291,15 @@ class YuzuTUI(App):
     def action_toggle_session_sidebar(self) -> None:
         """Toggle session sidebar visibility (for mobile layout)."""
         try:
+            import shutil
+            width = shutil.get_terminal_size().columns
+            
+            # On desktop (>= 80 cols), sidebar is always visible
+            if width >= 80:
+                log.debug("Desktop mode: sidebar toggle ignored (always visible)")
+                return
+            
+            # Mobile mode: toggle sidebar
             sidebar = self.query_one(SessionList)
             self._sidebar_visible = not self._sidebar_visible
 

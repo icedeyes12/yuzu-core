@@ -139,34 +139,28 @@ Footer {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Responsive: Wider screens (width > 80 columns)
+   Responsive: Desktop layout (width >= 80 columns)
+   Applied via .desktop class by Python code
    ══════════════════════════════════════════════════════════════════════════ */
 
-@media (min-width: 80) {
-    #main-layout {
-        layout: horizontal;
-    }
-    
-    SessionList {
-        display: block;
-        width: 22;
-        height: 100%;
-        dock: left;
-        border-bottom: none;
-        border-right: solid $panel;
-        max-height: none;
-    }
-    
-    #chat-container {
-        width: 1fr;
-    }
-    
-    Header {
-        height: 1;
-        padding: 0 2;
-    }
-    
-    .message.user {
-        text-align: right;
-    }
+#main-layout.desktop {
+    layout: horizontal;
+}
+
+SessionList.desktop {
+    display: block;
+    width: 22;
+    height: 100%;
+    dock: left;
+    border-bottom: none;
+    border-right: solid $panel;
+    max-height: none;
+}
+
+#chat-container.desktop {
+    width: 1fr;
+}
+
+.desktop .message.user {
+    text-align: right;
 }
