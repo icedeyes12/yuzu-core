@@ -1,148 +1,217 @@
 # FILE: cli/app.py
 # DESCRIPTION: Main Textual TUI application for Yuzu Companion.
-#              Provides persistent chat UI connected to FastAPI backend via HTTP.
+#              Full layout: sidebar + chat + input with session switching.
 
 from __future__ import annotations
 
 import httpx
-
 from textual.app import App, ComposeResult
-from textual.containers import Container
+from textual.binding import Binding
+from textual.containers import Container, Horizontal
 from textual.widgets import Header, Footer
 
 from cli.client import YuzuClient
-from cli.widgets import ChatLog, InputBox, MessageSubmitted
+from cli.widgets import ChatLog, InputBox, MessageSubmitted, SessionList, SessionSelected
+from app.logging_config import get_logger
+
+log = get_logger(__name__)
 
 
 class YuzuTUI(App):
     """
-    Main TUI application for Yuzu Companion.
+    Main Textual TUI application with persistent chat interface.
     
-    Persistent chat client that communicates with the FastAPI backend
-    via HTTP. Never imports database models or internal services.
+    Layout:
+    - Left sidebar: SessionList
+    - Right: ChatLog + InputBox
+    
+    Backend communication via HTTP only (no DB imports).
     """
 
     CSS_PATH = None
-    BINDINGS = []
-    DEFAULT_SESSION_ID = "default"
+    BINDINGS = [
+        Binding("ctrl+c", "quit", "Quit", show=True),
+        Binding("ctrl+h", "toggle_help", "Help", show=True),
+        Binding("tab", "focus_next", "Next", show=False),
+        Binding("shift+tab", "focus_previous", "Prev", show=False),
+    ]
 
     def __init__(self, backend_url: str = "http://localhost:5000") -> None:
         super().__init__()
         self.backend_url = backend_url
-        self.client = YuzuClient(backend_url)
+        self.client = YuzuClient(backend_url=backend_url)
+        self._processing = False
+        self._session_id: str = "default"
+        log.info(f"YuzuTUI initialized with backend: {backend_url}")
 
     def compose(self) -> ComposeResult:
         """Compose the main application layout."""
         yield Header(name="Yuzu Companion")
-        yield Container(
-            ChatLog(id="chat-log"),
-            InputBox(id="input-box"),
-            id="main-container",
-        )
+        with Horizontal(id="main-layout"):
+            yield SessionList(id="sidebar")
+            with Container(id="chat-container"):
+                yield ChatLog(id="chat-log")
+                yield InputBox(id="input-box")
         yield Footer()
 
-    async def on_mount(self) -> None:
-        """Initialize client, check health, and load history."""
-        await self.client.connect()
+    def on_mount(self) -> None:
+        """On mount: health check, load sessions, load history."""
+        log.info("YuzuTUI mounted and ready")
+        self.title = "Yuzu Companion"
+        self.sub_title = f"Backend: {self.backend_url}"
         
-        chat_log = self.query_one("#chat-log", ChatLog)
-        input_box = self.query_one("#input-box", InputBox)
-        
-        # Health check
-        chat_log.write("[dim]Connecting to backend...[/dim]")
-        is_healthy = await self.client.check_health()
-        
-        if not is_healthy:
-            chat_log.write("[red]❌ Backend unreachable. Start the server and restart TUI.[/red]")
-            input_box.disabled = True
-            return
-        
-        chat_log.write("[green]✓ Connected to backend[/green]")
-        
-        # Load chat history
-        await self._load_history()
+        # Run async initialization
+        self.run_worker(self._init_app(), exclusive=True)
 
-    async def on_unmount(self) -> None:
-        """Cleanup on app exit."""
-        await self.client.disconnect()
-
-    async def on_message_submitted(self, event: MessageSubmitted) -> None:
-        """Handle message submission from InputBox."""
-        message = event.message.strip()
-        if not message:
-            return
-        
-        chat_log = self.query_one("#chat-log", ChatLog)
-        input_box = self.query_one("#input-box", InputBox)
-        
-        # Disable input during processing to prevent spam
-        input_box.disabled = True
-        
-        # Display user message immediately
-        chat_log.write(f"[bold cyan]You:[/bold cyan] {message}")
-        
-        # Stream response from backend
-        response_text = ""
+    async def _init_app(self) -> None:
+        """Perform health check, load sessions, and load initial history."""
         try:
-            async for chunk in self.client.stream_message(self.DEFAULT_SESSION_ID, message):
-                if chunk:
-                    response_text += chunk
-                    # Clear and update to show streaming progress
-                    chat_log.write(f"[bold magenta]Yuzuki:[/bold magenta] {response_text}▌", overwrite_last=True)
+            # Health check
+            log.info("Running health check...")
+            is_healthy = await self.run_worker(self.client.check_health(), exclusive=False)
+            chat_log = self.query_one(ChatLog)
             
-            # Final response without cursor
-            if response_text:
-                chat_log.write(f"[bold magenta]Yuzuki:[/bold magenta] {response_text}", overwrite_last=True)
-                
-        except httpx.ConnectError:
-            chat_log.write("[red]❌ Connection lost. Backend may have restarted.[/red]")
-        except httpx.TimeoutException:
-            chat_log.write("[red]⏱️ Request timed out. Try again.[/red]")
+            if not is_healthy:
+                chat_log.add_message("system", f"⚠️  Backend unreachable: {self.backend_url}")
+                return
+            
+            chat_log.add_message("system", f"✓ Connected to {self.backend_url}")
+            log.info("Health check passed")
+            
+            # Load sessions
+            session_list = self.query_one(SessionList)
+            sessions = await self.run_worker(self.client.list_sessions(), exclusive=False)
+            session_list.load_sessions(sessions)
+            
+            # Set initial session_id
+            if sessions:
+                self._session_id = str(sessions[0].get("id", "default"))
+                session_list.set_active_session(self._session_id)
+            else:
+                self._session_id = "default"
+            
+            log.info(f"Loaded {len(sessions)} sessions, active: {self._session_id}")
+            
+            # Load history for active session
+            await self._load_history()
+            
         except Exception as e:
-            chat_log.write(f"[red]❌ Error: {type(e).__name__}: {e}[/red]")
-        finally:
-            # Re-enable input
-            input_box.disabled = False
-            input_box.clear()
-            input_box.focus()
+            log.error(f"Init failed: {e}")
+            chat_log = self.query_one(ChatLog)
+            chat_log.add_message("system", f"❌ Init error: {e}")
 
     async def _load_history(self) -> None:
-        """Load chat history from backend."""
-        chat_log = self.query_one("#chat-log", ChatLog)
+        """Load chat history for current session into ChatLog."""
+        try:
+            history = await self.run_worker(
+                self.client.get_history(self._session_id),
+                exclusive=False,
+            )
+            chat_log = self.query_one(ChatLog)
+            chat_log.clear_messages()
+            
+            if not history:
+                chat_log.add_message("system", "No previous messages")
+                return
+            
+            for msg in history:
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                if role == "user":
+                    chat_log.add_message("you", content)
+                elif role == "assistant":
+                    chat_log.add_message("yuzuki", content)
+                else:
+                    chat_log.add_message(role, content)
+            
+            log.info(f"Loaded {len(history)} messages for session {self._session_id}")
+            
+        except Exception as e:
+            log.error(f"Failed to load history: {e}")
+            chat_log = self.query_one(ChatLog)
+            chat_log.add_message("system", f"⚠️  Could not load history: {e}")
+
+    def on_message_submitted(self, event: MessageSubmitted) -> None:
+        """Handle message submission: local echo + backend send."""
+        if self._processing:
+            return
+        
+        message = event.message
+        chat_log = self.query_one(ChatLog)
+        
+        # Local echo
+        chat_log.add_message("you", message)
+        log.info(f"Message submitted: {message[:50]}...")
+        
+        # Send to backend
+        self.run_worker(self._send_message(message), exclusive=True)
+
+    async def _send_message(self, message: str) -> None:
+        """Send message to backend and handle streaming response."""
+        self._processing = True
+        chat_log = self.query_one(ChatLog)
+        input_box = self.query_one(InputBox)
+        
+        # Disable input during processing
+        input_box.disabled = True
+        input_box.styles.opacity = 0.5
+        
+        # Placeholder for response
+        chat_log.add_message("yuzuki", "")
+        full_response = ""
         
         try:
-            messages = await self.client.get_history(self.DEFAULT_SESSION_ID)
+            # Stream response
+            async for chunk in self.client.stream_message(self._session_id, message):
+                full_response += chunk
+                chat_log.update_last_message("yuzuki", full_response)
             
-            if messages:
-                chat_log.write("[dim]--- Previous Context ---[/dim]")
-                
-                for msg in messages:
-                    role = msg.get("role", "unknown")
-                    content = msg.get("content", "")
-                    
-                    if not content:
-                        continue
-                    
-                    # Format based on role
-                    role_style = {
-                        "user": "[bold cyan]You:[/bold cyan]",
-                        "assistant": "[bold magenta]Yuzuki:[/bold magenta]",
-                    }.get(role, f"[dim]{role}:[/dim]")
-                    
-                    chat_log.write(f"{role_style} {content}")
-                
-                chat_log.write("[dim]--- End of History ---[/dim]")
-                
+            log.info(f"Response received: {len(full_response)} chars")
+            
+        except httpx.ConnectError:
+            chat_log.update_last_message("yuzuki", "❌ Connection failed")
+            log.error("Connection error")
+            
+        except httpx.TimeoutException:
+            chat_log.update_last_message("yuzuki", "❌ Request timed out")
+            log.error("Timeout")
+            
         except Exception as e:
-            chat_log.write(f"[yellow]⚠️ Could not load history: {type(e).__name__}[/yellow]")
+            chat_log.update_last_message("yuzuki", f"❌ Error: {e}")
+            log.error(f"Send error: {e}")
+            
+        finally:
+            # Re-enable input
+            self._processing = False
+            input_box.disabled = False
+            input_box.styles.opacity = 1.0
+            input_box.focus()
+
+    def on_session_selected(self, event: SessionSelected) -> None:
+        """Handle session selection: switch session, reload history."""
+        session_id = event.session_id
+        
+        if session_id == self._session_id:
+            return  # No change
+        
+        log.info(f"Session selected: {session_id}")
+        self._session_id = session_id
+        
+        # Update UI
+        session_list = self.query_one(SessionList)
+        session_list.set_active_session(session_id)
+        
+        # Reload history
+        self.run_worker(self._load_history(), exclusive=True)
+
+    def action_toggle_help(self) -> None:
+        """Toggle help panel."""
+        self.bell()
 
 
-def run_app() -> None:
-    """Entry point for the TUI application."""
-    import sys
-    
-    backend_url = sys.argv[1] if len(sys) > 1 else "http://localhost:5000"
-    app = YuzuTUI(backend_url)
+def run_app(backend_url: str = "http://localhost:5000") -> None:
+    """Entry point for the Yuzu Companion TUI."""
+    app = YuzuTUI(backend_url=backend_url)
     app.run()
 
 
