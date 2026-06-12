@@ -243,7 +243,6 @@ If unsure, check `app/orchestrator.py` for reference implementations.
 1. **Lint**: `ruff check .` (Python) or `npx @biomejs/biome check .` (JS)
 2. **Compile check**: `python3 -m py_compile <changed_files>`
 3. **NEVER push if lint fails** — Fix errors first.
-4. **Use** `git co-author` **instead of** `git commit -m` — This adds the `Co-authored-by: Yuzuki-ai` trailer.
 
 ### Validation Commands
 
