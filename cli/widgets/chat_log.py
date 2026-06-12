@@ -18,7 +18,7 @@ class ChatLog(ScrollableContainer):
     """
 
     # Hidden tags that won't be displayed
-    HIDDEN_TAGS = ['<think>', '<analysis>', '<decision>', '<command>']
+    HIDDEN_TAGS = ["<think>", "<analysis>", "<decision>", "<command>"]
 
     DEFAULT_CSS = """
     ChatLog {
@@ -75,7 +75,7 @@ class ChatLog(ScrollableContainer):
     @staticmethod
     def _parse_and_render_content(content: str):
         """Parse tags and mix of text/tags.
-        
+
         Returns list of tuples: (role, content) where:
         - ('text', plain_text) for normal text
         - ('tag', tag_name, tag_content) for tagged blocks
@@ -88,5 +88,10 @@ class ChatLog(ScrollableContainer):
         result = content
         for tag in ChatLog.HIDDEN_TAGS:
             # Match both <tag>...</tag> and raw tag markers
-            result = re.sub(rf'{re.escape(tag)}.*?{re.escape(tag.replace("<", "</"))}', '', result, flags=re.DOTALL)
+            result = re.sub(
+                rf"{re.escape(tag)}.*?{re.escape(tag.replace('<', '</'))}",
+                "",
+                result,
+                flags=re.DOTALL,
+            )
         return result

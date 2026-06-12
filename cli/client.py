@@ -71,7 +71,7 @@ class YuzuClient:
 
     async def switch_session(self, session_id: int) -> None:
         """Switch the active session on the backend.
-        
+
         Args:
             session_id: Session ID to activate
         """
