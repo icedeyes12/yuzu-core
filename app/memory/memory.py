@@ -90,7 +90,8 @@ async def _memory_llm_call(ai_manager, messages: list[dict], **kwargs) -> str | 
     """Rate-limited LLM call for memory pipeline.
 
     Ensures memory calls don't overwhelm the API:
-    - Min 1s between calls (delay)
+    - Min delay between calls
+    - Explicit error logging for failures
     """
     global _last_memory_llm_call
 
@@ -115,10 +116,19 @@ async def _memory_llm_call(ai_manager, messages: list[dict], **kwargs) -> str | 
         if result:
             logger.debug(f"[MEMORY_LLM] Response received: {len(result)} chars")
         else:
-            logger.warning("[MEMORY_LLM] LLM returned None - possible context overflow")
+            # Explicit log when LLM returns None without throwing
+            logger.warning(
+                "[MEMORY_LLM] LLM returned None - possible context overflow, "
+                "rate limit, or empty response"
+            )
         return result
+    except TimeoutError as e:
+        logger.warning(f"[MEMORY_LLM] Timeout after {kwargs.get('timeout', 30)}s: {e}")
+        return None
     except Exception as e:
-        logger.warning(f"[Memory LLM] Call failed: {e}")
+        # Log the actual error reason instead of silently returning None
+        error_type = type(e).__name__
+        logger.warning(f"[MEMORY_LLM] Call failed ({error_type}): {e}")
         return None
 
 
@@ -165,10 +175,15 @@ async def _try_set_fence_async(session_id: int, fence_count: int) -> bool:
                     f"Fence active for session {session_id}, age={age.seconds}s"
                 )
                 return False
-            # Fence is stale - clear it
-            logger.info(f"Clearing stale fence for session {session_id}")
-        except (ValueError, TypeError):
-            pass
+            # Fence is stale - clear it BEFORE setting new one
+            logger.info(
+                f"Clearing stale fence for session {session_id}, age={age.seconds}s"
+            )
+            # CRITICAL FIX: Actually clear the stale fence
+            ms["in_progress_fence_count"] = None
+            ms["in_progress_fence_since"] = None
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Failed to parse fence timestamp: {e}")
 
     # Set new fence atomically
     ms["in_progress_fence_count"] = fence_count

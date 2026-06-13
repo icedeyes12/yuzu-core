@@ -208,10 +208,15 @@ class SessionService:
         """Rename a 'New Chat' session once it has reached the trigger count (async)."""
         if active_session.get("name") != "New Chat":
             return
-        if (
-            await Database.get_session_messages_count_async(session_id)
-            < SessionService._AUTO_NAME_TRIGGER_COUNT
-        ):
+
+        msg_count = await Database.get_session_messages_count_async(session_id)
+        if msg_count < SessionService._AUTO_NAME_TRIGGER_COUNT:
+            log.debug(
+                "auto_name: session %d has %d/%d messages, skipping",
+                session_id,
+                msg_count,
+                SessionService._AUTO_NAME_TRIGGER_COUNT,
+            )
             return
 
         api_keys = await Database.get_api_keys_async() or {}
@@ -223,14 +228,22 @@ class SessionService:
         name: str | None = None
         if api_key and summary:
             name = await SessionService._auto_name_via_llm_async(summary, api_key)
+            if not name:
+                log.warning("auto_name: LLM returned None for session %d", session_id)
         if not name:
             name = await SessionService._auto_name_from_history_async(session_id)
+            if not name:
+                log.warning(
+                    "auto_name: history fallback failed for session %d", session_id
+                )
         if not name:
             # Fallback: use timestamp-based name
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
             name = f"Chat {timestamp}"
+            log.info("auto_name: using timestamp fallback for session %d", session_id)
 
         await Database.rename_session_async(session_id, name)
+        log.info("auto_name: renamed session %d to '%s'", session_id, name)
 
     @staticmethod
     def generate_connection_msg(

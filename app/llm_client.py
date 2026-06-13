@@ -58,6 +58,7 @@ async def chutes_chat(
     Returns the assistant text or None.
     """
     if not api_key:
+        log.warning("chutes_chat: No API key provided - call will return None")
         return None
 
     messages: list[dict[str, str]] = []
@@ -71,6 +72,7 @@ async def chutes_chat(
         "Authorization": f"Bearer {api_key}",
     }
 
+    last_error: str | None = None
     async with httpx.AsyncClient() as client:
         for candidate in (model, *fallback_models):
             for retry in range(max_429_retries):
@@ -89,6 +91,7 @@ async def chutes_chat(
                             timeout=timeout,
                         )
                 except httpx.RequestError as e:
+                    last_error = f"RequestError: {e}"
                     log.warning("chutes call failed for %s: %s", candidate, e)
                     continue
 
@@ -98,15 +101,19 @@ async def chutes_chat(
                             "content"
                         ].strip()
                     except (KeyError, IndexError, ValueError) as e:
+                        last_error = f"ParseError: {e}"
                         log.warning(
                             "chutes response parse failed for %s: %s", candidate, e
                         )
                         continue
 
                 if response.status_code == 429 and retry < max_429_retries - 1:
+                    last_error = "HTTP 429 (rate limited)"
+                    log.warning("chutes %s -> HTTP 429, retrying...", candidate)
                     await asyncio.sleep(backoff_base**retry)
                     continue
 
+                last_error = f"HTTP {response.status_code}"
                 log.warning(
                     "chutes %s -> HTTP %s: %s",
                     candidate,
@@ -114,6 +121,9 @@ async def chutes_chat(
                     response.text[:200],
                 )
 
+    # Log final failure reason when all retries exhausted
+    if last_error:
+        log.warning("chutes_chat: All retries failed. Last error: %s", last_error)
     return None
 
 

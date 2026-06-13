@@ -343,9 +343,19 @@ Apply the deterministic action rules to extract any new, updated, reinforced, or
             if not isinstance(a, dict):
                 continue
             cat = a.get("category", "Experience")
+            original_cat = cat  # Track original for logging
             if cat not in valid_categories:
                 # Try mapping
-                cat = _CATEGORY_MAP.get(cat.lower(), "Experience")
+                mapped_cat = _CATEGORY_MAP.get(cat.lower(), None)
+                if mapped_cat:
+                    cat = mapped_cat
+                else:
+                    # Log warning when category is invalid and can't be mapped
+                    logger.warning(
+                        f"CALIBRATE: Invalid category '{original_cat}' for fact '{a.get('fact', '')[:50]}...', "
+                        f"defaulting to 'Experience'. Available categories: {valid_categories}"
+                    )
+                    cat = "Experience"
             action = a.get("action", "new")
             if action not in ("new", "reinforce", "update", "invalidate"):
                 action = "new"
