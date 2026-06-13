@@ -450,6 +450,13 @@ async def _process_tool_commands_async(
 
     results = await execute_commands(commands, session_id=session_id)
 
+
+    # SAFEGUARD: Persist clean_text BEFORE tool execution
+    # This ensures linear message order: user → assistant (clean) → tool → synthesis
+    if clean_text and clean_text.strip():
+        await _persist_assistant_async(clean_text, session_id)
+        log.info("[stream] persisted clean_text (pre-tool assistant message)")
+
     tool_markdowns: list[str] = []
     any_image_tool = False
     all_generated_paths: list[str] = []
@@ -458,6 +465,10 @@ async def _process_tool_commands_async(
         tool_markdown = result.get("markdown", str(result))
         tool_markdowns.append(tool_markdown)
 
+
+        # SAFEGUARD: Persist each tool result immediately
+        await _persist_tool_result_async(tool_name, tool_markdown, session_id)
+        log.info(f'[stream] persisted tool result for {tool_name}')
         p = parse_image_path(tool_markdown)
         if p is not None:
             any_image_tool = True
@@ -706,6 +717,12 @@ async def handle_user_message(user_message: str, interface: str = "terminal") ->
     tool_calls = await _parse_raw_tool_calls_async(provider_name, raw_api_response)
     if tool_calls:
         tool_results = await _execute_tool_calls_async(tool_calls, session_id)
+
+        # SAFEGUARD: Persist clean text_response BEFORE tool execution
+        if text_response and text_response.strip():
+            await _persist_assistant_async(text_response, session_id)
+            log.info("[non-stream] persisted clean text_response (pre-tool)")
+
         if tool_results:
             tool_name, tool_result = tool_results[0]
             tool_markdown = tool_result.get("markdown", str(tool_result))
