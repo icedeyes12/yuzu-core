@@ -7,7 +7,7 @@
  *
  * Key principle: The stream never stops buffering just because we switched sessions.
  * The activeViewSessionId determines which session's buffer gets rendered to DOM.
- * 
+ *
  * SYNC MECHANISM: After stream completes, frontend syncs with backend to validate integrity.
  */
 export class BackgroundStreamManager {
@@ -87,7 +87,10 @@ export class BackgroundStreamManager {
 	completeStream(sessionId) {
 		// GUARD: Prevent operations on invalid sessionId
 		if (!sessionId || sessionId === "null" || sessionId === "undefined") {
-			console.warn("[StreamManager] Complete stream aborted: Invalid session ID", sessionId);
+			console.warn(
+				"[StreamManager] Complete stream aborted: Invalid session ID",
+				sessionId,
+			);
 			return;
 		}
 
@@ -96,7 +99,7 @@ export class BackgroundStreamManager {
 			stream.isActive = false;
 			stream.isComplete = true;
 			console.log(`[StreamManager] Completed stream for session ${sessionId}`);
-			
+
 			// BACKGROUND SYNC: Validate buffer after completion
 			this.syncWithBackend(sessionId);
 		}
@@ -173,44 +176,51 @@ export class BackgroundStreamManager {
 	async syncWithBackend(sessionId) {
 		// GUARD: Prevent API calls with invalid sessionId
 		if (!sessionId || sessionId === "null" || sessionId === "undefined") {
-			console.warn("[StreamManager] Sync aborted: Invalid session ID", sessionId);
+			console.warn(
+				"[StreamManager] Sync aborted: Invalid session ID",
+				sessionId,
+			);
 			return { valid: false };
 		}
 
 		try {
 			const response = await fetch(`/api/stream/${sessionId}/sync`);
 			if (!response.ok) {
-				console.warn(`[StreamManager] Sync failed for session ${sessionId}: HTTP ${response.status}`);
+				console.warn(
+					`[StreamManager] Sync failed for session ${sessionId}: HTTP ${response.status}`,
+				);
 				return { valid: false };
 			}
 
 			const data = await response.json();
 			const stream = this.streams.get(sessionId);
 
-			if (stream && stream.buffer) {
+			if (stream?.buffer) {
 				// Generate checksum from frontend
 				const frontendChecksum = await this.generateChecksum(stream.buffer);
 				const valid = frontendChecksum === data.checksum;
 
 				console.log(
-					`[StreamManager] Sync ${valid ? '✓' : '✗'} for session ${sessionId}`,
-					`frontend: ${stream.buffer.length} chars, backend: ${data.length} chars`
+					`[StreamManager] Sync ${valid ? "✓" : "✗"} for session ${sessionId}`,
+					`frontend: ${stream.buffer.length} chars, backend: ${data.length} chars`,
 				);
 
 				// If mismatch, replace with backend version
 				if (!valid && data.content) {
-					console.warn(`[StreamManager] Buffer mismatch, replacing with backend version`);
+					console.warn(
+						`[StreamManager] Buffer mismatch, replacing with backend version`,
+					);
 					stream.buffer = data.content;
 					// Trigger re-render if this is active view
 					if (sessionId === this.activeViewSessionId) {
-						this.emit('resync', sessionId, data.content);
+						this.emit("resync", sessionId, data.content);
 					}
 				}
 
-				return { 
+				return {
 					valid,
 					checksum: data.checksum,
-					backend_length: data.length
+					backend_length: data.length,
 				};
 			}
 
@@ -231,13 +241,15 @@ export class BackgroundStreamManager {
 		try {
 			const encoder = new TextEncoder();
 			const data = encoder.encode(content);
-			const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+			const hashBuffer = await crypto.subtle.digest("SHA-256", data);
 			const hashArray = Array.from(new Uint8Array(hashBuffer));
-			const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+			const hashHex = hashArray
+				.map((b) => b.toString(16).padStart(2, "0"))
+				.join("");
 			return hashHex.substring(0, 16); // First 16 chars only
 		} catch (error) {
-			console.error('[StreamManager] Checksum error:', error);
-			return '';
+			console.error("[StreamManager] Checksum error:", error);
+			return "";
 		}
 	}
 
@@ -253,7 +265,9 @@ export class BackgroundStreamManager {
 
 	emit(event, ...args) {
 		const callbacks = this._listeners.get(event) || [];
-		callbacks.forEach(cb => cb(...args));
+		for (const cb of callbacks) {
+			cb(...args);
+		}
 	}
 }
 
