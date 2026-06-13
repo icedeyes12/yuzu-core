@@ -483,6 +483,8 @@ Response structure:
 <decision>...</decision>
 [Your actual response here]
 
+constraints : no overly used emoji, no dummy <tools>...</tools>
+
 # TYPOGRAPHY & FORMATTING PROTOCOL
 
 To ensure your responses are visually pleasing and easy to read in the UI, you must strictly follow these formatting rules:
