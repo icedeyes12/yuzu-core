@@ -149,8 +149,12 @@ async def api_delete_session(request: SessionDeleteRequest):
 
         if success:
             active_session = await get_active_session_async()
-            chat_history = await get_chat_history_async()
-            session_memory = await get_session_memory_async(active_session["id"])
+            if active_session:
+                chat_history = await get_chat_history_async(active_session["id"])
+                session_memory = await get_session_memory_async(active_session["id"])
+            else:
+                chat_history = []
+                session_memory = {}
 
             return {
                 "status": "success",
