@@ -450,7 +450,6 @@ async def _process_tool_commands_async(
 
     results = await execute_commands(commands, session_id=session_id)
 
-
     # SAFEGUARD: Persist clean_text BEFORE tool execution
     # This ensures linear message order: user → assistant (clean) → tool → synthesis
     if clean_text and clean_text.strip():
@@ -465,10 +464,9 @@ async def _process_tool_commands_async(
         tool_markdown = result.get("markdown", str(result))
         tool_markdowns.append(tool_markdown)
 
-
         # SAFEGUARD: Persist each tool result immediately
         await _persist_tool_result_async(tool_name, tool_markdown, session_id)
-        log.info(f'[stream] persisted tool result for {tool_name}')
+        log.info(f"[stream] persisted tool result for {tool_name}")
         p = parse_image_path(tool_markdown)
         if p is not None:
             any_image_tool = True
