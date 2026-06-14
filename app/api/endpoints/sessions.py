@@ -18,17 +18,12 @@ from app.db import (
     Database,
 )
 from app.services.session_service import SessionService
+from app.api.utils import get_client_id
 from app.logging_config import get_logger
 
 log = get_logger(__name__)
 
 router = APIRouter(tags=["sessions"])
-
-
-def _get_session_id(request: Request) -> str:
-    client_host = request.client.host if request.client else "unknown"
-    user_agent = request.headers.get("user-agent", "unknown")
-    return f"{client_host}_{hash(user_agent) % 10000}"
 
 
 class SessionCreateRequest(BaseModel):
@@ -82,7 +77,7 @@ async def api_create_session(http_request: Request, request: SessionCreateReques
         session_id = await create_session_async(request.name)
         await switch_session_async(session_id)
 
-        client_id = _get_session_id(http_request)
+        client_id = get_client_id(http_request)
         SessionService.clear_client_session(client_id)
 
         return {"status": "success", "session_id": session_id}
@@ -99,7 +94,7 @@ async def api_switch_session(request: SessionSwitchRequest, http_request: Reques
 
         await switch_session_async(request.session_id)
 
-        client_id = _get_session_id(http_request)
+        client_id = get_client_id(http_request)
         SessionService.clear_client_session(client_id)
 
         await SessionService.start_session_async(interface="web")
@@ -124,7 +119,9 @@ async def api_switch_session(request: SessionSwitchRequest, http_request: Reques
 async def api_rename_session(request: SessionRenameRequest):
     try:
         if not request.session_id or not request.name:
-            raise HTTPException(status_code=400, detail="session_id and name required")
+            raise HTTPException(
+                status_code=400, detail="session_id and name required"
+            )
 
         success = await rename_session_async(request.session_id, request.name)
 
@@ -174,15 +171,13 @@ async def api_delete_session(request: SessionDeleteRequest):
 @router.post("/clear_chat")
 async def api_clear_chat(request: Request, session_id: int | None = None):
     try:
-        if session_id:
-            session_id = session_id
-        else:
+        if not session_id:
             active_session = await get_active_session_async()
             session_id = active_session["id"]
 
         await clear_session_messages_async(session_id)
 
-        client_id = _get_session_id(request)
+        client_id = get_client_id(request)
         SessionService.clear_client_session(client_id)
 
         return {"status": "success"}
@@ -193,7 +188,7 @@ async def api_clear_chat(request: Request, session_id: int | None = None):
 @router.post("/end_session")
 async def api_end_session(request: Request):
     try:
-        client_id = _get_session_id(request)
+        client_id = get_client_id(request)
         SessionService.clear_client_session(client_id)
 
         profile = await Database.get_profile_async()

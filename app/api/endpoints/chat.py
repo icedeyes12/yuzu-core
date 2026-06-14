@@ -9,18 +9,13 @@ from pydantic import BaseModel, Field
 
 from app.services.chat_service import ChatService
 from app.services.session_service import SessionService
+from app.api.utils import get_client_id
 from app.orchestrator import handle_user_message
 from app.logging_config import get_logger
 
 log = get_logger(__name__)
 
 router = APIRouter(tags=["chat"])
-
-
-def _get_session_id(request: Request) -> str:
-    client_host = request.client.host if request.client else "unknown"
-    user_agent = request.headers.get("user-agent", "unknown")
-    return f"{client_host}_{hash(user_agent) % 10000}"
 
 
 class MessageRequest(BaseModel):
@@ -122,7 +117,7 @@ async def api_browser_unload(request: Request):
     try:
         from app.db import Database
 
-        client_id = _get_session_id(request)
+        client_id = get_client_id(request)
         SessionService.clear_client_session(client_id)
         log.info("Web page closed or refreshed - session cleared")
 

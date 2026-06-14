@@ -38,8 +38,17 @@ class SessionService:
     def start_session(interface: str = "terminal") -> dict[str, Any]:
         """Mark the active session as started (sync).
 
-        DEPRECATED: No longer creates connection log messages.
+        DEPRECATED: Use start_session_async instead.
+        This method is kept for backward compatibility only.
+        No longer creates connection log messages.
         """
+        import warnings
+
+        warnings.warn(
+            "start_session is deprecated, use start_session_async instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         profile = Database.get_profile()
         _ = Database.get_active_session()  # Session already active
 

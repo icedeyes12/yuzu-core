@@ -17,7 +17,6 @@ from psycopg.types.json import Json
 __all__ = [
     "review_memory",
     "review_memory_async",
-    "mark_retrieved_as_pending_review",
     "mark_retrieved_as_pending_review_async",
 ]
 
@@ -84,49 +83,6 @@ async def _get_ai_manager_async():
     return await get_ai_manager()
 
 
-def mark_retrieved_as_pending_review(
-    fact_ids: list[int], session_id: int | None = None
-) -> int:
-    """Mark retrieved facts as pending review.
-
-    Uses native `pending_review` BOOLEAN column (not JSONB metadata).
-    Also updates `last_reviewed_at` in metadata.
-    Returns number of facts marked.
-    """
-    if not fact_ids:
-        return 0
-
-    now = datetime.now()
-    if len(fact_ids) == 1:
-        fid = fact_ids[0]
-        try:
-            row = get_fact_by_id(fid)
-            if not row:
-                return 0
-            meta = row.get("metadata") or {}
-            meta["last_reviewed_at"] = now.isoformat()
-            pg_execute(
-                "UPDATE semantic_facts SET pending_review=TRUE, metadata=%s, last_accessed=%s WHERE id=%s",
-                (Json(meta), now, fid),
-            )
-            return 1
-        except Exception as e:
-            logger.warning(f"mark_pending failed for id={fid}: {e}")
-            return 0
-
-    # Batch update for multiple ids
-    ph = ",".join(["%s"] * len(fact_ids))
-    try:
-        pg_execute(
-            f"UPDATE semantic_facts SET pending_review=TRUE, last_accessed=%s WHERE id IN ({ph})",
-            (now,) + tuple(fact_ids),
-        )
-        return len(fact_ids)
-    except Exception as e:
-        logger.warning(f"batch mark_pending failed: {e}")
-        return 0
-
-
 async def mark_retrieved_as_pending_review_async(
     fact_ids: list[int], session_id: int | None = None
 ) -> int:
@@ -163,30 +119,6 @@ async def mark_retrieved_as_pending_review_async(
     except Exception as e:
         logger.warning(f"batch mark_pending async failed: {e}")
         return 0
-
-
-def _rate_facts_batch(
-    facts: list[dict],
-    conversation_context: str,
-) -> dict[int, str]:
-    """Rate multiple facts in a single LLM call (sync wrapper).
-
-    DEPRECATED: Use async version _rate_facts_batch_async instead.
-    This sync wrapper exists only for legacy compatibility.
-    """
-    if not facts:
-        return {}
-
-    try:
-        # For sync callers, use the async implementation via asyncio.run
-        # This is acceptable for the sync compatibility layer
-        import asyncio
-
-        return asyncio.run(_rate_facts_batch_async(facts, conversation_context))
-    except RuntimeError as e:
-        # If there's already a running loop, we can't use asyncio.run
-        logger.warning(f"Cannot call sync version from async context: {e}")
-        return {}
 
 
 async def _rate_facts_batch_async(

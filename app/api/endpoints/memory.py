@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from app.db import Database
 from app.services.memory_service import MemoryService
 from app.logging_config import get_logger
@@ -78,36 +78,20 @@ async def api_update_global_profile():
 
 @router.post("/rebuild_structured_memory")
 async def api_rebuild_structured_memory():
+    """Rebuild structured memory for the active session."""
     try:
         active_session = await Database.get_active_session_async()
         session_id = active_session["id"]
 
-        from app.memory.memory import run_memory_pipeline_async
-        from app.memory.db_memory import (
-            count_facts,
-            FACT_TYPE_STATIC,
-            FACT_TYPE_DYNAMIC,
-        )
-
-        # Get message count
-        count = await Database.get_session_messages_count_async(session_id)
-
-        # Run the full pipeline
-        result = await run_memory_pipeline_async(session_id, count)
-
-        semantic_count = count_facts(fact_type=FACT_TYPE_STATIC, session_id=session_id)
-        episodic_count = count_facts(fact_type=FACT_TYPE_DYNAMIC, session_id=session_id)
+        result = await MemoryService.rebuild_structured_memory_async(session_id)
 
         return {
             "status": "success",
-            "message": f"Memory pipeline completed: {result.get('segments', 0)} segments, {result.get('episodes', 0)} episodes, {result.get('pcl_runs', 0)} PCL runs",
-            "stats": {
-                "semantic": semantic_count,
-                "episodic": episodic_count,
-                "segments": result.get("segments", 0),
-                "episodes": result.get("episodes", 0),
-                "pcl_runs": result.get("pcl_runs", 0),
-            },
+            "message": (
+                f"Memory pipeline completed: {result['segments']} segments, "
+                f"{result['episodes']} episodes, {result['pcl_runs']} PCL runs"
+            ),
+            "stats": result,
         }
     except Exception as e:
         log.error("Error rebuilding structured memory: %s", e)
@@ -126,21 +110,13 @@ async def api_run_memory_decay():
 
         return {
             "status": "success",
-            "message": "Memory decay applied. Old memories faded, recent ones preserved.",
+            "message": (
+                "Memory decay applied. Old memories faded, recent ones preserved."
+            ),
         }
     except Exception as e:
         log.error("Error running memory decay: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.post("/memory/store")
-async def api_store_memory(request: Request, session_id: int | None = None):
-    pass
-
-
-@router.get("/memory/retrieve")
-async def api_retrieve_memory(request: Request, session_id: int | None = None):
-    pass
 
 
 @router.get("/memory_stats")
