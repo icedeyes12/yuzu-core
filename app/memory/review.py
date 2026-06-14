@@ -66,7 +66,7 @@ def run_decay(session_id=None, force=False):
 
     # Decay episodic memories (dynamic facts) — NOT semantic static facts
     try:
-        count_episodic = MemoryDB.MemoryDB.decay_facts(
+        count_episodic = MemoryDB.decay_facts(
             session_id=session_id, fact_type=FACT_TYPE_DYNAMIC
         )
         logger.info(f"Decayed {count_episodic} episodic memories")
@@ -116,7 +116,7 @@ def reinforce_memory(memory_id, memory_type="semantic"):
         memory_id: ID of the memory to reinforce.
         memory_type: 'semantic' or 'episodic' (ignored, all use same table)
     """
-    MemoryDB.MemoryDB.increment_importance(memory_id, delta=0.05, cap=1.0)
+    MemoryDB.increment_importance(memory_id, delta=0.05, cap=1.0)
 
 
 async def reinforce_memory_async(memory_id, memory_type="semantic"):

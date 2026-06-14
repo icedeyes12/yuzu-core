@@ -452,13 +452,13 @@ def retrieve_static_memories(query=None, limit=15):
     3-channel hybrid: vector + trigram + tsvector, merged via RRF.
     """
     if not query:
-        results = MemoryDB.MemoryDB.get_facts_by_session(
+        results = MemoryDB.get_facts_by_session(
             session_id=None, fact_type=FACT_TYPE_STATIC, limit=limit
         )
         parsed = [_parse_fact_content(r) for r in results]
         parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
         if parsed:
-            MemoryDB.MemoryDB.update_last_accessed([m["id"] for m in parsed])
+            MemoryDB.update_last_accessed([m["id"] for m in parsed])
         return parsed
 
     query_vec = _get_cached_embedding(query)  # CACHED
@@ -466,7 +466,7 @@ def retrieve_static_memories(query=None, limit=15):
 
     # Channel 1: vector (pgvector)
     vec_results = (
-        MemoryDB.MemoryDB.search_similar(
+        MemoryDB.search_similar(
             embedding=query_vec,
             fact_type=FACT_TYPE_STATIC,
             limit=limit,
@@ -476,14 +476,14 @@ def retrieve_static_memories(query=None, limit=15):
     )
 
     # Channel 2: trigram fuzzy (pg_trgm)
-    trgm_results = MemoryDB.MemoryDB.search_trgm(
+    trgm_results = MemoryDB.search_trgm(
         query=keyword,
         fact_type=FACT_TYPE_STATIC,
         limit=limit,
     )
 
     # Channel 3: tsvector full-text (pg_trgm tsvector)
-    tsv_results = MemoryDB.MemoryDB.search_tsv(
+    tsv_results = MemoryDB.search_tsv(
         query=keyword,
         fact_type=FACT_TYPE_STATIC,
         limit=limit,
@@ -511,7 +511,7 @@ def retrieve_static_memories(query=None, limit=15):
     parsed = parsed[:limit]
 
     if parsed:
-        MemoryDB.MemoryDB.update_last_accessed([m["id"] for m in parsed])
+        MemoryDB.update_last_accessed([m["id"] for m in parsed])
 
     return parsed
 
@@ -522,7 +522,7 @@ def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
     3-channel hybrid: vector + trigram + tsvector, merged via RRF.
     """
     if not query:
-        all_dynamic = MemoryDB.MemoryDB.get_facts_by_session(
+        all_dynamic = MemoryDB.get_facts_by_session(
             session_id=session_id, fact_type=FACT_TYPE_DYNAMIC, limit=limit * 3
         )
         results = [
@@ -533,7 +533,7 @@ def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
         parsed = [_parse_fact_content(r) for r in results]
         parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
         if parsed:
-            MemoryDB.MemoryDB.update_last_accessed([m["id"] for m in parsed])
+            MemoryDB.update_last_accessed([m["id"] for m in parsed])
         return parsed
 
     query_vec = _get_cached_embedding(query)  # CACHED - reuses same embedding
@@ -541,7 +541,7 @@ def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
 
     # Channel 1: vector (pgvector)
     vec_results = (
-        MemoryDB.MemoryDB.search_similar(
+        MemoryDB.search_similar(
             embedding=query_vec,
             session_id=session_id,
             fact_type=FACT_TYPE_DYNAMIC,
@@ -553,7 +553,7 @@ def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
     )
 
     # Channel 2: trigram fuzzy (pg_trgm)
-    trgm_results = MemoryDB.MemoryDB.search_trgm(
+    trgm_results = MemoryDB.search_trgm(
         query=keyword,
         session_id=session_id,
         fact_type=FACT_TYPE_DYNAMIC,
@@ -561,7 +561,7 @@ def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
     )
 
     # Channel 3: tsvector full-text (pg_trgm tsvector)
-    tsv_results = MemoryDB.MemoryDB.search_tsv(
+    tsv_results = MemoryDB.search_tsv(
         query=keyword,
         session_id=session_id,
         fact_type=FACT_TYPE_DYNAMIC,
@@ -590,7 +590,7 @@ def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
     parsed = parsed[:limit]
 
     if parsed:
-        MemoryDB.MemoryDB.update_last_accessed([m["id"] for m in parsed])
+        MemoryDB.update_last_accessed([m["id"] for m in parsed])
 
     return parsed
 
@@ -634,7 +634,7 @@ def retrieve_memories_combined(
 
     # Static channels
     vec_results_static = (
-        MemoryDB.MemoryDB.search_similar(
+        MemoryDB.search_similar(
             embedding=query_vec,
             fact_type=FACT_TYPE_STATIC,
             limit=static_limit,
@@ -642,12 +642,12 @@ def retrieve_memories_combined(
         if query_vec
         else []
     )
-    trgm_results_static = MemoryDB.MemoryDB.search_trgm(
+    trgm_results_static = MemoryDB.search_trgm(
         query=keyword,
         fact_type=FACT_TYPE_STATIC,
         limit=static_limit,
     )
-    tsv_results_static = MemoryDB.MemoryDB.search_tsv(
+    tsv_results_static = MemoryDB.search_tsv(
         query=keyword,
         fact_type=FACT_TYPE_STATIC,
         limit=static_limit,
@@ -655,7 +655,7 @@ def retrieve_memories_combined(
 
     # Dynamic channels
     vec_results_dynamic = (
-        MemoryDB.MemoryDB.search_similar(
+        MemoryDB.search_similar(
             embedding=query_vec,
             session_id=session_id,
             fact_type=FACT_TYPE_DYNAMIC,
@@ -665,13 +665,13 @@ def retrieve_memories_combined(
         if query_vec
         else []
     )
-    trgm_results_dynamic = MemoryDB.MemoryDB.search_trgm(
+    trgm_results_dynamic = MemoryDB.search_trgm(
         query=keyword,
         session_id=session_id,
         fact_type=FACT_TYPE_DYNAMIC,
         limit=dynamic_limit,
     )
-    tsv_results_dynamic = MemoryDB.MemoryDB.search_tsv(
+    tsv_results_dynamic = MemoryDB.search_tsv(
         query=keyword,
         session_id=session_id,
         fact_type=FACT_TYPE_DYNAMIC,
@@ -715,9 +715,9 @@ def retrieve_memories_combined(
 
     # Update last accessed
     if static_parsed:
-        MemoryDB.MemoryDB.update_last_accessed([m["id"] for m in static_parsed])
+        MemoryDB.update_last_accessed([m["id"] for m in static_parsed])
     if dynamic_parsed:
-        MemoryDB.MemoryDB.update_last_accessed([m["id"] for m in dynamic_parsed])
+        MemoryDB.update_last_accessed([m["id"] for m in dynamic_parsed])
 
     return static_parsed, dynamic_parsed
 
@@ -737,7 +737,7 @@ def retrieve_segments(session_id: int, query=None, limit: int = 10):
     query_vec = _embed_query(query) if query else None
 
     if query_vec:
-        results = MemoryDB.MemoryDB.search_similar(
+        results = MemoryDB.search_similar(
             embedding=query_vec,
             session_id=session_id,
             fact_type=FACT_TYPE_DYNAMIC,
@@ -746,7 +746,7 @@ def retrieve_segments(session_id: int, query=None, limit: int = 10):
         )
     else:
         # Fall back: fetch segments without vector search
-        all_dynamic = MemoryDB.MemoryDB.get_facts_by_session(
+        all_dynamic = MemoryDB.get_facts_by_session(
             session_id=session_id,
             fact_type=FACT_TYPE_DYNAMIC,
             limit=limit * 3,  # over-fetch, filter below
@@ -769,7 +769,7 @@ def retrieve_segments(session_id: int, query=None, limit: int = 10):
     parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
 
     if parsed:
-        MemoryDB.MemoryDB.update_last_accessed([m["id"] for m in parsed])
+        MemoryDB.update_last_accessed([m["id"] for m in parsed])
 
     return parsed
 
@@ -939,13 +939,13 @@ async def retrieve_static_memories_async(query=None, limit=15):
     3-channel hybrid: vector + trigram + tsvector, merged via RRF.
     """
     if not query:
-        results = await MemoryDB.MemoryDB.get_facts_by_session_async(
+        results = await MemoryDB.get_facts_by_session_async(
             session_id=None, fact_type=FACT_TYPE_STATIC, limit=limit
         )
         parsed = [_parse_fact_content(r) for r in results]
         parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
         if parsed:
-            await MemoryDB.MemoryDB.update_last_accessed_async(
+            await MemoryDB.update_last_accessed_async(
                 [m["id"] for m in parsed]
             )
         return parsed
@@ -955,7 +955,7 @@ async def retrieve_static_memories_async(query=None, limit=15):
 
     # Channel 1: vector (pgvector)
     vec_results = (
-        await MemoryDB.MemoryDB.search_similar_async(
+        await MemoryDB.search_similar_async(
             embedding=query_vec,
             fact_type=FACT_TYPE_STATIC,
             limit=limit,
@@ -965,14 +965,14 @@ async def retrieve_static_memories_async(query=None, limit=15):
     )
 
     # Channel 2: trigram fuzzy (pg_trgm)
-    trgm_results = await MemoryDB.MemoryDB.search_trgm_async(
+    trgm_results = await MemoryDB.search_trgm_async(
         query=keyword,
         fact_type=FACT_TYPE_STATIC,
         limit=limit,
     )
 
     # Channel 3: tsvector full-text
-    tsv_results = await MemoryDB.MemoryDB.search_tsv_async(
+    tsv_results = await MemoryDB.search_tsv_async(
         query=keyword,
         fact_type=FACT_TYPE_STATIC,
         limit=limit,
@@ -999,7 +999,7 @@ async def retrieve_static_memories_async(query=None, limit=15):
     parsed = parsed[:limit]
 
     if parsed:
-        await MemoryDB.MemoryDB.update_last_accessed_async([m["id"] for m in parsed])
+        await MemoryDB.update_last_accessed_async([m["id"] for m in parsed])
 
     return parsed
 
@@ -1010,7 +1010,7 @@ async def retrieve_dynamic_memories_async(session_id: int, query=None, limit=10)
     3-channel hybrid: vector + trigram + tsvector, merged via RRF.
     """
     if not query:
-        all_dynamic = await MemoryDB.MemoryDB.get_facts_by_session_async(
+        all_dynamic = await MemoryDB.get_facts_by_session_async(
             session_id=session_id, fact_type=FACT_TYPE_DYNAMIC, limit=limit * 3
         )
         results = [
@@ -1021,7 +1021,7 @@ async def retrieve_dynamic_memories_async(session_id: int, query=None, limit=10)
         parsed = [_parse_fact_content(r) for r in results]
         parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
         if parsed:
-            await MemoryDB.MemoryDB.update_last_accessed_async(
+            await MemoryDB.update_last_accessed_async(
                 [m["id"] for m in parsed]
             )
         return parsed
@@ -1033,7 +1033,7 @@ async def retrieve_dynamic_memories_async(session_id: int, query=None, limit=10)
 
     # Channel 1: vector (pgvector)
     vec_results = (
-        await MemoryDB.MemoryDB.search_similar_async(
+        await MemoryDB.search_similar_async(
             embedding=query_vec,
             session_id=session_id,
             fact_type=FACT_TYPE_DYNAMIC,
@@ -1045,7 +1045,7 @@ async def retrieve_dynamic_memories_async(session_id: int, query=None, limit=10)
     )
 
     # Channel 2: trigram fuzzy
-    trgm_results = await MemoryDB.MemoryDB.search_trgm_async(
+    trgm_results = await MemoryDB.search_trgm_async(
         query=keyword,
         session_id=session_id,
         fact_type=FACT_TYPE_DYNAMIC,
@@ -1053,7 +1053,7 @@ async def retrieve_dynamic_memories_async(session_id: int, query=None, limit=10)
     )
 
     # Channel 3: tsvector full-text
-    tsv_results = await MemoryDB.MemoryDB.search_tsv_async(
+    tsv_results = await MemoryDB.search_tsv_async(
         query=keyword,
         session_id=session_id,
         fact_type=FACT_TYPE_DYNAMIC,
@@ -1081,7 +1081,7 @@ async def retrieve_dynamic_memories_async(session_id: int, query=None, limit=10)
     parsed = parsed[:limit]
 
     if parsed:
-        await MemoryDB.MemoryDB.update_last_accessed_async([m["id"] for m in parsed])
+        await MemoryDB.update_last_accessed_async([m["id"] for m in parsed])
 
     return parsed
 
