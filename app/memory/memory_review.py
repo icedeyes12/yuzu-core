@@ -20,14 +20,8 @@ __all__ = [
     "mark_retrieved_as_pending_review_async",
 ]
 
-from app.memory.db_memory import (
-    get_fact_by_id,
-    get_fact_by_id_async,
-    pg_execute,
-    pg_execute_async,
-    get_facts_by_ids,
-    get_facts_by_ids_async,
-)
+from app.memory.db_memory_facade import MemoryDB
+from app.db import pg_execute, pg_execute_async
 from app.memory.memory import _memory_llm_call
 
 logger = logging.getLogger(__name__)
@@ -94,7 +88,7 @@ async def mark_retrieved_as_pending_review_async(
     if len(fact_ids) == 1:
         fid = fact_ids[0]
         try:
-            row = await get_fact_by_id_async(fid)
+            row = await MemoryDB.get_fact_by_id_async(fid)
             if not row:
                 return 0
             meta = row.get("metadata") or {}
@@ -342,7 +336,7 @@ def _update_fsrs_params(fact_id: int, rating: str) -> bool:
     Semantic facts use temporal validity instead and should NOT have FSRS updates.
     """
     try:
-        row = get_fact_by_id(fact_id)
+        row = MemoryDB.get_fact_by_id(fact_id)
         if not row:
             return False
 
@@ -375,7 +369,7 @@ def _update_fsrs_params(fact_id: int, rating: str) -> bool:
 async def _update_fsrs_params_async(fact_id: int, rating: str) -> bool:
     """Apply FSRS parameter update (async)."""
     try:
-        row = await get_fact_by_id_async(fact_id)
+        row = await MemoryDB.get_fact_by_id_async(fact_id)
         if not row:
             return False
 
@@ -539,7 +533,7 @@ def review_memory(
         return counts
 
     # BATCH FETCH: Get all facts in a single query (N+1 fix)
-    rows = get_facts_by_ids(fact_ids)
+    rows = MemoryDB.get_facts_by_ids(fact_ids)
     rows_by_id = {r["id"]: r for r in rows} if rows else {}
 
     facts_to_rate = []
@@ -616,7 +610,7 @@ async def review_memory_async(
         return {"again": 0, "hard": 0, "good": 0, "easy": 0, "failed": 0}
 
     # BATCH FETCH: Get all facts in a single query (N+1 fix)
-    rows = await get_facts_by_ids_async(fact_ids)
+    rows = await MemoryDB.get_facts_by_ids_async(fact_ids)
     rows_by_id = {r["id"]: r for r in rows} if rows else {}
 
     facts_to_rate = []

@@ -119,9 +119,7 @@ async def api_switch_session(request: SessionSwitchRequest, http_request: Reques
 async def api_rename_session(request: SessionRenameRequest):
     try:
         if not request.session_id or not request.name:
-            raise HTTPException(
-                status_code=400, detail="session_id and name required"
-            )
+            raise HTTPException(status_code=400, detail="session_id and name required")
 
         success = await rename_session_async(request.session_id, request.name)
 

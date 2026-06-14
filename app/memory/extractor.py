@@ -15,16 +15,12 @@ __all__ = [
     "calculate_emotional_weight",
 ]
 
-from app.memory.db_memory import (
-    save_fact,
-    save_fact_async,
-    search_similar,
-    search_similar_async,
+from app.memory.db_memory_facade import (
+    MemoryDB,
     FACT_TYPE_STATIC,
     FACT_TYPE_DYNAMIC,
-    pg_fetchone_async,
-    pg_execute_async,
 )
+from app.db import pg_fetchone_async, pg_execute_async
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +153,7 @@ def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None
 
     if vector is not None:
         # Check for duplicates using stricter threshold
-        existing = search_similar(
+        existing = MemoryDB.search_similar(
             embedding=vector,
             session_id=session_id,
             fact_type=FACT_TYPE_STATIC,
@@ -170,10 +166,12 @@ def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None
             e = existing[0]
             if e.get("content") == text:
                 # Exact content match — reinforce existing
-                from app.memory.db_memory import increment_importance, pg_execute
+                from app.memory.db_memory_facade import MemoryDB
+
+                from app.db import pg_execute
                 from datetime import datetime
 
-                increment_importance(e["id"], delta=0.1, cap=1.0)
+                MemoryDB.increment_importance(e["id"], delta=0.1, cap=1.0)
                 meta = e.get("metadata") or {}
                 ids = meta.get("source_episodic_ids", [])
                 if episode_id and episode_id not in ids:
@@ -189,17 +187,19 @@ def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None
                 return  # done — no insert needed
 
         # Also check by exact content match directly in DB
-        from app.memory.db_memory import pg_fetchone
+        from app.db import pg_fetchone
 
         existing_exact = pg_fetchone(
             "SELECT id, metadata FROM semantic_facts WHERE fact_type=%s AND content=%s AND invalid_at IS NULL LIMIT 1",
             (FACT_TYPE_STATIC, text),
         )
         if existing_exact:
-            from app.memory.db_memory import increment_importance, pg_execute
+            from app.memory.db_memory_facade import MemoryDB
+
+            from app.db import pg_execute
             from datetime import datetime
 
-            increment_importance(existing_exact["id"], delta=0.1, cap=1.0)
+            MemoryDB.increment_importance(existing_exact["id"], delta=0.1, cap=1.0)
             meta = existing_exact.get("metadata") or {}
             ids = meta.get("source_episodic_ids", [])
             if episode_id and episode_id not in ids:
@@ -228,7 +228,7 @@ def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None
     if episode_id:
         metadata["source_episodic_ids"] = [episode_id]
 
-    save_fact(
+    MemoryDB.save_fact(
         session_id=session_id,
         content=f"{entity} {relation} {target}",
         embedding=vector,
@@ -254,7 +254,7 @@ async def upsert_semantic_memory_async(
         vector = None
 
     if vector is not None:
-        existing = await search_similar_async(
+        existing = await MemoryDB.search_similar_async(
             embedding=vector,
             session_id=session_id,
             fact_type=FACT_TYPE_STATIC,
@@ -312,7 +312,7 @@ async def upsert_semantic_memory_async(
     if episode_id:
         metadata["source_episodic_ids"] = [episode_id]
 
-    await save_fact_async(
+    await MemoryDB.save_fact_async(
         session_id=session_id,
         content=f"{entity} {relation} {target}",
         embedding=vector,
@@ -343,7 +343,7 @@ def create_episodic_memory(
         logger.warning(f"Embedding failed: {e}")
         vector = None
 
-    fact_id = save_fact(
+    fact_id = MemoryDB.save_fact(
         session_id=session_id,
         content=summary,
         embedding=vector,
@@ -371,7 +371,7 @@ async def create_episodic_memory_async(
         logger.warning(f"Embedding async failed: {e}")
         vector = None
 
-    fact_id = await save_fact_async(
+    fact_id = await MemoryDB.save_fact_async(
         session_id=session_id,
         content=summary,
         embedding=vector,

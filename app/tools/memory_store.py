@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
-from app.memory.db_memory import save_fact_async, search_similar_async, FACT_TYPE_STATIC
+from app.memory.db_memory_facade import MemoryDB, FACT_TYPE_STATIC
 from app.db import Database
 
 logger = logging.getLogger(__name__)
@@ -158,7 +158,7 @@ async def execute(arguments, **kwargs):
         )
 
     # Check for duplicate using vector distance
-    existing = await search_similar_async(
+    existing = await MemoryDB.search_similar_async(
         embedding=vector,
         session_id=session_id,
         fact_type=FACT_TYPE_STATIC,
@@ -170,7 +170,8 @@ async def execute(arguments, **kwargs):
         e = existing[0]
         if e:
             # Duplicate found — reinforce existing fact
-            from app.memory.db_memory import pg_execute_async, SQL_FACT_UPDATE_METADATA
+            from app.db import pg_execute_async
+            from app.memory.db_memory_queries import SQL_FACT_UPDATE_METADATA
             from datetime import datetime
             from psycopg.types.json import Json
 
@@ -193,7 +194,7 @@ async def execute(arguments, **kwargs):
             )
 
     # Insert new fact into semantic_facts
-    fact_id = await save_fact_async(
+    fact_id = await MemoryDB.save_fact_async(
         session_id=session_id,
         content=fact,
         embedding=vector,

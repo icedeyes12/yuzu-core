@@ -8,7 +8,7 @@ from fastapi import Request
 
 def get_client_id(request: Request) -> str:
     """Generate a client identifier from request metadata.
-    
+
     Used for web client session tracking to prevent duplicate connection messages.
     """
     client_host = request.client.host if request.client else "unknown"

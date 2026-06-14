@@ -125,19 +125,22 @@ async def api_memory_stats():
         active_session = await Database.get_active_session_async()
         session_id = active_session["id"]
 
-        from app.memory.db_memory import (
-            count_facts,
+        from app.memory.db_memory_facade import (
+            MemoryDB,
             FACT_TYPE_STATIC,
             FACT_TYPE_DYNAMIC,
-            get_facts_by_session,
         )
 
-        semantic_count = count_facts(fact_type=FACT_TYPE_STATIC, session_id=session_id)
-        episodic_count = count_facts(fact_type=FACT_TYPE_DYNAMIC, session_id=session_id)
+        semantic_count = MemoryDB.count_facts(
+            fact_type=FACT_TYPE_STATIC, session_id=session_id
+        )
+        episodic_count = MemoryDB.count_facts(
+            fact_type=FACT_TYPE_DYNAMIC, session_id=session_id
+        )
 
         top_facts = []
         try:
-            facts = get_facts_by_session(
+            facts = MemoryDB.get_facts_by_session(
                 session_id=session_id, fact_type=FACT_TYPE_STATIC, limit=10
             )
             for f in facts:

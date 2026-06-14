@@ -756,7 +756,7 @@ async def create_episode_and_pcl_async(
     segment: dict,
 ) -> Optional[int]:
     """Create an episode and trigger PCL (async)."""
-    from app.memory.db_memory import save_fact_async, FACT_TYPE_DYNAMIC
+    from app.memory.db_memory_facade import MemoryDB, FACT_TYPE_DYNAMIC
     from app.memory.embedder import embed_text_async
     from app.memory.pcl import run_predict_calibrate_async
 
@@ -801,7 +801,7 @@ async def create_episode_and_pcl_async(
     end_id = segment_msgs[-1].get("id")
 
     # Create episode
-    episode_id = await save_fact_async(
+    episode_id = await MemoryDB.save_fact_async(
         session_id=session_id,
         content=f"{title}\n\n{summary}",
         embedding=embedding,
@@ -850,11 +850,11 @@ async def run_memory_review_async(session_id: int) -> dict:
     Returns summary: {reviewed: n, ratings: {...}}
     """
     from app.memory.memory_review import review_memory_async
-    from app.memory.db_memory import FACT_TYPE_STATIC, get_facts_by_session_async
+    from app.memory.db_memory_facade import MemoryDB, FACT_TYPE_STATIC
 
     try:
         # Get facts pending review
-        facts = await get_facts_by_session_async(
+        facts = await MemoryDB.get_facts_by_session_async(
             session_id, fact_type=FACT_TYPE_STATIC, limit=50
         )
         pending_ids = [

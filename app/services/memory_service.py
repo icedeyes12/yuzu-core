@@ -119,12 +119,12 @@ class MemoryService:
     @staticmethod
     async def rebuild_structured_memory_async(session_id: int) -> dict[str, Any]:
         """Run the full memory pipeline for a session.
-        
+
         Returns a summary dict with segments, episodes, and pcl_runs counts.
         """
         from app.memory.memory import run_memory_pipeline_async
-        from app.memory.db_memory import (
-            count_facts,
+        from app.memory.db_memory_facade import (
+            MemoryDB,
             FACT_TYPE_STATIC,
             FACT_TYPE_DYNAMIC,
         )
@@ -136,10 +136,10 @@ class MemoryService:
         result = await run_memory_pipeline_async(session_id, count)
 
         # Get final counts
-        semantic_count = count_facts(
+        semantic_count = MemoryDB.count_facts(
             fact_type=FACT_TYPE_STATIC, session_id=session_id
         )
-        episodic_count = count_facts(
+        episodic_count = MemoryDB.count_facts(
             fact_type=FACT_TYPE_DYNAMIC, session_id=session_id
         )
 

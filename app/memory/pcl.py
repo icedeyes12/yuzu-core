@@ -16,12 +16,7 @@ import logging
 import re
 from datetime import datetime
 from psycopg.types.json import Json
-from app.memory.db_memory import (
-    invalidate_fact_async,
-    get_fact_by_id_async,
-    get_facts_by_session_async,
-    FACT_TYPE_STATIC,
-)
+from app.memory.db_memory_facade import MemoryDB, FACT_TYPE_STATIC
 from app.memory.extractor import upsert_semantic_memory_async
 from app.memory.memory import _memory_llm_call
 
@@ -104,7 +99,7 @@ async def load_relevant_semantic_facts_async(
     session_id: int, limit: int = MAX_FACTS_FOR_PREDICTION
 ):
     """Fetch top semantic facts for a session (async)."""
-    facts = await get_facts_by_session_async(
+    facts = await MemoryDB.get_facts_by_session_async(
         session_id, fact_type=FACT_TYPE_STATIC, limit=limit
     )
     return [f for f in facts if not f.get("invalid_at")]
@@ -394,7 +389,7 @@ def _map_category_to_relation(category: str) -> str:
 
 async def _get_category_counts_async(session_id: int) -> dict[str, int]:
     """Count existing facts per category (async)."""
-    facts = await get_facts_by_session_async(
+    facts = await MemoryDB.get_facts_by_session_async(
         session_id=None, fact_type=FACT_TYPE_STATIC, limit=500
     )
     counts: dict[str, int] = {}
@@ -440,7 +435,7 @@ async def consolidate_facts_async(
 
         if action == "invalidate" and source_id:
             try:
-                await invalidate_fact_async(source_id)
+                await MemoryDB.invalidate_fact_async(source_id)
                 counts["invalidated"] += 1
             except Exception:
                 pass
@@ -448,7 +443,7 @@ async def consolidate_facts_async(
         elif action == "update" and source_id:
             try:
                 # Invalidate old, insert new
-                await invalidate_fact_async(source_id)
+                await MemoryDB.invalidate_fact_async(source_id)
                 await upsert_semantic_memory_async(
                     session_id, entity, relation, fact_text, episode_id=episode_id
                 )
@@ -463,9 +458,9 @@ async def consolidate_facts_async(
         elif action == "reinforce" and source_id:
             try:
                 # Append source_episodic_ids and bump confidence
-                fact = await get_fact_by_id_async(source_id)
+                fact = await MemoryDB.get_fact_by_id_async(source_id)
                 if fact:
-                    from app.memory.db_memory import pg_execute_async
+                    from app.db import pg_execute_async
 
                     meta = fact.get("metadata") or {}
                     ids = meta.get("source_episodic_ids", [])
@@ -551,9 +546,9 @@ async def run_predict_calibrate_async(
         # 5. Mark episode consolidated
         if episode_id:
             try:
-                from app.memory.db_memory import pg_execute_async
+                from app.db import pg_execute_async
 
-                ep = await get_fact_by_id_async(episode_id)
+                ep = await MemoryDB.get_fact_by_id_async(episode_id)
                 if ep:
                     meta = ep.get("metadata") or {}
                     meta["consolidated_at"] = datetime.now().isoformat()

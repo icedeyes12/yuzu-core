@@ -8,7 +8,7 @@ import json
 import asyncio
 from pathlib import Path
 from datetime import datetime
-from app.memory.db_memory import decay_facts, increment_importance, FACT_TYPE_DYNAMIC
+from app.memory.db_memory_facade import MemoryDB, FACT_TYPE_DYNAMIC
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,9 @@ def run_decay(session_id=None, force=False):
 
     # Decay episodic memories (dynamic facts) — NOT semantic static facts
     try:
-        count_episodic = decay_facts(session_id=session_id, fact_type=FACT_TYPE_DYNAMIC)
+        count_episodic = MemoryDB.MemoryDB.decay_facts(
+            session_id=session_id, fact_type=FACT_TYPE_DYNAMIC
+        )
         logger.info(f"Decayed {count_episodic} episodic memories")
     except Exception as e:
         logger.warning(f"Episodic decay failed: {e}")
@@ -97,7 +99,7 @@ async def run_decay_async(session_id=None, force=False):
         # But wait, I'm supposed to make everything non-blocking.
         # I'll use asyncio.to_thread for the sync decay_facts call.
         count_episodic = await asyncio.to_thread(
-            decay_facts, session_id=session_id, fact_type=FACT_TYPE_DYNAMIC
+            MemoryDB.decay_facts, session_id=session_id, fact_type=FACT_TYPE_DYNAMIC
         )
         logger.info(f"Decayed {count_episodic} episodic memories")
     except Exception as e:
@@ -114,9 +116,11 @@ def reinforce_memory(memory_id, memory_type="semantic"):
         memory_id: ID of the memory to reinforce.
         memory_type: 'semantic' or 'episodic' (ignored, all use same table)
     """
-    increment_importance(memory_id, delta=0.05, cap=1.0)
+    MemoryDB.MemoryDB.increment_importance(memory_id, delta=0.05, cap=1.0)
 
 
 async def reinforce_memory_async(memory_id, memory_type="semantic"):
     """Increase importance (async)."""
-    await asyncio.to_thread(increment_importance, memory_id, delta=0.05, cap=1.0)
+    await asyncio.to_thread(
+        MemoryDB.increment_importance, memory_id, delta=0.05, cap=1.0
+    )
