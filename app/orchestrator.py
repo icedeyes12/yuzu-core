@@ -221,6 +221,7 @@ async def _parse_raw_tool_calls_async(
     if not raw_response:
         return []
     try:
+        # WORKAROUND: Lazy import to prevent circular dependency with app.providers
         from app.providers import get_ai_manager
 
         manager = await get_ai_manager()

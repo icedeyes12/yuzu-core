@@ -357,6 +357,7 @@ async def _get_ai_manager_async():
     NOTE: All callers must be async and await this function.
     Sync callers are NOT supported - use async/await throughout.
     """
+    # WORKAROUND: Lazy import to prevent circular dependency with app.providers
     from app.providers import get_ai_manager
 
     return await get_ai_manager()

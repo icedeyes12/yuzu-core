@@ -72,6 +72,7 @@ async def _get_ai_manager_async():
 
     NOTE: All callers must be async and await this function.
     """
+    # WORKAROUND: Lazy import to prevent circular dependency with app.providers
     from app.providers import get_ai_manager
 
     return await get_ai_manager()
@@ -154,6 +155,7 @@ Facts to rate:
 Rate each fact (respond with JSON array only):"""
 
     try:
+        # WORKAROUND: Lazy import to prevent circular dependency with app.providers
         from app.providers import get_ai_manager
 
         ai = await get_ai_manager()

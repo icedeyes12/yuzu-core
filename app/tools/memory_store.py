@@ -49,6 +49,7 @@ TOOL_DEFINITION = ToolDefinition(
 async def _classify_category_llm_async(fact: str) -> str:
     """Classify a fact into a memory category using LLM (async)."""
     try:
+        # WORKAROUND: Lazy import to prevent circular dependency with app.providers
         from app.providers import get_ai_manager
 
         ai_manager = await get_ai_manager()

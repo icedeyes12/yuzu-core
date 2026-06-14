@@ -129,6 +129,7 @@ async def predict_episode_content_async(
 ) -> str | None:
     """PREDICT (async)."""
     try:
+        # WORKAROUND: Lazy import to prevent circular dependency with app.providers
         from app.providers import get_ai_manager
 
         ai_manager = await get_ai_manager()
@@ -233,6 +234,7 @@ async def calibrate_and_extract_async(
 ) -> list[dict]:
     """CALIBRATE (async)."""
     try:
+        # WORKAROUND: Lazy import to prevent circular dependency with app.providers
         from app.providers import get_ai_manager
 
         ai_manager = await get_ai_manager()
