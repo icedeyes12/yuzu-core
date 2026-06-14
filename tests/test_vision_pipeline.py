@@ -43,7 +43,11 @@ def test_inject_vision_context_with_vision_model():
         assert "image_paths" not in result[0]
 
 
-def test_vision_model_validation_llm_client():
+import pytest
+
+
+@pytest.mark.asyncio
+async def test_vision_model_validation_llm_client():
     from app.llm_client import generate_ai_response
 
     profile = {
@@ -60,9 +64,9 @@ def test_vision_model_validation_llm_client():
             "app.tools.multimodal.multimodal_tools.is_vision_model", return_value=False
         ),
         patch("app.db.Database.get_active_session", return_value={"id": 1}),
-        patch("app.db.Database.add_message") as mock_add,
+        patch("app.db.Database.add_message_async") as mock_add,
     ):
-        text, raw = generate_ai_response(profile, user_message, session_id=1)
+        text, raw = await generate_ai_response(profile, user_message, session_id=1)
 
         assert "[System] Current model does not support vision" in text
         assert raw is None

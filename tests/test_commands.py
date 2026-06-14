@@ -201,16 +201,21 @@ class TestParseImagePath:
         assert parse_image_path("") is None
 
 
+import pytest
+
+
 class TestExecuteCommands:
     """Tests for command execution (integration-ish)."""
 
-    def test_empty_commands(self):
-        results = execute_commands([])
+    @pytest.mark.asyncio
+    async def test_empty_commands(self):
+        results = await execute_commands([])
         assert results == []
 
-    def test_invalid_command_format(self):
+    @pytest.mark.asyncio
+    async def test_invalid_command_format(self):
         """Invalid command string should return error result."""
-        results = execute_commands(["   "])  # Empty/whitespace command
+        results = await execute_commands(["   "])  # Empty/whitespace command
         assert len(results) == 1
         tool_name, result = results[0]
         assert tool_name == "unknown"
