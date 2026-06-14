@@ -945,9 +945,7 @@ async def retrieve_static_memories_async(query=None, limit=15):
         parsed = [_parse_fact_content(r) for r in results]
         parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
         if parsed:
-            await MemoryDB.update_last_accessed_async(
-                [m["id"] for m in parsed]
-            )
+            await MemoryDB.update_last_accessed_async([m["id"] for m in parsed])
         return parsed
 
     query_vec = await _get_cached_embedding_async(query)  # CACHED
@@ -1021,9 +1019,7 @@ async def retrieve_dynamic_memories_async(session_id: int, query=None, limit=10)
         parsed = [_parse_fact_content(r) for r in results]
         parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
         if parsed:
-            await MemoryDB.update_last_accessed_async(
-                [m["id"] for m in parsed]
-            )
+            await MemoryDB.update_last_accessed_async([m["id"] for m in parsed])
         return parsed
 
     query_vec = await _get_cached_embedding_async(
