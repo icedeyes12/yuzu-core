@@ -181,10 +181,9 @@ async def _mark_facts_pending_async(static_ids: list[int], session_id: int) -> N
     if not static_ids:
         return
     try:
-        from app.memory.memory_review import mark_retrieved_as_pending_review
+        from app.memory.memory_review import mark_retrieved_as_pending_review_async
 
-        # Assume this might be sync, but check if we should run in thread
-        mark_retrieved_as_pending_review(static_ids, session_id)
+        await mark_retrieved_as_pending_review_async(static_ids, session_id)
     except Exception as e:  # noqa: BLE001
         log.warning("pending-review marking failed: %s", e)
 

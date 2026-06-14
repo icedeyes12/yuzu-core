@@ -411,12 +411,7 @@ async def _post_turn_async(
     )
 
     # Clear request-scoped caches
-    try:
-        from app.memory.memory import _clear_request_cache
-
-        _clear_request_cache(session_id)
-    except Exception:
-        pass
+    # _clear_request_cache was removed in Phase 2B safe deletions
     try:
         from app.memory.retrieval import _clear_embedding_cache
 
