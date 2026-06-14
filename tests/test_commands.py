@@ -3,6 +3,7 @@
 #              Tests the <command>...</command> protocol parser.
 
 from __future__ import annotations
+import pytest
 
 from app.commands import (
     execute_commands,
@@ -199,11 +200,6 @@ class TestParseImagePath:
     def test_returns_none_when_no_image(self):
         assert parse_image_path("<details>no image</details>") is None
         assert parse_image_path("") is None
-
-
-import pytest
-
-
 class TestExecuteCommands:
     """Tests for command execution (integration-ish)."""
 
