@@ -200,6 +200,8 @@ class TestParseImagePath:
     def test_returns_none_when_no_image(self):
         assert parse_image_path("<details>no image</details>") is None
         assert parse_image_path("") is None
+
+
 class TestExecuteCommands:
     """Tests for command execution (integration-ish)."""
 

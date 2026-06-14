@@ -42,6 +42,8 @@ def test_inject_vision_context_with_vision_model():
         assert result[0]["content"][0]["type"] == "text"
         assert result[0]["content"][1]["type"] == "image_url"
         assert "image_paths" not in result[0]
+
+
 @pytest.mark.asyncio
 async def test_vision_model_validation_llm_client():
     from app.llm_client import generate_ai_response
