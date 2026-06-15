@@ -15,7 +15,6 @@ from app.db.models import (
     ALL_TOOL_ROLES,
     TOOL_ROLES,
     add_api_key as _pg_add_api_key,
-    add_image_tools_message as _pg_add_image_tools_message,
     add_message as _pg_add_message,
     update_message as _pg_update_message,
     add_session_event as _pg_add_session_event,
@@ -52,7 +51,6 @@ from app.db.models import (
 )
 from app.db.models_async import (
     add_api_key_async as _pg_add_api_key_async,
-    add_image_tools_message_async as _pg_add_image_tools_message_async,
     add_message_async as _pg_add_message_async,
     update_message_async as _pg_update_message_async,
     add_session_event_async as _pg_add_session_event_async,
@@ -364,23 +362,6 @@ class Database:
         """Add a session event message to the active session."""
         active = await _pg_get_active_session_async()
         return await _pg_add_session_event_async(active["id"], content, interface)
-
-    @staticmethod
-    def add_image_tools_message(
-        image_url: str, session_id: int | None = None
-    ) -> int | None:
-        """Add an image tools message (defaults to active session)."""
-        # DEPRECATED: image_tools messages are now unified into the standard message pipeline with image_paths
-        return _pg_add_image_tools_message(_resolve_session_id(session_id), image_url)
-
-    @staticmethod
-    async def add_image_tools_message_async(
-        image_url: str, session_id: int | None = None
-    ) -> int | None:
-        """Add an image tools message (defaults to active session)."""
-        return await _pg_add_image_tools_message_async(
-            await _resolve_session_id_async(session_id), image_url
-        )
 
     @staticmethod
     def add_tool_result(

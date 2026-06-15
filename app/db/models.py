@@ -435,11 +435,6 @@ def get_session_conversation_summary(session_id: int, limit: int = 20) -> str:
     return format_conversation_summary(rows)
 
 
-def add_image_tools_message(session_id: int, image_url: str) -> int | None:
-    # DEPRECATED: image_tools messages are now unified into the standard message pipeline with image_paths
-    return add_message(session_id, "image_tools", image_url)
-
-
 def add_tool_result(session_id: int, tool_name: str, result_content: str) -> int | None:
     return add_message(session_id, tool_role_for(tool_name), result_content)
 
@@ -551,7 +546,6 @@ __all__ = [
     "get_recent_sessions",
     "get_recent_sessions_for_session",
     "get_session_conversation_summary",
-    "add_image_tools_message",
     "add_tool_result",
     "add_system_note",
     "add_memory_note",

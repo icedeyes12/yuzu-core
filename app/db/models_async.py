@@ -497,10 +497,6 @@ async def get_session_conversation_summary_async(
     return format_conversation_summary(rows)
 
 
-async def add_image_tools_message_async(session_id: int, image_url: str) -> int | None:
-    return await add_message_async(session_id, "image_tools", image_url)
-
-
 async def add_tool_result_async(
     session_id: int, tool_name: str, result_content: str
 ) -> int | None:
@@ -627,7 +623,6 @@ __all__ = [
     "get_recent_sessions_for_session_async",
     "get_recent_active_sessions_async",
     "get_session_conversation_summary_async",
-    "add_image_tools_message_async",
     "add_tool_result_async",
     "add_system_note_async",
     "add_memory_note_async",
