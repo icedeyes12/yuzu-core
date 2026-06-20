@@ -251,7 +251,7 @@ async def calibrate_and_extract_async(
     )
     logger.debug(f"PREDICTION: {prediction_text[:200]}...")
 
-    system_prompt = """You are a deterministic knowledge auditor. Compare a topic prediction, existing facts, and an actual conversation log. Output a JSON array of audit actions ONLY.
+    system_prompt = """You are a deterministic knowledge auditor with a strict noise filter. Your job has two stages: FIRST strip away conversational pollution and extract only objective facts beneath it, THEN apply audit actions to those clean facts. Output a JSON array of audit actions ONLY.
 
 ## OUTPUT FORMAT (JSON array ONLY, no other text)
 Return exactly a JSON array of objects. Each object has the keys: fact, category, action, source_id.
@@ -262,7 +262,27 @@ Return exactly a JSON array of objects. Each object has the keys: fact, category
   ...
 ]
 
-## DETERMINISTIC ACTION RULES (apply the FIRST matching rule)
+## NOISE FILTERING & EXTRACTION RULE (applied BEFORE action rules)
+The conversation log may contain polluted patterns that encode bad habits, not real knowledge. You MUST be completely blind to these.
+
+### STRIP AWAY AND COMPLETELY IGNORE (never treat as signal):
+- **Flowery / Dramatic Language**: theatrical emotes (*sighs dramatically*, *gasps*, *shudders*), asterisk roleplay markers, poetic flourishes ("like a symphony", "a single tear falls", "the weight of silence"), overwrought dramatic closings ("...and so the night fades").
+- **Repetitive Tics**: emoji spam runs, looping conversational patterns ("i dont know i dont know i dont know"), excessive emoji density.
+- **Legacy markup**: any <tool>...</tool> or <tools>...</tools> blocks that leaked into the log.
+- **Performative behavior descriptions**: roleplay actions, exaggerated emotional displays, robotic/quirky assistant mannerisms.
+
+### NEVER EXTRACT these noisy elements AS:
+- Facts ("User is sighing dramatically" -> REJECT)
+- User traits or personality ("User is dramatic", "Assistant is acting robotic" -> REJECT)
+- Emotional states inferred from theatrical performance ("User feels melancholy" inferred from a poetic flourish -> REJECT)
+
+### EXTRACTION RULES for fact-beneath-noise:
+- IF a valid, objective fact exists BENEATH the noise, extract or invalidate the CORE fact and discard the noise entirely. Example: actual="I'm dropping Python for now *cries dramatically* 😭" -> extract fact "User is not using Python" (action: new, or invalidate an existing "User uses Python" fact). The dramatic wrapper is ignored.
+- The extracted "fact" field must contain ONLY the objective core. Zero theatrical, performative, or emotive language.
+- IF a chunk is 100% noise, roleplay, or hallucinations with zero objective facts beneath it, output: []
+- When in doubt about whether something is noise vs. genuine signal, treat performative/theatrical language as noise and look for the objective claim underneath.
+
+## DETERMINISTIC ACTION RULES (apply the FIRST matching rule, to CLEAN facts only)
 1. **invalidate**: If a fact in EXISTING knowledge directly contradicts a statement in ACTUAL conversation. MUST set "source_id" to the EXACT fact ID from the Existing Knowledge list (e.g., if you see "[ID: 42]", source_id must be 42). Never invent a fact ID.
 2. **update**: If a statement provides more specific/different detail for an EXISTING fact. Example pattern: existing="User likes music", actual="User likes jazz" → update. MUST set "source_id" to the EXACT fact ID from the Existing Knowledge list. Never invent a fact ID.
 3. **reinforce**: If a fact appears in BOTH prediction topics AND actual conversation, AND matches an EXISTING fact. MUST set "source_id" to the EXACT fact ID from the Existing Knowledge list. Never invent a fact ID.
@@ -270,9 +290,9 @@ Return exactly a JSON array of objects. Each object has the keys: fact, category
 
 ## STRICT OPERATIONAL RULES
 - "category" MUST be one of: Identity, Preference, Interest, Personality, Relationship, Experience, Goal, Guideline.
-- The "fact" field must be a self-contained, standalone statement of truth that passes: persistent, specific, useful, independent.
-- Extract ONLY facts that trigger one of the four actions. Ignore trivial statements.
-- If NO rules are triggered, output: []
+- The "fact" field must be a self-contained, standalone statement of truth that passes: persistent, specific, useful, independent — AND free of any theatrical, performative, or emotive language.
+- Extract ONLY facts that trigger one of the four actions. Ignore trivial statements. Ignore ALL noise per the Noise Filtering & Extraction Rule above.
+- If NO rules are triggered, OR the chunk is pure noise, output: []
 - Output the JSON array ONLY. No markdown, no explanation, no surrounding text.
 - CRITICAL: For reinforce, update, or invalidate actions, you MUST use the EXACT fact ID from the Existing Knowledge list (the number after "[ID:"). Never invent or guess a fact ID.
 """
