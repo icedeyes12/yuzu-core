@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import logging
 import time
@@ -63,8 +64,17 @@ DANGEROUS_PATTERNS = [
 
 DANGEROUS_REGEX = re.compile("|".join(DANGEROUS_PATTERNS), re.IGNORECASE)
 
+# Cross-platform bash resolution. Termux users can still set TERMUX_BASH to pin
+# /data/data/com.termux/files/usr/bin/bash; on other platforms we fall back to
+# the system bash on PATH, then /bin/bash.
+TERMUX_BASH = "/data/data/com.termux/files/usr/bin/bash"
+BASH_EXECUTABLE = os.environ.get("TERMUX_BASH") or TERMUX_BASH
+if not Path(BASH_EXECUTABLE).exists():
+    resolved = shutil.which("bash")
+    BASH_EXECUTABLE = resolved or "/bin/bash"
+
 # Default working directory - use HOME env var with Termux fallback
-DEFAULT_CWD = Path(os.environ.get("HOME", "/data/data/com.termux/files/home"))
+DEFAULT_CWD = Path(os.environ.get("HOME", "")) or Path.cwd()
 
 
 # --------------------------------------------------------------------
@@ -309,7 +319,7 @@ async def execute(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(DEFAULT_CWD),
-            executable="/data/data/com.termux/files/usr/bin/bash",
+            executable=BASH_EXECUTABLE,
         )
 
         try:
