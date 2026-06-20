@@ -52,7 +52,9 @@ _STRING_ARG_TOOLS: dict[str, str] = {
 
 # Aliases the model uses for tool routing.
 # Maps tool names from LLM output to registry tool names.
-_TOOL_ALIASES: dict[str, str] = {
+# Public because it acts as a cross-module contract between commands.py
+# (parser side) and orchestrator.py (native tool-call executor).
+TOOL_ALIASES: dict[str, str] = {
     "imagine": "image_generate",
     "image_generate": "image_generate",
     "http_request": "http_request",
@@ -458,7 +460,7 @@ async def execute_commands(
                 continue
 
             raw_name = parsed["command"]
-            tool_name = _TOOL_ALIASES.get(raw_name, raw_name)
+            tool_name = TOOL_ALIASES.get(raw_name, raw_name)
             args = _parse_args(tool_name, parsed["args"])
 
             log.info("executing tool: %s with args: %s", tool_name, str(args)[:100])

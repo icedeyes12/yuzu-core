@@ -227,11 +227,23 @@ class AIProvider:
             return {"choices": [{"message": {"content": text, "tool_calls": []}}]}
         return None
 
+    async def _send_message_streaming_impl(
+        self, messages: list[dict], model: str, source: str = "llm", **kwargs
+    ) -> AsyncGenerator[str, None]:
+        """Default implementation raises; subclasses override this."""
+        raise NotImplementedError
+        # pragma: no cover - kept as type-checker anchor
+        if False:
+            yield ""
+
     async def send_message_streaming(
         self, messages: list[dict], model: str, source: str = "llm", **kwargs
     ) -> AsyncGenerator[str, None]:
-        raise NotImplementedError
-        yield ""  # Keep as async generator
+        """Yield raw chunks from the provider. Default delegates to abstract impl."""
+        async for chunk in self._send_message_streaming_impl(
+            messages, model, source=source, **kwargs
+        ):
+            yield chunk
 
     def parse_tool_calls(self, raw_response) -> list[dict]:
         return []

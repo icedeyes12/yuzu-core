@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import os
 import re
 from pathlib import Path
@@ -13,6 +14,7 @@ from typing import Any, AsyncIterator
 
 from app.commands import (
     IMAGE_SHORTCUT_WARNING,
+    TOOL_ALIASES,
     execute_commands,
     has_tool_blocks,
     is_markdown_image_shortcut,
@@ -28,7 +30,7 @@ from app.logging_config import get_logger
 from app.services.session_service import SessionService
 from app.services.memory_service import MemoryService
 from app.tools import multimodal_tools
-from app.tools.registry import get_tool_role
+from app.tools.registry import execute_tool, get_tool_role, is_terminal_tool
 from app.visual_context import store_visual_context
 
 log = get_logger(__name__)
@@ -186,8 +188,6 @@ def _cache_images_from_message(message: str) -> list[str]:
 
 def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
     """Return (base64, mime) for a generated image file, or (None, None)."""
-    import base64
-
     # Use the safe validator - this is the key for CodeQL
     validated_path = _validate_image_path_safely(image_path)
     if not validated_path:
@@ -242,13 +242,10 @@ async def _execute_tool_calls_async(
     tool_calls: list[dict], session_id: int
 ) -> list[tuple[str, dict]]:
     """Execute a list of tool calls and return results (async)."""
-    from app.commands import _TOOL_ALIASES
-    from app.tools.registry import execute_tool, is_terminal_tool
-
     results: list[tuple[str, dict]] = []
     for tc in tool_calls:
         raw_name = tc["name"]
-        tool_name = _TOOL_ALIASES.get(raw_name, raw_name)
+        tool_name = TOOL_ALIASES.get(raw_name, raw_name)
         arguments = tc.get("arguments", {})
         log.info("native tool_call: %s %s", tool_name, arguments)
         result = await execute_tool(tool_name, arguments, session_id=session_id)
@@ -288,11 +285,8 @@ async def _persist_tool_result_async(
     tool_name: str, markdown: str, session_id: int
 ) -> None:
     """Persist a tool result (async)."""
-    from app.commands import parse_image_path
-
     image_paths = []
-    path = parse_image_path(markdown)
-    if path:
+    if path := parse_image_path(markdown):
         image_paths.append(path)
 
     await Database.add_message_async(
@@ -775,11 +769,30 @@ class StreamFence:
 
     @classmethod
     async def acquire(cls, session_id: int, user_msg_id: int) -> str:
-        """Acquire a fence for a streaming session. Returns fence_id."""
+        """Acquire a fence for a streaming session. Returns fence_id.
+
+        Proactively runs cleanup_expired() to evict any stale fences from
+        prior sessions before claiming a new one. Without this, abandoned
+        fences can pin session memory for up to _STREAM_FENCE_TIMEOUT.
+        """
         import uuid
+
+        await cls.cleanup_expired()
 
         fence_id = str(uuid.uuid4())[:8]
         async with cls._lock:
+            # If a previous fence is still pinned for this session, log and
+            # overwrite rather than silently keep the stale one.
+            if session_id in cls._fences:
+                prior = cls._fences[session_id]
+                if not prior.get("completed"):
+                    log.warning(
+                        "stream fence for session %s was not completed "
+                        "(prior fence_id=%s); replacing with %s",
+                        session_id,
+                        prior.get("fence_id"),
+                        fence_id,
+                    )
             cls._fences[session_id] = {
                 "fence_id": fence_id,
                 "user_msg_id": user_msg_id,
@@ -790,18 +803,38 @@ class StreamFence:
 
     @classmethod
     async def complete(cls, session_id: int, fence_id: str) -> bool:
-        """Mark fence as completed, allowing persistence."""
+        """Mark fence as completed, allowing persistence.
+
+        Returns True on a successful transition, False if the fence was
+        missing or owned by a different fence_id (i.e. already evicted or
+        replaced). Callers should log accordingly; the return value is the
+        source of truth for whether the fence was safely retired.
+        """
         async with cls._lock:
-            if session_id in cls._fences:
-                fence = cls._fences[session_id]
-                if fence["fence_id"] == fence_id:
-                    fence["completed"] = True
-                    return True
-        return False
+            if session_id not in cls._fences:
+                log.warning(
+                    "stream fence complete() called for session %s but no "
+                    "fence is registered (fence_id=%s)",
+                    session_id,
+                    fence_id,
+                )
+                return False
+            fence = cls._fences[session_id]
+            if fence["fence_id"] != fence_id:
+                log.warning(
+                    "stream fence id mismatch for session %s: expected %s, "
+                    "got %s — likely already replaced",
+                    session_id,
+                    fence.get("fence_id"),
+                    fence_id,
+                )
+                return False
+            fence["completed"] = True
+        return True
 
     @classmethod
     async def is_completed(cls, session_id: int) -> bool:
-        """Check if fence is completed or expired."""
+        """Check if fence is completed or expired. Logs when it self-clears."""
         async with cls._lock:
             if session_id not in cls._fences:
                 return True  # No fence = already cleared
@@ -812,6 +845,12 @@ class StreamFence:
             # If completed or expired, clear it
             if fence["completed"] or elapsed > _STREAM_FENCE_TIMEOUT:
                 del cls._fences[session_id]
+                if elapsed > _STREAM_FENCE_TIMEOUT:
+                    log.warning(
+                        "stream fence for session %s expired after %.0fs",
+                        session_id,
+                        elapsed,
+                    )
                 return True
 
             return False
