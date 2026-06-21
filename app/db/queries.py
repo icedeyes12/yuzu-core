@@ -801,6 +801,46 @@ def build_encryption_status(
 
 
 # ---------------------------------------------------------------------------
+# Auth — identity mapping + server-side sessions (Phase 2)
+# ---------------------------------------------------------------------------
+
+SQL_IDENTITY_LOOKUP = """
+SELECT user_id FROM user_identities
+WHERE provider = %s AND provider_sub = %s
+"""
+
+SQL_IDENTITY_COUNT = "SELECT count(*) AS count FROM user_identities"
+
+SQL_IDENTITY_INSERT = """
+INSERT INTO user_identities (user_id, provider, provider_sub, email)
+VALUES (%s, %s, %s, %s)
+"""
+
+SQL_PROFILE_INSERT_DEFAULT_RETURNING = """
+INSERT INTO profiles (display_name, partner_name, affection, theme,
+                      memory_state, session_history, global_knowledge,
+                      providers_config, context, timestamp, updated_at)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+RETURNING id
+"""
+
+SQL_SESSION_TOKEN_CREATE = """
+INSERT INTO user_sessions (token, user_id, created_at, expires_at)
+VALUES (%s, %s, %s, %s)
+"""
+
+SQL_SESSION_TOKEN_VALIDATE = """
+SELECT user_id FROM user_sessions
+WHERE token = %s
+  AND expires_at > NOW()
+  AND revoked_at IS NULL
+"""
+
+SQL_SESSION_TOKEN_REVOKE = """
+UPDATE user_sessions SET revoked_at = %s WHERE token = %s
+"""
+
+# ---------------------------------------------------------------------------
 # Misc helpers
 # ---------------------------------------------------------------------------
 
@@ -897,6 +937,14 @@ __all__ = [
     "SQL_ENC_TOTAL_KEYS",
     "SQL_ENC_ENCRYPTED_KEYS",
     "build_encryption_status",
+    # Auth
+    "SQL_IDENTITY_LOOKUP",
+    "SQL_IDENTITY_COUNT",
+    "SQL_IDENTITY_INSERT",
+    "SQL_PROFILE_INSERT_DEFAULT_RETURNING",
+    "SQL_SESSION_TOKEN_CREATE",
+    "SQL_SESSION_TOKEN_VALIDATE",
+    "SQL_SESSION_TOKEN_REVOKE",
     # Misc
     "parse_json",
     "format_session_event",
