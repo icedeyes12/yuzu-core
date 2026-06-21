@@ -31,16 +31,16 @@ class SessionCreateRequest(BaseModel):
 
 
 class SessionSwitchRequest(BaseModel):
-    session_id: str = Field(..., gt=0, description="Session ID to switch to")
+    session_id: str = Field(..., min_length=1, description="Session ID to switch to")
 
 
 class SessionRenameRequest(BaseModel):
-    session_id: str = Field(..., gt=0, description="Session ID to rename")
+    session_id: str = Field(..., min_length=1, description="Session ID to rename")
     name: str = Field(..., min_length=1, description="New session name")
 
 
 class SessionDeleteRequest(BaseModel):
-    session_id: str = Field(..., gt=0, description="Session ID to delete")
+    session_id: str = Field(..., min_length=1, description="Session ID to delete")
 
 
 @router.get("/chat_history")
