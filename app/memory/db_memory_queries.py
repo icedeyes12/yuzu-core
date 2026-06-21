@@ -98,7 +98,7 @@ SQL_FACT_DECAY_FETCH_FOR_SESSION = """
 SELECT id, metadata, last_accessed
 FROM semantic_facts
 WHERE fact_type = %s
-  AND (metadata->>'session_id') = %s
+  AND (metadata->>'session_id') = %s::text
   AND invalid_at IS NULL
 """
 
@@ -133,7 +133,7 @@ def build_metadata_conditions(
     params: list[Any] = []
 
     if session_id is not None:
-        conditions.append("(metadata->>'session_id') = %s")
+        conditions.append("(metadata->>'session_id') = %s::text")
         params.append(session_id)
     if fact_type:
         conditions.append("fact_type = %s")
