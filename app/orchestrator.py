@@ -332,6 +332,7 @@ async def _run_synthesis_async(
     interface: str,
     tool_markdown: str,
     ephemeral_context: list[dict[str, str]] | None = None,
+    user_id: str | None = None,
 ) -> str | None:
     """Run a 2nd LLM pass to narrate around the tool result (async).
 
@@ -347,6 +348,7 @@ async def _run_synthesis_async(
         image_content_for_context=image_context,
         ephemeral_context=ephemeral_context,
         is_tool_loop=True,
+        user_id=user_id,
     )
     if not text or not text.strip():
         return None
@@ -360,6 +362,7 @@ async def _stream_synthesis_async(
     interface: str,
     tool_markdown: str,
     ephemeral_context: list[dict[str, str]] | None = None,
+    user_id: str | None = None,
 ) -> AsyncIterator[str]:
     """Stream the 2nd LLM pass (async).
 
@@ -377,6 +380,7 @@ async def _stream_synthesis_async(
         image_content_for_context=image_context,
         ephemeral_context=ephemeral_context,
         is_tool_loop=True,
+        user_id=user_id,
     ):
         yield chunk
 
@@ -479,6 +483,7 @@ async def _run_orchestration_loop_async(
     abort_check: callable[[], bool] | None,
     user_message: str,
     active_session: dict[str, Any],
+    user_id: str | None = None,
 ) -> AsyncIterator[str]:
     """Run the orchestration loop for synthesis with tool block detection.
 
@@ -604,6 +609,7 @@ async def _finalize_and_persist_async(
     user_message: str,
     final_response: str,
     active_session: dict[str, Any],
+    user_id: str | None = None,
 ) -> None:
     """Complete the stream fence and persist final state.
 
@@ -621,13 +627,13 @@ async def _finalize_and_persist_async(
 # --------------------------------------------------------------------
 
 
-async def handle_user_message(user_message: str, interface: str = "terminal") -> str:
+async def handle_user_message(user_message: str, interface: str = "terminal", user_id: str | None = None) -> str:
     """Process a user message end-to-end and return the assistant reply (async)."""
-    profile = await Database.get_profile_async()
+    profile = await Database.get_profile_async(user_id)
     if not user_message.strip():
         return "Please enter a message!"
 
-    active_session = await Database.get_active_session_async()
+    active_session = await Database.get_active_session_async(user_id)
     session_id = active_session["id"]
     # Assuming _cache_images_from_message is fast (local check + small download)
     # If it downloads, it should be async. Let's check multimodal_tools.
@@ -684,7 +690,7 @@ async def handle_user_message(user_message: str, interface: str = "terminal") ->
 
     try:
         text_response, raw_api_response = await generate_ai_response(
-            profile, user_message, interface, session_id
+            profile, user_message, interface, session_id, user_id=user_id
         )
     except Exception:
         await _persist_user_async(user_message, session_id, cached_images)
@@ -877,6 +883,7 @@ async def handle_user_message_streaming(
     model: str | None = None,
     abort_check: callable[[], bool] | None = None,
     image_paths: list[str] | None = None,
+    user_id: str | None = None,
 ) -> AsyncIterator[str]:
     """Streaming entrypoint (async) with fence protection.
 
@@ -887,7 +894,7 @@ async def handle_user_message_streaming(
     synthesis loops to _run_orchestration_loop_async, and finalization
     to _finalize_and_persist_async.
     """
-    profile = await Database.get_profile_async()
+    profile = await Database.get_profile_async(user_id)
     if not user_message.strip() and not image_paths:
         yield "Please enter a message!"
         return
@@ -896,7 +903,7 @@ async def handle_user_message_streaming(
         return
 
     if session_id is None:
-        active_session = await Database.get_active_session_async()
+        active_session = await Database.get_active_session_async(user_id)
         session_id = active_session["id"]
     else:
         active_session = {"id": session_id}
@@ -921,7 +928,7 @@ async def handle_user_message_streaming(
 
     try:
         async for chunk in generate_ai_response_streaming(
-            profile, user_message, interface, session_id, provider, model
+            profile, user_message, interface, session_id, provider, model, user_id=user_id
         ):
             if chunk:
                 if abort_check and abort_check():
@@ -996,6 +1003,7 @@ async def handle_user_message_streaming(
         abort_check=abort_check,
         user_message=user_message,
         active_session=active_session,
+        user_id=user_id,
     ):
         yield chunk
 

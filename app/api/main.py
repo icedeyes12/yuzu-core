@@ -5,12 +5,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.endpoints import chat, memory, profile, sessions, stream
+from app.api.endpoints import auth, chat, memory, profile, sessions, stream
 from app.api.static import router as static_router
 
 router = APIRouter()
 
 router.include_router(static_router)
+router.include_router(auth.router)
 router.include_router(chat.router)
 router.include_router(sessions.router)
 router.include_router(profile.router)

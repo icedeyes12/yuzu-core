@@ -17,9 +17,9 @@ log = logging.getLogger(__name__)
 
 class ChatService:
     @staticmethod
-    async def send_message_async(message: str, interface: str = "web") -> str:
+    async def send_message_async(message: str, interface: str = "web", user_id: str | None = None) -> str:
         """Process a simple text message (async)."""
-        return await handle_user_message(message, interface=interface)
+        return await handle_user_message(message, interface=interface, user_id=user_id)
 
     @staticmethod
     async def process_image_uploads(images: list[UploadFile]) -> list[str]:
@@ -70,6 +70,7 @@ class ChatService:
         provider: str | None = None,
         model: str | None = None,
         images: list[UploadFile] | None = None,
+        user_id: str | None = None,
     ) -> AsyncIterator[str]:
         """
         Start a streaming message response (async).
@@ -79,7 +80,7 @@ class ChatService:
         if images:
             image_paths = await ChatService.process_image_uploads(images)
 
-        active_session = await get_active_session_async()
+        active_session = await get_active_session_async(user_id)
         session_id = active_session["id"]
 
         # Build markdown for display in history
@@ -99,6 +100,7 @@ class ChatService:
             provider=provider,
             model=model,
             image_paths=image_paths,  # Pass paths for vision context
+            user_id=user_id,
         )
 
         q = buffer.subscribe()

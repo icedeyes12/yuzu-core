@@ -31,6 +31,7 @@ class StreamBuffer:
         provider: Optional[str] = None,
         model: Optional[str] = None,
         image_paths: Optional[List[str]] = None,
+        user_id: Optional[str] = None,
     ):
         self.session_id = session_id
         self.user_message = user_message
@@ -38,6 +39,7 @@ class StreamBuffer:
         self.provider = provider
         self.model = model
         self.image_paths = image_paths or []
+        self.user_id = user_id
 
         self.full_content = ""
         self.queues: List[asyncio.Queue] = []
@@ -94,6 +96,7 @@ class StreamBuffer:
                 provider=self.provider,
                 model=self.model,
                 image_paths=self.image_paths,
+                user_id=self.user_id,
             )
 
             # No filter - pass through all chunks directly
@@ -262,6 +265,7 @@ class StreamManager:
         provider: Optional[str] = None,
         model: Optional[str] = None,
         image_paths: Optional[List[str]] = None,
+        user_id: Optional[str] = None,
     ) -> StreamBuffer:
         """Start a new stream or return an existing one."""
         async with cls._lock:
@@ -274,7 +278,7 @@ class StreamManager:
                 # Don't delete here - let the finally block handle it
 
             stream = StreamBuffer(
-                session_id, user_message, interface, provider, model, image_paths
+                session_id, user_message, interface, provider, model, image_paths, user_id
             )
             cls._streams[session_id] = stream
 

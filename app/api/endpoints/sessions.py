@@ -18,7 +18,8 @@ from app.db import (
     Database,
 )
 from app.services.session_service import SessionService
-from app.api.utils import get_client_id
+from app.api.utils import get_client_id, get_current_user
+from fastapi import Depends
 from app.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -44,13 +45,13 @@ class SessionDeleteRequest(BaseModel):
 
 
 @router.get("/chat_history")
-async def api_get_chat_history(session_id: str | None = None):
+async def api_get_chat_history(session_id: str | None = None, user_id: str = Depends(get_current_user)):
     """Get chat history for a specific session or the active session."""
     try:
         if session_id:
             chat_history = await get_chat_history_async(session_id=session_id)
         else:
-            active_session = await get_active_session_async()
+            active_session = await get_active_session_async(user_id)
             if active_session:
                 chat_history = await get_chat_history_async(active_session["id"])
             else:
@@ -62,9 +63,9 @@ async def api_get_chat_history(session_id: str | None = None):
 
 
 @router.get("/sessions/list")
-async def api_list_sessions():
+async def api_list_sessions(user_id: str = Depends(get_current_user)):
     try:
-        sessions = await get_all_sessions_async()
+        sessions = await get_all_sessions_async(user_id)
         return {"sessions": sessions}
     except Exception as e:
         log.error("Error listing sessions: %s", e)
@@ -72,9 +73,9 @@ async def api_list_sessions():
 
 
 @router.post("/sessions/create")
-async def api_create_session(http_request: Request, request: SessionCreateRequest):
+async def api_create_session(http_request: Request, request: SessionCreateRequest, user_id: str = Depends(get_current_user)):
     try:
-        session_id = await create_session_async(request.name)
+        session_id = await create_session_async(request.name, user_id)
         await switch_session_async(session_id)
 
         client_id = get_client_id(http_request)
@@ -87,12 +88,12 @@ async def api_create_session(http_request: Request, request: SessionCreateReques
 
 
 @router.post("/sessions/switch")
-async def api_switch_session(request: SessionSwitchRequest, http_request: Request):
+async def api_switch_session(request: SessionSwitchRequest, http_request: Request, user_id: str = Depends(get_current_user)):
     try:
         if not request.session_id:
             raise HTTPException(status_code=400, detail="session_id required")
 
-        await switch_session_async(request.session_id)
+        await switch_session_async(request.session_id, user_id)
 
         client_id = get_client_id(http_request)
         SessionService.clear_client_session(client_id)
@@ -116,12 +117,12 @@ async def api_switch_session(request: SessionSwitchRequest, http_request: Reques
 
 
 @router.post("/sessions/rename")
-async def api_rename_session(request: SessionRenameRequest):
+async def api_rename_session(request: SessionRenameRequest, user_id: str = Depends(get_current_user)):
     try:
         if not request.session_id or not request.name:
             raise HTTPException(status_code=400, detail="session_id and name required")
 
-        success = await rename_session_async(request.session_id, request.name)
+        success = await rename_session_async(request.session_id, request.name, user_id)
 
         if success:
             return {"status": "success"}
@@ -135,15 +136,15 @@ async def api_rename_session(request: SessionRenameRequest):
 
 
 @router.post("/sessions/delete")
-async def api_delete_session(request: SessionDeleteRequest):
+async def api_delete_session(request: SessionDeleteRequest, user_id: str = Depends(get_current_user)):
     try:
         if not request.session_id:
             raise HTTPException(status_code=400, detail="session_id required")
 
-        success = await delete_session_async(request.session_id)
+        success = await delete_session_async(request.session_id, user_id)
 
         if success:
-            active_session = await get_active_session_async()
+            active_session = await get_active_session_async(user_id)
             if active_session:
                 chat_history = await get_chat_history_async(active_session["id"])
                 session_memory = await get_session_memory_async(active_session["id"])
@@ -167,10 +168,10 @@ async def api_delete_session(request: SessionDeleteRequest):
 
 
 @router.post("/clear_chat")
-async def api_clear_chat(request: Request, session_id: str | None = None):
+async def api_clear_chat(request: Request, session_id: str | None = None, user_id: str = Depends(get_current_user)):
     try:
         if not session_id:
-            active_session = await get_active_session_async()
+            active_session = await get_active_session_async(user_id)
             session_id = active_session["id"]
 
         await clear_session_messages_async(session_id)
@@ -184,12 +185,12 @@ async def api_clear_chat(request: Request, session_id: str | None = None):
 
 
 @router.post("/end_session")
-async def api_end_session(request: Request):
+async def api_end_session(request: Request, user_id: str = Depends(get_current_user)):
     try:
         client_id = get_client_id(request)
         SessionService.clear_client_session(client_id)
 
-        profile = await Database.get_profile_async()
+        profile = await Database.get_profile_async(user_id)
         await SessionService.end_session_cleanup_async(
             profile, interface="web", unexpected_exit=False
         )
@@ -199,7 +200,7 @@ async def api_end_session(request: Request):
 
 
 @router.get("/sessions/{session_id}/memory")
-async def api_get_session_memory(session_id: str):
+async def api_get_session_memory(session_id: str, user_id: str = Depends(get_current_user)):
     try:
         session_memory = await get_session_memory_async(session_id)
         return {

@@ -287,6 +287,7 @@ async def generate_ai_response(
     image_content_for_context: list[dict[str, Any]] | None = None,
     ephemeral_context: list[dict[str, str]] | None = None,
     is_tool_loop: bool = False,
+    user_id: str | None = None,
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single (text, raw_response) AI generation pass.
 
@@ -300,7 +301,7 @@ async def generate_ai_response(
     not yet persisted to DB. Stitched after build_messages() for synthesis.
     """
     if session_id is None:
-        session_id = (await Database.get_active_session_async())["id"]
+        session_id = (await Database.get_active_session_async(user_id))["id"]
 
     provider, model = _resolve_provider(profile, None, None)
 
@@ -418,6 +419,7 @@ async def generate_ai_response_streaming(
     image_content_for_context: list[dict[str, Any]] | None = None,
     ephemeral_context: list[dict[str, str]] | None = None,
     is_tool_loop: bool = False,
+    user_id: str | None = None,
 ) -> AsyncIterator[str]:
     """Stream a response from the configured provider chunk by chunk.
 
@@ -430,7 +432,7 @@ async def generate_ai_response_streaming(
     user message. We do NOT re-append user_message to avoid duplication.
     """
     if session_id is None:
-        session_id = (await Database.get_active_session_async())["id"]
+        session_id = (await Database.get_active_session_async(user_id))["id"]
 
     resolved_provider, resolved_model = _resolve_provider(profile, provider, model)
 

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -16,6 +16,7 @@ from app.db import (
     get_api_keys_async,
     update_profile_async,
 )
+from app.api.utils import get_current_user
 from app.stream_manager import StreamManager
 from app.services.config_service import ConfigService
 from app.providers import get_ai_manager
@@ -69,7 +70,7 @@ class ApiKeyRemoveRequest(BaseModel):
 
 
 @router.get("/config")
-async def api_get_config():
+async def api_get_config(user_id: str = Depends(get_current_user)):
     """Single source of truth for frontend configuration."""
     try:
         return await ConfigService.get_frontend_config()
@@ -79,11 +80,11 @@ async def api_get_config():
 
 
 @router.get("/profile")
-async def api_get_profile(session_id: str | None = None):
+async def api_get_profile(session_id: str | None = None, user_id: str = Depends(get_current_user)):
     try:
-        profile = await get_profile_async()
+        profile = await get_profile_async(user_id)
         if session_id is None:
-            active_session = await get_active_session_async()
+            active_session = await get_active_session_async(user_id)
         else:
             active_session = {"id": session_id}
         session_id = active_session["id"]
@@ -108,7 +109,7 @@ async def api_get_profile(session_id: str | None = None):
                         "timestamp": datetime.now().isoformat(),
                     }
                 )
-        session_memory = await get_session_memory_async(active_session["id"])
+        session_memory = await get_session_memory_async(active_session["id"])  # ownership via session FK
 
         api_keys = await get_api_keys_async()
         profile_dict = ConfigService.format_profile_dict(profile)
@@ -130,16 +131,16 @@ async def api_get_profile(session_id: str | None = None):
 
 
 @router.post("/update_profile")
-async def api_update_profile(request: ProfileUpdateRequest):
+async def api_update_profile(request: ProfileUpdateRequest, user_id: str = Depends(get_current_user)):
     try:
-        await update_profile_async(request.updates)
+        await update_profile_async(request.updates, user_id)
         return {"status": "success"}
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/add_api_key")
-async def api_add_api_key(request: ApiKeyRequest):
+async def api_add_api_key(request: ApiKeyRequest, user_id: str = Depends(get_current_user)):
     if await Database.add_api_key_async(request.key_name, request.api_key):
         return {"status": "success", "message": f"{request.key_name} API key added"}
     else:
@@ -150,7 +151,7 @@ async def api_add_api_key(request: ApiKeyRequest):
 
 
 @router.post("/add_chutes_key")
-async def api_add_chutes_key(request: ChutesKeyRequest):
+async def api_add_chutes_key(request: ChutesKeyRequest, user_id: str = Depends(get_current_user)):
     try:
         if await Database.add_api_key_async("chutes", request.api_key.strip()):
             return {
@@ -165,7 +166,7 @@ async def api_add_chutes_key(request: ChutesKeyRequest):
 
 
 @router.post("/remove_api_key")
-async def api_remove_api_key(request: ApiKeyRemoveRequest):
+async def api_remove_api_key(request: ApiKeyRemoveRequest, user_id: str = Depends(get_current_user)):
     try:
         if await Database.remove_api_key_async(request.key_name):
             return {
@@ -179,13 +180,13 @@ async def api_remove_api_key(request: ApiKeyRemoveRequest):
 
 
 @router.get("/providers/list")
-async def api_list_providers():
+async def api_list_providers(user_id: str = Depends(get_current_user)):
     try:
         ai_manager = await get_ai_manager()
         available_providers = ai_manager.get_available_providers()
         all_models = await ai_manager.get_all_models()
 
-        profile = await Database.get_profile_async()
+        profile = await Database.get_profile_async(user_id)
         providers_config = profile.get("providers_config", {})
         current_provider = providers_config.get("preferred_provider", "ollama")
         current_model = providers_config.get("preferred_model", "glm-4.6:cloud")
@@ -203,7 +204,7 @@ async def api_list_providers():
 
 
 @router.post("/providers/set_preferred")
-async def api_set_preferred_provider(request: ProviderSetRequest):
+async def api_set_preferred_provider(request: ProviderSetRequest, user_id: str = Depends(get_current_user)):
     try:
         result = await ConfigService.set_preferred_provider_async(
             request.provider_name, request.model_name
@@ -215,7 +216,7 @@ async def api_set_preferred_provider(request: ProviderSetRequest):
 
 
 @router.post("/providers/test_connection")
-async def api_test_provider_connection(request: ProviderTestRequest):
+async def api_test_provider_connection(request: ProviderTestRequest, user_id: str = Depends(get_current_user)):
     try:
         ai_manager = await get_ai_manager()
         provider = ai_manager.providers.get(request.provider_name)
@@ -237,7 +238,7 @@ async def api_test_provider_connection(request: ProviderTestRequest):
 
 
 @router.get("/get_vision_capabilities")
-async def api_get_vision_capabilities():
+async def api_get_vision_capabilities(user_id: str = Depends(get_current_user)):
     try:
         capabilities = ConfigService.get_vision_capabilities()
         return {"status": "success", "capabilities": capabilities}
@@ -247,7 +248,7 @@ async def api_get_vision_capabilities():
 
 
 @router.post("/providers/set_vision_model")
-async def api_set_vision_model(request: VisionModelSetRequest):
+async def api_set_vision_model(request: VisionModelSetRequest, user_id: str = Depends(get_current_user)):
     try:
         result = await ConfigService.set_vision_model_async(
             request.provider, request.model
@@ -259,16 +260,16 @@ async def api_set_vision_model(request: VisionModelSetRequest):
 
 
 @router.post("/providers/test_vision")
-async def api_test_vision():
+async def api_test_vision(user_id: str = Depends(get_current_user)):
     return {"status": "success", "message": "Vision model test successful"}
 
 
 @router.post("/update_location")
-async def api_update_location(request: LocationUpdateRequest):
+async def api_update_location(request: LocationUpdateRequest, user_id: str = Depends(get_current_user)):
     try:
-        context = await Database.get_context_async()
+        context = await Database.get_context_async(user_id)
         context["location"] = {"lat": request.lat, "lon": request.lon}
-        await Database.update_context_async(context)
+        await Database.update_context_async(context, user_id)
         return {"status": "success", "message": "Location updated"}
     except Exception as e:
         log.error("Error updating location: %s", e)
@@ -276,16 +277,16 @@ async def api_update_location(request: LocationUpdateRequest):
 
 
 @router.post("/update_weather_location")
-async def api_update_weather_location(request: LocationUpdateRequest):
+async def api_update_weather_location(request: LocationUpdateRequest, user_id: str = Depends(get_current_user)):
     """Alias for update_location to maintain compatibility."""
-    return await api_update_location(request)
+    return await api_update_location(request, user_id)
 
 
 @router.post("/global_knowledge/update")
-async def api_update_global_knowledge(request: GlobalKnowledgeUpdateRequest):
+async def api_update_global_knowledge(request: GlobalKnowledgeUpdateRequest, user_id: str = Depends(get_current_user)):
     try:
         global_knowledge = {"facts": request.facts}
-        await Database.update_profile_async({"global_knowledge": global_knowledge})
+        await Database.update_profile_async({"global_knowledge": global_knowledge}, user_id)
         return {"status": "success", "message": "Global knowledge updated"}
     except Exception as e:
         log.error("Error updating global knowledge: %s", e)

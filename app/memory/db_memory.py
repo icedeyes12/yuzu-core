@@ -493,7 +493,8 @@ async def save_fact_async(
 ) -> int | None:
     """Async version of save_fact."""
     if user_id is None:
-        user_id = (await get_profile_async())["id"]
+        if user_id is None:
+            user_id = (await get_profile_async())["id"]
     meta = dict(metadata) if metadata else {}
     if "session_id" not in meta:
         meta["session_id"] = session_id

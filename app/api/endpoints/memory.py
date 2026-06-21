@@ -3,8 +3,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from app.db import Database
+from app.api.utils import get_current_user
 from app.services.memory_service import MemoryService
 from app.logging_config import get_logger
 
@@ -14,11 +15,11 @@ router = APIRouter(tags=["memory"])
 
 
 @router.post("/update_session_context")
-async def api_update_session_context():
+async def api_update_session_context(user_id: str = Depends(get_current_user)):
     try:
-        active_session = await Database.get_active_session_async()
+        active_session = await Database.get_active_session_async(user_id)
         session_id = active_session["id"]
-        profile = await Database.get_profile_async()
+        profile = await Database.get_profile_async(user_id)
 
         chat_history = await Database.get_chat_history_async(session_id=session_id)
 
@@ -58,12 +59,12 @@ async def api_update_session_context():
 
 
 @router.post("/update_global_profile")
-async def api_update_global_profile():
+async def api_update_global_profile(user_id: str = Depends(get_current_user)):
     try:
         success = await MemoryService.summarize_global_profile_async()
 
         if success:
-            profile = await Database.get_profile_async()
+            profile = await Database.get_profile_async(user_id)
             return {
                 "status": "success",
                 "message": "Global player profile updated from ALL sessions!",
@@ -77,10 +78,10 @@ async def api_update_global_profile():
 
 
 @router.post("/rebuild_structured_memory")
-async def api_rebuild_structured_memory():
+async def api_rebuild_structured_memory(user_id: str = Depends(get_current_user)):
     """Rebuild structured memory for the active session."""
     try:
-        active_session = await Database.get_active_session_async()
+        active_session = await Database.get_active_session_async(user_id)
         session_id = active_session["id"]
 
         result = await MemoryService.rebuild_structured_memory_async(session_id)
@@ -99,9 +100,9 @@ async def api_rebuild_structured_memory():
 
 
 @router.post("/run_memory_decay")
-async def api_run_memory_decay():
+async def api_run_memory_decay(user_id: str = Depends(get_current_user)):
     try:
-        active_session = await Database.get_active_session_async()
+        active_session = await Database.get_active_session_async(user_id)
         session_id = active_session["id"]
 
         from app.memory.review import run_decay_async
@@ -120,9 +121,9 @@ async def api_run_memory_decay():
 
 
 @router.get("/memory_stats")
-async def api_memory_stats():
+async def api_memory_stats(user_id: str = Depends(get_current_user)):
     try:
-        active_session = await Database.get_active_session_async()
+        active_session = await Database.get_active_session_async(user_id)
         session_id = active_session["id"]
 
         from app.memory.db_memory_facade import (

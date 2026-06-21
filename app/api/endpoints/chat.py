@@ -9,7 +9,8 @@ from pydantic import BaseModel, Field
 
 from app.services.chat_service import ChatService
 from app.services.session_service import SessionService
-from app.api.utils import get_client_id
+from app.api.utils import get_client_id, get_current_user
+from fastapi import Depends
 from app.orchestrator import handle_user_message
 from app.logging_config import get_logger
 
@@ -24,7 +25,7 @@ class MessageRequest(BaseModel):
 
 
 @router.post("/send_message")
-async def api_send_message(request: MessageRequest):
+async def api_send_message(request: MessageRequest, user_id: str = Depends(get_current_user)):
     try:
         user_message = request.message.strip()
         if not user_message:
@@ -34,7 +35,7 @@ async def api_send_message(request: MessageRequest):
         log.info("[%s] message: %s...", interface, user_message[:200])
 
         ai_reply = await ChatService.send_message_async(
-            user_message, interface=interface
+            user_message, interface=interface, user_id=user_id
         )
 
         log.info("AI reply: %s", ai_reply)
@@ -53,6 +54,7 @@ async def api_send_message_stream(
     provider: str | None = Form(None),
     model: str | None = Form(None),
     images: list[UploadFile] = File(default=[]),
+    user_id: str = Depends(get_current_user),
 ):
     """Unified streaming endpoint for text and images."""
     try:
@@ -85,6 +87,7 @@ async def api_send_message_stream(
                 provider=provider,
                 model=model,
                 images=images,
+                user_id=user_id,
             ),
             media_type="text/event-stream",
         )
@@ -99,13 +102,13 @@ async def api_send_message_stream(
 
 
 @router.post("/generate_image")
-async def api_generate_image(request: MessageRequest):
+async def api_generate_image(request: MessageRequest, user_id: str = Depends(get_current_user)):
     try:
         prompt = request.message.strip()
         if not prompt:
             return {"reply": "Prompt required", "status": "error"}
 
-        ai_reply = await handle_user_message(f"/imagine {prompt}", interface="web")
+        ai_reply = await handle_user_message(f"/imagine {prompt}", interface="web", user_id=user_id)
         return {"reply": ai_reply, "status": "success"}
     except Exception as e:
         log.error("Error generating image: %s", type(e).__name__)
@@ -113,7 +116,7 @@ async def api_generate_image(request: MessageRequest):
 
 
 @router.post("/browser_unload")
-async def api_browser_unload(request: Request):
+async def api_browser_unload(request: Request, user_id: str = Depends(get_current_user)):
     try:
         from app.db import Database
 
@@ -121,7 +124,7 @@ async def api_browser_unload(request: Request):
         SessionService.clear_client_session(client_id)
         log.info("Web page closed or refreshed - session cleared")
 
-        profile = await Database.get_profile_async()
+        profile = await Database.get_profile_async(user_id)
         await SessionService.end_session_cleanup_async(
             profile, interface="web", unexpected_exit=True
         )
