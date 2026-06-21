@@ -89,12 +89,48 @@ DECRYPTION_ERROR = "[DECRYPTION_ERROR]"
 
 # ---------------------------------------------------------------------------
 # Schema DDL (executed by init_pg_tables / init_pg_tables_async)
+#
+# Post-Phase-1 multi-tenant schema.  profiles and chat_sessions use UUIDv7
+# primary keys (time-ordered, sortable).  All tenant-scoped tables carry a
+# user_id FK → profiles(id) ON DELETE CASCADE.  messages.id and
+# semantic_facts.id remain SERIAL integer (not changed in the cutover).
+#
+# Legacy migration columns (legacy_int_id, legacy_session_id, memory_json)
+# are NOT included — they are migration artifacts only and must not exist
+# on fresh installs.
 # ---------------------------------------------------------------------------
 
 SCHEMA_DDL: tuple[str, ...] = (
+    # ── Extensions ──
+    "CREATE EXTENSION IF NOT EXISTS pgcrypto",
+    "CREATE EXTENSION IF NOT EXISTS vector",
+    "CREATE EXTENSION IF NOT EXISTS pg_trgm",
+
+    # ── UUIDv7 generator (time-ordered, lexicographically sortable) ──
+    """
+    CREATE OR REPLACE FUNCTION generate_uuidv7()
+    RETURNS UUID AS $function$
+    DECLARE
+      unix_ts_ms BIGINT;
+      rand_hex TEXT;
+    BEGIN
+      unix_ts_ms := (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT;
+      rand_hex := replace(gen_random_uuid()::text, '-', '');
+      RETURN (
+        lpad(to_hex(unix_ts_ms), 12, '0')
+        || '7'
+        || substring(rand_hex, 14, 3)
+        || substring(rand_hex, 17, 4)
+        || substring(rand_hex, 21, 12)
+      )::UUID;
+    END;
+    $function$ LANGUAGE plpgsql VOLATILE
+    """,
+
+    # ── profiles (tenant root — PK is UUID, referenced by all user_id FKs) ──
     """
     CREATE TABLE IF NOT EXISTS profiles (
-        id SERIAL PRIMARY KEY,
+        id UUID NOT NULL DEFAULT generate_uuidv7() PRIMARY KEY,
         display_name VARCHAR(255) NOT NULL DEFAULT '',
         partner_name VARCHAR(255) NOT NULL DEFAULT '',
         affection INTEGER NOT NULL DEFAULT 50,
@@ -104,51 +140,93 @@ SCHEMA_DDL: tuple[str, ...] = (
         global_knowledge JSONB NOT NULL DEFAULT '{}',
         providers_config JSONB NOT NULL DEFAULT '{}',
         context JSONB NOT NULL DEFAULT '{}',
-        image_model VARCHAR(50) NOT NULL DEFAULT 'qwen_image',
-        vision_model VARCHAR(100) NOT NULL DEFAULT 'moonshotai/kimi-k2.5',
-        timestamp TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
+        image_model TEXT NOT NULL DEFAULT 'hunyuan',
+        vision_model TEXT NOT NULL DEFAULT 'moonshotai/kimi-k2.5',
+        location_lat REAL,
+        location_lon REAL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        timestamp TIMESTAMP DEFAULT NOW()
     )
     """,
+
+    # ── chat_sessions (PK UUID, tenant FK user_id → profiles) ──
     """
     CREATE TABLE IF NOT EXISTS chat_sessions (
-        id SERIAL PRIMARY KEY,
+        id UUID NOT NULL DEFAULT generate_uuidv7() PRIMARY KEY,
+        user_id UUID NOT NULL,
         name VARCHAR(255) NOT NULL DEFAULT 'New Chat',
         is_active BOOLEAN NOT NULL DEFAULT FALSE,
         message_count INTEGER NOT NULL DEFAULT 0,
-        memory_state JSONB NOT NULL DEFAULT '{}',
-        timestamp TIMESTAMP DEFAULT NOW(),
+        memory_state JSONB DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW(),
-        deleted_at TIMESTAMP DEFAULT NULL
+        deleted_at TIMESTAMP DEFAULT NULL,
+        timestamp TIMESTAMP DEFAULT NOW(),
+        FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
     )
     """,
+
+    # ── api_keys (not multi-tenant — stays SERIAL integer PK) ──
     """
     CREATE TABLE IF NOT EXISTS api_keys (
         id SERIAL PRIMARY KEY,
         key_name VARCHAR(255) NOT NULL DEFAULT 'openrouter',
         key_value TEXT NOT NULL,
         key_encrypted BOOLEAN NOT NULL DEFAULT TRUE,
-        timestamp TIMESTAMP DEFAULT NOW()
+        created_at TIMESTAMP DEFAULT NOW()
     )
     """,
+
+    # ── messages (id stays SERIAL int; session_id + user_id are UUID FKs) ──
     """
     CREATE TABLE IF NOT EXISTS messages (
         id SERIAL PRIMARY KEY,
-        session_id INTEGER NOT NULL,
+        session_id UUID,
+        user_id UUID NOT NULL,
         role VARCHAR(50) NOT NULL,
         content TEXT NOT NULL,
         content_encrypted BOOLEAN NOT NULL DEFAULT FALSE,
-        image_paths TEXT NOT NULL DEFAULT '[]',
-        timestamp TIMESTAMP DEFAULT NOW(),
-        FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+        image_paths TEXT DEFAULT '[]',
+        tool_calls JSONB,
+        tool_call_id VARCHAR,
+        timestamp VARCHAR NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
     )
     """,
+
+    # ── semantic_facts (id stays SERIAL int; user_id UUID FK; embedding vector(4096)) ──
+    """
+    CREATE TABLE IF NOT EXISTS semantic_facts (
+        id SERIAL PRIMARY KEY,
+        user_id UUID NOT NULL,
+        fact_type VARCHAR NOT NULL,
+        content TEXT NOT NULL,
+        metadata JSONB,
+        embedding vector(4096),
+        tsv tsvector,
+        pending_review BOOLEAN DEFAULT FALSE,
+        invalid_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_accessed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
+    )
+    """,
+
+    # ── Indexes ──
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_active ON chat_sessions(is_active)",
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at)",
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_deleted ON chat_sessions(deleted_at)",
+    "CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON chat_sessions(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_api_keys_name ON api_keys(key_name)",
-    # Migration: Add deleted_at column if it doesn't exist (safe to run multiple times)
-    "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL",
+    "CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id)",
+    "CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_messages_session_user ON messages(session_id, user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_semantic_facts_user_id ON semantic_facts(user_id)",
+    "CREATE INDEX IF NOT EXISTS semantic_facts_content_idx ON semantic_facts USING gin (content gin_trgm_ops)",
+    "CREATE INDEX IF NOT EXISTS semantic_facts_tsv_idx ON semantic_facts USING gin (tsv)",
+    "CREATE INDEX IF NOT EXISTS semantic_facts_pending_review_idx ON semantic_facts(pending_review) WHERE pending_review = TRUE",
 )
 
 
