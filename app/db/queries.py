@@ -227,6 +227,29 @@ SCHEMA_DDL: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS semantic_facts_content_idx ON semantic_facts USING gin (content gin_trgm_ops)",
     "CREATE INDEX IF NOT EXISTS semantic_facts_tsv_idx ON semantic_facts USING gin (tsv)",
     "CREATE INDEX IF NOT EXISTS semantic_facts_pending_review_idx ON semantic_facts(pending_review) WHERE pending_review = TRUE",
+
+    # ── Migrations for existing DBs (idempotent) ──
+    # Phase 1.3: add user_id to tenant-scoped tables (already done via migration SQL)
+    # Phase 1.7: drop NOT NULL on legacy mapping columns so new UUID rows can omit them
+    # Wrapped in DO blocks because legacy_* columns don't exist on fresh installs
+    """
+    DO $$ BEGIN
+      ALTER TABLE chat_sessions ALTER COLUMN legacy_int_id DROP NOT NULL;
+    EXCEPTION WHEN undefined_column THEN NULL;
+    END $$;
+    """,
+    """
+    DO $$ BEGIN
+      ALTER TABLE messages ALTER COLUMN legacy_session_id DROP NOT NULL;
+    EXCEPTION WHEN undefined_column THEN NULL;
+    END $$;
+    """,
+    """
+    DO $$ BEGIN
+      ALTER TABLE profiles ALTER COLUMN legacy_int_id DROP NOT NULL;
+    EXCEPTION WHEN undefined_column THEN NULL;
+    END $$;
+    """,
 )
 
 
