@@ -1,6 +1,6 @@
 # Yuzu Companion — Agent Operational Manual
 
-> **Version:** 3.2.0 · **Last Updated:** 2026-05-22
+> **Version:** 4.0.0 · **Last Updated:** 2026-05-22
 > This is the master behavior manual for any AI agent interacting with this codebase.
 
 ---
