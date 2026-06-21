@@ -154,8 +154,9 @@ async def get_active_session_async() -> dict:
     row = await pg_fetchone_async(SQL_SESSION_SELECT_ACTIVE)
     if not row:
         now = datetime.now()
+        user_id = (await get_profile_async())["id"]
         await pg_execute_async(
-            SQL_SESSION_INSERT, ("New Chat", True, 0, "{}", now, now)
+            SQL_SESSION_INSERT, (user_id, "New Chat", True, 0, "{}", now, now)
         )
         row = await pg_fetchone_async(SQL_SESSION_SELECT_ACTIVE)
     return parse_session_row(row)

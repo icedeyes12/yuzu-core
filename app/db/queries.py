@@ -263,7 +263,7 @@ SQL_PROFILE_INSERT_DEFAULT = """
 INSERT INTO profiles (display_name, partner_name, affection, theme,
                       memory_state, session_history, global_knowledge,
                       providers_config, context, timestamp, updated_at)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
 
 DEFAULT_PROFILE_PARAMS = (
@@ -276,8 +276,6 @@ DEFAULT_PROFILE_PARAMS = (
     "{}",
     "{}",
     "{}",
-    datetime.now(),
-    datetime.now(),
 )
 
 _PROFILE_JSON_FIELDS = (

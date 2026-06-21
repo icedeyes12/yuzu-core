@@ -194,7 +194,8 @@ def get_active_session() -> dict:
     row = pg_fetchone(SQL_SESSION_SELECT_ACTIVE)
     if not row:
         now = datetime.now()
-        pg_execute(SQL_SESSION_INSERT, ("New Chat", True, 0, "{}", now, now))
+        user_id = get_profile()["id"]
+        pg_execute(SQL_SESSION_INSERT, (user_id, "New Chat", True, 0, "{}", now, now))
         row = pg_fetchone(SQL_SESSION_SELECT_ACTIVE)
     return parse_session_row(row)
 

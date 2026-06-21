@@ -106,8 +106,8 @@ class TestBuildProfileUpdate:
         assert params[0] == 99
 
     def test_default_profile_params_match_columns(self):
-        # 9 placeholders before timestamp/updated_at
-        assert len(DEFAULT_PROFILE_PARAMS) == 11
+        # 9 values before timestamp/updated_at (datetimes added by caller at insert time)
+        assert len(DEFAULT_PROFILE_PARAMS) == 9
 
 
 class TestSessionParsers:
