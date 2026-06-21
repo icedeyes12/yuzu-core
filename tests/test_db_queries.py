@@ -311,4 +311,4 @@ class TestMisc:
         assert "semantic_facts" in full
         assert "generate_uuidv7" in full
         # 3 extensions + 1 function + 5 tables + 12 indexes + 3 migration DO-blocks = 24 statements
-        assert len(SCHEMA_DDL) == 24
+        assert len(SCHEMA_DDL) == 29

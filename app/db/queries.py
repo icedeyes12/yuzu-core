@@ -214,6 +214,32 @@ SCHEMA_DDL: tuple[str, ...] = (
     )
     """,
 
+    # ── user_identities (OAuth provider linkage — Google sub / GitHub id) ──
+    """
+    CREATE TABLE IF NOT EXISTS user_identities (
+        id UUID NOT NULL DEFAULT generate_uuidv7() PRIMARY KEY,
+        user_id UUID NOT NULL,
+        provider VARCHAR(32) NOT NULL,
+        provider_sub TEXT NOT NULL,
+        email TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE (provider, provider_sub),
+        FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
+    )
+    """,
+
+    # ── user_sessions (opaque server-side session tokens — revocable, not JWT) ──
+    """
+    CREATE TABLE IF NOT EXISTS user_sessions (
+        token TEXT PRIMARY KEY,
+        user_id UUID NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        expires_at TIMESTAMP NOT NULL,
+        revoked_at TIMESTAMP DEFAULT NULL,
+        FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
+    )
+    """,
+
     # ── Indexes ──
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_active ON chat_sessions(is_active)",
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at)",
@@ -227,6 +253,9 @@ SCHEMA_DDL: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS semantic_facts_content_idx ON semantic_facts USING gin (content gin_trgm_ops)",
     "CREATE INDEX IF NOT EXISTS semantic_facts_tsv_idx ON semantic_facts USING gin (tsv)",
     "CREATE INDEX IF NOT EXISTS semantic_facts_pending_review_idx ON semantic_facts(pending_review) WHERE pending_review = TRUE",
+    "CREATE INDEX IF NOT EXISTS idx_user_identities_user_id ON user_identities(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at)",
 
     # ── Migrations for existing DBs (idempotent) ──
     # Phase 1.3: add user_id to tenant-scoped tables (already done via migration SQL)
