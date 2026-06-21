@@ -244,6 +244,13 @@ CREATE INDEX IF NOT EXISTS idx_semantic_facts_user  ON semantic_facts(user_id);
 - All `session_id: int` annotations across `app/memory/db_memory.py`, `app/memory/memory_review.py`, orchestrator, services → `session_id: str` (UUID).
 - `pgvector` `embedding VECTOR(1024)` unaffected.
 
+**Phase 1.7 COMPLETED (2026-06-21) — 5 blocks, all committed on `dev`:**
+- **Block 1** (`d77b20f`): `SCHEMA_DDL` rewritten to post-cutover UUID schema (profiles/chat_sessions/messages/api_keys UUID PKs + user_id cols + semantic_facts with vector(4096) + generate_uuidv7 function). Note: live DB embedding is `vector(4096)`, not 1024 as originally noted above.
+- **Block 2** (`de3ed75`): Metadata `session_id` backfilled int→UUID string (1976 mapped, 50 orphaned→null, 386 already null). `::int` cast dropped from both `SQL_FACT_DECAY_FETCH_FOR_SESSION` and `build_metadata_conditions` → text comparison `(metadata->>'session_id') = %s`.
+- **Block 3** (`9bef3a2`): `session_id: int → str` annotations swept across 14 files (25 sites). `user_id` added to `SQL_SESSION_INSERT`, `SQL_MESSAGE_INSERT`, `SQL_FACT_INSERT` + all calling functions (sync + async). Facade pass-through updated. 3 test assertions fixed. 138 tests pass.
+- **Block 4** (`dbf6711`): Pydantic `Field(gt=0)` / `Path(ge=1)` numeric validators on `session_id` → `min_length=1` string validators in `sessions.py` (3 sites) + `stream.py` (2 sites).
+- **Block 5** (`8a0ff2f`): `parseInt(sessionId, 10)` removed from `static/js/modules/router.js` (3 sites). Frontend session_id transport verified: all fetch bodies/params use string passthrough, no other numeric coercion exists.
+
 **1.8 Verification gate (Phase 1)**
 - `SELECT count(*) FROM profiles/chat_sessions/messages/semantic_facts` unchanged pre/post.
 - `SELECT count(*) FROM messages m LEFT JOIN chat_sessions c ON m.session_id=c.id WHERE c.id IS NULL` → 0 (no orphaned FKs).
