@@ -25,7 +25,7 @@ class StreamBuffer:
 
     def __init__(
         self,
-        session_id: int,
+        session_id: str,
         user_message: str,
         interface: str = "web",
         provider: Optional[str] = None,
@@ -256,7 +256,7 @@ class StreamManager:
     @classmethod
     async def start_stream(
         cls,
-        session_id: int,
+        session_id: str,
         user_message: str,
         interface: str = "web",
         provider: Optional[str] = None,
@@ -285,13 +285,13 @@ class StreamManager:
             return stream
 
     @classmethod
-    async def get_stream(cls, session_id: int) -> Optional[StreamBuffer]:
+    async def get_stream(cls, session_id: str) -> Optional[StreamBuffer]:
         """Get an active stream for a session."""
         async with cls._lock:
             return cls._streams.get(session_id)
 
     @classmethod
-    async def _cleanup_stream(cls, session_id: int):
+    async def _cleanup_stream(cls, session_id: str):
         """Remove a stream from the manager (called from StreamBuffer finally block)."""
         async with cls._lock:
             if session_id in cls._streams:

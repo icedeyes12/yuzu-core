@@ -79,7 +79,7 @@ async def _get_ai_manager_async():
 
 
 async def mark_retrieved_as_pending_review_async(
-    fact_ids: list[int], session_id: int | None = None
+    fact_ids: list[int], session_id: str | None = None
 ) -> int:
     """Mark retrieved facts as pending review (async)."""
     if not fact_ids:
@@ -515,7 +515,7 @@ async def _update_fsrs_params_async(fact_id: int, rating: str) -> bool:
 
 
 def review_memory(
-    fact_ids: list[int], conversation_context: str, session_id: int | None = None
+    fact_ids: list[int], conversation_context: str, session_id: str | None = None
 ) -> dict:
     """Review a list of retrieved memories against the conversation context.
 
@@ -603,7 +603,7 @@ def review_memory(
 
 
 async def review_memory_async(
-    fact_ids: list[int], conversation_context: str, session_id: int | None = None
+    fact_ids: list[int], conversation_context: str, session_id: str | None = None
 ) -> dict:
     """Review memories (async)."""
     counts = {"again": 0, "hard": 0, "good": 0, "easy": 0, "failed": 0}

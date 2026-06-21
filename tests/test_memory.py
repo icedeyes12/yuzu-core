@@ -75,7 +75,7 @@ class TestMetadataConditions:
         """Session ID adds one condition."""
         conditions, params = build_metadata_conditions(session_id=42)
         assert len(conditions) == 1
-        assert "(metadata->>'session_id')::int = %s" in conditions
+        assert "(metadata->>'session_id') = %s" in conditions
         assert params == [42]
 
     def test_fact_type_only(self):

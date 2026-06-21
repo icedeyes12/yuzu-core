@@ -150,7 +150,7 @@ def _read_file_content(filepath: str, max_size: int = 50000) -> str:
 
 
 async def _retrieve_memories_async(
-    session_id: int, user_message: str | None, static_limit: int, dynamic_limit: int
+    session_id: str, user_message: str | None, static_limit: int, dynamic_limit: int
 ) -> tuple[list[int], str, str]:
     """Combined retrieval with single embedding call (async)."""
     try:
@@ -177,7 +177,7 @@ async def _retrieve_memories_async(
         return [], "", ""
 
 
-async def _mark_facts_pending_async(static_ids: list[int], session_id: int) -> None:
+async def _mark_facts_pending_async(static_ids: list[int], session_id: str) -> None:
     if not static_ids:
         return
     try:
@@ -188,7 +188,7 @@ async def _mark_facts_pending_async(static_ids: list[int], session_id: int) -> N
         log.warning("pending-review marking failed: %s", e)
 
 
-async def _legacy_memory_block_async(profile: dict[str, Any], session_id: int) -> str:
+async def _legacy_memory_block_async(profile: dict[str, Any], session_id: str) -> str:
     block = ""
     session_memory = await Database.get_session_memory_async(session_id)
     if session_memory and session_memory.get("session_context"):
@@ -279,7 +279,7 @@ def _global_knowledge_block(profile: dict[str, Any]) -> str:
     return "\n\n **WHAT YOU SHOULD KNOW ABOUT YOUR HUMAN**\n" + "\n".join(lines)
 
 
-async def _session_events_block_async(session_id: int) -> str:
+async def _session_events_block_async(session_id: str) -> str:
     """Build meta-awareness block with recent session context.
     Strictly returns state data. Behavioral rules are handled in the main prompt.
     """
@@ -364,7 +364,7 @@ def _get_relevant_tools(user_message: str) -> str:
 
 async def build_system_message_async(
     profile: dict[str, Any],
-    session_id: int,
+    session_id: str,
     interface: str,
     user_message: str | None,
 ) -> str:
@@ -519,7 +519,7 @@ You are in a perpetual state of growth, prioritizing curiosity and adaptability.
 
 async def build_messages(
     profile: dict[str, Any],
-    session_id: int,
+    session_id: str,
     interface: str,
     user_message: str | None,
     include_image_paths: bool = False,

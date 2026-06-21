@@ -68,8 +68,8 @@ SQL_FACT_DUP_CHECK_BY_CONTENT = (
 
 SQL_FACT_INSERT = """
 INSERT INTO semantic_facts
-    (fact_type, content, embedding, metadata, created_at, last_accessed)
-VALUES (%s, %s, %s::vector, %s, %s, %s)
+    (user_id, fact_type, content, embedding, metadata, created_at, last_accessed)
+VALUES (%s, %s, %s, %s::vector, %s, %s, %s)
 RETURNING id
 """
 
@@ -117,7 +117,7 @@ WHERE fact_type = %s
 
 def build_metadata_conditions(
     *,
-    session_id: int | None = None,
+    session_id: str | None = None,
     fact_type: str | None = None,
     category: str | None = None,
     metadata_filter: dict[str, str] | None = None,

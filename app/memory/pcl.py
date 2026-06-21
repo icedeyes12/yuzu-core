@@ -96,7 +96,7 @@ def _extract_json_from_markdown(text: str) -> str:
 
 
 async def load_relevant_semantic_facts_async(
-    session_id: int, limit: int = MAX_FACTS_FOR_PREDICTION
+    session_id: str, limit: int = MAX_FACTS_FOR_PREDICTION
 ):
     """Fetch top semantic facts for a session (async)."""
     facts = await MemoryDB.get_facts_by_session_async(
@@ -409,7 +409,7 @@ def _map_category_to_relation(category: str) -> str:
     return mapping.get(category, "experience")
 
 
-async def _get_category_counts_async(session_id: int) -> dict[str, int]:
+async def _get_category_counts_async(session_id: str) -> dict[str, int]:
     """Count existing facts per category (async)."""
     facts = await MemoryDB.get_facts_by_session_async(
         session_id=None, fact_type=FACT_TYPE_STATIC, limit=500
@@ -422,7 +422,7 @@ async def _get_category_counts_async(session_id: int) -> dict[str, int]:
 
 
 async def consolidate_facts_async(
-    extracted: list[dict], session_id: int, episode_id=None
+    extracted: list[dict], session_id: str, episode_id=None
 ) -> dict:
     """Apply extracted knowledge actions (async)."""
     counts = {"new": 0, "reinforced": 0, "updated": 0, "invalidated": 0}
@@ -524,7 +524,7 @@ async def consolidate_facts_async(
 
 
 async def run_predict_calibrate_async(
-    session_id: int,
+    session_id: str,
     episode_summary: str,
     messages: list[dict],
     episode_id=None,

@@ -433,7 +433,7 @@ def _parse_key_value_args(raw_args: str) -> dict[str, Any]:
 
 async def execute_commands(
     commands: list[str],
-    session_id: int | None = None,
+    session_id: str | None = None,
 ) -> list[tuple[str, dict[str, Any]]]:
     """Execute a list of commands sequentially (async).
 

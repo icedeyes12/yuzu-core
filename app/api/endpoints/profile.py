@@ -79,7 +79,7 @@ async def api_get_config():
 
 
 @router.get("/profile")
-async def api_get_profile(session_id: int | None = None):
+async def api_get_profile(session_id: str | None = None):
     try:
         profile = await get_profile_async()
         if session_id is None:

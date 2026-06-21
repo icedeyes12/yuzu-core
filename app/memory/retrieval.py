@@ -516,7 +516,7 @@ def retrieve_static_memories(query=None, limit=15):
     return parsed
 
 
-def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
+def retrieve_dynamic_memories(session_id: str, query=None, limit=10):
     """
     Retrieve dynamic (per-session) episodic memories.
     3-channel hybrid: vector + trigram + tsvector, merged via RRF.
@@ -599,7 +599,7 @@ def retrieve_dynamic_memories(session_id: int, query=None, limit=10):
 
 
 def retrieve_memories_combined(
-    session_id: int,
+    session_id: str,
     query: str | None = None,
     static_limit: int = 10,
     dynamic_limit: int = 5,
@@ -727,7 +727,7 @@ retrieve_semantic_memories = retrieve_static_memories
 retrieve_episodic_memories = retrieve_dynamic_memories
 
 
-def retrieve_segments(session_id: int, query=None, limit: int = 10):
+def retrieve_segments(session_id: str, query=None, limit: int = 10):
     """
     Retrieve conversation segments for a session.
 
@@ -774,7 +774,7 @@ def retrieve_segments(session_id: int, query=None, limit: int = 10):
     return parsed
 
 
-def retrieve_memory(session_id: int, query=None):
+def retrieve_memory(session_id: str, query=None):
     """
     Main retrieval entry point.
 
@@ -836,7 +836,7 @@ def _format_static_context(static: list[dict]) -> str:
 
 
 def retrieve_for_context(
-    session_id: int, query: str | None = None, limit: int = 10
+    session_id: str, query: str | None = None, limit: int = 10
 ) -> tuple[list[int], str]:
     """
     Retrieve ONLY static semantic memories for pre-LLM system prompt injection.
@@ -1002,7 +1002,7 @@ async def retrieve_static_memories_async(query=None, limit=15):
     return parsed
 
 
-async def retrieve_dynamic_memories_async(session_id: int, query=None, limit=10):
+async def retrieve_dynamic_memories_async(session_id: str, query=None, limit=10):
     """
     Async version of retrieve_dynamic_memories.
     3-channel hybrid: vector + trigram + tsvector, merged via RRF.
@@ -1082,7 +1082,7 @@ async def retrieve_dynamic_memories_async(session_id: int, query=None, limit=10)
     return parsed
 
 
-async def retrieve_memory_async(session_id: int, query=None):
+async def retrieve_memory_async(session_id: str, query=None):
     """
     Async version of retrieve_memory.
     Main retrieval entry point.
@@ -1119,7 +1119,7 @@ async def retrieve_memory_async(session_id: int, query=None):
 
 
 async def retrieve_for_context_async(
-    session_id: int, query: str | None = None, limit: int = 10
+    session_id: str, query: str | None = None, limit: int = 10
 ) -> tuple[list[int], str]:
     """
     Async version of retrieve_for_context.
@@ -1135,7 +1135,7 @@ async def retrieve_for_context_async(
 
 
 async def retrieve_memories_combined_async(
-    session_id: int,
+    session_id: str,
     query: str | None = None,
     static_limit: int = 10,
     dynamic_limit: int = 5,

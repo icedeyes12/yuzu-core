@@ -142,7 +142,7 @@ def update_memory(memory_dict: dict) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def get_memory_state(session_id: int) -> dict:
+def get_memory_state(session_id: str) -> dict:
     """Get pipeline state from session's memory_state.
 
     Returns dict with:
@@ -166,7 +166,7 @@ def get_memory_state(session_id: int) -> dict:
         return {"last_segmented_count": 0}
 
 
-def update_memory_state(session_id: int, state: dict) -> bool:
+def update_memory_state(session_id: str, state: dict) -> bool:
     """Update pipeline state in session's memory_state.
 
     Merges with existing state.
@@ -203,12 +203,14 @@ def get_all_sessions() -> list[dict]:
     return [parse_session_row(r) for r in pg_fetchall(SQL_SESSION_SELECT_ALL)]
 
 
-def create_session(name: str = "New Chat") -> int | None:
+def create_session(name: str = "New Chat", user_id: str | None = None) -> str | None:
+    if user_id is None:
+        user_id = get_profile()["id"]
     now = datetime.now()
     try:
         with PgSession() as s:
             row = s.execute_returning(
-                SQL_SESSION_INSERT, (name, False, 0, "{}", now, now)
+                SQL_SESSION_INSERT, (user_id, name, False, 0, "{}", now, now)
             )
             return row.get("id") if row else None
     except Exception as e:  # noqa: BLE001
@@ -216,7 +218,7 @@ def create_session(name: str = "New Chat") -> int | None:
         return None
 
 
-def switch_session(session_id: int) -> bool:
+def switch_session(session_id: str) -> bool:
     try:
         with PgSession() as s:
             s.execute(SQL_SESSION_DEACTIVATE_ALL)
@@ -227,7 +229,7 @@ def switch_session(session_id: int) -> bool:
         return False
 
 
-def rename_session(session_id: int, new_name: str) -> bool:
+def rename_session(session_id: str, new_name: str) -> bool:
     try:
         pg_execute(SQL_SESSION_RENAME, (new_name, datetime.now(), session_id))
         return True
@@ -236,7 +238,7 @@ def rename_session(session_id: int, new_name: str) -> bool:
         return False
 
 
-def delete_session(session_id: int) -> bool:
+def delete_session(session_id: str) -> bool:
     try:
         with PgSession() as s:
             s.execute(SQL_SESSION_DELETE, (session_id,))
@@ -246,7 +248,7 @@ def delete_session(session_id: int) -> bool:
         return False
 
 
-def update_session_memory(session_id: int, memory: dict) -> bool:
+def update_session_memory(session_id: str, memory: dict) -> bool:
     try:
         pg_execute(
             SQL_SESSION_UPDATE_MEMORY,
@@ -258,12 +260,12 @@ def update_session_memory(session_id: int, memory: dict) -> bool:
         return False
 
 
-def get_session_memory(session_id: int) -> dict:
+def get_session_memory(session_id: str) -> dict:
     rows = pg_fetchall(SQL_SESSION_MEMORY_NOTES, (session_id,))
     return parse_session_memory_rows(rows)
 
 
-def increment_message_count(session_id: int) -> bool:
+def increment_message_count(session_id: str) -> bool:
     try:
         pg_execute(SQL_SESSION_INCREMENT_COUNT, (datetime.now(), session_id))
         return True
@@ -321,21 +323,24 @@ def remove_api_key(key_name: str) -> bool:
 
 
 def add_message(
-    session_id: int,
+    session_id: str,
     role: str,
     content: str,
     image_paths: list[str] | None = None,
+    user_id: str | None = None,
 ) -> int | None:
     """Insert a message row, bump the session's message_count, return id.
 
     Timestamp is set by database NOW() to ensure ordering coherence.
     """
+    if user_id is None:
+        user_id = get_profile()["id"]
     try:
         paths_json = json.dumps(image_paths or [])
         with PgSession() as s:
             row = s.execute_returning(
                 SQL_MESSAGE_INSERT,
-                (session_id, role, content, paths_json),  # timestamp handled by DB
+                (session_id, user_id, role, content, paths_json),  # timestamp handled by DB
             )
             if row:
                 increment_message_count(session_id)
@@ -360,7 +365,7 @@ def update_message(
 
 
 def get_session_messages(
-    session_id: int, limit: int = 100, order: str = "ASC"
+    session_id: str, limit: int = 100, order: str = "ASC"
 ) -> list[dict]:
     """Fetch messages by session_id.
 
@@ -373,13 +378,13 @@ def get_session_messages(
     return [parse_message_row(r) for r in rows]
 
 
-def get_recent_messages(session_id: int, limit: int = 20) -> list[dict]:
+def get_recent_messages(session_id: str, limit: int = 20) -> list[dict]:
     """Alias kept for backward compatibility with older callers."""
     return get_session_messages(session_id, limit)
 
 
 def get_chat_history(
-    session_id: int, limit: int | None = None, recent: bool = False
+    session_id: str, limit: int | None = None, recent: bool = False
 ) -> list[dict]:
     """Get messages ordered by timestamp.
 
@@ -396,7 +401,7 @@ def get_chat_history(
     return [parse_message_row(r) for r in rows]
 
 
-def clear_session_messages(session_id: int) -> bool:
+def clear_session_messages(session_id: str) -> bool:
     try:
         pg_execute(SQL_MESSAGE_DELETE_FOR_SESSION, (session_id,))
         pg_execute(
@@ -409,13 +414,13 @@ def clear_session_messages(session_id: int) -> bool:
         return False
 
 
-def get_message_count(session_id: int) -> int:
+def get_message_count(session_id: str) -> int:
     row = pg_fetchone(SQL_MESSAGE_COUNT_CONVERSATIONAL, (session_id,))
     return row.get("cnt", 0) if row else 0
 
 
 def add_session_event(
-    session_id: int, content: str, interface: str = "terminal"
+    session_id: str, content: str, interface: str = "terminal"
 ) -> int | None:
     return add_message(session_id, "system", format_session_event(content, interface))
 
@@ -425,25 +430,25 @@ def get_recent_sessions(limit: int = 20) -> list[dict]:
     return [parse_event_row(r) for r in rows]
 
 
-def get_recent_sessions_for_session(session_id: int, limit: int = 20) -> list[dict]:
+def get_recent_sessions_for_session(session_id: str, limit: int = 20) -> list[dict]:
     rows = pg_fetchall(SQL_MESSAGE_RECENT_SYSTEM_FOR_SESSION, (session_id, limit))
     return [parse_event_row(r) for r in rows]
 
 
-def get_session_conversation_summary(session_id: int, limit: int = 20) -> str:
+def get_session_conversation_summary(session_id: str, limit: int = 20) -> str:
     rows = pg_fetchall(SQL_MESSAGE_CONVERSATION_SUMMARY, (session_id, limit))
     return format_conversation_summary(rows)
 
 
-def add_tool_result(session_id: int, tool_name: str, result_content: str) -> int | None:
+def add_tool_result(session_id: str, tool_name: str, result_content: str) -> int | None:
     return add_message(session_id, tool_role_for(tool_name), result_content)
 
 
-def add_system_note(session_id: int, content: str) -> int | None:
+def add_system_note(session_id: str, content: str) -> int | None:
     return add_message(session_id, "system", content)
 
 
-def add_memory_note(session_id: int, content: str) -> int | None:
+def add_memory_note(session_id: str, content: str) -> int | None:
     """Alias for add_system_note."""
     return add_system_note(session_id, content)
 
@@ -454,7 +459,7 @@ def add_memory_note(session_id: int, content: str) -> int | None:
 
 
 def get_chat_history_for_ai(
-    session_id: int,
+    session_id: str,
     limit: int | None = None,
     recent: bool = False,
     include_image_paths: bool = False,

@@ -339,8 +339,8 @@ SQL_SESSION_SELECT_ACTIVE = (
 )
 
 SQL_SESSION_INSERT = """
-INSERT INTO chat_sessions (name, is_active, message_count, memory_state, created_at, updated_at)
-VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
+INSERT INTO chat_sessions (user_id, name, is_active, message_count, memory_state, created_at, updated_at)
+VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
 """
 
 SQL_SESSION_SELECT_ALL = (
@@ -474,8 +474,8 @@ def decrypt_api_key_rows(rows: list[dict]) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 SQL_MESSAGE_INSERT = """
-INSERT INTO messages (session_id, role, content, image_paths, timestamp, content_encrypted)
-VALUES (%s, %s, %s, %s, NOW(), FALSE) RETURNING id, timestamp
+INSERT INTO messages (session_id, user_id, role, content, image_paths, timestamp, content_encrypted)
+VALUES (%s, %s, %s, %s, %s, NOW(), FALSE) RETURNING id, timestamp
 """
 
 SQL_MESSAGE_SELECT_ASC_LIMIT = """

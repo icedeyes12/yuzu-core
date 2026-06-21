@@ -216,7 +216,7 @@ def _parse_psql_output(
 
 
 def execute(
-    arguments: dict, session_id: int | None = None, tool_name: str = "sql"
+    arguments: dict, session_id: str | None = None, tool_name: str = "sql"
 ) -> dict:
     """Execute SQL query and return structured result.
 

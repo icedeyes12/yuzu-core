@@ -113,7 +113,7 @@ class SessionService:
 
     @staticmethod
     def auto_name_session_if_needed(
-        session_id: int, active_session: dict[str, Any]
+        session_id: str, active_session: dict[str, Any]
     ) -> None:
         """Rename a 'New Chat' session once it has reached the trigger count."""
         if active_session.get("name") != "New Chat":
@@ -212,7 +212,7 @@ class SessionService:
 
     @staticmethod
     async def auto_name_session_if_needed_async(
-        session_id: int, active_session: dict[str, Any]
+        session_id: str, active_session: dict[str, Any]
     ) -> None:
         """Rename a 'New Chat' session once it has reached the trigger count (async)."""
         if active_session.get("name") != "New Chat":
@@ -289,7 +289,7 @@ class SessionService:
         return others[0]["updated_at"]
 
     @staticmethod
-    def _bootstrap_memory(session_id: int) -> None:
+    def _bootstrap_memory(session_id: str) -> None:
         try:
             from app.memory.review import run_decay
 
@@ -298,7 +298,7 @@ class SessionService:
             log.warning("memory bootstrap failed: %s", e)
 
     @staticmethod
-    async def _bootstrap_memory_async(session_id: int) -> None:
+    async def _bootstrap_memory_async(session_id: str) -> None:
         try:
             from app.memory.review import run_decay_async
 
@@ -347,7 +347,7 @@ class SessionService:
         return (cleaned[:50] + "...") if len(cleaned) > 50 else cleaned
 
     @staticmethod
-    def _auto_name_from_history(session_id: int) -> str | None:
+    def _auto_name_from_history(session_id: str) -> str | None:
         history = Database.get_chat_history(session_id, limit=5) or []
         for msg in history:
             if msg["role"] == "user" and len(msg["content"].strip()) > 10:
@@ -361,7 +361,7 @@ class SessionService:
         return None
 
     @staticmethod
-    async def _auto_name_from_history_async(session_id: int) -> str | None:
+    async def _auto_name_from_history_async(session_id: str) -> str | None:
         history = await Database.get_chat_history_async(session_id, limit=5) or []
         for msg in history:
             if msg["role"] == "user" and len(msg["content"].strip()) > 10:

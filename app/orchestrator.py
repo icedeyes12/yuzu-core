@@ -239,7 +239,7 @@ async def _parse_raw_tool_calls_async(
 
 
 async def _execute_tool_calls_async(
-    tool_calls: list[dict], session_id: int
+    tool_calls: list[dict], session_id: str
 ) -> list[tuple[str, dict]]:
     """Execute a list of tool calls and return results (async)."""
     results: list[tuple[str, dict]] = []
@@ -265,7 +265,7 @@ def _clean(text: str) -> str:
 
 
 async def _persist_user_async(
-    message: str, session_id: int, image_paths: list[str] | None
+    message: str, session_id: str, image_paths: list[str] | None
 ) -> None:
     await Database.add_message_async(
         "user", message, session_id=session_id, image_paths=image_paths or None
@@ -273,7 +273,7 @@ async def _persist_user_async(
 
 
 async def _persist_assistant_async(
-    content: str, session_id: int, image_paths: list[str] | None = None
+    content: str, session_id: str, image_paths: list[str] | None = None
 ) -> None:
     """Persist an assistant response, with optional image paths (async)."""
     await Database.add_message_async(
@@ -282,7 +282,7 @@ async def _persist_assistant_async(
 
 
 async def _persist_tool_result_async(
-    tool_name: str, markdown: str, session_id: int
+    tool_name: str, markdown: str, session_id: str
 ) -> None:
     """Persist a tool result (async)."""
     image_paths = []
@@ -297,7 +297,7 @@ async def _persist_tool_result_async(
     )
 
 
-async def _persist_observation_async(observation: str, session_id: int) -> None:
+async def _persist_observation_async(observation: str, session_id: str) -> None:
     """Persist a system observation as an internal message (async)."""
     await Database.add_message_async(
         "system_observation", observation, session_id=session_id
@@ -310,7 +310,7 @@ async def _persist_observation_async(observation: str, session_id: int) -> None:
 
 
 async def _build_image_context_async(
-    tool_markdown: str, session_id: int
+    tool_markdown: str, session_id: str
 ) -> list[dict[str, Any]] | None:
     image_path = parse_image_path(tool_markdown)
     if not image_path:
@@ -328,7 +328,7 @@ async def _build_image_context_async(
 
 async def _run_synthesis_async(
     profile: dict[str, Any],
-    session_id: int,
+    session_id: str,
     interface: str,
     tool_markdown: str,
     ephemeral_context: list[dict[str, str]] | None = None,
@@ -356,7 +356,7 @@ async def _run_synthesis_async(
 
 async def _stream_synthesis_async(
     profile: dict[str, Any],
-    session_id: int,
+    session_id: str,
     interface: str,
     tool_markdown: str,
     ephemeral_context: list[dict[str, str]] | None = None,
@@ -392,7 +392,7 @@ async def _post_turn_async(
     profile: dict[str, Any],
     user_message: str,
     final_response: str,
-    session_id: int,
+    session_id: str,
     active_session: dict[str, Any],
 ) -> None:
     """Auto-rename session, summarize memory, trigger memory pipeline (async)."""
@@ -421,7 +421,7 @@ async def _post_turn_async(
 
 async def _process_tool_commands_async(
     full_response: str,
-    session_id: int,
+    session_id: str,
 ) -> tuple[str, bool, list[str]]:
     """Parse and execute tool commands, yielding tool markdown chunks.
 
@@ -470,7 +470,7 @@ async def _process_tool_commands_async(
 
 async def _run_orchestration_loop_async(
     profile: dict[str, Any],
-    session_id: int,
+    session_id: str,
     interface: str,
     current_synthesis_context: str,
     ephemeral_context: list[dict[str, str]],
@@ -598,7 +598,7 @@ async def _run_orchestration_loop_async(
 
 
 async def _finalize_and_persist_async(
-    session_id: int,
+    session_id: str,
     fence_id: int,
     profile: dict[str, Any],
     user_message: str,
@@ -768,7 +768,7 @@ class StreamFence:
     _lock = asyncio.Lock()
 
     @classmethod
-    async def acquire(cls, session_id: int, user_msg_id: int) -> str:
+    async def acquire(cls, session_id: str, user_msg_id: int) -> str:
         """Acquire a fence for a streaming session. Returns fence_id.
 
         Proactively runs cleanup_expired() to evict any stale fences from
@@ -802,7 +802,7 @@ class StreamFence:
         return fence_id
 
     @classmethod
-    async def complete(cls, session_id: int, fence_id: str) -> bool:
+    async def complete(cls, session_id: str, fence_id: str) -> bool:
         """Mark fence as completed, allowing persistence.
 
         Returns True on a successful transition, False if the fence was
@@ -833,7 +833,7 @@ class StreamFence:
         return True
 
     @classmethod
-    async def is_completed(cls, session_id: int) -> bool:
+    async def is_completed(cls, session_id: str) -> bool:
         """Check if fence is completed or expired. Logs when it self-clears."""
         async with cls._lock:
             if session_id not in cls._fences:
@@ -872,7 +872,7 @@ class StreamFence:
 async def handle_user_message_streaming(
     user_message: str,
     interface: str = "terminal",
-    session_id: int | None = None,
+    session_id: str | None = None,
     provider: str | None = None,
     model: str | None = None,
     abort_check: callable[[], bool] | None = None,

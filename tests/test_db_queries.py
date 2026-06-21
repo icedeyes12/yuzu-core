@@ -308,5 +308,7 @@ class TestMisc:
         assert "chat_sessions" in full
         assert "api_keys" in full
         assert "messages" in full
-        # 4 tables + 3 indexes = 7 statements
-        assert len(SCHEMA_DDL) == 9
+        assert "semantic_facts" in full
+        assert "generate_uuidv7" in full
+        # 3 extensions + 1 function + 5 tables + 12 indexes = 21 statements
+        assert len(SCHEMA_DDL) == 21

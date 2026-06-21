@@ -273,7 +273,7 @@ async def _get_partner_name_async() -> str:
 
 
 async def execute(
-    arguments: dict, session_id: int | None = None, tool_name: str = "bash"
+    arguments: dict, session_id: str | None = None, tool_name: str = "bash"
 ) -> dict:
     """Execute a bash command (async).
 

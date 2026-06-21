@@ -138,13 +138,13 @@ _pending_sessions: asyncio.Queue[int] = asyncio.Queue()
 _worker_task: Optional[asyncio.Task] = None
 
 
-async def _get_cached_memory_state_async(session_id: int) -> dict:
+async def _get_cached_memory_state_async(session_id: str) -> dict:
     """Get memory state (async)."""
     # Request-scoped cache might still be useful, but for now just proxy
     return await get_memory_state_async(session_id)
 
 
-async def _try_set_fence_async(session_id: int, fence_count: int) -> bool:
+async def _try_set_fence_async(session_id: str, fence_count: int) -> bool:
     """Atomically set fence for a session (async).
 
     CRITICAL: Uses database-level locking to prevent race conditions.
@@ -198,7 +198,7 @@ async def _try_set_fence_async(session_id: int, fence_count: int) -> bool:
     return True
 
 
-async def _clear_fence_async(session_id: int) -> None:
+async def _clear_fence_async(session_id: str) -> None:
     """Clear fence atomically (async)."""
     # Get current state with FOR UPDATE lock
     state = await pg_fetchone_async(
@@ -220,7 +220,7 @@ async def _clear_fence_async(session_id: int) -> None:
     logger.debug(f"Fence cleared for session {session_id}")
 
 
-async def _is_fence_active_async(session_id: int) -> bool:
+async def _is_fence_active_async(session_id: str) -> bool:
     """Check if fence is active (async)."""
     state = await _get_cached_memory_state_async(session_id)
     existing_count = state.get("in_progress_fence_count")
@@ -237,7 +237,7 @@ async def _is_fence_active_async(session_id: int) -> bool:
         return False
 
 
-async def _get_session_idle_hours_async(session_id: int) -> float | None:
+async def _get_session_idle_hours_async(session_id: str) -> float | None:
     """Get idle hours (async)."""
     messages = await get_session_messages_async(session_id, limit=1, order="DESC")
     if not messages:
@@ -255,7 +255,7 @@ async def _get_session_idle_hours_async(session_id: int) -> float | None:
 
 
 async def should_trigger_segmentation_async(
-    session_id: int, current_count: int
+    session_id: str, current_count: int
 ) -> tuple[bool, int]:
     """Check if segmentation should trigger (async).
 
@@ -323,7 +323,7 @@ async def should_trigger_segmentation_async(
 
 
 async def mark_segmentation_done_async(
-    session_id: int, last_message_id: int = 0, processed_count: int = 0
+    session_id: str, last_message_id: int = 0, processed_count: int = 0
 ) -> None:
     """Mark segmentation done (async).
 
@@ -752,7 +752,7 @@ BASE_STABILITY = 24.0  # Aligned with FSRS default (24 hours)
 
 
 async def create_episode_and_pcl_async(
-    session_id: int,
+    session_id: str,
     messages: list[dict],
     segment: dict,
 ) -> Optional[int]:
@@ -845,7 +845,7 @@ async def create_episode_and_pcl_async(
 # ── Memory review (pending reviews) ────────────────────────────────────────────
 
 
-async def run_memory_review_async(session_id: int) -> dict:
+async def run_memory_review_async(session_id: str) -> dict:
     """Run LLM-based memory review on pending reviews.
 
     Returns summary: {reviewed: n, ratings: {...}}
@@ -888,7 +888,7 @@ async def run_memory_review_async(session_id: int) -> dict:
 # ── Main pipeline runner ───────────────────────────────────────────────────────
 
 
-async def run_memory_pipeline_async(session_id: int, message_count: int) -> dict:
+async def run_memory_pipeline_async(session_id: str, message_count: int) -> dict:
     """Run the full memory pipeline for a session.
 
     Steps:
@@ -1055,7 +1055,7 @@ async def _background_worker_async():
             _pending_sessions.task_done()
 
 
-async def enqueue_memory_pipeline_async(session_id: int) -> None:
+async def enqueue_memory_pipeline_async(session_id: str) -> None:
     """Queue a session for background memory processing.
 
     Non-blocking — returns immediately.
@@ -1069,7 +1069,7 @@ async def enqueue_memory_pipeline_async(session_id: int) -> None:
     await _pending_sessions.put(session_id)
 
 
-async def trigger_memory_pipeline_async(session_id: int, current_count: int) -> bool:
+async def trigger_memory_pipeline_async(session_id: str, current_count: int) -> bool:
     """Check and trigger memory pipeline in background if threshold met.
 
     Returns True if pipeline was triggered.

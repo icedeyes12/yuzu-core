@@ -45,11 +45,13 @@ from app.db import (
     pg_fetchone,
     pg_fetchall,
     pg_execute,
+    get_profile,
     # Async versions
     AsyncPgSession,
     pg_fetchone_async,
     pg_fetchall_async,
     pg_execute_async,
+    get_profile_async,
 )
 from app.memory.db_memory_queries import (
     # Constants
@@ -102,18 +104,21 @@ def _embed_text(text: str) -> list[float] | None:
 
 # ── Save / Insert ─────────────────────────────────────────────────────────────
 def save_fact(
-    session_id: int | None,
+    session_id: str | None,
     content: str,
     embedding: list[float] | None,
     fact_type: str = FACT_TYPE_STATIC,
     metadata: dict | None = None,
     category: str | None = None,
+    user_id: str | None = None,
 ) -> int | None:
     """
     Insert a new fact into semantic_facts.
 
     Returns the new row id, or None on failure.
     """
+    if user_id is None:
+        user_id = get_profile()["id"]
     meta = dict(metadata) if metadata else {}
     if "session_id" not in meta:
         meta["session_id"] = session_id
@@ -145,6 +150,7 @@ def save_fact(
             row = s.execute_returning(
                 SQL_FACT_INSERT,
                 (
+                    user_id,
                     fact_type,
                     content,
                     vec_literal,
@@ -162,7 +168,7 @@ def save_fact(
 # ── Vector Search ─────────────────────────────────────────────────────────────
 def search_similar(
     embedding: list[float],
-    session_id: int | None = None,
+    session_id: str | None = None,
     fact_type: str | None = None,
     limit: int = 15,
     max_distance: float = 1.5,
@@ -208,7 +214,7 @@ def search_similar(
 # ── Keyword / Trigram Search ──────────────────────────────────────────────────
 def search_trgm(
     query: str,
-    session_id: int | None = None,
+    session_id: str | None = None,
     fact_type: str | None = None,
     limit: int = 15,
     min_similarity: float = 0.3,
@@ -249,7 +255,7 @@ def search_trgm(
 # ── Full-Text Search ─────────────────────────────────────────────────────────
 def search_tsv(
     query: str,
-    session_id: int | None = None,
+    session_id: str | None = None,
     fact_type: str | None = None,
     limit: int = 15,
     metadata_filter: dict | None = None,
@@ -322,7 +328,7 @@ async def get_facts_by_ids_async(ids: list[int]) -> list[dict]:
 
 
 def get_facts_by_session(
-    session_id: int | None,
+    session_id: str | None,
     fact_type: str | None = None,
     limit: int = 100,
 ) -> list[dict]:
@@ -338,7 +344,7 @@ def get_facts_by_session(
     return pg_fetchall(query, params)
 
 
-def count_facts(fact_type: str | None = None, session_id: int | None = None) -> int:
+def count_facts(fact_type: str | None = None, session_id: str | None = None) -> int:
     conditions, params = build_metadata_conditions(
         fact_type=fact_type, session_id=session_id
     )
@@ -385,7 +391,7 @@ def increment_importance(id: int, delta: float = 0.05, cap: float = 1.0) -> bool
 
 # ── FSRS Decay ────────────────────────────────────────────────────────────────
 def decay_facts(
-    session_id: int | None = None, fact_type: str = FACT_TYPE_DYNAMIC
+    session_id: str | None = None, fact_type: str = FACT_TYPE_DYNAMIC
 ) -> int:
     """
     Apply FSRS-style decay to episodic/dynamic facts.
@@ -477,14 +483,17 @@ def invalidate_fact(id: int) -> bool:
 
 
 async def save_fact_async(
-    session_id: int | None,
+    session_id: str | None,
     content: str,
     embedding: list[float] | None,
     fact_type: str = FACT_TYPE_STATIC,
     metadata: dict | None = None,
     category: str | None = None,
+    user_id: str | None = None,
 ) -> int | None:
     """Async version of save_fact."""
+    if user_id is None:
+        user_id = (await get_profile_async())["id"]
     meta = dict(metadata) if metadata else {}
     if "session_id" not in meta:
         meta["session_id"] = session_id
@@ -517,6 +526,7 @@ async def save_fact_async(
             row = await s.execute_returning(
                 SQL_FACT_INSERT,
                 (
+                    user_id,
                     fact_type,
                     content,
                     vec_literal,
@@ -533,7 +543,7 @@ async def save_fact_async(
 
 async def search_similar_async(
     embedding: list[float],
-    session_id: int | None = None,
+    session_id: str | None = None,
     fact_type: str | None = None,
     limit: int = 15,
     max_distance: float = 1.5,
@@ -569,7 +579,7 @@ async def search_similar_async(
 
 
 async def get_facts_by_session_async(
-    session_id: int | None,
+    session_id: str | None,
     fact_type: str | None = None,
     limit: int = 100,
 ) -> list[dict]:
@@ -614,7 +624,7 @@ async def invalidate_fact_async(id: int) -> bool:
 
 async def search_trgm_async(
     query: str,
-    session_id: int | None = None,
+    session_id: str | None = None,
     fact_type: str | None = None,
     limit: int = 15,
     min_similarity: float = 0.3,
@@ -645,7 +655,7 @@ async def search_trgm_async(
 
 async def search_tsv_async(
     query: str,
-    session_id: int | None = None,
+    session_id: str | None = None,
     fact_type: str | None = None,
     limit: int = 15,
     metadata_filter: dict | None = None,

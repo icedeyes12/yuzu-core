@@ -147,7 +147,7 @@ def _apply_vision_routing(
 def _inject_persistent_visual(
     messages: list[dict[str, Any]],
     user_message: str,
-    session_id: int | None,
+    session_id: str | None,
     is_tool_loop: bool = False,
 ) -> None:
     if not (session_id and has_visual_reference(user_message)):
@@ -283,7 +283,7 @@ async def generate_ai_response(
     profile: dict[str, Any],
     user_message: str,
     interface: str = "terminal",
-    session_id: int | None = None,
+    session_id: str | None = None,
     image_content_for_context: list[dict[str, Any]] | None = None,
     ephemeral_context: list[dict[str, str]] | None = None,
     is_tool_loop: bool = False,
@@ -412,7 +412,7 @@ async def generate_ai_response_streaming(
     profile: dict[str, Any],
     user_message: str,
     interface: str = "terminal",
-    session_id: int | None = None,
+    session_id: str | None = None,
     provider: str | None = None,
     model: str | None = None,
     image_content_for_context: list[dict[str, Any]] | None = None,

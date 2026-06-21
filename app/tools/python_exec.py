@@ -198,7 +198,7 @@ def _execute_python(code: str) -> tuple[bool, str, str, int]:
 
 
 def execute(
-    arguments: dict, session_id: int | None = None, tool_name: str = TOOL_NAME
+    arguments: dict, session_id: str | None = None, tool_name: str = TOOL_NAME
 ) -> dict:
     """Execute Python code and return result dict.
 

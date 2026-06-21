@@ -31,20 +31,20 @@ class SessionCreateRequest(BaseModel):
 
 
 class SessionSwitchRequest(BaseModel):
-    session_id: int = Field(..., gt=0, description="Session ID to switch to")
+    session_id: str = Field(..., gt=0, description="Session ID to switch to")
 
 
 class SessionRenameRequest(BaseModel):
-    session_id: int = Field(..., gt=0, description="Session ID to rename")
+    session_id: str = Field(..., gt=0, description="Session ID to rename")
     name: str = Field(..., min_length=1, description="New session name")
 
 
 class SessionDeleteRequest(BaseModel):
-    session_id: int = Field(..., gt=0, description="Session ID to delete")
+    session_id: str = Field(..., gt=0, description="Session ID to delete")
 
 
 @router.get("/chat_history")
-async def api_get_chat_history(session_id: int | None = None):
+async def api_get_chat_history(session_id: str | None = None):
     """Get chat history for a specific session or the active session."""
     try:
         if session_id:
@@ -167,7 +167,7 @@ async def api_delete_session(request: SessionDeleteRequest):
 
 
 @router.post("/clear_chat")
-async def api_clear_chat(request: Request, session_id: int | None = None):
+async def api_clear_chat(request: Request, session_id: str | None = None):
     try:
         if not session_id:
             active_session = await get_active_session_async()
@@ -199,7 +199,7 @@ async def api_end_session(request: Request):
 
 
 @router.get("/sessions/{session_id}/memory")
-async def api_get_session_memory(session_id: int):
+async def api_get_session_memory(session_id: str):
     try:
         session_memory = await get_session_memory_async(session_id)
         return {

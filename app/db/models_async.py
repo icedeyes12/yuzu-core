@@ -166,12 +166,14 @@ async def get_all_sessions_async() -> list[dict]:
     return [parse_session_row(r) for r in rows]
 
 
-async def create_session_async(name: str = "New Chat") -> int | None:
+async def create_session_async(name: str = "New Chat", user_id: str | None = None) -> str | None:
+    if user_id is None:
+        user_id = (await get_profile_async())["id"]
     now = datetime.now()
     try:
         async with AsyncPgSession() as s:
             row = await s.execute_returning(
-                SQL_SESSION_INSERT, (name, False, 0, "{}", now, now)
+                SQL_SESSION_INSERT, (user_id, name, False, 0, "{}", now, now)
             )
             return row.get("id") if row else None
     except Exception as e:  # noqa: BLE001
@@ -179,7 +181,7 @@ async def create_session_async(name: str = "New Chat") -> int | None:
         return None
 
 
-async def switch_session_async(session_id: int) -> bool:
+async def switch_session_async(session_id: str) -> bool:
     try:
         async with AsyncPgSession() as s:
             await s.execute(SQL_SESSION_DEACTIVATE_ALL)
@@ -190,7 +192,7 @@ async def switch_session_async(session_id: int) -> bool:
         return False
 
 
-async def rename_session_async(session_id: int, new_name: str) -> bool:
+async def rename_session_async(session_id: str, new_name: str) -> bool:
     try:
         await pg_execute_async(
             SQL_SESSION_RENAME, (new_name, datetime.now(), session_id)
@@ -201,7 +203,7 @@ async def rename_session_async(session_id: int, new_name: str) -> bool:
         return False
 
 
-async def delete_session_async(session_id: int) -> bool:
+async def delete_session_async(session_id: str) -> bool:
     try:
         async with AsyncPgSession() as s:
             await s.execute(SQL_SESSION_DELETE, (session_id,))
@@ -211,7 +213,7 @@ async def delete_session_async(session_id: int) -> bool:
         return False
 
 
-async def update_session_memory_async(session_id: int, memory: dict) -> bool:
+async def update_session_memory_async(session_id: str, memory: dict) -> bool:
     try:
         await pg_execute_async(
             SQL_SESSION_UPDATE_MEMORY,
@@ -223,12 +225,12 @@ async def update_session_memory_async(session_id: int, memory: dict) -> bool:
         return False
 
 
-async def get_session_memory_async(session_id: int) -> dict:
+async def get_session_memory_async(session_id: str) -> dict:
     rows = await pg_fetchall_async(SQL_SESSION_MEMORY_NOTES, (session_id,))
     return parse_session_memory_rows(rows)
 
 
-async def increment_message_count_async(session_id: int) -> bool:
+async def increment_message_count_async(session_id: str) -> bool:
     try:
         await pg_execute_async(
             SQL_SESSION_INCREMENT_COUNT, (datetime.now(), session_id)
@@ -244,7 +246,7 @@ async def increment_message_count_async(session_id: int) -> bool:
 # ---------------------------------------------------------------------------
 
 
-async def get_memory_state_async(session_id: int) -> dict:
+async def get_memory_state_async(session_id: str) -> dict:
     """Get pipeline state from session's memory_state.
 
     Returns dict with:
@@ -268,7 +270,7 @@ async def get_memory_state_async(session_id: int) -> dict:
         return {"last_segmented_count": 0}
 
 
-async def update_memory_state_async(session_id: int, state: dict) -> bool:
+async def update_memory_state_async(session_id: str, state: dict) -> bool:
     """Update pipeline state in session's memory_state.
 
     Merges with existing state.
@@ -338,10 +340,11 @@ async def remove_api_key_async(key_name: str) -> bool:
 
 
 async def add_message_async(
-    session_id: int,
+    session_id: str,
     role: str,
     content: str,
     image_paths: list[str] | None = None,
+    user_id: str | None = None,
 ) -> int | None:
     """Insert a message row, bump the session's message_count, return id.
 
@@ -349,12 +352,14 @@ async def add_message_async(
     """
     import json
 
+    if user_id is None:
+        user_id = (await get_profile_async())["id"]
     paths_json = json.dumps(image_paths or [])
     try:
         async with AsyncPgSession() as s:
             row = await s.execute_returning(
                 SQL_MESSAGE_INSERT,
-                (session_id, role, content, paths_json),
+                (session_id, user_id, role, content, paths_json),
             )
             if row:
                 await increment_message_count_async(session_id)
@@ -376,7 +381,7 @@ async def update_message_async(message_id: int, content: str) -> bool:
 
 
 async def get_session_messages_async(
-    session_id: int, limit: int = 100, order: str = "ASC"
+    session_id: str, limit: int = 100, order: str = "ASC"
 ) -> list[dict]:
     """Fetch messages for a session in chronological order.
 
@@ -391,7 +396,7 @@ async def get_session_messages_async(
 
 
 async def get_session_messages_after_id_async(
-    session_id: int, after_message_id: int, limit: int = 1000
+    session_id: str, after_message_id: int, limit: int = 1000
 ) -> list[dict]:
     """Fetch messages for a session after a specific message ID.
 
@@ -404,12 +409,12 @@ async def get_session_messages_after_id_async(
     return [parse_message_row(r) for r in rows]
 
 
-async def get_recent_messages_async(session_id: int, limit: int = 20) -> list[dict]:
+async def get_recent_messages_async(session_id: str, limit: int = 20) -> list[dict]:
     return await get_session_messages_async(session_id, limit)
 
 
 async def get_chat_history_async(
-    session_id: int, limit: int | None = None, recent: bool = False
+    session_id: str, limit: int | None = None, recent: bool = False
 ) -> list[dict]:
     if limit and recent:
         rows = await pg_fetchall_async(
@@ -425,7 +430,7 @@ async def get_chat_history_async(
     return [parse_message_row(r) for r in rows]
 
 
-async def clear_session_messages_async(session_id: int) -> bool:
+async def clear_session_messages_async(session_id: str) -> bool:
     try:
         await pg_execute_async(SQL_MESSAGE_DELETE_FOR_SESSION, (session_id,))
         await pg_execute_async(
@@ -438,13 +443,13 @@ async def clear_session_messages_async(session_id: int) -> bool:
         return False
 
 
-async def get_message_count_async(session_id: int) -> int:
+async def get_message_count_async(session_id: str) -> int:
     row = await pg_fetchone_async(SQL_MESSAGE_COUNT_CONVERSATIONAL, (session_id,))
     return row.get("cnt", 0) if row else 0
 
 
 async def add_session_event_async(
-    session_id: int, content: str, interface: str = "terminal"
+    session_id: str, content: str, interface: str = "terminal"
 ) -> int | None:
     return await add_message_async(
         session_id, "system", format_session_event(content, interface)
@@ -457,7 +462,7 @@ async def get_recent_sessions_async(limit: int = 20) -> list[dict]:
 
 
 async def get_recent_sessions_for_session_async(
-    session_id: int, limit: int = 20
+    session_id: str, limit: int = 20
 ) -> list[dict]:
     rows = await pg_fetchall_async(
         SQL_MESSAGE_RECENT_SYSTEM_FOR_SESSION, (session_id, limit)
@@ -466,7 +471,7 @@ async def get_recent_sessions_for_session_async(
 
 
 async def get_recent_active_sessions_async(
-    current_session_id: int, limit: int = 5
+    current_session_id: str, limit: int = 5
 ) -> list[dict]:
     """Fetch recently active sessions for meta-awareness block.
 
@@ -489,7 +494,7 @@ async def get_recent_active_sessions_async(
 
 
 async def get_session_conversation_summary_async(
-    session_id: int, limit: int = 20
+    session_id: str, limit: int = 20
 ) -> str:
     rows = await pg_fetchall_async(
         SQL_MESSAGE_CONVERSATION_SUMMARY, (session_id, limit)
@@ -498,16 +503,16 @@ async def get_session_conversation_summary_async(
 
 
 async def add_tool_result_async(
-    session_id: int, tool_name: str, result_content: str
+    session_id: str, tool_name: str, result_content: str
 ) -> int | None:
     return await add_message_async(session_id, tool_role_for(tool_name), result_content)
 
 
-async def add_system_note_async(session_id: int, content: str) -> int | None:
+async def add_system_note_async(session_id: str, content: str) -> int | None:
     return await add_message_async(session_id, "system", content)
 
 
-async def add_memory_note_async(session_id: int, content: str) -> int | None:
+async def add_memory_note_async(session_id: str, content: str) -> int | None:
     return await add_system_note_async(session_id, content)
 
 
@@ -517,7 +522,7 @@ async def add_memory_note_async(session_id: int, content: str) -> int | None:
 
 
 async def get_chat_history_for_ai_async(
-    session_id: int,
+    session_id: str,
     limit: int | None = None,
     recent: bool = False,
     include_image_paths: bool = False,

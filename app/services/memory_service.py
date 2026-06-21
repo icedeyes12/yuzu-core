@@ -39,7 +39,7 @@ class MemoryService:
         profile: dict[str, Any],
         user_message: str,
         final_response: str,
-        session_id: int,
+        session_id: str,
     ) -> None:
         """Internal: check and summarize if needed (fire-and-forget)."""
         try:
@@ -55,7 +55,7 @@ class MemoryService:
         profile: dict[str, Any],
         user_message: str,
         final_response: str,
-        session_id: int,
+        session_id: str,
         active_session: dict[str, Any],
     ) -> None:
         """Trigger session summarization and background pipeline if needed (async)."""
@@ -77,7 +77,7 @@ class MemoryService:
                 asyncio.create_task(MemoryService.trigger_pipeline_async(session_id))
 
     @staticmethod
-    async def trigger_pipeline_async(session_id: int) -> bool:
+    async def trigger_pipeline_async(session_id: str) -> bool:
         """Check and trigger background memory pipeline (async)."""
         # Get semaphore lazily in the active event loop
         semaphore = await MemoryService._get_pipeline_semaphore()
@@ -105,7 +105,7 @@ class MemoryService:
 
     @staticmethod
     async def summarize_session_async(
-        profile: dict[str, Any], user_message: str, ai_reply: str, session_id: int
+        profile: dict[str, Any], user_message: str, ai_reply: str, session_id: str
     ) -> bool:
         return await summarize_memory_async(profile, user_message, ai_reply, session_id)
 
@@ -117,7 +117,7 @@ class MemoryService:
         return await asyncio.to_thread(summarize_global_player_profile)
 
     @staticmethod
-    async def rebuild_structured_memory_async(session_id: int) -> dict[str, Any]:
+    async def rebuild_structured_memory_async(session_id: str) -> dict[str, Any]:
         """Run the full memory pipeline for a session.
 
         Returns a summary dict with segments, episodes, and pcl_runs counts.

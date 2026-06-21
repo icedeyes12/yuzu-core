@@ -185,7 +185,7 @@ def _get_partner_name() -> str:
         return "Yuzu"
 
 
-def execute(arguments: dict, session_id: int | None = None, **kwargs) -> dict:
+def execute(arguments: dict, session_id: str | None = None, **kwargs) -> dict:
     """Dispatch to the appropriate fs operation based on tool name.
 
     This is the main entry point for the registry.
@@ -211,7 +211,7 @@ def execute(arguments: dict, session_id: int | None = None, **kwargs) -> dict:
         )
 
 
-def execute_read(arguments: dict, session_id: int | None = None) -> dict:
+def execute_read(arguments: dict, session_id: str | None = None) -> dict:
     """Read file contents."""
     partner_name = _get_partner_name()
     path_arg = arguments.get("path", "")
@@ -300,7 +300,7 @@ def execute_read(arguments: dict, session_id: int | None = None) -> dict:
     )
 
 
-def execute_write(arguments: dict, session_id: int | None = None) -> dict:
+def execute_write(arguments: dict, session_id: str | None = None) -> dict:
     """Write content to a file."""
     partner_name = _get_partner_name()
     path_arg = arguments.get("path", "")
@@ -363,7 +363,7 @@ def execute_write(arguments: dict, session_id: int | None = None) -> dict:
     )
 
 
-def execute_ls(arguments: dict, session_id: int | None = None) -> dict:
+def execute_ls(arguments: dict, session_id: str | None = None) -> dict:
     """List directory contents."""
     partner_name = _get_partner_name()
     path_arg = arguments.get("path", "~/workspace")
@@ -460,7 +460,7 @@ def execute_ls(arguments: dict, session_id: int | None = None) -> dict:
     )
 
 
-def execute_mkdir(arguments: dict, session_id: int | None = None) -> dict:
+def execute_mkdir(arguments: dict, session_id: str | None = None) -> dict:
     """Create a directory."""
     partner_name = _get_partner_name()
     path_arg = arguments.get("path", "")
@@ -506,7 +506,7 @@ def execute_mkdir(arguments: dict, session_id: int | None = None) -> dict:
     )
 
 
-def execute_rm(arguments: dict, session_id: int | None = None) -> dict:
+def execute_rm(arguments: dict, session_id: str | None = None) -> dict:
     """Delete a file or empty directory."""
     partner_name = _get_partner_name()
     path_arg = arguments.get("path", "")

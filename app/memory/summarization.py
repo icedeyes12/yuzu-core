@@ -42,7 +42,7 @@ def _idle_hours(session_memory: dict[str, Any]) -> float | None:
 
 
 async def should_summarize_memory_async(
-    profile: dict[str, Any], user_message: str, session_id: int
+    profile: dict[str, Any], user_message: str, session_id: str
 ) -> bool:
     history = await Database.get_chat_history_async(session_id=session_id) or []
     convo_count = sum(1 for m in history if m["role"] in ("user", "assistant"))
@@ -76,7 +76,7 @@ async def summarize_memory_async(
     profile: dict[str, Any],
     user_message: str,
     ai_reply: str,
-    session_id: int,
+    session_id: str,
 ) -> bool:
     history = (
         await Database.get_chat_history_async(session_id=session_id, limit=80) or []
@@ -140,7 +140,7 @@ just a natural paragraph.
 
 
 async def _sync_episodic_to_db_async(
-    session_id: int, summary: str, history: list[dict[str, Any]]
+    session_id: str, summary: str, history: list[dict[str, Any]]
 ) -> None:
     try:
         from app.memory.extractor import (
