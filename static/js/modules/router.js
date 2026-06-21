@@ -3,7 +3,7 @@
 
 /**
  * Handles URL-based session routing for shareable URLs.
- * Enables /chat?session=123 style navigation without page reloads.
+ * Enables /chat?session=<uuid> style navigation without page reloads.
  */
 export class RouterManager {
 	constructor() {
@@ -13,14 +13,14 @@ export class RouterManager {
 
 	/**
 	 * Initialize router from current URL on page load.
-	 * @returns {number|null} Session ID from URL or null
+	 * @returns {string|null} Session ID (UUID) from URL or null
 	 */
 	initFromURL() {
 		const params = new URLSearchParams(window.location.search);
 		const sessionId = params.get("session");
 
 		if (sessionId) {
-			this.currentSessionId = parseInt(sessionId, 10);
+			this.currentSessionId = sessionId;
 			console.log(
 				`[Router] Initialized with session ${this.currentSessionId} from URL`,
 			);
@@ -33,7 +33,7 @@ export class RouterManager {
 
 	/**
 	 * Update URL to reflect current session without page reload.
-	 * @param {number} sessionId - Session ID to set in URL
+	 * @param {string} sessionId - Session ID (UUID) to set in URL
 	 */
 	updateURL(sessionId) {
 		if (!sessionId || sessionId === this.currentSessionId) return;
@@ -64,9 +64,9 @@ export class RouterManager {
 			const params = new URLSearchParams(window.location.search);
 			const sessionId = params.get("session");
 
-			if (sessionId && parseInt(sessionId, 10) !== this.currentSessionId) {
+			if (sessionId && sessionId !== this.currentSessionId) {
 				console.log(`[Router] PopState: switching to session ${sessionId}`);
-				this.currentSessionId = parseInt(sessionId, 10);
+				this.currentSessionId = sessionId;
 				// Trigger session switch without pushState
 				if (typeof window.handleSessionSwitch === "function") {
 					window.handleSessionSwitch(this.currentSessionId, false);
