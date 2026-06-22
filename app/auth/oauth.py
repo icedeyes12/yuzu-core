@@ -69,9 +69,11 @@ def get_provider(name: str) -> OAuthProviderConfig | None:
 
 def generate_pkce() -> tuple[str, str]:
     verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
-    challenge = base64.urlsafe_b64encode(
-        hashlib.sha256(verifier.encode()).digest()
-    ).rstrip(b"=").decode()
+    challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
+        .rstrip(b"=")
+        .decode()
+    )
     return verifier, challenge
 
 
@@ -85,7 +87,9 @@ def sign_state(provider: str, verifier: str, secret: str) -> str:
 def verify_state(state: str, secret: str) -> tuple[str, str] | None:
     try:
         token_b64, sig = state.rsplit(".", 1)
-        expected = hmac.new(secret.encode(), token_b64.encode(), hashlib.sha256).hexdigest()
+        expected = hmac.new(
+            secret.encode(), token_b64.encode(), hashlib.sha256
+        ).hexdigest()
         if not hmac.compare_digest(sig, expected):
             return None
         payload = json.loads(base64.urlsafe_b64decode(token_b64))

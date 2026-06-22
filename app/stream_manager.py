@@ -278,7 +278,13 @@ class StreamManager:
                 # Don't delete here - let the finally block handle it
 
             stream = StreamBuffer(
-                session_id, user_message, interface, provider, model, image_paths, user_id
+                session_id,
+                user_message,
+                interface,
+                provider,
+                model,
+                image_paths,
+                user_id,
             )
             cls._streams[session_id] = stream
 

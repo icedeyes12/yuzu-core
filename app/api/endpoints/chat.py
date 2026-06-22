@@ -25,7 +25,9 @@ class MessageRequest(BaseModel):
 
 
 @router.post("/send_message")
-async def api_send_message(request: MessageRequest, user_id: str = Depends(get_current_user)):
+async def api_send_message(
+    request: MessageRequest, user_id: str = Depends(get_current_user)
+):
     try:
         user_message = request.message.strip()
         if not user_message:
@@ -102,13 +104,17 @@ async def api_send_message_stream(
 
 
 @router.post("/generate_image")
-async def api_generate_image(request: MessageRequest, user_id: str = Depends(get_current_user)):
+async def api_generate_image(
+    request: MessageRequest, user_id: str = Depends(get_current_user)
+):
     try:
         prompt = request.message.strip()
         if not prompt:
             return {"reply": "Prompt required", "status": "error"}
 
-        ai_reply = await handle_user_message(f"/imagine {prompt}", interface="web", user_id=user_id)
+        ai_reply = await handle_user_message(
+            f"/imagine {prompt}", interface="web", user_id=user_id
+        )
         return {"reply": ai_reply, "status": "success"}
     except Exception as e:
         log.error("Error generating image: %s", type(e).__name__)
@@ -116,7 +122,9 @@ async def api_generate_image(request: MessageRequest, user_id: str = Depends(get
 
 
 @router.post("/browser_unload")
-async def api_browser_unload(request: Request, user_id: str = Depends(get_current_user)):
+async def api_browser_unload(
+    request: Request, user_id: str = Depends(get_current_user)
+):
     try:
         from app.db import Database
 

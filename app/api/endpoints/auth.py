@@ -139,7 +139,8 @@ async def _map_identity_to_profile(
         profile = await pg_fetchone_async(SQL_PROFILE_SELECT_FIRST)
         if not profile:
             await pg_execute_async(
-                SQL_PROFILE_INSERT_DEFAULT, (*DEFAULT_PROFILE_PARAMS, datetime.now(), datetime.now())
+                SQL_PROFILE_INSERT_DEFAULT,
+                (*DEFAULT_PROFILE_PARAMS, datetime.now(), datetime.now()),
             )
             profile = await pg_fetchone_async(SQL_PROFILE_SELECT_FIRST)
         user_id = str(profile["id"])

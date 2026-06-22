@@ -627,7 +627,9 @@ async def _finalize_and_persist_async(
 # --------------------------------------------------------------------
 
 
-async def handle_user_message(user_message: str, interface: str = "terminal", user_id: str | None = None) -> str:
+async def handle_user_message(
+    user_message: str, interface: str = "terminal", user_id: str | None = None
+) -> str:
     """Process a user message end-to-end and return the assistant reply (async)."""
     profile = await Database.get_profile_async(user_id)
     if not user_message.strip():
@@ -928,7 +930,13 @@ async def handle_user_message_streaming(
 
     try:
         async for chunk in generate_ai_response_streaming(
-            profile, user_message, interface, session_id, provider, model, user_id=user_id
+            profile,
+            user_message,
+            interface,
+            session_id,
+            provider,
+            model,
+            user_id=user_id,
         ):
             if chunk:
                 if abort_check and abort_check():

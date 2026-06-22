@@ -45,7 +45,9 @@ class SessionDeleteRequest(BaseModel):
 
 
 @router.get("/chat_history")
-async def api_get_chat_history(session_id: str | None = None, user_id: str = Depends(get_current_user)):
+async def api_get_chat_history(
+    session_id: str | None = None, user_id: str = Depends(get_current_user)
+):
     """Get chat history for a specific session or the active session."""
     try:
         if session_id:
@@ -73,7 +75,11 @@ async def api_list_sessions(user_id: str = Depends(get_current_user)):
 
 
 @router.post("/sessions/create")
-async def api_create_session(http_request: Request, request: SessionCreateRequest, user_id: str = Depends(get_current_user)):
+async def api_create_session(
+    http_request: Request,
+    request: SessionCreateRequest,
+    user_id: str = Depends(get_current_user),
+):
     try:
         session_id = await create_session_async(request.name, user_id)
         await switch_session_async(session_id)
@@ -88,7 +94,11 @@ async def api_create_session(http_request: Request, request: SessionCreateReques
 
 
 @router.post("/sessions/switch")
-async def api_switch_session(request: SessionSwitchRequest, http_request: Request, user_id: str = Depends(get_current_user)):
+async def api_switch_session(
+    request: SessionSwitchRequest,
+    http_request: Request,
+    user_id: str = Depends(get_current_user),
+):
     try:
         if not request.session_id:
             raise HTTPException(status_code=400, detail="session_id required")
@@ -117,7 +127,9 @@ async def api_switch_session(request: SessionSwitchRequest, http_request: Reques
 
 
 @router.post("/sessions/rename")
-async def api_rename_session(request: SessionRenameRequest, user_id: str = Depends(get_current_user)):
+async def api_rename_session(
+    request: SessionRenameRequest, user_id: str = Depends(get_current_user)
+):
     try:
         if not request.session_id or not request.name:
             raise HTTPException(status_code=400, detail="session_id and name required")
@@ -136,7 +148,9 @@ async def api_rename_session(request: SessionRenameRequest, user_id: str = Depen
 
 
 @router.post("/sessions/delete")
-async def api_delete_session(request: SessionDeleteRequest, user_id: str = Depends(get_current_user)):
+async def api_delete_session(
+    request: SessionDeleteRequest, user_id: str = Depends(get_current_user)
+):
     try:
         if not request.session_id:
             raise HTTPException(status_code=400, detail="session_id required")
@@ -168,7 +182,11 @@ async def api_delete_session(request: SessionDeleteRequest, user_id: str = Depen
 
 
 @router.post("/clear_chat")
-async def api_clear_chat(request: Request, session_id: str | None = None, user_id: str = Depends(get_current_user)):
+async def api_clear_chat(
+    request: Request,
+    session_id: str | None = None,
+    user_id: str = Depends(get_current_user),
+):
     try:
         if not session_id:
             active_session = await get_active_session_async(user_id)
@@ -200,7 +218,9 @@ async def api_end_session(request: Request, user_id: str = Depends(get_current_u
 
 
 @router.get("/sessions/{session_id}/memory")
-async def api_get_session_memory(session_id: str, user_id: str = Depends(get_current_user)):
+async def api_get_session_memory(
+    session_id: str, user_id: str = Depends(get_current_user)
+):
     try:
         session_memory = await get_session_memory_async(session_id)
         return {

@@ -263,7 +263,11 @@ class Database:
     ) -> int | None:
         """Add a message to a session (defaults to active session)."""
         return await _pg_add_message_async(
-            await _resolve_session_id_async(session_id), role, content, image_paths, user_id
+            await _resolve_session_id_async(session_id),
+            role,
+            content,
+            image_paths,
+            user_id,
         )
 
     @staticmethod
@@ -290,7 +294,9 @@ class Database:
         user_id: str | None = None,
     ) -> list[dict]:
         """Get chat history for a session (defaults to active session)."""
-        return _pg_get_chat_history(_resolve_session_id(session_id), limit, recent, user_id)
+        return _pg_get_chat_history(
+            _resolve_session_id(session_id), limit, recent, user_id
+        )
 
     @staticmethod
     async def get_chat_history_async(

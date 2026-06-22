@@ -17,7 +17,9 @@ log = logging.getLogger(__name__)
 
 class ChatService:
     @staticmethod
-    async def send_message_async(message: str, interface: str = "web", user_id: str | None = None) -> str:
+    async def send_message_async(
+        message: str, interface: str = "web", user_id: str | None = None
+    ) -> str:
         """Process a simple text message (async)."""
         return await handle_user_message(message, interface=interface, user_id=user_id)
 

@@ -80,7 +80,9 @@ async def api_get_config(user_id: str = Depends(get_current_user)):
 
 
 @router.get("/profile")
-async def api_get_profile(session_id: str | None = None, user_id: str = Depends(get_current_user)):
+async def api_get_profile(
+    session_id: str | None = None, user_id: str = Depends(get_current_user)
+):
     try:
         profile = await get_profile_async(user_id)
         if session_id is None:
@@ -109,7 +111,9 @@ async def api_get_profile(session_id: str | None = None, user_id: str = Depends(
                         "timestamp": datetime.now().isoformat(),
                     }
                 )
-        session_memory = await get_session_memory_async(active_session["id"])  # ownership via session FK
+        session_memory = await get_session_memory_async(
+            active_session["id"]
+        )  # ownership via session FK
 
         api_keys = await get_api_keys_async()
         profile_dict = ConfigService.format_profile_dict(profile)
@@ -131,7 +135,9 @@ async def api_get_profile(session_id: str | None = None, user_id: str = Depends(
 
 
 @router.post("/update_profile")
-async def api_update_profile(request: ProfileUpdateRequest, user_id: str = Depends(get_current_user)):
+async def api_update_profile(
+    request: ProfileUpdateRequest, user_id: str = Depends(get_current_user)
+):
     try:
         await update_profile_async(request.updates, user_id)
         return {"status": "success"}
@@ -140,7 +146,9 @@ async def api_update_profile(request: ProfileUpdateRequest, user_id: str = Depen
 
 
 @router.post("/add_api_key")
-async def api_add_api_key(request: ApiKeyRequest, user_id: str = Depends(get_current_user)):
+async def api_add_api_key(
+    request: ApiKeyRequest, user_id: str = Depends(get_current_user)
+):
     if await Database.add_api_key_async(request.key_name, request.api_key):
         return {"status": "success", "message": f"{request.key_name} API key added"}
     else:
@@ -151,7 +159,9 @@ async def api_add_api_key(request: ApiKeyRequest, user_id: str = Depends(get_cur
 
 
 @router.post("/add_chutes_key")
-async def api_add_chutes_key(request: ChutesKeyRequest, user_id: str = Depends(get_current_user)):
+async def api_add_chutes_key(
+    request: ChutesKeyRequest, user_id: str = Depends(get_current_user)
+):
     try:
         if await Database.add_api_key_async("chutes", request.api_key.strip()):
             return {
@@ -166,7 +176,9 @@ async def api_add_chutes_key(request: ChutesKeyRequest, user_id: str = Depends(g
 
 
 @router.post("/remove_api_key")
-async def api_remove_api_key(request: ApiKeyRemoveRequest, user_id: str = Depends(get_current_user)):
+async def api_remove_api_key(
+    request: ApiKeyRemoveRequest, user_id: str = Depends(get_current_user)
+):
     try:
         if await Database.remove_api_key_async(request.key_name):
             return {
@@ -204,7 +216,9 @@ async def api_list_providers(user_id: str = Depends(get_current_user)):
 
 
 @router.post("/providers/set_preferred")
-async def api_set_preferred_provider(request: ProviderSetRequest, user_id: str = Depends(get_current_user)):
+async def api_set_preferred_provider(
+    request: ProviderSetRequest, user_id: str = Depends(get_current_user)
+):
     try:
         result = await ConfigService.set_preferred_provider_async(
             request.provider_name, request.model_name
@@ -216,7 +230,9 @@ async def api_set_preferred_provider(request: ProviderSetRequest, user_id: str =
 
 
 @router.post("/providers/test_connection")
-async def api_test_provider_connection(request: ProviderTestRequest, user_id: str = Depends(get_current_user)):
+async def api_test_provider_connection(
+    request: ProviderTestRequest, user_id: str = Depends(get_current_user)
+):
     try:
         ai_manager = await get_ai_manager()
         provider = ai_manager.providers.get(request.provider_name)
@@ -248,7 +264,9 @@ async def api_get_vision_capabilities(user_id: str = Depends(get_current_user)):
 
 
 @router.post("/providers/set_vision_model")
-async def api_set_vision_model(request: VisionModelSetRequest, user_id: str = Depends(get_current_user)):
+async def api_set_vision_model(
+    request: VisionModelSetRequest, user_id: str = Depends(get_current_user)
+):
     try:
         result = await ConfigService.set_vision_model_async(
             request.provider, request.model
@@ -265,7 +283,9 @@ async def api_test_vision(user_id: str = Depends(get_current_user)):
 
 
 @router.post("/update_location")
-async def api_update_location(request: LocationUpdateRequest, user_id: str = Depends(get_current_user)):
+async def api_update_location(
+    request: LocationUpdateRequest, user_id: str = Depends(get_current_user)
+):
     try:
         context = await Database.get_context_async(user_id)
         context["location"] = {"lat": request.lat, "lon": request.lon}
@@ -277,16 +297,22 @@ async def api_update_location(request: LocationUpdateRequest, user_id: str = Dep
 
 
 @router.post("/update_weather_location")
-async def api_update_weather_location(request: LocationUpdateRequest, user_id: str = Depends(get_current_user)):
+async def api_update_weather_location(
+    request: LocationUpdateRequest, user_id: str = Depends(get_current_user)
+):
     """Alias for update_location to maintain compatibility."""
     return await api_update_location(request, user_id)
 
 
 @router.post("/global_knowledge/update")
-async def api_update_global_knowledge(request: GlobalKnowledgeUpdateRequest, user_id: str = Depends(get_current_user)):
+async def api_update_global_knowledge(
+    request: GlobalKnowledgeUpdateRequest, user_id: str = Depends(get_current_user)
+):
     try:
         global_knowledge = {"facts": request.facts}
-        await Database.update_profile_async({"global_knowledge": global_knowledge}, user_id)
+        await Database.update_profile_async(
+            {"global_knowledge": global_knowledge}, user_id
+        )
         return {"status": "success", "message": "Global knowledge updated"}
     except Exception as e:
         log.error("Error updating global knowledge: %s", e)

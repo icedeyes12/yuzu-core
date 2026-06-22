@@ -171,7 +171,9 @@ async def get_active_session_async(user_id: str | None = None) -> dict:
             await pg_execute_async(
                 SQL_SESSION_INSERT, (user_id, "New Chat", True, 0, "{}", now, now)
             )
-            row = await pg_fetchone_async(SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,))
+            row = await pg_fetchone_async(
+                SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,)
+            )
     else:
         row = await pg_fetchone_async(SQL_SESSION_SELECT_ACTIVE)
         if not row:
@@ -192,7 +194,9 @@ async def get_all_sessions_async(user_id: str | None = None) -> list[dict]:
     return [parse_session_row(r) for r in rows]
 
 
-async def create_session_async(name: str = "New Chat", user_id: str | None = None) -> str | None:
+async def create_session_async(
+    name: str = "New Chat", user_id: str | None = None
+) -> str | None:
     if user_id is None:
         user_id = (await get_profile_async())["id"]
     now = datetime.now()
@@ -212,7 +216,10 @@ async def switch_session_async(session_id: str, user_id: str | None = None) -> b
         async with AsyncPgSession() as s:
             if user_id is not None:
                 await s.execute(SQL_SESSION_DEACTIVATE_FOR_USER, (user_id,))
-                await s.execute(SQL_SESSION_ACTIVATE_ONE_SCOPED, (datetime.now(), session_id, user_id))
+                await s.execute(
+                    SQL_SESSION_ACTIVATE_ONE_SCOPED,
+                    (datetime.now(), session_id, user_id),
+                )
             else:
                 await s.execute(SQL_SESSION_DEACTIVATE_ALL)
                 await s.execute(SQL_SESSION_ACTIVATE_ONE, (datetime.now(), session_id))
@@ -222,11 +229,14 @@ async def switch_session_async(session_id: str, user_id: str | None = None) -> b
         return False
 
 
-async def rename_session_async(session_id: str, new_name: str, user_id: str | None = None) -> bool:
+async def rename_session_async(
+    session_id: str, new_name: str, user_id: str | None = None
+) -> bool:
     try:
         if user_id is not None:
             await pg_execute_async(
-                SQL_SESSION_RENAME_SCOPED, (new_name, datetime.now(), session_id, user_id)
+                SQL_SESSION_RENAME_SCOPED,
+                (new_name, datetime.now(), session_id, user_id),
             )
         else:
             await pg_execute_async(
@@ -452,7 +462,9 @@ async def get_recent_messages_async(session_id: str, limit: int = 20) -> list[di
 
 
 async def get_chat_history_async(
-    session_id: str, limit: int | None = None, recent: bool = False,
+    session_id: str,
+    limit: int | None = None,
+    recent: bool = False,
     user_id: str | None = None,
 ) -> list[dict]:
     if limit and recent:

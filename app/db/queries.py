@@ -105,7 +105,6 @@ SCHEMA_DDL: tuple[str, ...] = (
     "CREATE EXTENSION IF NOT EXISTS pgcrypto",
     "CREATE EXTENSION IF NOT EXISTS vector",
     "CREATE EXTENSION IF NOT EXISTS pg_trgm",
-
     # ── UUIDv7 generator (time-ordered, lexicographically sortable) ──
     """
     CREATE OR REPLACE FUNCTION generate_uuidv7()
@@ -126,7 +125,6 @@ SCHEMA_DDL: tuple[str, ...] = (
     END;
     $function$ LANGUAGE plpgsql VOLATILE
     """,
-
     # ── profiles (tenant root — PK is UUID, referenced by all user_id FKs) ──
     """
     CREATE TABLE IF NOT EXISTS profiles (
@@ -149,7 +147,6 @@ SCHEMA_DDL: tuple[str, ...] = (
         timestamp TIMESTAMP DEFAULT NOW()
     )
     """,
-
     # ── chat_sessions (PK UUID, tenant FK user_id → profiles) ──
     """
     CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -166,7 +163,6 @@ SCHEMA_DDL: tuple[str, ...] = (
         FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
     )
     """,
-
     # ── api_keys (not multi-tenant — stays SERIAL integer PK) ──
     """
     CREATE TABLE IF NOT EXISTS api_keys (
@@ -177,7 +173,6 @@ SCHEMA_DDL: tuple[str, ...] = (
         created_at TIMESTAMP DEFAULT NOW()
     )
     """,
-
     # ── messages (id stays SERIAL int; session_id + user_id are UUID FKs) ──
     """
     CREATE TABLE IF NOT EXISTS messages (
@@ -195,7 +190,6 @@ SCHEMA_DDL: tuple[str, ...] = (
         FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
     )
     """,
-
     # ── semantic_facts (id stays SERIAL int; user_id UUID FK; embedding vector(4096)) ──
     """
     CREATE TABLE IF NOT EXISTS semantic_facts (
@@ -213,7 +207,6 @@ SCHEMA_DDL: tuple[str, ...] = (
         FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
     )
     """,
-
     # ── user_identities (OAuth provider linkage — Google sub / GitHub id) ──
     """
     CREATE TABLE IF NOT EXISTS user_identities (
@@ -227,7 +220,6 @@ SCHEMA_DDL: tuple[str, ...] = (
         FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
     )
     """,
-
     # ── user_sessions (opaque server-side session tokens — revocable, not JWT) ──
     """
     CREATE TABLE IF NOT EXISTS user_sessions (
@@ -239,7 +231,6 @@ SCHEMA_DDL: tuple[str, ...] = (
         FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
     )
     """,
-
     # ── Indexes ──
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_active ON chat_sessions(is_active)",
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at)",
@@ -256,7 +247,6 @@ SCHEMA_DDL: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_user_identities_user_id ON user_identities(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at)",
-
     # ── Migrations for existing DBs (idempotent) ──
     # Phase 1.3: add user_id to tenant-scoped tables (already done via migration SQL)
     # Phase 1.7: drop NOT NULL on legacy mapping columns so new UUID rows can omit them
@@ -391,9 +381,7 @@ SQL_SESSION_SELECT_ACTIVE = (
     "SELECT * FROM chat_sessions WHERE is_active = TRUE AND deleted_at IS NULL LIMIT 1"
 )
 
-SQL_SESSION_SELECT_ACTIVE_FOR_USER = (
-    "SELECT * FROM chat_sessions WHERE user_id = %s AND is_active = TRUE AND deleted_at IS NULL LIMIT 1"
-)
+SQL_SESSION_SELECT_ACTIVE_FOR_USER = "SELECT * FROM chat_sessions WHERE user_id = %s AND is_active = TRUE AND deleted_at IS NULL LIMIT 1"
 
 SQL_SESSION_INSERT = """
 INSERT INTO chat_sessions (user_id, name, is_active, message_count, memory_state, created_at, updated_at)
@@ -404,17 +392,13 @@ SQL_SESSION_SELECT_ALL = (
     "SELECT * FROM chat_sessions WHERE deleted_at IS NULL ORDER BY updated_at DESC"
 )
 
-SQL_SESSION_SELECT_ALL_FOR_USER = (
-    "SELECT * FROM chat_sessions WHERE user_id = %s AND deleted_at IS NULL ORDER BY updated_at DESC"
-)
+SQL_SESSION_SELECT_ALL_FOR_USER = "SELECT * FROM chat_sessions WHERE user_id = %s AND deleted_at IS NULL ORDER BY updated_at DESC"
 
 SQL_SESSION_DEACTIVATE_ALL = (
     "UPDATE chat_sessions SET is_active = FALSE WHERE deleted_at IS NULL"
 )
 
-SQL_SESSION_DEACTIVATE_FOR_USER = (
-    "UPDATE chat_sessions SET is_active = FALSE WHERE user_id = %s AND deleted_at IS NULL"
-)
+SQL_SESSION_DEACTIVATE_FOR_USER = "UPDATE chat_sessions SET is_active = FALSE WHERE user_id = %s AND deleted_at IS NULL"
 
 SQL_SESSION_ACTIVATE_ONE = "UPDATE chat_sessions SET is_active = TRUE, updated_at = %s WHERE id = %s AND deleted_at IS NULL"
 
@@ -426,9 +410,13 @@ SQL_SESSION_RENAME_SCOPED = "UPDATE chat_sessions SET name = %s, updated_at = %s
 
 SQL_SESSION_DELETE = "UPDATE chat_sessions SET deleted_at = NOW() WHERE id = %s"
 
-SQL_SESSION_DELETE_SCOPED = "UPDATE chat_sessions SET deleted_at = NOW() WHERE id = %s AND user_id = %s"
+SQL_SESSION_DELETE_SCOPED = (
+    "UPDATE chat_sessions SET deleted_at = NOW() WHERE id = %s AND user_id = %s"
+)
 
-SQL_SESSION_OWNERSHIP_CHECK = "SELECT user_id FROM chat_sessions WHERE id = %s AND deleted_at IS NULL"
+SQL_SESSION_OWNERSHIP_CHECK = (
+    "SELECT user_id FROM chat_sessions WHERE id = %s AND deleted_at IS NULL"
+)
 
 SQL_SESSIONS_RECENT_ACTIVE = """
 SELECT id, name, updated_at, message_count, is_active

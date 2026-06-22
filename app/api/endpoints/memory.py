@@ -38,7 +38,10 @@ async def api_update_session_context(user_id: str = Depends(get_current_user)):
 
         if last_user_msg and last_ai_reply:
             success = await MemoryService.summarize_session_async(
-                profile, last_user_msg["content"], last_ai_reply["content"], session_id,
+                profile,
+                last_user_msg["content"],
+                last_ai_reply["content"],
+                session_id,
                 user_id,
             )
 
@@ -143,7 +146,10 @@ async def api_memory_stats(user_id: str = Depends(get_current_user)):
         top_facts = []
         try:
             facts = MemoryDB.get_facts_by_session(
-                session_id=session_id, fact_type=FACT_TYPE_STATIC, limit=10, user_id=user_id
+                session_id=session_id,
+                fact_type=FACT_TYPE_STATIC,
+                limit=10,
+                user_id=user_id,
             )
             for f in facts:
                 meta = f.get("metadata") or {}

@@ -105,10 +105,15 @@ class MemoryService:
 
     @staticmethod
     async def summarize_session_async(
-        profile: dict[str, Any], user_message: str, ai_reply: str, session_id: str,
+        profile: dict[str, Any],
+        user_message: str,
+        ai_reply: str,
+        session_id: str,
         user_id: str | None = None,
     ) -> bool:
-        return await summarize_memory_async(profile, user_message, ai_reply, session_id, user_id)
+        return await summarize_memory_async(
+            profile, user_message, ai_reply, session_id, user_id
+        )
 
     @staticmethod
     async def summarize_global_profile_async(user_id: str | None = None) -> bool:

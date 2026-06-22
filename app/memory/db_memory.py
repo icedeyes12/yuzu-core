@@ -115,7 +115,9 @@ def save_fact(
     Returns the new row id, or None on failure.
     """
     if user_id is None:
-        logger.error("save_fact: user_id is required — refusing to fall back to first profile")
+        logger.error(
+            "save_fact: user_id is required — refusing to fall back to first profile"
+        )
         return None
     meta = dict(metadata) if metadata else {}
     if "session_id" not in meta:
@@ -347,7 +349,11 @@ def get_facts_by_session(
     return pg_fetchall(query, params)
 
 
-def count_facts(fact_type: str | None = None, session_id: str | None = None, user_id: str | None = None) -> int:
+def count_facts(
+    fact_type: str | None = None,
+    session_id: str | None = None,
+    user_id: str | None = None,
+) -> int:
     conditions, params = build_metadata_conditions(
         fact_type=fact_type, session_id=session_id
     )
@@ -496,7 +502,9 @@ async def save_fact_async(
 ) -> int | None:
     """Async version of save_fact."""
     if user_id is None:
-        logger.error("save_fact_async: user_id is required — refusing to fall back to first profile")
+        logger.error(
+            "save_fact_async: user_id is required — refusing to fall back to first profile"
+        )
         return None
     meta = dict(metadata) if metadata else {}
     if "session_id" not in meta:

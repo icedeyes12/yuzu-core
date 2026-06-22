@@ -341,7 +341,13 @@ def add_message(
         with PgSession() as s:
             row = s.execute_returning(
                 SQL_MESSAGE_INSERT,
-                (session_id, user_id, role, content, paths_json),  # timestamp handled by DB
+                (
+                    session_id,
+                    user_id,
+                    role,
+                    content,
+                    paths_json,
+                ),  # timestamp handled by DB
             )
             if row:
                 increment_message_count(session_id)
@@ -385,8 +391,10 @@ def get_recent_messages(session_id: str, limit: int = 20) -> list[dict]:
 
 
 def get_chat_history(
-    session_id: str, limit: int | None = None, recent: bool = False,
-    user_id: str | None = None
+    session_id: str,
+    limit: int | None = None,
+    recent: bool = False,
+    user_id: str | None = None,
 ) -> list[dict]:
     """Get messages ordered by timestamp.
 
