@@ -13,7 +13,6 @@ from app.db import (
     get_active_session_async,
     get_chat_history_async,
     get_session_memory_async,
-    get_api_keys_async,
     update_profile_async,
 )
 from app.api.utils import get_current_user
@@ -115,7 +114,6 @@ async def api_get_profile(
             active_session["id"]
         )  # ownership via session FK
 
-        api_keys = await get_api_keys_async()
         profile_dict = ConfigService.format_profile_dict(profile)
         ai_providers_payload = await ConfigService.get_ai_providers_payload(profile)
         vision_capabilities = ConfigService.get_vision_capabilities()
@@ -123,7 +121,6 @@ async def api_get_profile(
         return {
             **profile_dict,
             "chat_history": chat_history,
-            "api_keys": api_keys,
             "active_session": active_session,
             "session_memory": session_memory,
             "ai_providers": ai_providers_payload,

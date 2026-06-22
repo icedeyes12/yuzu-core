@@ -284,8 +284,17 @@ SCHEMA_DDL: tuple[str, ...] = (
 
 SQL_PROFILE_SELECT_FIRST = "SELECT * FROM profiles LIMIT 1"
 
+SQL_PROFILE_UNCLAIMED_LOOKUP = """
+SELECT p.id
+FROM profiles p
+LEFT JOIN user_identities ui ON p.id = ui.user_id
+WHERE ui.id IS NULL
+ORDER BY p.created_at ASC
+LIMIT 1
+"""
+
 # ── Multi-tenant scoped variants (Phase 2.3+2.4) ──
-SQL_PROFILE_SELECT_BY_ID = "SELECT id, display_name, avatar_url FROM profiles WHERE id = %s"
+SQL_PROFILE_SELECT_BY_ID = "SELECT * FROM profiles WHERE id = %s"
 
 SQL_AUTH_ME_LOOKUP = """
 SELECT p.display_name, p.avatar_url, ui.email
@@ -843,8 +852,6 @@ SELECT user_id FROM user_identities
 WHERE provider = %s AND provider_sub = %s
 """
 
-SQL_IDENTITY_COUNT = "SELECT count(*) AS count FROM user_identities"
-
 SQL_IDENTITY_INSERT = """
 INSERT INTO user_identities (user_id, provider, provider_sub, email)
 VALUES (%s, %s, %s, %s)
@@ -981,7 +988,6 @@ __all__ = [
     "build_encryption_status",
     # Auth
     "SQL_IDENTITY_LOOKUP",
-    "SQL_IDENTITY_COUNT",
     "SQL_IDENTITY_INSERT",
     "SQL_PROFILE_INSERT_DEFAULT_RETURNING",
     "SQL_SESSION_TOKEN_CREATE",
@@ -989,6 +995,7 @@ __all__ = [
     "SQL_SESSION_TOKEN_REVOKE",
     "SQL_AUTH_ME_LOOKUP",
     "SQL_PROFILE_UPDATE_AVATAR",
+    "SQL_PROFILE_UNCLAIMED_LOOKUP",
     # Misc
     "parse_json",
     "format_session_event",
