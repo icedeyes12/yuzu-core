@@ -1,7 +1,18 @@
-# FILE: app/api/context.py
+# FILE: app/core/context.py
 # DESCRIPTION: Request-scoped ContextVar for client-side BYOK credentials.
 #              Populated per-request from X-Provider-* headers (chat endpoint),
 #              cleared in finally. Providers read via resolve_* helpers.
+#
+#              IMPORTANT: This module MUST stay dependency-free (only stdlib).
+#              It lives in app/core (not app/api) so importing it never
+#              triggers app/api/__init__.py → router registry → orchestrator
+#              chain. That ordering is what breaks the providers ↔ api
+#              circular import.
+#
+#              Precedence (Dual-Plane):
+#                1. Request plane  — ContextVar keyring (X-Provider-Key header)
+#                2. System plane   — os.getenv(f"{PROVIDER}_API_KEY")
+#                3. Legacy         — caller-provided fallback (DB-loaded self.api_key)
 
 from __future__ import annotations
 

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Request, Form, File, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.api.context import (
+from app.core.context import (
     RequestKeyring,
     set_request_keyring,
     clear_request_keyring,

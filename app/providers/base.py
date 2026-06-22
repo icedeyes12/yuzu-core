@@ -6,7 +6,7 @@ import asyncio
 from typing import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from app.api.context import resolve_api_key, resolve_base_url, resolve_model
+from app.core.context import resolve_api_key, resolve_base_url, resolve_model
 from app.db import get_api_key_async
 from app.tools import multimodal_tools
 
