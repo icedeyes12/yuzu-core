@@ -6,6 +6,7 @@ import asyncio
 from typing import AsyncGenerator
 from contextlib import asynccontextmanager
 
+from app.api.context import resolve_api_key, resolve_base_url, resolve_model
 from app.db import get_api_key_async
 from app.tools import multimodal_tools
 
@@ -198,6 +199,18 @@ class AIProvider:
         self._last_raw_response: dict | None = None
         self.api_key = None  # Will be loaded async
 
+    def resolve_api_key(self, fallback: str | None = None) -> str | None:
+        """Resolve API key from request plane, then system plane, then fallback."""
+        return resolve_api_key(self.name, fallback=fallback or self.api_key)
+
+    def resolve_base_url(self, fallback: str) -> str:
+        """Resolve base URL from request plane or system plane."""
+        return resolve_base_url(self.name, fallback)
+
+    def resolve_model(self, fallback: str) -> str:
+        """Resolve model ID from request plane or system plane."""
+        return resolve_model(self.name, fallback)
+
     async def initialize(self) -> None:
         """Async initialization to load API keys."""
         self.api_key = await self._load_api_key()
@@ -205,8 +218,11 @@ class AIProvider:
             self.is_available = bool(self.api_key)
 
     async def _load_api_key(self) -> str | None:
-        """Centralized API key lookup from DB (async)."""
+        """Centralized API key lookup from request plane, env, then DB."""
         try:
+            key = resolve_api_key(self.name)
+            if key:
+                return key
             return await get_api_key_async(self.name)
         except Exception:
             return None

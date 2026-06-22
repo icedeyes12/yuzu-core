@@ -247,6 +247,12 @@ SCHEMA_DDL: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_user_identities_user_id ON user_identities(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at)",
+    """
+    DO $$ BEGIN
+      ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT NULL;
+    EXCEPTION WHEN undefined_column THEN NULL;
+    END $$;
+    """,
     # ── Migrations for existing DBs (idempotent) ──
     # Phase 1.3: add user_id to tenant-scoped tables (already done via migration SQL)
     # Phase 1.7: drop NOT NULL on legacy mapping columns so new UUID rows can omit them
@@ -279,7 +285,23 @@ SCHEMA_DDL: tuple[str, ...] = (
 SQL_PROFILE_SELECT_FIRST = "SELECT * FROM profiles LIMIT 1"
 
 # ── Multi-tenant scoped variants (Phase 2.3+2.4) ──
-SQL_PROFILE_SELECT_BY_ID = "SELECT * FROM profiles WHERE id = %s"
+SQL_PROFILE_SELECT_BY_ID = "SELECT id, display_name, avatar_url FROM profiles WHERE id = %s"
+
+SQL_AUTH_ME_LOOKUP = """
+SELECT p.display_name, p.avatar_url, ui.email
+FROM profiles p
+LEFT JOIN LATERAL (
+  SELECT email FROM user_identities ui
+  WHERE ui.user_id = p.id
+  ORDER BY created_at DESC
+  LIMIT 1
+) ui ON true
+WHERE p.id = %s
+"""
+
+SQL_PROFILE_UPDATE_AVATAR = (
+    "UPDATE profiles SET avatar_url = %s, updated_at = %s WHERE id = %s"
+)
 
 SQL_PROFILE_INSERT_DEFAULT = """
 INSERT INTO profiles (display_name, partner_name, affection, theme,
@@ -293,6 +315,7 @@ DEFAULT_PROFILE_PARAMS = (
     "",
     50,
     "default",
+    "{}",
     "{}",
     "{}",
     "{}",
@@ -964,6 +987,8 @@ __all__ = [
     "SQL_SESSION_TOKEN_CREATE",
     "SQL_SESSION_TOKEN_VALIDATE",
     "SQL_SESSION_TOKEN_REVOKE",
+    "SQL_AUTH_ME_LOOKUP",
+    "SQL_PROFILE_UPDATE_AVATAR",
     # Misc
     "parse_json",
     "format_session_event",

@@ -27,6 +27,7 @@
 				if (raw) {
 					const cfg = JSON.parse(raw);
 					if (cfg.apiKey) init.headers.set("X-Provider-Key", cfg.apiKey);
+					if (cfg.provider) init.headers.set("X-Provider-Name", cfg.provider);
 					if (cfg.baseUrl) init.headers.set("X-Base-Url", cfg.baseUrl);
 					if (cfg.modelId) init.headers.set("X-Model-Id", cfg.modelId);
 				}
@@ -145,18 +146,32 @@ async function _checkAuthState() {
 			return;
 		}
 		const data = await resp.json();
-		_renderAuthenticated(authContent, data.user_id);
+		_renderAuthenticated(authContent, data);
 		_hideAuthOverlay();
 	} catch (_e) {
 		_renderUnauthenticated(authContent);
 	}
 }
 
-function _renderAuthenticated(container, userId) {
+function _renderAuthenticated(container, data) {
+	const userId = data?.user_id || "";
+	const email = data?.email || "";
+	const displayName = data?.display_name || "";
+	const avatarUrl = data?.avatar_url || "";
 	const shortId = userId ? `${userId.slice(0, 8)}…` : "unknown";
+	const showName = displayName || email || shortId;
+	const avatarHtml = avatarUrl
+		? `<img class="auth-user-avatar" src="${avatarUrl}" alt="avatar" referrerpolicy="no-referrer" />`
+		: `<div class="auth-user-avatar auth-avatar-placeholder">${(showName[0] || "?").toUpperCase()}</div>`;
 	container.innerHTML = `
 		<div class="auth-user">
-			<div class="auth-user-id" title="${userId || ""}">${shortId}</div>
+			<div class="auth-user-info">
+				${avatarHtml}
+				<div class="auth-user-meta">
+					<div class="auth-user-name" title="${showName}">${showName}</div>
+					<div class="auth-user-email" title="${email}">${email || ""}</div>
+				</div>
+			</div>
 			<button class="auth-logout-btn" onclick="handleLogout()">Sign Out</button>
 		</div>
 	`;

@@ -158,7 +158,7 @@ async def _verify_google_id_token(id_token: str, client_id: str) -> dict:
     )
 
 
-async def _get_github_identity(access_token: str) -> tuple[str, str | None]:
+async def _get_github_identity(access_token: str) -> tuple[str, str | None, str | None, str | None]:
     headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get("https://api.github.com/user", headers=headers)
@@ -175,20 +175,28 @@ async def _get_github_identity(access_token: str) -> tuple[str, str | None]:
                 if entry.get("primary") and entry.get("verified"):
                     email = entry["email"]
                     break
-        return provider_sub, email
+        avatar_url = data.get("avatar_url")
+        display_name = data.get("name") or data.get("login")
+        return provider_sub, email, avatar_url, display_name
 
 
 async def resolve_identity(
     config: OAuthProviderConfig,
     token_response: dict,
     client_id: str,
-) -> tuple[str, str | None]:
+) -> tuple[str, str | None, str | None, str | None]:
+    """Resolve OAuth identity → (provider_sub, email, avatar_url, display_name)."""
     if config.has_id_token:
         id_token = token_response.get("id_token")
         if not id_token:
             raise ValueError("Token response missing id_token")
         claims = await _verify_google_id_token(id_token, client_id)
-        return claims["sub"], claims.get("email")
+        return (
+            claims["sub"],
+            claims.get("email"),
+            claims.get("picture"),
+            claims.get("name"),
+        )
     access_token = token_response.get("access_token")
     if not access_token:
         raise ValueError("Token response missing access_token")

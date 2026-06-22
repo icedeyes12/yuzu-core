@@ -28,12 +28,14 @@ from app.auth.session import (
 from app.db.connection import pg_execute_async, pg_fetchone_async
 from app.db.queries import (
     DEFAULT_PROFILE_PARAMS,
+    SQL_AUTH_ME_LOOKUP,
     SQL_IDENTITY_COUNT,
     SQL_IDENTITY_INSERT,
     SQL_IDENTITY_LOOKUP,
     SQL_PROFILE_INSERT_DEFAULT,
     SQL_PROFILE_INSERT_DEFAULT_RETURNING,
     SQL_PROFILE_SELECT_FIRST,
+    SQL_PROFILE_UPDATE_AVATAR,
 )
 from app.logging_config import get_logger
 
@@ -112,12 +114,16 @@ async def callback(request: Request):
         raise HTTPException(status_code=502, detail="Token exchange failed")
 
     try:
-        provider_sub, email = await resolve_identity(config, token_response, client_id)
+        provider_sub, email, avatar_url, display_name = await resolve_identity(
+            config, token_response, client_id
+        )
     except Exception as e:
         log.error("Identity resolution failed: %s", e)
         raise HTTPException(status_code=502, detail="Identity resolution failed")
 
-    user_id = await _map_identity_to_profile(provider_name, provider_sub, email)
+    user_id = await _map_identity_to_profile(
+        provider_name, provider_sub, email, avatar_url, display_name
+    )
     token = await create_session(user_id)
 
     redirect_target = os.environ.get("APP_BASE_URL") or "/"
@@ -128,11 +134,28 @@ async def callback(request: Request):
 
 
 async def _map_identity_to_profile(
-    provider: str, provider_sub: str, email: str | None
+    provider: str,
+    provider_sub: str,
+    email: str | None,
+    avatar_url: str | None = None,
+    display_name: str | None = None,
 ) -> str:
     existing = await pg_fetchone_async(SQL_IDENTITY_LOOKUP, (provider, provider_sub))
     if existing:
-        return str(existing["user_id"])
+        user_id = str(existing["user_id"])
+        # Refresh avatar + display name on each login (IdP may have updated them)
+        if avatar_url:
+            await pg_execute_async(
+                SQL_PROFILE_UPDATE_AVATAR,
+                (avatar_url, datetime.now(), user_id),
+            )
+        if display_name:
+            from app.db.queries import build_profile_update
+            q, params = build_profile_update({"display_name": display_name}) or ("", [])
+            if q:
+                params.append(user_id)
+                await pg_execute_async(f"{q} WHERE id = %s", params)
+        return user_id
 
     identity_count = await pg_fetchone_async(SQL_IDENTITY_COUNT)
     if identity_count and identity_count["count"] == 0:
@@ -152,6 +175,19 @@ async def _map_identity_to_profile(
         if not row:
             raise HTTPException(status_code=500, detail="Profile creation failed")
         user_id = str(row["id"])
+
+    # Persist avatar + display name for new profiles
+    if avatar_url:
+        await pg_execute_async(
+            SQL_PROFILE_UPDATE_AVATAR,
+            (avatar_url, datetime.now(), user_id),
+        )
+    if display_name:
+        from app.db.queries import build_profile_update
+        q, params = build_profile_update({"display_name": display_name}) or ("", [])
+        if q:
+            params.append(user_id)
+            await pg_execute_async(f"{q} WHERE id = %s", params)
 
     await pg_execute_async(
         SQL_IDENTITY_INSERT, (user_id, provider, provider_sub, email)
@@ -177,4 +213,12 @@ async def me(request: Request):
     user_id = await validate_session(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
-    return {"user_id": user_id}
+    row = await pg_fetchone_async(SQL_AUTH_ME_LOOKUP, (user_id,))
+    if not row:
+        return {"user_id": user_id}
+    return {
+        "user_id": user_id,
+        "email": row.get("email"),
+        "display_name": row.get("display_name") or "",
+        "avatar_url": row.get("avatar_url"),
+    }

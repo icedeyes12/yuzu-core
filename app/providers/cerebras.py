@@ -28,7 +28,7 @@ class CerebrasProvider(AIProvider):
         return self.available_models
 
     def send_message(self, messages: list[dict], model: str, **kwargs) -> str | None:
-        if not self.api_key or model not in self.available_models:
+        if not self.resolve_api_key() or model not in self.available_models:
             return None
 
         try:
@@ -40,12 +40,12 @@ class CerebrasProvider(AIProvider):
             typical_p = kwargs.get("typical_p", 0.8)
 
             headers = {
-                "Authorization": f"Bearer {self.api_key}",
+                "Authorization": f"Bearer {self.resolve_api_key()}",
                 "Content-Type": "application/json",
             }
 
             payload = {
-                "model": model,
+                "model": self.resolve_model(model),
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
@@ -60,7 +60,7 @@ class CerebrasProvider(AIProvider):
             )
 
             response = requests.post(
-                self.base_url,
+                self.resolve_base_url(self.base_url),
                 headers=headers,
                 json=payload,
                 timeout=kwargs.get("timeout", 120),
@@ -76,7 +76,7 @@ class CerebrasProvider(AIProvider):
     async def send_message_streaming(
         self, messages: list[dict], model: str, **kwargs
     ) -> AsyncGenerator[str, None]:
-        if not self.api_key or model not in self.available_models:
+        if not self.resolve_api_key() or model not in self.available_models:
             yield ""
             return
 
@@ -89,12 +89,12 @@ class CerebrasProvider(AIProvider):
             typical_p = kwargs.get("typical_p", 0.8)
 
             headers = {
-                "Authorization": f"Bearer {self.api_key}",
+                "Authorization": f"Bearer {self.resolve_api_key()}",
                 "Content-Type": "application/json",
             }
 
             payload = {
-                "model": model,
+                "model": self.resolve_model(model),
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
@@ -107,7 +107,7 @@ class CerebrasProvider(AIProvider):
             async with httpx.AsyncClient() as client:
                 async with client.stream(
                     "POST",
-                    self.base_url,
+                    self.resolve_base_url(self.base_url),
                     headers=headers,
                     json=payload,
                     timeout=kwargs.get("timeout", 120),

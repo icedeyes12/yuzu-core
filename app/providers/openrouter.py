@@ -85,14 +85,14 @@ class OpenRouterProvider(AIProvider):
             temperature = min(temperature, 0.8)
 
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": f"Bearer {self.resolve_api_key()}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://github.com/icedeyes12/yuzu-companion",
             "X-Title": "Yuzu-Companion",
         }
 
         payload = {
-            "model": model,
+            "model": self.resolve_model(model),
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
@@ -111,7 +111,7 @@ class OpenRouterProvider(AIProvider):
         return headers, payload
 
     def send_message(self, messages: list[dict], model: str, **kwargs) -> str | None:
-        if not self.api_key or model not in self.available_models:
+        if not self.resolve_api_key() or model not in self.available_models:
             return None
 
         try:
@@ -121,7 +121,7 @@ class OpenRouterProvider(AIProvider):
             )
 
             response = requests.post(
-                self.base_url,
+                self.resolve_base_url(self.base_url),
                 headers=headers,
                 json=payload,
                 timeout=kwargs.get("timeout", 180),
@@ -145,13 +145,13 @@ class OpenRouterProvider(AIProvider):
     def send_message_raw(
         self, messages: list[dict], model: str, **kwargs
     ) -> dict | None:
-        if not self.api_key or model not in self.available_models:
+        if not self.resolve_api_key() or model not in self.available_models:
             return None
 
         try:
             headers, payload = self._prepare_payload(messages, model, False, **kwargs)
             response = requests.post(
-                self.base_url,
+                self.resolve_base_url(self.base_url),
                 headers=headers,
                 json=payload,
                 timeout=kwargs.get("timeout", 180),
@@ -174,7 +174,7 @@ class OpenRouterProvider(AIProvider):
     async def send_message_streaming(
         self, messages: list[dict], model: str, **kwargs
     ) -> AsyncGenerator[str, None]:
-        if not self.api_key or model not in self.available_models:
+        if not self.resolve_api_key() or model not in self.available_models:
             yield ""
             return
 
@@ -183,7 +183,7 @@ class OpenRouterProvider(AIProvider):
             async with httpx.AsyncClient() as client:
                 async with client.stream(
                     "POST",
-                    self.base_url,
+                    self.resolve_base_url(self.base_url),
                     headers=headers,
                     json=payload,
                     timeout=kwargs.get("timeout", 180),

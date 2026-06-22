@@ -72,7 +72,7 @@ class ChutesProvider(AIProvider):
 
         IMPORTANT: Sleep happens OUTSIDE rate limit lock to not block queue.
         """
-        if not self.api_key or model not in self.available_models:
+        if not self.resolve_api_key() or model not in self.available_models:
             return None
 
         log_prefix = kwargs.pop("log_prefix", "[CHAT]")
@@ -188,12 +188,12 @@ class ChutesProvider(AIProvider):
         stream = kwargs.get("stream", False)
 
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": f"Bearer {self.resolve_api_key()}",
             "Content-Type": "application/json",
         }
 
         payload = {
-            "model": model,
+            "model": self.resolve_model(model),
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
@@ -208,7 +208,7 @@ class ChutesProvider(AIProvider):
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(
-                    self.base_url,
+                    self.resolve_base_url(self.base_url),
                     headers=headers,
                     json=payload,
                     timeout=kwargs.get("timeout", 120),
@@ -226,10 +226,10 @@ class ChutesProvider(AIProvider):
     async def send_message_streaming(
         self, messages: list[dict], model: str, source: str = "llm", **kwargs
     ) -> AsyncGenerator[str, None]:
-        if not self.api_key or model not in self.available_models:
+        if not self.resolve_api_key() or model not in self.available_models:
             reason = (
                 "missing API key"
-                if not self.api_key
+                if not self.resolve_api_key()
                 else f"model {model} not in available"
             )
             logger.warning("Chutes stream aborted: %s", reason)
@@ -257,12 +257,12 @@ class ChutesProvider(AIProvider):
             typical_p = kwargs.get("typical_p", 0.85)
 
             headers = {
-                "Authorization": f"Bearer {self.api_key}",
+                "Authorization": f"Bearer {self.resolve_api_key()}",
                 "Content-Type": "application/json",
             }
 
             payload = {
-                "model": model,
+                "model": self.resolve_model(model),
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
@@ -276,7 +276,7 @@ class ChutesProvider(AIProvider):
                 async with httpx.AsyncClient() as client:
                     async with client.stream(
                         "POST",
-                        self.base_url,
+                        self.resolve_base_url(self.base_url),
                         headers=headers,
                         json=payload,
                         timeout=kwargs.get("timeout", 120),
