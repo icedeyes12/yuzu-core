@@ -77,8 +77,8 @@ def generate_pkce() -> tuple[str, str]:
 
 def sign_state(provider: str, verifier: str, secret: str) -> str:
     payload = json.dumps({"p": provider, "v": verifier, "t": int(time.time())})
-    sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
     token = base64.urlsafe_b64encode(payload.encode()).decode()
+    sig = hmac.new(secret.encode(), token.encode(), hashlib.sha256).hexdigest()
     return f"{token}.{sig}"
 
 
