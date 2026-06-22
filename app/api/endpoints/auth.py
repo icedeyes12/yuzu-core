@@ -46,7 +46,7 @@ def _require_env(name: str) -> str:
     val = os.environ.get(name)
     if not val:
         raise HTTPException(status_code=500, detail=f"Missing env var: {name}")
-    return val
+    return val.strip()
 
 
 @router.get("/login")
@@ -62,6 +62,8 @@ async def login(provider: str = "google"):
     code_verifier, code_challenge = generate_pkce()
     state = sign_state(provider, code_verifier, session_secret)
     auth_url = build_auth_url(config, client_id, redirect_uri, code_challenge, state)
+
+    log.info("OAuth login: provider=%s redirect_uri='%s'", provider, redirect_uri)
 
     response = RedirectResponse(url=auth_url, status_code=302)
     response.set_cookie(
