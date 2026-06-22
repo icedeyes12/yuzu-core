@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import secrets
 from datetime import datetime, timedelta
 
@@ -16,6 +17,8 @@ log = get_logger(__name__)
 SESSION_COOKIE_NAME = "yuzu_session"
 SESSION_TTL_DAYS = 7
 _SESSION_MAX_AGE = SESSION_TTL_DAYS * 24 * 60 * 60
+
+_COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
 
 
 def generate_token() -> str:
@@ -51,7 +54,7 @@ def set_session_cookie(response, token: str) -> None:
         value=token,
         max_age=_SESSION_MAX_AGE,
         httponly=True,
-        secure=True,
+        secure=_COOKIE_SECURE,
         samesite="strict",
         path="/",
     )

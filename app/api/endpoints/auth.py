@@ -18,6 +18,7 @@ from app.auth.oauth import (
 )
 from app.auth.session import (
     SESSION_COOKIE_NAME,
+    _COOKIE_SECURE,
     clear_session_cookie,
     create_session,
     revoke_session,
@@ -68,7 +69,7 @@ async def login(provider: str = "google"):
         value=state,
         max_age=600,
         httponly=True,
-        secure=True,
+        secure=_COOKIE_SECURE,
         samesite="lax",
         path="/",
     )
