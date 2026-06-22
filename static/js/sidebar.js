@@ -1,5 +1,190 @@
 // FILE: static/js/sidebar.js
 // DESCRIPTION: Unified sidebar management with session actions
+
+// === GLOBAL FETCH INTERCEPTOR (auth gate + Phase 3 BYOK prep) ===
+// Runs before any module — sidebar.js is the first classic script on every page.
+// 1. Detects 401 from /api/ endpoints → shows auth overlay (no full reload).
+// 2. Reads X-Provider-Key from localStorage for LLM endpoints (no-op until
+//    Phase 3 BYOK UI connects; harmless when localStorage key is absent).
+(() => {
+	const _origFetch = window.fetch;
+	const _LLM_ENDPOINTS = [
+		"/api/send_message",
+		"/api/send_message_stream",
+		"/api/generate_image",
+	];
+
+	window.fetch = async function (input, init) {
+		init = init || {};
+		init.headers = new Headers(init.headers || {});
+
+		const url = typeof input === "string" ? input : input.url;
+
+		// Phase 3 prep: inject provider key for LLM endpoints (no-op if unset)
+		if (_LLM_ENDPOINTS.some((ep) => url.includes(ep))) {
+			const key = localStorage.getItem("yuzu_provider_key");
+			if (key) init.headers.set("X-Provider-Key", key);
+		}
+
+		const response = await _origFetch.call(this, input, init);
+
+		// Auth gate: 401 from API (excluding auth endpoints) → overlay
+		if (
+			response.status === 401 &&
+			url.includes("/api/") &&
+			!url.includes("/api/auth/")
+		) {
+			_showAuthOverlay();
+		}
+		return response;
+	};
+})();
+
+// === AUTH OVERLAY (shown on 401, no full reload) ===
+function _ensureAuthOverlay() {
+	let overlay = document.getElementById("authOverlay");
+	if (overlay) return overlay;
+
+	overlay = document.createElement("div");
+	overlay.className = "auth-overlay";
+	overlay.id = "authOverlay";
+	overlay.innerHTML = `
+		<div class="auth-overlay-card">
+			<h2>Session Expired</h2>
+			<p>Please sign in again to continue.</p>
+			<div class="auth-overlay-buttons">
+				<button class="auth-btn auth-google-btn" onclick="loginWith('google')">
+					${_GOOGLE_SVG} Sign in with Google
+				</button>
+				<button class="auth-btn auth-github-btn" onclick="loginWith('github')">
+					${_GITHUB_SVG} Sign in with GitHub
+				</button>
+			</div>
+		</div>
+	`;
+	document.body.appendChild(overlay);
+	return overlay;
+}
+
+function _showAuthOverlay() {
+	const overlay = _ensureAuthOverlay();
+	overlay.classList.add("active");
+}
+
+function _hideAuthOverlay() {
+	const overlay = document.getElementById("authOverlay");
+	if (overlay) overlay.classList.remove("active");
+}
+
+// === INLINE SVG ICONS (monochrome, currentColor — theme-adaptive) ===
+const _GOOGLE_SVG = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12.48 10.12v3.04h4.39c-.19 1.15-1.34 3.37-4.39 3.37-2.64 0-4.8-2.19-4.8-4.89s2.16-4.89 4.8-4.89c1.51 0 2.52.64 3.1 1.2l2.11-2.04C16.04 4.43 14.48 3.76 12.48 3.76c-3.87 0-7 3.13-7 7s3.13 7 7 7c4.05 0 6.73-2.85 6.73-6.86 0-.46-.05-.81-.11-1.16l-6.62-.12z"/></svg>`;
+const _GITHUB_SVG = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.565 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>`;
+
+// === AUTH WIDGET (injected into sidebar — single source of truth) ===
+function _injectAuthSection() {
+	const sidebar = document.getElementById("mainSidebar");
+	if (!sidebar) return;
+	if (document.getElementById("authSection")) return;
+
+	const content = sidebar.querySelector(".sidebar-content");
+	if (!content) return;
+
+	// Auth section at TOP of sidebar content (before Navigation)
+	const authSection = document.createElement("div");
+	authSection.className = "sidebar-section auth-section";
+	authSection.id = "authSection";
+	authSection.innerHTML = `
+		<h3>Account</h3>
+		<div class="auth-content" id="authContent">
+			<div class="auth-loading">Checking session…</div>
+		</div>
+	`;
+	content.insertBefore(authSection, content.firstChild);
+
+	// BYOK placeholder after auth, before Navigation
+	const byokSection = document.createElement("div");
+	byokSection.className = "sidebar-section byok-section";
+	byokSection.id = "byokSection";
+	byokSection.innerHTML = `
+		<h3>Provider Keys</h3>
+		<div class="byok-placeholder">
+			<div class="byok-status byok-empty">No keys configured</div>
+			<button class="byok-manage-btn" disabled>Manage Keys</button>
+			<div class="byok-hint">API key management unlocks after sign-in</div>
+		</div>
+	`;
+	const navSection = content.querySelector(
+		".sidebar-section:not(.auth-section):not(.byok-section)",
+	);
+	if (navSection) {
+		content.insertBefore(byokSection, navSection);
+	} else {
+		content.appendChild(byokSection);
+	}
+}
+
+async function _checkAuthState() {
+	const authContent = document.getElementById("authContent");
+	if (!authContent) return;
+
+	try {
+		const resp = await fetch("/api/auth/me", {
+			headers: { Accept: "application/json" },
+		});
+		if (!resp.ok) {
+			_renderUnauthenticated(authContent);
+			return;
+		}
+		const data = await resp.json();
+		_renderAuthenticated(authContent, data.user_id);
+		_hideAuthOverlay();
+	} catch (_e) {
+		_renderUnauthenticated(authContent);
+	}
+}
+
+function _renderAuthenticated(container, userId) {
+	const shortId = userId ? `${userId.slice(0, 8)}…` : "unknown";
+	container.innerHTML = `
+		<div class="auth-user">
+			<div class="auth-user-id" title="${userId || ""}">${shortId}</div>
+			<button class="auth-logout-btn" onclick="handleLogout()">Sign Out</button>
+		</div>
+	`;
+}
+
+function _renderUnauthenticated(container) {
+	container.innerHTML = `
+		<div class="auth-login-buttons">
+			<button class="auth-btn auth-google-btn" onclick="loginWith('google')">
+				${_GOOGLE_SVG} Sign in with Google
+			</button>
+			<button class="auth-btn auth-github-btn" onclick="loginWith('github')">
+				${_GITHUB_SVG} Sign in with GitHub
+			</button>
+		</div>
+	`;
+}
+
+function loginWith(provider) {
+	window.location.href = `/api/auth/login?provider=${provider}`;
+}
+
+async function handleLogout() {
+	try {
+		await fetch("/api/auth/logout", { method: "POST" });
+	} catch (_e) {
+		// proceed to re-render regardless
+	}
+	_hideAuthOverlay();
+	_checkAuthState();
+}
+
+function _initAuth() {
+	_injectAuthSection();
+	_checkAuthState();
+}
+
 let _currentTheme = "stellar-night-suisei";
 
 // Session switching guardrails
@@ -520,6 +705,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 	console.log("Custom dropdown initialized");
 
+	// Initialize auth widget + BYOK placeholder
+	_initAuth();
+
 	// Debug: Check if elements exist
 	console.log("Sidebar elements check:");
 	console.log("- mainSidebar:", document.getElementById("mainSidebar"));
@@ -537,3 +725,5 @@ window.renameSession = renameSession;
 window.deleteSessionPrompt = deleteSessionPrompt;
 window.deleteSession = deleteSession;
 window.loadSidebarSessions = loadSidebarSessions;
+window.loginWith = loginWith;
+window.handleLogout = handleLogout;

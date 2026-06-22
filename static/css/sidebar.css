@@ -692,3 +692,192 @@
 		margin-right: 6px;
 	}
 }
+
+/* === AUTH WIDGET === */
+.auth-section {
+	padding: 1.2rem;
+	border-bottom: 1.5px solid var(--accent-secondary);
+}
+
+.auth-section h3 {
+	color: var(--accent-secondary);
+	font-size: 0.85rem;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	margin-bottom: 0.8rem;
+}
+
+.auth-loading {
+	color: var(--text-secondary);
+	font-size: 0.85rem;
+	padding: 0.5rem 0;
+}
+
+/* Authenticated state */
+.auth-user {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.8rem;
+}
+
+.auth-user-id {
+	font-family: monospace;
+	font-size: 0.85rem;
+	color: var(--text-color);
+	background: var(--input-bg);
+	padding: 0.35rem 0.6rem;
+	border-radius: 6px;
+	border: 1px solid var(--border-color);
+	cursor: help;
+}
+
+.auth-logout-btn {
+	background: var(--button-bg);
+	color: var(--button-text);
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	padding: 0.35rem 0.8rem;
+	font-size: 0.8rem;
+	cursor: pointer;
+	transition: background 0.2s ease;
+}
+
+.auth-logout-btn:hover {
+	background: var(--button-hover);
+}
+
+/* Unauthenticated — login buttons */
+.auth-login-buttons {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+}
+
+.auth-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	width: 100%;
+	padding: 0.6rem 1rem;
+	border-radius: 8px;
+	font-size: 0.85rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition:
+		background 0.2s ease,
+		border-color 0.2s ease;
+}
+
+.auth-btn svg {
+	flex-shrink: 0;
+}
+
+.auth-google-btn,
+.auth-github-btn {
+	background: var(--button-bg);
+	color: var(--button-text);
+	border: 1px solid var(--border-color);
+}
+
+.auth-google-btn:hover,
+.auth-github-btn:hover {
+	background: var(--button-hover);
+	border-color: var(--accent-primary);
+}
+
+/* === BYOK PLACEHOLDER === */
+.byok-section {
+	padding: 1.2rem;
+	border-bottom: 1.5px solid var(--accent-secondary);
+}
+
+.byok-section h3 {
+	color: var(--accent-secondary);
+	font-size: 0.85rem;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	margin-bottom: 0.8rem;
+}
+
+.byok-placeholder {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.byok-status {
+	font-size: 0.85rem;
+	padding: 0.4rem 0.6rem;
+	border-radius: 6px;
+}
+
+.byok-empty {
+	color: var(--text-secondary);
+	background: var(--input-bg);
+	border: 1px solid var(--border-color);
+}
+
+.byok-manage-btn {
+	background: var(--button-bg);
+	color: var(--text-secondary);
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	padding: 0.5rem 1rem;
+	font-size: 0.8rem;
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+.byok-hint {
+	font-size: 0.75rem;
+	color: var(--text-secondary);
+}
+
+/* === AUTH OVERLAY (full-screen, shown on 401 — no reload) === */
+.auth-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.7);
+	backdrop-filter: var(--backdrop-blur);
+	z-index: 10002;
+	display: none;
+	align-items: center;
+	justify-content: center;
+}
+
+.auth-overlay.active {
+	display: flex;
+}
+
+.auth-overlay-card {
+	background: var(--header-bg);
+	border: 1.5px solid var(--accent-secondary);
+	border-radius: 16px;
+	padding: 2rem 2.5rem;
+	text-align: center;
+	box-shadow: var(--shadow-base);
+	max-width: 360px;
+}
+
+.auth-overlay-card h2 {
+	color: var(--accent-secondary);
+	font-size: 1.4rem;
+	margin: 0 0 0.5rem 0;
+}
+
+.auth-overlay-card p {
+	color: var(--text-secondary);
+	font-size: 0.9rem;
+	margin: 0 0 1.5rem 0;
+}
+
+.auth-overlay-buttons {
+	display: flex;
+	flex-direction: column;
+	gap: 0.8rem;
+}
