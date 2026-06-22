@@ -409,7 +409,9 @@ def _map_category_to_relation(category: str) -> str:
     return mapping.get(category, "experience")
 
 
-async def _get_category_counts_async(session_id: str, user_id: str | None = None) -> dict[str, int]:
+async def _get_category_counts_async(
+    session_id: str, user_id: str | None = None
+) -> dict[str, int]:
     """Count existing facts per category (async)."""
     facts = await MemoryDB.get_facts_by_session_async(
         session_id=None, fact_type=FACT_TYPE_STATIC, limit=500, user_id=user_id
@@ -467,7 +469,12 @@ async def consolidate_facts_async(
                 # Invalidate old, insert new
                 await MemoryDB.invalidate_fact_async(source_id, user_id=user_id)
                 await upsert_semantic_memory_async(
-                    session_id, entity, relation, fact_text, episode_id=episode_id, user_id=user_id
+                    session_id,
+                    entity,
+                    relation,
+                    fact_text,
+                    episode_id=episode_id,
+                    user_id=user_id,
                 )
                 counts["updated"] += 1
             except Exception as e:
@@ -507,7 +514,12 @@ async def consolidate_facts_async(
         else:  # action == "new"
             try:
                 await upsert_semantic_memory_async(
-                    session_id, entity, relation, fact_text, episode_id=episode_id, user_id=user_id
+                    session_id,
+                    entity,
+                    relation,
+                    fact_text,
+                    episode_id=episode_id,
+                    user_id=user_id,
                 )
                 counts["new"] += 1
             except Exception as e:

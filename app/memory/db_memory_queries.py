@@ -76,7 +76,9 @@ RETURNING id
 SQL_FACT_SELECT_BY_ID = "SELECT * FROM semantic_facts WHERE id=%s AND user_id=%s"
 
 # Batch query for multiple fact IDs (N+1 fix)
-SQL_FACT_SELECT_BY_IDS = "SELECT * FROM semantic_facts WHERE id = ANY(%s) AND user_id=%s"
+SQL_FACT_SELECT_BY_IDS = (
+    "SELECT * FROM semantic_facts WHERE id = ANY(%s) AND user_id=%s"
+)
 
 SQL_FACT_SELECT_STATIC_LIMIT = (
     "SELECT * FROM semantic_facts WHERE fact_type=%s AND user_id=%s LIMIT %s"
@@ -86,9 +88,7 @@ SQL_FACT_UPDATE_METADATA = (
     "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s AND user_id=%s"
 )
 
-SQL_FACT_INVALIDATE = (
-    "UPDATE semantic_facts SET invalid_at=%s, last_accessed=%s WHERE id=%s AND user_id=%s"
-)
+SQL_FACT_INVALIDATE = "UPDATE semantic_facts SET invalid_at=%s, last_accessed=%s WHERE id=%s AND user_id=%s"
 
 SQL_FACT_UPDATE_DECAY = (
     "UPDATE semantic_facts SET metadata=%s, last_accessed=%s WHERE id=%s AND user_id=%s"

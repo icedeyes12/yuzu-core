@@ -465,7 +465,9 @@ async def execute_commands(
             args = _parse_args(tool_name, parsed["args"])
 
             log.info("executing tool: %s with args: %s", tool_name, str(args)[:100])
-            result = await execute_tool(tool_name, args, session_id=session_id, user_id=user_id)
+            result = await execute_tool(
+                tool_name, args, session_id=session_id, user_id=user_id
+            )
             results.append((tool_name, result))
 
         except Exception as e:

@@ -174,7 +174,9 @@ def upsert_semantic_memory(
                 from app.db import pg_execute
                 from datetime import datetime
 
-                MemoryDB.increment_importance(e["id"], delta=0.1, cap=1.0, user_id=user_id)
+                MemoryDB.increment_importance(
+                    e["id"], delta=0.1, cap=1.0, user_id=user_id
+                )
                 meta = e.get("metadata") or {}
                 ids = meta.get("source_episodic_ids", [])
                 if episode_id and episode_id not in ids:
@@ -202,7 +204,9 @@ def upsert_semantic_memory(
             from app.db import pg_execute
             from datetime import datetime
 
-            MemoryDB.increment_importance(existing_exact["id"], delta=0.1, cap=1.0, user_id=user_id)
+            MemoryDB.increment_importance(
+                existing_exact["id"], delta=0.1, cap=1.0, user_id=user_id
+            )
             meta = existing_exact.get("metadata") or {}
             ids = meta.get("source_episodic_ids", [])
             if episode_id and episode_id not in ids:

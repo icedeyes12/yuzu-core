@@ -158,7 +158,9 @@ async def _verify_google_id_token(id_token: str, client_id: str) -> dict:
     )
 
 
-async def _get_github_identity(access_token: str) -> tuple[str, str | None, str | None, str | None]:
+async def _get_github_identity(
+    access_token: str,
+) -> tuple[str, str | None, str | None, str | None]:
     headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get("https://api.github.com/user", headers=headers)

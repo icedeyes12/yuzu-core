@@ -530,7 +530,10 @@ def retrieve_dynamic_memories(session_id: str, query=None, limit=10, user_id=Non
         raise ValueError("retrieve_dynamic_memories: user_id is required")
     if not query:
         all_dynamic = MemoryDB.get_facts_by_session(
-            session_id=session_id, fact_type=FACT_TYPE_DYNAMIC, limit=limit * 3, user_id=user_id
+            session_id=session_id,
+            fact_type=FACT_TYPE_DYNAMIC,
+            limit=limit * 3,
+            user_id=user_id,
         )
         results = [
             r
@@ -625,15 +628,21 @@ def retrieve_memories_combined(
     """
     # No query = no embedding needed
     if not query:
-        static = retrieve_static_memories(query=None, limit=static_limit, user_id=user_id)
-        dynamic = retrieve_dynamic_memories(session_id, query=None, limit=dynamic_limit, user_id=user_id)
+        static = retrieve_static_memories(
+            query=None, limit=static_limit, user_id=user_id
+        )
+        dynamic = retrieve_dynamic_memories(
+            session_id, query=None, limit=dynamic_limit, user_id=user_id
+        )
         return static, dynamic
 
     # Short query = skip embedding, use trigram only
     query_len = len(query.strip())
     if query_len < _MIN_QUERY_LEN_FOR_EMBEDDING:
         # Fall back to individual functions which handle no-embedding case
-        static = retrieve_static_memories(query=query, limit=static_limit, user_id=user_id)
+        static = retrieve_static_memories(
+            query=query, limit=static_limit, user_id=user_id
+        )
         dynamic = retrieve_dynamic_memories(
             session_id, query=query, limit=dynamic_limit, user_id=user_id
         )
@@ -734,7 +743,9 @@ def retrieve_memories_combined(
     if static_parsed:
         MemoryDB.update_last_accessed([m["id"] for m in static_parsed], user_id=user_id)
     if dynamic_parsed:
-        MemoryDB.update_last_accessed([m["id"] for m in dynamic_parsed], user_id=user_id)
+        MemoryDB.update_last_accessed(
+            [m["id"] for m in dynamic_parsed], user_id=user_id
+        )
 
     return static_parsed, dynamic_parsed
 
@@ -744,7 +755,9 @@ retrieve_semantic_memories = retrieve_static_memories
 retrieve_episodic_memories = retrieve_dynamic_memories
 
 
-def retrieve_segments(session_id: str, query=None, limit: int = 10, user_id: str | None = None):
+def retrieve_segments(
+    session_id: str, query=None, limit: int = 10, user_id: str | None = None
+):
     """
     Retrieve conversation segments for a session.
 
@@ -807,7 +820,9 @@ def retrieve_memory(session_id: str, query=None, user_id: str | None = None):
         static = []
 
     try:
-        dynamic = retrieve_dynamic_memories(session_id, query=query, limit=10, user_id=user_id)
+        dynamic = retrieve_dynamic_memories(
+            session_id, query=query, limit=10, user_id=user_id
+        )
     except Exception as e:
         logger.warning(f"Dynamic memory retrieval failed: {e}")
         dynamic = []
@@ -855,7 +870,10 @@ def _format_static_context(static: list[dict]) -> str:
 
 
 def retrieve_for_context(
-    session_id: str, query: str | None = None, limit: int = 10, user_id: str | None = None
+    session_id: str,
+    query: str | None = None,
+    limit: int = 10,
+    user_id: str | None = None,
 ) -> tuple[list[int], str]:
     """
     Retrieve ONLY static semantic memories for pre-LLM system prompt injection.
@@ -952,7 +970,9 @@ async def _embed_query_async(text: str) -> list[float] | None:
         return None
 
 
-async def retrieve_static_memories_async(query=None, limit=15, user_id: str | None = None):
+async def retrieve_static_memories_async(
+    query=None, limit=15, user_id: str | None = None
+):
     """
     Async version of retrieve_static_memories.
     3-channel hybrid: vector + trigram + tsvector, merged via RRF.
@@ -964,7 +984,9 @@ async def retrieve_static_memories_async(query=None, limit=15, user_id: str | No
         parsed = [_parse_fact_content(r) for r in results]
         parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
         if parsed:
-            await MemoryDB.update_last_accessed_async([m["id"] for m in parsed], user_id=user_id)
+            await MemoryDB.update_last_accessed_async(
+                [m["id"] for m in parsed], user_id=user_id
+            )
         return parsed
 
     query_vec = await _get_cached_embedding_async(query)  # CACHED
@@ -1019,19 +1041,26 @@ async def retrieve_static_memories_async(query=None, limit=15, user_id: str | No
     parsed = parsed[:limit]
 
     if parsed:
-        await MemoryDB.update_last_accessed_async([m["id"] for m in parsed], user_id=user_id)
+        await MemoryDB.update_last_accessed_async(
+            [m["id"] for m in parsed], user_id=user_id
+        )
 
     return parsed
 
 
-async def retrieve_dynamic_memories_async(session_id: str, query=None, limit=10, user_id: str | None = None):
+async def retrieve_dynamic_memories_async(
+    session_id: str, query=None, limit=10, user_id: str | None = None
+):
     """
     Async version of retrieve_dynamic_memories.
     3-channel hybrid: vector + trigram + tsvector, merged via RRF.
     """
     if not query:
         all_dynamic = await MemoryDB.get_facts_by_session_async(
-            session_id=session_id, fact_type=FACT_TYPE_DYNAMIC, limit=limit * 3, user_id=user_id
+            session_id=session_id,
+            fact_type=FACT_TYPE_DYNAMIC,
+            limit=limit * 3,
+            user_id=user_id,
         )
         results = [
             r
@@ -1041,7 +1070,9 @@ async def retrieve_dynamic_memories_async(session_id: str, query=None, limit=10,
         parsed = [_parse_fact_content(r) for r in results]
         parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
         if parsed:
-            await MemoryDB.update_last_accessed_async([m["id"] for m in parsed], user_id=user_id)
+            await MemoryDB.update_last_accessed_async(
+                [m["id"] for m in parsed], user_id=user_id
+            )
         return parsed
 
     query_vec = await _get_cached_embedding_async(
@@ -1102,18 +1133,24 @@ async def retrieve_dynamic_memories_async(session_id: str, query=None, limit=10,
     parsed = parsed[:limit]
 
     if parsed:
-        await MemoryDB.update_last_accessed_async([m["id"] for m in parsed], user_id=user_id)
+        await MemoryDB.update_last_accessed_async(
+            [m["id"] for m in parsed], user_id=user_id
+        )
 
     return parsed
 
 
-async def retrieve_memory_async(session_id: str, query=None, user_id: str | None = None):
+async def retrieve_memory_async(
+    session_id: str, query=None, user_id: str | None = None
+):
     """
     Async version of retrieve_memory.
     Main retrieval entry point.
     """
     try:
-        static = await retrieve_static_memories_async(query=query, limit=15, user_id=user_id)
+        static = await retrieve_static_memories_async(
+            query=query, limit=15, user_id=user_id
+        )
     except Exception as e:
         logger.warning(f"Static memory retrieval async failed: {e}")
         static = []
@@ -1144,14 +1181,19 @@ async def retrieve_memory_async(session_id: str, query=None, user_id: str | None
 
 
 async def retrieve_for_context_async(
-    session_id: str, query: str | None = None, limit: int = 10, user_id: str | None = None
+    session_id: str,
+    query: str | None = None,
+    limit: int = 10,
+    user_id: str | None = None,
 ) -> tuple[list[int], str]:
     """
     Async version of retrieve_for_context.
     Retrieve ONLY static semantic memories for pre-LLM system prompt injection.
     """
     try:
-        static = await retrieve_static_memories_async(query=query, limit=limit, user_id=user_id)
+        static = await retrieve_static_memories_async(
+            query=query, limit=limit, user_id=user_id
+        )
     except Exception as e:
         logger.warning(f"retrieve_for_context_async failed: {e}")
         return [], ""

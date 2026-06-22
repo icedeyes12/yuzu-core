@@ -29,12 +29,10 @@ from app.db.connection import pg_execute_async, pg_fetchone_async
 from app.db.queries import (
     DEFAULT_PROFILE_PARAMS,
     SQL_AUTH_ME_LOOKUP,
-    SQL_IDENTITY_COUNT,
     SQL_IDENTITY_INSERT,
     SQL_IDENTITY_LOOKUP,
-    SQL_PROFILE_INSERT_DEFAULT,
     SQL_PROFILE_INSERT_DEFAULT_RETURNING,
-    SQL_PROFILE_SELECT_FIRST,
+    SQL_PROFILE_UNCLAIMED_LOOKUP,
     SQL_PROFILE_UPDATE_AVATAR,
 )
 from app.logging_config import get_logger
@@ -151,22 +149,16 @@ async def _map_identity_to_profile(
             )
         if display_name:
             from app.db.queries import build_profile_update
+
             q, params = build_profile_update({"display_name": display_name}) or ("", [])
             if q:
                 params.append(user_id)
                 await pg_execute_async(f"{q} WHERE id = %s", params)
         return user_id
 
-    identity_count = await pg_fetchone_async(SQL_IDENTITY_COUNT)
-    if identity_count and identity_count["count"] == 0:
-        profile = await pg_fetchone_async(SQL_PROFILE_SELECT_FIRST)
-        if not profile:
-            await pg_execute_async(
-                SQL_PROFILE_INSERT_DEFAULT,
-                (*DEFAULT_PROFILE_PARAMS, datetime.now(), datetime.now()),
-            )
-            profile = await pg_fetchone_async(SQL_PROFILE_SELECT_FIRST)
-        user_id = str(profile["id"])
+    unclaimed = await pg_fetchone_async(SQL_PROFILE_UNCLAIMED_LOOKUP)
+    if unclaimed:
+        user_id = str(unclaimed["id"])
     else:
         row = await pg_fetchone_async(
             SQL_PROFILE_INSERT_DEFAULT_RETURNING,
@@ -184,6 +176,7 @@ async def _map_identity_to_profile(
         )
     if display_name:
         from app.db.queries import build_profile_update
+
         q, params = build_profile_update({"display_name": display_name}) or ("", [])
         if q:
             params.append(user_id)

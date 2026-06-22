@@ -99,7 +99,7 @@ function _injectAuthSection() {
 	const content = sidebar.querySelector(".sidebar-content");
 	if (!content) return;
 
-	// Auth section at TOP of sidebar content (before Navigation)
+	// Auth section at BOTTOM of sidebar content
 	const authSection = document.createElement("div");
 	authSection.className = "sidebar-section auth-section";
 	authSection.id = "authSection";
@@ -109,28 +109,7 @@ function _injectAuthSection() {
 			<div class="auth-loading">Checking session…</div>
 		</div>
 	`;
-	content.insertBefore(authSection, content.firstChild);
-
-	// BYOK placeholder after auth, before Navigation
-	const byokSection = document.createElement("div");
-	byokSection.className = "sidebar-section byok-section";
-	byokSection.id = "byokSection";
-	byokSection.innerHTML = `
-		<h3>Provider Keys</h3>
-		<div class="byok-placeholder">
-			<div class="byok-status byok-empty">No keys configured</div>
-			<button class="byok-manage-btn" disabled>Manage Keys</button>
-			<div class="byok-hint">API key management unlocks after sign-in</div>
-		</div>
-	`;
-	const navSection = content.querySelector(
-		".sidebar-section:not(.auth-section):not(.byok-section)",
-	);
-	if (navSection) {
-		content.insertBefore(byokSection, navSection);
-	} else {
-		content.appendChild(byokSection);
-	}
+	content.appendChild(authSection);
 }
 
 async function _checkAuthState() {

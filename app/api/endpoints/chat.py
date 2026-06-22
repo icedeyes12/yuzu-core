@@ -48,7 +48,7 @@ class MessageRequest(BaseModel):
 @router.post("/send_message")
 async def api_send_message(
     request: Request,
-    payload: MessageRequest, 
+    payload: MessageRequest,
     user_id: str = Depends(get_current_user),
 ):
     keyring = _extract_keyring(request)

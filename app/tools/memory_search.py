@@ -48,7 +48,9 @@ async def execute(arguments, **kwargs):
         )
 
     try:
-        memory_bundle = await retrieve_memory_async(session_id=session_id, query=query, user_id=user_id)
+        memory_bundle = await retrieve_memory_async(
+            session_id=session_id, query=query, user_id=user_id
+        )
     except Exception as e:
         logger.warning(f"[memory_search] Retrieval failed: {e}")
         return error_result(

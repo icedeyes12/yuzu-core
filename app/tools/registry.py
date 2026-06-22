@@ -233,7 +233,9 @@ def is_terminal_tool(tool_name: str) -> bool:
 
 
 async def execute_tool(
-    tool_name: str, arguments: dict, session_id: Optional[str] = None,
+    tool_name: str,
+    arguments: dict,
+    session_id: Optional[str] = None,
     user_id: Optional[str] = None,
 ) -> dict:
     """Dispatch a tool call and return a structured result dict (async).
@@ -286,7 +288,11 @@ async def execute_tool(
         else:
             # Fallback for sync tools - run in thread to avoid blocking loop
             result = await asyncio.to_thread(
-                module.execute, arguments, session_id=session_id, tool_name=tool_name, user_id=user_id
+                module.execute,
+                arguments,
+                session_id=session_id,
+                tool_name=tool_name,
+                user_id=user_id,
             )
 
         # New-style structured result (already a dict with ok/data/markdown)

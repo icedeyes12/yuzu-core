@@ -75,10 +75,14 @@ class MemoryService:
             # Check if fence is already active BEFORE spawning task
             if not await _is_fence_active_async(session_id):
                 # Fire-and-forget: don't block main conversation
-                asyncio.create_task(MemoryService.trigger_pipeline_async(session_id, user_id))
+                asyncio.create_task(
+                    MemoryService.trigger_pipeline_async(session_id, user_id)
+                )
 
     @staticmethod
-    async def trigger_pipeline_async(session_id: str, user_id: str | None = None) -> bool:
+    async def trigger_pipeline_async(
+        session_id: str, user_id: str | None = None
+    ) -> bool:
         """Check and trigger background memory pipeline (async)."""
         # Get semaphore lazily in the active event loop
         semaphore = await MemoryService._get_pipeline_semaphore()
@@ -94,7 +98,9 @@ class MemoryService:
                     return False
 
                 count = await Database.get_session_messages_count_async(session_id)
-                triggered = await trigger_memory_pipeline_async(session_id, count, user_id)
+                triggered = await trigger_memory_pipeline_async(
+                    session_id, count, user_id
+                )
 
                 if triggered:
                     MemoryService._LAST_PIPELINE_TRIGGER[session_id] = now

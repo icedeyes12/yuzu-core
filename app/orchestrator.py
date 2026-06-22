@@ -248,7 +248,9 @@ async def _execute_tool_calls_async(
         tool_name = TOOL_ALIASES.get(raw_name, raw_name)
         arguments = tc.get("arguments", {})
         log.info("native tool_call: %s %s", tool_name, arguments)
-        result = await execute_tool(tool_name, arguments, session_id=session_id, user_id=user_id)
+        result = await execute_tool(
+            tool_name, arguments, session_id=session_id, user_id=user_id
+        )
         results.append((tool_name, result))
         if is_terminal_tool(tool_name) and result.get("ok"):
             break
@@ -718,7 +720,9 @@ async def handle_user_message(
     # Try native tool-call execution first
     tool_calls = await _parse_raw_tool_calls_async(provider_name, raw_api_response)
     if tool_calls:
-        tool_results = await _execute_tool_calls_async(tool_calls, session_id, user_id=user_id)
+        tool_results = await _execute_tool_calls_async(
+            tool_calls, session_id, user_id=user_id
+        )
 
         # SAFEGUARD: Persist clean text_response BEFORE tool execution
         if text_response and text_response.strip():
@@ -982,7 +986,9 @@ async def handle_user_message_streaming(
         return
 
     # === PHASE 4: Parse and execute tool commands ===
-    tool_result = await _process_tool_commands_async(full_response, session_id, user_id=user_id)
+    tool_result = await _process_tool_commands_async(
+        full_response, session_id, user_id=user_id
+    )
     combined_tool_markdown, any_image_tool, all_generated_paths = tool_result
 
     # Yield tool markdown chunks

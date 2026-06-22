@@ -136,7 +136,9 @@ def save_fact(
 
     # Reject exact content duplicates (same fact_type + content + not invalidated)
     try:
-        dup_check = pg_fetchone(SQL_FACT_DUP_CHECK_BY_CONTENT, (fact_type, content, user_id))
+        dup_check = pg_fetchone(
+            SQL_FACT_DUP_CHECK_BY_CONTENT, (fact_type, content, user_id)
+        )
         if dup_check:
             logger.debug(
                 f"save_fact: duplicate content found, rejecting id={dup_check['id']}"
@@ -329,7 +331,9 @@ def get_facts_by_ids(ids: list[int], user_id: str | None = None) -> list[dict]:
     return pg_fetchall(SQL_FACT_SELECT_BY_IDS, (ids, user_id))
 
 
-async def get_facts_by_ids_async(ids: list[int], user_id: str | None = None) -> list[dict]:
+async def get_facts_by_ids_async(
+    ids: list[int], user_id: str | None = None
+) -> list[dict]:
     """Batch fetch facts by ID list (async, N+1 fix).
 
     Returns list of fact dicts. Missing IDs are simply not included.
@@ -393,7 +397,9 @@ def update_last_accessed(ids: list[int], user_id: str | None = None) -> int:
         return 0
 
 
-def increment_importance(id: int, delta: float = 0.05, cap: float = 1.0, user_id: str | None = None) -> bool:
+def increment_importance(
+    id: int, delta: float = 0.05, cap: float = 1.0, user_id: str | None = None
+) -> bool:
     if not user_id:
         raise ValueError("increment_importance: user_id is required")
     try:
@@ -416,7 +422,9 @@ def increment_importance(id: int, delta: float = 0.05, cap: float = 1.0, user_id
 
 # ── FSRS Decay ────────────────────────────────────────────────────────────────
 def decay_facts(
-    session_id: str | None = None, fact_type: str = FACT_TYPE_DYNAMIC, user_id: str | None = None
+    session_id: str | None = None,
+    fact_type: str = FACT_TYPE_DYNAMIC,
+    user_id: str | None = None,
 ) -> int:
     """
     Apply FSRS-style decay to episodic/dynamic facts.

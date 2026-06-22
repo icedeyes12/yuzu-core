@@ -368,7 +368,9 @@ def _update_fsrs_params(fact_id: int, rating: str, user_id: str | None = None) -
         return False
 
 
-async def _update_fsrs_params_async(fact_id: int, rating: str, user_id: str | None = None) -> bool:
+async def _update_fsrs_params_async(
+    fact_id: int, rating: str, user_id: str | None = None
+) -> bool:
     """Apply FSRS parameter update (async)."""
     try:
         row = await MemoryDB.get_fact_by_id_async(fact_id, user_id=user_id)
@@ -515,7 +517,10 @@ async def _update_fsrs_params_async(fact_id: int, rating: str, user_id: str | No
 
 
 def review_memory(
-    fact_ids: list[int], conversation_context: str, session_id: str | None = None, user_id: str | None = None
+    fact_ids: list[int],
+    conversation_context: str,
+    session_id: str | None = None,
+    user_id: str | None = None,
 ) -> dict:
     """Review a list of retrieved memories against the conversation context.
 
@@ -603,7 +608,10 @@ def review_memory(
 
 
 async def review_memory_async(
-    fact_ids: list[int], conversation_context: str, session_id: str | None = None, user_id: str | None = None
+    fact_ids: list[int],
+    conversation_context: str,
+    session_id: str | None = None,
+    user_id: str | None = None,
 ) -> dict:
     """Review memories (async)."""
     counts = {"again": 0, "hard": 0, "good": 0, "easy": 0, "failed": 0}

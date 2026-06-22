@@ -880,7 +880,9 @@ async def run_memory_review_async(session_id: str, user_id: str | None = None) -
             else ""
         )
 
-        result = await review_memory_async(pending_ids, context, session_id, user_id=user_id)
+        result = await review_memory_async(
+            pending_ids, context, session_id, user_id=user_id
+        )
         logger.info(f"Memory review: {result}")
         return result
     except Exception as e:
@@ -891,7 +893,9 @@ async def run_memory_review_async(session_id: str, user_id: str | None = None) -
 # ── Main pipeline runner ───────────────────────────────────────────────────────
 
 
-async def run_memory_pipeline_async(session_id: str, message_count: int, user_id: str | None = None) -> dict:
+async def run_memory_pipeline_async(
+    session_id: str, message_count: int, user_id: str | None = None
+) -> dict:
     """Run the full memory pipeline for a session.
 
     Steps:
@@ -1058,7 +1062,9 @@ async def _background_worker_async():
             _pending_sessions.task_done()
 
 
-async def enqueue_memory_pipeline_async(session_id: str, user_id: str | None = None) -> None:
+async def enqueue_memory_pipeline_async(
+    session_id: str, user_id: str | None = None
+) -> None:
     """Queue a session for background memory processing.
 
     Non-blocking — returns immediately.
