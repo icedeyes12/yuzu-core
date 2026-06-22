@@ -400,12 +400,17 @@ async def _post_turn_async(
     active_session: dict[str, Any],
 ) -> None:
     """Auto-rename session, summarize memory, trigger memory pipeline (async)."""
+    user_id = profile.get("id")
+    if not user_id:
+        log.warning("_post_turn_async: profile has no id — memory pipeline skipped")
+        return
+
     # Auto-rename via service
     await SessionService.auto_name_session_if_needed_async(session_id, active_session)
 
     # Memory checks via service
     await MemoryService.run_per_message_checks_async(
-        profile, user_message, final_response, session_id, active_session
+        profile, user_message, final_response, session_id, active_session, user_id
     )
 
     # Clear request-scoped caches

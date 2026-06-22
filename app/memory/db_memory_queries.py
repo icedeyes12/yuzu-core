@@ -58,12 +58,12 @@ def vector_literal(vec: list[float] | None) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Static SQL constants
+# Static SQL constants — ALL scoped by user_id (multi-tenant isolation)
 # ---------------------------------------------------------------------------
 
 SQL_FACT_DUP_CHECK_BY_CONTENT = (
     "SELECT id FROM semantic_facts "
-    "WHERE fact_type=%s AND content=%s AND invalid_at IS NULL LIMIT 1"
+    "WHERE fact_type=%s AND content=%s AND user_id=%s AND invalid_at IS NULL LIMIT 1"
 )
 
 SQL_FACT_INSERT = """
@@ -73,25 +73,25 @@ VALUES (%s, %s, %s, %s::vector, %s, %s, %s)
 RETURNING id
 """
 
-SQL_FACT_SELECT_BY_ID = "SELECT * FROM semantic_facts WHERE id=%s"
+SQL_FACT_SELECT_BY_ID = "SELECT * FROM semantic_facts WHERE id=%s AND user_id=%s"
 
 # Batch query for multiple fact IDs (N+1 fix)
-SQL_FACT_SELECT_BY_IDS = "SELECT * FROM semantic_facts WHERE id = ANY(%s)"
+SQL_FACT_SELECT_BY_IDS = "SELECT * FROM semantic_facts WHERE id = ANY(%s) AND user_id=%s"
 
 SQL_FACT_SELECT_STATIC_LIMIT = (
-    "SELECT * FROM semantic_facts WHERE fact_type=%s LIMIT %s"
+    "SELECT * FROM semantic_facts WHERE fact_type=%s AND user_id=%s LIMIT %s"
 )
 
 SQL_FACT_UPDATE_METADATA = (
-    "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s"
+    "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s AND user_id=%s"
 )
 
 SQL_FACT_INVALIDATE = (
-    "UPDATE semantic_facts SET invalid_at=%s, last_accessed=%s WHERE id=%s"
+    "UPDATE semantic_facts SET invalid_at=%s, last_accessed=%s WHERE id=%s AND user_id=%s"
 )
 
 SQL_FACT_UPDATE_DECAY = (
-    "UPDATE semantic_facts SET metadata=%s, last_accessed=%s WHERE id=%s"
+    "UPDATE semantic_facts SET metadata=%s, last_accessed=%s WHERE id=%s AND user_id=%s"
 )
 
 SQL_FACT_DECAY_FETCH_FOR_SESSION = """
@@ -99,6 +99,7 @@ SELECT id, metadata, last_accessed
 FROM semantic_facts
 WHERE fact_type = %s
   AND (metadata->>'session_id') = %s::text
+  AND user_id = %s
   AND invalid_at IS NULL
 """
 
@@ -106,6 +107,7 @@ SQL_FACT_DECAY_FETCH_GLOBAL = """
 SELECT id, metadata, last_accessed
 FROM semantic_facts
 WHERE fact_type = %s
+  AND user_id = %s
   AND invalid_at IS NULL
 """
 
@@ -128,17 +130,25 @@ def build_metadata_conditions(
     Returns ([cond, ...], [param, ...]). Caller joins conditions with AND
     and passes params positionally.
 
+    HARD-FAIL: user_id is REQUIRED. A falsy user_id raises ValueError to
+    prevent cross-tenant data leaks. This is the central enforcement point
+    for multi-tenant isolation on semantic_facts.
+
     Used by search_similar / search_trgm / search_tsv / get_facts_by_session.
     """
+    if not user_id:
+        raise ValueError(
+            "user_id is required for semantic_facts queries — "
+            "refusing to execute unscoped query (multi-tenant isolation)"
+        )
     conditions: list[str] = []
     params: list[Any] = []
 
+    conditions.append("user_id = %s")
+    params.append(user_id)
     if session_id is not None:
         conditions.append("(metadata->>'session_id') = %s::text")
         params.append(session_id)
-    if user_id is not None:
-        conditions.append("user_id = %s")
-        params.append(user_id)
     if fact_type:
         conditions.append("fact_type = %s")
         params.append(fact_type)
@@ -242,9 +252,12 @@ def build_count_query(extra_conditions: list[str]) -> str:
 
 
 def build_update_last_accessed_query(id_count: int) -> str:
-    """Render the multi-id last_accessed UPDATE for the given count."""
+    """Render the multi-id last_accessed UPDATE for the given count.
+
+    Includes user_id scope to prevent cross-tenant updates.
+    """
     placeholders = ",".join(["%s"] * id_count)
-    return f"UPDATE semantic_facts SET last_accessed=%s WHERE id IN ({placeholders})"
+    return f"UPDATE semantic_facts SET last_accessed=%s WHERE id IN ({placeholders}) AND user_id=%s"
 
 
 __all__ = [

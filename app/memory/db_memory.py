@@ -136,7 +136,7 @@ def save_fact(
 
     # Reject exact content duplicates (same fact_type + content + not invalidated)
     try:
-        dup_check = pg_fetchone(SQL_FACT_DUP_CHECK_BY_CONTENT, (fact_type, content))
+        dup_check = pg_fetchone(SQL_FACT_DUP_CHECK_BY_CONTENT, (fact_type, content, user_id))
         if dup_check:
             logger.debug(
                 f"save_fact: duplicate content found, rejecting id={dup_check['id']}"
@@ -241,6 +241,7 @@ def search_trgm(
         fact_type=fact_type,
         category=category,
         metadata_filter=metadata_filter,
+        user_id=user_id,
     )
 
     sql = build_search_trgm_query(conditions)
@@ -287,6 +288,7 @@ def search_tsv(
         fact_type=fact_type,
         category=category,
         metadata_filter=metadata_filter,
+        user_id=user_id,
     )
 
     sql = build_search_tsv_query(conditions)
@@ -302,33 +304,41 @@ def search_tsv(
 
 
 # ── Retrieval ─────────────────────────────────────────────────────────────────
-def get_fact_by_id(id: int) -> dict | None:
-    return pg_fetchone(SQL_FACT_SELECT_BY_ID, (id,))
+def get_fact_by_id(id: int, user_id: str | None = None) -> dict | None:
+    if not user_id:
+        raise ValueError("get_fact_by_id: user_id is required")
+    return pg_fetchone(SQL_FACT_SELECT_BY_ID, (id, user_id))
 
 
-async def get_fact_by_id_async(id: int) -> dict | None:
+async def get_fact_by_id_async(id: int, user_id: str | None = None) -> dict | None:
     """Async version of get_fact_by_id."""
-    return await pg_fetchone_async(SQL_FACT_SELECT_BY_ID, (id,))
+    if not user_id:
+        raise ValueError("get_fact_by_id_async: user_id is required")
+    return await pg_fetchone_async(SQL_FACT_SELECT_BY_ID, (id, user_id))
 
 
-def get_facts_by_ids(ids: list[int]) -> list[dict]:
+def get_facts_by_ids(ids: list[int], user_id: str | None = None) -> list[dict]:
     """Batch fetch facts by ID list (N+1 fix).
 
     Returns list of fact dicts. Missing IDs are simply not included.
     """
+    if not user_id:
+        raise ValueError("get_facts_by_ids: user_id is required")
     if not ids:
         return []
-    return pg_fetchall(SQL_FACT_SELECT_BY_IDS, (ids,))
+    return pg_fetchall(SQL_FACT_SELECT_BY_IDS, (ids, user_id))
 
 
-async def get_facts_by_ids_async(ids: list[int]) -> list[dict]:
+async def get_facts_by_ids_async(ids: list[int], user_id: str | None = None) -> list[dict]:
     """Batch fetch facts by ID list (async, N+1 fix).
 
     Returns list of fact dicts. Missing IDs are simply not included.
     """
+    if not user_id:
+        raise ValueError("get_facts_by_ids_async: user_id is required")
     if not ids:
         return []
-    return await pg_fetchall_async(SQL_FACT_SELECT_BY_IDS, (ids,))
+    return await pg_fetchall_async(SQL_FACT_SELECT_BY_IDS, (ids, user_id))
 
 
 def get_facts_by_session(
@@ -337,12 +347,14 @@ def get_facts_by_session(
     limit: int = 100,
     user_id: str | None = None,
 ) -> list[dict]:
-    # Static facts are GLOBAL - no session_id filter
+    if not user_id:
+        raise ValueError("get_facts_by_session: user_id is required")
+    # Static facts are now per-user (was GLOBAL — multi-tenant leak fix)
     if fact_type == FACT_TYPE_STATIC:
-        return pg_fetchall(SQL_FACT_SELECT_STATIC_LIMIT, (fact_type, limit))
+        return pg_fetchall(SQL_FACT_SELECT_STATIC_LIMIT, (fact_type, user_id, limit))
     # Dynamic facts: build conditions
     conditions, params = build_metadata_conditions(
-        session_id=session_id, fact_type=fact_type
+        session_id=session_id, fact_type=fact_type, user_id=user_id
     )
     params.append(limit)
     query = build_facts_by_session_query(conditions, default_dynamic=True)
@@ -354,8 +366,10 @@ def count_facts(
     session_id: str | None = None,
     user_id: str | None = None,
 ) -> int:
+    if not user_id:
+        raise ValueError("count_facts: user_id is required")
     conditions, params = build_metadata_conditions(
-        fact_type=fact_type, session_id=session_id
+        fact_type=fact_type, session_id=session_id, user_id=user_id
     )
     query = build_count_query(conditions)
     row = pg_fetchone(query, params)
@@ -363,25 +377,27 @@ def count_facts(
 
 
 # ── Update / Access Tracking ───────────────────────────────────────────────────
-def update_last_accessed(ids: list[int]) -> int:
-    """Batch update last_accessed timestamp. Returns rows updated."""
+def update_last_accessed(ids: list[int], user_id: str | None = None) -> int:
+    """Update last_accessed timestamp for batch of fact IDs."""
+    if not user_id:
+        raise ValueError("update_last_accessed: user_id is required")
     if not ids:
         return 0
     now = datetime.now()
     query = build_update_last_accessed_query(len(ids))
     try:
-        with PgSession() as s:
-            s.execute(query, (now,) + tuple(ids))
+        pg_execute(query, (now,) + tuple(ids) + (user_id,))
         return len(ids)
     except Exception as e:
         logger.error(f"update_last_accessed failed: {e}")
         return 0
 
 
-def increment_importance(id: int, delta: float = 0.05, cap: float = 1.0) -> bool:
-    """Increment importance, capped at `cap`."""
+def increment_importance(id: int, delta: float = 0.05, cap: float = 1.0, user_id: str | None = None) -> bool:
+    if not user_id:
+        raise ValueError("increment_importance: user_id is required")
     try:
-        meta_row = pg_fetchone("SELECT metadata FROM semantic_facts WHERE id=%s", (id,))
+        meta_row = pg_fetchone(SQL_FACT_SELECT_BY_ID, (id, user_id))
         if not meta_row:
             return False
         meta = meta_row["metadata"] or {}
@@ -390,7 +406,7 @@ def increment_importance(id: int, delta: float = 0.05, cap: float = 1.0) -> bool
         meta["access_count"] = (meta.get("access_count") or 0) + 1
         pg_execute(
             SQL_FACT_UPDATE_METADATA,
-            (datetime.now(), Json(meta), id),
+            (datetime.now(), Json(meta), id, user_id),
         )
         return True
     except Exception as e:
@@ -400,7 +416,7 @@ def increment_importance(id: int, delta: float = 0.05, cap: float = 1.0) -> bool
 
 # ── FSRS Decay ────────────────────────────────────────────────────────────────
 def decay_facts(
-    session_id: str | None = None, fact_type: str = FACT_TYPE_DYNAMIC
+    session_id: str | None = None, fact_type: str = FACT_TYPE_DYNAMIC, user_id: str | None = None
 ) -> int:
     """
     Apply FSRS-style decay to episodic/dynamic facts.
@@ -418,10 +434,10 @@ def decay_facts(
 
         if session_id is not None:
             rows = pg_fetchall(
-                SQL_FACT_DECAY_FETCH_FOR_SESSION, (fact_type, session_id)
+                SQL_FACT_DECAY_FETCH_FOR_SESSION, (fact_type, session_id, user_id)
             )
         else:
-            rows = pg_fetchall(SQL_FACT_DECAY_FETCH_GLOBAL, (fact_type,))
+            rows = pg_fetchall(SQL_FACT_DECAY_FETCH_GLOBAL, (fact_type, user_id))
 
         count = 0
         for row in rows:
@@ -458,7 +474,7 @@ def decay_facts(
 
             pg_execute(
                 SQL_FACT_UPDATE_DECAY,
-                (Json(meta), now, row["id"]),
+                (Json(meta), now, row["id"], user_id),
             )
             count += 1
 
@@ -470,7 +486,7 @@ def decay_facts(
 
 
 # ── Soft Delete ───────────────────────────────────────────────────────────────
-def invalidate_fact(id: int) -> bool:
+def invalidate_fact(id: int, user_id: str | None = None) -> bool:
     """
     Soft-delete a fact by setting invalid_at = NOW().
     Does NOT hard-delete — preserves history for audit.
@@ -478,7 +494,7 @@ def invalidate_fact(id: int) -> bool:
     try:
         pg_execute(
             SQL_FACT_INVALIDATE,
-            (datetime.now(), datetime.now(), id),
+            (datetime.now(), datetime.now(), id, user_id),
         )
         return True
     except Exception as e:
@@ -523,7 +539,7 @@ async def save_fact_async(
 
     try:
         dup_check = await pg_fetchone_async(
-            SQL_FACT_DUP_CHECK_BY_CONTENT, (fact_type, content)
+            SQL_FACT_DUP_CHECK_BY_CONTENT, (fact_type, content, user_id)
         )
         if dup_check:
             logger.debug(
@@ -561,8 +577,11 @@ async def search_similar_async(
     max_distance: float = 1.5,
     metadata_filter: dict | None = None,
     category: str | None = None,
+    user_id: str | None = None,
 ) -> list[dict]:
     """Async version of search_similar."""
+    if not user_id:
+        raise ValueError("search_similar_async: user_id is required")
     try:
         norm_vec = normalize_vector(embedding)
         if not norm_vec:
@@ -577,6 +596,7 @@ async def search_similar_async(
             fact_type=fact_type,
             category=category,
             metadata_filter=metadata_filter,
+            user_id=user_id,
         )
 
         query = build_search_similar_query(vec_literal, conditions)
@@ -594,12 +614,17 @@ async def get_facts_by_session_async(
     session_id: str | None,
     fact_type: str | None = None,
     limit: int = 100,
+    user_id: str | None = None,
 ) -> list[dict]:
     """Async version of get_facts_by_session."""
+    if not user_id:
+        raise ValueError("get_facts_by_session_async: user_id is required")
     if fact_type == FACT_TYPE_STATIC:
-        return await pg_fetchall_async(SQL_FACT_SELECT_STATIC_LIMIT, (fact_type, limit))
+        return await pg_fetchall_async(
+            SQL_FACT_SELECT_STATIC_LIMIT, (fact_type, user_id, limit)
+        )
     conditions, params = build_metadata_conditions(
-        session_id=session_id, fact_type=fact_type
+        session_id=session_id, fact_type=fact_type, user_id=user_id
     )
     params.append(limit)
     query = build_facts_by_session_query(conditions, default_dynamic=True)
@@ -621,12 +646,14 @@ async def update_last_accessed_async(ids: list[int]) -> int:
         return 0
 
 
-async def invalidate_fact_async(id: int) -> bool:
+async def invalidate_fact_async(id: int, user_id: str | None = None) -> bool:
     """Async version of invalidate_fact."""
+    if not user_id:
+        raise ValueError("invalidate_fact_async: user_id is required")
     try:
         await pg_execute_async(
             SQL_FACT_INVALIDATE,
-            (datetime.now(), datetime.now(), id),
+            (datetime.now(), datetime.now(), id, user_id),
         )
         return True
     except Exception as e:
@@ -642,26 +669,27 @@ async def search_trgm_async(
     min_similarity: float = 0.3,
     metadata_filter: dict | None = None,
     category: str | None = None,
+    user_id: str | None = None,
 ) -> list[dict]:
     """Async version of search_trgm."""
-    if not query or not query.strip():
-        return []
-
-    conditions, params = build_metadata_conditions(
-        session_id=session_id,
-        fact_type=fact_type,
-        category=category,
-        metadata_filter=metadata_filter,
-    )
-
-    sql = build_search_trgm_query(conditions)
-    params_with_query = [query] + params + [query, min_similarity, limit]
-
+    if not user_id:
+        raise ValueError("search_trgm_async: user_id is required")
     try:
+        conditions, params = build_metadata_conditions(
+            session_id=session_id,
+            fact_type=fact_type,
+            category=category,
+            metadata_filter=metadata_filter,
+            user_id=user_id,
+        )
+
+        sql = build_search_trgm_query(conditions)
+        params_with_query = [query] + params + [query, min_similarity, limit]
+
         results = await pg_fetchall_async(sql, params_with_query)
         return results if results else []
     except Exception as e:
-        logger.error(f"search_trgm_async EXCEPTION: {e}")
+        logger.exception(f"search_trgm_async EXCEPTION: {type(e).__name__}: {e}")
         return []
 
 
@@ -673,8 +701,11 @@ async def search_tsv_async(
     metadata_filter: dict | None = None,
     category: str | None = None,
     rank_weight: float = 0.3,
+    user_id: str | None = None,
 ) -> list[dict]:
     """Async version of search_tsv."""
+    if not user_id:
+        raise ValueError("search_tsv_async: user_id is required")
     if not query or not query.strip():
         return []
 
@@ -683,6 +714,7 @@ async def search_tsv_async(
         fact_type=fact_type,
         category=category,
         metadata_filter=metadata_filter,
+        user_id=user_id,
     )
 
     sql = build_search_tsv_query(conditions)
@@ -692,5 +724,5 @@ async def search_tsv_async(
         results = await pg_fetchall_async(sql, params_with_query)
         return results if results else []
     except Exception as e:
-        logger.error(f"search_tsv_async EXCEPTION: {e}")
+        logger.error(f"search_tsv_async EXCEPTION: {type(e).__name__}: {e}")
         return []
