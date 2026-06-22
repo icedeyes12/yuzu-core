@@ -79,7 +79,7 @@ async def _get_ai_manager_async():
 
 
 async def mark_retrieved_as_pending_review_async(
-    fact_ids: list[int], session_id: str | None = None
+    fact_ids: list[int], session_id: str | None = None, user_id: str | None = None
 ) -> int:
     """Mark retrieved facts as pending review (async)."""
     if not fact_ids:
@@ -89,7 +89,7 @@ async def mark_retrieved_as_pending_review_async(
     if len(fact_ids) == 1:
         fid = fact_ids[0]
         try:
-            row = await MemoryDB.get_fact_by_id_async(fid)
+            row = await MemoryDB.get_fact_by_id_async(fid, user_id=user_id)
             if not row:
                 return 0
             meta = row.get("metadata") or {}
@@ -329,7 +329,7 @@ def _update_fsrs_params_fallback(fact_id: int, rating: str, row: dict) -> bool:
     return True
 
 
-def _update_fsrs_params(fact_id: int, rating: str) -> bool:
+def _update_fsrs_params(fact_id: int, rating: str, user_id: str | None = None) -> bool:
     """Apply FSRS parameter update based on rating.
 
     Uses fsrs library if available, falls back to multipliers otherwise.
@@ -338,7 +338,7 @@ def _update_fsrs_params(fact_id: int, rating: str) -> bool:
     Semantic facts use temporal validity instead and should NOT have FSRS updates.
     """
     try:
-        row = MemoryDB.get_fact_by_id(fact_id)
+        row = MemoryDB.get_fact_by_id(fact_id, user_id=user_id)
         if not row:
             return False
 
@@ -368,10 +368,10 @@ def _update_fsrs_params(fact_id: int, rating: str) -> bool:
         return False
 
 
-async def _update_fsrs_params_async(fact_id: int, rating: str) -> bool:
+async def _update_fsrs_params_async(fact_id: int, rating: str, user_id: str | None = None) -> bool:
     """Apply FSRS parameter update (async)."""
     try:
-        row = await MemoryDB.get_fact_by_id_async(fact_id)
+        row = await MemoryDB.get_fact_by_id_async(fact_id, user_id=user_id)
         if not row:
             return False
 
@@ -515,7 +515,7 @@ async def _update_fsrs_params_async(fact_id: int, rating: str) -> bool:
 
 
 def review_memory(
-    fact_ids: list[int], conversation_context: str, session_id: str | None = None
+    fact_ids: list[int], conversation_context: str, session_id: str | None = None, user_id: str | None = None
 ) -> dict:
     """Review a list of retrieved memories against the conversation context.
 
@@ -535,7 +535,7 @@ def review_memory(
         return counts
 
     # BATCH FETCH: Get all facts in a single query (N+1 fix)
-    rows = MemoryDB.get_facts_by_ids(fact_ids)
+    rows = MemoryDB.get_facts_by_ids(fact_ids, user_id=user_id)
     rows_by_id = {r["id"]: r for r in rows} if rows else {}
 
     facts_to_rate = []
@@ -591,7 +591,7 @@ def review_memory(
                 counts["failed"] += 1
                 continue
 
-            if _update_fsrs_params(fid, rating):
+            if _update_fsrs_params(fid, rating, user_id=user_id):
                 counts[rating] = counts.get(rating, 0) + 1
             else:
                 counts["failed"] += 1
@@ -603,7 +603,7 @@ def review_memory(
 
 
 async def review_memory_async(
-    fact_ids: list[int], conversation_context: str, session_id: str | None = None
+    fact_ids: list[int], conversation_context: str, session_id: str | None = None, user_id: str | None = None
 ) -> dict:
     """Review memories (async)."""
     counts = {"again": 0, "hard": 0, "good": 0, "easy": 0, "failed": 0}
@@ -612,7 +612,7 @@ async def review_memory_async(
         return {"again": 0, "hard": 0, "good": 0, "easy": 0, "failed": 0}
 
     # BATCH FETCH: Get all facts in a single query (N+1 fix)
-    rows = await MemoryDB.get_facts_by_ids_async(fact_ids)
+    rows = await MemoryDB.get_facts_by_ids_async(fact_ids, user_id=user_id)
     rows_by_id = {r["id"]: r for r in rows} if rows else {}
 
     facts_to_rate = []
@@ -652,7 +652,7 @@ async def review_memory_async(
                 counts["failed"] += 1
                 continue
 
-            if await _update_fsrs_params_async(fid, rating):
+            if await _update_fsrs_params_async(fid, rating, user_id=user_id):
                 counts[rating] = counts.get(rating, 0) + 1
             else:
                 counts["failed"] += 1

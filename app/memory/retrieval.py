@@ -744,7 +744,7 @@ retrieve_semantic_memories = retrieve_static_memories
 retrieve_episodic_memories = retrieve_dynamic_memories
 
 
-def retrieve_segments(session_id: str, query=None, limit: int = 10):
+def retrieve_segments(session_id: str, query=None, limit: int = 10, user_id: str | None = None):
     """
     Retrieve conversation segments for a session.
 
@@ -760,6 +760,7 @@ def retrieve_segments(session_id: str, query=None, limit: int = 10):
             fact_type=FACT_TYPE_DYNAMIC,
             metadata_filter={"source_table": "conversation_segments"},
             limit=limit,
+            user_id=user_id,
         )
     else:
         # Fall back: fetch segments without vector search
@@ -767,6 +768,7 @@ def retrieve_segments(session_id: str, query=None, limit: int = 10):
             session_id=session_id,
             fact_type=FACT_TYPE_DYNAMIC,
             limit=limit * 3,  # over-fetch, filter below
+            user_id=user_id,
         )
         # Filter: must be real segments (not old garbage with "No summary" content)
         _NO_SUMMARY_PATTERNS = ("no summary found", "no summary", "tidak ada ringkasan")
@@ -791,7 +793,7 @@ def retrieve_segments(session_id: str, query=None, limit: int = 10):
     return parsed
 
 
-def retrieve_memory(session_id: str, query=None):
+def retrieve_memory(session_id: str, query=None, user_id: str | None = None):
     """
     Main retrieval entry point.
 
@@ -799,13 +801,13 @@ def retrieve_memory(session_id: str, query=None):
         dict with static, dynamic, temporal_messages
     """
     try:
-        static = retrieve_static_memories(query=query, limit=15)
+        static = retrieve_static_memories(query=query, limit=15, user_id=user_id)
     except Exception as e:
         logger.warning(f"Static memory retrieval failed: {e}")
         static = []
 
     try:
-        dynamic = retrieve_dynamic_memories(session_id, query=query, limit=10)
+        dynamic = retrieve_dynamic_memories(session_id, query=query, limit=10, user_id=user_id)
     except Exception as e:
         logger.warning(f"Dynamic memory retrieval failed: {e}")
         dynamic = []
@@ -853,7 +855,7 @@ def _format_static_context(static: list[dict]) -> str:
 
 
 def retrieve_for_context(
-    session_id: str, query: str | None = None, limit: int = 10
+    session_id: str, query: str | None = None, limit: int = 10, user_id: str | None = None
 ) -> tuple[list[int], str]:
     """
     Retrieve ONLY static semantic memories for pre-LLM system prompt injection.
@@ -865,7 +867,7 @@ def retrieve_for_context(
         (static_ids, context_text) — IDs for caller to mark as pending_review if desired
     """
     try:
-        static = retrieve_static_memories(query=query, limit=limit)
+        static = retrieve_static_memories(query=query, limit=limit, user_id=user_id)
     except Exception as e:
         logger.warning(f"retrieve_for_context failed: {e}")
         return [], ""

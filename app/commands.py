@@ -434,6 +434,7 @@ def _parse_key_value_args(raw_args: str) -> dict[str, Any]:
 async def execute_commands(
     commands: list[str],
     session_id: str | None = None,
+    user_id: str | None = None,
 ) -> list[tuple[str, dict[str, Any]]]:
     """Execute a list of commands sequentially (async).
 
@@ -464,7 +465,7 @@ async def execute_commands(
             args = _parse_args(tool_name, parsed["args"])
 
             log.info("executing tool: %s with args: %s", tool_name, str(args)[:100])
-            result = await execute_tool(tool_name, args, session_id=session_id)
+            result = await execute_tool(tool_name, args, session_id=session_id, user_id=user_id)
             results.append((tool_name, result))
 
         except Exception as e:

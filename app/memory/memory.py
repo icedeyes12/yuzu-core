@@ -134,7 +134,7 @@ async def _memory_llm_call(ai_manager, messages: list[dict], **kwargs) -> str | 
 
 # ── Background state ─────────────────────────────────────────────────────────
 
-_pending_sessions: asyncio.Queue[int] = asyncio.Queue()
+_pending_sessions: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
 _worker_task: Optional[asyncio.Task] = None
 
 
@@ -755,6 +755,7 @@ async def create_episode_and_pcl_async(
     session_id: str,
     messages: list[dict],
     segment: dict,
+    user_id: str | None = None,
 ) -> Optional[int]:
     """Create an episode and trigger PCL (async)."""
     from app.memory.db_memory_facade import MemoryDB, FACT_TYPE_DYNAMIC
@@ -818,6 +819,7 @@ async def create_episode_and_pcl_async(
             "end_message_id": end_id,
             "session_id": session_id,
         },
+        user_id=user_id,
     )
 
     if not episode_id:
@@ -833,6 +835,7 @@ async def create_episode_and_pcl_async(
             episode_summary=summary,
             messages=segment_msgs,
             episode_id=episode_id,
+            user_id=user_id,
         )
         if pcl_result:
             logger.debug(f"PCL result: {pcl_result}")
@@ -845,7 +848,7 @@ async def create_episode_and_pcl_async(
 # ── Memory review (pending reviews) ────────────────────────────────────────────
 
 
-async def run_memory_review_async(session_id: str) -> dict:
+async def run_memory_review_async(session_id: str, user_id: str | None = None) -> dict:
     """Run LLM-based memory review on pending reviews.
 
     Returns summary: {reviewed: n, ratings: {...}}
@@ -856,7 +859,7 @@ async def run_memory_review_async(session_id: str) -> dict:
     try:
         # Get facts pending review
         facts = await MemoryDB.get_facts_by_session_async(
-            session_id, fact_type=FACT_TYPE_STATIC, limit=50
+            session_id, fact_type=FACT_TYPE_STATIC, limit=50, user_id=user_id
         )
         pending_ids = [
             f["id"] for f in facts if f.get("metadata", {}).get("pending_review")
@@ -877,7 +880,7 @@ async def run_memory_review_async(session_id: str) -> dict:
             else ""
         )
 
-        result = await review_memory_async(pending_ids, context, session_id)
+        result = await review_memory_async(pending_ids, context, session_id, user_id=user_id)
         logger.info(f"Memory review: {result}")
         return result
     except Exception as e:
@@ -888,7 +891,7 @@ async def run_memory_review_async(session_id: str) -> dict:
 # ── Main pipeline runner ───────────────────────────────────────────────────────
 
 
-async def run_memory_pipeline_async(session_id: str, message_count: int) -> dict:
+async def run_memory_pipeline_async(session_id: str, message_count: int, user_id: str | None = None) -> dict:
     """Run the full memory pipeline for a session.
 
     Steps:
@@ -994,7 +997,7 @@ async def run_memory_pipeline_async(session_id: str, message_count: int) -> dict
 
         for seg in batch_result:
             episode_id = await create_episode_and_pcl_async(
-                session_id, unsegmented, seg
+                session_id, unsegmented, seg, user_id=user_id
             )
             if episode_id:
                 episode_count += 1
@@ -1002,7 +1005,7 @@ async def run_memory_pipeline_async(session_id: str, message_count: int) -> dict
 
         # Run memory review if there are pending reviews
         try:
-            await run_memory_review_async(session_id)
+            await run_memory_review_async(session_id, user_id=user_id)
         except Exception as e:
             logger.warning(f"Memory review error: {e}")
 
@@ -1040,7 +1043,7 @@ async def run_memory_pipeline_async(session_id: str, message_count: int) -> dict
 async def _background_worker_async():
     """Async background worker."""
     while True:
-        session_to_process = await _pending_sessions.get()
+        session_to_process, user_id = await _pending_sessions.get()
         try:
             # Retrieve count from DB-persisted fence
             from app.db import get_memory_state_async
@@ -1048,14 +1051,14 @@ async def _background_worker_async():
             state = await get_memory_state_async(session_to_process)
             count = state.get("in_progress_fence_count", 0) or 0
 
-            await run_memory_pipeline_async(session_to_process, count)
+            await run_memory_pipeline_async(session_to_process, count, user_id=user_id)
         except Exception as e:
             logger.error(f"Background worker error: {e}")
         finally:
             _pending_sessions.task_done()
 
 
-async def enqueue_memory_pipeline_async(session_id: str) -> None:
+async def enqueue_memory_pipeline_async(session_id: str, user_id: str | None = None) -> None:
     """Queue a session for background memory processing.
 
     Non-blocking — returns immediately.
@@ -1066,10 +1069,12 @@ async def enqueue_memory_pipeline_async(session_id: str) -> None:
     if _worker_task is None or _worker_task.done():
         _worker_task = asyncio.create_task(_background_worker_async())
 
-    await _pending_sessions.put(session_id)
+    await _pending_sessions.put((session_id, user_id))
 
 
-async def trigger_memory_pipeline_async(session_id: str, current_count: int) -> bool:
+async def trigger_memory_pipeline_async(
+    session_id: str, current_count: int, user_id: str | None = None
+) -> bool:
     """Check and trigger memory pipeline in background if threshold met.
 
     Returns True if pipeline was triggered.
@@ -1086,5 +1091,5 @@ async def trigger_memory_pipeline_async(session_id: str, current_count: int) -> 
         logger.debug(f"Could not set fence for session {session_id}")
         return False
 
-    await enqueue_memory_pipeline_async(session_id)
+    await enqueue_memory_pipeline_async(session_id, user_id)
     return True

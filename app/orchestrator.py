@@ -239,7 +239,7 @@ async def _parse_raw_tool_calls_async(
 
 
 async def _execute_tool_calls_async(
-    tool_calls: list[dict], session_id: str
+    tool_calls: list[dict], session_id: str, user_id: str | None = None
 ) -> list[tuple[str, dict]]:
     """Execute a list of tool calls and return results (async)."""
     results: list[tuple[str, dict]] = []
@@ -248,7 +248,7 @@ async def _execute_tool_calls_async(
         tool_name = TOOL_ALIASES.get(raw_name, raw_name)
         arguments = tc.get("arguments", {})
         log.info("native tool_call: %s %s", tool_name, arguments)
-        result = await execute_tool(tool_name, arguments, session_id=session_id)
+        result = await execute_tool(tool_name, arguments, session_id=session_id, user_id=user_id)
         results.append((tool_name, result))
         if is_terminal_tool(tool_name) and result.get("ok"):
             break
@@ -431,6 +431,7 @@ async def _post_turn_async(
 async def _process_tool_commands_async(
     full_response: str,
     session_id: str,
+    user_id: str | None = None,
 ) -> tuple[str, bool, list[str]]:
     """Parse and execute tool commands, yielding tool markdown chunks.
 
@@ -447,7 +448,7 @@ async def _process_tool_commands_async(
 
     log.info("[stream] found %d tool block(s)", len(commands))
 
-    results = await execute_commands(commands, session_id=session_id)
+    results = await execute_commands(commands, session_id=session_id, user_id=user_id)
 
     # SAFEGUARD: Persist clean_text BEFORE tool execution
     # This ensures linear message order: user → assistant (clean) → tool → synthesis
@@ -717,7 +718,7 @@ async def handle_user_message(
     # Try native tool-call execution first
     tool_calls = await _parse_raw_tool_calls_async(provider_name, raw_api_response)
     if tool_calls:
-        tool_results = await _execute_tool_calls_async(tool_calls, session_id)
+        tool_results = await _execute_tool_calls_async(tool_calls, session_id, user_id=user_id)
 
         # SAFEGUARD: Persist clean text_response BEFORE tool execution
         if text_response and text_response.strip():
@@ -981,7 +982,7 @@ async def handle_user_message_streaming(
         return
 
     # === PHASE 4: Parse and execute tool commands ===
-    tool_result = await _process_tool_commands_async(full_response, session_id)
+    tool_result = await _process_tool_commands_async(full_response, session_id, user_id=user_id)
     combined_tool_markdown, any_image_tool, all_generated_paths = tool_result
 
     # Yield tool markdown chunks

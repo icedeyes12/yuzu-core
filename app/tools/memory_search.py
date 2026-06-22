@@ -29,10 +29,11 @@ TOOL_DEFINITION = ToolDefinition(
 
 async def execute(arguments, **kwargs):
     session_id = kwargs.get("session_id")
+    user_id = kwargs.get("user_id")
     from app.db import Database
     from app.memory.retrieval import retrieve_memory_async, format_memory
 
-    profile = await Database.get_profile_async() or {}
+    profile = await Database.get_profile_async(user_id) or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     query = arguments.get("query", "") or ""
@@ -47,7 +48,7 @@ async def execute(arguments, **kwargs):
         )
 
     try:
-        memory_bundle = await retrieve_memory_async(session_id=session_id, query=query)
+        memory_bundle = await retrieve_memory_async(session_id=session_id, query=query, user_id=user_id)
     except Exception as e:
         logger.warning(f"[memory_search] Retrieval failed: {e}")
         return error_result(

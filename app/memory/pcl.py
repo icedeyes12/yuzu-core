@@ -96,11 +96,11 @@ def _extract_json_from_markdown(text: str) -> str:
 
 
 async def load_relevant_semantic_facts_async(
-    session_id: str, limit: int = MAX_FACTS_FOR_PREDICTION
+    session_id: str, limit: int = MAX_FACTS_FOR_PREDICTION, user_id: str | None = None
 ):
     """Fetch top semantic facts for a session (async)."""
     facts = await MemoryDB.get_facts_by_session_async(
-        session_id, fact_type=FACT_TYPE_STATIC, limit=limit
+        session_id, fact_type=FACT_TYPE_STATIC, limit=limit, user_id=user_id
     )
     return [f for f in facts if not f.get("invalid_at")]
 
@@ -409,10 +409,10 @@ def _map_category_to_relation(category: str) -> str:
     return mapping.get(category, "experience")
 
 
-async def _get_category_counts_async(session_id: str) -> dict[str, int]:
+async def _get_category_counts_async(session_id: str, user_id: str | None = None) -> dict[str, int]:
     """Count existing facts per category (async)."""
     facts = await MemoryDB.get_facts_by_session_async(
-        session_id=None, fact_type=FACT_TYPE_STATIC, limit=500
+        session_id=None, fact_type=FACT_TYPE_STATIC, limit=500, user_id=user_id
     )
     counts: dict[str, int] = {}
     for f in facts:
@@ -422,7 +422,7 @@ async def _get_category_counts_async(session_id: str) -> dict[str, int]:
 
 
 async def consolidate_facts_async(
-    extracted: list[dict], session_id: str, episode_id=None
+    extracted: list[dict], session_id: str, episode_id=None, user_id: str | None = None
 ) -> dict:
     """Apply extracted knowledge actions (async)."""
     counts = {"new": 0, "reinforced": 0, "updated": 0, "invalidated": 0}
@@ -430,7 +430,7 @@ async def consolidate_facts_async(
     logger.info(f"CONSOLIDATE: {len(extracted)} actions to process")
 
     # Pre-count existing facts per category to enforce caps
-    category_counts = await _get_category_counts_async(session_id)
+    category_counts = await _get_category_counts_async(session_id, user_id=user_id)
     logger.debug(f"CONSOLIDATE: category counts: {category_counts}")
 
     for item in extracted:
@@ -457,7 +457,7 @@ async def consolidate_facts_async(
 
         if action == "invalidate" and source_id:
             try:
-                await MemoryDB.invalidate_fact_async(source_id)
+                await MemoryDB.invalidate_fact_async(source_id, user_id=user_id)
                 counts["invalidated"] += 1
             except Exception:
                 pass
@@ -465,9 +465,9 @@ async def consolidate_facts_async(
         elif action == "update" and source_id:
             try:
                 # Invalidate old, insert new
-                await MemoryDB.invalidate_fact_async(source_id)
+                await MemoryDB.invalidate_fact_async(source_id, user_id=user_id)
                 await upsert_semantic_memory_async(
-                    session_id, entity, relation, fact_text, episode_id=episode_id
+                    session_id, entity, relation, fact_text, episode_id=episode_id, user_id=user_id
                 )
                 counts["updated"] += 1
             except Exception as e:
@@ -480,7 +480,7 @@ async def consolidate_facts_async(
         elif action == "reinforce" and source_id:
             try:
                 # Append source_episodic_ids and bump confidence
-                fact = await MemoryDB.get_fact_by_id_async(source_id)
+                fact = await MemoryDB.get_fact_by_id_async(source_id, user_id=user_id)
                 if fact:
                     from app.db import pg_execute_async
 
@@ -507,7 +507,7 @@ async def consolidate_facts_async(
         else:  # action == "new"
             try:
                 await upsert_semantic_memory_async(
-                    session_id, entity, relation, fact_text, episode_id=episode_id
+                    session_id, entity, relation, fact_text, episode_id=episode_id, user_id=user_id
                 )
                 counts["new"] += 1
             except Exception as e:
@@ -528,6 +528,7 @@ async def run_predict_calibrate_async(
     episode_summary: str,
     messages: list[dict],
     episode_id=None,
+    user_id: str | None = None,
 ) -> dict | None:
     """Run full PCL pipeline (async)."""
     if not messages:
@@ -538,7 +539,7 @@ async def run_predict_calibrate_async(
 
     try:
         # 1. Load existing semantic facts
-        existing = await load_relevant_semantic_facts_async(session_id)
+        existing = await load_relevant_semantic_facts_async(session_id, user_id=user_id)
         logger.debug(f"PCL: Loaded {len(existing)} existing facts")
 
         # 2. PREDICT
@@ -562,7 +563,7 @@ async def run_predict_calibrate_async(
 
         # 4. CONSOLIDATE
         result = await consolidate_facts_async(
-            extracted, session_id, episode_id=episode_id
+            extracted, session_id, episode_id=episode_id, user_id=user_id
         )
 
         # 5. Mark episode consolidated
@@ -570,7 +571,7 @@ async def run_predict_calibrate_async(
             try:
                 from app.db import pg_execute_async
 
-                ep = await MemoryDB.get_fact_by_id_async(episode_id)
+                ep = await MemoryDB.get_fact_by_id_async(episode_id, user_id=user_id)
                 if ep:
                     meta = ep.get("metadata") or {}
                     meta["consolidated_at"] = datetime.now().isoformat()

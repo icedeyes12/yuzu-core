@@ -161,6 +161,7 @@ def upsert_semantic_memory(
             fact_type=FACT_TYPE_STATIC,
             limit=5,
             max_distance=_EXTRACTOR_DEDUP_THRESHOLD,
+            user_id=user_id,
         )
 
         # FALLBACK: text-level dedupe (in case embedding failed)
@@ -173,7 +174,7 @@ def upsert_semantic_memory(
                 from app.db import pg_execute
                 from datetime import datetime
 
-                MemoryDB.increment_importance(e["id"], delta=0.1, cap=1.0)
+                MemoryDB.increment_importance(e["id"], delta=0.1, cap=1.0, user_id=user_id)
                 meta = e.get("metadata") or {}
                 ids = meta.get("source_episodic_ids", [])
                 if episode_id and episode_id not in ids:
@@ -192,8 +193,8 @@ def upsert_semantic_memory(
         from app.db import pg_fetchone
 
         existing_exact = pg_fetchone(
-            "SELECT id, metadata FROM semantic_facts WHERE fact_type=%s AND content=%s AND invalid_at IS NULL LIMIT 1",
-            (FACT_TYPE_STATIC, text),
+            "SELECT id, metadata FROM semantic_facts WHERE fact_type=%s AND content=%s AND invalid_at IS NULL AND user_id=%s LIMIT 1",
+            (FACT_TYPE_STATIC, text, user_id),
         )
         if existing_exact:
             from app.memory.db_memory_facade import MemoryDB
@@ -201,7 +202,7 @@ def upsert_semantic_memory(
             from app.db import pg_execute
             from datetime import datetime
 
-            MemoryDB.increment_importance(existing_exact["id"], delta=0.1, cap=1.0)
+            MemoryDB.increment_importance(existing_exact["id"], delta=0.1, cap=1.0, user_id=user_id)
             meta = existing_exact.get("metadata") or {}
             ids = meta.get("source_episodic_ids", [])
             if episode_id and episode_id not in ids:
@@ -284,8 +285,8 @@ async def upsert_semantic_memory_async(
                 return  # done — no insert needed
 
         existing_exact = await pg_fetchone_async(
-            "SELECT id, metadata FROM semantic_facts WHERE fact_type=%s AND content=%s AND invalid_at IS NULL LIMIT 1",
-            (FACT_TYPE_STATIC, text),
+            "SELECT id, metadata FROM semantic_facts WHERE fact_type=%s AND content=%s AND invalid_at IS NULL AND user_id=%s LIMIT 1",
+            (FACT_TYPE_STATIC, text, user_id),
         )
         if existing_exact:
             meta = existing_exact.get("metadata") or {}
