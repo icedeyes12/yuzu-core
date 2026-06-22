@@ -446,7 +446,7 @@ def _enrich_with_trgm_score(results: list[dict], keyword: str) -> list[dict]:
     return results
 
 
-def retrieve_static_memories(query=None, limit=15):
+def retrieve_static_memories(query=None, limit=15, user_id=None):
     """
     Retrieve static (global) memories — no session filter.
     3-channel hybrid: vector + trigram + tsvector, merged via RRF.
@@ -603,6 +603,7 @@ def retrieve_memories_combined(
     query: str | None = None,
     static_limit: int = 10,
     dynamic_limit: int = 5,
+    user_id: str | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Retrieve static and dynamic memories with single embedding call.
 
@@ -1139,6 +1140,7 @@ async def retrieve_memories_combined_async(
     query: str | None = None,
     static_limit: int = 10,
     dynamic_limit: int = 5,
+    user_id: str | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Async wrapper for retrieve_memories_combined using asyncio.to_thread."""
     import asyncio
@@ -1149,4 +1151,5 @@ async def retrieve_memories_combined_async(
         query,
         static_limit,
         dynamic_limit,
+        user_id,
     )

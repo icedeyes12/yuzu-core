@@ -105,16 +105,17 @@ class MemoryService:
 
     @staticmethod
     async def summarize_session_async(
-        profile: dict[str, Any], user_message: str, ai_reply: str, session_id: str
+        profile: dict[str, Any], user_message: str, ai_reply: str, session_id: str,
+        user_id: str | None = None,
     ) -> bool:
-        return await summarize_memory_async(profile, user_message, ai_reply, session_id)
+        return await summarize_memory_async(profile, user_message, ai_reply, session_id, user_id)
 
     @staticmethod
-    async def summarize_global_profile_async() -> bool:
+    async def summarize_global_profile_async(user_id: str | None = None) -> bool:
         # Assuming summarize_global_player_profile is sync and I/O bound
         import asyncio
 
-        return await asyncio.to_thread(summarize_global_player_profile)
+        return await asyncio.to_thread(summarize_global_player_profile, user_id)
 
     @staticmethod
     async def rebuild_structured_memory_async(session_id: str) -> dict[str, Any]:

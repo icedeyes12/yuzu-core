@@ -150,7 +150,11 @@ def _read_file_content(filepath: str, max_size: int = 50000) -> str:
 
 
 async def _retrieve_memories_async(
-    session_id: str, user_message: str | None, static_limit: int, dynamic_limit: int
+    session_id: str,
+    user_message: str | None,
+    static_limit: int,
+    dynamic_limit: int,
+    user_id: str,
 ) -> tuple[list[int], str, str]:
     """Combined retrieval with single embedding call (async)."""
     try:
@@ -165,6 +169,7 @@ async def _retrieve_memories_async(
             query=user_message,
             static_limit=static_limit,
             dynamic_limit=dynamic_limit,
+            user_id=user_id,
         )
 
         ids = [m["id"] for m in static]
@@ -188,9 +193,9 @@ async def _mark_facts_pending_async(static_ids: list[int], session_id: str) -> N
         log.warning("pending-review marking failed: %s", e)
 
 
-async def _legacy_memory_block_async(profile: dict[str, Any], session_id: str) -> str:
+async def _legacy_memory_block_async(profile: dict[str, Any], session_id: str, user_id: str) -> str:
     block = ""
-    session_memory = await Database.get_session_memory_async(session_id)
+    session_memory = await Database.get_session_memory_async(session_id, user_id)
     if session_memory and session_memory.get("session_context"):
         block += (
             f"\n\nBACKGROUND (recent context):\n{session_memory['session_context']}"
@@ -367,6 +372,7 @@ async def build_system_message_async(
     session_id: str,
     interface: str,
     user_message: str | None,
+    user_id: str,
 ) -> str:
     """Render the full system prompt for a chat turn (async).
 
@@ -382,10 +388,11 @@ async def build_system_message_async(
         user_message,
         static_limit=5,
         dynamic_limit=3,  # Reduced from 10, 5
+        user_id=user_id,
     )
     await _mark_facts_pending_async(static_ids, session_id)
     memory_block = (f"\n\n{static_context}" if static_context else "") + dynamic_context
-    memory_block += await _legacy_memory_block_async(profile, session_id)
+    memory_block += await _legacy_memory_block_async(profile, session_id, user_id)
 
     # TOOL OPTIMIZATION: Only mention tools that are contextually relevant
     # For normal chat, skip advanced tools unless mentioned
@@ -522,6 +529,7 @@ async def build_messages(
     session_id: str,
     interface: str,
     user_message: str | None,
+    user_id: str,
     include_image_paths: bool = False,
 ) -> list[dict[str, Any]]:
     """Build the full chat-completion messages list (async).
@@ -529,13 +537,14 @@ async def build_messages(
     OPTIMIZED: Reduced history limit to prevent context bloat.
     """
     system_message = await build_system_message_async(
-        profile, session_id, interface, user_message
+        profile, session_id, interface, user_message, user_id
     )
 
     # HARD CAP: Limit history
     history = (
         await Database.get_chat_history_for_ai_async(
             session_id=session_id,
+            user_id=user_id,
             limit=100,  # .Fetch more, then trim by tokens
             recent=True,
             include_image_paths=include_image_paths,

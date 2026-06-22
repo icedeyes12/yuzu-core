@@ -316,7 +316,7 @@ async def generate_ai_response(
     # build_messages() fetches history which ALREADY contains the user message
     # (persisted by orchestrator before calling this function)
     messages = await build_messages(
-        profile, session_id, interface, user_message, include_image_paths=True
+        profile, session_id, interface, user_message, user_id, include_image_paths=True
     )
 
     # Stitch in-memory context (assistant tool calls + results) not yet in DB
@@ -448,7 +448,7 @@ async def generate_ai_response_streaming(
     # build_messages() fetches history which ALREADY contains the user message
     # (persisted by orchestrator before calling this function)
     messages = await build_messages(
-        profile, session_id, interface, user_message, include_image_paths=True
+        profile, session_id, interface, user_message, user_id, include_image_paths=True
     )
 
     # Stitch in-memory context (assistant tool calls + results) not yet in DB

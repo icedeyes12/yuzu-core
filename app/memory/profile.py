@@ -229,7 +229,7 @@ async def _global_analysis_call(prompt: str, api_key: str) -> str | None:
     )
 
 
-def summarize_global_player_profile() -> bool:
+def summarize_global_player_profile(user_id: str | None = None) -> bool:
     """Analyze ALL conversation history across ALL sessions and update the profile.
 
     NOTE: This is a SYNC function that wraps the async implementation.
@@ -237,12 +237,12 @@ def summarize_global_player_profile() -> bool:
     """
     import asyncio
 
-    return asyncio.run(_summarize_global_player_profile_async())
+    return asyncio.run(_summarize_global_player_profile_async(user_id))
 
 
-async def _summarize_global_player_profile_async() -> bool:
+async def _summarize_global_player_profile_async(user_id: str | None = None) -> bool:
     """Async implementation of global profile analysis."""
-    sessions = await Database.get_all_sessions_async() or []
+    sessions = await Database.get_all_sessions_async(user_id) or []
     log.info("global profile analysis: %d sessions", len(sessions))
 
     max_per_session = 2000
@@ -319,10 +319,10 @@ async def _summarize_global_player_profile_async() -> bool:
     parsed["total_messages"] = total_messages
     parsed["analysis_chars"] = len(conversation_text)
 
-    profile = await Database.get_profile_async() or {}
+    profile = await Database.get_profile_async(user_id) or {}
     merged = _merge_profile_data(profile.get("memory") or {}, parsed)
     try:
-        await Database.update_profile_async({"memory": merged})
+        await Database.update_profile_async({"memory": merged}, user_id)
     except Exception:
         log.exception("profile update failed")
         return False

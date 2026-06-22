@@ -38,7 +38,8 @@ async def api_update_session_context(user_id: str = Depends(get_current_user)):
 
         if last_user_msg and last_ai_reply:
             success = await MemoryService.summarize_session_async(
-                profile, last_user_msg["content"], last_ai_reply["content"], session_id
+                profile, last_user_msg["content"], last_ai_reply["content"], session_id,
+                user_id,
             )
 
             if success:
@@ -61,7 +62,7 @@ async def api_update_session_context(user_id: str = Depends(get_current_user)):
 @router.post("/update_global_profile")
 async def api_update_global_profile(user_id: str = Depends(get_current_user)):
     try:
-        success = await MemoryService.summarize_global_profile_async()
+        success = await MemoryService.summarize_global_profile_async(user_id)
 
         if success:
             profile = await Database.get_profile_async(user_id)
@@ -133,16 +134,16 @@ async def api_memory_stats(user_id: str = Depends(get_current_user)):
         )
 
         semantic_count = MemoryDB.count_facts(
-            fact_type=FACT_TYPE_STATIC, session_id=session_id
+            fact_type=FACT_TYPE_STATIC, session_id=session_id, user_id=user_id
         )
         episodic_count = MemoryDB.count_facts(
-            fact_type=FACT_TYPE_DYNAMIC, session_id=session_id
+            fact_type=FACT_TYPE_DYNAMIC, session_id=session_id, user_id=user_id
         )
 
         top_facts = []
         try:
             facts = MemoryDB.get_facts_by_session(
-                session_id=session_id, fact_type=FACT_TYPE_STATIC, limit=10
+                session_id=session_id, fact_type=FACT_TYPE_STATIC, limit=10, user_id=user_id
             )
             for f in facts:
                 meta = f.get("metadata") or {}

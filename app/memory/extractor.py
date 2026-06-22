@@ -131,7 +131,7 @@ def _map_relation_to_category(relation: str) -> str:
     return _RELATION_TO_CATEGORY.get(key, "Experience")
 
 
-def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None):
+def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None, user_id=None):
     """Insert or update a semantic memory with embedding and 8-category taxonomy.
 
     Duplicate detection: vector search for top-5 similar records;
@@ -235,11 +235,12 @@ def upsert_semantic_memory(session_id, entity, relation, target, episode_id=None
         fact_type=FACT_TYPE_STATIC,
         metadata=metadata,
         category=category,
+        user_id=user_id,
     )
 
 
 async def upsert_semantic_memory_async(
-    session_id, entity, relation, target, episode_id=None
+    session_id, entity, relation, target, episode_id=None, user_id=None
 ):
     """Async version of upsert_semantic_memory."""
     category = _map_relation_to_category(relation)
@@ -260,6 +261,7 @@ async def upsert_semantic_memory_async(
             fact_type=FACT_TYPE_STATIC,
             limit=5,
             max_distance=_EXTRACTOR_DEDUP_THRESHOLD,
+            user_id=user_id,
         )
 
         if existing and len(existing) > 0:
@@ -319,11 +321,12 @@ async def upsert_semantic_memory_async(
         fact_type=FACT_TYPE_STATIC,
         metadata=metadata,
         category=category,
+        user_id=user_id,
     )
 
 
 def create_episodic_memory(
-    session_id, summary, emotional_weight=0.0, importance=0.5, source_message_ids=None
+    session_id, summary, emotional_weight=0.0, importance=0.5, source_message_ids=None, user_id=None
 ):
     """Create a new episodic memory record with embedding.
 
@@ -355,12 +358,13 @@ def create_episodic_memory(
             "source_message_ids": source_message_ids,
             "session_id": session_id,
         },
+        user_id=user_id,
     )
     return fact_id
 
 
 async def create_episodic_memory_async(
-    session_id, summary, emotional_weight=0.0, importance=0.5, source_message_ids=None
+    session_id, summary, emotional_weight=0.0, importance=0.5, source_message_ids=None, user_id=None
 ):
     """Async version of create_episodic_memory."""
     try:
@@ -383,5 +387,6 @@ async def create_episodic_memory_async(
             "source_message_ids": source_message_ids,
             "session_id": session_id,
         },
+        user_id=user_id,
     )
     return fact_id

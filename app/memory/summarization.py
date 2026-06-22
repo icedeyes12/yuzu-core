@@ -77,9 +77,10 @@ async def summarize_memory_async(
     user_message: str,
     ai_reply: str,
     session_id: str,
+    user_id: str | None = None,
 ) -> bool:
     history = (
-        await Database.get_chat_history_async(session_id=session_id, limit=80) or []
+        await Database.get_chat_history_async(session_id=session_id, limit=80, user_id=user_id) or []
     )
     if not history:
         return False

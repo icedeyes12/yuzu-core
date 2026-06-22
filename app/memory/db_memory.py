@@ -45,13 +45,10 @@ from app.db import (
     pg_fetchone,
     pg_fetchall,
     pg_execute,
-    get_profile,
-    # Async versions
     AsyncPgSession,
     pg_fetchone_async,
     pg_fetchall_async,
     pg_execute_async,
-    get_profile_async,
 )
 from app.memory.db_memory_queries import (
     # Constants
@@ -118,7 +115,8 @@ def save_fact(
     Returns the new row id, or None on failure.
     """
     if user_id is None:
-        user_id = get_profile()["id"]
+        logger.error("save_fact: user_id is required — refusing to fall back to first profile")
+        return None
     meta = dict(metadata) if metadata else {}
     if "session_id" not in meta:
         meta["session_id"] = session_id
@@ -174,6 +172,7 @@ def search_similar(
     max_distance: float = 1.5,
     metadata_filter: dict | None = None,
     category: str | None = None,
+    user_id: str | None = None,
 ) -> list[dict]:
     """
     ANN search via PostgreSQL <=> (cosine) operator.
@@ -198,6 +197,7 @@ def search_similar(
             fact_type=fact_type,
             category=category,
             metadata_filter=metadata_filter,
+            user_id=user_id,
         )
 
         query = build_search_similar_query(vec_literal, conditions)
@@ -220,6 +220,7 @@ def search_trgm(
     min_similarity: float = 0.3,
     metadata_filter: dict | None = None,
     category: str | None = None,
+    user_id: str | None = None,
 ) -> list[dict]:
     """
     Fuzzy keyword search via pg_trgm similarity operator.
@@ -261,6 +262,7 @@ def search_tsv(
     metadata_filter: dict | None = None,
     category: str | None = None,
     rank_weight: float = 0.3,
+    user_id: str | None = None,
 ) -> list[dict]:
     """
     PostgreSQL full-text search via tsvector column.
@@ -331,6 +333,7 @@ def get_facts_by_session(
     session_id: str | None,
     fact_type: str | None = None,
     limit: int = 100,
+    user_id: str | None = None,
 ) -> list[dict]:
     # Static facts are GLOBAL - no session_id filter
     if fact_type == FACT_TYPE_STATIC:
@@ -344,7 +347,7 @@ def get_facts_by_session(
     return pg_fetchall(query, params)
 
 
-def count_facts(fact_type: str | None = None, session_id: str | None = None) -> int:
+def count_facts(fact_type: str | None = None, session_id: str | None = None, user_id: str | None = None) -> int:
     conditions, params = build_metadata_conditions(
         fact_type=fact_type, session_id=session_id
     )
@@ -493,8 +496,8 @@ async def save_fact_async(
 ) -> int | None:
     """Async version of save_fact."""
     if user_id is None:
-        if user_id is None:
-            user_id = (await get_profile_async())["id"]
+        logger.error("save_fact_async: user_id is required — refusing to fall back to first profile")
+        return None
     meta = dict(metadata) if metadata else {}
     if "session_id" not in meta:
         meta["session_id"] = session_id

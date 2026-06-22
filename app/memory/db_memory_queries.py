@@ -121,6 +121,7 @@ def build_metadata_conditions(
     fact_type: str | None = None,
     category: str | None = None,
     metadata_filter: dict[str, str] | None = None,
+    user_id: str | None = None,
 ) -> tuple[list[str], list[Any]]:
     """Build a list of WHERE-clause fragments + their parameter list.
 
@@ -135,6 +136,9 @@ def build_metadata_conditions(
     if session_id is not None:
         conditions.append("(metadata->>'session_id') = %s::text")
         params.append(session_id)
+    if user_id is not None:
+        conditions.append("user_id = %s")
+        params.append(user_id)
     if fact_type:
         conditions.append("fact_type = %s")
         params.append(fact_type)
