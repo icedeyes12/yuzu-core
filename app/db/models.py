@@ -261,7 +261,7 @@ def update_session_memory(session_id: str, memory: dict) -> bool:
         return False
 
 
-def get_session_memory(session_id: str) -> dict:
+def get_session_memory(session_id: str, user_id: str | None = None) -> dict:
     rows = pg_fetchall(SQL_SESSION_MEMORY_NOTES, (session_id,))
     return parse_session_memory_rows(rows)
 
@@ -385,7 +385,8 @@ def get_recent_messages(session_id: str, limit: int = 20) -> list[dict]:
 
 
 def get_chat_history(
-    session_id: str, limit: int | None = None, recent: bool = False
+    session_id: str, limit: int | None = None, recent: bool = False,
+    user_id: str | None = None
 ) -> list[dict]:
     """Get messages ordered by timestamp.
 
@@ -464,6 +465,7 @@ def get_chat_history_for_ai(
     limit: int | None = None,
     recent: bool = False,
     include_image_paths: bool = False,
+    user_id: str | None = None,
 ) -> list[dict]:
     """Fetch history and format specifically for LLM context (e.g. system turn)."""
     rows = get_chat_history(session_id, limit, recent)

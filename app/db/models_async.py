@@ -263,7 +263,7 @@ async def update_session_memory_async(session_id: str, memory: dict) -> bool:
         return False
 
 
-async def get_session_memory_async(session_id: str) -> dict:
+async def get_session_memory_async(session_id: str, user_id: str | None = None) -> dict:
     rows = await pg_fetchall_async(SQL_SESSION_MEMORY_NOTES, (session_id,))
     return parse_session_memory_rows(rows)
 
@@ -452,7 +452,8 @@ async def get_recent_messages_async(session_id: str, limit: int = 20) -> list[di
 
 
 async def get_chat_history_async(
-    session_id: str, limit: int | None = None, recent: bool = False
+    session_id: str, limit: int | None = None, recent: bool = False,
+    user_id: str | None = None,
 ) -> list[dict]:
     if limit and recent:
         rows = await pg_fetchall_async(
@@ -564,6 +565,7 @@ async def get_chat_history_for_ai_async(
     limit: int | None = None,
     recent: bool = False,
     include_image_paths: bool = False,
+    user_id: str | None = None,
 ) -> list[dict]:
     if limit and recent:
         rows = await pg_fetchall_async(

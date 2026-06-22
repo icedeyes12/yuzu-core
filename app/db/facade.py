@@ -287,19 +287,21 @@ class Database:
         session_id: str | None = None,
         limit: int | None = None,
         recent: bool = False,
+        user_id: str | None = None,
     ) -> list[dict]:
         """Get chat history for a session (defaults to active session)."""
-        return _pg_get_chat_history(_resolve_session_id(session_id), limit, recent)
+        return _pg_get_chat_history(_resolve_session_id(session_id), limit, recent, user_id)
 
     @staticmethod
     async def get_chat_history_async(
         session_id: str | None = None,
         limit: int | None = None,
         recent: bool = False,
+        user_id: str | None = None,
     ) -> list[dict]:
         """Get chat history for a session (defaults to active session)."""
         return await _pg_get_chat_history_async(
-            await _resolve_session_id_async(session_id), limit, recent
+            await _resolve_session_id_async(session_id), limit, recent, user_id
         )
 
     @staticmethod
@@ -308,10 +310,11 @@ class Database:
         limit: int | None = None,
         recent: bool = False,
         include_image_paths: bool = False,
+        user_id: str | None = None,
     ) -> list[dict]:
         """Build message context for AI provider (defaults to active session)."""
         return _pg_get_chat_history_for_ai(
-            _resolve_session_id(session_id), limit, recent, include_image_paths
+            _resolve_session_id(session_id), limit, recent, include_image_paths, user_id
         )
 
     @staticmethod
@@ -320,6 +323,7 @@ class Database:
         limit: int | None = None,
         recent: bool = False,
         include_image_paths: bool = False,
+        user_id: str | None = None,
     ) -> list[dict]:
         """Build message context for AI provider (defaults to active session)."""
         return await _pg_get_chat_history_for_ai_async(
@@ -327,6 +331,7 @@ class Database:
             limit,
             recent,
             include_image_paths,
+            user_id,
         )
 
     @staticmethod
