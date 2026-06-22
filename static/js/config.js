@@ -8,11 +8,11 @@ document.addEventListener("DOMContentLoaded", () => {
 	console.log("Config page loaded - initializing...");
 	loadAppConfig().then(() => {
 		loadProfileData();
-		loadAPIKeys();
 		loadGlobalKnowledge();
 		loadProviderSettings();
 		loadImageModel();
 		setupEventListeners();
+		loadBYOKConfig();
 		initializeConfigAnimations();
 	});
 });
@@ -254,10 +254,17 @@ function setupEventListeners() {
 		);
 	}
 
-	// API key management
-	const addApiKeyBtn = document.getElementById("add-api-key");
-	if (addApiKeyBtn) {
-		addApiKeyBtn.addEventListener("click", addAPIKey);
+	// API key management — DECOMMISSIONED, replaced by BYOK
+	// (add-api-key button removed from config.html)
+
+	// BYOK provider configuration
+	const saveByokBtn = document.getElementById("save-byok");
+	if (saveByokBtn) {
+		saveByokBtn.addEventListener("click", saveBYOKConfig);
+	}
+	const byokProviderSelect = document.getElementById("byok-provider");
+	if (byokProviderSelect) {
+		byokProviderSelect.addEventListener("change", toggleBYOKFields);
 	}
 
 	// Memory and data
@@ -710,118 +717,78 @@ async function saveProfileSettings() {
 	}
 }
 
-async function loadAPIKeys() {
-	try {
-		const response = await fetch("/api/profile");
-		const data = await response.json();
+// === BYOK (Bring Your Own Key) — localStorage only, zero server storage ===
+const BYOK_STORAGE_KEY = "yuzu_byok_config";
 
-		const keysList = document.getElementById("keys-list");
+function saveBYOKConfig() {
+	const provider = document.getElementById("byok-provider")?.value || "";
+	const apiKey = document.getElementById("byok-api-key")?.value?.trim() || "";
+	const baseUrl = document.getElementById("byok-base-url")?.value?.trim() || "";
+	const modelId = document.getElementById("byok-model-id")?.value?.trim() || "";
 
-		if (!data.api_keys || Object.keys(data.api_keys).length === 0) {
-			keysList.innerHTML = "<li>No API keys stored</li>";
-			return;
-		}
-
-		keysList.innerHTML = Object.entries(data.api_keys)
-			.map(
-				([keyName, keyValue]) => `
-            <li style="margin-bottom: 0.5rem; padding: 0.5rem; background: rgba(255,255,255,0.05); border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
-                <span><strong>${keyName}:</strong> ${keyValue.substring(0, 10)}...${keyValue.substring(keyValue.length - 5)}</span>
-                <button onclick="removeAPIKey('${keyName}')" class="btn" style="background: #ef4444; color: white; padding: 0.3rem 0.6rem; font-size: 0.8rem;">Remove</button>
-            </li>
-        `,
-			)
-			.join("");
-
-		console.log("API keys loaded");
-	} catch (error) {
-		console.error("Error loading API keys:", error);
-		document.getElementById("keys-list").innerHTML =
-			"<li>Error loading API keys</li>";
-		showError("Failed to load API keys");
-	}
-}
-
-async function addAPIKey() {
-	const providerSelect = document.getElementById("api-key-provider");
-	const apiKeyInput = document.getElementById("api-key");
-
-	const keyName = providerSelect.value;
-	const apiKey = apiKeyInput.value.trim();
-
-	if (!apiKey) {
-		showError("Please enter an API key");
+	if (!provider) {
+		showError("Please select a provider");
 		return;
 	}
 
-	// Show loading state
-	const addBtn = document.getElementById("add-api-key");
-	const originalText = addBtn.textContent;
-	addBtn.textContent = "Adding...";
-	addBtn.disabled = true;
+	const config = { provider, apiKey, baseUrl, modelId };
 
 	try {
-		const response = await fetch("/api/add_api_key", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				key_name: keyName,
-				api_key: apiKey,
-			}),
-		});
+		localStorage.setItem(BYOK_STORAGE_KEY, JSON.stringify(config));
 
-		const result = await response.json();
-
-		if (result.status === "success") {
-			showSuccess("API key added successfully!");
-			apiKeyInput.value = "";
-			loadAPIKeys(); // Reload the list
-			// Reload provider settings to reflect new key availability
-			loadProviderSettings();
-		} else {
-			showError(`Failed to add API key: ${result.message}`);
+		// Subtle success indication: button text swap + toast
+		const btn = document.getElementById("save-byok");
+		if (btn) {
+			const original = btn.textContent;
+			btn.textContent = "Saved ✓";
+			btn.style.background = "var(--accent-tertiary)";
+			setTimeout(() => {
+				btn.textContent = original;
+				btn.style.background = "";
+			}, 1800);
 		}
-	} catch (error) {
-		console.error("Error adding API key:", error);
-		showError("Error adding API key");
-	} finally {
-		// Restore button state
-		addBtn.textContent = originalText;
-		addBtn.disabled = false;
+		showSuccess("Provider configuration saved locally");
+	} catch (e) {
+		console.error("saveBYOKConfig failed:", e);
+		showError("Failed to save provider configuration locally");
 	}
 }
 
-async function removeAPIKey(keyName) {
-	if (!confirm(`Are you sure you want to remove the ${keyName} API key?`)) {
-		return;
-	}
-
+function loadBYOKConfig() {
 	try {
-		const response = await fetch("/api/remove_api_key", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({ key_name: keyName }),
-		});
+		const raw = localStorage.getItem(BYOK_STORAGE_KEY);
+		if (!raw) return;
 
-		const result = await response.json();
-
-		if (result.status === "success") {
-			showSuccess("API key removed!");
-			loadAPIKeys(); // Reload the list
-			// Reload provider settings to reflect key removal
-			loadProviderSettings();
-		} else {
-			showError(`Failed to remove API key: ${result.message}`);
+		const config = JSON.parse(raw);
+		const providerSelect = document.getElementById("byok-provider");
+		if (providerSelect && config.provider) {
+			providerSelect.value = config.provider;
 		}
-	} catch (error) {
-		console.error("Error removing API key:", error);
-		showError("Error removing API key");
+		const apiKeyInput = document.getElementById("byok-api-key");
+		if (apiKeyInput) apiKeyInput.value = config.apiKey || "";
+		const baseUrlInput = document.getElementById("byok-base-url");
+		if (baseUrlInput) baseUrlInput.value = config.baseUrl || "";
+		const modelIdInput = document.getElementById("byok-model-id");
+		if (modelIdInput) modelIdInput.value = config.modelId || "";
+
+		// Sync conditional field visibility
+		toggleBYOKFields();
+	} catch (e) {
+		console.error("loadBYOKConfig failed:", e);
 	}
 }
+
+function toggleBYOKFields() {
+	const provider = document.getElementById("byok-provider")?.value || "";
+	const showConditional = provider === "ollama" || provider === "custom";
+	const baseGroup = document.getElementById("byok-baseurl-group");
+	const modelGroup = document.getElementById("byok-modelid-group");
+	if (baseGroup) baseGroup.style.display = showConditional ? "block" : "none";
+	if (modelGroup) modelGroup.style.display = showConditional ? "block" : "none";
+}
+
+// Make BYOK functions globally available for inline handlers
+window.saveBYOKConfig = saveBYOKConfig;
 
 // Load structured memory statistics
 async function loadMemoryStats() {
@@ -1185,8 +1152,8 @@ function initializeConfigAnimations() {
 }
 
 // Make functions globally available
-window.removeAPIKey = removeAPIKey;
 window.showSuccess = showSuccess;
+window.showError = showError;
 
 // Location functions
 async function loadLocation() {
@@ -1246,7 +1213,6 @@ function useCurrentLocation() {
 
 // Load location on page load
 document.addEventListener("DOMContentLoaded", loadLocation);
-window.showError = showError;
 
 // Load image model on page load
 document.addEventListener("DOMContentLoaded", loadImageModel);

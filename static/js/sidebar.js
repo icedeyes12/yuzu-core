@@ -1,11 +1,11 @@
 // FILE: static/js/sidebar.js
 // DESCRIPTION: Unified sidebar management with session actions
 
-// === GLOBAL FETCH INTERCEPTOR (auth gate + Phase 3 BYOK prep) ===
+// === GLOBAL FETCH INTERCEPTOR (auth gate + Phase 3 BYOK) ===
 // Runs before any module — sidebar.js is the first classic script on every page.
 // 1. Detects 401 from /api/ endpoints → shows auth overlay (no full reload).
-// 2. Reads X-Provider-Key from localStorage for LLM endpoints (no-op until
-//    Phase 3 BYOK UI connects; harmless when localStorage key is absent).
+// 2. Reads yuzu_byok_config from localStorage and injects X-Provider-Key,
+//    X-Base-Url, X-Model-Id headers into LLM endpoint requests.
 (() => {
 	const _origFetch = window.fetch;
 	const _LLM_ENDPOINTS = [
@@ -20,10 +20,19 @@
 
 		const url = typeof input === "string" ? input : input.url;
 
-		// Phase 3 prep: inject provider key for LLM endpoints (no-op if unset)
+		// BYOK: inject provider config headers for LLM endpoints
 		if (_LLM_ENDPOINTS.some((ep) => url.includes(ep))) {
-			const key = localStorage.getItem("yuzu_provider_key");
-			if (key) init.headers.set("X-Provider-Key", key);
+			try {
+				const raw = localStorage.getItem("yuzu_byok_config");
+				if (raw) {
+					const cfg = JSON.parse(raw);
+					if (cfg.apiKey) init.headers.set("X-Provider-Key", cfg.apiKey);
+					if (cfg.baseUrl) init.headers.set("X-Base-Url", cfg.baseUrl);
+					if (cfg.modelId) init.headers.set("X-Model-Id", cfg.modelId);
+				}
+			} catch (e) {
+				console.warn("BYOK config parse failed:", e);
+			}
 		}
 
 		const response = await _origFetch.call(this, input, init);

@@ -292,30 +292,38 @@
         </div>
 
         <div class="config-section">
-            <h2>API Keys</h2>
-            
+            <h2>Provider Keys (Bring Your Own Key)</h2>
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                Your API keys are stored only in this browser and sent per-request to the backend. They never touch the server database.
+            </p>
+
             <div class="form-group">
-                <label for="api-key-provider">Provider:</label>
-                <select id="api-key-provider" class="form-select">
+                <label for="byok-provider">Provider:</label>
+                <select id="byok-provider" class="form-select">
                     <option value="openrouter">OpenRouter</option>
                     <option value="cerebras">Cerebras</option>
                     <option value="chutes">Chutes</option>
+                    <option value="ollama">Ollama</option>
+                    <option value="custom">Custom</option>
                 </select>
             </div>
 
-            <div class="form-group">
-                <label for="api-key">API Key:</label>
-                <input type="text" id="api-key" placeholder="Enter your API key">
+            <div class="form-group" id="byok-apikey-group">
+                <label for="byok-api-key">API Key:</label>
+                <input type="password" id="byok-api-key" placeholder="Enter your API key (optional for Ollama)" style="background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.6rem 0.8rem; width: 100%;">
             </div>
-            
-            <button id="add-api-key" class="btn btn-primary">Add API Key</button>
-            
-            <div style="margin-top: 1rem;">
-                <h3 style="margin-bottom: 0.5rem;">Stored API Keys:</h3>
-                <ul id="keys-list" style="list-style: none; padding: 0;">
-                    <li>Loading...</li>
-                </ul>
+
+            <div class="form-group byok-conditional" id="byok-baseurl-group" style="display: none;">
+                <label for="byok-base-url">Custom Base URL:</label>
+                <input type="text" id="byok-base-url" placeholder="e.g. http://localhost:11434" style="background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.6rem 0.8rem; width: 100%;">
             </div>
+
+            <div class="form-group byok-conditional" id="byok-modelid-group" style="display: none;">
+                <label for="byok-model-id">Custom Model ID:</label>
+                <input type="text" id="byok-model-id" placeholder="e.g. llama3" style="background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.6rem 0.8rem; width: 100%;">
+            </div>
+
+            <button id="save-byok" class="btn btn-primary">Save Provider Configuration</button>
         </div>
     </main>
 
