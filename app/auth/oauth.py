@@ -147,6 +147,10 @@ async def _verify_google_id_token(id_token: str, client_id: str) -> dict:
         algorithms=["RS256"],
         audience=client_id,
         issuer=_GOOGLE_ISSUER,
+        # Leeway for clock skew between the Termux host and Google's servers.
+        # Without this, a server clock that's a few seconds behind Google's
+        # causes "The token is not yet valid (iat)" on freshly minted id_tokens.
+        leeway=30,
     )
 
 
