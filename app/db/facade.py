@@ -14,7 +14,6 @@ from typing import Any, Callable
 from app.db.models import (
     ALL_TOOL_ROLES,
     TOOL_ROLES,
-    add_api_key as _pg_add_api_key,
     add_message as _pg_add_message,
     update_message as _pg_update_message,
     add_session_event as _pg_add_session_event,
@@ -27,8 +26,6 @@ from app.db.models import (
     get_active_session as _pg_get_active_session,
     get_all_encrypted_messages as _pg_get_all_encrypted_messages,
     get_all_sessions as _pg_get_all_sessions,
-    get_api_key as _pg_get_api_key,
-    get_api_keys as _pg_get_api_keys,
     get_chat_history as _pg_get_chat_history,
     get_chat_history_for_ai as _pg_get_chat_history_for_ai,
     get_context as _pg_get_context,
@@ -42,7 +39,6 @@ from app.db.models import (
     get_session_messages as _pg_get_session_messages,
     increment_message_count as _pg_increment_message_count,
     init_pg_tables as _init_pg_tables,
-    remove_api_key as _pg_remove_api_key,
     rename_session as _pg_rename_session,
     switch_session as _pg_switch_session,
     update_context as _pg_update_context,
@@ -50,7 +46,6 @@ from app.db.models import (
     update_session_memory as _pg_update_session_memory,
 )
 from app.db.models_async import (
-    add_api_key_async as _pg_add_api_key_async,
     add_message_async as _pg_add_message_async,
     update_message_async as _pg_update_message_async,
     add_session_event_async as _pg_add_session_event_async,
@@ -63,8 +58,6 @@ from app.db.models_async import (
     get_active_session_async as _pg_get_active_session_async,
     get_all_encrypted_messages_async as _pg_get_all_encrypted_messages_async,
     get_all_sessions_async as _pg_get_all_sessions_async,
-    get_api_key_async as _pg_get_api_key_async,
-    get_api_keys_async as _pg_get_api_keys_async,
     get_chat_history_async as _pg_get_chat_history_async,
     get_chat_history_for_ai_async as _pg_get_chat_history_for_ai_async,
     get_context_async as _pg_get_context_async,
@@ -78,7 +71,6 @@ from app.db.models_async import (
     get_session_memory_async as _pg_get_session_memory_async,
     get_session_messages_async as _pg_get_session_messages_async,
     increment_message_count_async as _pg_increment_message_count_async,
-    remove_api_key_async as _pg_remove_api_key_async,
     rename_session_async as _pg_rename_session_async,
     switch_session_async as _pg_switch_session_async,
     update_context_async as _pg_update_context_async,
@@ -168,16 +160,6 @@ class Database:
     get_context_async = _proxy_async(_pg_get_context_async)
     update_context = _proxy(_pg_update_context)
     update_context_async = _proxy_async(_pg_update_context_async)
-
-    # ── API keys (pure passthroughs) ──────────────────────────────────────────
-    get_api_keys = _proxy(_pg_get_api_keys)
-    get_api_keys_async = _proxy_async(_pg_get_api_keys_async)
-    get_api_key = _proxy(_pg_get_api_key)
-    get_api_key_async = _proxy_async(_pg_get_api_key_async)
-    add_api_key = _proxy(_pg_add_api_key)
-    add_api_key_async = _proxy_async(_pg_add_api_key_async)
-    remove_api_key = _proxy(_pg_remove_api_key)
-    remove_api_key_async = _proxy_async(_pg_remove_api_key_async)
 
     # ── Sessions (pure passthroughs) ──────────────────────────────────────────
     create_session = _proxy(_pg_create_session)

@@ -15,16 +15,11 @@ from app.db.connection import (
     pg_fetchall_async,
     pg_fetchone_async,
 )
+from app.db.models import TenantScopeError
 from app.db.queries import (
     ALL_TOOL_ROLES,
     DEFAULT_PROFILE_PARAMS,
     SCHEMA_DDL,
-    SQL_APIKEY_DELETE,
-    SQL_APIKEY_INSERT,
-    SQL_APIKEY_SELECT_ALL,
-    SQL_APIKEY_SELECT_BY_NAME,
-    SQL_APIKEY_SELECT_ID_BY_NAME,
-    SQL_APIKEY_UPDATE,
     SQL_ENC_ENCRYPTED_KEYS,
     SQL_ENC_ENCRYPTED_MESSAGES,
     SQL_ENC_TOTAL_KEYS,
@@ -61,7 +56,6 @@ from app.db.queries import (
     SQL_SESSION_RENAME,
     SQL_SESSION_RENAME_SCOPED,
     SQL_SESSION_RESET_COUNT_AND_MEMORY,
-    SQL_SESSION_SELECT_ACTIVE,
     SQL_SESSION_SELECT_ACTIVE_FOR_USER,
     SQL_SESSION_SELECT_ALL,
     SQL_SESSION_SELECT_ALL_FOR_USER,
@@ -70,8 +64,6 @@ from app.db.queries import (
     TOOL_ROLES,
     build_encryption_status,
     build_profile_update,
-    decrypt_api_key_rows,
-    encrypt_api_key,
     format_ai_history_rows,
     format_conversation_summary,
     format_session_event,
@@ -164,25 +156,20 @@ async def update_memory_async(memory_dict: dict, user_id: str | None = None) -> 
 
 
 async def get_active_session_async(user_id: str | None = None) -> dict:
-    if user_id is not None:
-        row = await pg_fetchone_async(SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,))
-        if not row:
-            now = datetime.now()
-            await pg_execute_async(
-                SQL_SESSION_INSERT, (user_id, "New Chat", True, 0, "{}", now, now)
-            )
-            row = await pg_fetchone_async(
-                SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,)
-            )
-    else:
-        row = await pg_fetchone_async(SQL_SESSION_SELECT_ACTIVE)
-        if not row:
-            now = datetime.now()
-            fallback_uid = (await get_profile_async())["id"]
-            await pg_execute_async(
-                SQL_SESSION_INSERT, (fallback_uid, "New Chat", True, 0, "{}", now, now)
-            )
-            row = await pg_fetchone_async(SQL_SESSION_SELECT_ACTIVE)
+    if not user_id:
+        raise TenantScopeError(
+            "get_active_session_async requires a valid user_id — refusing to "
+            "fall back to a default profile (multi-tenant isolation)"
+        )
+    row = await pg_fetchone_async(SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,))
+    if not row:
+        now = datetime.now()
+        await pg_execute_async(
+            SQL_SESSION_INSERT, (user_id, "New Chat", True, 0, "{}", now, now)
+        )
+        row = await pg_fetchone_async(
+            SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,)
+        )
     return parse_session_row(row)
 
 
@@ -198,7 +185,10 @@ async def create_session_async(
     name: str = "New Chat", user_id: str | None = None
 ) -> str | None:
     if user_id is None:
-        user_id = (await get_profile_async())["id"]
+        raise TenantScopeError(
+            "create_session_async requires a valid user_id — refusing to "
+            "fall back to a default profile (multi-tenant isolation)"
+        )
     now = datetime.now()
     try:
         async with AsyncPgSession() as s:
@@ -337,52 +327,6 @@ async def update_memory_state_async(session_id: str, state: dict) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# API keys
-# ---------------------------------------------------------------------------
-
-
-async def get_api_keys_async(key_name: str | None = None) -> dict[str, str]:
-    if key_name:
-        rows = await pg_fetchall_async(SQL_APIKEY_SELECT_BY_NAME, (key_name,))
-    else:
-        rows = await pg_fetchall_async(SQL_APIKEY_SELECT_ALL)
-    return decrypt_api_key_rows(rows)
-
-
-async def get_api_key_async(key_name: str) -> str | None:
-    return (await get_api_keys_async(key_name)).get(key_name)
-
-
-async def add_api_key_async(key_name: str, key_value: str) -> bool:
-    encrypted = encrypt_api_key(key_value)
-    is_encrypted = encrypted != key_value
-    try:
-        existing = await pg_fetchone_async(SQL_APIKEY_SELECT_ID_BY_NAME, (key_name,))
-        if existing:
-            await pg_execute_async(
-                SQL_APIKEY_UPDATE, (encrypted, is_encrypted, key_name)
-            )
-        else:
-            await pg_execute_async(
-                SQL_APIKEY_INSERT,
-                (key_name, encrypted, is_encrypted, datetime.now()),
-            )
-        return True
-    except Exception as e:  # noqa: BLE001
-        log.error("add_api_key_async failed: %s", e)
-        return False
-
-
-async def remove_api_key_async(key_name: str) -> bool:
-    try:
-        await pg_execute_async(SQL_APIKEY_DELETE, (key_name,))
-        return True
-    except Exception as e:  # noqa: BLE001
-        log.error("remove_api_key_async failed: %s", e)
-        return False
-
-
-# ---------------------------------------------------------------------------
 # Messages
 # ---------------------------------------------------------------------------
 
@@ -401,7 +345,10 @@ async def add_message_async(
     import json
 
     if user_id is None:
-        user_id = (await get_profile_async())["id"]
+        raise TenantScopeError(
+            "add_message_async requires a valid user_id — refusing to "
+            "fall back to a default profile (multi-tenant isolation)"
+        )
     paths_json = json.dumps(image_paths or [])
     try:
         async with AsyncPgSession() as s:
@@ -661,11 +608,6 @@ __all__ = [
     "increment_message_count_async",
     "get_memory_state_async",
     "update_memory_state_async",
-    # API keys
-    "get_api_keys_async",
-    "get_api_key_async",
-    "add_api_key_async",
-    "remove_api_key_async",
     # Messages
     "add_message_async",
     "update_message_async",

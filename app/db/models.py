@@ -15,12 +15,6 @@ from app.db.queries import (
     ALL_TOOL_ROLES,
     DEFAULT_PROFILE_PARAMS,
     SCHEMA_DDL,
-    SQL_APIKEY_DELETE,
-    SQL_APIKEY_INSERT,
-    SQL_APIKEY_SELECT_ALL,
-    SQL_APIKEY_SELECT_BY_NAME,
-    SQL_APIKEY_SELECT_ID_BY_NAME,
-    SQL_APIKEY_UPDATE,
     SQL_ENC_ENCRYPTED_KEYS,
     SQL_ENC_ENCRYPTED_MESSAGES,
     SQL_ENC_TOTAL_KEYS,
@@ -54,8 +48,6 @@ from app.db.queries import (
     TOOL_ROLES,
     build_encryption_status,
     build_profile_update,
-    decrypt_api_key_rows,
-    encrypt_api_key,
     format_ai_history_rows,
     format_conversation_summary,
     format_session_event,
@@ -75,6 +67,15 @@ log = get_logger(__name__)
 # ALL_TOOL_ROLES re-exported here for backward compatibility with callers
 # that imported it from app.db_pg_models.
 __re_exports__ = (TOOL_ROLES, ALL_TOOL_ROLES)
+
+
+class TenantScopeError(Exception):
+    """Raised when a tenant-scoped operation is called without a valid user_id.
+
+    Hard guard against cross-tenant data leaks. In a multi-tenant architecture,
+    silently falling back to a default profile ID would allow one tenant's
+    operations to read/write another tenant's data.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -205,8 +206,11 @@ def get_all_sessions() -> list[dict]:
 
 
 def create_session(name: str = "New Chat", user_id: str | None = None) -> str | None:
-    if user_id is None:
-        user_id = get_profile()["id"]
+    if not user_id:
+        raise TenantScopeError(
+            "create_session requires a valid user_id — refusing to "
+            "fall back to a default profile (multi-tenant isolation)"
+        )
     now = datetime.now()
     try:
         with PgSession() as s:
@@ -276,49 +280,6 @@ def increment_message_count(session_id: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# API keys
-# ---------------------------------------------------------------------------
-
-
-def get_api_keys(key_name: str | None = None) -> dict[str, str]:
-    if key_name:
-        rows = pg_fetchall(SQL_APIKEY_SELECT_BY_NAME, (key_name,))
-    else:
-        rows = pg_fetchall(SQL_APIKEY_SELECT_ALL)
-    return decrypt_api_key_rows(rows)
-
-
-def get_api_key(key_name: str) -> str | None:
-    return get_api_keys(key_name).get(key_name)
-
-
-def add_api_key(key_name: str, key_value: str) -> bool:
-    encrypted = encrypt_api_key(key_value)
-    is_encrypted = encrypted != key_value
-    try:
-        if pg_fetchone(SQL_APIKEY_SELECT_ID_BY_NAME, (key_name,)):
-            pg_execute(SQL_APIKEY_UPDATE, (encrypted, is_encrypted, key_name))
-        else:
-            pg_execute(
-                SQL_APIKEY_INSERT,
-                (key_name, encrypted, is_encrypted, datetime.now()),
-            )
-        return True
-    except Exception as e:  # noqa: BLE001
-        log.error("add_api_key failed: %s", e)
-        return False
-
-
-def remove_api_key(key_name: str) -> bool:
-    try:
-        pg_execute(SQL_APIKEY_DELETE, (key_name,))
-        return True
-    except Exception as e:  # noqa: BLE001
-        log.error("remove_api_key failed: %s", e)
-        return False
-
-
-# ---------------------------------------------------------------------------
 # Messages
 # ---------------------------------------------------------------------------
 
@@ -334,8 +295,11 @@ def add_message(
 
     Timestamp is set by database NOW() to ensure ordering coherence.
     """
-    if user_id is None:
-        user_id = get_profile()["id"]
+    if not user_id:
+        raise TenantScopeError(
+            "add_message requires a valid user_id — refusing to "
+            "fall back to a default profile (multi-tenant isolation)"
+        )
     try:
         paths_json = json.dumps(image_paths or [])
         with PgSession() as s:
@@ -525,6 +489,8 @@ def batch_decrypt_messages(message_ids: list[int]) -> dict:
 __all__ = [
     # Schema
     "init_pg_tables",
+    # Errors
+    "TenantScopeError",
     # Profile
     "get_profile",
     "update_profile",
@@ -545,11 +511,6 @@ __all__ = [
     # Pipeline state
     "get_memory_state",
     "update_memory_state",
-    # API keys
-    "get_api_keys",
-    "get_api_key",
-    "add_api_key",
-    "remove_api_key",
     # Messages
     "add_message",
     "update_message",
