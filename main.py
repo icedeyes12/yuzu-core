@@ -191,7 +191,8 @@ async def favicon():
 async def home(request: Request, user_id: str = Depends(get_current_user)):
     profile = await Database.get_profile_async(user_id)
     return templates.TemplateResponse(
-        request=request, name="index.html", context={"profile": profile}
+        request=request, name="index.html",
+        context={"profile": profile, "current_page": "home"},
     )
 
 
@@ -199,7 +200,8 @@ async def home(request: Request, user_id: str = Depends(get_current_user)):
 async def chat_page(request: Request, user_id: str = Depends(get_current_user)):
     profile = await Database.get_profile_async(user_id)
     return templates.TemplateResponse(
-        request=request, name="chat.html", context={"profile": profile}
+        request=request, name="chat.html",
+        context={"profile": profile, "current_page": "chat"},
     )
 
 
@@ -207,7 +209,8 @@ async def chat_page(request: Request, user_id: str = Depends(get_current_user)):
 async def config_page(request: Request, user_id: str = Depends(get_current_user)):
     profile = await Database.get_profile_async(user_id)
     return templates.TemplateResponse(
-        request=request, name="config.html", context={"profile": profile}
+        request=request, name="config.html",
+        context={"profile": profile, "current_page": "config"},
     )
 
 
@@ -215,7 +218,8 @@ async def config_page(request: Request, user_id: str = Depends(get_current_user)
 async def about_page(request: Request, user_id: str = Depends(get_current_user)):
     profile = await Database.get_profile_async(user_id)
     return templates.TemplateResponse(
-        request=request, name="about.html", context={"profile": profile}
+        request=request, name="about.html",
+        context={"profile": profile, "current_page": "about"},
     )
 
 
