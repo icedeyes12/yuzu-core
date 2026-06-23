@@ -106,8 +106,10 @@ class TestBuildProfileUpdate:
         assert params[0] == 99
 
     def test_default_profile_params_match_columns(self):
-        # 9 values before timestamp/updated_at (datetimes added by caller at insert time)
-        assert len(DEFAULT_PROFILE_PARAMS) == 9
+        # 10 values: display_name, partner_name, affection, theme,
+        # memory_state, session_history, global_knowledge, providers_config,
+        # context, image_model (datetimes added by caller at insert time).
+        assert len(DEFAULT_PROFILE_PARAMS) == 10
 
 
 class TestSessionParsers:
@@ -310,5 +312,11 @@ class TestMisc:
         assert "messages" in full
         assert "semantic_facts" in full
         assert "generate_uuidv7" in full
-        # 3 extensions + 1 function + 5 tables + 12 indexes + 3 migration DO-blocks = 24 statements
-        assert len(SCHEMA_DDL) == 29
+        # 3 extensions + 1 function + 7 tables + 15 indexes + 4 migration DO-blocks
+        # + 3 GRANT DO-blocks = 33 statements.
+        # Tables: profiles, chat_sessions, api_keys, messages, semantic_facts,
+        #         user_identities, user_sessions (last 2 added in Phase 2 OAuth).
+        # Migration DO-blocks: avatar_url, chat_sessions legacy_int_id,
+        #         messages legacy_session_id, profiles legacy_int_id.
+        # GRANT DO-blocks: user_identities, user_sessions, sequences (Phase 2 fix).
+        assert len(SCHEMA_DDL) == 33

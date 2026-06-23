@@ -65,43 +65,47 @@ class TestVectorHelpers:
 class TestMetadataConditions:
     """Tests for WHERE clause builder."""
 
-    def test_no_conditions(self):
-        """No filters returns empty."""
-        conditions, params = build_metadata_conditions()
-        assert conditions == []
-        assert params == []
+    def test_no_conditions(self, user_id):
+        """user_id is always present; no other filters returns just the tenant condition."""
+        conditions, params = build_metadata_conditions(user_id=user_id)
+        assert conditions == ["user_id = %s"]
+        assert params == [user_id]
 
-    def test_session_id_only(self):
-        """Session ID adds one condition."""
-        conditions, params = build_metadata_conditions(session_id=42)
-        assert len(conditions) == 1
+    def test_session_id_only(self, user_id):
+        """Session ID adds one condition on top of the mandatory user_id filter."""
+        conditions, params = build_metadata_conditions(session_id=42, user_id=user_id)
+        assert len(conditions) == 2
+        assert "user_id = %s" in conditions
         assert "(metadata->>'session_id') = %s::text" in conditions
-        assert params == [42]
+        assert params == [user_id, 42]
 
-    def test_fact_type_only(self):
-        """Fact type adds one condition."""
-        conditions, params = build_metadata_conditions(fact_type="static")
-        assert len(conditions) == 1
+    def test_fact_type_only(self, user_id):
+        """Fact type adds one condition on top of the mandatory user_id filter."""
+        conditions, params = build_metadata_conditions(fact_type="static", user_id=user_id)
+        assert len(conditions) == 2
+        assert "user_id = %s" in conditions
         assert "fact_type = %s" in conditions
-        assert params == ["static"]
+        assert params == [user_id, "static"]
 
-    def test_category_only(self):
-        """Category adds one condition."""
-        conditions, params = build_metadata_conditions(category="Preference")
-        assert len(conditions) == 1
+    def test_category_only(self, user_id):
+        """Category adds one condition on top of the mandatory user_id filter."""
+        conditions, params = build_metadata_conditions(category="Preference", user_id=user_id)
+        assert len(conditions) == 2
+        assert "user_id = %s" in conditions
         assert "(metadata->>'category') = %s" in conditions
-        assert params == ["Preference"]
+        assert params == [user_id, "Preference"]
 
-    def test_all_filters(self):
-        """All filters combined."""
+    def test_all_filters(self, user_id):
+        """All filters combined with the mandatory user_id tenant condition."""
         conditions, params = build_metadata_conditions(
             session_id=1,
             fact_type="dynamic",
             category="Identity",
             metadata_filter={"source": "test"},
+            user_id=user_id,
         )
-        assert len(conditions) == 4
-        assert len(params) == 5  # session, fact_type, category, key, val
+        assert len(conditions) == 5  # user_id, session, fact_type, category, metadata key=val
+        assert len(params) == 6  # user_id, session, fact_type, category, key, val
 
 
 class TestQueryBuilders:

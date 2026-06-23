@@ -74,17 +74,17 @@ class TestArgumentReordering:
         Database.get_messages()
         assert captured["args"] == (fake_active, 100)
 
-    def test_get_chat_history_recent_flag_passes(self, monkeypatch, fake_active):
+    def test_get_chat_history_recent_flag_passes(self, monkeypatch, fake_active, user_id):
         captured = {}
 
-        def fake_get(session_id, limit, recent):
-            captured["args"] = (session_id, limit, recent)
+        def fake_get(session_id, limit, recent, user_id):
+            captured["args"] = (session_id, limit, recent, user_id)
             return []
 
         monkeypatch.setattr(db_module, "_pg_get_chat_history", fake_get)
 
-        Database.get_chat_history(limit=20, recent=True)
-        assert captured["args"] == (fake_active, 20, True)
+        Database.get_chat_history(limit=20, recent=True, user_id=user_id)
+        assert captured["args"] == (fake_active, 20, True, user_id)
 
     def test_clear_session_uses_active(self, monkeypatch, fake_active):
         captured = {}
