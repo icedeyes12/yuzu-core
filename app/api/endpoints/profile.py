@@ -72,7 +72,7 @@ class ApiKeyRemoveRequest(BaseModel):
 async def api_get_config(user_id: str = Depends(get_current_user)):
     """Single source of truth for frontend configuration."""
     try:
-        return await ConfigService.get_frontend_config()
+        return await ConfigService.get_frontend_config(user_id)
     except Exception as e:
         log.error("Error getting config: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -89,7 +89,7 @@ async def api_get_profile(
         else:
             active_session = {"id": session_id}
         session_id = active_session["id"]
-        chat_history = await get_chat_history_async(session_id=session_id, limit=None)
+        chat_history = await get_chat_history_async(session_id=session_id, limit=None, user_id=user_id)
 
         # Inject ongoing stream if it exists
         active_buf = await StreamManager.get_stream(session_id)
@@ -111,7 +111,7 @@ async def api_get_profile(
                     }
                 )
         session_memory = await get_session_memory_async(
-            active_session["id"]
+            active_session["id"], user_id=user_id
         )  # ownership via session FK
 
         profile_dict = ConfigService.format_profile_dict(profile)
@@ -218,7 +218,7 @@ async def api_set_preferred_provider(
 ):
     try:
         result = await ConfigService.set_preferred_provider_async(
-            request.provider_name, request.model_name
+            user_id, request.provider_name, request.model_name
         )
         return {"status": "success", "message": result}
     except Exception as e:
@@ -266,7 +266,7 @@ async def api_set_vision_model(
 ):
     try:
         result = await ConfigService.set_vision_model_async(
-            request.provider, request.model
+            user_id, request.provider, request.model
         )
         return {"status": "success", "message": result}
     except Exception as e:

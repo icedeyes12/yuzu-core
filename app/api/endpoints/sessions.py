@@ -51,13 +51,13 @@ async def api_get_chat_history(
     """Get chat history for a specific session or the active session."""
     try:
         if session_id:
-            chat_history = await get_chat_history_async(session_id=session_id)
+            chat_history = await get_chat_history_async(session_id=session_id, user_id=user_id)
         else:
             active_session = await get_active_session_async(user_id)
             if active_session:
-                chat_history = await get_chat_history_async(active_session["id"])
+                chat_history = await get_chat_history_async(active_session["id"], user_id=user_id)
             else:
-                chat_history = await get_chat_history_async()
+                chat_history = await get_chat_history_async(user_id=user_id)
         return {"status": "success", "chat_history": chat_history}
     except Exception as e:
         log.error("Error getting chat history: %s", e)
@@ -82,7 +82,7 @@ async def api_create_session(
 ):
     try:
         session_id = await create_session_async(request.name, user_id)
-        await switch_session_async(session_id)
+        await switch_session_async(session_id, user_id)
 
         client_id = get_client_id(http_request)
         SessionService.clear_client_session(client_id)
@@ -112,8 +112,8 @@ async def api_switch_session(
 
         SessionService.mark_client_connected(client_id)
 
-        chat_history = await get_chat_history_async(session_id=request.session_id)
-        session_memory = await get_session_memory_async(request.session_id)
+        chat_history = await get_chat_history_async(session_id=request.session_id, user_id=user_id)
+        session_memory = await get_session_memory_async(request.session_id, user_id=user_id)
 
         return {
             "status": "success",
@@ -160,7 +160,7 @@ async def api_delete_session(
         if success:
             active_session = await get_active_session_async(user_id)
             if active_session:
-                chat_history = await get_chat_history_async(active_session["id"])
+                chat_history = await get_chat_history_async(active_session["id"], user_id=user_id)
                 session_memory = await get_session_memory_async(active_session["id"])
             else:
                 chat_history = []
@@ -192,7 +192,7 @@ async def api_clear_chat(
             active_session = await get_active_session_async(user_id)
             session_id = active_session["id"]
 
-        await clear_session_messages_async(session_id)
+        await clear_session_messages_async(session_id, user_id=user_id)
 
         client_id = get_client_id(request)
         SessionService.clear_client_session(client_id)
@@ -222,7 +222,7 @@ async def api_get_session_memory(
     session_id: str, user_id: str = Depends(get_current_user)
 ):
     try:
-        session_memory = await get_session_memory_async(session_id)
+        session_memory = await get_session_memory_async(session_id, user_id=user_id)
         return {
             "status": "success",
             "session_id": session_id,

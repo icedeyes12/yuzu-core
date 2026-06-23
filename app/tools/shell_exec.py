@@ -256,12 +256,12 @@ def _truncate_output(output: str, max_size: int = MAX_OUTPUT_SIZE) -> str:
     return f"{truncated}\n\n... ({remaining} more bytes truncated)"
 
 
-async def _get_partner_name_async() -> str:
+async def _get_partner_name_async(user_id: str | None = None) -> str:
     """Get partner name from profile (async)."""
     try:
         from app.db import Database
 
-        profile = await Database.get_profile_async() or {}
+        profile = await Database.get_profile_async(user_id) or {}
         return profile.get("partner_name", "Yuzu")
     except Exception:
         return "Yuzu"
@@ -273,7 +273,8 @@ async def _get_partner_name_async() -> str:
 
 
 async def execute(
-    arguments: dict, session_id: str | None = None, tool_name: str = "bash"
+    arguments: dict, session_id: str | None = None, tool_name: str = "bash",
+    user_id: str | None = None,
 ) -> dict:
     """Execute a bash command (async).
 

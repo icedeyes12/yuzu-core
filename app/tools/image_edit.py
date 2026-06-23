@@ -126,7 +126,7 @@ async def execute(arguments, **kwargs) -> dict:
             "Yuzu",
         )
 
-    profile = await Database.get_profile_async() or {}
+    profile = await Database.get_profile_async(kwargs.get("user_id")) or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     validated_path = _validate_image_path(image_path)
@@ -226,7 +226,7 @@ async def execute(arguments, **kwargs) -> dict:
 
     except Exception as e:
         logger.debug(f"[IMAGE EDIT] Exception: {str(e)}")
-        profile = await Database.get_profile_async() or {}
+        profile = await Database.get_profile_async(kwargs.get("user_id")) or {}
         partner_name = profile.get("partner_name", "Yuzu")
         return error_result(
             "Image edit failed. Please try again later.",

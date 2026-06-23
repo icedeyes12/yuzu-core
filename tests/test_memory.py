@@ -66,42 +66,42 @@ class TestMetadataConditions:
     """Tests for WHERE clause builder."""
 
     def test_no_conditions(self):
-        """No filters returns empty."""
-        conditions, params = build_metadata_conditions()
-        assert conditions == []
-        assert params == []
+        """With only user_id, returns just the tenant scope condition."""
+        conditions, params = build_metadata_conditions(user_id="uid")
+        assert conditions == ["user_id = %s"]
+        assert params == ["uid"]
 
     def test_session_id_only(self):
         """Session ID adds one condition."""
-        conditions, params = build_metadata_conditions(session_id=42)
-        assert len(conditions) == 1
+        conditions, params = build_metadata_conditions(user_id="uid", session_id=42)
+        assert len(conditions) == 2
         assert "(metadata->>'session_id') = %s::text" in conditions
-        assert params == [42]
+        assert "uid" in params and 42 in params
 
     def test_fact_type_only(self):
         """Fact type adds one condition."""
-        conditions, params = build_metadata_conditions(fact_type="static")
-        assert len(conditions) == 1
+        conditions, params = build_metadata_conditions(user_id="uid", fact_type="static")
+        assert len(conditions) == 2
         assert "fact_type = %s" in conditions
-        assert params == ["static"]
+        assert "uid" in params and "static" in params
 
     def test_category_only(self):
         """Category adds one condition."""
-        conditions, params = build_metadata_conditions(category="Preference")
-        assert len(conditions) == 1
+        conditions, params = build_metadata_conditions(user_id="uid", category="Preference")
+        assert len(conditions) == 2
         assert "(metadata->>'category') = %s" in conditions
-        assert params == ["Preference"]
+        assert "uid" in params and "Preference" in params
 
     def test_all_filters(self):
         """All filters combined."""
-        conditions, params = build_metadata_conditions(
+        conditions, params = build_metadata_conditions(user_id="uid", 
             session_id=1,
             fact_type="dynamic",
             category="Identity",
             metadata_filter={"source": "test"},
         )
-        assert len(conditions) == 4
-        assert len(params) == 5  # session, fact_type, category, key, val
+        assert len(conditions) == 5  # user_id + session + fact_type + category + metadata(key,val)
+        assert len(params) == 6  # uid + session, fact_type, category, key, val
 
 
 class TestQueryBuilders:

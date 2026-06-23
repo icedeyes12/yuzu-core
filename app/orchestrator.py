@@ -267,24 +267,24 @@ def _clean(text: str) -> str:
 
 
 async def _persist_user_async(
-    message: str, session_id: str, image_paths: list[str] | None
+    message: str, session_id: str, image_paths: list[str] | None, *, user_id: str
 ) -> None:
     await Database.add_message_async(
-        "user", message, session_id=session_id, image_paths=image_paths or None
+        "user", message, session_id=session_id, image_paths=image_paths or None, user_id=user_id
     )
 
 
 async def _persist_assistant_async(
-    content: str, session_id: str, image_paths: list[str] | None = None
+    content: str, session_id: str, image_paths: list[str] | None = None, *, user_id: str
 ) -> None:
     """Persist an assistant response, with optional image paths (async)."""
     await Database.add_message_async(
-        "assistant", content, session_id=session_id, image_paths=image_paths
+        "assistant", content, session_id=session_id, image_paths=image_paths, user_id=user_id
     )
 
 
 async def _persist_tool_result_async(
-    tool_name: str, markdown: str, session_id: str
+    tool_name: str, markdown: str, session_id: str, *, user_id: str
 ) -> None:
     """Persist a tool result (async)."""
     image_paths = []
@@ -296,13 +296,14 @@ async def _persist_tool_result_async(
         markdown,
         session_id=session_id,
         image_paths=image_paths or None,
+        user_id=user_id,
     )
 
 
-async def _persist_observation_async(observation: str, session_id: str) -> None:
+async def _persist_observation_async(observation: str, session_id: str, *, user_id: str) -> None:
     """Persist a system observation as an internal message (async)."""
     await Database.add_message_async(
-        "system_observation", observation, session_id=session_id
+        "system_observation", observation, session_id=session_id, user_id=user_id
     )
 
 
@@ -408,7 +409,7 @@ async def _post_turn_async(
         return
 
     # Auto-rename via service
-    await SessionService.auto_name_session_if_needed_async(session_id, active_session)
+    await SessionService.auto_name_session_if_needed_async(session_id, active_session, user_id=user_id)
 
     # Memory checks via service
     await MemoryService.run_per_message_checks_async(
@@ -433,7 +434,8 @@ async def _post_turn_async(
 async def _process_tool_commands_async(
     full_response: str,
     session_id: str,
-    user_id: str | None = None,
+    *,
+    user_id: str,
 ) -> tuple[str, bool, list[str]]:
     """Parse and execute tool commands, yielding tool markdown chunks.
 
@@ -455,7 +457,7 @@ async def _process_tool_commands_async(
     # SAFEGUARD: Persist clean_text BEFORE tool execution
     # This ensures linear message order: user → assistant (clean) → tool → synthesis
     if clean_text and clean_text.strip():
-        await _persist_assistant_async(clean_text, session_id)
+        await _persist_assistant_async(clean_text, session_id, user_id=user_id)
         log.info("[stream] persisted clean_text (pre-tool assistant message)")
 
     tool_markdowns: list[str] = []
@@ -467,7 +469,7 @@ async def _process_tool_commands_async(
         tool_markdowns.append(tool_markdown)
 
         # SAFEGUARD: Persist each tool result immediately
-        await _persist_tool_result_async(tool_name, tool_markdown, session_id)
+        await _persist_tool_result_async(tool_name, tool_markdown, session_id, user_id=user_id)
         log.info(f"[stream] persisted tool result for {tool_name}")
         p = parse_image_path(tool_markdown)
         if p is not None:
@@ -491,7 +493,8 @@ async def _run_orchestration_loop_async(
     abort_check: callable[[], bool] | None,
     user_message: str,
     active_session: dict[str, Any],
-    user_id: str | None = None,
+    *,
+    user_id: str,
 ) -> AsyncIterator[str]:
     """Run the orchestration loop for synthesis with tool block detection.
 
@@ -617,7 +620,8 @@ async def _finalize_and_persist_async(
     user_message: str,
     final_response: str,
     active_session: dict[str, Any],
-    user_id: str | None = None,
+    *,
+    user_id: str,
 ) -> None:
     """Complete the stream fence and persist final state.
 
@@ -636,7 +640,7 @@ async def _finalize_and_persist_async(
 
 
 async def handle_user_message(
-    user_message: str, interface: str = "terminal", user_id: str | None = None
+    user_message: str, interface: str = "terminal", *, user_id: str
 ) -> str:
     """Process a user message end-to-end and return the assistant reply (async)."""
     profile = await Database.get_profile_async(user_id)
@@ -657,7 +661,7 @@ async def handle_user_message(
             if stripped.startswith("/imagine"):
                 commands = [stripped]
 
-            await _persist_user_async(user_message, session_id, cached_images)
+            await _persist_user_async(user_message, session_id, cached_images, user_id=user_id)
 
             results = await execute_commands(commands, session_id=session_id)
             tool_markdowns = []
@@ -665,7 +669,7 @@ async def handle_user_message(
             for tool_name, result in results:
                 tool_markdown = result.get("markdown", str(result))
                 tool_markdowns.append(tool_markdown)
-                await _persist_tool_result_async(tool_name, tool_markdown, session_id)
+                await _persist_tool_result_async(tool_name, tool_markdown, session_id, user_id=user_id)
 
             combined = "\n\n".join(tool_markdowns)
 
@@ -680,7 +684,7 @@ async def handle_user_message(
                 profile, session_id, interface, combined
             )
             if synthesis:
-                await _persist_assistant_async(synthesis, session_id, generated_paths)
+                await _persist_assistant_async(synthesis, session_id, generated_paths, user_id=user_id)
                 final = (
                     f"{combined}\n\n{synthesis}"
                     if parse_image_path(combined)
@@ -703,10 +707,10 @@ async def handle_user_message(
             profile, user_message, interface, session_id, user_id=user_id
         )
     except Exception:
-        await _persist_user_async(user_message, session_id, cached_images)
+        await _persist_user_async(user_message, session_id, cached_images, user_id=user_id)
         raise
 
-    await _persist_user_async(user_message, session_id, cached_images)
+    await _persist_user_async(user_message, session_id, cached_images, user_id=user_id)
 
     if text_response is None:
         log.error("AI provider returned None")
@@ -726,13 +730,13 @@ async def handle_user_message(
 
         # SAFEGUARD: Persist clean text_response BEFORE tool execution
         if text_response and text_response.strip():
-            await _persist_assistant_async(text_response, session_id)
+            await _persist_assistant_async(text_response, session_id, user_id=user_id)
             log.info("[non-stream] persisted clean text_response (pre-tool)")
 
         if tool_results:
             tool_name, tool_result = tool_results[0]
             tool_markdown = tool_result.get("markdown", str(tool_result))
-            await _persist_tool_result_async(tool_name, tool_markdown, session_id)
+            await _persist_tool_result_async(tool_name, tool_markdown, session_id, user_id=user_id)
 
             is_image_tool = parse_image_path(tool_markdown) is not None
             generated_paths = (
@@ -754,7 +758,7 @@ async def handle_user_message(
             )
 
             if synthesis:
-                await _persist_assistant_async(synthesis, session_id, generated_paths)
+                await _persist_assistant_async(synthesis, session_id, generated_paths, user_id=user_id)
                 final_response = (
                     f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
                 )
@@ -768,7 +772,7 @@ async def handle_user_message(
             )
             return tool_markdown
 
-    await _persist_assistant_async(text_response, session_id)
+    await _persist_assistant_async(text_response, session_id, user_id=user_id)
     await _post_turn_async(
         profile, user_message, text_response, session_id, active_session
     )
@@ -895,7 +899,8 @@ async def handle_user_message_streaming(
     model: str | None = None,
     abort_check: callable[[], bool] | None = None,
     image_paths: list[str] | None = None,
-    user_id: str | None = None,
+    *,
+    user_id: str,
 ) -> AsyncIterator[str]:
     """Streaming entrypoint (async) with fence protection.
 
@@ -930,7 +935,7 @@ async def handle_user_message_streaming(
 
     # FENCE: Acquire fence before persisting user message
     user_msg_id = await _persist_user_async(
-        user_message, session_id, all_image_paths or None
+        user_message, session_id, all_image_paths or None, user_id
     )
     fence_id = await StreamFence.acquire(session_id, user_msg_id or 0)
     log.info(f"[stream] fence {fence_id} acquired for session {session_id}")

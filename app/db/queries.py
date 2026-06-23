@@ -282,8 +282,6 @@ SCHEMA_DDL: tuple[str, ...] = (
 # Profile SQL
 # ---------------------------------------------------------------------------
 
-SQL_PROFILE_SELECT_FIRST = "SELECT * FROM profiles LIMIT 1"
-
 SQL_PROFILE_UNCLAIMED_LOOKUP = """
 SELECT p.id
 FROM profiles p
@@ -409,10 +407,6 @@ def parse_profile_row(row: dict | None) -> dict:
 # Chat session SQL
 # ---------------------------------------------------------------------------
 
-SQL_SESSION_SELECT_ACTIVE = (
-    "SELECT * FROM chat_sessions WHERE is_active = TRUE AND deleted_at IS NULL LIMIT 1"
-)
-
 SQL_SESSION_SELECT_ACTIVE_FOR_USER = "SELECT * FROM chat_sessions WHERE user_id = %s AND is_active = TRUE AND deleted_at IS NULL LIMIT 1"
 
 SQL_SESSION_INSERT = """
@@ -420,27 +414,13 @@ INSERT INTO chat_sessions (user_id, name, is_active, message_count, memory_state
 VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
 """
 
-SQL_SESSION_SELECT_ALL = (
-    "SELECT * FROM chat_sessions WHERE deleted_at IS NULL ORDER BY updated_at DESC"
-)
-
 SQL_SESSION_SELECT_ALL_FOR_USER = "SELECT * FROM chat_sessions WHERE user_id = %s AND deleted_at IS NULL ORDER BY updated_at DESC"
-
-SQL_SESSION_DEACTIVATE_ALL = (
-    "UPDATE chat_sessions SET is_active = FALSE WHERE deleted_at IS NULL"
-)
 
 SQL_SESSION_DEACTIVATE_FOR_USER = "UPDATE chat_sessions SET is_active = FALSE WHERE user_id = %s AND deleted_at IS NULL"
 
-SQL_SESSION_ACTIVATE_ONE = "UPDATE chat_sessions SET is_active = TRUE, updated_at = %s WHERE id = %s AND deleted_at IS NULL"
-
 SQL_SESSION_ACTIVATE_ONE_SCOPED = "UPDATE chat_sessions SET is_active = TRUE, updated_at = %s WHERE id = %s AND user_id = %s AND deleted_at IS NULL"
 
-SQL_SESSION_RENAME = "UPDATE chat_sessions SET name = %s, updated_at = %s WHERE id = %s AND deleted_at IS NULL"
-
 SQL_SESSION_RENAME_SCOPED = "UPDATE chat_sessions SET name = %s, updated_at = %s WHERE id = %s AND user_id = %s AND deleted_at IS NULL"
-
-SQL_SESSION_DELETE = "UPDATE chat_sessions SET deleted_at = NOW() WHERE id = %s"
 
 SQL_SESSION_DELETE_SCOPED = (
     "UPDATE chat_sessions SET deleted_at = NOW() WHERE id = %s AND user_id = %s"
@@ -921,7 +901,6 @@ __all__ = [
     # Schema
     "SCHEMA_DDL",
     # Profile
-    "SQL_PROFILE_SELECT_FIRST",
     "SQL_PROFILE_SELECT_BY_ID",
     "SQL_SESSION_SELECT_ACTIVE_FOR_USER",
     "SQL_SESSION_SELECT_ALL_FOR_USER",
@@ -935,14 +914,8 @@ __all__ = [
     "build_profile_update",
     "parse_profile_row",
     # Sessions
-    "SQL_SESSION_SELECT_ACTIVE",
     "SQL_SESSION_INSERT",
     "SQL_SESSIONS_RECENT_ACTIVE",
-    "SQL_SESSION_SELECT_ALL",
-    "SQL_SESSION_DEACTIVATE_ALL",
-    "SQL_SESSION_ACTIVATE_ONE",
-    "SQL_SESSION_RENAME",
-    "SQL_SESSION_DELETE",
     "SQL_SESSION_UPDATE_MEMORY",
     "SQL_SESSION_INCREMENT_COUNT",
     "SQL_SESSION_RESET_COUNT_AND_MEMORY",

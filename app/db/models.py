@@ -39,17 +39,17 @@ from app.db.queries import (
     SQL_MESSAGE_UPDATE,
     SQL_MESSAGE_UPDATE_DECRYPTED,
     SQL_PROFILE_INSERT_DEFAULT,
-    SQL_PROFILE_SELECT_FIRST,
-    SQL_SESSION_ACTIVATE_ONE,
-    SQL_SESSION_DEACTIVATE_ALL,
-    SQL_SESSION_DELETE,
+    SQL_PROFILE_SELECT_BY_ID,
+    SQL_SESSION_ACTIVATE_ONE_SCOPED,
+    SQL_SESSION_DEACTIVATE_FOR_USER,
+    SQL_SESSION_DELETE_SCOPED,
+    SQL_SESSION_RENAME_SCOPED,
+    SQL_SESSION_SELECT_ACTIVE_FOR_USER,
+    SQL_SESSION_SELECT_ALL_FOR_USER,
     SQL_SESSION_INCREMENT_COUNT,
     SQL_SESSION_INSERT,
     SQL_SESSION_MEMORY_NOTES,
-    SQL_SESSION_RENAME,
     SQL_SESSION_RESET_COUNT_AND_MEMORY,
-    SQL_SESSION_SELECT_ACTIVE,
-    SQL_SESSION_SELECT_ALL,
     SQL_SESSION_UPDATE_MEMORY,
     TOOL_ROLES,
     build_encryption_status,
@@ -95,17 +95,17 @@ def init_pg_tables() -> None:
 # ---------------------------------------------------------------------------
 
 
-def get_profile() -> dict:
+def get_profile(user_id: str) -> dict:
     """Get the user profile. Creates a default row if none exists."""
-    row = pg_fetchone(SQL_PROFILE_SELECT_FIRST)
+    row = pg_fetchone(SQL_PROFILE_SELECT_BY_ID, (user_id,))
     if not row:
         now = datetime.now()
         pg_execute(SQL_PROFILE_INSERT_DEFAULT, (*DEFAULT_PROFILE_PARAMS, now, now))
-        row = pg_fetchone(SQL_PROFILE_SELECT_FIRST)
+        row = pg_fetchone(SQL_PROFILE_SELECT_BY_ID, (user_id,))
     return parse_profile_row(row)
 
 
-def update_profile(updates: dict) -> bool:
+def update_profile(updates: dict, user_id: str) -> bool:
     """Update the user profile with a partial set of fields."""
     if not updates:
         return False
@@ -113,6 +113,8 @@ def update_profile(updates: dict) -> bool:
     if built is None:
         return False
     query, params = built
+    query += " WHERE id = %s"
+    params.append(user_id)
     try:
         pg_execute(query, params)
         return True
@@ -121,20 +123,20 @@ def update_profile(updates: dict) -> bool:
         return False
 
 
-def get_context() -> dict:
-    return get_profile().get("context", {})
+def get_context(user_id: str) -> dict:
+    return get_profile(user_id).get("context", {})
 
 
-def update_context(context_dict: dict) -> bool:
-    return update_profile({"context": context_dict})
+def update_context(context_dict: dict, user_id: str) -> bool:
+    return update_profile({"context": context_dict}, user_id)
 
 
-def get_memory() -> dict:
-    return get_profile().get("memory", {})
+def get_memory(user_id: str) -> dict:
+    return get_profile(user_id).get("memory", {})
 
 
-def update_memory(memory_dict: dict) -> bool:
-    return update_profile({"memory": memory_dict})
+def update_memory(memory_dict: dict, user_id: str) -> bool:
+    return update_profile({"memory": memory_dict}, user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -189,24 +191,21 @@ def update_memory_state(session_id: str, state: dict) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def get_active_session() -> dict:
+def get_active_session(user_id: str) -> dict:
     """Get the currently active session. Creates one if none."""
-    row = pg_fetchone(SQL_SESSION_SELECT_ACTIVE)
+    row = pg_fetchone(SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,))
     if not row:
         now = datetime.now()
-        user_id = get_profile()["id"]
         pg_execute(SQL_SESSION_INSERT, (user_id, "New Chat", True, 0, "{}", now, now))
-        row = pg_fetchone(SQL_SESSION_SELECT_ACTIVE)
+        row = pg_fetchone(SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,))
     return parse_session_row(row)
 
 
-def get_all_sessions() -> list[dict]:
-    return [parse_session_row(r) for r in pg_fetchall(SQL_SESSION_SELECT_ALL)]
+def get_all_sessions(user_id: str) -> list[dict]:
+    return [parse_session_row(r) for r in pg_fetchall(SQL_SESSION_SELECT_ALL_FOR_USER, (user_id,))]
 
 
-def create_session(name: str = "New Chat", user_id: str | None = None) -> str | None:
-    if user_id is None:
-        user_id = get_profile()["id"]
+def create_session(name: str = "New Chat", *, user_id: str) -> str | None:
     now = datetime.now()
     try:
         with PgSession() as s:
@@ -219,30 +218,30 @@ def create_session(name: str = "New Chat", user_id: str | None = None) -> str | 
         return None
 
 
-def switch_session(session_id: str) -> bool:
+def switch_session(session_id: str, user_id: str) -> bool:
     try:
         with PgSession() as s:
-            s.execute(SQL_SESSION_DEACTIVATE_ALL)
-            s.execute(SQL_SESSION_ACTIVATE_ONE, (datetime.now(), session_id))
+            s.execute(SQL_SESSION_DEACTIVATE_FOR_USER, (user_id,))
+            s.execute(SQL_SESSION_ACTIVATE_ONE_SCOPED, (datetime.now(), session_id, user_id))
         return True
     except Exception as e:  # noqa: BLE001
         log.error("switch_session failed: %s", e)
         return False
 
 
-def rename_session(session_id: str, new_name: str) -> bool:
+def rename_session(session_id: str, new_name: str, user_id: str) -> bool:
     try:
-        pg_execute(SQL_SESSION_RENAME, (new_name, datetime.now(), session_id))
+        pg_execute(SQL_SESSION_RENAME_SCOPED, (new_name, datetime.now(), session_id, user_id))
         return True
     except Exception as e:  # noqa: BLE001
         log.error("rename_session failed: %s", e)
         return False
 
 
-def delete_session(session_id: str) -> bool:
+def delete_session(session_id: str, user_id: str) -> bool:
     try:
         with PgSession() as s:
-            s.execute(SQL_SESSION_DELETE, (session_id,))
+            s.execute(SQL_SESSION_DELETE_SCOPED, (session_id, user_id))
         return True
     except Exception as e:  # noqa: BLE001
         log.error("delete_session failed: %s", e)
@@ -261,7 +260,7 @@ def update_session_memory(session_id: str, memory: dict) -> bool:
         return False
 
 
-def get_session_memory(session_id: str, user_id: str | None = None) -> dict:
+def get_session_memory(session_id: str, user_id: str) -> dict:
     rows = pg_fetchall(SQL_SESSION_MEMORY_NOTES, (session_id,))
     return parse_session_memory_rows(rows)
 
@@ -328,14 +327,13 @@ def add_message(
     role: str,
     content: str,
     image_paths: list[str] | None = None,
-    user_id: str | None = None,
+    *,
+    user_id: str,
 ) -> int | None:
     """Insert a message row, bump the session's message_count, return id.
 
     Timestamp is set by database NOW() to ensure ordering coherence.
     """
-    if user_id is None:
-        user_id = get_profile()["id"]
     try:
         paths_json = json.dumps(image_paths or [])
         with PgSession() as s:
@@ -394,7 +392,8 @@ def get_chat_history(
     session_id: str,
     limit: int | None = None,
     recent: bool = False,
-    user_id: str | None = None,
+    *,
+    user_id: str,
 ) -> list[dict]:
     """Get messages ordered by timestamp.
 
@@ -473,10 +472,11 @@ def get_chat_history_for_ai(
     limit: int | None = None,
     recent: bool = False,
     include_image_paths: bool = False,
-    user_id: str | None = None,
+    *,
+    user_id: str,
 ) -> list[dict]:
     """Fetch history and format specifically for LLM context (e.g. system turn)."""
-    rows = get_chat_history(session_id, limit, recent)
+    rows = get_chat_history(session_id, limit, recent, user_id=user_id)
     return format_ai_history_rows(rows, include_image_paths=include_image_paths)
 
 

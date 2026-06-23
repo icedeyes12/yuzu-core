@@ -47,23 +47,16 @@ from app.db.queries import (
     SQL_MESSAGE_UPDATE,
     SQL_MESSAGE_UPDATE_DECRYPTED,
     SQL_PROFILE_INSERT_DEFAULT,
-    SQL_PROFILE_SELECT_FIRST,
     SQL_PROFILE_SELECT_BY_ID,
     SQL_SESSION_ACTIVATE_ONE_SCOPED,
-    SQL_SESSION_ACTIVATE_ONE,
-    SQL_SESSION_DEACTIVATE_ALL,
     SQL_SESSION_DEACTIVATE_FOR_USER,
-    SQL_SESSION_DELETE,
     SQL_SESSION_DELETE_SCOPED,
     SQL_SESSION_INCREMENT_COUNT,
     SQL_SESSION_INSERT,
     SQL_SESSION_MEMORY_NOTES,
-    SQL_SESSION_RENAME,
     SQL_SESSION_RENAME_SCOPED,
     SQL_SESSION_RESET_COUNT_AND_MEMORY,
-    SQL_SESSION_SELECT_ACTIVE,
     SQL_SESSION_SELECT_ACTIVE_FOR_USER,
-    SQL_SESSION_SELECT_ALL,
     SQL_SESSION_SELECT_ALL_FOR_USER,
     SQL_SESSION_UPDATE_MEMORY,
     SQL_SESSIONS_RECENT_ACTIVE,
@@ -110,30 +103,26 @@ async def init_pg_tables_async() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def get_profile_async(user_id: str | None = None) -> dict:
-    if user_id is not None:
-        row = await pg_fetchone_async(SQL_PROFILE_SELECT_BY_ID, (user_id,))
-    else:
-        row = await pg_fetchone_async(SQL_PROFILE_SELECT_FIRST)
+async def get_profile_async(user_id: str) -> dict:
+    row = await pg_fetchone_async(SQL_PROFILE_SELECT_BY_ID, (user_id,))
     if not row:
         now = datetime.now()
         await pg_execute_async(
             SQL_PROFILE_INSERT_DEFAULT, (*DEFAULT_PROFILE_PARAMS, now, now)
         )
-        row = await pg_fetchone_async(SQL_PROFILE_SELECT_FIRST)
+        row = await pg_fetchone_async(SQL_PROFILE_SELECT_BY_ID, (user_id,))
     return parse_profile_row(row)
 
 
-async def update_profile_async(updates: dict, user_id: str | None = None) -> bool:
+async def update_profile_async(updates: dict, user_id: str) -> bool:
     if not updates:
         return False
     built = build_profile_update(updates)
     if built is None:
         return False
     query, params = built
-    if user_id is not None:
-        query += " WHERE id = %s"
-        params.append(user_id)
+    query += " WHERE id = %s"
+    params.append(user_id)
     try:
         await pg_execute_async(query, params)
         return True
@@ -142,19 +131,19 @@ async def update_profile_async(updates: dict, user_id: str | None = None) -> boo
         return False
 
 
-async def get_context_async(user_id: str | None = None) -> dict:
+async def get_context_async(user_id: str) -> dict:
     return (await get_profile_async(user_id)).get("context", {})
 
 
-async def update_context_async(context_dict: dict, user_id: str | None = None) -> bool:
+async def update_context_async(context_dict: dict, user_id: str) -> bool:
     return await update_profile_async({"context": context_dict}, user_id)
 
 
-async def get_memory_async(user_id: str | None = None) -> dict:
+async def get_memory_async(user_id: str) -> dict:
     return (await get_profile_async(user_id)).get("memory", {})
 
 
-async def update_memory_async(memory_dict: dict, user_id: str | None = None) -> bool:
+async def update_memory_async(memory_dict: dict, user_id: str) -> bool:
     return await update_profile_async({"memory": memory_dict}, user_id)
 
 
@@ -163,42 +152,27 @@ async def update_memory_async(memory_dict: dict, user_id: str | None = None) -> 
 # ---------------------------------------------------------------------------
 
 
-async def get_active_session_async(user_id: str | None = None) -> dict:
-    if user_id is not None:
-        row = await pg_fetchone_async(SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,))
-        if not row:
-            now = datetime.now()
-            await pg_execute_async(
-                SQL_SESSION_INSERT, (user_id, "New Chat", True, 0, "{}", now, now)
-            )
-            row = await pg_fetchone_async(
-                SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,)
-            )
-    else:
-        row = await pg_fetchone_async(SQL_SESSION_SELECT_ACTIVE)
-        if not row:
-            now = datetime.now()
-            fallback_uid = (await get_profile_async())["id"]
-            await pg_execute_async(
-                SQL_SESSION_INSERT, (fallback_uid, "New Chat", True, 0, "{}", now, now)
-            )
-            row = await pg_fetchone_async(SQL_SESSION_SELECT_ACTIVE)
+async def get_active_session_async(user_id: str) -> dict:
+    row = await pg_fetchone_async(SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,))
+    if not row:
+        now = datetime.now()
+        await pg_execute_async(
+            SQL_SESSION_INSERT, (user_id, "New Chat", True, 0, "{}", now, now)
+        )
+        row = await pg_fetchone_async(
+            SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,)
+        )
     return parse_session_row(row)
 
 
-async def get_all_sessions_async(user_id: str | None = None) -> list[dict]:
-    if user_id is not None:
-        rows = await pg_fetchall_async(SQL_SESSION_SELECT_ALL_FOR_USER, (user_id,))
-    else:
-        rows = await pg_fetchall_async(SQL_SESSION_SELECT_ALL)
+async def get_all_sessions_async(user_id: str) -> list[dict]:
+    rows = await pg_fetchall_async(SQL_SESSION_SELECT_ALL_FOR_USER, (user_id,))
     return [parse_session_row(r) for r in rows]
 
 
 async def create_session_async(
-    name: str = "New Chat", user_id: str | None = None
+    name: str = "New Chat", *, user_id: str
 ) -> str | None:
-    if user_id is None:
-        user_id = (await get_profile_async())["id"]
     now = datetime.now()
     try:
         async with AsyncPgSession() as s:
@@ -211,18 +185,14 @@ async def create_session_async(
         return None
 
 
-async def switch_session_async(session_id: str, user_id: str | None = None) -> bool:
+async def switch_session_async(session_id: str, user_id: str) -> bool:
     try:
         async with AsyncPgSession() as s:
-            if user_id is not None:
-                await s.execute(SQL_SESSION_DEACTIVATE_FOR_USER, (user_id,))
-                await s.execute(
-                    SQL_SESSION_ACTIVATE_ONE_SCOPED,
-                    (datetime.now(), session_id, user_id),
-                )
-            else:
-                await s.execute(SQL_SESSION_DEACTIVATE_ALL)
-                await s.execute(SQL_SESSION_ACTIVATE_ONE, (datetime.now(), session_id))
+            await s.execute(SQL_SESSION_DEACTIVATE_FOR_USER, (user_id,))
+            await s.execute(
+                SQL_SESSION_ACTIVATE_ONE_SCOPED,
+                (datetime.now(), session_id, user_id),
+            )
         return True
     except Exception as e:  # noqa: BLE001
         log.error("switch_session_async failed: %s", e)
@@ -230,31 +200,23 @@ async def switch_session_async(session_id: str, user_id: str | None = None) -> b
 
 
 async def rename_session_async(
-    session_id: str, new_name: str, user_id: str | None = None
+    session_id: str, new_name: str, user_id: str
 ) -> bool:
     try:
-        if user_id is not None:
-            await pg_execute_async(
-                SQL_SESSION_RENAME_SCOPED,
-                (new_name, datetime.now(), session_id, user_id),
-            )
-        else:
-            await pg_execute_async(
-                SQL_SESSION_RENAME, (new_name, datetime.now(), session_id)
-            )
+        await pg_execute_async(
+            SQL_SESSION_RENAME_SCOPED,
+            (new_name, datetime.now(), session_id, user_id),
+        )
         return True
     except Exception as e:  # noqa: BLE001
         log.error("rename_session_async failed: %s", e)
         return False
 
 
-async def delete_session_async(session_id: str, user_id: str | None = None) -> bool:
+async def delete_session_async(session_id: str, user_id: str) -> bool:
     try:
         async with AsyncPgSession() as s:
-            if user_id is not None:
-                await s.execute(SQL_SESSION_DELETE_SCOPED, (session_id, user_id))
-            else:
-                await s.execute(SQL_SESSION_DELETE, (session_id,))
+            await s.execute(SQL_SESSION_DELETE_SCOPED, (session_id, user_id))
         return True
     except Exception as e:  # noqa: BLE001
         log.error("delete_session_async failed: %s", e)
@@ -273,7 +235,7 @@ async def update_session_memory_async(session_id: str, memory: dict) -> bool:
         return False
 
 
-async def get_session_memory_async(session_id: str, user_id: str | None = None) -> dict:
+async def get_session_memory_async(session_id: str, user_id: str) -> dict:
     rows = await pg_fetchall_async(SQL_SESSION_MEMORY_NOTES, (session_id,))
     return parse_session_memory_rows(rows)
 
@@ -392,7 +354,8 @@ async def add_message_async(
     role: str,
     content: str,
     image_paths: list[str] | None = None,
-    user_id: str | None = None,
+    *,
+    user_id: str,
 ) -> int | None:
     """Insert a message row, bump the session's message_count, return id.
 
@@ -400,8 +363,6 @@ async def add_message_async(
     """
     import json
 
-    if user_id is None:
-        user_id = (await get_profile_async())["id"]
     paths_json = json.dumps(image_paths or [])
     try:
         async with AsyncPgSession() as s:
@@ -465,7 +426,8 @@ async def get_chat_history_async(
     session_id: str,
     limit: int | None = None,
     recent: bool = False,
-    user_id: str | None = None,
+    *,
+    user_id: str,
 ) -> list[dict]:
     if limit and recent:
         rows = await pg_fetchall_async(
@@ -577,7 +539,8 @@ async def get_chat_history_for_ai_async(
     limit: int | None = None,
     recent: bool = False,
     include_image_paths: bool = False,
-    user_id: str | None = None,
+    *,
+    user_id: str,
 ) -> list[dict]:
     if limit and recent:
         rows = await pg_fetchall_async(

@@ -36,9 +36,9 @@ class ConfigService:
         return capabilities
 
     @staticmethod
-    async def get_ai_providers_payload(profile: dict | None = None) -> dict[str, Any]:
+    async def get_ai_providers_payload(user_id: str, profile: dict | None = None) -> dict[str, Any]:
         if profile is None:
-            profile = await Database.get_profile_async()
+            profile = await Database.get_profile_async(user_id)
 
         ai_manager = await get_ai_manager()
         providers_config = profile.get("providers_config", {})
@@ -51,9 +51,9 @@ class ConfigService:
         }
 
     @staticmethod
-    def get_vision_payload(profile: dict | None = None) -> dict[str, Any]:
+    def get_vision_payload(user_id: str, profile: dict | None = None) -> dict[str, Any]:
         if profile is None:
-            profile = Database.get_profile()
+            profile = Database.get_profile(user_id)
 
         from app.tools.multimodal import multimodal_tools
 
@@ -75,9 +75,9 @@ class ConfigService:
         }
 
     @staticmethod
-    async def get_frontend_config() -> dict[str, Any]:
+    async def get_frontend_config(user_id: str) -> dict[str, Any]:
         """Unified frontend configuration for web and CLI."""
-        profile = await Database.get_profile_async()
+        profile = await Database.get_profile_async(user_id)
         return {
             "status": "success",
             "ai_providers": await ConfigService.get_ai_providers_payload(profile),
@@ -113,14 +113,14 @@ class ConfigService:
 
     @staticmethod
     def set_preferred_provider(
-        provider_name: str, model_name: str | None = None
+        user_id: str, provider_name: str, model_name: str | None = None
     ) -> str:
-        profile = Database.get_profile()
+        profile = Database.get_profile(user_id)
         config = profile.get("providers_config") or {}
         config["preferred_provider"] = provider_name
         if model_name:
             config["preferred_model"] = model_name
-        Database.update_profile({"providers_config": config})
+        Database.update_profile({"providers_config": config}, user_id)
         # Run async reload in sync context
         asyncio.run(reload_ai_manager())
 
@@ -128,34 +128,34 @@ class ConfigService:
         return f"Preferred provider set to: {provider_name}{suffix}"
 
     @staticmethod
-    def set_vision_model(provider: str, model: str) -> str:
-        profile = Database.get_profile()
+    def set_vision_model(user_id: str, provider: str, model: str) -> str:
+        profile = Database.get_profile(user_id)
         config = profile.get("providers_config") or {}
         config["vision_model_preferences"] = {"provider": provider, "model": model}
-        Database.update_profile({"providers_config": config})
+        Database.update_profile({"providers_config": config}, user_id)
         return f"Vision model set to: {provider}/{model}"
 
     @staticmethod
     async def set_preferred_provider_async(
-        provider_name: str, model_name: str | None = None
+        user_id: str, provider_name: str, model_name: str | None = None
     ) -> str:
         """Async version for web API endpoints."""
-        profile = await Database.get_profile_async()
+        profile = await Database.get_profile_async(user_id)
         config = profile.get("providers_config") or {}
         config["preferred_provider"] = provider_name
         if model_name:
             config["preferred_model"] = model_name
-        await Database.update_profile_async({"providers_config": config})
+        await Database.update_profile_async({"providers_config": config}, user_id)
         await reload_ai_manager()
 
         suffix = f" with model: {model_name}" if model_name else ""
         return f"Preferred provider set to: {provider_name}{suffix}"
 
     @staticmethod
-    async def set_vision_model_async(provider: str, model: str) -> str:
+    async def set_vision_model_async(user_id: str, provider: str, model: str) -> str:
         """Async version for web API endpoints."""
-        profile = await Database.get_profile_async()
+        profile = await Database.get_profile_async(user_id)
         config = profile.get("providers_config") or {}
         config["vision_model_preferences"] = {"provider": provider, "model": model}
-        await Database.update_profile_async({"providers_config": config})
+        await Database.update_profile_async({"providers_config": config}, user_id)
         return f"Vision model set to: {provider}/{model}"

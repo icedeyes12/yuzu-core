@@ -42,16 +42,16 @@ def _idle_hours(session_memory: dict[str, Any]) -> float | None:
 
 
 async def should_summarize_memory_async(
-    profile: dict[str, Any], user_message: str, session_id: str
+    profile: dict[str, Any], user_message: str, session_id: str, user_id: str
 ) -> bool:
-    history = await Database.get_chat_history_async(session_id=session_id) or []
+    history = await Database.get_chat_history_async(session_id=session_id, user_id=user_id) or []
     convo_count = sum(1 for m in history if m["role"] in ("user", "assistant"))
 
     if (
         convo_count >= _SUMMARY_TRIGGER_INTERVAL
         and convo_count % _SUMMARY_TRIGGER_INTERVAL == 0
     ):
-        session_memory = await Database.get_session_memory_async(session_id) or {}
+        session_memory = await Database.get_session_memory_async(session_id, user_id) or {}
         if convo_count > session_memory.get("last_summary_count", 0):
             idle = _idle_hours(session_memory)
             if idle is not None and idle < _IDLE_THRESHOLD_HOURS:

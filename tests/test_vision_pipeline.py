@@ -68,4 +68,4 @@ async def test_vision_model_validation_llm_client():
 
         assert "[System] Current model does not support vision" in text
         assert raw is None
-        mock_add.assert_called_with("system", text, session_id=1)
+        mock_add.assert_called_with("system", text, session_id=1, user_id=None)

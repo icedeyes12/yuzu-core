@@ -107,7 +107,7 @@ class TestBuildProfileUpdate:
 
     def test_default_profile_params_match_columns(self):
         # 9 values before timestamp/updated_at (datetimes added by caller at insert time)
-        assert len(DEFAULT_PROFILE_PARAMS) == 9
+        assert len(DEFAULT_PROFILE_PARAMS) == 10
 
 
 class TestSessionParsers:
@@ -311,4 +311,4 @@ class TestMisc:
         assert "semantic_facts" in full
         assert "generate_uuidv7" in full
         # 3 extensions + 1 function + 5 tables + 12 indexes + 3 migration DO-blocks = 24 statements
-        assert len(SCHEMA_DDL) == 29
+        assert len(SCHEMA_DDL) == 30

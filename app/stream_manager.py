@@ -73,6 +73,7 @@ class StreamBuffer:
                 "assistant",
                 final_content,
                 session_id=self.session_id,
+                user_id=self.user_id,
             )
             log.info(
                 f"[Stream] Persisted {len(final_content)} chars to DB for session {self.session_id}"
