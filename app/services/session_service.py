@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from typing import Any
 
@@ -124,8 +125,7 @@ class SessionService:
         ):
             return
 
-        api_keys = Database.get_api_keys() or {}
-        api_key = api_keys.get("chutes")
+        api_key = os.environ.get("CHUTES_API_KEY")
         summary = Database.get_session_conversation_summary(session_id, limit=15)
 
         name: str | None = None
@@ -228,8 +228,7 @@ class SessionService:
             )
             return
 
-        api_keys = await Database.get_api_keys_async() or {}
-        api_key = api_keys.get("chutes")
+        api_key = os.environ.get("CHUTES_API_KEY")
         summary = await Database.get_session_conversation_summary_async(
             session_id, limit=15
         )

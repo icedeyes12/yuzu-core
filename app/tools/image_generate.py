@@ -11,6 +11,7 @@ from pathlib import Path
 from datetime import datetime
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 from app.db import Database
+from app.core.context import resolve_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +50,7 @@ async def execute(arguments, **kwargs):
     partner_name = profile.get("partner_name", "Yuzu")
 
     try:
-        api_keys = await Database.get_api_keys_async()
-        api_key = api_keys.get("chutes")
+        api_key = resolve_api_key("chutes")
         if not api_key:
             return error_result(
                 "No Chutes API key available",

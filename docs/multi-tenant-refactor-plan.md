@@ -1,6 +1,7 @@
 # Multi-Tenant Refactor Plan — yuzu-companion
 
-> **Status:** DRAFT FOR REVIEW — no SQL executed, no implementation code written.
+> **Status:** IN PROGRESS — Phase 1 complete, Phase 2 complete, Phase 3+4 partially complete.
+> **Status Update (2026-06-23):** Phase 1 (UUID migration) fully complete and verified in live DB. Phase 2 (OAuth2 + session auth) code complete — **critical fix applied**: `user_identities` + `user_sessions` tables lacked grants for `yuzu_agent`, blocking all authenticated endpoints (root cause of "No global profile yet" bug); GRANT DDL added to `SCHEMA_DDL`. Phase 3.1 (BYOK decommission) complete — all `api_keys` DB reads removed: user-plane tools (`image_generate`, `image_edit`, `multimodal`, `providers/base`, `config_service`) now resolve keys exclusively via ContextVar `resolve_api_key`; system-plane task (`session_service` auto-naming) falls back to `os.getenv("CHUTES_API_KEY")`; 3 BYOK-write endpoints (`/add_api_key`, `/add_chutes_key`, `/remove_api_key`) deleted from `profile.py`. DB-layer `api_keys` functions left inert (no live callers). Phase 4 (isolation) user_id threading + memory scoping done, but anti-regression guardrails (tenant isolation tests, `TenantScopeError`) NOT yet implemented.
 > **Scope:** UUID migration · OAuth2 · Strict client-side BYOK · Multi-tenant isolation.
 > **Constraints:** raw psycopg v3 (async `AsyncConnectionPool` + sync `ConnectionPool`), FastAPI, no ORM, no new dependencies without approval, all SQL in `app/db/queries.py` + `app/memory/db_memory_queries.py`, all DB access via `Database` facade.
 > **Date:** 2026-06-21

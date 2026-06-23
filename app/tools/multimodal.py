@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from PIL import Image
 import io
-from app.db import get_profile, get_api_keys
+from app.db import get_profile
+from app.core.context import resolve_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -554,8 +555,6 @@ class MultimodalTools:
         Returns:
             Tuple of (provider_name, model_name) or (None, None) if none available
         """
-        api_keys = get_api_keys()
-
         # 1. Check user's saved preference first
         try:
             profile = get_profile()
@@ -590,7 +589,7 @@ class MultimodalTools:
             logger.warning(f"[Vision] Could not load saved preference: {e}")
 
         # 2. Try Chutes first (preferred)
-        if "chutes" in api_keys:
+        if resolve_api_key("chutes"):
             chutes_models = self.get_available_vision_models("chutes")
             if chutes_models:
                 default_model = chutes_models[0]
@@ -600,7 +599,7 @@ class MultimodalTools:
                 return "chutes", default_model
 
         # 3. Fallback to OpenRouter
-        if "openrouter" in api_keys:
+        if resolve_api_key("openrouter"):
             openrouter_models = self.get_available_vision_models("openrouter")
             if openrouter_models:
                 return "openrouter", openrouter_models[0]

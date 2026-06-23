@@ -275,6 +275,28 @@ SCHEMA_DDL: tuple[str, ...] = (
     EXCEPTION WHEN undefined_column THEN NULL;
     END $$;
     """,
+    # ── Phase 2: GRANT app-user privileges on OAuth/session tables ──
+    # These tables may have been created by a superuser/owner role.
+    # Wrap in DO blocks so startup doesn't crash when the app DB user
+    # (yuzu_agent) lacks ownership — the owner must run these manually.
+    """
+    DO $$ BEGIN
+      GRANT SELECT, INSERT, UPDATE, DELETE ON user_identities TO yuzu_agent;
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END $$;
+    """,
+    """
+    DO $$ BEGIN
+      GRANT SELECT, INSERT, UPDATE, DELETE ON user_sessions TO yuzu_agent;
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END $$;
+    """,
+    """
+    DO $$ BEGIN
+      GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO yuzu_agent;
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END $$;
+    """,
 )
 
 

@@ -7,7 +7,6 @@ from typing import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from app.core.context import resolve_api_key, resolve_base_url, resolve_model
-from app.db import get_api_key_async
 from app.tools import multimodal_tools
 
 logger = logging.getLogger(__name__)
@@ -218,12 +217,12 @@ class AIProvider:
             self.is_available = bool(self.api_key)
 
     async def _load_api_key(self) -> str | None:
-        """Centralized API key lookup from request plane, env, then DB."""
+        """Resolve API key from request plane (ContextVar) then system plane (env).
+
+        DB-stored keys are decommissioned (Phase 3.1 BYOK). No DB read remains.
+        """
         try:
-            key = resolve_api_key(self.name)
-            if key:
-                return key
-            return await get_api_key_async(self.name)
+            return resolve_api_key(self.name)
         except Exception:
             return None
 
