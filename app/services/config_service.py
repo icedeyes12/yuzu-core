@@ -4,7 +4,8 @@ import asyncio
 import logging
 from typing import Any
 
-from app.db import Database, get_api_keys
+from app.core.context import resolve_api_key
+from app.db import Database
 from app.providers import get_ai_manager, reload_ai_manager
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ class ConfigService:
             capabilities["vision_provider"] = vision_provider
             capabilities["vision_model"] = vision_model
 
-        if "openrouter" in (get_api_keys() or {}):
+        if resolve_api_key("openrouter"):
             capabilities["has_image_generation"] = True
             capabilities["image_generation_provider"] = "openrouter"
 

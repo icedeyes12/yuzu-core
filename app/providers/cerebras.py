@@ -28,7 +28,7 @@ class CerebrasProvider(AIProvider):
         return self.available_models
 
     def send_message(self, messages: list[dict], model: str, **kwargs) -> str | None:
-        if not self.resolve_api_key() or model not in self.available_models:
+        if model not in self.available_models:
             return None
 
         try:
@@ -40,7 +40,7 @@ class CerebrasProvider(AIProvider):
             typical_p = kwargs.get("typical_p", 0.8)
 
             headers = {
-                "Authorization": f"Bearer {self.resolve_api_key()}",
+                "Authorization": f"Bearer {self._require_api_key()}",
                 "Content-Type": "application/json",
             }
 
@@ -76,7 +76,7 @@ class CerebrasProvider(AIProvider):
     async def send_message_streaming(
         self, messages: list[dict], model: str, **kwargs
     ) -> AsyncGenerator[str, None]:
-        if not self.resolve_api_key() or model not in self.available_models:
+        if model not in self.available_models:
             yield ""
             return
 
@@ -89,7 +89,7 @@ class CerebrasProvider(AIProvider):
             typical_p = kwargs.get("typical_p", 0.8)
 
             headers = {
-                "Authorization": f"Bearer {self.resolve_api_key()}",
+                "Authorization": f"Bearer {self._require_api_key()}",
                 "Content-Type": "application/json",
             }
 

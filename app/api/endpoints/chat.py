@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request, Form, File, UploadFile
+from fastapi import APIRouter, Request, Form, File, UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -11,6 +11,7 @@ from app.core.context import (
     RequestKeyring,
     set_request_keyring,
     clear_request_keyring,
+    MissingProviderKeyError,
 )
 from app.services.chat_service import ChatService
 from app.services.session_service import SessionService
@@ -69,6 +70,12 @@ async def api_send_message(
         log.info("AI reply: %s", ai_reply)
         return {"reply": ai_reply}
 
+    except MissingProviderKeyError as e:
+        log.warning("Missing provider key: %s", e)
+        raise HTTPException(
+            status_code=424,
+            detail=f"No API key for {e.provider}. Set your key in Settings → Provider Keys.",
+        )
     except Exception as e:
         log.error("Error in api_send_message: %s", type(e).__name__)
         return {"reply": "Sorry, I encountered an error processing your message."}
@@ -129,6 +136,14 @@ async def api_send_message_stream(
                     user_id=user_id,
                 ):
                     yield chunk
+            except MissingProviderKeyError as e:
+                log.warning("Missing provider key in stream: %s", e)
+                yield (
+                    f'data: {{"error": "missing_key", '
+                    f'"provider": "{e.provider}", '
+                    f'"message": "No API key for {e.provider}. '
+                    f'Set your key in Settings → Provider Keys."}}\n\n'
+                )
             finally:
                 if keyring:
                     clear_request_keyring()

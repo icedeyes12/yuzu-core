@@ -26,15 +26,6 @@ log = get_logger(__name__)
 router = APIRouter(tags=["profile"])
 
 
-class ApiKeyRequest(BaseModel):
-    key_name: str = Field(..., min_length=1, description="Name for the API key")
-    api_key: str = Field(..., min_length=1, description="The API key value")
-
-
-class ChutesKeyRequest(BaseModel):
-    api_key: str = Field(..., min_length=1, description="Chutes API key value")
-
-
 class ProviderSetRequest(BaseModel):
     provider_name: str = Field(..., min_length=1, description="AI provider name")
     model_name: str | None = Field(None, description="Optional model name")
@@ -60,12 +51,6 @@ class GlobalKnowledgeUpdateRequest(BaseModel):
 
 class ProfileUpdateRequest(BaseModel):
     updates: dict = Field(..., description="Key-value pairs for profile updates")
-
-
-class ApiKeyRemoveRequest(BaseModel):
-    key_name: str = Field(
-        ..., min_length=1, description="Name of the API key to remove"
-    )
 
 
 @router.get("/config")
@@ -138,52 +123,6 @@ async def api_update_profile(
     try:
         await update_profile_async(request.updates, user_id)
         return {"status": "success"}
-    except Exception:
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.post("/add_api_key")
-async def api_add_api_key(
-    request: ApiKeyRequest, user_id: str = Depends(get_current_user)
-):
-    if await Database.add_api_key_async(request.key_name, request.api_key):
-        return {"status": "success", "message": f"{request.key_name} API key added"}
-    else:
-        return {
-            "status": "error",
-            "message": "API key already exists or failed to save",
-        }
-
-
-@router.post("/add_chutes_key")
-async def api_add_chutes_key(
-    request: ChutesKeyRequest, user_id: str = Depends(get_current_user)
-):
-    try:
-        if await Database.add_api_key_async("chutes", request.api_key.strip()):
-            return {
-                "status": "success",
-                "message": "Chutes API key added successfully!",
-            }
-        else:
-            return {"status": "error", "message": "Failed to save Chutes API key"}
-    except Exception as e:
-        log.error("Error adding Chutes API key: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.post("/remove_api_key")
-async def api_remove_api_key(
-    request: ApiKeyRemoveRequest, user_id: str = Depends(get_current_user)
-):
-    try:
-        if await Database.remove_api_key_async(request.key_name):
-            return {
-                "status": "success",
-                "message": f"{request.key_name} API key removed",
-            }
-        else:
-            return {"status": "error", "message": "API key not found"}
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 

@@ -85,7 +85,7 @@ class OpenRouterProvider(AIProvider):
             temperature = min(temperature, 0.8)
 
         headers = {
-            "Authorization": f"Bearer {self.resolve_api_key()}",
+            "Authorization": f"Bearer {self._require_api_key()}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://github.com/icedeyes12/yuzu-companion",
             "X-Title": "Yuzu-Companion",
@@ -111,7 +111,7 @@ class OpenRouterProvider(AIProvider):
         return headers, payload
 
     def send_message(self, messages: list[dict], model: str, **kwargs) -> str | None:
-        if not self.resolve_api_key() or model not in self.available_models:
+        if model not in self.available_models:
             return None
 
         try:
@@ -145,7 +145,7 @@ class OpenRouterProvider(AIProvider):
     def send_message_raw(
         self, messages: list[dict], model: str, **kwargs
     ) -> dict | None:
-        if not self.resolve_api_key() or model not in self.available_models:
+        if model not in self.available_models:
             return None
 
         try:
@@ -174,7 +174,7 @@ class OpenRouterProvider(AIProvider):
     async def send_message_streaming(
         self, messages: list[dict], model: str, **kwargs
     ) -> AsyncGenerator[str, None]:
-        if not self.resolve_api_key() or model not in self.available_models:
+        if model not in self.available_models:
             yield ""
             return
 

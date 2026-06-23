@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from app.core.context import resolve_api_key
 from app.db import Database
 from app.llm_client import chutes_chat
 from app.logging_config import get_logger
@@ -126,8 +127,7 @@ class SessionService:
         ):
             return
 
-        api_keys = Database.get_api_keys() or {}
-        api_key = api_keys.get("chutes")
+        api_key = resolve_api_key("chutes")
         summary = Database.get_session_conversation_summary(session_id, limit=15)
 
         name: str | None = None
@@ -232,8 +232,7 @@ class SessionService:
             )
             return
 
-        api_keys = await Database.get_api_keys_async() or {}
-        api_key = api_keys.get("chutes")
+        api_key = resolve_api_key("chutes")
         summary = await Database.get_session_conversation_summary_async(
             session_id, limit=15
         )
