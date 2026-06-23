@@ -26,6 +26,11 @@ from app.db import (
     tool_role_for,
 )
 
+from app.db.queries import (
+    SQL_PROFILE_INSERT_DEFAULT,
+    SQL_PROFILE_INSERT_DEFAULT_RETURNING,
+)
+
 
 class TestParseJson:
     def test_empty_input_returns_dict(self):
@@ -106,10 +111,16 @@ class TestBuildProfileUpdate:
         assert params[0] == 99
 
     def test_default_profile_params_match_columns(self):
-        # 10 values: display_name, partner_name, affection, theme,
-        # memory_state, session_history, global_knowledge, providers_config,
-        # context, image_model (datetimes added by caller at insert time).
-        assert len(DEFAULT_PROFILE_PARAMS) == 10
+        # 9 values backing the 9 non-timestamp INSERT columns:
+        # display_name, partner_name, affection, theme, memory_state,
+        # session_history, global_knowledge, providers_config, context.
+        # Callers append 2 datetimes (timestamp, updated_at) -> 9 + 2 = 11,
+        # which must equal the %s count in both INSERT constants.
+        # image_model / vision_model / avatar_url are NOT inserted here;
+        # they take schema DEFAULTS ('hunyuan', 'moonshotai/kimi-k2.5', NULL).
+        assert len(DEFAULT_PROFILE_PARAMS) == 9
+        for sql in (SQL_PROFILE_INSERT_DEFAULT, SQL_PROFILE_INSERT_DEFAULT_RETURNING):
+            assert sql.count("%s") == len(DEFAULT_PROFILE_PARAMS) + 2
 
 
 class TestSessionParsers:
