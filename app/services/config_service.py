@@ -37,7 +37,9 @@ class ConfigService:
         return capabilities
 
     @staticmethod
-    async def get_ai_providers_payload(user_id: str, profile: dict | None = None) -> dict[str, Any]:
+    async def get_ai_providers_payload(
+        user_id: str, profile: dict | None = None
+    ) -> dict[str, Any]:
         if profile is None:
             profile = await Database.get_profile_async(user_id)
 

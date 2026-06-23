@@ -21,7 +21,9 @@ async def api_update_session_context(user_id: str = Depends(get_current_user)):
         session_id = active_session["id"]
         profile = await Database.get_profile_async(user_id)
 
-        chat_history = await Database.get_chat_history_async(session_id=session_id, user_id=user_id)
+        chat_history = await Database.get_chat_history_async(
+            session_id=session_id, user_id=user_id
+        )
 
         if len(chat_history) < 5:
             return {
@@ -46,7 +48,9 @@ async def api_update_session_context(user_id: str = Depends(get_current_user)):
             )
 
             if success:
-                session_memory = await Database.get_session_memory_async(session_id, user_id=user_id)
+                session_memory = await Database.get_session_memory_async(
+                    session_id, user_id=user_id
+                )
                 return {
                     "status": "success",
                     "message": "Session context updated!",

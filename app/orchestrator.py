@@ -270,7 +270,11 @@ async def _persist_user_async(
     message: str, session_id: str, image_paths: list[str] | None, *, user_id: str
 ) -> None:
     await Database.add_message_async(
-        "user", message, session_id=session_id, image_paths=image_paths or None, user_id=user_id
+        "user",
+        message,
+        session_id=session_id,
+        image_paths=image_paths or None,
+        user_id=user_id,
     )
 
 
@@ -279,7 +283,11 @@ async def _persist_assistant_async(
 ) -> None:
     """Persist an assistant response, with optional image paths (async)."""
     await Database.add_message_async(
-        "assistant", content, session_id=session_id, image_paths=image_paths, user_id=user_id
+        "assistant",
+        content,
+        session_id=session_id,
+        image_paths=image_paths,
+        user_id=user_id,
     )
 
 
@@ -300,7 +308,9 @@ async def _persist_tool_result_async(
     )
 
 
-async def _persist_observation_async(observation: str, session_id: str, *, user_id: str) -> None:
+async def _persist_observation_async(
+    observation: str, session_id: str, *, user_id: str
+) -> None:
     """Persist a system observation as an internal message (async)."""
     await Database.add_message_async(
         "system_observation", observation, session_id=session_id, user_id=user_id
@@ -409,7 +419,9 @@ async def _post_turn_async(
         return
 
     # Auto-rename via service
-    await SessionService.auto_name_session_if_needed_async(session_id, active_session, user_id=user_id)
+    await SessionService.auto_name_session_if_needed_async(
+        session_id, active_session, user_id=user_id
+    )
 
     # Memory checks via service
     await MemoryService.run_per_message_checks_async(
@@ -469,7 +481,9 @@ async def _process_tool_commands_async(
         tool_markdowns.append(tool_markdown)
 
         # SAFEGUARD: Persist each tool result immediately
-        await _persist_tool_result_async(tool_name, tool_markdown, session_id, user_id=user_id)
+        await _persist_tool_result_async(
+            tool_name, tool_markdown, session_id, user_id=user_id
+        )
         log.info(f"[stream] persisted tool result for {tool_name}")
         p = parse_image_path(tool_markdown)
         if p is not None:
@@ -661,7 +675,9 @@ async def handle_user_message(
             if stripped.startswith("/imagine"):
                 commands = [stripped]
 
-            await _persist_user_async(user_message, session_id, cached_images, user_id=user_id)
+            await _persist_user_async(
+                user_message, session_id, cached_images, user_id=user_id
+            )
 
             results = await execute_commands(commands, session_id=session_id)
             tool_markdowns = []
@@ -669,7 +685,9 @@ async def handle_user_message(
             for tool_name, result in results:
                 tool_markdown = result.get("markdown", str(result))
                 tool_markdowns.append(tool_markdown)
-                await _persist_tool_result_async(tool_name, tool_markdown, session_id, user_id=user_id)
+                await _persist_tool_result_async(
+                    tool_name, tool_markdown, session_id, user_id=user_id
+                )
 
             combined = "\n\n".join(tool_markdowns)
 
@@ -684,7 +702,9 @@ async def handle_user_message(
                 profile, session_id, interface, combined
             )
             if synthesis:
-                await _persist_assistant_async(synthesis, session_id, generated_paths, user_id=user_id)
+                await _persist_assistant_async(
+                    synthesis, session_id, generated_paths, user_id=user_id
+                )
                 final = (
                     f"{combined}\n\n{synthesis}"
                     if parse_image_path(combined)
@@ -707,7 +727,9 @@ async def handle_user_message(
             profile, user_message, interface, session_id, user_id=user_id
         )
     except Exception:
-        await _persist_user_async(user_message, session_id, cached_images, user_id=user_id)
+        await _persist_user_async(
+            user_message, session_id, cached_images, user_id=user_id
+        )
         raise
 
     await _persist_user_async(user_message, session_id, cached_images, user_id=user_id)
@@ -736,7 +758,9 @@ async def handle_user_message(
         if tool_results:
             tool_name, tool_result = tool_results[0]
             tool_markdown = tool_result.get("markdown", str(tool_result))
-            await _persist_tool_result_async(tool_name, tool_markdown, session_id, user_id=user_id)
+            await _persist_tool_result_async(
+                tool_name, tool_markdown, session_id, user_id=user_id
+            )
 
             is_image_tool = parse_image_path(tool_markdown) is not None
             generated_paths = (
@@ -758,7 +782,9 @@ async def handle_user_message(
             )
 
             if synthesis:
-                await _persist_assistant_async(synthesis, session_id, generated_paths, user_id=user_id)
+                await _persist_assistant_async(
+                    synthesis, session_id, generated_paths, user_id=user_id
+                )
                 final_response = (
                     f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
                 )

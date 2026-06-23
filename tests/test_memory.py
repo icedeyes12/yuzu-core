@@ -80,27 +80,34 @@ class TestMetadataConditions:
 
     def test_fact_type_only(self):
         """Fact type adds one condition."""
-        conditions, params = build_metadata_conditions(user_id="uid", fact_type="static")
+        conditions, params = build_metadata_conditions(
+            user_id="uid", fact_type="static"
+        )
         assert len(conditions) == 2
         assert "fact_type = %s" in conditions
         assert "uid" in params and "static" in params
 
     def test_category_only(self):
         """Category adds one condition."""
-        conditions, params = build_metadata_conditions(user_id="uid", category="Preference")
+        conditions, params = build_metadata_conditions(
+            user_id="uid", category="Preference"
+        )
         assert len(conditions) == 2
         assert "(metadata->>'category') = %s" in conditions
         assert "uid" in params and "Preference" in params
 
     def test_all_filters(self):
         """All filters combined."""
-        conditions, params = build_metadata_conditions(user_id="uid", 
+        conditions, params = build_metadata_conditions(
+            user_id="uid",
             session_id=1,
             fact_type="dynamic",
             category="Identity",
             metadata_filter={"source": "test"},
         )
-        assert len(conditions) == 5  # user_id + session + fact_type + category + metadata(key,val)
+        assert (
+            len(conditions) == 5
+        )  # user_id + session + fact_type + category + metadata(key,val)
         assert len(params) == 6  # uid + session, fact_type, category, key, val
 
 

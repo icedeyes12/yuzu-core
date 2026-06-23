@@ -51,11 +51,15 @@ async def api_get_chat_history(
     """Get chat history for a specific session or the active session."""
     try:
         if session_id:
-            chat_history = await get_chat_history_async(session_id=session_id, user_id=user_id)
+            chat_history = await get_chat_history_async(
+                session_id=session_id, user_id=user_id
+            )
         else:
             active_session = await get_active_session_async(user_id)
             if active_session:
-                chat_history = await get_chat_history_async(active_session["id"], user_id=user_id)
+                chat_history = await get_chat_history_async(
+                    active_session["id"], user_id=user_id
+                )
             else:
                 chat_history = await get_chat_history_async(user_id=user_id)
         return {"status": "success", "chat_history": chat_history}
@@ -112,8 +116,12 @@ async def api_switch_session(
 
         SessionService.mark_client_connected(client_id)
 
-        chat_history = await get_chat_history_async(session_id=request.session_id, user_id=user_id)
-        session_memory = await get_session_memory_async(request.session_id, user_id=user_id)
+        chat_history = await get_chat_history_async(
+            session_id=request.session_id, user_id=user_id
+        )
+        session_memory = await get_session_memory_async(
+            request.session_id, user_id=user_id
+        )
 
         return {
             "status": "success",
@@ -160,7 +168,9 @@ async def api_delete_session(
         if success:
             active_session = await get_active_session_async(user_id)
             if active_session:
-                chat_history = await get_chat_history_async(active_session["id"], user_id=user_id)
+                chat_history = await get_chat_history_async(
+                    active_session["id"], user_id=user_id
+                )
                 session_memory = await get_session_memory_async(active_session["id"])
             else:
                 chat_history = []

@@ -143,7 +143,9 @@ class SessionService:
         Database.rename_session(session_id, name, user_id)
 
     @staticmethod
-    async def start_session_async(interface: str = "terminal", *, user_id: str) -> dict[str, Any]:
+    async def start_session_async(
+        interface: str = "terminal", *, user_id: str
+    ) -> dict[str, Any]:
         """Mark the active session as started (async).
 
         DEPRECATED: No longer creates connection log messages.

@@ -202,7 +202,10 @@ def get_active_session(user_id: str) -> dict:
 
 
 def get_all_sessions(user_id: str) -> list[dict]:
-    return [parse_session_row(r) for r in pg_fetchall(SQL_SESSION_SELECT_ALL_FOR_USER, (user_id,))]
+    return [
+        parse_session_row(r)
+        for r in pg_fetchall(SQL_SESSION_SELECT_ALL_FOR_USER, (user_id,))
+    ]
 
 
 def create_session(name: str = "New Chat", *, user_id: str) -> str | None:
@@ -222,7 +225,9 @@ def switch_session(session_id: str, user_id: str) -> bool:
     try:
         with PgSession() as s:
             s.execute(SQL_SESSION_DEACTIVATE_FOR_USER, (user_id,))
-            s.execute(SQL_SESSION_ACTIVATE_ONE_SCOPED, (datetime.now(), session_id, user_id))
+            s.execute(
+                SQL_SESSION_ACTIVATE_ONE_SCOPED, (datetime.now(), session_id, user_id)
+            )
         return True
     except Exception as e:  # noqa: BLE001
         log.error("switch_session failed: %s", e)
@@ -231,7 +236,9 @@ def switch_session(session_id: str, user_id: str) -> bool:
 
 def rename_session(session_id: str, new_name: str, user_id: str) -> bool:
     try:
-        pg_execute(SQL_SESSION_RENAME_SCOPED, (new_name, datetime.now(), session_id, user_id))
+        pg_execute(
+            SQL_SESSION_RENAME_SCOPED, (new_name, datetime.now(), session_id, user_id)
+        )
         return True
     except Exception as e:  # noqa: BLE001
         log.error("rename_session failed: %s", e)

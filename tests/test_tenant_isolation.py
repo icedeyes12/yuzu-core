@@ -272,75 +272,147 @@ class MockTenantDB:
         now = datetime.now()
         self.profiles = {
             TENANT_A: {
-                "id": TENANT_A, "display_name": "Tenant A",
-                "partner_name": "Partner A", "affection": 50,
-                "theme": "dark", "memory_state": {},
-                "session_history": {}, "global_knowledge": {},
-                "providers_config": {}, "context": {},
-                "image_model": "default", "vision_model": "default",
+                "id": TENANT_A,
+                "display_name": "Tenant A",
+                "partner_name": "Partner A",
+                "affection": 50,
+                "theme": "dark",
+                "memory_state": {},
+                "session_history": {},
+                "global_knowledge": {},
+                "providers_config": {},
+                "context": {},
+                "image_model": "default",
+                "vision_model": "default",
                 "avatar_url": None,
-                "created_at": now, "updated_at": now,
+                "created_at": now,
+                "updated_at": now,
             },
             TENANT_B: {
-                "id": TENANT_B, "display_name": "Tenant B",
-                "partner_name": "Partner B", "affection": 75,
-                "theme": "light", "memory_state": {},
-                "session_history": {}, "global_knowledge": {},
-                "providers_config": {}, "context": {},
-                "image_model": "default", "vision_model": "default",
+                "id": TENANT_B,
+                "display_name": "Tenant B",
+                "partner_name": "Partner B",
+                "affection": 75,
+                "theme": "light",
+                "memory_state": {},
+                "session_history": {},
+                "global_knowledge": {},
+                "providers_config": {},
+                "context": {},
+                "image_model": "default",
+                "vision_model": "default",
                 "avatar_url": None,
-                "created_at": now, "updated_at": now,
+                "created_at": now,
+                "updated_at": now,
             },
         }
         self.sessions = {
             SESSION_A: {
-                "id": SESSION_A, "user_id": TENANT_A,
-                "name": "A's Chat", "is_active": True,
-                "message_count": 2, "memory_state": {},
+                "id": SESSION_A,
+                "user_id": TENANT_A,
+                "name": "A's Chat",
+                "is_active": True,
+                "message_count": 2,
+                "memory_state": {},
                 "deleted_at": None,
-                "created_at": now, "updated_at": now,
+                "created_at": now,
+                "updated_at": now,
             },
             SESSION_B: {
-                "id": SESSION_B, "user_id": TENANT_B,
-                "name": "B's Chat", "is_active": True,
-                "message_count": 2, "memory_state": {},
+                "id": SESSION_B,
+                "user_id": TENANT_B,
+                "name": "B's Chat",
+                "is_active": True,
+                "message_count": 2,
+                "memory_state": {},
                 "deleted_at": None,
-                "created_at": now, "updated_at": now,
+                "created_at": now,
+                "updated_at": now,
             },
         }
         self.messages = [
-            {"id": 1, "session_id": SESSION_A, "user_id": TENANT_A,
-             "role": "user", "content": "Hello from A",
-             "image_paths": "[]", "timestamp": now},
-            {"id": 2, "session_id": SESSION_A, "user_id": TENANT_A,
-             "role": "assistant", "content": "Hi A!",
-             "image_paths": "[]", "timestamp": now},
-            {"id": 3, "session_id": SESSION_B, "user_id": TENANT_B,
-             "role": "user", "content": "Hello from B",
-             "image_paths": "[]", "timestamp": now},
-            {"id": 4, "session_id": SESSION_B, "user_id": TENANT_B,
-             "role": "assistant", "content": "Hi B!",
-             "image_paths": "[]", "timestamp": now},
+            {
+                "id": 1,
+                "session_id": SESSION_A,
+                "user_id": TENANT_A,
+                "role": "user",
+                "content": "Hello from A",
+                "image_paths": "[]",
+                "timestamp": now,
+            },
+            {
+                "id": 2,
+                "session_id": SESSION_A,
+                "user_id": TENANT_A,
+                "role": "assistant",
+                "content": "Hi A!",
+                "image_paths": "[]",
+                "timestamp": now,
+            },
+            {
+                "id": 3,
+                "session_id": SESSION_B,
+                "user_id": TENANT_B,
+                "role": "user",
+                "content": "Hello from B",
+                "image_paths": "[]",
+                "timestamp": now,
+            },
+            {
+                "id": 4,
+                "session_id": SESSION_B,
+                "user_id": TENANT_B,
+                "role": "assistant",
+                "content": "Hi B!",
+                "image_paths": "[]",
+                "timestamp": now,
+            },
         ]
         self.facts = [
-            {"id": 1, "user_id": TENANT_A, "fact_type": "static",
-             "content": "Tenant A likes coffee", "embedding": None,
-             "metadata": {"category": "Preference"}, "invalid_at": None,
-             "created_at": now, "last_accessed": now},
-            {"id": 2, "user_id": TENANT_A, "fact_type": "dynamic",
-             "content": "Tenant A visited Paris", "embedding": None,
-             "metadata": {"category": "Experience", "session_id": SESSION_A},
-             "invalid_at": None,
-             "created_at": now, "last_accessed": now},
-            {"id": 3, "user_id": TENANT_B, "fact_type": "static",
-             "content": "Tenant B likes tea", "embedding": None,
-             "metadata": {"category": "Preference"}, "invalid_at": None,
-             "created_at": now, "last_accessed": now},
-            {"id": 4, "user_id": TENANT_B, "fact_type": "dynamic",
-             "content": "Tenant B visited Tokyo", "embedding": None,
-             "metadata": {"category": "Experience", "session_id": SESSION_B},
-             "invalid_at": None,
-             "created_at": now, "last_accessed": now},
+            {
+                "id": 1,
+                "user_id": TENANT_A,
+                "fact_type": "static",
+                "content": "Tenant A likes coffee",
+                "embedding": None,
+                "metadata": {"category": "Preference"},
+                "invalid_at": None,
+                "created_at": now,
+                "last_accessed": now,
+            },
+            {
+                "id": 2,
+                "user_id": TENANT_A,
+                "fact_type": "dynamic",
+                "content": "Tenant A visited Paris",
+                "embedding": None,
+                "metadata": {"category": "Experience", "session_id": SESSION_A},
+                "invalid_at": None,
+                "created_at": now,
+                "last_accessed": now,
+            },
+            {
+                "id": 3,
+                "user_id": TENANT_B,
+                "fact_type": "static",
+                "content": "Tenant B likes tea",
+                "embedding": None,
+                "metadata": {"category": "Preference"},
+                "invalid_at": None,
+                "created_at": now,
+                "last_accessed": now,
+            },
+            {
+                "id": 4,
+                "user_id": TENANT_B,
+                "fact_type": "dynamic",
+                "content": "Tenant B visited Tokyo",
+                "embedding": None,
+                "metadata": {"category": "Experience", "session_id": SESSION_B},
+                "invalid_at": None,
+                "created_at": now,
+                "last_accessed": now,
+            },
         ]
 
     # ── user_id extraction ────────────────────────────────────────────────
@@ -416,8 +488,11 @@ class MockTenantDB:
         # All sessions for user (has ORDER BY)
         if "from chat_sessions" in sl and "order by" in sl:
             uid = params[0] if params else None
-            return [dict(s) for s in self.sessions.values()
-                    if s["user_id"] == uid and not s.get("deleted_at")]
+            return [
+                dict(s)
+                for s in self.sessions.values()
+                if s["user_id"] == uid and not s.get("deleted_at")
+            ]
 
         # Messages by session_id
         if "from messages" in sl and "session_id" in sl:
@@ -429,13 +504,17 @@ class MockTenantDB:
             uid = self._extract_user_id(sql, params)
             if not uid:
                 return []
-            results = [dict(f) for f in self.facts
-                       if f["user_id"] == uid and not f.get("invalid_at")]
+            results = [
+                dict(f)
+                for f in self.facts
+                if f["user_id"] == uid and not f.get("invalid_at")
+            ]
             # Apply fact_type filter if present in SQL
             ft_match = re.search(r"fact_type\s*=\s*%s", sql, re.IGNORECASE)
             if ft_match:
-                ft_idx = sum(1 for p in re.finditer(r"%s", sql)
-                             if p.start() < ft_match.start())
+                ft_idx = sum(
+                    1 for p in re.finditer(r"%s", sql) if p.start() < ft_match.start()
+                )
                 if ft_idx < len(params):
                     ft = params[ft_idx]
                     results = [f for f in results if f["fact_type"] == ft]
@@ -451,9 +530,9 @@ class MockTenantDB:
 
         # Profile update — parse SET clause and apply column values
         if "update profiles" in sl:
-            set_match = re.search(r'set\s+(.+?)\s+where', sl)
+            set_match = re.search(r"set\s+(.+?)\s+where", sl)
             if set_match:
-                col_names = re.findall(r'(\w+)\s*=\s*%s', set_match.group(1))
+                col_names = re.findall(r"(\w+)\s*=\s*%s", set_match.group(1))
                 uid = params[-1] if params else None
                 if uid in self.profiles:
                     for i, col in enumerate(col_names):
@@ -513,11 +592,15 @@ class MockTenantDB:
         if "insert into chat_sessions" in sl:
             uid = params[0] if params else None
             row = {
-                "id": f"new-session-{self._next_id}", "user_id": uid,
+                "id": f"new-session-{self._next_id}",
+                "user_id": uid,
                 "name": params[1] if len(params) > 1 else "New Chat",
                 "is_active": params[2] if len(params) > 2 else False,
-                "message_count": 0, "memory_state": {},
-                "deleted_at": None, "created_at": now, "updated_at": now,
+                "message_count": 0,
+                "memory_state": {},
+                "deleted_at": None,
+                "created_at": now,
+                "updated_at": now,
             }
             self.sessions[row["id"]] = row
             return dict(row)
@@ -530,7 +613,8 @@ class MockTenantDB:
                 "user_id": params[1] if len(params) > 1 else None,
                 "role": params[2] if len(params) > 2 else "user",
                 "content": params[3] if len(params) > 3 else "",
-                "image_paths": "[]", "timestamp": now,
+                "image_paths": "[]",
+                "timestamp": now,
             }
             self.messages.append(row)
             return dict(row)
@@ -542,8 +626,11 @@ class MockTenantDB:
                 "user_id": params[0] if params else None,
                 "fact_type": params[1] if len(params) > 1 else "static",
                 "content": params[2] if len(params) > 2 else "",
-                "embedding": None, "metadata": {}, "invalid_at": None,
-                "created_at": now, "last_accessed": now,
+                "embedding": None,
+                "metadata": {},
+                "invalid_at": None,
+                "created_at": now,
+                "last_accessed": now,
             }
             self.facts.append(row)
             return dict(row)
@@ -552,13 +639,21 @@ class MockTenantDB:
         if "insert into profiles" in sl:
             uid = f"new-profile-{self._next_id}"
             row = {
-                "id": uid, "display_name": "New User",
-                "partner_name": "Yuzu", "affection": 0,
-                "theme": "dark", "memory_state": {},
-                "session_history": {}, "global_knowledge": {},
-                "providers_config": {}, "context": {},
-                "image_model": "default", "vision_model": "default",
-                "avatar_url": None, "created_at": now, "updated_at": now,
+                "id": uid,
+                "display_name": "New User",
+                "partner_name": "Yuzu",
+                "affection": 0,
+                "theme": "dark",
+                "memory_state": {},
+                "session_history": {},
+                "global_knowledge": {},
+                "providers_config": {},
+                "context": {},
+                "image_model": "default",
+                "vision_model": "default",
+                "avatar_url": None,
+                "created_at": now,
+                "updated_at": now,
             }
             self.profiles[uid] = row
             return dict(row)
@@ -628,7 +723,6 @@ def tenant_db(monkeypatch):
 
 
 class TestProfileIsolation:
-
     @pytest.mark.asyncio
     async def test_tenant_a_reads_own_profile(self, tenant_db):
         profile = await Database.get_profile_async(TENANT_A)
@@ -661,7 +755,6 @@ class TestProfileIsolation:
 
 
 class TestSessionIsolation:
-
     @pytest.mark.asyncio
     async def test_tenant_a_sees_only_own_sessions(self, tenant_db):
         sessions = await Database.get_all_sessions_async(TENANT_A)
@@ -700,7 +793,6 @@ class TestSessionIsolation:
 
 
 class TestMessageIsolation:
-
     @pytest.mark.asyncio
     async def test_tenant_a_history_excludes_tenant_b(self, tenant_db):
         history = await Database.get_chat_history_async(
@@ -726,12 +818,9 @@ class TestMessageIsolation:
 
 
 class TestMemoryIsolation:
-
     @pytest.mark.asyncio
     async def test_tenant_a_facts_exclude_tenant_b(self, tenant_db):
-        facts = await get_facts_by_session_async(
-            session_id=SESSION_A, user_id=TENANT_A
-        )
+        facts = await get_facts_by_session_async(session_id=SESSION_A, user_id=TENANT_A)
         assert len(facts) > 0
         for f in facts:
             assert f["user_id"] == TENANT_A
@@ -739,9 +828,7 @@ class TestMemoryIsolation:
 
     @pytest.mark.asyncio
     async def test_tenant_b_facts_exclude_tenant_a(self, tenant_db):
-        facts = await get_facts_by_session_async(
-            session_id=SESSION_B, user_id=TENANT_B
-        )
+        facts = await get_facts_by_session_async(session_id=SESSION_B, user_id=TENANT_B)
         assert len(facts) > 0
         for f in facts:
             assert f["user_id"] == TENANT_B

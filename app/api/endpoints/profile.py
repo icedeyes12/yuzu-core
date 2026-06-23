@@ -74,7 +74,9 @@ async def api_get_profile(
         else:
             active_session = {"id": session_id}
         session_id = active_session["id"]
-        chat_history = await get_chat_history_async(session_id=session_id, limit=None, user_id=user_id)
+        chat_history = await get_chat_history_async(
+            session_id=session_id, limit=None, user_id=user_id
+        )
 
         # Inject ongoing stream if it exists
         active_buf = await StreamManager.get_stream(session_id)

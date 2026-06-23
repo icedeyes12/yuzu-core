@@ -33,7 +33,9 @@ class TestSessionIdResolution:
 
         monkeypatch.setattr(db_module, "_pg_add_message", fake_add_message)
 
-        result = Database.add_message("user", "hi", session_id=7, image_paths=None, user_id="uid")
+        result = Database.add_message(
+            "user", "hi", session_id=7, image_paths=None, user_id="uid"
+        )
         assert result == 99
         assert captured == {
             "session_id": 7,

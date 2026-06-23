@@ -251,7 +251,11 @@ class Database:
     ) -> int | None:
         """Add a message to a session (defaults to active session)."""
         return _pg_add_message(
-            _resolve_session_id(session_id, user_id), role, content, image_paths, user_id=user_id
+            _resolve_session_id(session_id, user_id),
+            role,
+            content,
+            image_paths,
+            user_id=user_id,
         )
 
     @staticmethod
@@ -277,7 +281,9 @@ class Database:
         session_id: str | None = None, limit: int | None = None, *, user_id: str
     ) -> list[dict]:
         """Get messages for a session (defaults to active session)."""
-        return _pg_get_session_messages(_resolve_session_id(session_id, user_id), limit or 100)
+        return _pg_get_session_messages(
+            _resolve_session_id(session_id, user_id), limit or 100
+        )
 
     @staticmethod
     async def get_messages_async(
@@ -311,7 +317,10 @@ class Database:
     ) -> list[dict]:
         """Get chat history for a session (defaults to active session)."""
         return await _pg_get_chat_history_async(
-            await _resolve_session_id_async(session_id, user_id), limit, recent, user_id=user_id
+            await _resolve_session_id_async(session_id, user_id),
+            limit,
+            recent,
+            user_id=user_id,
         )
 
     @staticmethod
@@ -325,7 +334,11 @@ class Database:
     ) -> list[dict]:
         """Build message context for AI provider (defaults to active session)."""
         return _pg_get_chat_history_for_ai(
-            _resolve_session_id(session_id, user_id), limit, recent, include_image_paths, user_id=user_id
+            _resolve_session_id(session_id, user_id),
+            limit,
+            recent,
+            include_image_paths,
+            user_id=user_id,
         )
 
     @staticmethod
@@ -352,7 +365,9 @@ class Database:
         return _pg_clear_session_messages(_resolve_session_id(session_id, user_id))
 
     @staticmethod
-    async def clear_session_async(session_id: str | None = None, *, user_id: str) -> bool:
+    async def clear_session_async(
+        session_id: str | None = None, *, user_id: str
+    ) -> bool:
         """Clear all messages for a session (defaults to active session)."""
         return await _pg_clear_session_messages_async(
             await _resolve_session_id_async(session_id, user_id)
@@ -369,7 +384,9 @@ class Database:
         return await Database.clear_session_async(session_id)
 
     @staticmethod
-    def add_session_event(content: str, interface: str = "terminal", *, user_id: str) -> int | None:
+    def add_session_event(
+        content: str, interface: str = "terminal", *, user_id: str
+    ) -> int | None:
         """Add a session event message to the active session."""
         active = _pg_get_active_session(user_id)
         return _pg_add_session_event(active["id"], content, interface)
@@ -405,7 +422,9 @@ class Database:
         )
 
     @staticmethod
-    def add_system_note(content: str, session_id: str | None = None, user_id: str = "") -> int | None:
+    def add_system_note(
+        content: str, session_id: str | None = None, user_id: str = ""
+    ) -> int | None:
         """Add a system note message (defaults to active session)."""
         return _pg_add_system_note(_resolve_session_id(session_id, user_id), content)
 
@@ -419,7 +438,9 @@ class Database:
         )
 
     @staticmethod
-    def add_memory_note(content: str, session_id: str | None = None, user_id: str = "") -> int | None:
+    def add_memory_note(
+        content: str, session_id: str | None = None, user_id: str = ""
+    ) -> int | None:
         """Alias for add_system_note."""
         return Database.add_system_note(content, session_id, user_id)
 
