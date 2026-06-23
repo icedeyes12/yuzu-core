@@ -42,7 +42,7 @@ from app.db.queries import (
     SQL_SESSION_MEMORY_NOTES,
     SQL_SESSION_RENAME,
     SQL_SESSION_RESET_COUNT_AND_MEMORY,
-    SQL_SESSION_SELECT_ACTIVE,
+    SQL_SESSION_SELECT_ACTIVE_FOR_USER,
     SQL_SESSION_SELECT_ALL,
     SQL_SESSION_UPDATE_MEMORY,
     TOOL_ROLES,
@@ -190,14 +190,22 @@ def update_memory_state(session_id: str, state: dict) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def get_active_session() -> dict:
-    """Get the currently active session. Creates one if none."""
-    row = pg_fetchone(SQL_SESSION_SELECT_ACTIVE)
+def get_active_session(user_id: str | None = None) -> dict:
+    """Get the currently active session for ``user_id``. Creates one if none.
+
+    Reads are scoped to ``user_id`` via ``SQL_SESSION_SELECT_ACTIVE_FOR_USER``
+    (multi-tenant isolation). A new row is seeded with the same ``user_id``.
+    """
+    if not user_id:
+        raise TenantScopeError(
+            "get_active_session requires a valid user_id — refusing to "
+            "fall back to a default profile (multi-tenant isolation)"
+        )
+    row = pg_fetchone(SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,))
     if not row:
         now = datetime.now()
-        user_id = get_profile()["id"]
         pg_execute(SQL_SESSION_INSERT, (user_id, "New Chat", True, 0, "{}", now, now))
-        row = pg_fetchone(SQL_SESSION_SELECT_ACTIVE)
+        row = pg_fetchone(SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,))
     return parse_session_row(row)
 
 
@@ -394,9 +402,19 @@ def get_message_count(session_id: str) -> int:
 
 
 def add_session_event(
-    session_id: str, content: str, interface: str = "terminal"
+    session_id: str,
+    content: str,
+    interface: str = "terminal",
+    user_id: str | None = None,
 ) -> int | None:
-    return add_message(session_id, "system", format_session_event(content, interface))
+    if not user_id:
+        raise TenantScopeError(
+            "add_session_event requires a valid user_id — refusing to "
+            "fall back to a default profile (multi-tenant isolation)"
+        )
+    return add_message(
+        session_id, "system", format_session_event(content, interface), user_id=user_id
+    )
 
 
 def get_recent_sessions(limit: int = 20) -> list[dict]:
@@ -414,17 +432,43 @@ def get_session_conversation_summary(session_id: str, limit: int = 20) -> str:
     return format_conversation_summary(rows)
 
 
-def add_tool_result(session_id: str, tool_name: str, result_content: str) -> int | None:
-    return add_message(session_id, tool_role_for(tool_name), result_content)
+def add_tool_result(
+    session_id: str,
+    tool_name: str,
+    result_content: str,
+    user_id: str | None = None,
+) -> int | None:
+    if not user_id:
+        raise TenantScopeError(
+            "add_tool_result requires a valid user_id — refusing to "
+            "fall back to a default profile (multi-tenant isolation)"
+        )
+    return add_message(
+        session_id, tool_role_for(tool_name), result_content, user_id=user_id
+    )
 
 
-def add_system_note(session_id: str, content: str) -> int | None:
-    return add_message(session_id, "system", content)
+def add_system_note(
+    session_id: str, content: str, user_id: str | None = None
+) -> int | None:
+    if not user_id:
+        raise TenantScopeError(
+            "add_system_note requires a valid user_id — refusing to "
+            "fall back to a default profile (multi-tenant isolation)"
+        )
+    return add_message(session_id, "system", content, user_id=user_id)
 
 
-def add_memory_note(session_id: str, content: str) -> int | None:
+def add_memory_note(
+    session_id: str, content: str, user_id: str | None = None
+) -> int | None:
     """Alias for add_system_note."""
-    return add_system_note(session_id, content)
+    if not user_id:
+        raise TenantScopeError(
+            "add_memory_note requires a valid user_id — refusing to "
+            "fall back to a default profile (multi-tenant isolation)"
+        )
+    return add_system_note(session_id, content, user_id=user_id)
 
 
 # ---------------------------------------------------------------------------

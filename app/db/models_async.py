@@ -447,10 +447,18 @@ async def get_message_count_async(session_id: str) -> int:
 
 
 async def add_session_event_async(
-    session_id: str, content: str, interface: str = "terminal"
+    session_id: str,
+    content: str,
+    interface: str = "terminal",
+    user_id: str | None = None,
 ) -> int | None:
+    if not user_id:
+        raise TenantScopeError(
+            "add_session_event_async requires a valid user_id — refusing to "
+            "fall back to a default profile (multi-tenant isolation)"
+        )
     return await add_message_async(
-        session_id, "system", format_session_event(content, interface)
+        session_id, "system", format_session_event(content, interface), user_id=user_id
     )
 
 
@@ -501,17 +509,41 @@ async def get_session_conversation_summary_async(
 
 
 async def add_tool_result_async(
-    session_id: str, tool_name: str, result_content: str
+    session_id: str,
+    tool_name: str,
+    result_content: str,
+    user_id: str | None = None,
 ) -> int | None:
-    return await add_message_async(session_id, tool_role_for(tool_name), result_content)
+    if not user_id:
+        raise TenantScopeError(
+            "add_tool_result_async requires a valid user_id — refusing to "
+            "fall back to a default profile (multi-tenant isolation)"
+        )
+    return await add_message_async(
+        session_id, tool_role_for(tool_name), result_content, user_id=user_id
+    )
 
 
-async def add_system_note_async(session_id: str, content: str) -> int | None:
-    return await add_message_async(session_id, "system", content)
+async def add_system_note_async(
+    session_id: str, content: str, user_id: str | None = None
+) -> int | None:
+    if not user_id:
+        raise TenantScopeError(
+            "add_system_note_async requires a valid user_id — refusing to "
+            "fall back to a default profile (multi-tenant isolation)"
+        )
+    return await add_message_async(session_id, "system", content, user_id=user_id)
 
 
-async def add_memory_note_async(session_id: str, content: str) -> int | None:
-    return await add_system_note_async(session_id, content)
+async def add_memory_note_async(
+    session_id: str, content: str, user_id: str | None = None
+) -> int | None:
+    if not user_id:
+        raise TenantScopeError(
+            "add_memory_note_async requires a valid user_id — refusing to "
+            "fall back to a default profile (multi-tenant isolation)"
+        )
+    return await add_system_note_async(session_id, content, user_id=user_id)
 
 
 # ---------------------------------------------------------------------------
