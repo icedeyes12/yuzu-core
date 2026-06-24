@@ -496,7 +496,9 @@ async def _process_tool_commands_async(
     combined_tool_markdown = "\n\n".join(tool_markdowns)
 
     # Return results for coordination
-    return (combined_tool_markdown, any_image_tool, all_generated_paths)
+    # clean_text is the assistant's preamble with tool blocks stripped —
+    # callers MUST use this (not full_response) for ephemeral context.
+    return (clean_text, combined_tool_markdown, any_image_tool, all_generated_paths)
 
 
 async def _run_orchestration_loop_async(
@@ -580,27 +582,11 @@ async def _run_orchestration_loop_async(
             return
 
         if not has_tool_blocks(synthesis):
-            final_response = (
-                f"{current_synthesis_context}\n\n{synthesis}"
-                if any_image_tool
-                else synthesis
-            )
+            # PERSIST: Save synthesis as a discrete assistant message.
+            # NO Frankenstein concatenation — synthesis is the final answer.
+            await _persist_assistant_async(synthesis, session_id, user_id=user_id)
             await StreamFence.complete(session_id, fence_id)
             log.info(f"[stream] fence {fence_id} completed (final synthesis)")
-            await _post_turn_async(
-                profile,
-                user_message,
-                final_response,
-                session_id,
-                active_session,
-                user_id=user_id,
-            )
-            return
-
-        log.info("[stream] synthesis contains tool blocks, continuing loop")
-
-        next_commands, _ = parse_tool_blocks(synthesis)
-        if not next_commands:
             await _post_turn_async(
                 profile,
                 user_message,
@@ -611,8 +597,34 @@ async def _run_orchestration_loop_async(
             )
             return
 
-        # Append synthesis + next tool results to ephemeral context
-        ephemeral_context.append({"role": "assistant", "content": synthesis})
+        log.info("[stream] synthesis contains tool blocks, continuing loop")
+
+        next_commands, clean_synth = parse_tool_blocks(synthesis)
+        if not next_commands:
+            # No more tool calls — persist clean synthesis and exit
+            await _persist_assistant_async(
+                clean_synth or synthesis, session_id, user_id=user_id
+            )
+            await _post_turn_async(
+                profile,
+                user_message,
+                clean_synth or synthesis,
+                session_id,
+                active_session,
+                user_id=user_id,
+            )
+            return
+
+        # Persist this iteration's synthesis as a discrete assistant message
+        _, clean_synth = parse_tool_blocks(synthesis)
+        if clean_synth and clean_synth.strip():
+            await _persist_assistant_async(clean_synth, session_id, user_id=user_id)
+            log.info("[stream] persisted intermediate synthesis (clean)")
+
+        # Append CLEAN synthesis (tool blocks stripped) to ephemeral context
+        ephemeral_context.append(
+            {"role": "assistant", "content": clean_synth or synthesis}
+        )
 
         next_results = await execute_commands(
             next_commands, session_id=session_id, user_id=user_id
@@ -623,6 +635,10 @@ async def _run_orchestration_loop_async(
         for tool_name, result in next_results:
             tm = result.get("markdown", str(result))
             next_markdowns.append(tm)
+            # Persist each tool result as a discrete message
+            await _persist_tool_result_async(
+                tool_name, tm, session_id, user_id=user_id
+            )
             p = parse_image_path(tm)
             if p:
                 any_image_tool = True
@@ -630,10 +646,18 @@ async def _run_orchestration_loop_async(
             yield "\n\n" + tm
 
         next_combined = "\n\n".join(next_markdowns)
-        ephemeral_context.append({"role": "user", "content": next_combined})
+        # Wrap tool results in SYSTEM_OBSERVATION — NOT raw user content
+        ephemeral_context.append(
+            {"role": "user", "content": f"<SYSTEM_OBSERVATION>\n{next_combined}\n</SYSTEM_OBSERVATION>"}
+        )
         current_synthesis_context = next_combined
 
-    # Max loops reached
+    # Max loops reached — persist whatever synthesis we have
+    if synthesis:
+        _, clean_synth = parse_tool_blocks(synthesis)
+        await _persist_assistant_async(
+            clean_synth or synthesis, session_id, user_id=user_id
+        )
     await StreamFence.complete(session_id, fence_id)
     await _post_turn_async(
         profile,
@@ -741,12 +765,12 @@ async def handle_user_message(
             await _post_turn_async(
                 profile,
                 user_message,
-                final,
+                synthesis or combined,
                 session_id,
                 active_session,
                 user_id=user_id,
             )
-            return final
+            return final  # CLI display value; DB has discrete messages
 
     provider_name = (profile.get("providers_config") or {}).get(
         "preferred_provider", "ollama"
@@ -797,10 +821,10 @@ async def handle_user_message(
                 [parse_image_path(tool_markdown)] if is_image_tool else None
             )
 
-            # Build ephemeral context for synthesis
+            # Build ephemeral context — clean text + SYSTEM_OBSERVATION wrapper
             ephemeral_context = [
                 {"role": "assistant", "content": text_response},
-                {"role": "user", "content": tool_markdown},
+                {"role": "user", "content": f"<SYSTEM_OBSERVATION>\n{tool_markdown}\n</SYSTEM_OBSERVATION>"},
             ]
 
             synthesis = await _run_synthesis_async(
@@ -819,15 +843,16 @@ async def handle_user_message(
                 final_response = (
                     f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
                 )
+                # Pass ONLY synthesis to memory pipeline — no tool markdown
                 await _post_turn_async(
                     profile,
                     user_message,
-                    final_response,
+                    synthesis,
                     session_id,
                     active_session,
                     user_id=user_id,
                 )
-                return final_response
+                return final_response  # CLI display; DB has discrete messages
 
             await _post_turn_async(
                 profile,
@@ -1067,29 +1092,34 @@ async def handle_user_message_streaming(
     tool_result = await _process_tool_commands_async(
         full_response, session_id, user_id=user_id
     )
-    combined_tool_markdown, any_image_tool, all_generated_paths = tool_result
+    # Unpack clean_text (tool blocks stripped) — use this, NOT full_response,
+    # for ephemeral context to prevent context poisoning.
+    clean_text, combined_tool_markdown, any_image_tool, all_generated_paths = tool_result
 
     # Yield tool markdown chunks
     if combined_tool_markdown:
         yield "\n\n" + combined_tool_markdown
 
     # === PHASE 5: Build ephemeral context for synthesis ===
+    # CRITICAL: Use clean_text (tool blocks stripped), NOT full_response.
+    # Wrap tool results in <SYSTEM_OBSERVATION> so the LLM knows this is a
+    # tool result, not user input. This prevents context poisoning.
     ephemeral_context: list[dict[str, str]] = [
-        {"role": "assistant", "content": full_response},
-        {"role": "user", "content": combined_tool_markdown},
+        {"role": "assistant", "content": clean_text or full_response},
+        {"role": "user", "content": f"<SYSTEM_OBSERVATION>\n{combined_tool_markdown}\n</SYSTEM_OBSERVATION>"},
     ]
 
     current_synthesis_context = combined_tool_markdown
     # all_generated_paths is already a list from _process_tool_commands_async
 
     if not combined_tool_markdown:
-        # No tool output, just finalize
+        # No tool output, just finalize — StreamManager persists full_response
         await _finalize_and_persist_async(
             session_id,
             fence_id,
             profile,
             user_message,
-            full_response,
+            clean_text or full_response,
             active_session,
             user_id=user_id,
         )
