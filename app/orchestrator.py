@@ -411,11 +411,14 @@ async def _post_turn_async(
     final_response: str,
     session_id: str,
     active_session: dict[str, Any],
+    *,
+    user_id: str,
 ) -> None:
     """Auto-rename session, summarize memory, trigger memory pipeline (async)."""
-    user_id = profile.get("id")
     if not user_id:
-        log.warning("_post_turn_async: profile has no id — memory pipeline skipped")
+        user_id = profile.get("id")
+    if not user_id:
+        log.warning("_post_turn_async: no user_id — memory pipeline skipped")
         return
 
     # Auto-rename via service
@@ -538,6 +541,7 @@ async def _run_orchestration_loop_async(
                 interface,
                 current_synthesis_context,
                 ephemeral_context=ephemeral_context,
+                user_id=user_id,
             ):
                 if chunk:
                     if abort_check and abort_check():
@@ -571,6 +575,7 @@ async def _run_orchestration_loop_async(
                 current_synthesis_context,
                 session_id,
                 active_session,
+                user_id=user_id,
             )
             return
 
@@ -583,7 +588,8 @@ async def _run_orchestration_loop_async(
             await StreamFence.complete(session_id, fence_id)
             log.info(f"[stream] fence {fence_id} completed (final synthesis)")
             await _post_turn_async(
-                profile, user_message, final_response, session_id, active_session
+                profile, user_message, final_response, session_id, active_session,
+                user_id=user_id,
             )
             return
 
@@ -592,14 +598,17 @@ async def _run_orchestration_loop_async(
         next_commands, _ = parse_tool_blocks(synthesis)
         if not next_commands:
             await _post_turn_async(
-                profile, user_message, synthesis, session_id, active_session
+                profile, user_message, synthesis, session_id, active_session,
+                user_id=user_id,
             )
             return
 
         # Append synthesis + next tool results to ephemeral context
         ephemeral_context.append({"role": "assistant", "content": synthesis})
 
-        next_results = await execute_commands(next_commands, session_id=session_id)
+        next_results = await execute_commands(
+            next_commands, session_id=session_id, user_id=user_id
+        )
         next_markdowns: list[str] = []
         any_image_tool = False
 
@@ -624,6 +633,7 @@ async def _run_orchestration_loop_async(
         synthesis or current_synthesis_context,
         session_id,
         active_session,
+        user_id=user_id,
     )
 
 
@@ -644,7 +654,8 @@ async def _finalize_and_persist_async(
     await StreamFence.complete(session_id, fence_id)
     log.info(f"[stream] fence {fence_id} completed")
     await _post_turn_async(
-        profile, user_message, final_response, session_id, active_session
+        profile, user_message, final_response, session_id, active_session,
+        user_id=user_id,
     )
 
 
@@ -679,7 +690,9 @@ async def handle_user_message(
                 user_message, session_id, cached_images, user_id=user_id
             )
 
-            results = await execute_commands(commands, session_id=session_id)
+            results = await execute_commands(
+                commands, session_id=session_id, user_id=user_id
+            )
             tool_markdowns = []
 
             for tool_name, result in results:
@@ -699,7 +712,7 @@ async def handle_user_message(
 
             # Run synthesis
             synthesis = await _run_synthesis_async(
-                profile, session_id, interface, combined
+                profile, session_id, interface, combined, user_id=user_id
             )
             if synthesis:
                 await _persist_assistant_async(
@@ -714,7 +727,8 @@ async def handle_user_message(
                 final = combined
 
             await _post_turn_async(
-                profile, user_message, final, session_id, active_session
+                profile, user_message, final, session_id, active_session,
+                user_id=user_id,
             )
             return final
 
@@ -778,6 +792,7 @@ async def handle_user_message(
                 session_id,
                 interface,
                 tool_markdown,
+                user_id=user_id,
                 ephemeral_context=ephemeral_context,
             )
 
@@ -789,18 +804,21 @@ async def handle_user_message(
                     f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
                 )
                 await _post_turn_async(
-                    profile, user_message, final_response, session_id, active_session
+                    profile, user_message, final_response, session_id, active_session,
+                    user_id=user_id,
                 )
                 return final_response
 
             await _post_turn_async(
-                profile, user_message, tool_markdown, session_id, active_session
+                profile, user_message, tool_markdown, session_id, active_session,
+                user_id=user_id,
             )
             return tool_markdown
 
     await _persist_assistant_async(text_response, session_id, user_id=user_id)
     await _post_turn_async(
-        profile, user_message, text_response, session_id, active_session
+        profile, user_message, text_response, session_id, active_session,
+        user_id=user_id,
     )
     return text_response
 
@@ -1006,6 +1024,7 @@ async def handle_user_message_streaming(
             user_message,
             _EMPTY_RESPONSE_FALLBACK,
             active_session,
+            user_id=user_id,
         )
         yield _EMPTY_RESPONSE_FALLBACK
         return
@@ -1038,7 +1057,13 @@ async def handle_user_message_streaming(
     if not combined_tool_markdown:
         # No tool output, just finalize
         await _finalize_and_persist_async(
-            session_id, fence_id, profile, user_message, full_response, active_session
+            session_id,
+            fence_id,
+            profile,
+            user_message,
+            full_response,
+            active_session,
+            user_id=user_id,
         )
         return
 
