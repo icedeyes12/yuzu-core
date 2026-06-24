@@ -588,7 +588,11 @@ async def _run_orchestration_loop_async(
             await StreamFence.complete(session_id, fence_id)
             log.info(f"[stream] fence {fence_id} completed (final synthesis)")
             await _post_turn_async(
-                profile, user_message, final_response, session_id, active_session,
+                profile,
+                user_message,
+                final_response,
+                session_id,
+                active_session,
                 user_id=user_id,
             )
             return
@@ -598,7 +602,11 @@ async def _run_orchestration_loop_async(
         next_commands, _ = parse_tool_blocks(synthesis)
         if not next_commands:
             await _post_turn_async(
-                profile, user_message, synthesis, session_id, active_session,
+                profile,
+                user_message,
+                synthesis,
+                session_id,
+                active_session,
                 user_id=user_id,
             )
             return
@@ -654,7 +662,11 @@ async def _finalize_and_persist_async(
     await StreamFence.complete(session_id, fence_id)
     log.info(f"[stream] fence {fence_id} completed")
     await _post_turn_async(
-        profile, user_message, final_response, session_id, active_session,
+        profile,
+        user_message,
+        final_response,
+        session_id,
+        active_session,
         user_id=user_id,
     )
 
@@ -727,7 +739,11 @@ async def handle_user_message(
                 final = combined
 
             await _post_turn_async(
-                profile, user_message, final, session_id, active_session,
+                profile,
+                user_message,
+                final,
+                session_id,
+                active_session,
                 user_id=user_id,
             )
             return final
@@ -804,20 +820,32 @@ async def handle_user_message(
                     f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
                 )
                 await _post_turn_async(
-                    profile, user_message, final_response, session_id, active_session,
+                    profile,
+                    user_message,
+                    final_response,
+                    session_id,
+                    active_session,
                     user_id=user_id,
                 )
                 return final_response
 
             await _post_turn_async(
-                profile, user_message, tool_markdown, session_id, active_session,
+                profile,
+                user_message,
+                tool_markdown,
+                session_id,
+                active_session,
                 user_id=user_id,
             )
             return tool_markdown
 
     await _persist_assistant_async(text_response, session_id, user_id=user_id)
     await _post_turn_async(
-        profile, user_message, text_response, session_id, active_session,
+        profile,
+        user_message,
+        text_response,
+        session_id,
+        active_session,
         user_id=user_id,
     )
     return text_response
