@@ -102,7 +102,9 @@ async def api_get_profile(
         )  # ownership via session FK
 
         profile_dict = ConfigService.format_profile_dict(profile)
-        ai_providers_payload = await ConfigService.get_ai_providers_payload(user_id, profile)
+        ai_providers_payload = await ConfigService.get_ai_providers_payload(
+            user_id, profile
+        )
         vision_capabilities = ConfigService.get_vision_capabilities()
 
         return {
