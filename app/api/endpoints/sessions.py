@@ -112,7 +112,7 @@ async def api_switch_session(
         client_id = get_client_id(http_request)
         SessionService.clear_client_session(client_id)
 
-        await SessionService.start_session_async(interface="web")
+        await SessionService.start_session_async(interface="web", user_id=user_id)
 
         SessionService.mark_client_connected(client_id)
 
@@ -220,7 +220,7 @@ async def api_end_session(request: Request, user_id: str = Depends(get_current_u
 
         profile = await Database.get_profile_async(user_id)
         await SessionService.end_session_cleanup_async(
-            profile, interface="web", unexpected_exit=False
+            profile, interface="web", unexpected_exit=False, user_id=user_id
         )
         return {"status": "session ended"}
     except Exception:

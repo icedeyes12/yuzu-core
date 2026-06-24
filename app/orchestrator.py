@@ -268,8 +268,8 @@ def _clean(text: str) -> str:
 
 async def _persist_user_async(
     message: str, session_id: str, image_paths: list[str] | None, *, user_id: str
-) -> None:
-    await Database.add_message_async(
+) -> int | None:
+    return await Database.add_message_async(
         "user",
         message,
         session_id=session_id,
@@ -961,7 +961,7 @@ async def handle_user_message_streaming(
 
     # FENCE: Acquire fence before persisting user message
     user_msg_id = await _persist_user_async(
-        user_message, session_id, all_image_paths or None, user_id
+        user_message, session_id, all_image_paths or None, user_id=user_id
     )
     fence_id = await StreamFence.acquire(session_id, user_msg_id or 0)
     log.info(f"[stream] fence {fence_id} acquired for session {session_id}")

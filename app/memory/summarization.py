@@ -82,7 +82,7 @@ async def summarize_memory_async(
     user_message: str,
     ai_reply: str,
     session_id: str,
-    user_id: str | None = None,
+    user_id: str,
 ) -> bool:
     history = (
         await Database.get_chat_history_async(
@@ -144,12 +144,12 @@ just a natural paragraph.
         },
     )
 
-    await _sync_episodic_to_db_async(session_id, paragraph.strip(), history)
+    await _sync_episodic_to_db_async(session_id, paragraph.strip(), history, user_id)
     return True
 
 
 async def _sync_episodic_to_db_async(
-    session_id: str, summary: str, history: list[dict[str, Any]]
+    session_id: str, summary: str, history: list[dict[str, Any]], user_id: str
 ) -> None:
     try:
         from app.memory.extractor import (
@@ -171,6 +171,7 @@ async def _sync_episodic_to_db_async(
             emotional,
             importance,
             source_message_ids=[m["id"] for m in recent],
+            user_id=user_id,
         )
     except Exception as e:
         log.warning("sync episodic to DB failed: %s", e)

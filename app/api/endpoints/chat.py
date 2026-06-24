@@ -201,7 +201,7 @@ async def api_browser_unload(
 
         profile = await Database.get_profile_async(user_id)
         await SessionService.end_session_cleanup_async(
-            profile, interface="web", unexpected_exit=True
+            profile, interface="web", unexpected_exit=True, user_id=user_id
         )
 
         return {"status": "page closed"}

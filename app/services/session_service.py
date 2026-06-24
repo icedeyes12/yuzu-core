@@ -196,7 +196,7 @@ class SessionService:
         disconnect_msg = SessionService.generate_disconnect_msg(
             profile["display_name"], interface, duration_minutes, unexpected_exit
         )
-        await Database.add_message_async("system", disconnect_msg, session_id)
+        await Database.add_message_async("system", disconnect_msg, session_id, user_id=user_id)
 
         history["last_session"] = {
             "end_time": datetime.now().isoformat(),

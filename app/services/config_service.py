@@ -83,8 +83,8 @@ class ConfigService:
         profile = await Database.get_profile_async(user_id)
         return {
             "status": "success",
-            "ai_providers": await ConfigService.get_ai_providers_payload(profile),
-            "vision": ConfigService.get_vision_payload(profile),
+            "ai_providers": await ConfigService.get_ai_providers_payload(user_id, profile),
+            "vision": ConfigService.get_vision_payload(user_id, profile),
         }
 
     @staticmethod
