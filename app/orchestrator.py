@@ -463,7 +463,7 @@ async def _process_tool_commands_async(
     commands, clean_text = parse_tool_blocks(full_response)
 
     if not commands:
-        return ("", False, [])
+        return ("", "", False, [])
 
     log.info("[stream] found %d tool block(s)", len(commands))
 
