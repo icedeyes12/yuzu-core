@@ -636,9 +636,7 @@ async def _run_orchestration_loop_async(
             tm = result.get("markdown", str(result))
             next_markdowns.append(tm)
             # Persist each tool result as a discrete message
-            await _persist_tool_result_async(
-                tool_name, tm, session_id, user_id=user_id
-            )
+            await _persist_tool_result_async(tool_name, tm, session_id, user_id=user_id)
             p = parse_image_path(tm)
             if p:
                 any_image_tool = True
@@ -648,7 +646,10 @@ async def _run_orchestration_loop_async(
         next_combined = "\n\n".join(next_markdowns)
         # Wrap tool results in SYSTEM_OBSERVATION — NOT raw user content
         ephemeral_context.append(
-            {"role": "user", "content": f"<SYSTEM_OBSERVATION>\n{next_combined}\n</SYSTEM_OBSERVATION>"}
+            {
+                "role": "user",
+                "content": f"<SYSTEM_OBSERVATION>\n{next_combined}\n</SYSTEM_OBSERVATION>",
+            }
         )
         current_synthesis_context = next_combined
 
@@ -824,7 +825,10 @@ async def handle_user_message(
             # Build ephemeral context — clean text + SYSTEM_OBSERVATION wrapper
             ephemeral_context = [
                 {"role": "assistant", "content": text_response},
-                {"role": "user", "content": f"<SYSTEM_OBSERVATION>\n{tool_markdown}\n</SYSTEM_OBSERVATION>"},
+                {
+                    "role": "user",
+                    "content": f"<SYSTEM_OBSERVATION>\n{tool_markdown}\n</SYSTEM_OBSERVATION>",
+                },
             ]
 
             synthesis = await _run_synthesis_async(
@@ -1094,7 +1098,9 @@ async def handle_user_message_streaming(
     )
     # Unpack clean_text (tool blocks stripped) — use this, NOT full_response,
     # for ephemeral context to prevent context poisoning.
-    clean_text, combined_tool_markdown, any_image_tool, all_generated_paths = tool_result
+    clean_text, combined_tool_markdown, any_image_tool, all_generated_paths = (
+        tool_result
+    )
 
     # Yield tool markdown chunks
     if combined_tool_markdown:
@@ -1106,7 +1112,10 @@ async def handle_user_message_streaming(
     # tool result, not user input. This prevents context poisoning.
     ephemeral_context: list[dict[str, str]] = [
         {"role": "assistant", "content": clean_text or full_response},
-        {"role": "user", "content": f"<SYSTEM_OBSERVATION>\n{combined_tool_markdown}\n</SYSTEM_OBSERVATION>"},
+        {
+            "role": "user",
+            "content": f"<SYSTEM_OBSERVATION>\n{combined_tool_markdown}\n</SYSTEM_OBSERVATION>",
+        },
     ]
 
     current_synthesis_context = combined_tool_markdown
