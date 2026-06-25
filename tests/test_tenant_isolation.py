@@ -24,6 +24,7 @@ from app.memory.db_memory_queries import (
 
 # ── Integration test targets ─────────────────────────────────────────────────
 from app.db import Database
+from app.db.facade import TenantScopeError
 from app.memory.db_memory import (
     get_fact_by_id_async,
     get_facts_by_session_async,
@@ -717,6 +718,50 @@ def tenant_db(monkeypatch):
     )
 
     return db
+
+
+# ── Tenant Scope Guard (Phase 4.4 boundary check) ──────────────────────────
+
+
+class TestTenantScopeGuard:
+    """Falsy user_id must fail loud at the facade boundary — never reach a
+    tenant-scoped query. Pure unit tests: the guard fires before any DB
+    access, so no tenant_db fixture is needed."""
+
+    def test_sync_add_message_rejects_empty_user_id(self):
+        with pytest.raises(TenantScopeError):
+            Database.add_message("user", "hi", user_id="")
+
+    def test_sync_add_message_rejects_none_user_id(self):
+        with pytest.raises(TenantScopeError):
+            Database.add_message("user", "hi", user_id=None)  # type: ignore[arg-type]
+
+    def test_get_messages_rejects_whitespace_user_id(self):
+        with pytest.raises(TenantScopeError):
+            Database.get_messages(user_id="   ")
+
+    def test_clear_session_rejects_empty_user_id(self):
+        with pytest.raises(TenantScopeError):
+            Database.clear_session(user_id="")
+
+    @pytest.mark.asyncio
+    async def test_async_add_message_rejects_empty_user_id(self):
+        with pytest.raises(TenantScopeError):
+            await Database.add_message_async("user", "hi", user_id="")
+
+    def test_add_tool_result_now_requires_user_id(self):
+        # Regression: add_tool_result previously called _resolve_session_id
+        # with a single arg (TypeError at runtime). Now keyword-only user_id
+        # + guard — falsy user_id raises TenantScopeError instead.
+        with pytest.raises(TenantScopeError):
+            Database.add_tool_result("bash", "out", user_id="")
+
+    def test_add_system_note_rejects_falsy_default(self):
+        # Regression: add_system_note had `user_id: str = ""` (a falsy default
+        # that silently scoped queries to an empty tenant). The default is now
+        # removed; falsy user_id raises TenantScopeError.
+        with pytest.raises(TenantScopeError):
+            Database.add_system_note("note", user_id="")
 
 
 # ── Profile Isolation ────────────────────────────────────────────────────────
