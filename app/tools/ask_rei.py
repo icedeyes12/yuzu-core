@@ -94,7 +94,7 @@ def execute(arguments, **kwargs):
     """
     from app.db import get_profile
 
-    profile = get_profile() or {}
+    profile = get_profile(kwargs.get("user_id")) or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     # Parse arguments

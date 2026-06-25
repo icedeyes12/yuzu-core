@@ -72,7 +72,7 @@ class ChutesProvider(AIProvider):
 
         IMPORTANT: Sleep happens OUTSIDE rate limit lock to not block queue.
         """
-        if not self.resolve_api_key() or model not in self.available_models:
+        if model not in self.available_models:
             return None
 
         log_prefix = kwargs.pop("log_prefix", "[CHAT]")
@@ -188,7 +188,7 @@ class ChutesProvider(AIProvider):
         stream = kwargs.get("stream", False)
 
         headers = {
-            "Authorization": f"Bearer {self.resolve_api_key()}",
+            "Authorization": f"Bearer {self._require_api_key()}",
             "Content-Type": "application/json",
         }
 
@@ -226,7 +226,7 @@ class ChutesProvider(AIProvider):
     async def send_message_streaming(
         self, messages: list[dict], model: str, source: str = "llm", **kwargs
     ) -> AsyncGenerator[str, None]:
-        if not self.resolve_api_key() or model not in self.available_models:
+        if model not in self.available_models:
             reason = (
                 "missing API key"
                 if not self.resolve_api_key()
@@ -257,7 +257,7 @@ class ChutesProvider(AIProvider):
             typical_p = kwargs.get("typical_p", 0.85)
 
             headers = {
-                "Authorization": f"Bearer {self.resolve_api_key()}",
+                "Authorization": f"Bearer {self._require_api_key()}",
                 "Content-Type": "application/json",
             }
 

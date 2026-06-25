@@ -6,7 +6,12 @@ import asyncio
 from typing import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from app.core.context import resolve_api_key, resolve_base_url, resolve_model
+from app.core.context import (
+    resolve_api_key,
+    resolve_base_url,
+    resolve_model,
+    MissingProviderKeyError,
+)
 from app.tools import multimodal_tools
 
 logger = logging.getLogger(__name__)
@@ -217,14 +222,26 @@ class AIProvider:
             self.is_available = bool(self.api_key)
 
     async def _load_api_key(self) -> str | None:
-        """Resolve API key from request plane (ContextVar) then system plane (env).
+        """Resolve API key from request plane (ContextVar) or system plane (env).
 
-        DB-stored keys are decommissioned (Phase 3.1 BYOK). No DB read remains.
+        The database is NO LONGER consulted. Keys live client-side (BYOK)
+        and are delivered per-request via X-Provider-Key header. If neither
+        the request plane nor the system plane has a key, this returns None
+        and the provider's is_available flag is set to False at init time.
         """
-        try:
-            return resolve_api_key(self.name)
-        except Exception:
-            return None
+        return resolve_api_key(self.name)
+
+    def _require_api_key(self) -> str:
+        """Resolve and return the API key, raising MissingProviderKeyError if absent.
+
+        Call this at the top of send_message / send_message_streaming in
+        every provider that requires a key (i.e., not Ollama). The error
+        propagates to the API layer which maps it to HTTP 424.
+        """
+        key = resolve_api_key(self.name)
+        if not key:
+            raise MissingProviderKeyError(self.name)
+        return key
 
     async def get_models(self) -> list[str]:
         raise NotImplementedError

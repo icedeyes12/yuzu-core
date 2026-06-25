@@ -312,7 +312,7 @@ def get_fact_by_id(id: int, user_id: str | None = None) -> dict | None:
     return pg_fetchone(SQL_FACT_SELECT_BY_ID, (id, user_id))
 
 
-async def get_fact_by_id_async(id: int, user_id: str | None = None) -> dict | None:
+async def get_fact_by_id_async(id: int, user_id: str) -> dict | None:
     """Async version of get_fact_by_id."""
     if not user_id:
         raise ValueError("get_fact_by_id_async: user_id is required")
@@ -654,7 +654,7 @@ async def update_last_accessed_async(ids: list[int]) -> int:
         return 0
 
 
-async def invalidate_fact_async(id: int, user_id: str | None = None) -> bool:
+async def invalidate_fact_async(id: int, user_id: str) -> bool:
     """Async version of invalidate_fact."""
     if not user_id:
         raise ValueError("invalidate_fact_async: user_id is required")

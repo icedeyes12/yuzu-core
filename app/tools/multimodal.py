@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from PIL import Image
 import io
-from app.db import get_profile
 from app.core.context import resolve_api_key
 
 logger = logging.getLogger(__name__)
@@ -555,10 +554,10 @@ class MultimodalTools:
         Returns:
             Tuple of (provider_name, model_name) or (None, None) if none available
         """
+
         # 1. Check user's saved preference first
         try:
-            profile = get_profile()
-            providers_config = profile.get("providers_config", {})
+            providers_config = {}
             prefs = providers_config.get("vision_model_preferences", {})
             saved_provider = prefs.get("provider")
             saved_model = prefs.get("model")

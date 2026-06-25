@@ -407,7 +407,26 @@ async function loadImageModel() {
 		const data = await response.json();
 
 		const imageModel = data.image_model || "qwen_image";
-		document.getElementById("image-model").value = imageModel;
+
+		// Populate available image models dynamically (matches backend's
+		// supported models in app/tools/image_generate.py)
+		const select = document.getElementById("image-model");
+		if (select) {
+			const availableModels = [
+				{ value: "qwen_image", label: "Qwen Image" },
+				{ value: "z_turbo", label: "Z Image Turbo" },
+			];
+			select.innerHTML = "";
+			availableModels.forEach((m) => {
+				const option = document.createElement("option");
+				option.value = m.value;
+				option.textContent = m.label;
+				if (m.value === imageModel) {
+					option.selected = true;
+				}
+				select.appendChild(option);
+			});
+		}
 
 		console.log("Image model loaded:", imageModel);
 	} catch (error) {

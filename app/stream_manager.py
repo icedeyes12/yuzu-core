@@ -61,6 +61,18 @@ class StreamBuffer:
         if not content and not is_error:
             return
 
+        # FRANKENSTEIN GUARD: If the accumulated content contains tool blocks,
+        # the orchestrator has already persisted discrete messages (clean_text
+        # as assistant, tool results as tool roles, synthesis as assistant).
+        # Skip the single-write persistence to prevent double-saving a
+        # Frankenstein concatenation of all three.
+        if "<tool>" in content or "<command>" in content:
+            log.info(
+                f"[Stream] Skipping _persist_to_db — orchestrator handled "
+                f"discrete persistence for session {self.session_id}"
+            )
+            return
+
         try:
             from app.db import Database
 
@@ -73,6 +85,7 @@ class StreamBuffer:
                 "assistant",
                 final_content,
                 session_id=self.session_id,
+                user_id=self.user_id,
             )
             log.info(
                 f"[Stream] Persisted {len(final_content)} chars to DB for session {self.session_id}"

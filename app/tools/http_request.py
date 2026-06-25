@@ -111,7 +111,7 @@ def get_media_dir() -> Path:
 async def execute(arguments, **kwargs):
     from app.db import Database
 
-    profile = await Database.get_profile_async() or {}
+    profile = await Database.get_profile_async(kwargs.get("user_id")) or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     if isinstance(arguments, dict):

@@ -174,12 +174,12 @@ def _resolve_path(path: str) -> Path | None:
 # --------------------------------------------------------------------
 
 
-def _get_partner_name() -> str:
+def _get_partner_name(user_id: str | None = None) -> str:
     """Get partner name from profile."""
     try:
         from app.db import get_profile
 
-        profile = get_profile() or {}
+        profile = get_profile(user_id) if user_id else {}
         return profile.get("partner_name", "Yuzu")
     except Exception:
         return "Yuzu"

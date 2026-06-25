@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Depends, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -23,7 +23,8 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 from app.db import Database  # noqa: E402
 from app.db.connection import get_sync_pool, get_async_pool, close_async_pool  # noqa: E402
 from app.api import api_router  # noqa: E402
-from app.services.session_service import SessionService  # noqa: E402
+from app.api.utils import get_current_user  # noqa: E402
+from app.services.session_service import SessionService  # noqa: E402, F401
 from app.logging_config import get_logger  # noqa: E402
 
 log = get_logger(__name__)
@@ -187,42 +188,42 @@ async def favicon():
 
 
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    profile = await Database.get_profile_async()
+async def home(request: Request, user_id: str = Depends(get_current_user)):
+    profile = await Database.get_profile_async(user_id)
     return templates.TemplateResponse(
-        request=request, name="index.html", context={"profile": profile}
+        request=request,
+        name="index.html",
+        context={"profile": profile, "current_page": "home"},
     )
 
 
 @app.get("/chat", response_class=HTMLResponse)
-async def chat_page(request: Request):
-    client_id = _get_session_id(request)
-
-    if not SessionService.is_client_connected(client_id):
-        print(f"Web session not found for {client_id}, starting new web session...")
-        SessionService.start_session(interface="web")
-        SessionService.mark_client_connected(client_id)
-        print("Web session started and flagged.")
-
-    profile = await Database.get_profile_async()
+async def chat_page(request: Request, user_id: str = Depends(get_current_user)):
+    profile = await Database.get_profile_async(user_id)
     return templates.TemplateResponse(
-        request=request, name="chat.html", context={"profile": profile}
+        request=request,
+        name="chat.html",
+        context={"profile": profile, "current_page": "chat"},
     )
 
 
 @app.get("/config", response_class=HTMLResponse)
-async def config_page(request: Request):
-    profile = await Database.get_profile_async()
+async def config_page(request: Request, user_id: str = Depends(get_current_user)):
+    profile = await Database.get_profile_async(user_id)
     return templates.TemplateResponse(
-        request=request, name="config.html", context={"profile": profile}
+        request=request,
+        name="config.html",
+        context={"profile": profile, "current_page": "config"},
     )
 
 
 @app.get("/about", response_class=HTMLResponse)
-async def about_page(request: Request):
-    profile = await Database.get_profile_async()
+async def about_page(request: Request, user_id: str = Depends(get_current_user)):
+    profile = await Database.get_profile_async(user_id)
     return templates.TemplateResponse(
-        request=request, name="about.html", context={"profile": profile}
+        request=request,
+        name="about.html",
+        context={"profile": profile, "current_page": "about"},
     )
 
 

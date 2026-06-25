@@ -27,7 +27,7 @@
 
 Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ (3.13 compatible) on the backend, vanilla JS on the frontend. Key facts:
 
-- **No ORM** — All database access is raw psycopg2 SQL. No SQLAlchemy, no Django ORM.
+- **No ORM** — All database access is raw psycopg v3 SQL (`psycopg[binary,pool]>=3.1`). No SQLAlchemy, no Django ORM.
 - **No SQLite** — PostgreSQL only, with pgvector extension for vector search.
 - **No build step** — Frontend is vanilla JS/ESM, no bundler, no npm.
 - **No Flask** — FastAPI only (migrated in v2.0.0).
@@ -47,10 +47,10 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 | `file app/providers.py` | AI provider hierarchy + `AIProviderManager` singleton |
 | `file app/tools/registry.py` | Central tool dispatch — **only** place tools are executed |
 | `app/memory/` | Full memory pipeline (extraction, embedding, retrieval, retention) |
-| `file app/db/facade.py` | `Database` class — stable API over raw psycopg2 |
+| `file app/db/facade.py` | `Database` class — stable API over raw psycopg v3 |
 | `file app/db/queries.py` | **Single source of truth** for all SQL strings |
 | `file app/stream_manager.py` | Background stream buffers, reconnect state, incremental persistence |
-| `file app/web.py` | FastAPI entry point (~130 lines, minimal) |
+| `file main.py` | FastAPI entry point (~130 lines, minimal) |
 | `file app/cli.py` | CLI entry point (Rich TUI) |
 | `file static/js/chat.js` | Chat UI, SSE streaming, typing indicator |
 | `file static/js/renderer.js` | Marked.js v18 + Mermaid rendering |
@@ -210,7 +210,7 @@ If unsure, check `app/orchestrator.py` for reference implementations.
 
  6. **NEVER add** `print()` **statements.** Use `get_logger(__name__)` from `file logging_config.py`.
  7. **NEVER add new dependencies** without explicit approval. The dependency surface is intentionally minimal.
- 8. **NEVER modify** `file app/web.py` **unless the change is about routing or static mounts.** Business logic lives in `app/`.
+ 8. **NEVER modify** `file main.py` **unless the change is about routing or static mounts.** Business logic lives in `app/`.
  9. **NEVER add new streaming pipelines or files** when fixing streaming issues. Fix existing code.
 10. **ALWAYS use** `from __future__ import annotations` at the top of every Python file.
 11. **ALWAYS use modern type syntax** (`list[X]`, `X | None`) — never `typing.List`, `typing.Optional`.
@@ -305,7 +305,7 @@ flowchart TB
     subgraph Interfaces["User Interfaces"]
         direction LR
         TERM["Terminal (main.py)"]
-        WEB["Web Browser (web.py)"]
+        WEB["Web Browser (main.py)"]
         EXT["External API Consumers"]
     end
 
@@ -630,7 +630,7 @@ python3 -m pytest tests/ -v
 - Don't add new LLM call sites outside `file llm_client.py`
 - Don't drop tables or hard-delete facts
 - Don't add npm/bundler to the frontend
-- Don't modify `file web.py` for business logic
+- Don't modify `file main.py` for business logic
 - Don't assume a client disconnect invalidates the in-flight assistant response
 
 ---

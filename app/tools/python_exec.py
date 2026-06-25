@@ -198,7 +198,10 @@ def _execute_python(code: str) -> tuple[bool, str, str, int]:
 
 
 def execute(
-    arguments: dict, session_id: str | None = None, tool_name: str = TOOL_NAME
+    arguments: dict,
+    session_id: str | None = None,
+    tool_name: str = TOOL_NAME,
+    user_id: str | None = None,
 ) -> dict:
     """Execute Python code and return result dict.
 
@@ -275,12 +278,12 @@ def execute(
         )
 
 
-def _get_partner_name() -> str:
+def _get_partner_name(user_id: str | None = None) -> str:
     """Get partner name from profile."""
     try:
         from app.db import Database
 
-        profile = Database.get_profile()
+        profile = Database.get_profile(user_id)
         return profile.get("partner_name", "Yuzu")
     except Exception:
         return "Yuzu"

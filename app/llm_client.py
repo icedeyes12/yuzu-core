@@ -310,7 +310,9 @@ async def generate_ai_response(
         user_message
     ) and not multimodal_tools.is_vision_model(model):
         error_msg = "[System] Current model does not support vision. Please reconfigure your active model to a multimodal one first~ :3"
-        await Database.add_message_async("system", error_msg, session_id=session_id)
+        await Database.add_message_async(
+            "system", error_msg, session_id=session_id, user_id=user_id
+        )
         return error_msg, None
 
     # build_messages() fetches history which ALREADY contains the user message
@@ -441,7 +443,9 @@ async def generate_ai_response_streaming(
         user_message
     ) and not multimodal_tools.is_vision_model(resolved_model):
         error_msg = "[System] Current model does not support vision. Please reconfigure your active model to a multimodal one first~ :3"
-        await Database.add_message_async("system", error_msg, session_id=session_id)
+        await Database.add_message_async(
+            "system", error_msg, session_id=session_id, user_id=user_id
+        )
         yield error_msg
         return
 

@@ -15,6 +15,12 @@ from app.db.queries import (
     ALL_TOOL_ROLES,
     DEFAULT_PROFILE_PARAMS,
     SCHEMA_DDL,
+    SQL_APIKEY_DELETE,
+    SQL_APIKEY_INSERT,
+    SQL_APIKEY_SELECT_ALL,
+    SQL_APIKEY_SELECT_BY_NAME,
+    SQL_APIKEY_SELECT_ID_BY_NAME,
+    SQL_APIKEY_UPDATE,
     SQL_ENC_ENCRYPTED_KEYS,
     SQL_ENC_ENCRYPTED_MESSAGES,
     SQL_ENC_TOTAL_KEYS,
@@ -33,21 +39,23 @@ from app.db.queries import (
     SQL_MESSAGE_UPDATE,
     SQL_MESSAGE_UPDATE_DECRYPTED,
     SQL_PROFILE_INSERT_DEFAULT,
-    SQL_PROFILE_SELECT_FIRST,
-    SQL_SESSION_ACTIVATE_ONE,
-    SQL_SESSION_DEACTIVATE_ALL,
-    SQL_SESSION_DELETE,
+    SQL_PROFILE_SELECT_BY_ID,
+    SQL_SESSION_ACTIVATE_ONE_SCOPED,
+    SQL_SESSION_DEACTIVATE_FOR_USER,
+    SQL_SESSION_DELETE_SCOPED,
+    SQL_SESSION_RENAME_SCOPED,
+    SQL_SESSION_SELECT_ACTIVE_FOR_USER,
+    SQL_SESSION_SELECT_ALL_FOR_USER,
     SQL_SESSION_INCREMENT_COUNT,
     SQL_SESSION_INSERT,
     SQL_SESSION_MEMORY_NOTES,
-    SQL_SESSION_RENAME,
     SQL_SESSION_RESET_COUNT_AND_MEMORY,
-    SQL_SESSION_SELECT_ACTIVE_FOR_USER,
-    SQL_SESSION_SELECT_ALL,
     SQL_SESSION_UPDATE_MEMORY,
     TOOL_ROLES,
     build_encryption_status,
     build_profile_update,
+    decrypt_api_key_rows,
+    encrypt_api_key,
     format_ai_history_rows,
     format_conversation_summary,
     format_session_event,
@@ -69,15 +77,6 @@ log = get_logger(__name__)
 __re_exports__ = (TOOL_ROLES, ALL_TOOL_ROLES)
 
 
-class TenantScopeError(Exception):
-    """Raised when a tenant-scoped operation is called without a valid user_id.
-
-    Hard guard against cross-tenant data leaks. In a multi-tenant architecture,
-    silently falling back to a default profile ID would allow one tenant's
-    operations to read/write another tenant's data.
-    """
-
-
 # ---------------------------------------------------------------------------
 # Schema initialization
 # ---------------------------------------------------------------------------
@@ -96,17 +95,17 @@ def init_pg_tables() -> None:
 # ---------------------------------------------------------------------------
 
 
-def get_profile() -> dict:
+def get_profile(user_id: str) -> dict:
     """Get the user profile. Creates a default row if none exists."""
-    row = pg_fetchone(SQL_PROFILE_SELECT_FIRST)
+    row = pg_fetchone(SQL_PROFILE_SELECT_BY_ID, (user_id,))
     if not row:
         now = datetime.now()
         pg_execute(SQL_PROFILE_INSERT_DEFAULT, (*DEFAULT_PROFILE_PARAMS, now, now))
-        row = pg_fetchone(SQL_PROFILE_SELECT_FIRST)
+        row = pg_fetchone(SQL_PROFILE_SELECT_BY_ID, (user_id,))
     return parse_profile_row(row)
 
 
-def update_profile(updates: dict) -> bool:
+def update_profile(updates: dict, user_id: str) -> bool:
     """Update the user profile with a partial set of fields."""
     if not updates:
         return False
@@ -114,6 +113,8 @@ def update_profile(updates: dict) -> bool:
     if built is None:
         return False
     query, params = built
+    query += " WHERE id = %s"
+    params.append(user_id)
     try:
         pg_execute(query, params)
         return True
@@ -122,20 +123,20 @@ def update_profile(updates: dict) -> bool:
         return False
 
 
-def get_context() -> dict:
-    return get_profile().get("context", {})
+def get_context(user_id: str) -> dict:
+    return get_profile(user_id).get("context", {})
 
 
-def update_context(context_dict: dict) -> bool:
-    return update_profile({"context": context_dict})
+def update_context(context_dict: dict, user_id: str) -> bool:
+    return update_profile({"context": context_dict}, user_id)
 
 
-def get_memory() -> dict:
-    return get_profile().get("memory", {})
+def get_memory(user_id: str) -> dict:
+    return get_profile(user_id).get("memory", {})
 
 
-def update_memory(memory_dict: dict) -> bool:
-    return update_profile({"memory": memory_dict})
+def update_memory(memory_dict: dict, user_id: str) -> bool:
+    return update_profile({"memory": memory_dict}, user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -190,17 +191,8 @@ def update_memory_state(session_id: str, state: dict) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def get_active_session(user_id: str | None = None) -> dict:
-    """Get the currently active session for ``user_id``. Creates one if none.
-
-    Reads are scoped to ``user_id`` via ``SQL_SESSION_SELECT_ACTIVE_FOR_USER``
-    (multi-tenant isolation). A new row is seeded with the same ``user_id``.
-    """
-    if not user_id:
-        raise TenantScopeError(
-            "get_active_session requires a valid user_id — refusing to "
-            "fall back to a default profile (multi-tenant isolation)"
-        )
+def get_active_session(user_id: str) -> dict:
+    """Get the currently active session. Creates one if none."""
     row = pg_fetchone(SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,))
     if not row:
         now = datetime.now()
@@ -209,16 +201,14 @@ def get_active_session(user_id: str | None = None) -> dict:
     return parse_session_row(row)
 
 
-def get_all_sessions() -> list[dict]:
-    return [parse_session_row(r) for r in pg_fetchall(SQL_SESSION_SELECT_ALL)]
+def get_all_sessions(user_id: str) -> list[dict]:
+    return [
+        parse_session_row(r)
+        for r in pg_fetchall(SQL_SESSION_SELECT_ALL_FOR_USER, (user_id,))
+    ]
 
 
-def create_session(name: str = "New Chat", user_id: str | None = None) -> str | None:
-    if not user_id:
-        raise TenantScopeError(
-            "create_session requires a valid user_id — refusing to "
-            "fall back to a default profile (multi-tenant isolation)"
-        )
+def create_session(name: str = "New Chat", *, user_id: str) -> str | None:
     now = datetime.now()
     try:
         with PgSession() as s:
@@ -231,30 +221,34 @@ def create_session(name: str = "New Chat", user_id: str | None = None) -> str | 
         return None
 
 
-def switch_session(session_id: str) -> bool:
+def switch_session(session_id: str, user_id: str) -> bool:
     try:
         with PgSession() as s:
-            s.execute(SQL_SESSION_DEACTIVATE_ALL)
-            s.execute(SQL_SESSION_ACTIVATE_ONE, (datetime.now(), session_id))
+            s.execute(SQL_SESSION_DEACTIVATE_FOR_USER, (user_id,))
+            s.execute(
+                SQL_SESSION_ACTIVATE_ONE_SCOPED, (datetime.now(), session_id, user_id)
+            )
         return True
     except Exception as e:  # noqa: BLE001
         log.error("switch_session failed: %s", e)
         return False
 
 
-def rename_session(session_id: str, new_name: str) -> bool:
+def rename_session(session_id: str, new_name: str, user_id: str) -> bool:
     try:
-        pg_execute(SQL_SESSION_RENAME, (new_name, datetime.now(), session_id))
+        pg_execute(
+            SQL_SESSION_RENAME_SCOPED, (new_name, datetime.now(), session_id, user_id)
+        )
         return True
     except Exception as e:  # noqa: BLE001
         log.error("rename_session failed: %s", e)
         return False
 
 
-def delete_session(session_id: str) -> bool:
+def delete_session(session_id: str, user_id: str) -> bool:
     try:
         with PgSession() as s:
-            s.execute(SQL_SESSION_DELETE, (session_id,))
+            s.execute(SQL_SESSION_DELETE_SCOPED, (session_id, user_id))
         return True
     except Exception as e:  # noqa: BLE001
         log.error("delete_session failed: %s", e)
@@ -273,7 +267,7 @@ def update_session_memory(session_id: str, memory: dict) -> bool:
         return False
 
 
-def get_session_memory(session_id: str, user_id: str | None = None) -> dict:
+def get_session_memory(session_id: str, user_id: str) -> dict:
     rows = pg_fetchall(SQL_SESSION_MEMORY_NOTES, (session_id,))
     return parse_session_memory_rows(rows)
 
@@ -288,6 +282,49 @@ def increment_message_count(session_id: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# API keys
+# ---------------------------------------------------------------------------
+
+
+def get_api_keys(key_name: str | None = None) -> dict[str, str]:
+    if key_name:
+        rows = pg_fetchall(SQL_APIKEY_SELECT_BY_NAME, (key_name,))
+    else:
+        rows = pg_fetchall(SQL_APIKEY_SELECT_ALL)
+    return decrypt_api_key_rows(rows)
+
+
+def get_api_key(key_name: str) -> str | None:
+    return get_api_keys(key_name).get(key_name)
+
+
+def add_api_key(key_name: str, key_value: str) -> bool:
+    encrypted = encrypt_api_key(key_value)
+    is_encrypted = encrypted != key_value
+    try:
+        if pg_fetchone(SQL_APIKEY_SELECT_ID_BY_NAME, (key_name,)):
+            pg_execute(SQL_APIKEY_UPDATE, (encrypted, is_encrypted, key_name))
+        else:
+            pg_execute(
+                SQL_APIKEY_INSERT,
+                (key_name, encrypted, is_encrypted, datetime.now()),
+            )
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.error("add_api_key failed: %s", e)
+        return False
+
+
+def remove_api_key(key_name: str) -> bool:
+    try:
+        pg_execute(SQL_APIKEY_DELETE, (key_name,))
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.error("remove_api_key failed: %s", e)
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Messages
 # ---------------------------------------------------------------------------
 
@@ -297,17 +334,13 @@ def add_message(
     role: str,
     content: str,
     image_paths: list[str] | None = None,
-    user_id: str | None = None,
+    *,
+    user_id: str,
 ) -> int | None:
     """Insert a message row, bump the session's message_count, return id.
 
     Timestamp is set by database NOW() to ensure ordering coherence.
     """
-    if not user_id:
-        raise TenantScopeError(
-            "add_message requires a valid user_id — refusing to "
-            "fall back to a default profile (multi-tenant isolation)"
-        )
     try:
         paths_json = json.dumps(image_paths or [])
         with PgSession() as s:
@@ -366,7 +399,8 @@ def get_chat_history(
     session_id: str,
     limit: int | None = None,
     recent: bool = False,
-    user_id: str | None = None,
+    *,
+    user_id: str,
 ) -> list[dict]:
     """Get messages ordered by timestamp.
 
@@ -402,19 +436,9 @@ def get_message_count(session_id: str) -> int:
 
 
 def add_session_event(
-    session_id: str,
-    content: str,
-    interface: str = "terminal",
-    user_id: str | None = None,
+    session_id: str, content: str, interface: str = "terminal"
 ) -> int | None:
-    if not user_id:
-        raise TenantScopeError(
-            "add_session_event requires a valid user_id — refusing to "
-            "fall back to a default profile (multi-tenant isolation)"
-        )
-    return add_message(
-        session_id, "system", format_session_event(content, interface), user_id=user_id
-    )
+    return add_message(session_id, "system", format_session_event(content, interface))
 
 
 def get_recent_sessions(limit: int = 20) -> list[dict]:
@@ -432,43 +456,17 @@ def get_session_conversation_summary(session_id: str, limit: int = 20) -> str:
     return format_conversation_summary(rows)
 
 
-def add_tool_result(
-    session_id: str,
-    tool_name: str,
-    result_content: str,
-    user_id: str | None = None,
-) -> int | None:
-    if not user_id:
-        raise TenantScopeError(
-            "add_tool_result requires a valid user_id — refusing to "
-            "fall back to a default profile (multi-tenant isolation)"
-        )
-    return add_message(
-        session_id, tool_role_for(tool_name), result_content, user_id=user_id
-    )
+def add_tool_result(session_id: str, tool_name: str, result_content: str) -> int | None:
+    return add_message(session_id, tool_role_for(tool_name), result_content)
 
 
-def add_system_note(
-    session_id: str, content: str, user_id: str | None = None
-) -> int | None:
-    if not user_id:
-        raise TenantScopeError(
-            "add_system_note requires a valid user_id — refusing to "
-            "fall back to a default profile (multi-tenant isolation)"
-        )
-    return add_message(session_id, "system", content, user_id=user_id)
+def add_system_note(session_id: str, content: str) -> int | None:
+    return add_message(session_id, "system", content)
 
 
-def add_memory_note(
-    session_id: str, content: str, user_id: str | None = None
-) -> int | None:
+def add_memory_note(session_id: str, content: str) -> int | None:
     """Alias for add_system_note."""
-    if not user_id:
-        raise TenantScopeError(
-            "add_memory_note requires a valid user_id — refusing to "
-            "fall back to a default profile (multi-tenant isolation)"
-        )
-    return add_system_note(session_id, content, user_id=user_id)
+    return add_system_note(session_id, content)
 
 
 # ---------------------------------------------------------------------------
@@ -481,10 +479,11 @@ def get_chat_history_for_ai(
     limit: int | None = None,
     recent: bool = False,
     include_image_paths: bool = False,
-    user_id: str | None = None,
+    *,
+    user_id: str,
 ) -> list[dict]:
     """Fetch history and format specifically for LLM context (e.g. system turn)."""
-    rows = get_chat_history(session_id, limit, recent)
+    rows = get_chat_history(session_id, limit, recent, user_id=user_id)
     return format_ai_history_rows(rows, include_image_paths=include_image_paths)
 
 
@@ -533,8 +532,6 @@ def batch_decrypt_messages(message_ids: list[int]) -> dict:
 __all__ = [
     # Schema
     "init_pg_tables",
-    # Errors
-    "TenantScopeError",
     # Profile
     "get_profile",
     "update_profile",
@@ -555,6 +552,11 @@ __all__ = [
     # Pipeline state
     "get_memory_state",
     "update_memory_state",
+    # API keys
+    "get_api_keys",
+    "get_api_key",
+    "add_api_key",
+    "remove_api_key",
     # Messages
     "add_message",
     "update_message",

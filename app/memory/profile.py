@@ -261,7 +261,10 @@ async def _summarize_global_player_profile_async(user_id: str | None = None) -> 
         sid = session["id"]
         name = session.get("name") or f"Session {sid}"
         messages = (
-            await Database.get_chat_history_async(session_id=sid, limit=None) or []
+            await Database.get_chat_history_async(
+                session_id=sid, limit=None, user_id=user_id
+            )
+            or []
         )
         if not messages:
             continue

@@ -39,6 +39,23 @@ class RequestKeyring:
     model_id: str | None = None
 
 
+class MissingProviderKeyError(Exception):
+    """Raised when a provider requires an API key but none is available
+    in the request plane (ContextVar) or system plane (env var).
+
+    The API layer catches this and returns 424 Failed Dependency with a
+    clear message directing the client to set their API key.
+    """
+
+    def __init__(self, provider_name: str):
+        self.provider_name = provider_name
+        super().__init__(
+            f"No API key available for provider '{provider_name}'. "
+            f"Set your key in the client (BYOK) or configure "
+            f"{provider_name.upper()}_API_KEY environment variable."
+        )
+
+
 _keyring_ctx: ContextVar[RequestKeyring | None] = ContextVar(
     "yuzu_request_keyring", default=None
 )

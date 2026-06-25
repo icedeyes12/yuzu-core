@@ -102,9 +102,10 @@ Respond with ONLY the category name, nothing else."""
 
 async def execute(arguments, **kwargs):
     session_id = kwargs.get("session_id")
+    user_id = kwargs.get("user_id")
     from app.memory.embedder import embed_texts_async
 
-    profile = await Database.get_profile_async() or {}
+    profile = await Database.get_profile_async(user_id) or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     fact = arguments.get("fact", "").strip()

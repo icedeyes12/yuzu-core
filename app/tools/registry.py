@@ -277,7 +277,7 @@ async def execute_tool(
             f"Tool module unavailable: {tool_name}",
             tool_def,
             f"/{tool_name}",
-            await _get_partner_name_async(),
+            await _get_partner_name_async(user_id),
         )
 
     try:
@@ -315,7 +315,7 @@ async def execute_tool(
                 ToolDefinition(name="", description="", role=tool_def.role),
                 f"/{tool_name}",
                 [str(result)],
-                await _get_partner_name_async(),
+                await _get_partner_name_async(user_id),
             ),
         }
 
@@ -325,21 +325,21 @@ async def execute_tool(
             "Tool execution failed. Please try again later.",
             tool_def,
             f"/{tool_name}",
-            await _get_partner_name_async(),
+            await _get_partner_name_async(user_id),
         )
 
 
-async def _get_partner_name_async() -> str:
+async def _get_partner_name_async(user_id: str | None = None) -> str:
     """Get partner name from profile for error messages (async)."""
     try:
         from app.db import Database
 
-        profile = await Database.get_profile_async() or {}
+        profile = await Database.get_profile_async(user_id) if user_id else {}
         return profile.get("partner_name", "Yuzu")
     except Exception:
         return "Yuzu"
 
 
-def _get_partner_name() -> str:
+def _get_partner_name(user_id: str | None = None) -> str:
     """Legacy sync wrapper."""
-    return asyncio.run(_get_partner_name_async())
+    return asyncio.run(_get_partner_name_async(user_id))

@@ -42,16 +42,21 @@ def _idle_hours(session_memory: dict[str, Any]) -> float | None:
 
 
 async def should_summarize_memory_async(
-    profile: dict[str, Any], user_message: str, session_id: str
+    profile: dict[str, Any], user_message: str, session_id: str, user_id: str
 ) -> bool:
-    history = await Database.get_chat_history_async(session_id=session_id) or []
+    history = (
+        await Database.get_chat_history_async(session_id=session_id, user_id=user_id)
+        or []
+    )
     convo_count = sum(1 for m in history if m["role"] in ("user", "assistant"))
 
     if (
         convo_count >= _SUMMARY_TRIGGER_INTERVAL
         and convo_count % _SUMMARY_TRIGGER_INTERVAL == 0
     ):
-        session_memory = await Database.get_session_memory_async(session_id) or {}
+        session_memory = (
+            await Database.get_session_memory_async(session_id, user_id) or {}
+        )
         if convo_count > session_memory.get("last_summary_count", 0):
             idle = _idle_hours(session_memory)
             if idle is not None and idle < _IDLE_THRESHOLD_HOURS:
@@ -77,7 +82,7 @@ async def summarize_memory_async(
     user_message: str,
     ai_reply: str,
     session_id: str,
-    user_id: str | None = None,
+    user_id: str,
 ) -> bool:
     history = (
         await Database.get_chat_history_async(
@@ -139,12 +144,12 @@ just a natural paragraph.
         },
     )
 
-    await _sync_episodic_to_db_async(session_id, paragraph.strip(), history)
+    await _sync_episodic_to_db_async(session_id, paragraph.strip(), history, user_id)
     return True
 
 
 async def _sync_episodic_to_db_async(
-    session_id: str, summary: str, history: list[dict[str, Any]]
+    session_id: str, summary: str, history: list[dict[str, Any]], user_id: str
 ) -> None:
     try:
         from app.memory.extractor import (
@@ -166,6 +171,7 @@ async def _sync_episodic_to_db_async(
             emotional,
             importance,
             source_message_ids=[m["id"] for m in recent],
+            user_id=user_id,
         )
     except Exception as e:
         log.warning("sync episodic to DB failed: %s", e)
