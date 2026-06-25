@@ -184,7 +184,7 @@ async def execute(arguments, **kwargs):
 
             await pg_execute_async(
                 SQL_FACT_UPDATE_METADATA,
-                (datetime.now(), Json(meta), e["id"]),
+                (datetime.now(), Json(meta), e["id"], user_id),
             )
 
             new_confidence = e.get("metadata", {}).get("confidence", 0.7)
@@ -212,6 +212,7 @@ async def execute(arguments, **kwargs):
             "session_id": session_id,
             "access_count": 0,
         },
+        user_id=user_id,
     )
 
     if fact_id:

@@ -426,10 +426,6 @@ SQL_SESSION_DELETE_SCOPED = (
     "UPDATE chat_sessions SET deleted_at = NOW() WHERE id = %s AND user_id = %s"
 )
 
-SQL_SESSION_OWNERSHIP_CHECK = (
-    "SELECT user_id FROM chat_sessions WHERE id = %s AND deleted_at IS NULL"
-)
-
 SQL_SESSIONS_RECENT_ACTIVE = """
 SELECT id, name, updated_at, message_count, is_active
 FROM chat_sessions
@@ -479,7 +475,7 @@ def parse_session_row(row: dict | None) -> dict:
 SQL_SESSION_MEMORY_NOTES = """
 SELECT content, role, timestamp
 FROM messages
-WHERE session_id = %s AND role IN ('system', 'memory')
+WHERE session_id = %s AND user_id = %s AND role IN ('system', 'memory')
 ORDER BY timestamp DESC
 LIMIT 50
 """
@@ -908,7 +904,6 @@ __all__ = [
     "SQL_SESSION_ACTIVATE_ONE_SCOPED",
     "SQL_SESSION_RENAME_SCOPED",
     "SQL_SESSION_DELETE_SCOPED",
-    "SQL_SESSION_OWNERSHIP_CHECK",
     "SQL_PROFILE_INSERT_DEFAULT",
     "DEFAULT_PROFILE_PARAMS",
     "build_profile_update",

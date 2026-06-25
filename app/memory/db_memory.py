@@ -104,7 +104,7 @@ def save_fact(
     session_id: str | None,
     content: str,
     embedding: list[float] | None,
-    fact_type: str = FACT_TYPE_STATIC,
+    fact_type: str,
     metadata: dict | None = None,
     category: str | None = None,
     user_id: str | None = None,
@@ -114,11 +114,8 @@ def save_fact(
 
     Returns the new row id, or None on failure.
     """
-    if user_id is None:
-        logger.error(
-            "save_fact: user_id is required — refusing to fall back to first profile"
-        )
-        return None
+    if not user_id:
+        raise ValueError("save_fact: user_id is required")
     meta = dict(metadata) if metadata else {}
     if "session_id" not in meta:
         meta["session_id"] = session_id
@@ -185,6 +182,8 @@ def search_similar(
     Returns list of dicts: {id, content, fact_type, metadata,
                             last_accessed, created_at, distance}
     """
+    if not user_id:
+        raise ValueError("search_similar: user_id is required")
     try:
         norm_vec = normalize_vector(embedding)
         if not norm_vec:
@@ -235,6 +234,8 @@ def search_trgm(
     Returns list of dicts: {id, content, fact_type, metadata,
                             last_accessed, created_at, similarity}
     """
+    if not user_id:
+        raise ValueError("search_trgm: user_id is required")
     if not query or not query.strip():
         return []
 
@@ -282,6 +283,8 @@ def search_tsv(
     Returns list of dicts: {id, content, fact_type, metadata,
                             last_accessed, created_at, ts_rank}
     """
+    if not user_id:
+        raise ValueError("search_tsv: user_id is required")
     if not query or not query.strip():
         return []
 
@@ -499,6 +502,8 @@ def invalidate_fact(id: int, user_id: str | None = None) -> bool:
     Soft-delete a fact by setting invalid_at = NOW().
     Does NOT hard-delete — preserves history for audit.
     """
+    if not user_id:
+        raise ValueError("invalidate_fact: user_id is required")
     try:
         pg_execute(
             SQL_FACT_INVALIDATE,
@@ -525,11 +530,8 @@ async def save_fact_async(
     user_id: str | None = None,
 ) -> int | None:
     """Async version of save_fact."""
-    if user_id is None:
-        logger.error(
-            "save_fact_async: user_id is required — refusing to fall back to first profile"
-        )
-        return None
+    if not user_id:
+        raise ValueError("save_fact_async: user_id is required")
     meta = dict(metadata) if metadata else {}
     if "session_id" not in meta:
         meta["session_id"] = session_id

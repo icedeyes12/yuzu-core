@@ -125,7 +125,6 @@ MESSAGE_SESSION_EXEMPTIONS = {
     "SQL_MESSAGE_HISTORY_FOR_AI_ASC_LIMIT",
     "SQL_MESSAGE_HISTORY_FOR_AI_DESC_LIMIT",
     "SQL_MESSAGE_HISTORY_FOR_AI_ASC_ALL",
-    "SQL_SESSION_MEMORY_NOTES",
 }
 
 ALL_EXEMPTIONS = (
@@ -952,3 +951,56 @@ class TestMemoryIsolation:
             await invalidate_fact_async(1, None)
         with pytest.raises(ValueError):
             await search_similar_async([0.1] * 4096, user_id=None)
+
+
+class TestSyncMemoryGuards:
+    """Sync memory functions must also reject missing user_id —
+    previously only async variants had guards."""
+
+    def test_sync_invalidate_fact_requires_user_id(self):
+        from app.memory.db_memory import invalidate_fact
+
+        with pytest.raises(ValueError):
+            invalidate_fact(1, user_id=None)
+
+    def test_sync_search_similar_requires_user_id(self):
+        from app.memory.db_memory import search_similar
+
+        with pytest.raises(ValueError):
+            search_similar([0.1] * 4096, user_id=None)
+
+    def test_sync_search_trgm_requires_user_id(self):
+        from app.memory.db_memory import search_trgm
+
+        with pytest.raises(ValueError):
+            search_trgm("test query", user_id=None)
+
+    def test_sync_search_tsv_requires_user_id(self):
+        from app.memory.db_memory import search_tsv
+
+        with pytest.raises(ValueError):
+            search_tsv("test query", user_id=None)
+
+    def test_sync_save_fact_requires_user_id(self):
+        from app.memory.db_memory import save_fact
+
+        with pytest.raises(ValueError):
+            save_fact(session_id=None, content="x", embedding=None, fact_type="static", user_id=None)
+
+
+class TestRetrieveMemoryGuards:
+    """retrieve_memory entry points must reject missing user_id
+    instead of silently returning empty results."""
+
+    def test_retrieve_memory_rejects_missing_user_id(self):
+        from app.memory.retrieval import retrieve_memory
+
+        with pytest.raises(ValueError):
+            retrieve_memory(SESSION_A, user_id=None)
+
+    @pytest.mark.asyncio
+    async def test_retrieve_memory_async_rejects_missing_user_id(self):
+        from app.memory.retrieval import retrieve_memory_async
+
+        with pytest.raises(ValueError):
+            await retrieve_memory_async(SESSION_A, user_id=None)

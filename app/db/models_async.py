@@ -230,7 +230,7 @@ async def update_session_memory_async(session_id: str, memory: dict) -> bool:
 
 
 async def get_session_memory_async(session_id: str, user_id: str) -> dict:
-    rows = await pg_fetchall_async(SQL_SESSION_MEMORY_NOTES, (session_id,))
+    rows = await pg_fetchall_async(SQL_SESSION_MEMORY_NOTES, (session_id, user_id))
     return parse_session_memory_rows(rows)
 
 

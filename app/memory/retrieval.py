@@ -764,6 +764,8 @@ def retrieve_segments(
     Segments are stored as fact_type=dynamic with source_table='conversation_segments'.
     They represent raw message windows, not semantic facts.
     """
+    if not user_id:
+        raise ValueError("retrieve_segments: user_id is required")
     query_vec = _embed_query(query) if query else None
 
     if query_vec:
@@ -801,7 +803,7 @@ def retrieve_segments(
     parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
 
     if parsed:
-        MemoryDB.update_last_accessed([m["id"] for m in parsed])
+        MemoryDB.update_last_accessed([m["id"] for m in parsed], user_id=user_id)
 
     return parsed
 
@@ -813,6 +815,8 @@ def retrieve_memory(session_id: str, query=None, user_id: str | None = None):
     Returns:
         dict with static, dynamic, temporal_messages
     """
+    if not user_id:
+        raise ValueError("retrieve_memory: user_id is required")
     try:
         static = retrieve_static_memories(query=query, limit=15, user_id=user_id)
     except Exception as e:
@@ -1147,6 +1151,8 @@ async def retrieve_memory_async(
     Async version of retrieve_memory.
     Main retrieval entry point.
     """
+    if not user_id:
+        raise ValueError("retrieve_memory_async: user_id is required")
     try:
         static = await retrieve_static_memories_async(
             query=query, limit=15, user_id=user_id

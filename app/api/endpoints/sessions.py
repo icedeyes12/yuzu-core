@@ -171,7 +171,9 @@ async def api_delete_session(
                 chat_history = await get_chat_history_async(
                     active_session["id"], user_id=user_id
                 )
-                session_memory = await get_session_memory_async(active_session["id"])
+                session_memory = await get_session_memory_async(
+                    active_session["id"], user_id=user_id
+                )
             else:
                 chat_history = []
                 session_memory = {}

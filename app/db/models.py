@@ -268,7 +268,7 @@ def update_session_memory(session_id: str, memory: dict) -> bool:
 
 
 def get_session_memory(session_id: str, user_id: str) -> dict:
-    rows = pg_fetchall(SQL_SESSION_MEMORY_NOTES, (session_id,))
+    rows = pg_fetchall(SQL_SESSION_MEMORY_NOTES, (session_id, user_id))
     return parse_session_memory_rows(rows)
 
 
