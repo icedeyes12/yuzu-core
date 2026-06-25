@@ -445,19 +445,20 @@ async def _process_tool_commands_async(
     session_id: str,
     *,
     user_id: str,
-) -> tuple[str, bool, list[str]]:
+) -> tuple[str, str, bool, list[str], bool]:
     """Parse and execute tool commands, yielding tool markdown chunks.
 
     Yields:
         tuple of (tool_markdown, is_image_tool, generated_paths)
 
     Returns:
-        Combined tool markdown string and list of all generated image paths.
+        (clean_text, combined_tool_markdown, any_image_tool,
+         all_generated_paths, had_terminal_success)
     """
     commands, clean_text = parse_tool_blocks(full_response)
 
     if not commands:
-        return ("", "", False, [])
+        return ("", "", False, [], False)
 
     log.info("[stream] found %d tool block(s)", len(commands))
 
@@ -472,6 +473,7 @@ async def _process_tool_commands_async(
     tool_markdowns: list[str] = []
     any_image_tool = False
     all_generated_paths: list[str] = []
+    had_terminal_success = False
 
     for tool_name, result in results:
         tool_markdown = result.get("markdown", str(result))
@@ -486,13 +488,22 @@ async def _process_tool_commands_async(
         if p is not None:
             any_image_tool = True
             all_generated_paths.append(p)
+        if is_terminal_tool(tool_name) and result.get("ok"):
+            had_terminal_success = True
+            break
 
     combined_tool_markdown = "\n\n".join(tool_markdowns)
 
     # Return results for coordination
     # clean_text is the assistant's preamble with tool blocks stripped —
     # callers MUST use this (not full_response) for ephemeral context.
-    return (clean_text, combined_tool_markdown, any_image_tool, all_generated_paths)
+    return (
+        clean_text,
+        combined_tool_markdown,
+        any_image_tool,
+        all_generated_paths,
+        had_terminal_success,
+    )
 
 
 async def _run_orchestration_loop_async(
@@ -725,12 +736,15 @@ async def handle_user_message(
             )
             tool_markdowns = []
 
+            had_terminal_success = False
             for tool_name, result in results:
                 tool_markdown = result.get("markdown", str(result))
                 tool_markdowns.append(tool_markdown)
                 await _persist_tool_result_async(
                     tool_name, tool_markdown, session_id, user_id=user_id
                 )
+                if is_terminal_tool(tool_name) and result.get("ok"):
+                    had_terminal_success = True
 
             combined = "\n\n".join(tool_markdowns)
 
@@ -739,6 +753,18 @@ async def handle_user_message(
                 path = parse_image_path(tm)
                 if path:
                     generated_paths.append(path)
+
+            # Terminal tool succeeded — skip synthesis, finalize directly
+            if had_terminal_success:
+                await _post_turn_async(
+                    profile,
+                    user_message,
+                    combined,
+                    session_id,
+                    active_session,
+                    user_id=user_id,
+                )
+                return combined
 
             # Run synthesis
             synthesis = await _run_synthesis_async(
@@ -814,6 +840,18 @@ async def handle_user_message(
             generated_paths = (
                 [parse_image_path(tool_markdown)] if is_image_tool else None
             )
+
+            # Terminal tool succeeded — skip synthesis, finalize directly
+            if is_terminal_tool(tool_name) and tool_result.get("ok"):
+                await _post_turn_async(
+                    profile,
+                    user_message,
+                    tool_markdown,
+                    session_id,
+                    active_session,
+                    user_id=user_id,
+                )
+                return tool_markdown
 
             # Build ephemeral context — clean text + SYSTEM_OBSERVATION wrapper
             ephemeral_context = [
@@ -1091,13 +1129,31 @@ async def handle_user_message_streaming(
     )
     # Unpack clean_text (tool blocks stripped) — use this, NOT full_response,
     # for ephemeral context to prevent context poisoning.
-    clean_text, combined_tool_markdown, any_image_tool, all_generated_paths = (
-        tool_result
-    )
+    (
+        clean_text,
+        combined_tool_markdown,
+        any_image_tool,
+        all_generated_paths,
+        had_terminal_success,
+    ) = tool_result
 
     # Yield tool markdown chunks
     if combined_tool_markdown:
         yield "\n\n" + combined_tool_markdown
+
+    # Terminal tool (e.g. image_generate) succeeded — skip synthesis pass.
+    # The tool result is already yielded + persisted; no 2nd LLM call needed.
+    if had_terminal_success:
+        await _finalize_and_persist_async(
+            session_id,
+            fence_id,
+            profile,
+            user_message,
+            clean_text or combined_tool_markdown,
+            active_session,
+            user_id=user_id,
+        )
+        return
 
     # === PHASE 5: Build ephemeral context for synthesis ===
     # CRITICAL: Use clean_text (tool blocks stripped), NOT full_response.
