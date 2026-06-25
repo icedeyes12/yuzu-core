@@ -140,11 +140,13 @@ async def api_send_message_stream(
                     yield chunk
             except MissingProviderKeyError as e:
                 log.warning("Missing provider key in stream: %s", e)
-                payload = json.dumps({
-                    "error": "missing_key",
-                    "provider": e.provider,
-                    "message": f"No API key for {e.provider}. Set your key in Settings → Provider Keys.",
-                })
+                payload = json.dumps(
+                    {
+                        "error": "missing_key",
+                        "provider": e.provider,
+                        "message": f"No API key for {e.provider}. Set your key in Settings → Provider Keys.",
+                    }
+                )
                 yield f"data: {payload}\n\n"
             finally:
                 if keyring:

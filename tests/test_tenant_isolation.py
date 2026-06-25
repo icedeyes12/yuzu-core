@@ -986,7 +986,13 @@ class TestSyncMemoryGuards:
         from app.memory.db_memory import save_fact
 
         with pytest.raises(ValueError):
-            save_fact(session_id=None, content="x", embedding=None, fact_type="static", user_id=None)
+            save_fact(
+                session_id=None,
+                content="x",
+                embedding=None,
+                fact_type="static",
+                user_id=None,
+            )
 
 
 class TestRetrieveMemoryGuards:

@@ -498,7 +498,9 @@ class Database:
     ) -> int | None:
         """Alias for add_system_note_async."""
         _require_user_id("add_memory_note_async", user_id)
-        return await Database.add_system_note_async(content, session_id, user_id=user_id)
+        return await Database.add_system_note_async(
+            content, session_id, user_id=user_id
+        )
 
 
 __all__ = [
