@@ -34,6 +34,7 @@ from app.db.queries import (
     SQL_PROFILE_INSERT_DEFAULT_RETURNING,
     SQL_PROFILE_UNCLAIMED_LOOKUP,
     SQL_PROFILE_UPDATE_AVATAR,
+    SQL_PROFILE_UPDATE_DISPLAY_NAME,
 )
 from app.logging_config import get_logger
 
@@ -45,7 +46,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def _require_env(name: str) -> str:
     val = os.environ.get(name)
     if not val:
-        raise HTTPException(status_code=500, detail=f"Missing env var: {name}")
+        log.error("Missing required env var: %s", name)
+        raise HTTPException(status_code=500, detail="Server configuration error")
     return val.strip()
 
 
@@ -131,6 +133,14 @@ async def callback(request: Request):
     return response
 
 
+async def _persist_display_name(user_id: str, display_name: str) -> None:
+    """Update a profile's display_name on OAuth login (both new and existing profiles)."""
+    await pg_execute_async(
+        SQL_PROFILE_UPDATE_DISPLAY_NAME,
+        (display_name, datetime.now(), user_id),
+    )
+
+
 async def _map_identity_to_profile(
     provider: str,
     provider_sub: str,
@@ -148,12 +158,7 @@ async def _map_identity_to_profile(
                 (avatar_url, datetime.now(), user_id),
             )
         if display_name:
-            from app.db.queries import build_profile_update
-
-            q, params = build_profile_update({"display_name": display_name}) or ("", [])
-            if q:
-                params.append(user_id)
-                await pg_execute_async(f"{q} WHERE id = %s", params)
+            await _persist_display_name(user_id, display_name)
         return user_id
 
     unclaimed = await pg_fetchone_async(SQL_PROFILE_UNCLAIMED_LOOKUP)
@@ -175,12 +180,7 @@ async def _map_identity_to_profile(
             (avatar_url, datetime.now(), user_id),
         )
     if display_name:
-        from app.db.queries import build_profile_update
-
-        q, params = build_profile_update({"display_name": display_name}) or ("", [])
-        if q:
-            params.append(user_id)
-            await pg_execute_async(f"{q} WHERE id = %s", params)
+        await _persist_display_name(user_id, display_name)
 
     await pg_execute_async(
         SQL_IDENTITY_INSERT, (user_id, provider, provider_sub, email)

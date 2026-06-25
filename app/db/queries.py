@@ -310,6 +310,10 @@ SQL_PROFILE_UPDATE_AVATAR = (
     "UPDATE profiles SET avatar_url = %s, updated_at = %s WHERE id = %s"
 )
 
+SQL_PROFILE_UPDATE_DISPLAY_NAME = (
+    "UPDATE profiles SET display_name = %s, updated_at = %s WHERE id = %s"
+)
+
 SQL_PROFILE_INSERT_DEFAULT = """
 INSERT INTO profiles (display_name, partner_name, affection, theme,
                       memory_state, session_history, global_knowledge,
@@ -963,6 +967,7 @@ __all__ = [
     "SQL_SESSION_TOKEN_REVOKE",
     "SQL_AUTH_ME_LOOKUP",
     "SQL_PROFILE_UPDATE_AVATAR",
+    "SQL_PROFILE_UPDATE_DISPLAY_NAME",
     "SQL_PROFILE_UNCLAIMED_LOOKUP",
     # Misc
     "parse_json",

@@ -415,12 +415,6 @@ async def _post_turn_async(
     user_id: str,
 ) -> None:
     """Auto-rename session, summarize memory, trigger memory pipeline (async)."""
-    if not user_id:
-        user_id = profile.get("id")
-    if not user_id:
-        log.warning("_post_turn_async: no user_id — memory pipeline skipped")
-        return
-
     # Auto-rename via service
     await SessionService.auto_name_session_if_needed_async(
         session_id, active_session, user_id=user_id
@@ -586,7 +580,7 @@ async def _run_orchestration_loop_async(
             # NO Frankenstein concatenation — synthesis is the final answer.
             await _persist_assistant_async(synthesis, session_id, user_id=user_id)
             await StreamFence.complete(session_id, fence_id)
-            log.info(f"[stream] fence {fence_id} completed (final synthesis)")
+            log.info("[stream] fence %s completed (final synthesis)", fence_id)
             await _post_turn_async(
                 profile,
                 user_message,
@@ -616,7 +610,6 @@ async def _run_orchestration_loop_async(
             return
 
         # Persist this iteration's synthesis as a discrete assistant message
-        _, clean_synth = parse_tool_blocks(synthesis)
         if clean_synth and clean_synth.strip():
             await _persist_assistant_async(clean_synth, session_id, user_id=user_id)
             log.info("[stream] persisted intermediate synthesis (clean)")
