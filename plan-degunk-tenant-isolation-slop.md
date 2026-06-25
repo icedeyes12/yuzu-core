@@ -19,33 +19,33 @@ Base: `origin/master...dev` (39 commits, 74 files). Scope: Tier 1 (auth + orches
 ## Task Checklist
 
 ### Phase 1 — Memory & data-layer tenant contract
-- [ ] 1.1 Unify `user_id` None-handling in `app/memory/db_memory.py` to a single `_require_user_id` guard (raise `ValueError`) across all fact functions
-- [ ] 1.2 Add `ValueError` guard to sync `invalidate_fact` (line 500) — match async variant
-- [ ] 1.3 Add `ValueError` guards to sync `search_similar` / `search_trgm` / `search_tsv` — match their async counterparts
-- [ ] 1.4 Add `ValueError` guard to `retrieve_segments` in `app/memory/retrieval.py` — match `retrieve_static_memories`
-- [ ] 1.5 Tighten `retrieve_memory` / `retrieve_memory_async` to validate `user_id` before try/except (re-raise instead of swallow)
-- [ ] 1.6 Scope `SQL_SESSION_MEMORY_NOTES` by `user_id` in `app/db/queries.py`; thread the param through `get_session_memory` / `get_session_memory_async` in `app/db/models.py` + `models_async.py` + `facade.py`
-- [ ] 1.7 Remove dead `SQL_SESSION_OWNERSHIP_CHECK` from `app/db/queries.py` (definition + `__all__` entry)
-- [ ] 1.8 Fix missed `user_id` in `api_delete_session` — `app/api/endpoints/sessions.py` line ~166
-- [ ] 1.9 Normalize f-string logging → `%s` lazy in `app/memory/db_memory.py` (diff-introduced lines only)
-- [ ] 1.10 Update `tests/test_tenant_isolation.py`: move `SQL_SESSION_MEMORY_NOTES` out of `MESSAGE_SESSION_EXEMPTIONS`; add test asserting `retrieve_memory(user_id=None)` raises
-- [ ] 1.11 Lint: `ruff check .` + `python3 -m py_compile` on all changed files; commit
+- [x] 1.1 Unify `user_id` None-handling in `app/memory/db_memory.py` to a single `_require_user_id` guard (raise `ValueError`) across all fact functions
+- [x] 1.2 Add `ValueError` guard to sync `invalidate_fact` (line 500) — match async variant
+- [x] 1.3 Add `ValueError` guards to sync `search_similar` / `search_trgm` / `search_tsv` — match their async counterparts
+- [x] 1.4 Add `ValueError` guard to `retrieve_segments` in `app/memory/retrieval.py` — match `retrieve_static_memories`
+- [x] 1.5 Tighten `retrieve_memory` / `retrieve_memory_async` to validate `user_id` before try/except (re-raise instead of swallow)
+- [x] 1.6 Scope `SQL_SESSION_MEMORY_NOTES` by `user_id` in `app/db/queries.py`; thread the param through `get_session_memory` / `get_session_memory_async` in `app/db/models.py` + `models_async.py` + `facade.py`
+- [x] 1.7 Remove dead `SQL_SESSION_OWNERSHIP_CHECK` from `app/db/queries.py` (definition + `__all__` entry)
+- [x] 1.8 Fix missed `user_id` in `api_delete_session` — `app/api/endpoints/sessions.py` line ~166
+- [x] 1.9 Normalize f-string logging → `%s` lazy in `app/memory/db_memory.py` (diff-introduced lines only)
+- [x] 1.10 Update `tests/test_tenant_isolation.py`: move `SQL_SESSION_MEMORY_NOTES` out of `MESSAGE_SESSION_EXEMPTIONS`; add test asserting `retrieve_memory(user_id=None)` raises
+- [x] 1.11 Lint: `ruff check .` + `python3 -m py_compile` on all changed files; commit
 
 ### Phase 2 — Core path cleanup (orchestrator + auth endpoint)
-- [ ] 2.1 Remove redundant `parse_tool_blocks(synthesis)` at `app/orchestrator.py` line 619 (reuse `clean_synth` from line 602)
-- [ ] 2.2 Remove over-defensive `user_id` fallback in `_post_turn_async` — `app/orchestrator.py` lines 418–421
-- [ ] 2.3 Normalize diff-introduced f-string logging → `%s` lazy in `app/orchestrator.py` (line 589 + any others added in this diff)
-- [ ] 2.4 Extract duplicated display_name persistence into a single helper in `app/api/endpoints/auth.py`; move the inline `from app.db.queries import build_profile_update` to module top
-- [ ] 2.5 Move the `f"{q} WHERE id = %s"` SQL fragment into `app/db/queries.py` as a constant (or extend `build_profile_update` to include the WHERE clause); remove f-string SQL from `auth.py` lines 156 + 183
-- [ ] 2.6 Genericize `_require_env` error — log var name internally, return generic `"Configuration error"` to client
-- [ ] 2.7 Lint: `ruff check .` + `py_compile`; commit
+- [x] 2.1 Remove redundant `parse_tool_blocks(synthesis)` at `app/orchestrator.py` line 619 (reuse `clean_synth` from line 602)
+- [x] 2.2 Remove over-defensive `user_id` fallback in `_post_turn_async` — `app/orchestrator.py` lines 418–421
+- [x] 2.3 Normalize diff-introduced f-string logging → `%s` lazy in `app/orchestrator.py` (line 589 + any others added in this diff)
+- [x] 2.4 Extract duplicated display_name persistence into a single helper in `app/api/endpoints/auth.py`; move the inline `from app.db.queries import build_profile_update` to module top
+- [x] 2.5 Move the `f"{q} WHERE id = %s"` SQL fragment into `app/db/queries.py` as a constant (or extend `build_profile_update` to include the WHERE clause); remove f-string SQL from `auth.py` lines 156 + 183
+- [x] 2.6 Genericize `_require_env` error — log var name internally, return generic `"Configuration error"` to client
+- [x] 2.7 Lint: `ruff check .` + `py_compile`; commit
 
 ### Phase 3 — Frontend security + CSS + template wiring
-- [ ] 3.1 Add HTML-escape helper to `static/js/sidebar.js`; apply to `display_name`, `email`, `avatar_url` in `_renderAuthenticated` (XSS fix)
-- [ ] 3.2 Use `json.dumps` for the SSE error payload in `_keyring_scoped_stream` — `app/api/endpoints/chat.py`
-- [ ] 3.3 Remove dead CSS in `static/css/sidebar.css` — first `.auth-user` block, `.auth-user-id`, first `.auth-logout-btn` definition
-- [ ] 3.4 Wire `current_page` context var in `main.py` route handlers (home/chat/config/about)
-- [ ] 3.5 Lint: `npx @biomejs/biome check static/js/`; commit
+- [x] 3.1 Add HTML-escape helper to `static/js/sidebar.js`; apply to `display_name`, `email`, `avatar_url` in `_renderAuthenticated` (XSS fix)
+- [x] 3.2 Use `json.dumps` for the SSE error payload in `_keyring_scoped_stream` — `app/api/endpoints/chat.py`
+- [x] 3.3 Remove dead CSS in `static/css/sidebar.css` — first `.auth-user` block, `.auth-user-id`, first `.auth-logout-btn` definition
+- [x] 3.4 Wire `current_page` context var in `main.py` route handlers (home/chat/config/about)
+- [x] 3.5 Lint: `npx @biomejs/biome check static/js/`; commit
 
 ---
 

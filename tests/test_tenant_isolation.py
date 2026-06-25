@@ -83,6 +83,7 @@ PROFILE_PK_EXEMPTIONS = {
     # Profile by primary key — the id column IS the user_id (inherent scoping).
     "SQL_PROFILE_SELECT_BY_ID",
     "SQL_PROFILE_UPDATE_AVATAR",
+    "SQL_PROFILE_UPDATE_DISPLAY_NAME",
 }
 
 SYSTEM_AGGREGATE_EXEMPTIONS = {
