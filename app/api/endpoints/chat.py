@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Request, Form, File, UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -138,12 +140,12 @@ async def api_send_message_stream(
                     yield chunk
             except MissingProviderKeyError as e:
                 log.warning("Missing provider key in stream: %s", e)
-                yield (
-                    f'data: {{"error": "missing_key", '
-                    f'"provider": "{e.provider}", '
-                    f'"message": "No API key for {e.provider}. '
-                    f'Set your key in Settings → Provider Keys."}}\n\n'
-                )
+                payload = json.dumps({
+                    "error": "missing_key",
+                    "provider": e.provider,
+                    "message": f"No API key for {e.provider}. Set your key in Settings → Provider Keys.",
+                })
+                yield f"data: {payload}\n\n"
             finally:
                 if keyring:
                     clear_request_keyring()

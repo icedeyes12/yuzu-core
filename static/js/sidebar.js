@@ -139,16 +139,20 @@ function _renderAuthenticated(container, data) {
 	const avatarUrl = data?.avatar_url || "";
 	const shortId = userId ? `${userId.slice(0, 8)}…` : "unknown";
 	const showName = displayName || email || shortId;
-	const avatarHtml = avatarUrl
-		? `<img class="auth-user-avatar" src="${avatarUrl}" alt="avatar" referrerpolicy="no-referrer" />`
-		: `<div class="auth-user-avatar auth-avatar-placeholder">${(showName[0] || "?").toUpperCase()}</div>`;
+	const safeAvatarUrl =
+		avatarUrl && /^(https?:|data:)/i.test(avatarUrl) ? avatarUrl : "";
+	const avatarHtml = safeAvatarUrl
+		? `<img class="auth-user-avatar" src="${safeAvatarUrl}" alt="avatar" referrerpolicy="no-referrer" />`
+		: `<div class="auth-user-avatar auth-avatar-placeholder">${_escapeHtml(
+				(showName[0] || "?").toUpperCase(),
+			)}</div>`;
 	container.innerHTML = `
 		<div class="auth-user">
 			<div class="auth-user-info">
 				${avatarHtml}
 				<div class="auth-user-meta">
-					<div class="auth-user-name" title="${showName}">${showName}</div>
-					<div class="auth-user-email" title="${email}">${email || ""}</div>
+					<div class="auth-user-name" title="${_escapeHtml(showName)}">${_escapeHtml(showName)}</div>
+					<div class="auth-user-email" title="${_escapeHtml(email)}">${_escapeHtml(email || "")}</div>
 				</div>
 			</div>
 			<button class="auth-logout-btn" onclick="handleLogout()">Sign Out</button>
@@ -631,8 +635,8 @@ function _setSessionSwitchingVisual(_sessionId, isLoading) {
 // Helper functions
 function _escapeHtml(text) {
 	const div = document.createElement("div");
-	div.textContent = text;
-	return div.innerHTML;
+	div.textContent = String(text ?? "");
+	return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
 }
 
 function formatSessionDate(dateString) {

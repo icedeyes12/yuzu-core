@@ -713,40 +713,6 @@
 	padding: 0.5rem 0;
 }
 
-/* Authenticated state */
-.auth-user {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 0.8rem;
-}
-
-.auth-user-id {
-	font-family: monospace;
-	font-size: 0.85rem;
-	color: var(--text-color);
-	background: var(--input-bg);
-	padding: 0.35rem 0.6rem;
-	border-radius: 6px;
-	border: 1px solid var(--border-color);
-	cursor: help;
-}
-
-.auth-logout-btn {
-	background: var(--button-bg);
-	color: var(--button-text);
-	border: 1px solid var(--border-color);
-	border-radius: 6px;
-	padding: 0.35rem 0.8rem;
-	font-size: 0.8rem;
-	cursor: pointer;
-	transition: background 0.2s ease;
-}
-
-.auth-logout-btn:hover {
-	background: var(--button-hover);
-}
-
 /* Unauthenticated — login buttons */
 .auth-login-buttons {
 	display: flex;
