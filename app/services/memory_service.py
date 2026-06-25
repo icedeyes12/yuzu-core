@@ -40,12 +40,15 @@ class MemoryService:
         user_message: str,
         final_response: str,
         session_id: str,
+        user_id: str,
     ) -> None:
         """Internal: check and summarize if needed (fire-and-forget)."""
         try:
-            if await should_summarize_memory_async(profile, user_message, session_id):
+            if await should_summarize_memory_async(
+                profile, user_message, session_id, user_id
+            ):
                 await summarize_memory_async(
-                    profile, user_message, final_response, session_id
+                    profile, user_message, final_response, session_id, user_id
                 )
         except Exception as e:
             logger.warning(f"Session summarization failed: {e}")
@@ -63,11 +66,12 @@ class MemoryService:
         # Session auto-naming is handled by SessionService, called by orchestrator
 
         # 1. Check for session context summary (fire-and-forget to not block)
-        asyncio.create_task(
-            MemoryService._summarize_if_needed_async(
-                profile, user_message, final_response, session_id
+        if user_id:
+            asyncio.create_task(
+                MemoryService._summarize_if_needed_async(
+                    profile, user_message, final_response, session_id, user_id
+                )
             )
-        )
 
         # 2. Throttle and trigger background memory pipeline (segmentation, PCL, review)
         msg_count = await Database.get_session_messages_count_async(session_id)
