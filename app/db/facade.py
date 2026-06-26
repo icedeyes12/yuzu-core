@@ -84,6 +84,16 @@ from app.db.models_async import (
     update_context_async as _pg_update_context_async,
     update_profile_async as _pg_update_profile_async,
     update_session_memory_async as _pg_update_session_memory_async,
+    create_session_token_async as _pg_create_session_token_async,
+    validate_session_token_async as _pg_validate_session_token_async,
+    revoke_session_token_async as _pg_revoke_session_token_async,
+    lookup_identity_async as _pg_lookup_identity_async,
+    lookup_unclaimed_profile_async as _pg_lookup_unclaimed_profile_async,
+    insert_default_profile_returning_async as _pg_insert_default_profile_returning_async,
+    update_profile_avatar_async as _pg_update_profile_avatar_async,
+    update_profile_display_name_async as _pg_update_profile_display_name_async,
+    insert_identity_async as _pg_insert_identity_async,
+    lookup_auth_me_async as _pg_lookup_auth_me_async,
 )
 from app.logging_config import get_logger
 
@@ -244,6 +254,22 @@ class Database:
     )
     batch_decrypt_messages = _proxy(_pg_batch_decrypt_messages)
     batch_decrypt_messages_async = _proxy_async(_pg_batch_decrypt_messages_async)
+
+    # ── Auth & Tokens (pure passthroughs) ─────────────────────────────────────
+    create_session_token_async = _proxy_async(_pg_create_session_token_async)
+    validate_session_token_async = _proxy_async(_pg_validate_session_token_async)
+    revoke_session_token_async = _proxy_async(_pg_revoke_session_token_async)
+    lookup_identity_async = _proxy_async(_pg_lookup_identity_async)
+    lookup_unclaimed_profile_async = _proxy_async(_pg_lookup_unclaimed_profile_async)
+    insert_default_profile_returning_async = _proxy_async(
+        _pg_insert_default_profile_returning_async
+    )
+    update_profile_avatar_async = _proxy_async(_pg_update_profile_avatar_async)
+    update_profile_display_name_async = _proxy_async(
+        _pg_update_profile_display_name_async
+    )
+    insert_identity_async = _proxy_async(_pg_insert_identity_async)
+    lookup_auth_me_async = _proxy_async(_pg_lookup_auth_me_async)
 
     # ── Messages (session_id-defaulting wrappers) ────────────────────────────
     @staticmethod

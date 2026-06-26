@@ -4,7 +4,10 @@ import json
 import requests
 import httpx
 from typing import AsyncGenerator
+import logging
 from app.providers.base import AIProvider
+
+logger = logging.getLogger(__name__)
 
 
 class OllamaProvider(AIProvider):
@@ -116,4 +119,8 @@ class OllamaProvider(AIProvider):
                         yield ""
 
         except Exception as e:
-            yield f"Error: {str(e)}"
+            logger.error("Ollama streaming error: %s", repr(e), exc_info=True)
+            error_msg = str(e)
+            if not error_msg:
+                error_msg = repr(e)
+            yield f"Error: {type(e).__name__} - {error_msg}"

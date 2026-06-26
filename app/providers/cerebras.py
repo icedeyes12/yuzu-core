@@ -133,4 +133,8 @@ class CerebrasProvider(AIProvider):
                     else:
                         yield ""
         except Exception as e:
-            yield f"Error: {str(e)}"
+            logger.error("Cerebras streaming error: %s", repr(e), exc_info=True)
+            error_msg = str(e)
+            if not error_msg:
+                error_msg = repr(e)
+            yield f"Error: {type(e).__name__} - {error_msg}"

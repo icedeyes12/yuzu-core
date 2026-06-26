@@ -4,12 +4,7 @@ import os
 import secrets
 from datetime import datetime, timedelta
 
-from app.db.connection import pg_execute_async, pg_fetchone_async
-from app.db.queries import (
-    SQL_SESSION_TOKEN_CREATE,
-    SQL_SESSION_TOKEN_REVOKE,
-    SQL_SESSION_TOKEN_VALIDATE,
-)
+from app.db.facade import Database
 from app.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -29,22 +24,19 @@ async def create_session(user_id: str) -> str:
     token = generate_token()
     now = datetime.now()
     expires_at = now + timedelta(days=SESSION_TTL_DAYS)
-    await pg_execute_async(
-        SQL_SESSION_TOKEN_CREATE,
-        (token, user_id, now, expires_at),
-    )
+    await Database.create_session_token_async(token, user_id, now, expires_at)
     return token
 
 
 async def validate_session(token: str) -> str | None:
-    row = await pg_fetchone_async(SQL_SESSION_TOKEN_VALIDATE, (token,))
+    row = await Database.validate_session_token_async(token)
     if not row:
         return None
     return str(row["user_id"])
 
 
 async def revoke_session(token: str) -> bool:
-    await pg_execute_async(SQL_SESSION_TOKEN_REVOKE, (datetime.now(), token))
+    await Database.revoke_session_token_async(token, datetime.now())
     return True
 
 

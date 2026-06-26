@@ -650,3 +650,83 @@ __all__ = [
     "TOOL_ROLES",
     "ALL_TOOL_ROLES",
 ]
+
+# ---------------------------------------------------------------------------
+# Auth and Session Token operations
+# ---------------------------------------------------------------------------
+
+
+async def create_session_token_async(
+    token: str, user_id: str, now: datetime, expires_at: datetime
+) -> None:
+    from app.db.queries import SQL_SESSION_TOKEN_CREATE
+
+    await pg_execute_async(SQL_SESSION_TOKEN_CREATE, (token, user_id, now, expires_at))
+
+
+async def validate_session_token_async(token: str) -> dict | None:
+    from app.db.queries import SQL_SESSION_TOKEN_VALIDATE
+
+    return await pg_fetchone_async(SQL_SESSION_TOKEN_VALIDATE, (token,))
+
+
+async def revoke_session_token_async(token: str, now: datetime) -> None:
+    from app.db.queries import SQL_SESSION_TOKEN_REVOKE
+
+    await pg_execute_async(SQL_SESSION_TOKEN_REVOKE, (now, token))
+
+
+async def lookup_identity_async(provider: str, provider_sub: str) -> dict | None:
+    from app.db.queries import SQL_IDENTITY_LOOKUP
+
+    return await pg_fetchone_async(SQL_IDENTITY_LOOKUP, (provider, provider_sub))
+
+
+async def lookup_unclaimed_profile_async() -> dict | None:
+    from app.db.queries import SQL_PROFILE_UNCLAIMED_LOOKUP
+
+    return await pg_fetchone_async(SQL_PROFILE_UNCLAIMED_LOOKUP)
+
+
+async def insert_default_profile_returning_async(
+    params: tuple, created_at: datetime, updated_at: datetime
+) -> dict | None:
+    from app.db.queries import SQL_PROFILE_INSERT_DEFAULT_RETURNING
+
+    return await pg_fetchone_async(
+        SQL_PROFILE_INSERT_DEFAULT_RETURNING, (*params, created_at, updated_at)
+    )
+
+
+async def update_profile_avatar_async(
+    user_id: str, avatar_url: str, now: datetime
+) -> None:
+    from app.db.queries import SQL_PROFILE_UPDATE_AVATAR
+
+    await pg_execute_async(SQL_PROFILE_UPDATE_AVATAR, (avatar_url, now, user_id))
+
+
+async def update_profile_display_name_async(
+    user_id: str, display_name: str, now: datetime
+) -> None:
+    from app.db.queries import SQL_PROFILE_UPDATE_DISPLAY_NAME
+
+    await pg_execute_async(
+        SQL_PROFILE_UPDATE_DISPLAY_NAME, (display_name, now, user_id)
+    )
+
+
+async def insert_identity_async(
+    user_id: str, provider: str, provider_sub: str, email: str | None
+) -> None:
+    from app.db.queries import SQL_IDENTITY_INSERT
+
+    await pg_execute_async(
+        SQL_IDENTITY_INSERT, (user_id, provider, provider_sub, email)
+    )
+
+
+async def lookup_auth_me_async(user_id: str) -> dict | None:
+    from app.db.queries import SQL_AUTH_ME_LOOKUP
+
+    return await pg_fetchone_async(SQL_AUTH_ME_LOOKUP, (user_id,))
