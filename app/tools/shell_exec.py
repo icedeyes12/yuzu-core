@@ -35,7 +35,6 @@ TOOL_BASH: ToolDefinition = ToolDefinition(
             required=True,
         ),
     ],
-    is_terminal=False,
     needs_session=False,
 )
 

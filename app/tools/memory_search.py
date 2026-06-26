@@ -23,7 +23,6 @@ TOOL_DEFINITION = ToolDefinition(
         ),
     ],
     needs_session=True,
-    is_terminal=True,
 )
 
 

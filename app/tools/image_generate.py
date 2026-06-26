@@ -32,7 +32,6 @@ TOOL_DEFINITION = ToolDefinition(
             required=True,
         ),
     ],
-    is_terminal=True,
 )
 
 

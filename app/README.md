@@ -395,7 +395,6 @@ class ToolDefinition:
     description: str
     parameters: List[ToolParam]
     requires_session: bool = False
-    is_terminal: bool = False   # skips second LLM pass on success
     category: str = "general"
 ```
 

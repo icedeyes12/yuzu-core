@@ -41,7 +41,6 @@ TOOL_DEFINITION = ToolDefinition(
             enum=["GET", "POST", "PUT", "DELETE"],
         ),
     ],
-    is_terminal=True,
 )
 
 

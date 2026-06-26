@@ -213,15 +213,6 @@ def get_tool_role(tool_name: str) -> str:
     return f"{tool_name}_tools"
 
 
-def is_terminal_tool(tool_name: str) -> bool:
-    """Check if a tool is terminal (skips second LLM pass on success)."""
-    _collect_definitions()
-    tool_def = _TOOL_DEFINITIONS.get(tool_name)
-    if tool_def:
-        return tool_def.is_terminal
-    return False
-
-
 # --------------------------------------------------------------------
 # Legacy support
 # --------------------------------------------------------------------

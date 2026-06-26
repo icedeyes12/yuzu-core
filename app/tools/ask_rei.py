@@ -43,7 +43,6 @@ TOOL_DEFINITION = ToolDefinition(
             default=DEFAULT_CONVERSATION_ID,
         ),
     ],
-    is_terminal=True,
 )
 
 

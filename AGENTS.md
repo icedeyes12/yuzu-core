@@ -501,9 +501,8 @@ print(os.getcwd())
 1. **Single entry point**: `execute_tool(name, arguments, session_id)` in `file registry.py`
 2. **Lazy loading**: Tool modules imported on first dispatch
 3. **Alias resolution**: `imagine` → `image_generate`, `request` → `http_request`
-4. **Terminal tools**: `image_generate` is terminal — no synthesis pass on success
-5. **Non-terminal tools**: Trigger synthesis pass (2nd LLM call)
-6. **Sequential execution**: Tools execute one after another, results collected into single observation
+4. **Sequential execution**: Tools execute one after another, results collected into single observation
+5. **Synthesis pass**: All tools trigger synthesis (2nd LLM call) — no terminal/non-terminal distinction
 
 ### Message Persistence Flow
 

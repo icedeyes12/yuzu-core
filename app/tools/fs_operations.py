@@ -45,7 +45,6 @@ TOOL_READ = ToolDefinition(
             required=True,
         ),
     ],
-    is_terminal=False,
 )
 
 TOOL_WRITE = ToolDefinition(
@@ -67,7 +66,6 @@ TOOL_WRITE = ToolDefinition(
             required=True,
         ),
     ],
-    is_terminal=False,
 )
 
 TOOL_LS = ToolDefinition(
@@ -83,7 +81,6 @@ TOOL_LS = ToolDefinition(
             default="~/workspace",
         ),
     ],
-    is_terminal=False,
 )
 
 TOOL_MKDIR = ToolDefinition(
@@ -98,7 +95,6 @@ TOOL_MKDIR = ToolDefinition(
             required=True,
         ),
     ],
-    is_terminal=False,
 )
 
 TOOL_RM = ToolDefinition(
@@ -113,7 +109,6 @@ TOOL_RM = ToolDefinition(
             required=True,
         ),
     ],
-    is_terminal=False,
 )
 
 # Registry-compatible TOOL_DEFINITION (maps name -> definition)

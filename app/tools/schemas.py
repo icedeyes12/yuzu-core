@@ -28,14 +28,12 @@ class ToolDefinition:
     - The LLM's tools[] array (serialized to function-calling schema)
     - Dispatcher routing (tool_name → module)
     - Role categorization for DB storage
-    - Terminal/non-terminal classification for second LLM pass
     """
 
     name: str  # unique, matches module name, e.g. "image_generate"
     description: str  # human-readable; LLM uses this to decide when to call
     role: str  # DB storage role, e.g. "image_tools", "request_tools"
     parameters: list[ToolParam] = field(default_factory=list)
-    is_terminal: bool = False  # if True, skip second LLM pass on success
 
     # Internal fields (not serialized to LLM schema)
     needs_session: bool = False  # if True, dispatcher injects session_id from context
