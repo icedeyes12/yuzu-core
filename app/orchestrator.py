@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import os
 import re
 from pathlib import Path
@@ -35,7 +34,7 @@ _TIMESTAMP_SUFFIX = re.compile(r"\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$"
 _EMPTY_RESPONSE_FALLBACK = "I'm having trouble responding right now. Please try again."
 _MD_IMAGE_PATTERN = re.compile(r"!\[[^\]]{0,200}\]\(([^)]{1,200})\)")
 
-_MAX_ORCHESTRATION_LOOPS = 30
+_MAX_ORCHESTRATION_LOOPS = 5
 _STREAM_FENCE_TIMEOUT = 300
 
 _BASE_DIR = Path(__file__).resolve().parent.parent
@@ -148,28 +147,6 @@ def _cache_images_from_message(message: str) -> list[str]:
     return cached
 
 
-def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
-    """Return (base64, mime) for a generated image file, or (None, None)."""
-    validated_path = _validate_image_path_safely(image_path)
-    if not validated_path:
-        return None, None
-
-    try:
-        data = base64.b64encode(validated_path.read_bytes()).decode("utf-8")
-    except OSError as e:
-        log.warning("image read failed (%s): %s", validated_path, e)
-        return None, None
-
-    suffix = validated_path.suffix.lower()
-    if suffix == ".png":
-        mime = "image/png"
-    elif suffix == ".gif":
-        mime = "image/gif"
-    else:
-        mime = "image/jpeg"
-    return data, mime
-
-
 async def _parse_raw_tool_calls_async(
     provider_name: str, raw_response: dict | None
 ) -> list[dict]:
@@ -266,38 +243,19 @@ async def _persist_observation_async(
     )
 
 
-async def _build_image_context_async(
-    tool_markdown: str, session_id: str,
-) -> list[dict[str, Any]] | None:
-    """Load generated image from tool result and return as base64 block."""
-    image_path = parse_image_path(tool_markdown)
-    if not image_path:
-        return None
-    b64, mime = await asyncio.to_thread(_load_image_base64, image_path)
-    if not (b64 and mime):
-        return None
-    log.info("[synthesis] attached generated image for 2nd pass")
-    return [{"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}]
-
-
 async def _run_synthesis_async(
     profile: dict[str, Any],
     session_id: str,
     interface: str,
     tool_markdown: str,
-    ephemeral_context: list[dict[str, str]] | None = None,
     user_id: str | None = None,
 ) -> str | None:
     """Run a 2nd LLM pass to narrate around the tool result."""
-    image_context = await _build_image_context_async(tool_markdown, session_id)
-
     text, _ = await generate_ai_response(
         profile,
         "",
         interface,
         session_id,
-        image_content_for_context=image_context,
-        ephemeral_context=ephemeral_context,
         is_tool_loop=True,
         user_id=user_id,
     )
@@ -312,19 +270,14 @@ async def _stream_synthesis_async(
     session_id: str,
     interface: str,
     tool_markdown: str,
-    ephemeral_context: list[dict[str, str]] | None = None,
     user_id: str | None = None,
 ) -> AsyncIterator[str]:
     """Stream the 2nd LLM pass."""
-    image_context = await _build_image_context_async(tool_markdown, session_id)
-
     async for chunk in generate_ai_response_streaming(
         profile,
         "",
         interface,
         session_id,
-        image_content_for_context=image_context,
-        ephemeral_context=ephemeral_context,
         is_tool_loop=True,
         user_id=user_id,
     ):
@@ -447,7 +400,6 @@ async def _run_orchestration_loop_async(
                 session_id,
                 interface,
                 current_synthesis_context,
-                ephemeral_context=ephemeral_context,
                 user_id=user_id,
             ):
                 if chunk:
@@ -724,7 +676,6 @@ async def handle_user_message(
                 interface,
                 tool_markdown,
                 user_id=user_id,
-                ephemeral_context=ephemeral_context,
             )
 
             if synthesis:

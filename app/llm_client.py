@@ -13,7 +13,6 @@ from app.logging_config import get_logger
 from app.prompts import build_messages
 from app.providers import get_ai_manager
 from app.providers.base import _rate_limit_provider
-from app.tools import multimodal_tools
 from app.tools.registry import get_tool_definitions
 
 log = get_logger(__name__)
@@ -174,32 +173,11 @@ async def _send_to_provider(
     model: str,
     messages: list[dict[str, Any]],
     *,
-    image_context: list[dict[str, Any]] | None,
     source: str = "chat",
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single LLM dispatch with timing log. Returns (text, raw_response)."""
     ai_manager = await get_ai_manager()
     schemas = _unique_tool_schemas()
-
-    if image_context and provider in ai_manager.providers:
-        if multimodal_tools.is_vision_model(model, provider):
-            log.info(
-                "2nd-pass: %s/%s is vision-capable, reusing for image synthesis",
-                provider,
-                model,
-            )
-        else:
-            v_provider, v_model = multimodal_tools.get_best_vision_provider()
-            if v_provider and v_model:
-                log.info(
-                    "2nd-pass vision fallback: %s/%s (non-vision) -> %s/%s",
-                    provider,
-                    model,
-                    v_provider,
-                    v_model,
-                )
-                provider, model = v_provider, v_model
-                schemas = []  # vision models don't accept tool schemas
 
     started = time.time()
     raw_response: dict[str, Any] | None = None
@@ -241,7 +219,6 @@ async def generate_ai_response(
     user_message: str,
     interface: str = "terminal",
     session_id: str | None = None,
-    image_content_for_context: list[dict[str, Any]] | None = None,
     ephemeral_context: list[dict[str, str]] | None = None,
     is_tool_loop: bool = False,
     user_id: str | None = None,
@@ -257,15 +234,6 @@ async def generate_ai_response(
 
     provider, model = _resolve_provider(profile, None, None)
 
-    if multimodal_tools.has_images(
-        user_message
-    ) and not multimodal_tools.is_vision_model(model):
-        error_msg = "[System] Current model does not support vision. Please reconfigure your active model to a multimodal one first~ :3"
-        await Database.add_message_async(
-            "system", error_msg, session_id=session_id, user_id=user_id
-        )
-        return error_msg, None
-
     messages = await build_messages(
         profile, session_id, interface, user_message, user_id, include_image_paths=True
     )
@@ -273,25 +241,10 @@ async def generate_ai_response(
     if ephemeral_context:
         messages.extend(ephemeral_context)
 
-    if image_content_for_context:
-        messages.append(
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Here's the generated image for your reference.",
-                    },
-                    *image_content_for_context,
-                ],
-            }
-        )
-
     text, raw = await _send_to_provider(
         provider,
         model,
         messages,
-        image_context=image_content_for_context,
         source="chat",
     )
     return text, raw
@@ -302,30 +255,10 @@ async def _stream_from_provider(
     model: str,
     messages: list[dict[str, Any]],
     *,
-    image_context: list[dict[str, Any]] | None,
     source: str = "chat",
 ) -> AsyncIterator[str]:
     """Yield raw chunks from the provider's streaming API."""
     ai_manager = await get_ai_manager()
-
-    if image_context and provider in ai_manager.providers:
-        if multimodal_tools.is_vision_model(model, provider):
-            log.info(
-                "streaming 2nd-pass: %s/%s is vision-capable, reusing for image synthesis",
-                provider,
-                model,
-            )
-        else:
-            v_provider, v_model = multimodal_tools.get_best_vision_provider()
-            if v_provider and v_model:
-                log.info(
-                    "streaming 2nd-pass vision fallback: %s/%s (non-vision) -> %s/%s",
-                    provider,
-                    model,
-                    v_provider,
-                    v_model,
-                )
-                provider, model = v_provider, v_model
 
     received = 0
     try:
@@ -352,7 +285,6 @@ async def generate_ai_response_streaming(
     session_id: str | None = None,
     provider: str | None = None,
     model: str | None = None,
-    image_content_for_context: list[dict[str, Any]] | None = None,
     ephemeral_context: list[dict[str, str]] | None = None,
     is_tool_loop: bool = False,
     user_id: str | None = None,
@@ -363,16 +295,6 @@ async def generate_ai_response_streaming(
 
     resolved_provider, resolved_model = _resolve_provider(profile, provider, model)
 
-    if multimodal_tools.has_images(
-        user_message
-    ) and not multimodal_tools.is_vision_model(resolved_model):
-        error_msg = "[System] Current model does not support vision. Please reconfigure your active model to a multimodal one first~ :3"
-        await Database.add_message_async(
-            "system", error_msg, session_id=session_id, user_id=user_id
-        )
-        yield error_msg
-        return
-
     messages = await build_messages(
         profile, session_id, interface, user_message, user_id, include_image_paths=True
     )
@@ -380,25 +302,10 @@ async def generate_ai_response_streaming(
     if ephemeral_context:
         messages.extend(ephemeral_context)
 
-    if image_content_for_context:
-        messages.append(
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Here's the generated image for your reference.",
-                    },
-                    *image_content_for_context,
-                ],
-            }
-        )
-
     async for chunk in _stream_from_provider(
         resolved_provider,
         resolved_model,
         messages,
-        image_context=image_content_for_context,
         source="chat",
     ):
         yield chunk
