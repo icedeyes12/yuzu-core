@@ -34,7 +34,7 @@ _TIMESTAMP_SUFFIX = re.compile(r"\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$"
 _EMPTY_RESPONSE_FALLBACK = "I'm having trouble responding right now. Please try again."
 _MD_IMAGE_PATTERN = re.compile(r"!\[[^\]]{0,200}\]\(([^)]{1,200})\)")
 
-_MAX_ORCHESTRATION_LOOPS = 5
+_MAX_ORCHESTRATION_LOOPS = 4
 _STREAM_FENCE_TIMEOUT = 300
 
 _BASE_DIR = Path(__file__).resolve().parent.parent
@@ -436,6 +436,7 @@ async def _run_orchestration_loop_async(
             return
 
         if not has_tool_blocks(synthesis):
+            # No tool blocks in synthesis — this is the final response.
             await _persist_assistant_async(synthesis, session_id, user_id=user_id)
             await StreamFence.complete(session_id, fence_id)
             log.info("[stream] fence %s completed (final synthesis)", fence_id)
@@ -449,22 +450,47 @@ async def _run_orchestration_loop_async(
             )
             return
 
-        log.info("[stream] synthesis complete — persisting final response")
+        # Synthesis contains tool blocks — model is retrying / doing multi-step.
+        # Execute the tools and loop (up to _MAX_ORCHESTRATION_LOOPS).
+        log.info("[stream] synthesis contains tool blocks — continuing loop (%d/%d)", loop_count, _MAX_ORCHESTRATION_LOOPS)
 
-        # Synthesis is the final response — persist and return.
-        # Do NOT parse for tool blocks again to avoid infinite loops.
-        await _persist_assistant_async(synthesis, session_id, user_id=user_id)
-        await StreamFence.complete(session_id, fence_id)
-        log.info("[stream] fence %s completed (final synthesis)", fence_id)
-        await _post_turn_async(
-            profile,
-            user_message,
-            synthesis,
-            session_id,
-            active_session,
-            user_id=user_id,
+        next_commands, clean_synth = parse_tool_blocks(synthesis)
+        if not next_commands:
+            await _persist_assistant_async(
+                clean_synth or synthesis, session_id, user_id=user_id
+            )
+            await _post_turn_async(
+                profile,
+                user_message,
+                clean_synth or synthesis,
+                session_id,
+                active_session,
+                user_id=user_id,
+            )
+            return
+
+        # Persist intermediate synthesis (clean)
+        if clean_synth and clean_synth.strip():
+            await _persist_assistant_async(clean_synth, session_id, user_id=user_id)
+            log.info("[stream] persisted intermediate synthesis (clean)")
+
+        # Execute tools
+        next_results = await execute_commands(
+            next_commands, session_id=session_id, user_id=user_id
         )
-        return
+        next_markdowns: list[str] = []
+
+        for tool_name, result in next_results:
+            tm = result.get("markdown", str(result))
+            next_markdowns.append(tm)
+            await _persist_tool_result_async(tool_name, tm, session_id, user_id=user_id)
+            p = parse_image_path(tm)
+            if p:
+                any_image_tool = True
+                all_generated_paths.append(p)
+            yield "\n\n" + tm
+
+        current_synthesis_context = "\n\n".join(next_markdowns)
 
     # Fallback: should not reach here normally
     await StreamFence.complete(session_id, fence_id)
