@@ -103,7 +103,7 @@ CRITICAL RULE: NEVER put `<command>` tags inside Markdown fenced code blocks (``
 
 ## Protocol Format
 <command>
-/command arguments
+/imagine a beautiful sunset
 </command>
 
 1. One tool per block. Max 3 blocks per response.
