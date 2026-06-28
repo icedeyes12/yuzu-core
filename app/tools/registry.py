@@ -1,4 +1,5 @@
 """Central tool registry — single dispatch point for all tool execution."""
+
 from __future__ import annotations
 
 
