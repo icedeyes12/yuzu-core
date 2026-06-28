@@ -18,9 +18,10 @@ _REGEX_INPUT_LIMIT = 100000
 _MAX_TOOL_BLOCKS = 3
 
 # Tool block parsing - uses string methods instead of regex to prevent ReDoS
-# Opening and closing tags
-_TOOL_OPEN = "<command>"
-_TOOL_CLOSE = "</command>"
+# Opening and closing tags.  We accept both <tool> and <command> for
+# backward compatibility (AGENTS.md mentions <tool>, older prompts use <command>).
+_TOOL_OPEN_TOOLS = ("<tool>", "<command>")
+_TOOL_CLOSE_TOOLS = ("</tool>", "</command>")
 
 # Tools whose argument is a free-form string keyed by a specific field.
 _STRING_ARG_TOOLS: dict[str, str] = {
@@ -82,12 +83,45 @@ def _safe_regex_search(pattern: re.Pattern, text: str) -> re.Match | None:
 # --------------------------------------------------------------------
 
 
+def _match_open_tag(stripped: str) -> tuple[int, int, int] | None:
+    """Check if *stripped* starts with a recognized open tag.
+
+    Returns ``(open_len, close_offset, close_len)`` where *open_len* is the
+    length of the matched open tag, *close_offset* is the offset of the
+    matching close tag relative to the end of the open tag, and *close_len*
+    is the length of the matched close tag.  Returns ``(open_len, -1, 0)``
+    when the close tag is not on the same line, or ``None`` if no open tag
+    matches.
+    """
+    for open_tag in _TOOL_OPEN_TOOLS:
+        if stripped.startswith(open_tag):
+            open_len = len(open_tag)
+            for close_tag in _TOOL_CLOSE_TOOLS:
+                idx = stripped.find(close_tag, open_len)
+                if idx != -1:
+                    return open_len, idx - open_len, len(close_tag)
+            return open_len, -1, 0
+    return None
+
+
+def _find_close_tag(line: str) -> tuple[int, int] | None:
+    """Check if *line* contains a recognized close tag.
+
+    Returns ``(start_idx, tag_len)`` or ``None``.
+    """
+    for close_tag in _TOOL_CLOSE_TOOLS:
+        idx = line.find(close_tag)
+        if idx != -1:
+            return idx, len(close_tag)
+    return None
+
+
 def parse_tool_blocks(text: str) -> tuple[list[str], str]:
-    """Parse <command>...</command> blocks from LLM response.
+    """Parse <tool>...</tool> or <command>...</command> blocks from LLM response.
 
     Returns (commands, clean_text): max 3 command strings, plus text with
     all tool blocks removed. Line-start positioning prevents accidental
-    parsing of inline <command> mentions in narrative.
+    parsing of inline tool mentions in narrative.
     """
     if not text:
         return [], ""
@@ -103,59 +137,52 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
         line = lines[i]
         stripped = line.strip()
 
-        if stripped.startswith(_TOOL_OPEN):
-            content_lines: list[str] = []
-            found_close = False
+        match = _match_open_tag(stripped)
+        if match is None:
+            i += 1
+            continue
 
-            if _TOOL_CLOSE in stripped:
-                # Single-line format: <tool>command</tool>
-                # Must be pure tool block (only whitespace around)
-                after_open = stripped[len(_TOOL_OPEN) :]
-                close_idx = after_open.find(_TOOL_CLOSE)
-                if close_idx != -1:
-                    after_close = after_open[close_idx + len(_TOOL_CLOSE) :].strip()
-                    if not after_close:
-                        content = after_open[:close_idx].strip()
-                        if content:
-                            matches.append(content)
-                        lines[i] = ""
-            else:
-                after_open = stripped[len(_TOOL_OPEN) :].strip()
-                if not after_open:
-                    # Collect content until </tool>
-                    j = i + 1
-                    while j < len(lines):
-                        inner_line = lines[j]
-                        inner_stripped = inner_line.strip()
+        open_len, close_idx, close_len = match
+        content_lines: list[str] = []
+        found_close = False
 
-                        if inner_stripped.endswith(_TOOL_CLOSE):
-                            before_close = inner_stripped[: -len(_TOOL_CLOSE)].strip()
-                            if before_close:
-                                content_part = inner_line[
-                                    : inner_line.rfind(_TOOL_CLOSE)
-                                ].strip()
-                                content_lines.append(content_part)
-                            found_close = True
-                            for k in range(i, j + 1):
-                                lines[k] = ""
-                            break
-                        elif inner_stripped.startswith(_TOOL_CLOSE):
-                            found_close = True
-                            for k in range(i, j + 1):
-                                lines[k] = ""
-                            break
-                        else:
-                            content_lines.append(inner_line.strip())
-                        j += 1
+        if close_idx != -1:
+            # Single-line format: <tool>command</tool>
+            after_open = stripped[open_len:]
+            before_close = after_open[:close_idx].strip()
+            after_close = after_open[close_idx + close_len :].strip()
+            if not after_close and before_close:
+                matches.append(before_close)
+            lines[i] = ""
+        else:
+            # Multi-line: <tool> ... </tool>
+            after_open = stripped[open_len:].strip()
+            if after_open:
+                content_lines.append(after_open)
+            j = i + 1
+            while j < len(lines):
+                inner_line = lines[j]
+                inner_stripped = inner_line.strip()
 
-                    if found_close and content_lines:
-                        # Join lines preserving indentation, strip trailing whitespace
-                        content = "\n".join(content_lines).strip()
-                        if content:
-                            matches.append(content)
-                    elif found_close:
-                        # Empty tool block, just mark lines removed
-                        pass
+                close_match = _find_close_tag(inner_line)
+                if close_match is not None:
+                    close_start, close_len = close_match
+                    before_close = inner_line[:close_start].strip()
+                    if before_close:
+                        content_lines.append(before_close)
+                    found_close = True
+                    for k in range(i, j + 1):
+                        lines[k] = ""
+                    break
+                else:
+                    content_lines.append(inner_line.strip())
+                j += 1
+
+            if found_close and content_lines:
+                content = "\n".join(content_lines).strip()
+                if content:
+                    matches.append(content)
+
         i += 1
 
     matches = matches[:_MAX_TOOL_BLOCKS]
@@ -186,28 +213,22 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
 
 
 def has_tool_blocks(text: str) -> bool:
-    """Check if text contains any <command>...</command> blocks."""
+    """Check if text contains any <tool>...</tool> or <command>...</command> blocks."""
     if not text:
         return False
     if len(text) > _REGEX_INPUT_LIMIT:
         text = text[:_REGEX_INPUT_LIMIT]
 
-    if "<command>" in text and "</command>" in text:
-        return True
+    for open_tag, close_tag in zip(_TOOL_OPEN_TOOLS, _TOOL_CLOSE_TOOLS):
+        if open_tag in text and close_tag in text:
+            return True
 
     lines = text.split("\n")
     for line in lines:
         stripped = line.strip()
-        if stripped.startswith(_TOOL_OPEN):
-            if _TOOL_CLOSE in stripped:
-                after_open = stripped[len(_TOOL_OPEN) :]
-                close_idx = after_open.find(_TOOL_CLOSE)
-                if close_idx != -1:
-                    after_close = after_open[close_idx + len(_TOOL_CLOSE) :].strip()
-                    if not after_close:
-                        return True
-            else:
-                return _TOOL_CLOSE in text
+        if _match_open_tag(stripped) is not None:
+            return True
+
     return False
 
 
