@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+import base64
+import io
+import os
 from datetime import datetime, timezone
 from typing import Any
-import os
+
+from PIL import Image
+
 from app.db import Database
 from app.logging_config import get_logger
 
 log = get_logger(__name__)
 
 MAX_HISTORY_TOKENS = 15000
+_MAX_EMBEDDED_IMAGES = 3
+_IMAGE_ROLES = ("user", "image_tools", "image_edit")
 
 
 def _estimate_tokens(text: str) -> int:
@@ -508,7 +515,12 @@ async def build_messages(
     user_id: str,
     include_image_paths: bool = False,
 ) -> list[dict[str, Any]]:
-    """Build the full chat-completion messages list (async)."""
+    """Build the full chat-completion messages list (async).
+
+    Converts ``image_paths`` on history messages into base64 ``image_url``
+    blocks (OpenAI multimodal format) at build time so the LLM always
+    carries the last 3 images regardless of role.
+    """
     system_message = await build_system_message_async(
         profile, session_id, interface, user_message, user_id
     )
@@ -518,22 +530,92 @@ async def build_messages(
         await Database.get_chat_history_for_ai_async(
             session_id=session_id,
             user_id=user_id,
-            limit=100,  # .Fetch more, then trim by tokens
+            limit=100,
             recent=True,
-            include_image_paths=include_image_paths,
+            include_image_paths=True,
         )
     ) or []
 
     # Apply token-based trimming
     history = _trim_history_to_token_limit(history, MAX_HISTORY_TOKENS)
 
-    return [{"role": "system", "content": system_message}] + [
-        {
-            "role": m["role"],
-            "content": m["content"],
-            "image_paths": m.get("image_paths"),
-        }
-        if "image_paths" in m
-        else {"role": m["role"], "content": m["content"]}
-        for m in history
-    ]
+    # ── Collect last N image paths globally (across all roles) ─────────
+    last_images: list[tuple[str, str]] = []  # (path, role)
+    for msg in reversed(history):
+        role = msg.get("role", "")
+        paths = msg.get("image_paths") or []
+        if role in _IMAGE_ROLES and paths:
+            for p in reversed(paths):
+                if len(last_images) >= _MAX_EMBEDDED_IMAGES:
+                    break
+                last_images.append((p, role))
+        if len(last_images) >= _MAX_EMBEDDED_IMAGES:
+            break
+    allowed_set = {p for p, _ in last_images}
+
+    # ── Convert messages with image_paths to multimodal content ────────
+    result: list[dict[str, Any]] = [{"role": "system", "content": system_message}]
+    for msg in history:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        paths = msg.get("image_paths") or []
+
+        if role in _IMAGE_ROLES and paths:
+            valid_paths = [p for p in paths if p in allowed_set and os.path.exists(p)]
+            if valid_paths:
+                result.append(_build_multimodal_message(role, content, valid_paths))
+                continue
+
+        result.append({"role": role, "content": content})
+
+    return result
+
+
+def _build_multimodal_message(
+    role: str, text: str, image_paths: list[str]
+) -> dict[str, Any]:
+    """Build a single multimodal content array (text + base64 images)."""
+    parts: list[dict[str, Any]] = [{"type": "text", "text": text or ""}]
+
+    for path in image_paths:
+        encoded = _encode_image_safe(path)
+        if encoded:
+            parts.append(encoded)
+
+    # If no images were successfully encoded, fall back to plain text
+    if len(parts) == 1:
+        return {"role": role, "content": text or ""}
+
+    return {"role": role, "content": parts}
+
+
+def _encode_image_safe(path: str) -> dict[str, Any] | None:
+    """Load, resize, and base64-encode a local image file.
+
+    Returns an OpenAI-compatible ``image_url`` content block, or ``None``
+        if the file cannot be read.
+    """
+    try:
+        with Image.open(path) as img:
+            if max(img.size) > 1024:
+                img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+
+            if path.lower().endswith(".png"):
+                fmt, mime = "PNG", "image/png"
+            elif path.lower().endswith(".gif"):
+                fmt, mime = "GIF", "image/gif"
+            elif path.lower().endswith(".webp"):
+                fmt, mime = "WEBP", "image/webp"
+            else:
+                fmt, mime = "JPEG", "image/jpeg"
+
+            buf = io.BytesIO()
+            img.save(buf, format=fmt, quality=85)
+            data = base64.b64encode(buf.getvalue()).decode("utf-8")
+    except FileNotFoundError:
+        return None
+    except Exception as e:
+        log.warning("[Vision] Failed to encode %s: %s", path, e)
+        return None
+
+    return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}}

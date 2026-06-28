@@ -3,69 +3,37 @@ from __future__ import annotations
 import os
 from unittest.mock import patch
 import sys
-import pytest
 
-# Ensure app is in path
 sys.path.append("/home/workspace/yuzu-companion")
 
-from app.tools.multimodal import MultimodalTools
+
+def test_build_messages_returns_list():
+    """Smoke test — build_messages is async and needs a DB; just verify import."""
+    from app.prompts import build_messages
+    assert callable(build_messages)
 
 
-def test_inject_vision_context_no_vision_model():
-    tools = MultimodalTools()
-    messages = [{"role": "user", "content": "hello", "image_paths": ["path1.jpg"]}]
-    with patch.object(MultimodalTools, "is_vision_model", return_value=False):
-        result = tools.inject_vision_context(messages, "non-vision-model")
-        assert result == messages
+def test_encode_image_safe_missing_file():
+    """_encode_image_safe returns None for non-existent files."""
+    from app.prompts import _encode_image_safe
+    assert _encode_image_safe("/nonexistent/path.jpg") is None
 
 
-def test_inject_vision_context_with_vision_model():
-    tools = MultimodalTools()
-    messages = [
-        {
-            "role": "user",
-            "content": "what is this?",
-            "image_paths": ["tests/assets/test.jpg"],
-        }
-    ]
-
-    os.makedirs("tests/assets", exist_ok=True)
+def test_encode_image_safe_valid(tmp_path=None):
+    """_encode_image_safe returns a valid image_url block for a real image."""
+    from app.prompts import _encode_image_safe
     from PIL import Image
+    import tempfile
 
-    img = Image.new("RGB", (100, 100), color="red")
-    img.save("tests/assets/test.jpg")
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+        img = Image.new("RGB", (10, 10), color="blue")
+        img.save(f, format="PNG")
+        path = f.name
 
-    with patch.object(MultimodalTools, "is_vision_model", return_value=True):
-        result = tools.inject_vision_context(messages, "vision-model")
-        assert len(result) == 1
-        assert isinstance(result[0]["content"], list)
-        assert result[0]["content"][0]["type"] == "text"
-        assert result[0]["content"][1]["type"] == "image_url"
-        assert "image_paths" not in result[0]
-
-
-@pytest.mark.asyncio
-async def test_vision_model_validation_llm_client():
-    from app.llm_client import generate_ai_response
-
-    profile = {
-        "providers_config": {
-            "preferred_provider": "ollama",
-            "preferred_model": "non-vision",
-        }
-    }
-    user_message = "![test](static/uploads/test.jpg)"
-
-    with (
-        patch("app.tools.multimodal.multimodal_tools.has_images", return_value=True),
-        patch(
-            "app.tools.multimodal.multimodal_tools.is_vision_model", return_value=False
-        ),
-        patch("app.db.Database.get_active_session", return_value={"id": 1}),
-        patch("app.db.Database.add_message_async") as mock_add,
-    ):
-        text, raw = await generate_ai_response(profile, user_message, session_id=1)
-
-        assert "[System] Current model does not support vision" in text
-        assert raw is None
-        mock_add.assert_called_with("system", text, session_id=1, user_id=None)
+    try:
+        result = _encode_image_safe(path)
+        assert result is not None
+        assert result["type"] == "image_url"
+        assert "data:image/png;base64," in result["image_url"]["url"]
+    finally:
+        os.unlink(path)

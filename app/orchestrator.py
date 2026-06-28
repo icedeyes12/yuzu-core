@@ -28,7 +28,6 @@ from app.services.session_service import SessionService
 from app.services.memory_service import MemoryService
 from app.tools import multimodal_tools
 from app.tools.registry import execute_tool, get_tool_role
-from app.visual_context import store_visual_context
 
 log = get_logger(__name__)
 
@@ -268,19 +267,16 @@ async def _persist_observation_async(
 
 
 async def _build_image_context_async(
-    tool_markdown: str, session_id: str
+    tool_markdown: str, session_id: str,
 ) -> list[dict[str, Any]] | None:
+    """Load generated image from tool result and return as base64 block."""
     image_path = parse_image_path(tool_markdown)
     if not image_path:
         return None
-    # Assuming _load_image_base64 is fast or run it in thread if needed
-    # It reads bytes, so better to use asyncio.to_thread if it's not already
     b64, mime = await asyncio.to_thread(_load_image_base64, image_path)
     if not (b64 and mime):
         return None
-    # Assuming store_visual_context is fast/local
-    store_visual_context(session_id, b64, mime)
-    log.info("attached generated image to synthesis pass")
+    log.info("[synthesis] attached generated image for 2nd pass")
     return [{"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}]
 
 

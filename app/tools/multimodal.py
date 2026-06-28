@@ -659,116 +659,16 @@ class MultimodalTools:
         return found_images
 
     def inject_vision_context(
-        self, messages: list[dict], current_model: str
+        self, messages: list[dict], current_model: str,
     ) -> list[dict]:
-        """Pure helper function to inject vision context into the messages list.
+        """Deprecated — returns *messages* unchanged.
 
-        If the current_model does not support vision, returns messages unmodified.
-        Otherwise, converts messages with image_paths into the standard OpenAI
-        multimodal array structure with Base64 strings.
+        Image embedding is now handled in ``app.prompts.build_messages()``
+        which converts ``image_paths`` to base64 ``image_url`` blocks at
+        build time.  This method is retained as a no-op stub so existing
+        callers do not break.
         """
-        if not self.is_vision_model(current_model):
-            return messages
-
-        # Phase 1: Determine the 3 most recent valid image paths globally across history
-        allowed_global_paths = []
-        _image_roles = ("user", "image_tools", "image_edit")
-        for msg in reversed(messages):
-            role = msg.get("role")
-            image_paths = msg.get("image_paths")
-
-            if role in _image_roles and image_paths:
-                # We defer processing to a second pass, just keeping track of paths
-                for path in reversed(image_paths):
-                    if os.path.exists(path) and path not in allowed_global_paths:
-                        allowed_global_paths.append(path)
-                        if len(allowed_global_paths) >= 3:
-                            break
-            if len(allowed_global_paths) >= 3:
-                break
-
-        # Convert back to a set for fast lookup
-        allowed_path_set = set(allowed_global_paths)
-
-        new_messages = []
-        for msg in messages:
-            role = msg.get("role")
-            content = msg.get("content")
-            image_paths = msg.get("image_paths")
-
-            if role in _image_roles and image_paths:
-                # Build multimodal content array
-                # Content might already be a string or list
-                text_content = ""
-                if isinstance(content, str):
-                    text_content = content
-                elif isinstance(content, list):
-                    # Find the text part
-                    for part in content:
-                        if isinstance(part, dict) and part.get("type") == "text":
-                            text_content = part.get("text", "")
-                            break
-
-                # Check for missing files first and add placeholders
-                missing_placeholders = []
-                valid_paths = []
-                for path in image_paths:
-                    if not os.path.exists(path):
-                        missing_placeholders.append(f"[Image file unavailable: {path}]")
-                    elif path in allowed_path_set:
-                        valid_paths.append(path)
-
-                if missing_placeholders:
-                    text_content += "\n" + "\n".join(missing_placeholders)
-
-                new_content = [
-                    {"type": "text", "text": text_content or "What's in these images?"}
-                ]
-
-                for path in valid_paths:
-                    try:
-                        with Image.open(path) as img:
-                            # Resize if larger than 1024px
-                            if max(img.size) > 1024:
-                                img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
-
-                            # Convert to Base64
-                            img_byte_arr = io.BytesIO()
-                            # Preserve transparency for PNG, else JPEG
-                            if path.lower().endswith(".png"):
-                                format_ext = "PNG"
-                                mime = "image/png"
-                            else:
-                                format_ext = "JPEG"
-                                mime = "image/jpeg"
-
-                            img.save(img_byte_arr, format=format_ext, quality=85)
-                            data = base64.b64encode(img_byte_arr.getvalue()).decode(
-                                "utf-8"
-                            )
-
-                        new_content.append(
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:{mime};base64,{data}"},
-                            }
-                        )
-                    except FileNotFoundError:
-                        # Catch FileNotFoundError silently as per requirements
-                        continue
-                    except Exception as e:
-                        logger.warning(f"[Vision] Failed to process image {path}: {e}")
-
-                new_msg = msg.copy()
-                new_msg["content"] = new_content
-                # Remove image_paths from the payload sent to LLM
-                if "image_paths" in new_msg:
-                    del new_msg["image_paths"]
-                new_messages.append(new_msg)
-            else:
-                new_messages.append(msg)
-
-        return new_messages
+        return messages
 
 
 multimodal_tools = MultimodalTools()

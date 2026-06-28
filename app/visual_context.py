@@ -1,59 +1,26 @@
+"""Visual context helpers — DEPRECATED.
+
+Image embedding is now handled entirely in ``app.prompts.build_messages()``
+which converts ``image_paths`` on history messages to base64 ``image_url``
+blocks at build time.  This module is retained as a stub so existing imports
+do not break; all functions are no-ops and will be removed in a future
+release.
+"""
+
 from __future__ import annotations
 
 
-import threading
-import re
-
-# ── Visual Context Buffer ─────────────────────────────────────────────────────
-
-
-_visual_context_buffer: dict = {}  # session_id -> {"base64": str, "mime": str, "turns_left": int}
-_visual_context_lock = threading.Lock()
-_VISUAL_CONTEXT_TURNS = 3
-
-
 def store_visual_context(session_id: str, image_base64: str, mime: str) -> None:
-    """Store a visual context snapshot for follow-up turns. Thread-safe."""
-    with _visual_context_lock:
-        _visual_context_buffer[session_id] = {
-            "base64": image_base64,
-            "mime": mime,
-            "turns_left": _VISUAL_CONTEXT_TURNS,
-        }
+    """Deprecated — no-op."""
 
 
 def consume_visual_context(
-    session_id: str, is_tool_loop: bool = False
+    session_id: str, is_tool_loop: bool = False,
 ) -> tuple[str | None, str | None]:
-    """Return stored visual context if available and conditionally decrement turn counter.
-
-    Returns (base64, mime) or (None, None). Thread-safe.
-    """
-    with _visual_context_lock:
-        ctx = _visual_context_buffer.get(session_id)
-        if not ctx or ctx["turns_left"] <= 0:
-            _visual_context_buffer.pop(session_id, None)
-            return None, None
-
-        if not is_tool_loop:
-            ctx["turns_left"] -= 1
-
-        if ctx["turns_left"] <= 0:
-            _visual_context_buffer.pop(session_id, None)
-        return ctx["base64"], ctx["mime"]
-
-
-# ── Visual Reference Detection ───────────────────────────────────────────────
-
-
-_VISUAL_REF_PATTERNS = re.compile(
-    r"(?:yang tadi|yang sebelumnya|tadi|bedanya|beda apa|compare|"
-    r"bandingin|foto tadi|gambar tadi|image before|the previous|earlier image|"
-    r"dari tadi|yang barusan)",
-    re.IGNORECASE,
-)
+    """Deprecated — always returns (None, None)."""
+    return None, None
 
 
 def has_visual_reference(text: str) -> bool:
-    """Detect if the user message references a previous image."""
-    return bool(_VISUAL_REF_PATTERNS.search(text))
+    """Deprecated — always returns False."""
+    return False

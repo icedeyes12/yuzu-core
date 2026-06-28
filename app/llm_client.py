@@ -15,10 +15,6 @@ from app.providers import get_ai_manager
 from app.providers.base import _rate_limit_provider
 from app.tools import multimodal_tools
 from app.tools.registry import get_tool_definitions
-from app.visual_context import (
-    consume_visual_context,
-    has_visual_reference,
-)
 
 log = get_logger(__name__)
 
@@ -135,35 +131,6 @@ def _apply_vision_routing(
     """Switch to vision provider/model when needed and rewrite the last user msg."""
     # DEPRECATED: Automatic vision model switching is removed in favor of manual configuration and validation.
     return messages, provider, model
-
-
-def _inject_persistent_visual(
-    messages: list[dict[str, Any]],
-    user_message: str,
-    session_id: str | None,
-    is_tool_loop: bool = False,
-) -> None:
-    if not (session_id and has_visual_reference(user_message)):
-        return
-    prev_b64, prev_mime = consume_visual_context(session_id, is_tool_loop=is_tool_loop)
-    if not (prev_b64 and prev_mime):
-        return
-    messages.append(
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": "[Previous image context re-attached for comparison]",
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{prev_mime};base64,{prev_b64}"},
-                },
-            ],
-        }
-    )
-    log.info("re-injected persistent visual context")
 
 
 def _unique_tool_schemas() -> list[dict[str, Any]]:
@@ -306,8 +273,6 @@ async def generate_ai_response(
     if ephemeral_context:
         messages.extend(ephemeral_context)
 
-    messages = multimodal_tools.inject_vision_context(messages, model)
-
     if image_content_for_context:
         messages.append(
             {
@@ -321,10 +286,6 @@ async def generate_ai_response(
                 ],
             }
         )
-
-    _inject_persistent_visual(
-        messages, user_message, session_id, is_tool_loop=is_tool_loop
-    )
 
     text, raw = await _send_to_provider(
         provider,
@@ -419,8 +380,6 @@ async def generate_ai_response_streaming(
     if ephemeral_context:
         messages.extend(ephemeral_context)
 
-    messages = multimodal_tools.inject_vision_context(messages, resolved_model)
-
     if image_content_for_context:
         messages.append(
             {
@@ -434,10 +393,6 @@ async def generate_ai_response_streaming(
                 ],
             }
         )
-
-    _inject_persistent_visual(
-        messages, user_message, session_id, is_tool_loop=is_tool_loop
-    )
 
     async for chunk in _stream_from_provider(
         resolved_provider,
