@@ -1,4 +1,4 @@
-"""Tool-block parsing and command dispatch — implements the <tool>...</tool> protocol."""
+"""Tool-block parsing and command dispatch — implements the <command>...</command> protocol."""
 
 from __future__ import annotations
 
@@ -18,10 +18,10 @@ _REGEX_INPUT_LIMIT = 100000
 _MAX_TOOL_BLOCKS = 3
 
 # Tool block parsing - uses string methods instead of regex to prevent ReDoS
-# Opening and closing tags.  We accept both <tool> and <command> for
-# backward compatibility (AGENTS.md mentions <tool>, older prompts use <command>).
-_TOOL_OPEN_TOOLS = ("<tool>", "<command>")
-_TOOL_CLOSE_TOOLS = ("</tool>", "</command>")
+# Opening and closing tags.  We accept <tool> as an alias for backward
+# compatibility (some models may still emit <tool> despite training).
+_TOOL_OPEN_TOOLS = ("<command>", "<tool>")
+_TOOL_CLOSE_TOOLS = ("</command>", "</tool>")
 
 # Tools whose argument is a free-form string keyed by a specific field.
 _STRING_ARG_TOOLS: dict[str, str] = {
@@ -117,7 +117,7 @@ def _find_close_tag(line: str) -> tuple[int, int] | None:
 
 
 def parse_tool_blocks(text: str) -> tuple[list[str], str]:
-    """Parse <tool>...</tool> or <command>...</command> blocks from LLM response.
+    """Parse <command>...</command> blocks from LLM response.
 
     Returns (commands, clean_text): max 3 command strings, plus text with
     all tool blocks removed. Line-start positioning prevents accidental
@@ -147,7 +147,7 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
         found_close = False
 
         if close_idx != -1:
-            # Single-line format: <tool>command</tool>
+            # Single-line format: <command>command</command>
             after_open = stripped[open_len:]
             before_close = after_open[:close_idx].strip()
             after_close = after_open[close_idx + close_len :].strip()
@@ -155,7 +155,7 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
                 matches.append(before_close)
             lines[i] = ""
         else:
-            # Multi-line: <tool> ... </tool>
+            # Multi-line: <command> ... </command>
             after_open = stripped[open_len:].strip()
             if after_open:
                 content_lines.append(after_open)
@@ -213,7 +213,7 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
 
 
 def has_tool_blocks(text: str) -> bool:
-    """Check if text contains any <tool>...</tool> or <command>...</command> blocks."""
+    """Check if text contains any <command>...</command> blocks."""
     if not text:
         return False
     if len(text) > _REGEX_INPUT_LIMIT:

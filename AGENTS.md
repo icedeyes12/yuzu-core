@@ -33,7 +33,7 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 - **No Flask** — FastAPI only (migrated in v2.0.0).
 - **Pluggable LLM providers** — Ollama, Cerebras, OpenRouter, Chutes via `file providers.py`.
 - **Memory is first-class** — The memory subsystem (`app/memory/`) is not an afterthought; it's a core architectural layer.
-- **Tool protocol** — Uses `<tool>...</tool>` blocks for tool invocation (v3.1.0+). Legacy `/command` syntax removed.
+- **Tool protocol** — Uses `<command>...</command>` blocks for tool invocation (v3.1.0+). Legacy `/command` syntax removed.
 - **Streaming is stateful** — Long-running SSE responses are managed by `StreamManager`, not by the request thread.
 
 ### Key Files at a Glance
@@ -43,7 +43,7 @@ Yuzu Companion is an intimate AI companion system. The codebase is Python 3.12+ 
 | `file app/orchestrator.py` | **Single entry point** for all user messages |
 | `file app/llm_client.py` | LLM dispatch, vision routing, `chutes_chat()` helper |
 | `file app/prompts.py` | System prompt assembly, message context building |
-| `file app/commands.py` | `<tool>` block parsing, command dispatch, image guards |
+| `file app/commands.py` | `<command>` block parsing, command dispatch, image guards |
 | `file app/providers.py` | AI provider hierarchy + `AIProviderManager` singleton |
 | `file app/tools/registry.py` | Central tool dispatch — **only** place tools are executed |
 | `app/memory/` | Full memory pipeline (extraction, embedding, retrieval, retention) |
@@ -293,7 +293,7 @@ python3 -m pytest tests/ -v
 14. **Don't add new LLM call sites** — All LLM calls go through `file llm_client.py` (`generate_ai_response`, `generate_ai_response_streaming`, `chutes_chat`).
 15. **Don't modify the frontend buildless architecture** — No bundlers, no npm, no framework. Vanilla JS/ESM only.
 16. **Don't change the** `semantic_facts` **schema** without a migration plan — This table is the unified memory store.
-17. **Don't use legacy /command syntax** — Use `<tool>...</tool>` blocks only (v3.1.0+).
+17. **Don't use legacy /command syntax** — Use `<command>...</command>` blocks only (v3.1.0+).
 18. **Don't assume the request thread owns completion state** — Background streaming may outlive the original HTTP request and still must remain recoverable.
 
 ---
@@ -393,7 +393,7 @@ flowchart TB
 
 | Caller | Callee | Purpose |
 | --- | --- | --- |
-| `orchestrator.py` | `commands.py` | Parse `<tool>...</tool>` blocks from LLM response |
+| `orchestrator.py` | `commands.py` | Parse `<command>...</command>` blocks from LLM response |
 | `orchestrator.py` | `llm_client.py` | Generate AI response (sync + stream) |
 | `commands.py` | `tools/registry.py` | Execute parsed commands |
 | `orchestrator.py` | `db/facade.py` | Auto-name, summarize, pipeline trigger |
@@ -475,19 +475,19 @@ flowchart TB
 
 ### Tool Protocol (v3.1.0+)
 
-**LLM invokes tools using `<tool>...</tool>` blocks:**
+**LLM invokes tools using `<command>...</command>` blocks:**
 
 ```
-<tool>
+<command>
 /bash
 ls -la
-</tool>
+</command>
 
-<tool>
+<command>
 /python
 import os
 print(os.getcwd())
-</tool>
+</command>
 ```
 
 **Parsing behavior:**
@@ -506,7 +506,7 @@ print(os.getcwd())
 
 ### Message Persistence Flow
 
-When LLM invokes tools via `<tool>` blocks:
+When LLM invokes tools via `<command>` blocks:
 
 1. **Clean text first**: Extract tool blocks, stream remaining conversational text to UI
 2. **Execute tools**: Run all parsed commands sequentially
@@ -532,7 +532,7 @@ assistant:   "ada 5 file di folder tersebut"   ← synthesis
 
 1. Create `app/tools/<tool_name>.py` with `TOOL_DEFINITION` dict and `execute()` function
 2. Add import in `registry.py` `_collect_definitions()` and `_load_tool_module()`
-3. Update `prompts.py` system prompt with `<tool>` documentation
+3. Update `prompts.py` system prompt with `<command>` documentation
 4. No need to add aliases in `commands.py` — tool name comes from block content
 
 ---
@@ -567,7 +567,7 @@ assistant:   "ada 5 file di folder tersebut"   ← synthesis
 
 | Test | What it Covers |
 |---|---|
-| `tests/test_commands.py` | `<tool>` block parsing, command dispatch |
+| `tests/test_commands.py` | `<command>` block parsing, command dispatch |
 | `tests/test_db_queries.py` | SQL constants, parsers |
 | `tests/test_prompts.py` | Prompt assembly |
 | `tests/test_database_facade.py` | Database facade |
