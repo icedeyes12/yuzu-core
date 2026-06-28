@@ -1,10 +1,3 @@
-# FILE: app.db.models.py
-# DESCRIPTION: Sync PostgreSQL repository.
-#
-#   Each function is a thin wrapper that calls a SQL constant from
-#   app.db.queries, runs it through app.db.connection, and passes
-#   the result to a parser also defined in db_queries. The async mirror
-#   lives in db_pg_models_async.py and uses the same constants and parsers.
 
 from __future__ import annotations
 

@@ -1,8 +1,5 @@
+
 from __future__ import annotations
-# FILE: app/tools/multimodal.py
-# DESCRIPTION: Multimodal tools with image caching and vision support
-
-
 import logging
 import requests
 import base64
@@ -675,11 +672,12 @@ class MultimodalTools:
 
         # Phase 1: Determine the 3 most recent valid image paths globally across history
         allowed_global_paths = []
+        _image_roles = ("user", "image_tools", "image_edit")
         for msg in reversed(messages):
             role = msg.get("role")
             image_paths = msg.get("image_paths")
 
-            if role == "user" and image_paths:
+            if role in _image_roles and image_paths:
                 # We defer processing to a second pass, just keeping track of paths
                 for path in reversed(image_paths):
                     if os.path.exists(path) and path not in allowed_global_paths:
@@ -698,7 +696,7 @@ class MultimodalTools:
             content = msg.get("content")
             image_paths = msg.get("image_paths")
 
-            if role == "user" and image_paths:
+            if role in _image_roles and image_paths:
                 # Build multimodal content array
                 # Content might already be a string or list
                 text_content = ""

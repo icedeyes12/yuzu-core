@@ -1,8 +1,3 @@
-# FILE: app/memory/db_memory_queries.py
-# DESCRIPTION: Single source of truth for SQL strings and parsers used by
-#              the sync (db_memory.py) and async (db_memory_async stubs)
-#              memory repository layers.
-#
 #  Mirrors the pattern established in app/db_queries.py for the core DB
 #  layer: SQL constants live here, repository functions become thin
 #  wrappers around them. This eliminates the previously duplicated SQL

@@ -1,5 +1,3 @@
-# FILE: cli/widgets/__init__.py
-# DESCRIPTION: Custom widgets for Yuzu Companion TUI.
 
 from __future__ import annotations
 

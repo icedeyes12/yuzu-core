@@ -1,7 +1,3 @@
-# FILE: app.db.connection.py
-# DESCRIPTION: PostgreSQL connection pool and query helpers (psycopg v3).
-#              Provides both sync (PgSession) and async (AsyncPgSession)
-#              context managers backed by lazy-initialized pools.
 
 from __future__ import annotations
 

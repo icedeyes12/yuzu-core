@@ -1,36 +1,10 @@
-# FILE: app/memory/db_memory.py
-# DESCRIPTION: Unified memory CRUD layer over PostgreSQL semantic_facts table.
-#             All memory operations (semantic, episodic, segment) go through here.
-#             No SQLAlchemy ORM — pure psycopg v3 raw SQL for vector friendliness.
-#
-# Schema (aligned with plast-mem):
+# Schema reference:
 #   semantic_facts (
-#     id             SERIAL PRIMARY KEY,
-#     session_id     INTEGER,
-#     fact_type      VARCHAR(20)  -- 'static' | 'dynamic'
-#     content        TEXT,
-#     embedding      VECTOR(4096), -- pgvector, NULL allowed
-#     metadata       JSONB,        -- carries per-type fields
-#     valid_at       TIMESTAMP,    -- when fact became true (plast-mem pattern)
-#     invalid_at     TIMESTAMP,    -- when fact became false (soft delete)
-#     created_at     TIMESTAMP DEFAULT NOW(),
-#     last_accessed  TIMESTAMP DEFAULT NOW()
+#     id, session_id, fact_type, content, embedding (VECTOR(4096)),
+#     metadata (JSONB), valid_at, invalid_at, created_at, last_accessed
 #   )
-#
-# Temporal Validity (plast-mem pattern):
-#   - valid_at: set on creation (when fact becomes true)
-#   - invalid_at: set when contradicted (soft delete)
-#   - Active facts: invalid_at IS NULL
-#   - Semantic facts use temporal validity (no FSRS decay)
-#   - Episodic facts use FSRS decay (stored in metadata)
-#
-# metadata carries per-type data:
-#   - static (semantic): { confidence, importance, entity, relation, target,
-#                          category, source_table, access_count }
-#   - dynamic (episodic): { importance, stability, difficulty, surprise_level,
-#                          title, summary, source_table, access_count }
-#   - dynamic (segment): { importance, start_message_id, end_message_id,
-#                          source_table, access_count }
+# Active facts: invalid_at IS NULL
+# Semantic facts use temporal validity; episodic facts use FSRS decay in metadata.
 
 from __future__ import annotations
 
@@ -51,14 +25,11 @@ from app.db import (
     pg_execute_async,
 )
 from app.memory.db_memory_queries import (
-    # Constants
     FACT_TYPE_STATIC,
     FACT_TYPE_DYNAMIC,
     EMBEDDING_DIM,
-    # Vector helpers
     normalize_vector,
     vector_literal,
-    # Static SQL
     SQL_FACT_DUP_CHECK_BY_CONTENT,
     SQL_FACT_INSERT,
     SQL_FACT_SELECT_BY_ID,
@@ -69,7 +40,6 @@ from app.memory.db_memory_queries import (
     SQL_FACT_UPDATE_DECAY,
     SQL_FACT_DECAY_FETCH_FOR_SESSION,
     SQL_FACT_DECAY_FETCH_GLOBAL,
-    # Builders
     build_metadata_conditions,
     build_search_similar_query,
     build_search_trgm_query,
@@ -82,7 +52,6 @@ from app.memory.db_memory_queries import (
 logger = logging.getLogger(__name__)
 
 
-# ── Embedding helpers ─────────────────────────────────────────────────────────
 def _embed_text(text: str) -> list[float] | None:
     """Embed text via Chutes API. Returns None on failure."""
     try:
@@ -94,12 +63,6 @@ def _embed_text(text: str) -> list[float] | None:
         return None
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# SYNC FUNCTIONS (legacy compatibility)
-# ═════════════════════════════════════════════════════════════════════════════
-
-
-# ── Save / Insert ─────────────────────────────────────────────────────────────
 def save_fact(
     session_id: str | None,
     content: str,
@@ -109,11 +72,6 @@ def save_fact(
     category: str | None = None,
     user_id: str | None = None,
 ) -> int | None:
-    """
-    Insert a new fact into semantic_facts.
-
-    Returns the new row id, or None on failure.
-    """
     if not user_id:
         raise ValueError("save_fact: user_id is required")
     meta = dict(metadata) if metadata else {}
@@ -131,7 +89,7 @@ def save_fact(
 
     vec_literal = vector_literal(norm_vec)
 
-    # Reject exact content duplicates (same fact_type + content + not invalidated)
+
     try:
         dup_check = pg_fetchone(
             SQL_FACT_DUP_CHECK_BY_CONTENT, (fact_type, content, user_id)
@@ -164,7 +122,6 @@ def save_fact(
         return None
 
 
-# ── Vector Search ─────────────────────────────────────────────────────────────
 def search_similar(
     embedding: list[float],
     session_id: str | None = None,
@@ -175,13 +132,6 @@ def search_similar(
     category: str | None = None,
     user_id: str | None = None,
 ) -> list[dict]:
-    """
-    ANN search via PostgreSQL <=> (cosine) operator.
-    Distance is computed once via CTE and used in WHERE and ORDER BY.
-
-    Returns list of dicts: {id, content, fact_type, metadata,
-                            last_accessed, created_at, distance}
-    """
     if not user_id:
         raise ValueError("search_similar: user_id is required")
     try:
@@ -194,7 +144,7 @@ def search_similar(
         if not vec_literal:
             return []
 
-        # Build conditions using the query builder
+
         conditions, params = build_metadata_conditions(
             session_id=session_id,
             fact_type=fact_type,
@@ -214,7 +164,6 @@ def search_similar(
         return []
 
 
-# ── Keyword / Trigram Search ──────────────────────────────────────────────────
 def search_trgm(
     query: str,
     session_id: str | None = None,
@@ -225,15 +174,6 @@ def search_trgm(
     category: str | None = None,
     user_id: str | None = None,
 ) -> list[dict]:
-    """
-    Fuzzy keyword search via pg_trgm similarity operator.
-
-    Uses the GIN index on content (gin_trgm_ops) for fast trigram matching.
-    Ranks by similarity score descending.
-
-    Returns list of dicts: {id, content, fact_type, metadata,
-                            last_accessed, created_at, similarity}
-    """
     if not user_id:
         raise ValueError("search_trgm: user_id is required")
     if not query or not query.strip():
@@ -248,7 +188,6 @@ def search_trgm(
     )
 
     sql = build_search_trgm_query(conditions)
-    # Params order: query, query, min_similarity, limit (query appears twice for similarity() calls)
     params_with_query = [query] + params + [query, min_similarity, limit]
 
     try:
@@ -259,7 +198,6 @@ def search_trgm(
         return []
 
 
-# ── Full-Text Search ─────────────────────────────────────────────────────────
 def search_tsv(
     query: str,
     session_id: str | None = None,
@@ -270,19 +208,6 @@ def search_tsv(
     rank_weight: float = 0.3,
     user_id: str | None = None,
 ) -> list[dict]:
-    """
-    PostgreSQL full-text search via tsvector column.
-
-    Uses the GIN index on the auto-generated tsv column for fast
-    ts_headline and ts_rank scoring.
-
-    Args:
-        query: plain-text search query (converted to tsquery internally)
-        rank_weight: how much ts_rank contributes to final score vs recency
-
-    Returns list of dicts: {id, content, fact_type, metadata,
-                            last_accessed, created_at, ts_rank}
-    """
     if not user_id:
         raise ValueError("search_tsv: user_id is required")
     if not query or not query.strip():
@@ -308,7 +233,6 @@ def search_tsv(
         return []
 
 
-# ── Retrieval ─────────────────────────────────────────────────────────────────
 def get_fact_by_id(id: int, user_id: str | None = None) -> dict | None:
     if not user_id:
         raise ValueError("get_fact_by_id: user_id is required")
@@ -316,17 +240,12 @@ def get_fact_by_id(id: int, user_id: str | None = None) -> dict | None:
 
 
 async def get_fact_by_id_async(id: int, user_id: str) -> dict | None:
-    """Async version of get_fact_by_id."""
     if not user_id:
         raise ValueError("get_fact_by_id_async: user_id is required")
     return await pg_fetchone_async(SQL_FACT_SELECT_BY_ID, (id, user_id))
 
 
 def get_facts_by_ids(ids: list[int], user_id: str | None = None) -> list[dict]:
-    """Batch fetch facts by ID list (N+1 fix).
-
-    Returns list of fact dicts. Missing IDs are simply not included.
-    """
     if not user_id:
         raise ValueError("get_facts_by_ids: user_id is required")
     if not ids:
@@ -337,10 +256,6 @@ def get_facts_by_ids(ids: list[int], user_id: str | None = None) -> list[dict]:
 async def get_facts_by_ids_async(
     ids: list[int], user_id: str | None = None
 ) -> list[dict]:
-    """Batch fetch facts by ID list (async, N+1 fix).
-
-    Returns list of fact dicts. Missing IDs are simply not included.
-    """
     if not user_id:
         raise ValueError("get_facts_by_ids_async: user_id is required")
     if not ids:
@@ -383,9 +298,7 @@ def count_facts(
     return row["cnt"] if row else 0
 
 
-# ── Update / Access Tracking ───────────────────────────────────────────────────
 def update_last_accessed(ids: list[int], user_id: str | None = None) -> int:
-    """Update last_accessed timestamp for batch of fact IDs."""
     if not user_id:
         raise ValueError("update_last_accessed: user_id is required")
     if not ids:
@@ -423,23 +336,11 @@ def increment_importance(
         return False
 
 
-# ── FSRS Decay ────────────────────────────────────────────────────────────────
 def decay_facts(
     session_id: str | None = None,
     fact_type: str = FACT_TYPE_DYNAMIC,
     user_id: str | None = None,
 ) -> int:
-    """
-    Apply FSRS-style decay to episodic/dynamic facts.
-
-    Decay formula:
-        importance = importance * exp(-hours_since_last_access / stability)
-        stability = 24 * (1 + access_count * 0.5)
-
-    Does NOT affect static (semantic) facts — they use invalid_at temporal validity.
-
-    Returns the number of facts decayed.
-    """
     try:
         now = datetime.now()
 
@@ -496,12 +397,7 @@ def decay_facts(
         return 0
 
 
-# ── Soft Delete ───────────────────────────────────────────────────────────────
 def invalidate_fact(id: int, user_id: str | None = None) -> bool:
-    """
-    Soft-delete a fact by setting invalid_at = NOW().
-    Does NOT hard-delete — preserves history for audit.
-    """
     if not user_id:
         raise ValueError("invalidate_fact: user_id is required")
     try:
@@ -513,11 +409,6 @@ def invalidate_fact(id: int, user_id: str | None = None) -> bool:
     except Exception as e:
         logger.error(f"invalidate_fact failed: {e}")
         return False
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# ASYNC FUNCTIONS (for FastAPI routes)
-# ═════════════════════════════════════════════════════════════════════════════
 
 
 async def save_fact_async(
@@ -589,7 +480,7 @@ async def search_similar_async(
     category: str | None = None,
     user_id: str | None = None,
 ) -> list[dict]:
-    """Async version of search_similar."""
+
     if not user_id:
         raise ValueError("search_similar_async: user_id is required")
     try:
@@ -626,7 +517,7 @@ async def get_facts_by_session_async(
     limit: int = 100,
     user_id: str | None = None,
 ) -> list[dict]:
-    """Async version of get_facts_by_session."""
+
     if not user_id:
         raise ValueError("get_facts_by_session_async: user_id is required")
     if fact_type == FACT_TYPE_STATIC:
@@ -642,7 +533,7 @@ async def get_facts_by_session_async(
 
 
 async def update_last_accessed_async(ids: list[int]) -> int:
-    """Async version of update_last_accessed."""
+
     if not ids:
         return 0
     now = datetime.now()
@@ -657,7 +548,7 @@ async def update_last_accessed_async(ids: list[int]) -> int:
 
 
 async def invalidate_fact_async(id: int, user_id: str) -> bool:
-    """Async version of invalidate_fact."""
+
     if not user_id:
         raise ValueError("invalidate_fact_async: user_id is required")
     try:
@@ -681,7 +572,7 @@ async def search_trgm_async(
     category: str | None = None,
     user_id: str | None = None,
 ) -> list[dict]:
-    """Async version of search_trgm."""
+
     if not user_id:
         raise ValueError("search_trgm_async: user_id is required")
     try:
@@ -713,7 +604,7 @@ async def search_tsv_async(
     rank_weight: float = 0.3,
     user_id: str | None = None,
 ) -> list[dict]:
-    """Async version of search_tsv."""
+
     if not user_id:
         raise ValueError("search_tsv_async: user_id is required")
     if not query or not query.strip():

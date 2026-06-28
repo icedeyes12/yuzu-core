@@ -1,9 +1,3 @@
-# FILE: tests/test_tenant_isolation.py
-# DESCRIPTION: Phase 4.4 — Anti-Regression Guardrails for multi-tenant isolation.
-#
-# Two test categories:
-#   1. Static SQL inspection — every tenant-scoped query must bind user_id
-#   2. Multi-tenant integration — two mock tenants cannot cross-access data
 #
 # No live database required. All DB access is mocked at the connection layer.
 

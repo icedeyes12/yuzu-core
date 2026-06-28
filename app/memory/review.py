@@ -1,6 +1,3 @@
-from __future__ import annotations
-# FILE: app/memory/review.py
-# DESCRIPTION: FSRS-style review and decay system for memory - uses db_memory
 
 
 import logging

@@ -1,8 +1,5 @@
+
 from __future__ import annotations
-# FILE: app/tools/http_request.py
-# DESCRIPTION: HTTP request tool for external API calls
-
-
 import logging
 import httpx
 import socket
@@ -45,11 +42,6 @@ TOOL_DEFINITION = ToolDefinition(
 
 
 def is_safe_public_url(url: str) -> tuple[bool, str]:
-    """Validate URL is safe public HTTPS endpoint.
-
-    Returns:
-        (is_safe, reason) tuple. Reason is empty string if valid.
-    """
     parsed = urlparse(url)
 
     if parsed.scheme != "https":
@@ -79,15 +71,6 @@ def is_safe_public_url(url: str) -> tuple[bool, str]:
 
 
 def _extract_url(args_str: str) -> tuple:
-    """Extract HTTP method and URL from arguments.
-
-    Supports formats like:
-    - "https://example.com" (implicit GET)
-    - "GET https://example.com"
-    - "POST https://example.com"
-
-    Returns: (method, url) tuple, defaults to GET if no method specified.
-    """
     args_str = args_str.strip()
 
     method_match = re.match(
@@ -118,10 +101,8 @@ async def execute(arguments, **kwargs):
     else:
         args_str = str(arguments).strip()
 
-    # Extract HTTP method and URL from arguments
     method, url = _extract_url(args_str)
 
-    # Allow method override from arguments dict
     if isinstance(arguments, dict) and arguments.get("method"):
         method = arguments["method"].upper()
 

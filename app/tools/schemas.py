@@ -1,9 +1,5 @@
+
 from __future__ import annotations
-# FILE: app/tools/schemas.py
-# DESCRIPTION: Standard tool definition schema for function calling.
-# All tools MUST expose a TOOL_DEFINITION and implement execute(arguments, session_id=None).
-
-
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -67,11 +63,7 @@ class ToolDefinition:
         }
 
 
-# --------------------------------------------------------------------
-# Tool result standard
-# --------------------------------------------------------------------
-# Every tool's execute() MUST return this shape:
-#
+# Tool result contract: every tool's execute() MUST return this shape:
 #   {"ok": True,  "data": {...}, "markdown": "<tools>...</tools>"}
 #   {"ok": False, "error": "...", "markdown": "<tools>...</tools>"}
 #

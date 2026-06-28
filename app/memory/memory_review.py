@@ -1,8 +1,3 @@
-# FILE: app/memory/memory_review.py
-# DESCRIPTION: LLM-based memory review system using fsrs library.
-#              Ratings drive FSRS parameter updates via proper state transitions.
-#
-# Flow:
 #   1. retrieve_memory() marks retrieved facts as pending_review in metadata
 #   2. review_memory() is called with conversation context
 #   3. LLM rates each fact: Again/Hard/Good/Easy

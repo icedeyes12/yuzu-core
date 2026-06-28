@@ -1,5 +1,3 @@
-# FILE: app/logging_config.py
-# DESCRIPTION: Centralized logging setup. Honors LOG_LEVEL env var.
 
 from __future__ import annotations
 

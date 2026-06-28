@@ -1,6 +1,3 @@
-# FILE: app/api/endpoints/sessions.py
-# DESCRIPTION: Session management endpoints
-
 from __future__ import annotations
 
 from fastapi import APIRouter, Request, HTTPException

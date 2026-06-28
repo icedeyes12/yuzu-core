@@ -1,6 +1,3 @@
-# FILE: tests/test_database_facade.py
-# DESCRIPTION: Tests for the session-id-defaulting wrappers in the Database
-#              facade. Uses monkeypatching so no live PostgreSQL is required.
 
 from __future__ import annotations
 

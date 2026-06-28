@@ -1,5 +1,3 @@
-# FILE: tests/conftest.py
-# DESCRIPTION: Shared pytest fixtures and path setup.
 
 from __future__ import annotations
 

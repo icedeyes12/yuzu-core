@@ -1,6 +1,3 @@
-# FILE: tests/test_commands.py
-# DESCRIPTION: Pure-function tests for app.commands.
-#              Tests the <command>...</command> protocol parser.
 
 from __future__ import annotations
 import pytest

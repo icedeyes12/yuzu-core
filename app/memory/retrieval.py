@@ -1,8 +1,3 @@
-from __future__ import annotations
-# FILE: app/memory/retrieval.py
-# DESCRIPTION: Memory retrieval with PostgreSQL pgvector.
-#              Simplified to 2 types: static (global) and dynamic (per-session).
-#
 # No more semantic/episodic/segments - just static and dynamic.
 
 

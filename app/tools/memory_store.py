@@ -1,8 +1,5 @@
+
 from __future__ import annotations
-# FILE: app/tools/memory_store.py
-# DESCRIPTION: Tool for storing memories to PostgreSQL vector database
-
-
 import logging
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 from app.memory.db_memory_facade import MemoryDB, FACT_TYPE_STATIC

@@ -1,11 +1,4 @@
-# FILE: app.db.facade.py
-# DESCRIPTION: Thin facade over app.db.models.
-#
-# The Database class normalizes argument order (most app code wants to pass
-# `role` and `content` first, with `session_id` defaulting to the active
-# session) and provides a stable surface for backward compatibility. Pure
-# passthrough methods are generated programmatically to avoid 200+ lines of
-# one-line wrappers.
+"""Thin facade over db_pg_models — normalizes argument order and provides a stable surface."""
 
 from __future__ import annotations
 
@@ -100,21 +93,11 @@ from app.logging_config import get_logger
 log = get_logger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Initialization
-# ---------------------------------------------------------------------------
-
-
 def init_db() -> None:
     """Create PostgreSQL tables if missing."""
     log.info("initializing PostgreSQL tables")
     _init_pg_tables()
     log.info("PostgreSQL tables initialized")
-
-
-# ---------------------------------------------------------------------------
-# Database facade
-# ---------------------------------------------------------------------------
 
 
 def _resolve_session_id(session_id: str | None, user_id: str) -> str:
@@ -134,12 +117,7 @@ async def _resolve_session_id_async(session_id: str | None, user_id: str) -> str
 
 
 class TenantScopeError(RuntimeError):
-    """Raised when a tenant-scoped operation runs without a valid user_id.
-
-    A falsy user_id (None / "") would silently scope a query to an empty tenant
-    or cross tenant boundaries. Fail loud at the facade boundary instead of
-    letting a malformed query reach the DB.
-    """
+    """Raised when a tenant-scoped operation runs without a valid user_id."""
 
     def __init__(self, method: str) -> None:
         super().__init__(
@@ -155,11 +133,7 @@ def _require_user_id(method: str, user_id: str | None) -> None:
 
 
 def _proxy(target: Callable[..., Any]) -> staticmethod:
-    """Wrap a function in a staticmethod that forwards *args/**kwargs.
-
-    Used for pure passthroughs where Database.X(args) == _pg_X(args).
-    """
-
+    """Wrap a function in a staticmethod that forwards *args/**kwargs."""
     def _call(*args: Any, **kwargs: Any) -> Any:
         return target(*args, **kwargs)
 
@@ -170,7 +144,6 @@ def _proxy(target: Callable[..., Any]) -> staticmethod:
 
 def _proxy_async(target: Callable[..., Any]) -> staticmethod:
     """Wrap an async function in a staticmethod that forwards *args/**kwargs."""
-
     async def _call(*args: Any, **kwargs: Any) -> Any:
         return await target(*args, **kwargs)
 
@@ -180,17 +153,8 @@ def _proxy_async(target: Callable[..., Any]) -> staticmethod:
 
 
 class Database:
-    """Static helper class delegating to PostgreSQL via db_pg_models.
+    """Static helper class delegating to PostgreSQL via db_pg_models."""
 
-    Two patterns live here:
-      1. Pure passthroughs (generated via _proxy) for methods that don't
-         need argument normalization.
-      2. Hand-written wrappers for methods that:
-           - default session_id to the active session, AND/OR
-           - accept a different argument order than db_pg_models.
-    """
-
-    # ── Profile / context (pure passthroughs) ────────────────────────────────
     get_profile = _proxy(_pg_get_profile)
     get_profile_async = _proxy_async(_pg_get_profile_async)
     update_profile = _proxy(_pg_update_profile)
@@ -200,7 +164,7 @@ class Database:
     update_context = _proxy(_pg_update_context)
     update_context_async = _proxy_async(_pg_update_context_async)
 
-    # ── API keys (pure passthroughs) ──────────────────────────────────────────
+
     get_api_keys = _proxy(_pg_get_api_keys)
     get_api_keys_async = _proxy_async(_pg_get_api_keys_async)
     get_api_key = _proxy(_pg_get_api_key)
@@ -210,7 +174,7 @@ class Database:
     remove_api_key = _proxy(_pg_remove_api_key)
     remove_api_key_async = _proxy_async(_pg_remove_api_key_async)
 
-    # ── Sessions (pure passthroughs) ──────────────────────────────────────────
+
     create_session = _proxy(_pg_create_session)
     create_session_async = _proxy_async(_pg_create_session_async)
     get_active_session = _proxy(_pg_get_active_session)
@@ -245,7 +209,7 @@ class Database:
         _pg_get_recent_active_sessions_async
     )
 
-    # ── Encryption status (pure passthroughs) ────────────────────────────────
+
     get_encryption_status = _proxy(_pg_get_encryption_status)
     get_encryption_status_async = _proxy_async(_pg_get_encryption_status_async)
     get_all_encrypted_messages = _proxy(_pg_get_all_encrypted_messages)
@@ -255,7 +219,7 @@ class Database:
     batch_decrypt_messages = _proxy(_pg_batch_decrypt_messages)
     batch_decrypt_messages_async = _proxy_async(_pg_batch_decrypt_messages_async)
 
-    # ── Auth & Tokens (pure passthroughs) ─────────────────────────────────────
+
     create_session_token_async = _proxy_async(_pg_create_session_token_async)
     validate_session_token_async = _proxy_async(_pg_validate_session_token_async)
     revoke_session_token_async = _proxy_async(_pg_revoke_session_token_async)
@@ -271,7 +235,7 @@ class Database:
     insert_identity_async = _proxy_async(_pg_insert_identity_async)
     lookup_auth_me_async = _proxy_async(_pg_lookup_auth_me_async)
 
-    # ── Messages (session_id-defaulting wrappers) ────────────────────────────
+
     @staticmethod
     def update_message(
         message_id: int, content: str, image_paths: list[str] | None = None
@@ -284,8 +248,6 @@ class Database:
     ) -> bool:
         return await _pg_update_message_async(message_id, content)
 
-    # These reorder args (role/content first) and default session_id to the
-    # active session, which is the convention used throughout the codebase.
 
     @staticmethod
     def add_message(

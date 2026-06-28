@@ -1,5 +1,3 @@
-# FILE: app/memory/extractor.py
-# DESCRIPTION: LLM-only semantic fact extraction - uses db_memory for storage
 
 from __future__ import annotations
 

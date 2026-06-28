@@ -1,5 +1,3 @@
-# FILE: tests/test_profile_analysis.py
-# DESCRIPTION: Pure-function tests for normalization, merging, and parsing.
 
 from __future__ import annotations
 

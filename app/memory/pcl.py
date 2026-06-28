@@ -1,8 +1,3 @@
-# FILE: app/memory/pcl.py
-# DESCRIPTION: Predict-Calibrate Learning (PCL) pipeline.
-#              Aligns with plast-mem's PredictCalibrateJob.
-#
-# Flow:
 #   1. PREDICT — generate prediction of episode content from existing semantic knowledge
 #   2. CALIBRATE — compare prediction with actual messages, extract knowledge gaps
 #   3. CONSOLIDATE — apply new/reinforce/update/invalidate actions to DB

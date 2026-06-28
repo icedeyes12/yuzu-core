@@ -1,5 +1,3 @@
-# FILE: cli/widgets/chat_log.py
-# DESCRIPTION: Scrollable chat history widget with Markdown rendering.
 
 from __future__ import annotations
 

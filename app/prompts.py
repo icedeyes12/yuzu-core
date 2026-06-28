@@ -1,6 +1,4 @@
-# FILE: app/prompts.py
-# DESCRIPTION: System-prompt assembly and message-context construction
-#              for the chat LLM.
+"""System-prompt assembly and message-context construction for the chat LLM."""
 
 from __future__ import annotations
 
@@ -12,7 +10,6 @@ from app.logging_config import get_logger
 
 log = get_logger(__name__)
 
-# ── Token Limits ══════════════════════════════
 MAX_HISTORY_TOKENS = 15000
 
 
@@ -32,16 +29,7 @@ def _trim_history_to_token_limit(
 ) -> list[dict]:
     """Trim message history to fit within token budget.
 
-    Starts from recent messages and works backwards,
-    keeping as many messages as fit within the limit.
-    Preserves at least last 2 messages for context.
-
-    Args:
-        messages: List of message dicts with 'content' key
-        max_tokens: Maximum tokens allowed for history
-
-    Returns:
-        Trimmed list of messages
+    Keeps most recent messages first, preserving at least last 2 for context.
     """
     if not messages:
         return messages
@@ -52,17 +40,12 @@ def _trim_history_to_token_limit(
     if total_tokens <= max_tokens:
         return messages
 
-    # Need to trim - keep most recent messages
-    log.info(f"[Prompt] Trimming history: {total_tokens} > {max_tokens} tokens")
-
     trimmed = []
     token_count = 0
 
-    # Work backwards from most recent
     for msg in reversed(messages):
         msg_tokens = _estimate_tokens(msg.get("content", ""))
 
-        # Always keep at least last 2 messages
         if len(trimmed) < 2:
             trimmed.insert(0, msg)
             token_count += msg_tokens
@@ -80,31 +63,22 @@ def _trim_history_to_token_limit(
 
 
 def _format_relative_time(timestamp_str: str | None) -> str:
-    """Convert ISO timestamp to human-readable relative time (timezone-aware).
-
-    Uses pure Python datetime math. Treats naive timestamps as UTC.
-    Example: "2 hours ago", "3 days ago", "Just now"
-    """
+    """Convert ISO timestamp to human-readable relative time."""
     if not timestamp_str:
         return "Unknown"
 
     try:
-        # Clean and parse timestamp
         ts_str = timestamp_str.strip()
         if not ts_str:
             return "Unknown"
 
-        # Handle various ISO formats
         if "T" in ts_str:
-            # ISO format: "2026-05-22T14:30:00"
             iso_str = ts_str.split("+")[0].split(".")[0]
             past = datetime.fromisoformat(iso_str)
         else:
-            # Simple format: "2026-05-22 14:30:00"
             iso_str = ts_str.split("+")[0].split(".")[0]
             past = datetime.fromisoformat(iso_str)
 
-        # If naive, assume UTC
         if past.tzinfo is None:
             past = past.replace(tzinfo=timezone.utc)
 
@@ -138,7 +112,6 @@ def _truncate(text: str, limit: int = 120) -> str:
 
 def _read_file_content(filepath: str, max_size: int = 50000) -> str:
     """Read file content with size limit. Returns empty string if file not found."""
-
     try:
         if not os.path.exists(filepath):
             return ""
@@ -238,7 +211,7 @@ async def _location_block_async() -> str:
 
 
 def _interface_block(interface: str) -> str:
-    """Return operational interface constraints without emotional directives."""
+    """Return operational interface constraints."""
     if interface.lower() == "terminal":
         return "TERMINAL (Raw CLI, text-only, fast execution)"
     elif interface.lower() == "web":
@@ -247,12 +220,7 @@ def _interface_block(interface: str) -> str:
 
 
 def _global_knowledge_block(profile: dict[str, Any]) -> str:
-    """Persistent cross-session knowledge about the user.
-
-    Uses `global_knowledge` JSONB column from profiles table.
-    Contains identity, preferences, and facts that persist across all sessions.
-    Independent from per-session memory (semantic_facts, episodes).
-    """
+    """Persistent cross-session knowledge about the user (global_knowledge JSONB)."""
     global_knowledge = profile.get("global_knowledge") or {}
     if isinstance(global_knowledge, str):
         import json
@@ -310,23 +278,17 @@ async def _session_events_block_async(session_id: str) -> str:
 
 
 def _get_relevant_tools(user_message: str) -> str:
-    """Return tool documentation only for tools relevant to the current query.
-
-    OPTIMIZATION: Reduces system prompt size by ~60% for normal conversations.
-    """
+    """Return tool documentation only for tools relevant to the current query."""
     msg_lower = user_message.lower()
 
-    # Always-available core tools
     base_tools = """
 ### Core Tools
 <command>bash ls -la ~</command>
 <command>python print(2 + 2)</command>
 """
 
-    # Conditionally add tools based on context
     tools_sections = [base_tools]
 
-    # Image tools (only if image-related)
     if any(
         kw in msg_lower
         for kw in [
@@ -346,7 +308,6 @@ def _get_relevant_tools(user_message: str) -> str:
 **Must start with:** partner_name, a young teenage girl, 15 years old
 """)
 
-    # Memory tools (only if memory-related)
     if any(
         kw in msg_lower for kw in ["remember", "memory", "memorize", "forget", "recall"]
     ):
@@ -356,7 +317,6 @@ def _get_relevant_tools(user_message: str) -> str:
 <command>memory_store fact="Something to remember"</command>
 """)
 
-    # File tools (only if file-related)
     if any(
         kw in msg_lower for kw in ["file", "read", "write", "code", "script", "path"]
     ):
@@ -376,28 +336,20 @@ async def build_system_message_async(
     user_message: str | None,
     user_id: str,
 ) -> str:
-    """Render the full system prompt for a chat turn (async).
-
-    OPTIMIZED: Only includes tools that are relevant to the current context.
-    This reduces token wastage by ~40% on average.
-    """
+    """Render the full system prompt for a chat turn (async)."""
     current_time = datetime.now().strftime("%A, %Y-%m-%d %H:%M:%S")
 
-    # Combined retrieval - single embedding call for both static and dynamic
-    # OPTIMIZATION: Reduced limits to prevent token bloat
     static_ids, static_context, dynamic_context = await _retrieve_memories_async(
         session_id,
         user_message,
         static_limit=5,
-        dynamic_limit=3,  # Reduced from 10, 5
+        dynamic_limit=3,
         user_id=user_id,
     )
     await _mark_facts_pending_async(static_ids, session_id)
     memory_block = (f"\n\n{static_context}" if static_context else "") + dynamic_context
     memory_block += await _legacy_memory_block_async(profile, session_id, user_id)
 
-    # TOOL OPTIMIZATION: Only mention tools that are contextually relevant
-    # For normal chat, skip advanced tools unless mentioned
     _get_relevant_tools(user_message or "")
 
     return f"""# IDENTITY
@@ -556,10 +508,7 @@ async def build_messages(
     user_id: str,
     include_image_paths: bool = False,
 ) -> list[dict[str, Any]]:
-    """Build the full chat-completion messages list (async).
-
-    OPTIMIZED: Reduced history limit to prevent context bloat.
-    """
+    """Build the full chat-completion messages list (async)."""
     system_message = await build_system_message_async(
         profile, session_id, interface, user_message, user_id
     )

@@ -1,7 +1,4 @@
-# FILE: app/llm_client.py
-# DESCRIPTION: AI response generation + shared Chutes HTTP helper.
-#              Consolidates the three near-identical raw-Chutes call sites
-#              previously duplicated across app.py.
+"""AI response generation + shared Chutes HTTP helper."""
 
 from __future__ import annotations
 
@@ -33,9 +30,7 @@ _DEFAULT_HEADERS = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Shared Chutes HTTP helper (replaces three duplicated call sites)
-# ---------------------------------------------------------------------------
+# Shared Chutes HTTP helper
 
 
 async def chutes_chat(
@@ -127,9 +122,7 @@ async def chutes_chat(
     return None
 
 
-# ---------------------------------------------------------------------------
 # Vision context injection
-# ---------------------------------------------------------------------------
 
 
 def _apply_vision_routing(
@@ -222,7 +215,6 @@ async def _send_to_provider(
     schemas = _unique_tool_schemas()
 
     if image_context and provider in ai_manager.providers:
-        # Capability check: prefer native vision model if available
         if multimodal_tools.is_vision_model(model, provider):
             log.info(
                 "2nd-pass: %s/%s is vision-capable, reusing for image synthesis",
@@ -230,7 +222,6 @@ async def _send_to_provider(
                 model,
             )
         else:
-            # Current model lacks vision support, use fallback
             v_provider, v_model = multimodal_tools.get_best_vision_provider()
             if v_provider and v_model:
                 log.info(
@@ -258,7 +249,6 @@ async def _send_to_provider(
         log.warning("chat %s/%s returned empty (%.1fs)", provider, model, duration)
         return None, None
 
-    # Extract text content from the raw response
     try:
         text = raw_response["choices"][0]["message"].get("content") or ""
         text = text.strip()
@@ -292,11 +282,6 @@ async def generate_ai_response(
     """Single (text, raw_response) AI generation pass.
 
     raw_response is the full API response dict, used for tool-call parsing.
-    Legacy /command detection lives in the orchestrator.
-
-    NOTE: build_messages() fetches full history including the just-persisted
-    user message. We do NOT re-append user_message to avoid duplication.
-
     ephemeral_context: In-memory context (assistant tool calls + results)
     not yet persisted to DB. Stitched after build_messages() for synthesis.
     """
@@ -305,7 +290,6 @@ async def generate_ai_response(
 
     provider, model = _resolve_provider(profile, None, None)
 
-    # Validation: If images are present but model is not vision-capable, abort
     if multimodal_tools.has_images(
         user_message
     ) and not multimodal_tools.is_vision_model(model):
@@ -315,24 +299,16 @@ async def generate_ai_response(
         )
         return error_msg, None
 
-    # build_messages() fetches history which ALREADY contains the user message
-    # (persisted by orchestrator before calling this function)
     messages = await build_messages(
         profile, session_id, interface, user_message, user_id, include_image_paths=True
     )
 
-    # Stitch in-memory context (assistant tool calls + results) not yet in DB
     if ephemeral_context:
         messages.extend(ephemeral_context)
 
-    # DO NOT re-append user_message here - it's already in history
-    # The history from build_messages() is authoritative
-
-    # Apply the Interceptor Hook
     messages = multimodal_tools.inject_vision_context(messages, model)
 
     if image_content_for_context:
-        # 2nd pass synthesis often has image context from tool results
         messages.append(
             {
                 "role": "user",
@@ -372,7 +348,6 @@ async def _stream_from_provider(
     ai_manager = await get_ai_manager()
 
     if image_context and provider in ai_manager.providers:
-        # Capability check: prefer native vision model if available
         if multimodal_tools.is_vision_model(model, provider):
             log.info(
                 "streaming 2nd-pass: %s/%s is vision-capable, reusing for image synthesis",
@@ -380,7 +355,6 @@ async def _stream_from_provider(
                 model,
             )
         else:
-            # Current model lacks vision support, use fallback
             v_provider, v_model = multimodal_tools.get_best_vision_provider()
             if v_provider and v_model:
                 log.info(
@@ -401,7 +375,6 @@ async def _stream_from_provider(
                 received += len(chunk)
                 yield chunk
     except asyncio.CancelledError:
-        # Stream was cancelled (user clicked Stop) - propagate up
         log.info(
             "stream cancelled by user at llm_client layer (%d chars received)", received
         )
@@ -423,22 +396,12 @@ async def generate_ai_response_streaming(
     is_tool_loop: bool = False,
     user_id: str | None = None,
 ) -> AsyncIterator[str]:
-    """Stream a response from the configured provider chunk by chunk.
-
-    Performs the same context assembly and vision routing as the
-    non-streaming variant, then dispatches via the provider's streaming
-    API. Yields raw provider chunks; the orchestrator is responsible for
-    filtering /command preambles and post-processing.
-
-    NOTE: build_messages() fetches full history including the just-persisted
-    user message. We do NOT re-append user_message to avoid duplication.
-    """
+    """Stream a response from the configured provider chunk by chunk."""
     if session_id is None:
         session_id = (await Database.get_active_session_async(user_id))["id"]
 
     resolved_provider, resolved_model = _resolve_provider(profile, provider, model)
 
-    # Validation: If images are present but model is not vision-capable, abort
     if multimodal_tools.has_images(
         user_message
     ) and not multimodal_tools.is_vision_model(resolved_model):
@@ -449,20 +412,13 @@ async def generate_ai_response_streaming(
         yield error_msg
         return
 
-    # build_messages() fetches history which ALREADY contains the user message
-    # (persisted by orchestrator before calling this function)
     messages = await build_messages(
         profile, session_id, interface, user_message, user_id, include_image_paths=True
     )
 
-    # Stitch in-memory context (assistant tool calls + results) not yet in DB
     if ephemeral_context:
         messages.extend(ephemeral_context)
 
-    # DO NOT re-append user_message here - it's already in history
-    # The history from build_messages() is authoritative
-
-    # Apply the Interceptor Hook
     messages = multimodal_tools.inject_vision_context(messages, resolved_model)
 
     if image_content_for_context:

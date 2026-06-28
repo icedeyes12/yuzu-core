@@ -1,6 +1,4 @@
 from __future__ import annotations
-# FILE: app/encryption.py
-# DESCRIPTION: High performance and quantum resistant encryption
 
 
 from Crypto.Cipher import ChaCha20_Poly1305

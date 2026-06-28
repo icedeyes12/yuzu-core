@@ -1,5 +1,3 @@
-# FILE: tests/test_memory.py
-# DESCRIPTION: Unit tests for memory system query builders and helpers
 
 from app.memory.db_memory_queries import (
     normalize_vector,

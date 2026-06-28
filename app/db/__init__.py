@@ -1,9 +1,5 @@
-# FILE: app/db/__init__.py
-# DESCRIPTION: Database layer package with modernized structure.
 
 from __future__ import annotations
-
-# Core connection layer
 
 __all__ = [
     "annotations",

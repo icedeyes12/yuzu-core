@@ -1,6 +1,3 @@
-# FILE: app/api/static.py
-# DESCRIPTION: Static file serving endpoints for uploaded and generated images.
-
 from __future__ import annotations
 
 import os
@@ -10,7 +7,6 @@ from fastapi.responses import FileResponse
 
 router = APIRouter(prefix="/static", tags=["static"])
 
-# Resolve base directory relative to this file
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 

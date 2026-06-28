@@ -1,7 +1,4 @@
-# FILE: app/orchestrator.py
-# DESCRIPTION: Single entrypoint for handling user messages.
-#              Implements Thought → Action → Observation agentic loop.
-#              Uses <tool>...</tool> protocol for tool invocation.
+"""Single entrypoint for user messages — implements Thought → Action → Observation loop."""
 
 from __future__ import annotations
 
@@ -39,15 +36,9 @@ _TIMESTAMP_SUFFIX = re.compile(r"\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\s*$"
 _EMPTY_RESPONSE_FALLBACK = "I'm having trouble responding right now. Please try again."
 _MD_IMAGE_PATTERN = re.compile(r"!\[[^\]]{0,200}\]\(([^)]{1,200})\)")
 
-# Services
-
-# Maximum orchestration loops to prevent runaway execution
 _MAX_ORCHESTRATION_LOOPS = 30
+_STREAM_FENCE_TIMEOUT = 300
 
-# Stream fence timeout - incomplete streams abandoned after this duration (seconds)
-_STREAM_FENCE_TIMEOUT = 300  # 5 minutes
-
-# Allowed image directories (resolved at module load, not runtime)
 _BASE_DIR = Path(__file__).resolve().parent.parent
 _ALLOWED_IMAGE_DIRS = [
     (_BASE_DIR / "static").resolve(),
@@ -60,55 +51,33 @@ _ALLOWED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 
 def _validate_image_path_safely(user_path: str) -> Path | None:
-    """Validate a user-provided image path by searching trusted directories.
-
-    SECURITY: This function NEVER constructs paths from user input directly.
-    Instead, it extracts ONLY the filename (using os.path.basename) and
-    searches for it in pre-defined trusted directories.
-
-    This breaks the CodeQL taint chain completely - no part of the user's
-    path string is used in path construction.
-
-    Returns:
-        Path object if valid image found, None otherwise.
-    """
+    """Validate a user-provided image path by searching trusted directories."""
     if not user_path or not isinstance(user_path, str):
         return None
 
-    # SECURITY: Extract ONLY the filename - this removes all directory components
-    # and ensures no path traversal is possible. The filename is just a string
-    # that we use to search in OUR trusted directories.
     filename = os.path.basename(user_path.replace("\\", "/"))
 
     if not filename:
         return None
 
-    # Validate filename is not dangerous (defensive)
     if filename.startswith(".") or ".." in filename:
         log.warning("suspicious filename rejected: %s", filename[:50])
         return None
 
-    # Check extension
     ext = Path(filename).suffix.lower()
     if ext not in _ALLOWED_IMAGE_EXTS:
         return None
 
-    # SECURITY: Search ONLY in pre-resolved trusted directories
-    # We construct paths using our constants, NOT user input
     for trusted_dir in _ALLOWED_IMAGE_DIRS:
-        # Construct candidate using TRUSTED base + filename only
         candidate = trusted_dir / filename
 
         try:
-            # Resolve and verify
             resolved = candidate.resolve()
 
-            # Must exist and be a regular file
             if not resolved.is_file():
                 continue
 
-            # Verify resolved path is still within trusted_dir
-            # (handles symlinks that might escape)
+            # Verify resolved path is still within trusted_dir (handles symlinks)
             try:
                 rel = os.path.relpath(str(resolved), str(trusted_dir))
                 if rel.startswith(".."):
@@ -117,7 +86,6 @@ def _validate_image_path_safely(user_path: str) -> Path | None:
             except ValueError:
                 continue
 
-            # Additional symlink check
             if resolved.is_symlink():
                 log.warning("symlink rejected: %s", filename[:50])
                 continue
@@ -128,11 +96,6 @@ def _validate_image_path_safely(user_path: str) -> Path | None:
             continue
 
     return None
-
-
-# --------------------------------------------------------------------
-# Image-cache helpers
-# --------------------------------------------------------------------
 
 
 def _cache_uploaded_images(message: str) -> list[str]:
@@ -188,7 +151,6 @@ def _cache_images_from_message(message: str) -> list[str]:
 
 def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
     """Return (base64, mime) for a generated image file, or (None, None)."""
-    # Use the safe validator - this is the key for CodeQL
     validated_path = _validate_image_path_safely(image_path)
     if not validated_path:
         return None, None
@@ -209,11 +171,6 @@ def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
     return data, mime
 
 
-# --------------------------------------------------------------------
-# Native tool-call helpers (for providers that support it)
-# --------------------------------------------------------------------
-
-
 async def _parse_raw_tool_calls_async(
     provider_name: str, raw_response: dict | None
 ) -> list[dict]:
@@ -221,7 +178,7 @@ async def _parse_raw_tool_calls_async(
     if not raw_response:
         return []
     try:
-        # WORKAROUND: Lazy import to prevent circular dependency with app.providers
+        # WORKAROUND: Lazy import to prevent circular dependency
         from app.providers import get_ai_manager
 
         manager = await get_ai_manager()
@@ -253,11 +210,6 @@ async def _execute_tool_calls_async(
         )
         results.append((tool_name, result))
     return results
-
-
-# --------------------------------------------------------------------
-# Response post-processing
-# --------------------------------------------------------------------
 
 
 def _clean(text: str) -> str:
@@ -315,11 +267,6 @@ async def _persist_observation_async(
     )
 
 
-# --------------------------------------------------------------------
-# Synthesis pass (2nd LLM call after tools ran)
-# --------------------------------------------------------------------
-
-
 async def _build_image_context_async(
     tool_markdown: str, session_id: str
 ) -> list[dict[str, Any]] | None:
@@ -345,10 +292,7 @@ async def _run_synthesis_async(
     ephemeral_context: list[dict[str, str]] | None = None,
     user_id: str | None = None,
 ) -> str | None:
-    """Run a 2nd LLM pass to narrate around the tool result (async).
-
-    ephemeral_context: In-memory conversation turns not yet in DB.
-    """
+    """Run a 2nd LLM pass to narrate around the tool result."""
     image_context = await _build_image_context_async(tool_markdown, session_id)
 
     text, _ = await generate_ai_response(
@@ -375,12 +319,7 @@ async def _stream_synthesis_async(
     ephemeral_context: list[dict[str, str]] | None = None,
     user_id: str | None = None,
 ) -> AsyncIterator[str]:
-    """Stream the 2nd LLM pass (async).
-
-    ephemeral_context: In-memory conversation turns not yet in DB.
-    Contains the assistant's first-pass response with <command> blocks
-    and the tool results, ensuring the LLM has full context.
-    """
+    """Stream the 2nd LLM pass."""
     image_context = await _build_image_context_async(tool_markdown, session_id)
 
     async for chunk in generate_ai_response_streaming(
@@ -395,10 +334,6 @@ async def _stream_synthesis_async(
     ):
         yield chunk
 
-
-# --------------------------------------------------------------------
-# Per-turn side effects
-# --------------------------------------------------------------------
 
 _PIPELINE_CHECK_INTERVAL = 5
 
@@ -424,18 +359,13 @@ async def _post_turn_async(
     )
 
     # Clear request-scoped caches
-    # _clear_request_cache was removed in Phase 2B safe deletions
+    # _clear_request_cache was removed
     try:
         from app.memory.retrieval import _clear_embedding_cache
 
         _clear_embedding_cache()
     except Exception:
         pass
-
-
-# --------------------------------------------------------------------
-# Streaming orchestration helpers
-# --------------------------------------------------------------------
 
 
 async def _process_tool_commands_async(
@@ -461,8 +391,6 @@ async def _process_tool_commands_async(
 
     results = await execute_commands(commands, session_id=session_id, user_id=user_id)
 
-    # SAFEGUARD: Persist clean_text BEFORE tool execution
-    # This ensures linear message order: user → assistant (clean) → tool → synthesis
     if clean_text and clean_text.strip():
         await _persist_assistant_async(clean_text, session_id, user_id=user_id)
         log.info("[stream] persisted clean_text (pre-tool assistant message)")
@@ -475,7 +403,6 @@ async def _process_tool_commands_async(
         tool_markdown = result.get("markdown", str(result))
         tool_markdowns.append(tool_markdown)
 
-        # SAFEGUARD: Persist each tool result immediately
         await _persist_tool_result_async(
             tool_name, tool_markdown, session_id, user_id=user_id
         )
@@ -487,9 +414,6 @@ async def _process_tool_commands_async(
 
     combined_tool_markdown = "\n\n".join(tool_markdowns)
 
-    # Return results for coordination
-    # clean_text is the assistant's preamble with tool blocks stripped —
-    # callers MUST use this (not full_response) for ephemeral context.
     return (clean_text, combined_tool_markdown, any_image_tool, all_generated_paths)
 
 
@@ -507,14 +431,7 @@ async def _run_orchestration_loop_async(
     *,
     user_id: str,
 ) -> AsyncIterator[str]:
-    """Run the orchestration loop for synthesis with tool block detection.
-
-    Handles iterative synthesis passes that may contain additional tool blocks.
-    Continues until synthesis has no more tool blocks or max loops reached.
-
-    Yields:
-        Synthesis chunks and tool result markdown.
-    """
+    """Run the orchestration loop for synthesis with tool block detection."""
     loop_count = 0
     all_generated_paths: list[str] = []
 
@@ -543,8 +460,6 @@ async def _run_orchestration_loop_async(
 
                     synthesis_chunks.append(chunk)
                     full_synthesis += chunk
-
-                    # Yield chunk with proper formatting
                     yield (
                         "\n\n" + chunk
                         if any_image_tool and not synthesis_chunks[:-1]
@@ -574,8 +489,6 @@ async def _run_orchestration_loop_async(
             return
 
         if not has_tool_blocks(synthesis):
-            # PERSIST: Save synthesis as a discrete assistant message.
-            # NO Frankenstein concatenation — synthesis is the final answer.
             await _persist_assistant_async(synthesis, session_id, user_id=user_id)
             await StreamFence.complete(session_id, fence_id)
             log.info("[stream] fence %s completed (final synthesis)", fence_id)
@@ -635,7 +548,6 @@ async def _run_orchestration_loop_async(
             yield "\n\n" + tm
 
         next_combined = "\n\n".join(next_markdowns)
-        # Wrap tool results in SYSTEM_OBSERVATION — NOT raw user content
         ephemeral_context.append(
             {
                 "role": "user",
@@ -644,7 +556,6 @@ async def _run_orchestration_loop_async(
         )
         current_synthesis_context = next_combined
 
-    # Max loops reached — persist whatever synthesis we have
     if synthesis:
         _, clean_synth = parse_tool_blocks(synthesis)
         await _persist_assistant_async(
@@ -687,11 +598,6 @@ async def _finalize_and_persist_async(
     )
 
 
-# --------------------------------------------------------------------
-# Public entry points
-# --------------------------------------------------------------------
-
-
 async def handle_user_message(
     user_message: str, interface: str = "terminal", *, user_id: str
 ) -> str:
@@ -702,11 +608,8 @@ async def handle_user_message(
 
     active_session = await Database.get_active_session_async(user_id)
     session_id = active_session["id"]
-    # Assuming _cache_images_from_message is fast (local check + small download)
-    # If it downloads, it should be async. Let's check multimodal_tools.
     cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
 
-    # Fast-path: user typed /imagine directly
     stripped = user_message.strip()
     if stripped.startswith("/imagine ") or stripped.startswith("<command>"):
         commands, _ = parse_tool_blocks(stripped)
@@ -789,17 +692,14 @@ async def handle_user_message(
     if is_markdown_image_shortcut(text_response):
         return IMAGE_SHORTCUT_WARNING
 
-    # Try native tool-call execution first
     tool_calls = await _parse_raw_tool_calls_async(provider_name, raw_api_response)
     if tool_calls:
         tool_results = await _execute_tool_calls_async(
             tool_calls, session_id, user_id=user_id
         )
 
-        # SAFEGUARD: Persist clean text_response BEFORE tool execution
         if text_response and text_response.strip():
             await _persist_assistant_async(text_response, session_id, user_id=user_id)
-            log.info("[non-stream] persisted clean text_response (pre-tool)")
 
         if tool_results:
             tool_name, tool_result = tool_results[0]
@@ -838,7 +738,6 @@ async def handle_user_message(
                 final_response = (
                     f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
                 )
-                # Pass ONLY synthesis to memory pipeline — no tool markdown
                 await _post_turn_async(
                     profile,
                     user_message,
@@ -1025,16 +924,13 @@ async def handle_user_message_streaming(
     if image_paths:
         all_image_paths.extend(image_paths)
 
-    # FENCE: Acquire fence before persisting user message
     user_msg_id = await _persist_user_async(
         user_message, session_id, all_image_paths or None, user_id=user_id
     )
     fence_id = await StreamFence.acquire(session_id, user_msg_id or 0)
     log.info(f"[stream] fence {fence_id} acquired for session {session_id}")
 
-    # === PHASE 1: Initial LLM response streaming ===
     response_chunks: list[str] = []
-
     try:
         async for chunk in generate_ai_response_streaming(
             profile,
@@ -1063,7 +959,6 @@ async def handle_user_message_streaming(
 
     full_response = "".join(response_chunks)
 
-    # === PHASE 2: Handle empty response ===
     if not _clean(full_response):
         await _finalize_and_persist_async(
             session_id,
@@ -1077,18 +972,14 @@ async def handle_user_message_streaming(
         yield _EMPTY_RESPONSE_FALLBACK
         return
 
-    # === PHASE 3: Handle markdown image shortcut ===
     if is_markdown_image_shortcut(full_response):
         await StreamFence.complete(session_id, fence_id)
         yield IMAGE_SHORTCUT_WARNING
         return
 
-    # === PHASE 4: Parse and execute tool commands ===
     tool_result = await _process_tool_commands_async(
         full_response, session_id, user_id=user_id
     )
-    # Unpack clean_text (tool blocks stripped) — use this, NOT full_response,
-    # for ephemeral context to prevent context poisoning.
     clean_text, combined_tool_markdown, any_image_tool, all_generated_paths = (
         tool_result
     )
@@ -1097,10 +988,6 @@ async def handle_user_message_streaming(
     if combined_tool_markdown:
         yield "\n\n" + combined_tool_markdown
 
-    # === PHASE 5: Build ephemeral context for synthesis ===
-    # CRITICAL: Use clean_text (tool blocks stripped), NOT full_response.
-    # Wrap tool results in <SYSTEM_OBSERVATION> so the LLM knows this is a
-    # tool result, not user input. This prevents context poisoning.
     ephemeral_context: list[dict[str, str]] = [
         {"role": "assistant", "content": clean_text or full_response},
         {
@@ -1110,10 +997,8 @@ async def handle_user_message_streaming(
     ]
 
     current_synthesis_context = combined_tool_markdown
-    # all_generated_paths is already a list from _process_tool_commands_async
 
     if not combined_tool_markdown:
-        # No tool output, just finalize — StreamManager persists full_response
         await _finalize_and_persist_async(
             session_id,
             fence_id,
@@ -1125,7 +1010,6 @@ async def handle_user_message_streaming(
         )
         return
 
-    # === PHASE 6: Run orchestration loop (synthesis with potential tool blocks) ===
     async for chunk in _run_orchestration_loop_async(
         profile=profile,
         session_id=session_id,
@@ -1141,4 +1025,4 @@ async def handle_user_message_streaming(
     ):
         yield chunk
 
-    return  # Orchestration loop handles finalization
+    return  # orchestration loop handles finalization

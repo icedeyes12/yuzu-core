@@ -1,6 +1,3 @@
-# FILE: app/api/endpoints/chat.py
-# DESCRIPTION: Chat and messaging endpoints
-
 from __future__ import annotations
 
 import json
@@ -123,9 +120,6 @@ async def api_send_message_stream(
         keyring = _extract_keyring(request)
 
         async def _keyring_scoped_stream():
-            """Wrap the stream generator so the ContextVar is set before
-            StreamManager.start_stream spawns its background task (which
-            copies the current context). Cleared in finally."""
             if keyring:
                 set_request_keyring(keyring)
             try:

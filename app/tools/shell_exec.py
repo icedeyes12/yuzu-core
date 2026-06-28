@@ -1,7 +1,3 @@
-# FILE: app/tools/shell_exec.py
-# DESCRIPTION: Shell command execution for Termux environment.
-#              Execute bash commands with timeout, security controls, and
-#              optional persistent session support for orchestration.
 
 from __future__ import annotations
 
@@ -17,10 +13,6 @@ from pathlib import Path
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 
 logger = logging.getLogger(__name__)
-
-# --------------------------------------------------------------------
-# Constants
-# --------------------------------------------------------------------
 
 TOOL_NAME = "bash"
 TOOL_BASH: ToolDefinition = ToolDefinition(
@@ -76,11 +68,6 @@ if not Path(BASH_EXECUTABLE).exists():
 DEFAULT_CWD = Path(os.environ.get("HOME", "")) or Path.cwd()
 
 
-# --------------------------------------------------------------------
-# Persistent Shell Session (for orchestration cycles)
-# --------------------------------------------------------------------
-
-# Module-level persistent session (reset between user turns)
 _persistent_process: subprocess.Popen | None = None
 _session_cwd: Path = DEFAULT_CWD
 
@@ -229,16 +216,7 @@ def reset_session():
     logger.info("shell session reset")
 
 
-# --------------------------------------------------------------------
-# Helper Functions
-# --------------------------------------------------------------------
-
-
 def _is_dangerous(command: str) -> tuple[bool, str]:
-    """Check if command is potentially dangerous.
-
-    Returns (is_dangerous, reason).
-    """
     if DANGEROUS_REGEX.search(command):
         return True, "Command matches dangerous pattern blocklist"
 
@@ -256,7 +234,6 @@ def _truncate_output(output: str, max_size: int = MAX_OUTPUT_SIZE) -> str:
 
 
 async def _get_partner_name_async(user_id: str | None = None) -> str:
-    """Get partner name from profile (async)."""
     try:
         from app.db import Database
 
@@ -264,11 +241,6 @@ async def _get_partner_name_async(user_id: str | None = None) -> str:
         return profile.get("partner_name", "Yuzu")
     except Exception:
         return "Yuzu"
-
-
-# --------------------------------------------------------------------
-# Execute Function
-# --------------------------------------------------------------------
 
 
 async def execute(
@@ -300,7 +272,6 @@ async def execute(
 
     full_command = f"/bash {command}"
 
-    # Security check
     is_dangerous, reason = _is_dangerous(command)
     if is_dangerous:
         logger.warning(f"[shell] Blocked dangerous command: {command} - {reason}")
@@ -311,11 +282,9 @@ async def execute(
             partner_name,
         )
 
-    # Execute command (async)
     try:
         start_time = time.time()
 
-        # Use asyncio.create_subprocess_shell
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
@@ -341,7 +310,6 @@ async def execute(
 
         duration_ms = int((time.time() - start_time) * 1000)
 
-        # Truncate if needed
         stdout_str = _truncate_output(stdout.decode().strip() or "(empty)")
         stderr_str = _truncate_output(stderr.decode().strip() or "(empty)")
         exit_code = process.returncode

@@ -1,6 +1,3 @@
-# FILE: tests/test_db_queries.py
-# DESCRIPTION: Tests for the pure helpers in app.db_queries.
-#              These never touch the database.
 
 from __future__ import annotations
 

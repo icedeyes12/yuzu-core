@@ -1,6 +1,3 @@
-# FILE: cli/client.py
-# DESCRIPTION: Async HTTP client for communicating with the FastAPI backend.
-#              Thin-client — HTTP only, no database imports.
 
 from __future__ import annotations
 

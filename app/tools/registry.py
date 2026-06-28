@@ -1,18 +1,5 @@
+"""Central tool registry — single dispatch point for all tool execution."""
 from __future__ import annotations
-# FILE: app/tools/registry.py
-# DESCRIPTION: Central tool registry — single source of truth for dispatch.
-#
-# Architecture:
-#   - TOOL_DEFINITIONS: dict[name -> ToolDefinition] — lazily populated
-#   - _TOOL_MODULES: dict[name -> module] — lazy-loaded on first dispatch
-#   - execute_tool(): calls tool.execute() and returns structured result
-#   - get_tool_definitions(): returns list for LLM tools[] array
-#   - get_tools_by_role(): filters tools by role
-#
-# How to register a new tool:
-#   1. Add TOOL_DEFINITION to the tool's module (e.g. image_generate.py)
-#   2. Import it in _collect_definitions() below (at the bottom of this file)
-#   3. The tool must have execute(arguments, session_id=None) -> dict
 
 
 from typing import Optional

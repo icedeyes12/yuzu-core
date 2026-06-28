@@ -1,6 +1,3 @@
-# FILE: app/api/endpoints/profile.py
-# DESCRIPTION: Profile, config, and provider settings endpoints
-
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Depends

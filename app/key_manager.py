@@ -1,6 +1,4 @@
 from __future__ import annotations
-# FILE: app/key_manager.py
-# DESCRIPTION: Encryption key management utility (CLI)
 
 
 import argparse

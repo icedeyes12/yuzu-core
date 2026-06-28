@@ -1,20 +1,4 @@
-# FILE: app.db.queries.py
-# DESCRIPTION: Single source of truth for SQL strings, schema DDL, row
-#              parsers, and shared constants used by both the sync and
-#              async repository layers.
-#
-# Why this file exists:
-#   The sync (db_pg_models.py) and async (db_pg_models_async.py) modules
-#   used to duplicate every SQL string, every CREATE TABLE statement, and
-#   every row-to-dict mapping. Any fix made to one had to be remembered in
-#   the other - and over time, they drifted. Centralizing here makes the
-#   sync/async wrappers thin (3-5 lines each) and removes the drift risk.
-#
-# Conventions:
-#   * SQL constants are UPPER_SNAKE_CASE module-level strings.
-#   * Row parsers are pure functions: dict-in, dict-out, no I/O.
-#   * Encryption is intentionally re-exported here so both repo layers
-#     import the helpers from a single location.
+"""Single source of truth for SQL strings, schema DDL, row parsers, and shared constants."""
 
 from __future__ import annotations
 
@@ -23,9 +7,7 @@ import re
 from datetime import datetime
 from typing import Any
 
-# ---------------------------------------------------------------------------
-# Tool-role constants (used by the message layer to dispatch tool results)
-# ---------------------------------------------------------------------------
+
 
 TOOL_ROLES: dict[str, str] = {
     # Image generation
@@ -60,9 +42,7 @@ TOOL_ROLES: dict[str, str] = {
 ALL_TOOL_ROLES: list[str] = sorted(set(TOOL_ROLES.values()))
 
 
-# ---------------------------------------------------------------------------
-# Encryption helpers (sync, CPU-bound)
-# ---------------------------------------------------------------------------
+
 
 
 def encrypt_api_key(api_key: str) -> str:
@@ -87,13 +67,9 @@ def decrypt_api_key(encrypted_key: str, is_encrypted: bool = True) -> str:
 DECRYPTION_ERROR = "[DECRYPTION_ERROR]"
 
 
-# ---------------------------------------------------------------------------
-# Schema DDL (executed by init_pg_tables / init_pg_tables_async)
-#
-# Post-Phase-1 multi-tenant schema.  profiles and chat_sessions use UUIDv7
-# primary keys (time-ordered, sortable).  All tenant-scoped tables carry a
-# user_id FK → profiles(id) ON DELETE CASCADE.  messages.id and
-# semantic_facts.id remain SERIAL integer (not changed in the cutover).
+
+# Schema DDL — multi-tenant: profiles/chat_sessions use UUIDv7 PKs,
+# all tenant-scoped tables have user_id FK → profiles(id) ON DELETE CASCADE.
 #
 # Legacy migration columns (legacy_int_id, legacy_session_id, memory_json)
 # are NOT included — they are migration artifacts only and must not exist
@@ -253,8 +229,7 @@ SCHEMA_DDL: tuple[str, ...] = (
     EXCEPTION WHEN undefined_column THEN NULL;
     END $$;
     """,
-    # ── Migrations for existing DBs (idempotent) ──
-    # Phase 1.3: add user_id to tenant-scoped tables (already done via migration SQL)
+        # Phase 1.3: add user_id to tenant-scoped tables (already done via migration SQL)
     # Phase 1.7: drop NOT NULL on legacy mapping columns so new UUID rows can omit them
     # Wrapped in DO blocks because legacy_* columns don't exist on fresh installs
     """
@@ -278,9 +253,7 @@ SCHEMA_DDL: tuple[str, ...] = (
 )
 
 
-# ---------------------------------------------------------------------------
-# Profile SQL
-# ---------------------------------------------------------------------------
+
 
 SQL_PROFILE_UNCLAIMED_LOOKUP = """
 SELECT p.id
@@ -291,7 +264,6 @@ ORDER BY p.created_at ASC
 LIMIT 1
 """
 
-# ── Multi-tenant scoped variants (Phase 2.3+2.4) ──
 SQL_PROFILE_SELECT_BY_ID = "SELECT * FROM profiles WHERE id = %s"
 
 SQL_AUTH_ME_LOOKUP = """
@@ -363,7 +335,6 @@ def build_profile_update(updates: dict[str, Any]) -> tuple[str, list[Any]] | Non
 
     for key, value in updates.items():
         if key in _PROFILE_JSON_FIELDS:
-            # JSONB columns - no _json suffix
             col_name = "memory_state" if key == "memory" else key
             set_parts.append(f"{col_name} = %s")
             params.append(json.dumps(value) if isinstance(value, dict) else value)
@@ -383,10 +354,7 @@ def build_profile_update(updates: dict[str, Any]) -> tuple[str, list[Any]] | Non
 
 
 def parse_profile_row(row: dict | None) -> dict:
-    """Convert a raw profile row into the public dict shape.
-
-    All JSON columns are JSONB, so they're already dict - no parse_json needed.
-    """
+    """Convert a raw profile row into the public dict shape."""
     if not row:
         return {}
     return {
@@ -395,11 +363,11 @@ def parse_profile_row(row: dict | None) -> dict:
         "partner_name": row.get("partner_name", ""),
         "affection": row.get("affection", 50),
         "theme": row.get("theme", "default"),
-        "memory": row.get("memory_state") or {},  # JSONB - already dict
-        "session_history": row.get("session_history") or {},  # JSONB
-        "global_knowledge": row.get("global_knowledge") or {},  # JSONB
-        "providers_config": row.get("providers_config") or {},  # JSONB
-        "context": row.get("context") or {},  # JSONB
+        "memory": row.get("memory_state") or {},
+        "session_history": row.get("session_history") or {},
+        "global_knowledge": row.get("global_knowledge") or {},
+        "providers_config": row.get("providers_config") or {},
+        "context": row.get("context") or {},
         "image_model": row.get("image_model", "qwen_image"),
         "vision_model": row.get("vision_model", "moonshotai/kimi-k2.5"),
         "created_at": row.get("created_at"),
@@ -407,9 +375,7 @@ def parse_profile_row(row: dict | None) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Chat session SQL
-# ---------------------------------------------------------------------------
+
 
 SQL_SESSION_SELECT_ACTIVE_FOR_USER = "SELECT * FROM chat_sessions WHERE user_id = %s AND is_active = TRUE AND deleted_at IS NULL LIMIT 1"
 
@@ -472,9 +438,7 @@ def parse_session_row(row: dict | None) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Session memory (notes view)
-# ---------------------------------------------------------------------------
+
 
 SQL_SESSION_MEMORY_NOTES = """
 SELECT content, role, timestamp
@@ -781,6 +745,7 @@ def format_ai_history_rows(
             entry["image_paths"] = image_paths
 
         formatted.append(entry)
+
     return formatted
 
 

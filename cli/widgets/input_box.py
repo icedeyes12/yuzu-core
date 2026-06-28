@@ -1,5 +1,3 @@
-# FILE: cli/widgets/input_box.py
-# DESCRIPTION: Input widget with message submission handling.
 
 from __future__ import annotations
 

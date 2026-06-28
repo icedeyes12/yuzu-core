@@ -1,6 +1,4 @@
 from __future__ import annotations
-# FILE: web.py
-# DESCRIPTION: FastAPI web interface for yuzu-companion
 
 
 from contextlib import asynccontextmanager

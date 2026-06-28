@@ -1,8 +1,5 @@
+
 from __future__ import annotations
-# FILE: app/tools/image_generate.py
-# DESCRIPTION: Image generation tool using diffusion models
-
-
 import logging
 import os
 import httpx
@@ -65,7 +62,6 @@ async def execute(arguments, **kwargs):
             endpoint = Z_TURBO_ENDPOINT
             payload = {"prompt": prompt}
         else:
-            # Default: qwen_image
             endpoint = QWEN_IMAGE_ENDPOINT
             payload = {"prompt": prompt}
 
@@ -111,7 +107,6 @@ async def execute(arguments, **kwargs):
         if not str(filepath).startswith(str(images_dir) + os.sep):
             raise ValueError("Unsafe output path")
 
-        # Use asyncio.to_thread for file I/O
         await asyncio.to_thread(filepath.write_bytes, response.content)
 
         logger.debug(f"[IMAGE TOOL] Saved: {filepath}")

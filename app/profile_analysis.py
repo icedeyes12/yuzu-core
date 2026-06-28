@@ -1,6 +1,3 @@
-# FILE: app.profile_analysis.py
-# DESCRIPTION: Backward-compatible shim for memory and profile analysis logic.
-#              Logic migrated to app/memory/ in Phase 3.
 
 from __future__ import annotations
 from app.memory.summarization import (

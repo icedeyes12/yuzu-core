@@ -1,8 +1,3 @@
-# FILE: app/memory/memory.py
-# DESCRIPTION: Background memory pipeline runner.
-#              Spawns a daemon thread that processes segmentation, PCL, and memory review
-#              in the background without blocking the main chat loop.
-#
 # Architecture (aligned with plast-mem):
 #   1. Segmentation → batch_segment() creates episodes
 #   2. PCL → create_episode_and_pcl() extracts semantic facts

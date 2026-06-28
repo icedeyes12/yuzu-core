@@ -1,19 +1,13 @@
-# FILE: app/core/context.py
-# DESCRIPTION: Request-scoped ContextVar for client-side BYOK credentials.
-#              Populated per-request from X-Provider-* headers (chat endpoint),
-#              cleared in finally. Providers read via resolve_* helpers.
+# This module MUST stay dependency-free (only stdlib).
+# It lives in app/core (not app/api) so importing it never
+# triggers app/api/__init__.py → router registry → orchestrator
+# chain. That ordering is what breaks the providers ↔ api
+# circular import.
 #
-#              IMPORTANT: This module MUST stay dependency-free (only stdlib).
-#              It lives in app/core (not app/api) so importing it never
-#              triggers app/api/__init__.py → router registry → orchestrator
-#              chain. That ordering is what breaks the providers ↔ api
-#              circular import.
-#
-#              Precedence (Dual-Plane):
-#                1. Request plane  — ContextVar keyring (X-Provider-Key header)
-#                2. System plane   — os.getenv(f"{PROVIDER}_API_KEY")
-#                3. Legacy         — caller-provided fallback (DB-loaded self.api_key)
-
+# Precedence (Dual-Plane):
+#   1. Request plane  — ContextVar keyring (X-Provider-Key header)
+#   2. System plane   — os.getenv(f"{PROVIDER}_API_KEY")
+#   3. Legacy         — caller-provided fallback (DB-loaded self.api_key)
 from __future__ import annotations
 
 import os
@@ -23,15 +17,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class RequestKeyring:
-    """Per-request credential bundle from client-side BYOK headers.
-
-    Fields:
-        provider:  Name of the provider this keyring targets (e.g. "openrouter").
-                   None acts as a wildcard — applies to any provider.
-        key:       Plaintext API key from X-Provider-Key. Never persisted.
-        base_url:  Optional override from X-Base-Url.
-        model_id:  Optional model override from X-Model-Id.
-    """
+    """Per-request credential bundle from client-side BYOK headers."""
 
     provider: str | None = None
     key: str | None = None
@@ -40,12 +26,7 @@ class RequestKeyring:
 
 
 class MissingProviderKeyError(Exception):
-    """Raised when a provider requires an API key but none is available
-    in the request plane (ContextVar) or system plane (env var).
-
-    The API layer catches this and returns 424 Failed Dependency with a
-    clear message directing the client to set their API key.
-    """
+    """Raised when a provider requires an API key but none is available."""
 
     def __init__(self, provider_name: str):
         self.provider_name = provider_name
@@ -67,7 +48,7 @@ def set_request_keyring(keyring: RequestKeyring) -> None:
 
 
 def get_request_keyring() -> RequestKeyring | None:
-    """Return the current request's keyring, or None if unset (system plane)."""
+    """Return the current request's keyring, or None if unset."""
     return _keyring_ctx.get()
 
 
@@ -84,13 +65,7 @@ def _provider_matches(keyring: RequestKeyring | None, provider_name: str) -> boo
 
 
 def resolve_api_key(provider_name: str, fallback: str | None = None) -> str | None:
-    """Resolve the API key for a provider.
-
-    Precedence (Dual-Plane):
-      1. Request plane  — ContextVar keyring (X-Provider-Key header)
-      2. System plane   — os.getenv(f"{PROVIDER}_API_KEY")
-      3. Legacy         — caller-provided fallback (DB-loaded self.api_key)
-    """
+    """Resolve the API key for a provider (request plane → env var → fallback)."""
     keyring = get_request_keyring()
     if _provider_matches(keyring, provider_name):
         return keyring.key
@@ -101,10 +76,7 @@ def resolve_api_key(provider_name: str, fallback: str | None = None) -> str | No
 
 
 def resolve_base_url(provider_name: str, fallback: str) -> str:
-    """Resolve the base URL for a provider.
-
-    Precedence: ContextVar → os.getenv → fallback (provider default).
-    """
+    """Resolve the base URL for a provider (ContextVar → env var → fallback)."""
     keyring = get_request_keyring()
     if _provider_matches(keyring, provider_name) and keyring.base_url:
         return keyring.base_url
@@ -115,10 +87,7 @@ def resolve_base_url(provider_name: str, fallback: str) -> str:
 
 
 def resolve_model(provider_name: str, fallback: str) -> str:
-    """Resolve the model ID for a provider.
-
-    Precedence: ContextVar model_id → fallback (caller-provided model).
-    """
+    """Resolve the model ID for a provider (ContextVar → fallback)."""
     keyring = get_request_keyring()
     if _provider_matches(keyring, provider_name) and keyring.model_id:
         return keyring.model_id

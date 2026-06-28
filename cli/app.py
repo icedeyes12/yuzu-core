@@ -1,6 +1,3 @@
-# FILE: cli/app.py
-# DESCRIPTION: Main Textual TUI application for Yuzu Companion.
-#              Full layout: sidebar + chat + input with session switching.
 
 from __future__ import annotations
 

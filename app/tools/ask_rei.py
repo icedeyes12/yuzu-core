@@ -1,6 +1,4 @@
 from __future__ import annotations
-# FILE: app/tools/ask_rei.py
-# DESCRIPTION: Tool for Yuzuki to send messages to Reina via Zo ASK API
 
 
 import logging
@@ -11,13 +9,10 @@ from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 
 logger = logging.getLogger(__name__)
 
-# Default conversation ID for Reina's session
 DEFAULT_CONVERSATION_ID = "con_TzvviTNTYCFCJ7AR"
 
-# Zo ASK API endpoint
 ZO_ASK_URL = "https://api.zo.computer/zo/ask"
 
-# Request timeout
 TIMEOUT = 120
 
 
@@ -47,30 +42,19 @@ TOOL_DEFINITION = ToolDefinition(
 
 
 def _get_zo_api_key() -> str | None:
-    """Get ZO_API_KEY from environment."""
     return os.environ.get("ZO_API_KEY")
 
 
 def _build_yuzuki_signature() -> str:
-    """Build signature for Yuzuki's messages to Reina."""
     timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     return f'[Yuzuki via /ask-rei] {{"signature":{{"identity":"yuzuki","timestamp":"{timestamp}"}}}}'
 
 
 def _parse_args(args_str: str) -> dict:
-    """Parse /ask-rei arguments.
-
-    Supports:
-    - /ask-rei "message"
-    - /ask-rei --id con_XXX "message"
-
-    Returns dict with 'message' and optional 'conversation_id'.
-    """
     args_str = args_str.strip()
 
     result = {"conversation_id": DEFAULT_CONVERSATION_ID}
 
-    # Check for --id flag
     if args_str.startswith("--id "):
         parts = args_str.split(None, 2)
         if len(parts) >= 2:
@@ -81,22 +65,16 @@ def _parse_args(args_str: str) -> dict:
                 result["message"] = ""
             return result
 
-    # No --id flag, treat entire string as message
     result["message"] = args_str.strip("\"'")
     return result
 
 
 def execute(arguments, **kwargs):
-    """Execute the /ask-rei tool.
-
-    Sends a message to Reina via Zo ASK API and returns her response.
-    """
     from app.db import get_profile
 
     profile = get_profile(kwargs.get("user_id")) or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
-    # Parse arguments
     if isinstance(arguments, dict):
         parsed = _parse_args(arguments.get("message", ""))
         message = parsed.get("message", "")
@@ -116,7 +94,6 @@ def execute(arguments, **kwargs):
             partner_name,
         )
 
-    # Get API key
     api_key = _get_zo_api_key()
     if not api_key:
         return error_result(
@@ -126,11 +103,9 @@ def execute(arguments, **kwargs):
             partner_name,
         )
 
-    # Build message with Yuzuki signature
     signature = _build_yuzuki_signature()
     full_message = f"{message}\n\n{signature}"
 
-    # Call Zo ASK API
     try:
         response = requests.post(
             ZO_ASK_URL,
@@ -159,7 +134,6 @@ def execute(arguments, **kwargs):
         data = response.json()
         output = data.get("output", "")
 
-        # Check if output is empty
         if not output or not output.strip():
             return ok_result(
                 {

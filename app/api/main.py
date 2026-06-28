@@ -1,6 +1,3 @@
-# FILE: app/api/main.py
-# DESCRIPTION: Central router registry for the FastAPI backend.
-
 from __future__ import annotations
 
 from fastapi import APIRouter

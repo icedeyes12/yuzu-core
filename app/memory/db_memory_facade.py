@@ -1,8 +1,3 @@
-# FILE: app/memory/db_memory_facade.py
-# DESCRIPTION: Thin facade over app.memory.db_memory.
-#
-# The MemoryDB class unifies the scattered sync/async function pairs in
-# db_memory.py behind a single static interface, mirroring the pattern
 # established by app.db.facade.Database.
 #
 # Two patterns live here:

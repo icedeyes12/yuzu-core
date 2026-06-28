@@ -1,8 +1,5 @@
+
 from __future__ import annotations
-# FILE: app/tools/image_edit.py
-# DESCRIPTION: Edit existing images using Qwen Image Edit API
-
-
 import logging
 import os
 import httpx
@@ -42,10 +39,6 @@ TOOL_DEFINITION = ToolDefinition(
 
 
 def _validate_image_path(image_path: str) -> Path | None:
-    """Validate image path is within allowed directories."""
-    if not image_path or not isinstance(image_path, str):
-        return None
-
     filename = os.path.basename(image_path.replace("\\", "/"))
     if not filename or filename.startswith(".") or ".." in filename:
         return None
@@ -82,7 +75,6 @@ def _validate_image_path(image_path: str) -> Path | None:
 
 
 def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
-    """Load image and return (base64, mime) or (None, None)."""
     validated_path = _validate_image_path(image_path)
     if not validated_path:
         return None, None
@@ -160,7 +152,6 @@ async def execute(arguments, **kwargs) -> dict:
         logger.debug(f"[IMAGE EDIT] Editing: {image_path}")
         logger.debug(f"[IMAGE EDIT] Prompt: {prompt}")
 
-        # Qwen Image Edit expects flat payload (NOT input_args wrapper)
         payload = {
             "prompt": prompt,
             "image_b64s": [image_base64],
@@ -225,7 +216,6 @@ async def execute(arguments, **kwargs) -> dict:
 
     except Exception as e:
         logger.debug(f"[IMAGE EDIT] Exception: {str(e)}")
-        profile = await Database.get_profile_async(kwargs.get("user_id")) or {}
         partner_name = profile.get("partner_name", "Yuzu")
         return error_result(
             "Image edit failed. Please try again later.",

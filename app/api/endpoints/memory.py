@@ -1,6 +1,3 @@
-# FILE: app/api/endpoints/memory.py
-# DESCRIPTION: Memory pipeline and stats endpoints
-
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Depends

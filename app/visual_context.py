@@ -1,8 +1,4 @@
 from __future__ import annotations
-# FILE: app/visual_context.py
-# DESCRIPTION: Persistent visual context buffer for follow-up image references.
-#              Stores the last processed image as base64 for N follow-up turns
-#              so the model can compare or reference it without a new tool call.
 
 
 import threading

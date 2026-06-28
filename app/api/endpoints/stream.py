@@ -1,6 +1,3 @@
-# FILE: app/api/endpoints/stream.py
-# DESCRIPTION: Stream status and sync validation endpoints
-
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Path
@@ -19,10 +16,7 @@ async def get_stream_status(
     session_id: str = Path(..., description="Session ID", min_length=1),
     user_id: str = Depends(get_current_user),
 ):
-    """Get current stream status and buffer state for a session.
-
-    Used by frontend to check if stream is still active or completed.
-    """
+    """Get current stream status and buffer state for a session."""
     try:
         stream = await StreamManager.get_stream(session_id)
 
@@ -51,11 +45,7 @@ async def sync_stream_buffer(
     session_id: str = Path(..., description="Session ID", min_length=1),
     user_id: str = Depends(get_current_user),
 ):
-    """Sync frontend buffer with backend and return validation checksum.
-
-    Used after stream completion to ensure frontend buffer matches backend.
-    If mismatch detected, frontend can request full content replacement.
-    """
+    """Sync frontend buffer with backend and return validation checksum."""
     try:
         stream = await StreamManager.get_stream(session_id)
 

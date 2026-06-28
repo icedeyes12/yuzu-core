@@ -1,7 +1,3 @@
-# FILE: app/tools/fs_operations.py
-# DESCRIPTION: File system operations for Termux environment.
-#              Read, write, list, create, and delete files/directories.
-
 from __future__ import annotations
 
 import os
@@ -21,16 +17,9 @@ ALLOWED_BASE_DIRS = [
     Path("/tmp"),
 ]
 
-# Maximum file size for read operations (1MB)
 MAX_READ_SIZE = 1_000_000
 
-# Maximum output length for listing
 MAX_LS_LINES = 200
-
-
-# --------------------------------------------------------------------
-# Tool Definitions
-# --------------------------------------------------------------------
 
 TOOL_READ = ToolDefinition(
     name="read",
@@ -112,12 +101,7 @@ TOOL_RM = ToolDefinition(
 )
 
 # Registry-compatible TOOL_DEFINITION (maps name -> definition)
-TOOL_DEFINITION = TOOL_READ  # Default for registry lookup
-
-
-# --------------------------------------------------------------------
-# Path Security
-# --------------------------------------------------------------------
+TOOL_DEFINITION = TOOL_READ
 
 
 def _resolve_path(path: str) -> Path | None:
@@ -128,15 +112,11 @@ def _resolve_path(path: str) -> Path | None:
     if not path:
         return None
 
-    # Expand ~ to home directory
     expanded = Path(path).expanduser()
 
-    # Normalize to prevent traversal
     normalized = expanded.resolve()
 
-    # Make absolute
     if not normalized.is_absolute():
-        # Relative path: resolve from ~/workspace
         normalized = (Path("~/workspace").expanduser() / normalized).resolve()
 
     # Check for path traversal attempts
@@ -164,13 +144,7 @@ def _resolve_path(path: str) -> Path | None:
     return normalized
 
 
-# --------------------------------------------------------------------
-# Execute Functions
-# --------------------------------------------------------------------
-
-
 def _get_partner_name(user_id: str | None = None) -> str:
-    """Get partner name from profile."""
     try:
         from app.db import get_profile
 
@@ -181,10 +155,6 @@ def _get_partner_name(user_id: str | None = None) -> str:
 
 
 def execute(arguments: dict, session_id: str | None = None, **kwargs) -> dict:
-    """Dispatch to the appropriate fs operation based on tool name.
-
-    This is the main entry point for the registry.
-    """
     tool_name = kwargs.get("tool_name", "read")
 
     if tool_name == "read":
@@ -207,7 +177,6 @@ def execute(arguments: dict, session_id: str | None = None, **kwargs) -> dict:
 
 
 def execute_read(arguments: dict, session_id: str | None = None) -> dict:
-    """Read file contents."""
     partner_name = _get_partner_name()
     path_arg = arguments.get("path", "")
 
@@ -246,7 +215,6 @@ def execute_read(arguments: dict, session_id: str | None = None) -> dict:
             partner_name,
         )
 
-    # Check file size
     try:
         size = resolved.stat().st_size
         if size > MAX_READ_SIZE:
@@ -264,7 +232,6 @@ def execute_read(arguments: dict, session_id: str | None = None) -> dict:
             partner_name,
         )
 
-    # Read file
     try:
         content = resolved.read_text(encoding="utf-8", errors="replace")
     except OSError as e:
@@ -275,10 +242,8 @@ def execute_read(arguments: dict, session_id: str | None = None) -> dict:
             partner_name,
         )
 
-    # Get file extension for syntax highlighting
     file_ext = resolved.suffix
 
-    # Format output with line numbers
     lines = content.split("\n")
 
     return ok_result(
@@ -296,7 +261,6 @@ def execute_read(arguments: dict, session_id: str | None = None) -> dict:
 
 
 def execute_write(arguments: dict, session_id: str | None = None) -> dict:
-    """Write content to a file."""
     partner_name = _get_partner_name()
     path_arg = arguments.get("path", "")
     content = arguments.get("content", "")
@@ -320,7 +284,6 @@ def execute_write(arguments: dict, session_id: str | None = None) -> dict:
             partner_name,
         )
 
-    # Create parent directories if needed
     parent = resolved.parent
     if parent and not parent.exists():
         try:
@@ -333,7 +296,6 @@ def execute_write(arguments: dict, session_id: str | None = None) -> dict:
                 partner_name,
             )
 
-    # Write file
     try:
         resolved.write_text(content, encoding="utf-8")
     except OSError as e:
@@ -359,7 +321,6 @@ def execute_write(arguments: dict, session_id: str | None = None) -> dict:
 
 
 def execute_ls(arguments: dict, session_id: str | None = None) -> dict:
-    """List directory contents."""
     partner_name = _get_partner_name()
     path_arg = arguments.get("path", "~/workspace")
 
@@ -390,7 +351,6 @@ def execute_ls(arguments: dict, session_id: str | None = None) -> dict:
             partner_name,
         )
 
-    # List contents
     try:
         entries = list(resolved.iterdir())
     except OSError as e:
@@ -401,7 +361,6 @@ def execute_ls(arguments: dict, session_id: str | None = None) -> dict:
             partner_name,
         )
 
-    # Sort: directories first, then files
     dirs = []
     files = []
     for entry in entries:
@@ -416,16 +375,13 @@ def execute_ls(arguments: dict, session_id: str | None = None) -> dict:
     dirs.sort()
     files.sort()
 
-    # Build output lines for markdown
     lines = [f"Directory: {resolved}"]
     lines.append(f"Total: {len(entries)} items ({len(dirs)} dirs, {len(files)} files)")
     lines.append("")
 
-    # Format directories
     for d in dirs[:MAX_LS_LINES]:
-        lines.append(f"\ud83d\udcc1 {d}/")
+        lines.append(f"\U0001f4c1 {d}/")
 
-    # Format files with size
     remaining = MAX_LS_LINES - len(dirs)
     for f_name in files[:remaining]:
         entry = resolved / f_name
@@ -433,14 +389,13 @@ def execute_ls(arguments: dict, session_id: str | None = None) -> dict:
             stats = entry.stat()
             size = stats.st_size
             mtime = datetime.fromtimestamp(stats.st_mtime).strftime("%Y-%m-%d %H:%M")
-            lines.append(f"\ud83d\udcc4 {f_name:<30} {size:>8}  {mtime}")
+            lines.append(f"\U0001f4c4 {f_name:<30} {size:>8}  {mtime}")
         except OSError:
-            lines.append(f"\ud83d\udcc4 {f_name}")
+            lines.append(f"\U0001f4c4 {f_name}")
 
     if len(files) > remaining:
         lines.append(f"... and {len(files) - remaining} more files")
 
-    # Return with listing in markdown
     return ok_result(
         {
             "path": str(resolved),
@@ -456,7 +411,6 @@ def execute_ls(arguments: dict, session_id: str | None = None) -> dict:
 
 
 def execute_mkdir(arguments: dict, session_id: str | None = None) -> dict:
-    """Create a directory."""
     partner_name = _get_partner_name()
     path_arg = arguments.get("path", "")
 
@@ -479,7 +433,6 @@ def execute_mkdir(arguments: dict, session_id: str | None = None) -> dict:
             partner_name,
         )
 
-    # Create directory
     try:
         resolved.mkdir(parents=True, exist_ok=True)
     except OSError as e:
@@ -502,7 +455,6 @@ def execute_mkdir(arguments: dict, session_id: str | None = None) -> dict:
 
 
 def execute_rm(arguments: dict, session_id: str | None = None) -> dict:
-    """Delete a file or empty directory."""
     partner_name = _get_partner_name()
     path_arg = arguments.get("path", "")
 
@@ -533,7 +485,6 @@ def execute_rm(arguments: dict, session_id: str | None = None) -> dict:
             partner_name,
         )
 
-    # Delete
     try:
         if resolved.is_dir():
             resolved.rmdir()  # Only empty directories

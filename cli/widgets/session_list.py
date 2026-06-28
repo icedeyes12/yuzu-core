@@ -1,5 +1,3 @@
-# FILE: cli/widgets/session_list.py
-# DESCRIPTION: Session sidebar widget for switching between chat sessions.
 
 from __future__ import annotations
 
