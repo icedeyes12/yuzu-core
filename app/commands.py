@@ -162,8 +162,6 @@ def parse_tool_blocks(text: str) -> tuple[list[str], str]:
             j = i + 1
             while j < len(lines):
                 inner_line = lines[j]
-                inner_stripped = inner_line.strip()
-
                 close_match = _find_close_tag(inner_line)
                 if close_match is not None:
                     close_start, close_len = close_match

@@ -9,8 +9,6 @@ import os
 import hashlib
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
-from PIL import Image
-import io
 from app.core.context import resolve_api_key
 
 logger = logging.getLogger(__name__)

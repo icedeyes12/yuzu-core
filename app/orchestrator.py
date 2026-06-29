@@ -212,7 +212,7 @@ def _build_ephemeral_context(
             "content": assistant_text or None,
             "tool_calls": [
                 {
-                    "id": tc.get("id", f"call_{i}"),
+                    "id": bc.get("id", f"call_{i}"),
                     "type": "function",
                     "function": {
                         "name": bc["name"],
