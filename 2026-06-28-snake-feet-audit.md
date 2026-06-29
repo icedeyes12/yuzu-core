@@ -383,6 +383,26 @@ The current audit report is therefore **incomplete**. The remaining work is conc
 
 ---
 
+## Phase 4 — static/css/
+
+### 31. LOW: `static/css/index.css` is orphaned
+
+- **File:** `static/css/index.css`
+- **What’s wrong:** This stylesheet exists in the repository but is not referenced by any template or bundle in the live app. The runtime pages load `style.css`, `theme.css`, `chat.css`, `home.css`, `about.css`, `config.css`, `sidebar.css`, `marked.css`, and `multimodal.css`, but not `index.css`.
+- **Why it matters:** Dead stylesheets are maintenance debt. They drift, confuse ownership, and tempt future changes to land in a file that nothing actually uses.
+- **Impact:** Low
+- **Simplest practical fix:** Delete `index.css` unless a route is intentionally meant to use it, or wire it into one template and remove the duplicated baseline rules elsewhere.
+
+### 32. Medium: Multimodal styling is split across two overlapping sources of truth
+
+- **Files:** `static/css/multimodal.css`, `static/css/components/multimodal.css`, `static/css/chat.css`, `templates/chat.html`
+- **What’s wrong:** The chat page pulls in `static/css/multimodal.css` directly in `templates/chat.html`, and `static/css/chat.css` separately imports `static/css/components/multimodal.css`. Both files style the same multimodal UI surface, so the active design is distributed across two parallel stylesheets.
+- **Why it matters:** This is avoidable duplication. It increases the chance of drift, makes it harder to know which file is authoritative, and forces future fixes to be duplicated in two places.
+- **Impact:** Medium
+- **Simplest practical fix:** Pick one multimodal stylesheet as the canonical source, remove the other import path, and collapse the duplicated rules into the surviving file.
+
+---
+
 ## Priority Summary
 
 | Priority | Count | Est. Lines to Remove |
