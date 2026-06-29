@@ -403,21 +403,49 @@ The current audit report is therefore **incomplete**. The remaining work is conc
 
 ---
 
+## Template audit findings
+
+### 33. MEDIUM: `templates/multimodal_chat.html` is an orphaned legacy surface
+
+- **File:** `templates/multimodal_chat.html`
+- **What's wrong:** Nothing in `main.py` or the Jinja templates includes or routes to this page. It is a full alternate chat UI with its own inline CSS and markup, but it is not part of the live page set.
+- **Why it matters:** Orphaned templates are dead maintenance surface. They drift independently, they can fool future work into editing the wrong page, and they waste attention during audits.
+- **Impact:** Medium
+- **Simplest practical fix:** Delete the template unless a route is intentionally meant to serve it.
+
+### 34. LOW: `templates/chat.html` loads Tailwind CDN without using Tailwind utilities
+
+- **File:** `templates/chat.html`
+- **What's wrong:** The page includes `https://cdn.tailwindcss.com`, but the template itself uses project-specific class names and local stylesheets instead of Tailwind utility classes. The CDN script is not doing useful work.
+- **Why it matters:** This adds a runtime network dependency for no behavior gain and makes the styling stack look more complex than it is.
+- **Impact:** Low
+- **Simplest practical fix:** Remove the Tailwind CDN `<script>` tag from `templates/chat.html`.
+
+### 35. LOW: Footer markup is duplicated across the main HTML templates
+
+- **Files:** `templates/index.html`, `templates/about.html`, `templates/config.html`
+- **What's wrong:** The same footer content (`©2026 hkkm project | built with love`) is copied into three pages with only trivial wrapper differences.
+- **Why it matters:** Duplicate template chrome is easy to forget when changing wording, years, or links. It is low-risk debt, but still unnecessary debt.
+- **Impact:** Low
+- **Simplest practical fix:** Extract the footer into a shared partial or macro and include it from the three pages.
+
+---
+
 ## Priority Summary
 
 | Priority | Count | Est. Lines to Remove |
 |----------|-------|---------------------|
 | Critical | 2 | ~1,200 |
 | High | 5 | ~350 |
-| Medium | 9 | ~420 |
-| Low | 9 | ~60 |
-| **Total** | **25** | **~2,030** |
+| Medium | 10 | ~430 |
+| Low | 11 | ~70 |
+| **Total** | **28** | **~2,080** |
 
 ## Recommended Order of Attack
 
-1. **Dead function cleanup** (issues 3, 4, 5, 6, 7, 31, 32, 33, 35) — trivial, zero risk, immediate clarity
+1. **Dead/orphan cleanup** (issues 3, 4, 5, 6, 7, 31, 32, 33, 34, 35) — trivial, zero risk, immediate clarity
 2. **Remove sync `models.py`** (issue 1) — biggest single win, need to verify no CLI dependency
 3. **Unify tool protocol** (issue 2) — highest architectural impact
 4. **Fix sync-in-async providers** (issue 8) — correctness fix
-5. **Remove redundant aliases** (issues 10, 11, 12, 13, 34) — incremental simplification
+5. **Remove redundant aliases** (issues 10, 11, 12, 13, 36) — incremental simplification
 6. **Clean up SQL/query issues** (issues 15, 17, 19, 20) — polish
