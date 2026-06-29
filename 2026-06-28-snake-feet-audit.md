@@ -431,21 +431,65 @@ The current audit report is therefore **incomplete**. The remaining work is conc
 
 ---
 
+## Phase 5 — scripts/
+
+### 36. LOW: `scripts/cleanup_memory` is an empty file
+
+- **File:** `scripts/cleanup_memory`
+- **What’s wrong:** The file exists in the repo as a zero-byte placeholder. It has no executable content and no documented purpose beyond acting like a file name.
+- **Why it matters:** Empty files are pure noise. They suggest a missing implementation or forgotten artifact and add nothing to the maintenance surface.
+- **Impact:** Low
+- **Simplest practical fix:** Delete the file unless there is a deliberate reason to keep a marker file here.
+
+### 37. MEDIUM: `scripts/cleanup_memory.sql` contains hard DELETEs against `semantic_facts`
+
+- **File:** `scripts/cleanup_memory.sql`
+- **What’s wrong:** This SQL script issues direct `DELETE FROM semantic_facts` statements in multiple places, including exact-duplicate cleanup and garbage-segment purges. That bypasses the repo’s own soft-delete rule for semantic facts.
+- **Why it matters:** It creates an inconsistent maintenance path and bypasses the safety model used everywhere else in the codebase. If somebody runs it casually, it can hard-delete memory data that should be retained as invalidated history.
+- **Impact:** Medium
+- **Simplest practical fix:** Rewrite the script to use `UPDATE semantic_facts SET invalid_at = NOW()` instead of `DELETE`, or remove the script if the maintenance task is already covered by Python utilities.
+
+### 38. HIGH: `scripts/reembed_all.py` is a large one-off migration script with duplicated command paths
+
+- **File:** `scripts/reembed_all.py`
+- **What’s wrong:** The script mixes migration, re-embedding, and finalize logic in one large file, and it exposes three command modes plus an extra `--reembed-all` branch. The control flow is broad for a one-off maintenance utility, and it duplicates the same batch/retry patterns across the active/all branches.
+- **Why it matters:** The file is harder to reason about than the task requires. A migration helper should be obvious, short-lived, and narrowly scoped; this one has become a mini framework for its own maintenance flow.
+- **Impact:** High
+- **Simplest practical fix:** Split the irreversible migration steps into smaller single-purpose scripts or, if that’s too much, collapse the duplicate batch logic into one shared path and remove the extra command variants.
+
+### 39. LOW: `scripts/show_memory_context.py` is a narrow debugging utility with no safeguards
+
+- **File:** `scripts/show_memory_context.py`
+- **What’s wrong:** The script directly prints memory context for an arbitrary session chosen at runtime, with no user scoping or authorization guard. It is useful for local debugging, but it is still a raw introspection tool.
+- **Why it matters:** Debugging tools that expose prompt context should be obviously bounded. Leaving them as open-ended scripts makes accidental use more likely and increases the chance they outlive their purpose.
+- **Impact:** Low
+- **Simplest practical fix:** Keep it if actively used, but move it into a clearly labeled admin/debug-only location or add a short header comment stating it is intentionally local-only.
+
+### 40. LOW: `scripts/yuzu_cli.py` hardcodes a single session and request shape
+
+- **File:** `scripts/yuzu_cli.py`
+- **What’s wrong:** The script defaults to `DEFAULT_SESSION = 37` and hardcodes request shape details directly into the client flow. That makes it a convenience script for one environment rather than a general-purpose CLI.
+- **Why it matters:** Hardcoded defaults age badly. They are fine for personal tooling, but they are still a hidden assumption that future readers must discover and override.
+- **Impact:** Low
+- **Simplest practical fix:** Make the default session optional or environment-driven, and keep the CLI focused on transport instead of personal defaults.
+
+---
+
 ## Priority Summary
 
 | Priority | Count | Est. Lines to Remove |
 |----------|-------|---------------------|
 | Critical | 2 | ~1,200 |
-| High | 5 | ~350 |
-| Medium | 10 | ~430 |
-| Low | 11 | ~70 |
-| **Total** | **28** | **~2,080** |
+| High | 6 | ~430 |
+| Medium | 11 | ~470 |
+| Low | 13 | ~120 |
+| **Total** | **32** | **~2,220** |
 
 ## Recommended Order of Attack
 
-1. **Dead/orphan cleanup** (issues 3, 4, 5, 6, 7, 31, 32, 33, 34, 35) — trivial, zero risk, immediate clarity
+1. **Dead/orphan cleanup** (issues 3, 4, 5, 6, 7, 31, 32, 33, 34, 35, 36, 39, 40) — trivial, zero risk, immediate clarity
 2. **Remove sync `models.py`** (issue 1) — biggest single win, need to verify no CLI dependency
 3. **Unify tool protocol** (issue 2) — highest architectural impact
 4. **Fix sync-in-async providers** (issue 8) — correctness fix
-5. **Remove redundant aliases** (issues 10, 11, 12, 13, 36) — incremental simplification
+5. **Remove redundant aliases** (issues 10, 11, 12, 13, 37) — incremental simplification
 6. **Clean up SQL/query issues** (issues 15, 17, 19, 20) — polish
