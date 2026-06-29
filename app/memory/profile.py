@@ -242,7 +242,7 @@ def summarize_global_player_profile(user_id: str | None = None) -> bool:
 
 async def _summarize_global_player_profile_async(user_id: str | None = None) -> bool:
     """Async implementation of global profile analysis."""
-    sessions = await Database.get_all_sessions_async(user_id) or []
+    sessions = await Database.get_all_sessions(user_id) or []
     log.info("global profile analysis: %d sessions", len(sessions))
 
     max_per_session = 2000
@@ -261,9 +261,7 @@ async def _summarize_global_player_profile_async(user_id: str | None = None) -> 
         sid = session["id"]
         name = session.get("name") or f"Session {sid}"
         messages = (
-            await Database.get_chat_history_async(
-                session_id=sid, limit=None, user_id=user_id
-            )
+            await Database.get_chat_history(session_id=sid, limit=None, user_id=user_id)
             or []
         )
         if not messages:
@@ -322,10 +320,10 @@ async def _summarize_global_player_profile_async(user_id: str | None = None) -> 
     parsed["total_messages"] = total_messages
     parsed["analysis_chars"] = len(conversation_text)
 
-    profile = await Database.get_profile_async(user_id) or {}
+    profile = await Database.get_profile(user_id) or {}
     merged = _merge_profile_data(profile.get("memory") or {}, parsed)
     try:
-        await Database.update_profile_async({"memory": merged}, user_id)
+        await Database.update_profile({"memory": merged}, user_id)
     except Exception:
         log.exception("profile update failed")
         return False

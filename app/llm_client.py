@@ -235,13 +235,18 @@ async def generate_ai_response(
     prevent the model from re-invoking tools.
     """
     if session_id is None:
-        session_id = (await Database.get_active_session_async(user_id))["id"]
+        session_id = (await Database.get_active_session(user_id))["id"]
 
     provider, model = _resolve_provider(profile, None, None)
 
     messages = await build_messages(
-        profile, session_id, interface, user_message, user_id,
-        include_image_paths=True, suppress_tools=suppress_tools,
+        profile,
+        session_id,
+        interface,
+        user_message,
+        user_id,
+        include_image_paths=True,
+        suppress_tools=suppress_tools,
     )
 
     if ephemeral_context:
@@ -271,7 +276,11 @@ async def _stream_from_provider(
     received = 0
     try:
         async for chunk in ai_manager.send_message_streaming(
-            provider, model, messages, source=source, timeout=180,
+            provider,
+            model,
+            messages,
+            source=source,
+            timeout=180,
             suppress_tools=suppress_tools,
         ):
             if chunk:
@@ -306,13 +315,18 @@ async def generate_ai_response_streaming(
     prevent the model from re-invoking tools.
     """
     if session_id is None:
-        session_id = (await Database.get_active_session_async(user_id))["id"]
+        session_id = (await Database.get_active_session(user_id))["id"]
 
     resolved_provider, resolved_model = _resolve_provider(profile, provider, model)
 
     messages = await build_messages(
-        profile, session_id, interface, user_message, user_id,
-        include_image_paths=True, suppress_tools=suppress_tools,
+        profile,
+        session_id,
+        interface,
+        user_message,
+        user_id,
+        include_image_paths=True,
+        suppress_tools=suppress_tools,
     )
 
     if ephemeral_context:

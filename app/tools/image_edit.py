@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import logging
 import os
@@ -118,7 +117,7 @@ async def execute(arguments, **kwargs) -> dict:
             "Yuzu",
         )
 
-    profile = await Database.get_profile_async(kwargs.get("user_id")) or {}
+    profile = await Database.get_profile(kwargs.get("user_id")) or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     validated_path = _validate_image_path(image_path)

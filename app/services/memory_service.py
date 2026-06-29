@@ -74,7 +74,7 @@ class MemoryService:
             )
 
         # 2. Throttle and trigger background memory pipeline (segmentation, PCL, review)
-        msg_count = await Database.get_session_messages_count_async(session_id)
+        msg_count = await Database.get_session_messages_count(session_id)
         if msg_count % MemoryService._PIPELINE_CHECK_INTERVAL == 0:
             # Check if fence is already active BEFORE spawning task
             if not await _is_fence_active_async(session_id):
@@ -101,7 +101,7 @@ class MemoryService:
                     logger.debug(f"Pipeline trigger debounced for session {session_id}")
                     return False
 
-                count = await Database.get_session_messages_count_async(session_id)
+                count = await Database.get_session_messages_count(session_id)
                 triggered = await trigger_memory_pipeline_async(
                     session_id, count, user_id
                 )
@@ -147,7 +147,7 @@ class MemoryService:
         )
 
         # Get message count
-        count = await Database.get_session_messages_count_async(session_id)
+        count = await Database.get_session_messages_count(session_id)
 
         # Run the full pipeline
         result = await run_memory_pipeline_async(session_id, count)

@@ -31,7 +31,6 @@ export {
 export { hideChatSkeleton, showChatSkeleton } from "./skeleton.js";
 // State management
 export {
-	_currentPage,
 	currentAbortController,
 	currentStreamMessage,
 	findMessageById,

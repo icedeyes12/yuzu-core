@@ -155,12 +155,6 @@ def ensure_static_dirs():
         os.makedirs(dir_path, exist_ok=True)
 
 
-def _get_session_id(request: Request) -> str:
-    client_host = request.client.host if request.client else "unknown"
-    user_agent = request.headers.get("user-agent", "unknown")
-    return f"{client_host}_{hash(user_agent) % 10000}"
-
-
 ensure_static_dirs()
 
 # ---------------------------------------------------------------------------
@@ -187,7 +181,7 @@ async def favicon():
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request, user_id: str = Depends(get_current_user)):
-    profile = await Database.get_profile_async(user_id)
+    profile = await Database.get_profile(user_id)
     return templates.TemplateResponse(
         request=request,
         name="index.html",
@@ -197,7 +191,7 @@ async def home(request: Request, user_id: str = Depends(get_current_user)):
 
 @app.get("/chat", response_class=HTMLResponse)
 async def chat_page(request: Request, user_id: str = Depends(get_current_user)):
-    profile = await Database.get_profile_async(user_id)
+    profile = await Database.get_profile(user_id)
     return templates.TemplateResponse(
         request=request,
         name="chat.html",
@@ -207,7 +201,7 @@ async def chat_page(request: Request, user_id: str = Depends(get_current_user)):
 
 @app.get("/config", response_class=HTMLResponse)
 async def config_page(request: Request, user_id: str = Depends(get_current_user)):
-    profile = await Database.get_profile_async(user_id)
+    profile = await Database.get_profile(user_id)
     return templates.TemplateResponse(
         request=request,
         name="config.html",
@@ -217,7 +211,7 @@ async def config_page(request: Request, user_id: str = Depends(get_current_user)
 
 @app.get("/about", response_class=HTMLResponse)
 async def about_page(request: Request, user_id: str = Depends(get_current_user)):
-    profile = await Database.get_profile_async(user_id)
+    profile = await Database.get_profile(user_id)
     return templates.TemplateResponse(
         request=request,
         name="about.html",

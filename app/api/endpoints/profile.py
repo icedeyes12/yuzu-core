@@ -9,7 +9,7 @@ from app.db import (
     get_profile_async,
     get_active_session_async,
     get_chat_history_async,
-    get_session_memory_async,
+    get_memory_state_async,
     update_profile_async,
 )
 from app.api.utils import get_current_user
@@ -94,9 +94,7 @@ async def api_get_profile(
                         "timestamp": datetime.now().isoformat(),
                     }
                 )
-        session_memory = await get_session_memory_async(
-            active_session["id"], user_id=user_id
-        )  # ownership via session FK
+        session_memory = await get_memory_state_async(active_session["id"])
 
         profile_dict = ConfigService.format_profile_dict(profile)
         ai_providers_payload = await ConfigService.get_ai_providers_payload(
@@ -135,7 +133,7 @@ async def api_list_providers(user_id: str = Depends(get_current_user)):
         available_providers = ai_manager.get_available_providers()
         all_models = await ai_manager.get_all_models()
 
-        profile = await Database.get_profile_async(user_id)
+        profile = await Database.get_profile(user_id)
         providers_config = profile.get("providers_config", {})
         current_provider = providers_config.get("preferred_provider", "ollama")
         current_model = providers_config.get("preferred_model", "glm-4.6:cloud")
@@ -214,31 +212,18 @@ async def api_set_vision_model(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/providers/test_vision")
-async def api_test_vision(user_id: str = Depends(get_current_user)):
-    return {"status": "success", "message": "Vision model test successful"}
-
-
 @router.post("/update_location")
 async def api_update_location(
     request: LocationUpdateRequest, user_id: str = Depends(get_current_user)
 ):
     try:
-        context = await Database.get_context_async(user_id)
+        context = await Database.get_context(user_id)
         context["location"] = {"lat": request.lat, "lon": request.lon}
-        await Database.update_context_async(context, user_id)
+        await Database.update_context(context, user_id)
         return {"status": "success", "message": "Location updated"}
     except Exception as e:
         log.error("Error updating location: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.post("/update_weather_location")
-async def api_update_weather_location(
-    request: LocationUpdateRequest, user_id: str = Depends(get_current_user)
-):
-    """Alias for update_location to maintain compatibility."""
-    return await api_update_location(request, user_id)
 
 
 @router.post("/global_knowledge/update")
@@ -247,9 +232,7 @@ async def api_update_global_knowledge(
 ):
     try:
         global_knowledge = {"facts": request.facts}
-        await Database.update_profile_async(
-            {"global_knowledge": global_knowledge}, user_id
-        )
+        await Database.update_profile({"global_knowledge": global_knowledge}, user_id)
         return {"status": "success", "message": "Global knowledge updated"}
     except Exception as e:
         log.error("Error updating global knowledge: %s", e)

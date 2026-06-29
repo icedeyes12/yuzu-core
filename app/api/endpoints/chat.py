@@ -197,7 +197,7 @@ async def api_browser_unload(
         SessionService.clear_client_session(client_id)
         log.info("Web page closed or refreshed - session cleared")
 
-        profile = await Database.get_profile_async(user_id)
+        profile = await Database.get_profile(user_id)
         await SessionService.end_session_cleanup_async(
             profile, interface="web", unexpected_exit=True, user_id=user_id
         )

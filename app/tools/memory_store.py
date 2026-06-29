@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import logging
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
@@ -101,7 +100,7 @@ async def execute(arguments, **kwargs):
     user_id = kwargs.get("user_id")
     from app.memory.embedder import embed_texts_async
 
-    profile = await Database.get_profile_async(user_id) or {}
+    profile = await Database.get_profile(user_id) or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     fact = arguments.get("fact", "").strip()

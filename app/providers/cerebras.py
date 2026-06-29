@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import requests
 import httpx
 from typing import AsyncGenerator
 from app.providers.base import AIProvider
@@ -27,7 +26,9 @@ class CerebrasProvider(AIProvider):
     def get_models(self) -> list[str]:
         return self.available_models
 
-    def send_message(self, messages: list[dict], model: str, **kwargs) -> str | None:
+    async def send_message(
+        self, messages: list[dict], model: str, **kwargs
+    ) -> str | None:
         if model not in self.available_models:
             return None
 
@@ -59,12 +60,13 @@ class CerebrasProvider(AIProvider):
                 f"[Cerebras] {model} | new_msg=1 | max_tokens={max_tokens or 'unlimited'}"
             )
 
-            response = requests.post(
-                self.resolve_base_url(self.base_url),
-                headers=headers,
-                json=payload,
-                timeout=kwargs.get("timeout", 120),
-            )
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    self.resolve_base_url(self.base_url),
+                    headers=headers,
+                    json=payload,
+                    timeout=kwargs.get("timeout", 120),
+                )
 
             if response.status_code == 200:
                 result = response.json()

@@ -188,15 +188,13 @@ def execute(
 
     is_safe, error_msg = _check_security(code)
     if not is_safe:
-        log.warning("[python] Security check failed: %s", error_msg)
+        log.info("[python] Security check failed: %s", error_msg)
         return error_result(
             error_msg,
             TOOL_DEFINITION,
             full_command,
             _get_partner_name(),
         )
-
-        log.info("[python] Executing code (%d chars)", len(code))
 
     success, stdout, stderr, duration_ms = _execute_python(code)
 
@@ -233,11 +231,5 @@ def execute(
         )
 
 
-def _get_partner_name(user_id: str | None = None) -> str:
-    try:
-        from app.db import Database
-
-        profile = Database.get_profile(user_id)
-        return profile.get("partner_name", "Yuzu")
-    except Exception:
-        return "Yuzu"
+def _get_partner_name() -> str:
+    return "Yuzu"

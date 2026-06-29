@@ -11,7 +11,8 @@ from app.memory.db_memory_facade import (
     FACT_TYPE_STATIC,
     FACT_TYPE_DYNAMIC,
 )
-from app.db import get_session_messages
+from app.db.connection import pg_fetchall
+from app.db.queries import SQL_MESSAGE_SELECT_ASC_LIMIT, parse_message_row
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +139,8 @@ def _search_temporal_messages(session_id, start, end, limit=200):
         start_str = start.strftime("%Y-%m-%d %H:%M:%S")
         end_str = end.strftime("%Y-%m-%d %H:%M:%S")
 
-        messages = get_session_messages(session_id, limit=limit)
+        rows = pg_fetchall(SQL_MESSAGE_SELECT_ASC_LIMIT, (session_id, limit))
+        messages = [parse_message_row(r) for r in rows]
 
         for msg in messages:
             ts = msg.get("timestamp", "")

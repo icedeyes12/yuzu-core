@@ -238,9 +238,7 @@
         </div>
     </main>
 
-    <footer class="home-footer">
-        <span class="footer-link" onclick="window.location.href='/about'">©2026 hkkm project</span> | built with love
-    </footer>
+    {% include "partials/footer.html" %}
 
     <script src="{{ url_for('static', path='js/sidebar.js') }}"></script>
     <script src="{{ url_for('static', path='js/config.js') }}"></script>

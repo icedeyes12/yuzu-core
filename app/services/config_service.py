@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 
@@ -41,7 +40,7 @@ class ConfigService:
         user_id: str, profile: dict | None = None
     ) -> dict[str, Any]:
         if profile is None:
-            profile = await Database.get_profile_async(user_id)
+            profile = await Database.get_profile(user_id)
 
         ai_manager = await get_ai_manager()
         providers_config = profile.get("providers_config", {})
@@ -54,9 +53,23 @@ class ConfigService:
         }
 
     @staticmethod
-    def get_vision_payload(user_id: str, profile: dict | None = None) -> dict[str, Any]:
+    async def get_frontend_config(user_id: str) -> dict[str, Any]:
+        """Unified frontend configuration for web and CLI."""
+        profile = await Database.get_profile(user_id)
+        return {
+            "status": "success",
+            "ai_providers": await ConfigService.get_ai_providers_payload(
+                user_id, profile
+            ),
+            "vision": await ConfigService.get_vision_payload_async(user_id, profile),
+        }
+
+    @staticmethod
+    async def get_vision_payload_async(
+        user_id: str, profile: dict | None = None
+    ) -> dict[str, Any]:
         if profile is None:
-            profile = Database.get_profile(user_id)
+            profile = await Database.get_profile(user_id)
 
         from app.tools.multimodal import multimodal_tools
 
@@ -75,18 +88,6 @@ class ConfigService:
             "models_by_provider": vision_models_by_provider,
             "current_provider": vision_prefs.get("provider"),
             "current_model": vision_prefs.get("model"),
-        }
-
-    @staticmethod
-    async def get_frontend_config(user_id: str) -> dict[str, Any]:
-        """Unified frontend configuration for web and CLI."""
-        profile = await Database.get_profile_async(user_id)
-        return {
-            "status": "success",
-            "ai_providers": await ConfigService.get_ai_providers_payload(
-                user_id, profile
-            ),
-            "vision": ConfigService.get_vision_payload(user_id, profile),
         }
 
     @staticmethod
@@ -117,40 +118,16 @@ class ConfigService:
         }
 
     @staticmethod
-    def set_preferred_provider(
-        user_id: str, provider_name: str, model_name: str | None = None
-    ) -> str:
-        profile = Database.get_profile(user_id)
-        config = profile.get("providers_config") or {}
-        config["preferred_provider"] = provider_name
-        if model_name:
-            config["preferred_model"] = model_name
-        Database.update_profile({"providers_config": config}, user_id)
-        # Run async reload in sync context
-        asyncio.run(reload_ai_manager())
-
-        suffix = f" with model: {model_name}" if model_name else ""
-        return f"Preferred provider set to: {provider_name}{suffix}"
-
-    @staticmethod
-    def set_vision_model(user_id: str, provider: str, model: str) -> str:
-        profile = Database.get_profile(user_id)
-        config = profile.get("providers_config") or {}
-        config["vision_model_preferences"] = {"provider": provider, "model": model}
-        Database.update_profile({"providers_config": config}, user_id)
-        return f"Vision model set to: {provider}/{model}"
-
-    @staticmethod
     async def set_preferred_provider_async(
         user_id: str, provider_name: str, model_name: str | None = None
     ) -> str:
         """Async version for web API endpoints."""
-        profile = await Database.get_profile_async(user_id)
+        profile = await Database.get_profile(user_id)
         config = profile.get("providers_config") or {}
         config["preferred_provider"] = provider_name
         if model_name:
             config["preferred_model"] = model_name
-        await Database.update_profile_async({"providers_config": config}, user_id)
+        await Database.update_profile({"providers_config": config}, user_id)
         await reload_ai_manager()
 
         suffix = f" with model: {model_name}" if model_name else ""
@@ -159,8 +136,8 @@ class ConfigService:
     @staticmethod
     async def set_vision_model_async(user_id: str, provider: str, model: str) -> str:
         """Async version for web API endpoints."""
-        profile = await Database.get_profile_async(user_id)
+        profile = await Database.get_profile(user_id)
         config = profile.get("providers_config") or {}
         config["vision_model_preferences"] = {"provider": provider, "model": model}
-        await Database.update_profile_async({"providers_config": config}, user_id)
+        await Database.update_profile({"providers_config": config}, user_id)
         return f"Vision model set to: {provider}/{model}"

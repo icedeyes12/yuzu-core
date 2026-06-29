@@ -124,13 +124,6 @@ async def callback(request: Request):
     return response
 
 
-async def _persist_display_name(user_id: str, display_name: str) -> None:
-    """Update a profile's display_name on OAuth login (both new and existing profiles)."""
-    await Database.update_profile_display_name_async(
-        user_id, display_name, datetime.now()
-    )
-
-
 async def _map_identity_to_profile(
     provider: str,
     provider_sub: str,
@@ -138,23 +131,23 @@ async def _map_identity_to_profile(
     avatar_url: str | None = None,
     display_name: str | None = None,
 ) -> str:
-    existing = await Database.lookup_identity_async(provider, provider_sub)
+    existing = await Database.lookup_identity(provider, provider_sub)
     if existing:
         user_id = str(existing["user_id"])
         # Refresh avatar + display name on each login (IdP may have updated them)
         if avatar_url:
-            await Database.update_profile_avatar_async(
-                user_id, avatar_url, datetime.now()
-            )
+            await Database.update_profile_avatar(user_id, avatar_url, datetime.now())
         if display_name:
-            await _persist_display_name(user_id, display_name)
+            await Database.update_profile_display_name(
+                user_id, display_name, datetime.now()
+            )
         return user_id
 
-    unclaimed = await Database.lookup_unclaimed_profile_async()
+    unclaimed = await Database.lookup_unclaimed_profile()
     if unclaimed:
         user_id = str(unclaimed["id"])
     else:
-        row = await Database.insert_default_profile_returning_async(
+        row = await Database.insert_default_profile_returning(
             DEFAULT_PROFILE_PARAMS, datetime.now(), datetime.now()
         )
         if not row:
@@ -163,11 +156,13 @@ async def _map_identity_to_profile(
 
     # Persist avatar + display name for new profiles
     if avatar_url:
-        await Database.update_profile_avatar_async(user_id, avatar_url, datetime.now())
+        await Database.update_profile_avatar(user_id, avatar_url, datetime.now())
     if display_name:
-        await _persist_display_name(user_id, display_name)
+        await Database.update_profile_display_name(
+            user_id, display_name, datetime.now()
+        )
 
-    await Database.insert_identity_async(user_id, provider, provider_sub, email)
+    await Database.insert_identity(user_id, provider, provider_sub, email)
     return user_id
 
 
@@ -189,7 +184,7 @@ async def me(request: Request):
     user_id = await validate_session(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
-    row = await Database.lookup_auth_me_async(user_id)
+    row = await Database.lookup_auth_me(user_id)
     if not row:
         return {"user_id": user_id}
     return {

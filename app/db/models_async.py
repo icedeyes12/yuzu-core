@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -31,8 +30,6 @@ from app.db.queries import (
     SQL_MESSAGE_HISTORY_FOR_AI_ASC_LIMIT,
     SQL_MESSAGE_HISTORY_FOR_AI_DESC_LIMIT,
     SQL_MESSAGE_INSERT,
-    SQL_MESSAGE_RECENT_SYSTEM_FOR_SESSION,
-    SQL_MESSAGE_RECENT_SYSTEM_GLOBAL,
     SQL_MESSAGE_SELECT_ASC_ALL,
     SQL_MESSAGE_SELECT_ASC_LIMIT,
     SQL_MESSAGE_SELECT_AFTER_ID,
@@ -53,7 +50,6 @@ from app.db.queries import (
     SQL_SESSION_RESET_COUNT_AND_MEMORY,
     SQL_SESSION_SELECT_ACTIVE_FOR_USER,
     SQL_SESSION_SELECT_ALL_FOR_USER,
-    SQL_SESSION_UPDATE_MEMORY,
     SQL_SESSIONS_RECENT_ACTIVE,
     TOOL_ROLES,
     build_encryption_status,
@@ -63,12 +59,10 @@ from app.db.queries import (
     format_ai_history_rows,
     format_conversation_summary,
     format_session_event,
-    parse_event_row,
     parse_message_row,
     parse_profile_row,
     parse_session_memory_rows,
     parse_session_row,
-    tool_role_for,
 )
 from app.logging_config import get_logger
 
@@ -212,19 +206,13 @@ async def delete_session_async(session_id: str, user_id: str) -> bool:
         return False
 
 
-async def update_session_memory_async(session_id: str, memory: dict) -> bool:
-    try:
-        await pg_execute_async(
-            SQL_SESSION_UPDATE_MEMORY,
-            (json.dumps(memory), datetime.now(), session_id),
-        )
-        return True
-    except Exception as e:  # noqa: BLE001
-        log.error("update_session_memory_async failed: %s", e)
-        return False
+async def get_session_notes_async(session_id: str, user_id: str) -> dict:
+    """Fetch historical system/memory messages for a session.
 
-
-async def get_session_memory_async(session_id: str, user_id: str) -> dict:
+    This reads from the messages table (role = 'system'), NOT the
+    memory_state column on chat_sessions. Use get_memory_state_async
+    to read the current session memory state.
+    """
     rows = await pg_fetchall_async(SQL_SESSION_MEMORY_NOTES, (session_id, user_id))
     return parse_session_memory_rows(rows)
 
@@ -360,7 +348,15 @@ async def add_message_async(
         async with AsyncPgSession() as s:
             row = await s.execute_returning(
                 SQL_MESSAGE_INSERT,
-                (session_id, user_id, role, content, paths_json, tool_calls_json, tool_call_id),
+                (
+                    session_id,
+                    user_id,
+                    role,
+                    content,
+                    paths_json,
+                    tool_calls_json,
+                    tool_call_id,
+                ),
             )
             if row:
                 await increment_message_count_async(session_id)
@@ -410,10 +406,6 @@ async def get_session_messages_after_id_async(
     return [parse_message_row(r) for r in rows]
 
 
-async def get_recent_messages_async(session_id: str, limit: int = 20) -> list[dict]:
-    return await get_session_messages_async(session_id, limit)
-
-
 async def get_chat_history_async(
     session_id: str,
     limit: int | None = None,
@@ -461,20 +453,6 @@ async def add_session_event_async(
     )
 
 
-async def get_recent_sessions_async(limit: int = 20) -> list[dict]:
-    rows = await pg_fetchall_async(SQL_MESSAGE_RECENT_SYSTEM_GLOBAL, (limit,))
-    return [parse_event_row(r) for r in rows]
-
-
-async def get_recent_sessions_for_session_async(
-    session_id: str, limit: int = 20
-) -> list[dict]:
-    rows = await pg_fetchall_async(
-        SQL_MESSAGE_RECENT_SYSTEM_FOR_SESSION, (session_id, limit)
-    )
-    return [parse_event_row(r) for r in rows]
-
-
 async def get_recent_active_sessions_async(
     current_session_id: str, limit: int = 5
 ) -> list[dict]:
@@ -507,18 +485,8 @@ async def get_session_conversation_summary_async(
     return format_conversation_summary(rows)
 
 
-async def add_tool_result_async(
-    session_id: str, tool_name: str, result_content: str
-) -> int | None:
-    return await add_message_async(session_id, tool_role_for(tool_name), result_content)
-
-
 async def add_system_note_async(session_id: str, content: str) -> int | None:
     return await add_message_async(session_id, "system", content)
-
-
-async def add_memory_note_async(session_id: str, content: str) -> int | None:
-    return await add_system_note_async(session_id, content)
 
 
 # ---------------------------------------------------------------------------
@@ -611,8 +579,7 @@ __all__ = [
     "switch_session_async",
     "rename_session_async",
     "delete_session_async",
-    "get_session_memory_async",
-    "update_session_memory_async",
+    "get_session_notes_async",
     "increment_message_count_async",
     "get_memory_state_async",
     "update_memory_state_async",
@@ -626,18 +593,13 @@ __all__ = [
     "update_message_async",
     "get_session_messages_async",
     "get_session_messages_after_id_async",
-    "get_recent_messages_async",
     "get_chat_history_async",
     "clear_session_messages_async",
     "get_message_count_async",
     "add_session_event_async",
-    "get_recent_sessions_async",
-    "get_recent_sessions_for_session_async",
     "get_recent_active_sessions_async",
     "get_session_conversation_summary_async",
-    "add_tool_result_async",
     "add_system_note_async",
-    "add_memory_note_async",
     # AI history
     "get_chat_history_for_ai_async",
     # Encryption

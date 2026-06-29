@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import hashlib
+
 from fastapi import HTTPException, Request
 
 from app.auth.session import SESSION_COOKIE_NAME, validate_session
 
 
 def get_client_id(request: Request) -> str:
-    """Generate a client identifier from request metadata."""
+    """Generate a stable client identifier from request metadata."""
     client_host = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
-    return f"{client_host}_{hash(user_agent) % 10000}"
+    digest = hashlib.sha256(user_agent.encode()).hexdigest()[:8]
+    return f"{client_host}_{digest}"
 
 
 async def get_current_user(request: Request) -> str:

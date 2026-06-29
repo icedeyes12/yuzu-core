@@ -70,9 +70,11 @@ def _parse_args(args_str: str) -> dict:
 
 
 def execute(arguments, **kwargs):
-    from app.db import get_profile
+    from app.db.connection import pg_fetchone
+    from app.db.queries import SQL_PROFILE_SELECT_BY_ID, parse_profile_row
 
-    profile = get_profile(kwargs.get("user_id")) or {}
+    row = pg_fetchone(SQL_PROFILE_SELECT_BY_ID, (kwargs.get("user_id"),))
+    profile = parse_profile_row(row) if row else {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     if isinstance(arguments, dict):

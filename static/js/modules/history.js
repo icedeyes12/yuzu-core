@@ -16,22 +16,6 @@ let _isLoadingHistory = false;
 let _pendingSessionId = null;
 
 /**
- * Check if a history load is currently in progress.
- * @returns {boolean}
- */
-export function isHistoryLoading() {
-	return _isLoadingHistory;
-}
-
-/**
- * Get the session ID currently being loaded (if any).
- * @returns {number|null}
- */
-export function getPendingSessionId() {
-	return _pendingSessionId;
-}
-
-/**
  * Load chat history for a session.
  * @param {number|null} sessionId - Session ID to load
  */

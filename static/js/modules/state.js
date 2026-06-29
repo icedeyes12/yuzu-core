@@ -3,7 +3,6 @@
 
 // ==================== GLOBAL STATE ====================
 export let isProcessingMessage = false;
-export const _currentPage = 0;
 export const MESSAGES_PER_PAGE = 30;
 
 // ==================== STREAMING STATE ====================

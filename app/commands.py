@@ -385,68 +385,6 @@ async def execute_commands(
     return results
 
 
-def format_observation(results: list[tuple[str, dict[str, Any]]]) -> str:
-    """Format tool execution results as a system observation.
-
-    Creates a structured observation block for appending to conversation history.
-
-    Args:
-        results: List of (tool_name, result_dict) tuples
-
-    Returns:
-        Formatted observation string wrapped in <SYSTEM_OBSERVATION> tags
-    """
-    if not results:
-        return ""
-
-    lines = ["<SYSTEM_OBSERVATION>"]
-
-    for i, (tool_name, result) in enumerate(results, 1):
-        lines.append(f"Command {i}:")
-        lines.append(f"TOOL: {tool_name}")
-
-        if isinstance(result, dict):
-            ok = result.get("ok", False)
-            lines.append(f"STATUS: {'SUCCESS' if ok else 'FAILED'}")
-
-            data = result.get("data", {})
-            if isinstance(data, dict):
-                if "command" in data:
-                    lines.append(f"COMMAND: {data['command']}")
-                if "exit_code" in data:
-                    lines.append(f"EXIT_CODE: {data['exit_code']}")
-                if "stdout" in data:
-                    stdout = data["stdout"]
-                    if stdout:
-                        lines.append(f"STDOUT:\n{stdout}")
-                    else:
-                        lines.append("STDOUT: (empty)")
-                if "stderr" in data:
-                    stderr = data["stderr"]
-                    if stderr:
-                        lines.append(f"STDERR:\n{stderr}")
-                    else:
-                        lines.append("STDERR: (empty)")
-                if "output" in data:
-                    lines.append(f"OUTPUT:\n{data['output']}")
-                if "image_path" in data:
-                    lines.append(f"IMAGE: {data['image_path']}")
-
-            error = result.get("error")
-            if error:
-                lines.append(f"ERROR: {error}")
-
-            markdown = result.get("markdown")
-            if markdown and ok:
-                lines.append(f"MARKDOWN:\n{markdown[:500]}")
-        else:
-            lines.append(f"RESULT: {str(result)[:500]}")
-
-        lines.append("")
-
-    lines.append("</SYSTEM_OBSERVATION>")
-    return "\n".join(lines)
-
 
 def parse_image_path(formatted_result: str) -> str | None:
     """Extract and validate a generated-image path from markdown blob."""

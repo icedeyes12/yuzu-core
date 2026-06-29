@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import requests
 import httpx
 from typing import AsyncGenerator
 import logging
@@ -30,7 +29,9 @@ class OllamaProvider(AIProvider):
     def get_models(self) -> list[str]:
         return self.available_models
 
-    def send_message(self, messages: list[dict], model: str, **kwargs) -> str | None:
+    async def send_message(
+        self, messages: list[dict], model: str, **kwargs
+    ) -> str | None:
         if model not in self.available_models:
             return None
 
@@ -54,11 +55,12 @@ class OllamaProvider(AIProvider):
                 },
             }
 
-            response = requests.post(
-                f"{self.base_url}/api/chat",
-                json=payload,
-                timeout=kwargs.get("timeout", 180),
-            )
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.base_url}/api/chat",
+                    json=payload,
+                    timeout=kwargs.get("timeout", 180),
+                )
 
             if response.status_code == 200:
                 result = response.json()

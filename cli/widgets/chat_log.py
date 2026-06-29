@@ -15,9 +15,6 @@ class ChatLog(ScrollableContainer):
     Supports streaming updates for assistant messages with timer display.
     """
 
-    # Hidden tags that won't be displayed
-    HIDDEN_TAGS = ["<think>", "<analysis>", "<decision>", "<command>"]
-
     DEFAULT_CSS = """
     ChatLog {
         height: 1fr;
@@ -71,25 +68,6 @@ class ChatLog(ScrollableContainer):
             child.remove()
 
     @staticmethod
-    def _parse_and_render_content(content: str):
-        """Parse tags and mix of text/tags.
-
-        Returns list of tuples: (role, content) where:
-        - ('text', plain_text) for normal text
-        - ('tag', tag_name, tag_content) for tagged blocks
-        """
+    def _parse_and_render_content(content: str) -> str:
+        """Strip XML-like tags from content, returning plain text."""
         return re.sub(r"<[^>]+>", "", content)
-
-    @staticmethod
-    def _filter_hidden_tags(content: str) -> str:
-        """Remove hidden tags from content."""
-        result = content
-        for tag in ChatLog.HIDDEN_TAGS:
-            # Match both <tag>...</tag> and raw tag markers
-            result = re.sub(
-                rf"{re.escape(tag)}.*?{re.escape(tag.replace('<', '</'))}",
-                "",
-                result,
-                flags=re.DOTALL,
-            )
-        return result

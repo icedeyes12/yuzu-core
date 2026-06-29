@@ -488,42 +488,6 @@ export class MultimodalManager {
 		return msg;
 	}
 
-	finalizeStreamMessage(contentDiv, finalContent) {
-		if (!contentDiv) return;
-
-		// [ACCORDION PRESERVATION] Capture state before final render
-		const detailsStates = captureDetailsState(contentDiv);
-
-		// Final render with full markdown processing
-		contentDiv.innerHTML = renderer.render(finalContent);
-
-		// Final highlight pass
-		if (typeof hljs !== "undefined") {
-			contentDiv.querySelectorAll("pre code:not(.hljs)").forEach((block) => {
-				hljs.highlightElement(block);
-			});
-		}
-
-		// Final mermaid initialization
-		if (renderer.isMermaidReady) {
-			renderer.initializeMermaidDiagrams(contentDiv);
-		}
-
-		// Update copy button handler - use data-action instead of onclick
-		if (currentStreamMessage) {
-			const copyBtn = currentStreamMessage.querySelector(".copy-message-btn");
-			if (copyBtn) {
-				// Set data attribute for event delegation
-				copyBtn.setAttribute("data-action", "copy-message");
-				copyBtn.setAttribute("data-message-content", finalContent);
-			}
-			currentStreamMessage.removeAttribute("data-streaming");
-		}
-
-		// [ACCORDION PRESERVATION] Restore state after render
-		restoreDetailsState(contentDiv, detailsStates);
-	}
-
 	cleanupStreamState() {
 		setCurrentStreamMessage(null);
 		// Note: Session tracking is handled by BackgroundStreamManager.activeViewSessionId

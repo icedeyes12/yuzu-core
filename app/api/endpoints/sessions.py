@@ -6,7 +6,7 @@ from app.db import (
     get_all_sessions_async,
     get_active_session_async,
     get_chat_history_async,
-    get_session_memory_async,
+    get_memory_state_async,
     create_session_async,
     switch_session_async,
     rename_session_async,
@@ -116,9 +116,7 @@ async def api_switch_session(
         chat_history = await get_chat_history_async(
             session_id=request.session_id, user_id=user_id
         )
-        session_memory = await get_session_memory_async(
-            request.session_id, user_id=user_id
-        )
+        session_memory = await get_memory_state_async(request.session_id)
 
         return {
             "status": "success",
@@ -168,9 +166,7 @@ async def api_delete_session(
                 chat_history = await get_chat_history_async(
                     active_session["id"], user_id=user_id
                 )
-                session_memory = await get_session_memory_async(
-                    active_session["id"], user_id=user_id
-                )
+                session_memory = await get_memory_state_async(active_session["id"])
             else:
                 chat_history = []
                 session_memory = {}
@@ -217,7 +213,7 @@ async def api_end_session(request: Request, user_id: str = Depends(get_current_u
         client_id = get_client_id(request)
         SessionService.clear_client_session(client_id)
 
-        profile = await Database.get_profile_async(user_id)
+        profile = await Database.get_profile(user_id)
         await SessionService.end_session_cleanup_async(
             profile, interface="web", unexpected_exit=False, user_id=user_id
         )
@@ -231,7 +227,7 @@ async def api_get_session_memory(
     session_id: str, user_id: str = Depends(get_current_user)
 ):
     try:
-        session_memory = await get_session_memory_async(session_id, user_id=user_id)
+        session_memory = await get_memory_state_async(session_id)
         return {
             "status": "success",
             "session_id": session_id,

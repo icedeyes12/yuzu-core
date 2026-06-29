@@ -146,9 +146,11 @@ def _resolve_path(path: str) -> Path | None:
 
 def _get_partner_name(user_id: str | None = None) -> str:
     try:
-        from app.db import get_profile
+        from app.db.connection import pg_fetchone
+        from app.db.queries import SQL_PROFILE_SELECT_BY_ID, parse_profile_row
 
-        profile = get_profile(user_id) if user_id else {}
+        row = pg_fetchone(SQL_PROFILE_SELECT_BY_ID, (user_id,)) if user_id else None
+        profile = parse_profile_row(row) if row else {}
         return profile.get("partner_name", "Yuzu")
     except Exception:
         return "Yuzu"

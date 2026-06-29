@@ -35,7 +35,6 @@ class YuzuTUI(App):
     CSS_PATH = "styles/app.tcss"
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit", show=True),
-        Binding("ctrl+h", "toggle_help", "Help", show=True),
         Binding("ctrl+s", "toggle_session_sidebar", "Sessions", show=True),
         Binding("tab", "focus_next", "Next", show=False),
         Binding("shift+tab", "focus_previous", "Prev", show=False),
@@ -332,10 +331,6 @@ class YuzuTUI(App):
 
         # Reload history in background
         asyncio.create_task(self._load_history())
-
-    def action_toggle_help(self) -> None:
-        """Toggle help panel."""
-        self.bell()
 
     def action_toggle_session_sidebar(self) -> None:
         """Toggle session sidebar visibility (for mobile layout)."""

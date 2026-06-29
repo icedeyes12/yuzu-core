@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import logging
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
@@ -29,7 +28,7 @@ async def execute(arguments, **kwargs):
     from app.db import Database
     from app.memory.retrieval import retrieve_memory_async, format_memory
 
-    profile = await Database.get_profile_async(user_id) or {}
+    profile = await Database.get_profile(user_id) or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     query = arguments.get("query", "") or ""

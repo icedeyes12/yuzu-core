@@ -140,30 +140,6 @@ def _format_table(
     return "\n".join(lines)
 
 
-def _parse_psql_output(
-    output: str, columns: list[str] | None = None
-) -> tuple[list[dict], list[str]]:
-    if not output or not output.strip():
-        return [], columns or []
-
-    lines = output.strip().split("\n")
-    rows = []
-
-    for line in lines:
-        if not line.strip():
-            continue
-        values = line.split(",")
-        if columns:
-            row = {}
-            for i, col in enumerate(columns):
-                row[col] = values[i] if i < len(values) else None
-            rows.append(row)
-        else:
-            rows.append({"value": v} for v in values)
-
-    return rows, columns or ["value"]
-
-
 def execute(
     arguments: dict, session_id: str | None = None, tool_name: str = "sql"
 ) -> dict:
@@ -174,7 +150,7 @@ def execute(
             "Empty query. Provide a SQL query.",
             TOOL_DEFINITION,
             "/sql",
-            _get_partner_name(),
+            "Yuzu",
         )
 
     write_mode = query_arg.startswith("--write")
@@ -247,7 +223,7 @@ def execute(
             result_data,
             TOOL_DEFINITION,
             f"/sql {'--write ' if write_mode else ''}{query[:50]}{'...' if len(query) > 50 else ''}",
-            _get_partner_name(),
+            "Yuzu",
         )
 
     except subprocess.TimeoutExpired:
@@ -271,11 +247,4 @@ def execute(
         )
 
 
-def _get_partner_name() -> str:
-    try:
-        from app.db.db_queries import get_active_profile
 
-        profile = get_active_profile()
-        return profile.get("partner_name", "Yuzu")
-    except Exception:
-        return "Yuzu"

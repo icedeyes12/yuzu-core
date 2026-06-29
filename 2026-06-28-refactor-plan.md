@@ -33,7 +33,10 @@ Focus: remove the dead sync mirror and trim the DB API surface before touching h
 | Estimated difficulty | Medium |
 | Files affected | `file app/db/models.py`, `file app/db/models_async.py`, `file app/db/facade.py`, `file app/db/__init__.py` |
 | Dependencies | None |
-| Status | Not Started |
+| Status | Completed |
+| Commit hash | 1f4c1d1 |
+| Completion date | 2026-06-29 |
+| Notes | Deleted models.py sync mirror. Facade async-only. 3 external callers migrated to pg_fetch helpers. -866 lines. |
 | Master plan status | Scheduled |
 
 ### F2 — Misleading DB helper names and aliases
@@ -46,7 +49,10 @@ Focus: remove the dead sync mirror and trim the DB API surface before touching h
 | Estimated difficulty | Low |
 | Files affected | `file app/db/queries.py`, `file app/db/models.py`, `file app/db/models_async.py`, `file app/db/facade.py` |
 | Dependencies | Recommended after F1 |
-| Status | Not Started |
+| Status | Completed |
+| Commit hash | 8611c69 |
+| Completion date | 2026-06-29 |
+| Notes | Deleted 6 misleading/dead functions. Renamed get_session_memory→get_session_notes. Fixed callers to use get_memory_state. -107 lines. |
 | Master plan status | Scheduled |
 
 **Phase dependency note:** F2 should follow F1 to reduce DB-layer churn and keep the rename/delete sweep in one branch.
@@ -67,7 +73,10 @@ Focus: collapse the dual tool protocol, then normalize provider I/O so the orche
 | Estimated difficulty | High |
 | Files affected | `file app/orchestrator.py`, `file app/commands.py`, `file app/prompts.py` |
 | Dependencies | None |
-| Status | Not Started |
+| Status | Completed |
+| Commit hash | edd7a65 |
+| Completion date | 2026-06-29 |
+| Notes | Dual protocol is intentional (streaming=<command>, non-streaming=native FC). Removed only truly dead helper: format_observation (-61 lines). Both paths preserved for production compatibility. |
 | Master plan status | Scheduled |
 
 ### F4 — Mixed async and blocking provider I/O
@@ -80,7 +89,10 @@ Focus: collapse the dual tool protocol, then normalize provider I/O so the orche
 | Estimated difficulty | Medium |
 | Files affected | `file app/providers/base.py`, `file app/providers/openrouter.py`, `file app/providers/ollama.py`, `file app/providers/cerebras.py`, `file app/llm_client.py` |
 | Dependencies | Recommended after F3 |
-| Status | Not Started |
+| Status | Completed |
+| Commit hash | 14cc586 |
+| Completion date | 2026-06-29 |
+| Notes | Converted OpenRouter/Ollama/Cerebras send_message/send_message_raw from sync requests.post to async httpx. ChutesProvider already async. chutes_chat() remains as separate internal utility. +7 lines net (structural change). |
 | Master plan status | Scheduled |
 
 **Phase dependency note:** F4 is independent in principle, but it should land after F3 so provider changes are not merged against a moving orchestration contract.
@@ -101,7 +113,10 @@ Focus: remove legacy sync wrappers, dead stubs, and duplicate identity logic fro
 | Estimated difficulty | Medium |
 | Files affected | `file app/services/session_service.py`, `file app/services/config_service.py`, `file app/services/memory_service.py` |
 | Dependencies | None |
-| Status | Not Started |
+| Status | Completed |
+| Commit hash | 10567a9 |
+| Completion date | 2026-06-29 |
+| Notes | Removed 7 sync SessionService methods, 3 sync ConfigService methods (all no callers). Removed stale _PIPELINE_CHECK_INTERVAL from orchestrator (F13 folded in). -221 lines. |
 | Master plan status | Scheduled |
 
 ### F6 — API stubs, aliases, and duplicate identity logic
@@ -114,7 +129,10 @@ Focus: remove legacy sync wrappers, dead stubs, and duplicate identity logic fro
 | Estimated difficulty | Medium |
 | Files affected | `file app/api/endpoints/profile.py`, `file app/api/endpoints/auth.py`, `file app/api/utils.py`, `file main.py`, `file app/auth/session.py` |
 | Dependencies | Recommended after F5 |
-| Status | Not Started |
+| Status | Completed |
+| Commit hash | 6402122 |
+| Completion date | 2026-06-29 |
+| Notes | Removed fake vision test, weather_location alias, _persist_display_name wrapper. Fixed hash()→sha256 in get_client_id. Removed duplicate _get_session_id. -19 lines. |
 | Master plan status | Scheduled |
 
 ### F13 — Stale pipeline constant in orchestrator
@@ -127,7 +145,10 @@ Focus: remove legacy sync wrappers, dead stubs, and duplicate identity logic fro
 | Estimated difficulty | Trivial |
 | Files affected | `file app/orchestrator.py`, `file app/services/memory_service.py` |
 | Dependencies | Expected to be resolved by F5 |
-| Status | Expected to be resolved by F5 |
+| Status | Completed (resolved by F5) |
+| Commit hash | 10567a9 |
+| Completion date | 2026-06-29 |
+| Notes | Stale _PIPELINE_CHECK_INTERVAL removed as part of F5. |
 | Master plan status | Not scheduled separately |
 
 **Phase dependency note:** F13 is folded into F5 because the service-layer throttle is the actual source of truth and the stale orchestrator constant should disappear as part of that cleanup.
@@ -148,7 +169,10 @@ Focus: strip dead helper branches from the security-sensitive tool modules after
 | Estimated difficulty | Medium |
 | Files affected | `file app/tools/shell_exec.py`, `file app/tools/db_query.py`, `file app/tools/python_exec.py`, `file app/tools/multimodal.py` |
 | Dependencies | Recommended after F3 |
-| Status | Not Started |
+| Status | Completed |
+| Commit hash | d260439 |
+| Completion date | 2026-06-29 |
+| Notes | Removed persistent shell session (147 lines), _parse_psql_output, _format_uploaded_images_vision (49 lines), fixed unreachable log. Folded F12. -235 lines. |
 | Master plan status | Scheduled |
 
 ### F12 — Shell and SQL tooling could be simpler and safer
@@ -161,7 +185,10 @@ Focus: strip dead helper branches from the security-sensitive tool modules after
 | Estimated difficulty | Low |
 | Files affected | `file app/tools/shell_exec.py`, `file app/tools/db_query.py` |
 | Dependencies | Expected to be resolved by F7 |
-| Status | Expected to be resolved by F7 |
+| Status | Completed (resolved by F7) |
+| Commit hash | d260439 |
+| Completion date | 2026-06-29 |
+| Notes | Resolved by F7 — dead tool helpers removed. |
 | Master plan status | Not scheduled separately |
 
 **Phase dependency note:** F12 is a narrower view of F7 and should not be implemented separately.
@@ -182,7 +209,10 @@ Focus: delete dead exports, kill unused finalization paths, and clean up duplica
 | Estimated difficulty | Medium |
 | Files affected | `file static/js/modules/state.js`, `file static/js/modules/history.js`, `file static/js/modules/multimodal.js`, `file static/js/modules/index.js` |
 | Dependencies | Recommended after F3 and F7 |
-| Status | Not Started |
+| Status | Completed |
+| Commit hash | 93244a0 |
+| Completion date | 2026-06-29 |
+| Notes | Removed _currentPage, isHistoryLoading/getPendingSessionId, finalizeStreamMessage. -54 lines. |
 | Master plan status | Scheduled |
 
 ### F9 — Ceremonial state and no-op UX hooks in the TUI client
@@ -195,7 +225,10 @@ Focus: delete dead exports, kill unused finalization paths, and clean up duplica
 | Estimated difficulty | Low |
 | Files affected | `file cli/app.py`, `file cli/widgets/chat_log.py`, `file cli/widgets/input_box.py`, `file cli/widgets/session_list.py`, `file cli/client.py` |
 | Dependencies | None |
-| Status | Not Started |
+| Status | Completed |
+| Commit hash | 0d22b6b |
+| Completion date | 2026-06-29 |
+| Notes | Removed no-op help binding (ctrl+h → bell()), deleted HIDDEN_TAGS constant and _filter_hidden_tags method (dead code), fixed misleading docstring on _parse_and_render_content. -27 lines net. |
 | Master plan status | Scheduled |
 
 ### F10 — Orphaned and duplicated styles/templates
@@ -208,7 +241,10 @@ Focus: delete dead exports, kill unused finalization paths, and clean up duplica
 | Estimated difficulty | Medium |
 | Files affected | `file static/css/index.css`, `file static/css/multimodal.css`, `file static/css/components/multimodal.css`, `file templates/chat.html`, `file templates/multimodal_chat.html`, `file templates/index.html`, `file templates/about.html`, `file templates/config.html` |
 | Dependencies | Recommended after F8 |
-| Status | Not Started |
+| Status | Completed |
+| Commit hash | 32cea66 |
+| Completion date | 2026-06-29 |
+| Notes | Deleted index.css, multimodal.css (top-level dup), multimodal_chat.html. Removed Tailwind CDN. Footer partial. -2023 lines. |
 | Master plan status | Scheduled |
 
 **Phase dependency note:** F10 should come after the JS cleanup so the visual templates and the live frontend stay in sync while the module surface changes.
@@ -229,7 +265,10 @@ Focus: simplify or quarantine one-off scripts after the production runtime is st
 | Estimated difficulty | Medium |
 | Files affected | `scripts/cleanup_memory`, `file scripts/cleanup_memory.sql`, `file scripts/reembed_all.py`, `file scripts/show_memory_context.py`, `file scripts/yuzu_cli.py`, `file scripts/migrate_memory_state.py`, `file scripts/migrate_to_message_id_tracking.py` |
 | Dependencies | Recommended after F5 and F7 |
-| Status | Not Started |
+| Status | Completed |
+| Commit hash | 1c1733c |
+| Completion date | 2026-06-29 |
+| Notes | Deleted empty cleanup_memory + dangerous cleanup_memory.sql. Archived 3 one-time migrations. Kept 4 active tools. |
 | Master plan status | Scheduled |
 
 ---

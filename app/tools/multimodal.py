@@ -408,54 +408,6 @@ class MultimodalTools:
 
         return clean_text
 
-    def _format_uploaded_images_vision(
-        self, user_message: str, provider: str = None
-    ) -> List[Dict]:
-        import base64
-
-        parts = user_message.split("UPLOADED_IMAGES:")
-        if len(parts) < 2:
-            return [{"role": "user", "content": user_message}]
-
-        images_part = parts[1]
-
-        user_text = ""
-        image_paths = []
-
-        for line in images_part.split("\n"):
-            if line.startswith("USER_MESSAGE:"):
-                user_text = line.replace("USER_MESSAGE:", "").strip()
-            elif line.startswith("IMAGE_UPLOAD:"):
-                path = line.replace("IMAGE_UPLOAD:", "").strip()
-                image_paths.append(path)
-
-        content = [{"type": "text", "text": user_text or "Analyze these images"}]
-
-        for i, image_path in enumerate(image_paths[:3]):
-            try:
-                with open(image_path, "rb") as f:
-                    image_bytes = f.read()
-                    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-
-                if image_path.lower().endswith(".png"):
-                    mime_type = "image/png"
-                elif image_path.lower().endswith(".jpg") or image_path.lower().endswith(
-                    ".jpeg"
-                ):
-                    mime_type = "image/jpeg"
-                elif image_path.lower().endswith(".gif"):
-                    mime_type = "image/gif"
-                else:
-                    mime_type = "image/jpeg"
-
-                data_url = f"data:{mime_type};base64,{image_base64}"
-
-                content.append({"type": "image_url", "image_url": {"url": data_url}})
-
-            except Exception:
-                pass
-
-        return [{"role": "user", "content": content}]
 
     def detect_image_generation_request(
         self, text: str, is_ai_response: bool = False

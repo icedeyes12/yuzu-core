@@ -741,14 +741,7 @@ class TestTenantScopeGuard:
     @pytest.mark.asyncio
     async def test_async_add_message_rejects_empty_user_id(self):
         with pytest.raises(TenantScopeError):
-            await Database.add_message_async("user", "hi", user_id="")
-
-    def test_add_tool_result_now_requires_user_id(self):
-        # Regression: add_tool_result previously called _resolve_session_id
-        # with a single arg (TypeError at runtime). Now keyword-only user_id
-        # + guard — falsy user_id raises TenantScopeError instead.
-        with pytest.raises(TenantScopeError):
-            Database.add_tool_result("bash", "out", user_id="")
+            await Database.add_message("user", "hi", user_id="")
 
     def test_add_system_note_rejects_falsy_default(self):
         # Regression: add_system_note had `user_id: str = ""` (a falsy default
@@ -764,29 +757,29 @@ class TestTenantScopeGuard:
 class TestProfileIsolation:
     @pytest.mark.asyncio
     async def test_tenant_a_reads_own_profile(self, tenant_db):
-        profile = await Database.get_profile_async(TENANT_A)
+        profile = await Database.get_profile(TENANT_A)
         assert profile["id"] == TENANT_A
         assert profile["display_name"] == "Tenant A"
 
     @pytest.mark.asyncio
     async def test_tenant_b_reads_own_profile(self, tenant_db):
-        profile = await Database.get_profile_async(TENANT_B)
+        profile = await Database.get_profile(TENANT_B)
         assert profile["id"] == TENANT_B
         assert profile["display_name"] == "Tenant B"
 
     @pytest.mark.asyncio
     async def test_profiles_are_distinct(self, tenant_db):
-        a = await Database.get_profile_async(TENANT_A)
-        b = await Database.get_profile_async(TENANT_B)
+        a = await Database.get_profile(TENANT_A)
+        b = await Database.get_profile(TENANT_B)
         assert a["id"] != b["id"]
         assert a["display_name"] != b["display_name"]
 
     @pytest.mark.asyncio
     async def test_tenant_a_update_does_not_affect_tenant_b(self, tenant_db):
-        await Database.update_profile_async({"display_name": "Modified A"}, TENANT_A)
-        b = await Database.get_profile_async(TENANT_B)
+        await Database.update_profile({"display_name": "Modified A"}, TENANT_A)
+        b = await Database.get_profile(TENANT_B)
         assert b["display_name"] == "Tenant B"
-        a = await Database.get_profile_async(TENANT_A)
+        a = await Database.get_profile(TENANT_A)
         assert a["display_name"] == "Modified A"
 
 
@@ -796,35 +789,35 @@ class TestProfileIsolation:
 class TestSessionIsolation:
     @pytest.mark.asyncio
     async def test_tenant_a_sees_only_own_sessions(self, tenant_db):
-        sessions = await Database.get_all_sessions_async(TENANT_A)
+        sessions = await Database.get_all_sessions(TENANT_A)
         assert len(sessions) == 1
         assert sessions[0]["id"] == SESSION_A
 
     @pytest.mark.asyncio
     async def test_tenant_b_sees_only_own_sessions(self, tenant_db):
-        sessions = await Database.get_all_sessions_async(TENANT_B)
+        sessions = await Database.get_all_sessions(TENANT_B)
         assert len(sessions) == 1
         assert sessions[0]["id"] == SESSION_B
 
     @pytest.mark.asyncio
     async def test_tenant_a_active_session_is_own(self, tenant_db):
-        session = await Database.get_active_session_async(TENANT_A)
+        session = await Database.get_active_session(TENANT_A)
         assert session["id"] == SESSION_A
 
     @pytest.mark.asyncio
     async def test_tenant_b_active_session_is_own(self, tenant_db):
-        session = await Database.get_active_session_async(TENANT_B)
+        session = await Database.get_active_session(TENANT_B)
         assert session["id"] == SESSION_B
 
     @pytest.mark.asyncio
     async def test_tenant_a_cannot_delete_tenant_b_session(self, tenant_db):
-        await Database.delete_session_async(SESSION_B, TENANT_A)
+        await Database.delete_session(SESSION_B, TENANT_A)
         # Session_B must still exist and be undeleted
         assert tenant_db.sessions[SESSION_B]["deleted_at"] is None
 
     @pytest.mark.asyncio
     async def test_tenant_a_can_delete_own_session(self, tenant_db):
-        await Database.delete_session_async(SESSION_A, TENANT_A)
+        await Database.delete_session(SESSION_A, TENANT_A)
         assert tenant_db.sessions[SESSION_A]["deleted_at"] is not None
 
 
@@ -834,7 +827,7 @@ class TestSessionIsolation:
 class TestMessageIsolation:
     @pytest.mark.asyncio
     async def test_tenant_a_history_excludes_tenant_b(self, tenant_db):
-        history = await Database.get_chat_history_async(
+        history = await Database.get_chat_history(
             session_id=SESSION_A, user_id=TENANT_A
         )
         assert len(history) == 2
@@ -844,7 +837,7 @@ class TestMessageIsolation:
 
     @pytest.mark.asyncio
     async def test_tenant_b_history_excludes_tenant_a(self, tenant_db):
-        history = await Database.get_chat_history_async(
+        history = await Database.get_chat_history(
             session_id=SESSION_B, user_id=TENANT_B
         )
         assert len(history) == 2

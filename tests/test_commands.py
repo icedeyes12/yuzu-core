@@ -1,10 +1,8 @@
-
 from __future__ import annotations
 import pytest
 
 from app.commands import (
     execute_commands,
-    format_observation,
     has_tool_blocks,
     parse_image_path,
     parse_tool_blocks,
@@ -137,51 +135,6 @@ class TestHasToolBlocks:
 
     def test_returns_true_with_narration(self):
         assert has_tool_blocks("hello <command>cmd</command> world") is True
-
-
-class TestFormatObservation:
-    """Tests for the observation formatter."""
-
-    def test_single_success_result(self):
-        results = [
-            (
-                "bash",
-                {
-                    "ok": True,
-                    "data": {
-                        "command": "ls",
-                        "exit_code": 0,
-                        "stdout": "file1.txt\nfile2.txt",
-                        "stderr": "",
-                    },
-                },
-            )
-        ]
-        obs = format_observation(results)
-        assert "<SYSTEM_OBSERVATION>" in obs
-        assert "</SYSTEM_OBSERVATION>" in obs
-        assert "Command 1:" in obs
-        assert "TOOL: bash" in obs
-        assert "STATUS: SUCCESS" in obs
-        assert "COMMAND: ls" in obs
-        assert "EXIT_CODE: 0" in obs
-        assert "file1.txt" in obs
-
-    def test_multiple_results(self):
-        results = [
-            ("bash", {"ok": True, "data": {"exit_code": 0, "stdout": "ok"}}),
-            ("bash", {"ok": False, "error": "Command failed"}),
-        ]
-        obs = format_observation(results)
-        assert "Command 1:" in obs
-        assert "Command 2:" in obs
-        assert "STATUS: SUCCESS" in obs
-        assert "STATUS: FAILED" in obs
-        assert "ERROR: Command failed" in obs
-
-    def test_empty_results(self):
-        obs = format_observation([])
-        assert obs == ""
 
 
 class TestParseImagePath:

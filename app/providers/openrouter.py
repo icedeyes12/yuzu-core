@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import httpx
-import requests
 from typing import AsyncGenerator
 from app.providers.base import AIProvider
 from app.tools import multimodal_tools
@@ -110,7 +109,9 @@ class OpenRouterProvider(AIProvider):
 
         return headers, payload
 
-    def send_message(self, messages: list[dict], model: str, **kwargs) -> str | None:
+    async def send_message(
+        self, messages: list[dict], model: str, **kwargs
+    ) -> str | None:
         if model not in self.available_models:
             return None
 
@@ -120,12 +121,13 @@ class OpenRouterProvider(AIProvider):
                 f"[OpenRouter] {model} | max_tokens={payload['max_tokens'] or 'unlimited'}"
             )
 
-            response = requests.post(
-                self.resolve_base_url(self.base_url),
-                headers=headers,
-                json=payload,
-                timeout=kwargs.get("timeout", 180),
-            )
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    self.resolve_base_url(self.base_url),
+                    headers=headers,
+                    json=payload,
+                    timeout=kwargs.get("timeout", 180),
+                )
 
             if response.status_code == 200:
                 result = response.json()
@@ -142,7 +144,7 @@ class OpenRouterProvider(AIProvider):
         except Exception:
             return None
 
-    def send_message_raw(
+    async def send_message_raw(
         self, messages: list[dict], model: str, **kwargs
     ) -> dict | None:
         if model not in self.available_models:
@@ -150,12 +152,13 @@ class OpenRouterProvider(AIProvider):
 
         try:
             headers, payload = self._prepare_payload(messages, model, False, **kwargs)
-            response = requests.post(
-                self.resolve_base_url(self.base_url),
-                headers=headers,
-                json=payload,
-                timeout=kwargs.get("timeout", 180),
-            )
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    self.resolve_base_url(self.base_url),
+                    headers=headers,
+                    json=payload,
+                    timeout=kwargs.get("timeout", 180),
+                )
 
             if response.status_code == 200:
                 result = response.json()

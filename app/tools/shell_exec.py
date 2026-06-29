@@ -1,10 +1,8 @@
-
 from __future__ import annotations
 
 import os
 import re
 import shutil
-import subprocess
 import logging
 import time
 import asyncio
@@ -68,154 +66,6 @@ if not Path(BASH_EXECUTABLE).exists():
 DEFAULT_CWD = Path(os.environ.get("HOME", "")) or Path.cwd()
 
 
-_persistent_process: subprocess.Popen | None = None
-_session_cwd: Path = DEFAULT_CWD
-
-
-def _get_persistent_session() -> subprocess.Popen:
-    """Get or create a persistent bash process for the current orchestration cycle."""
-    global _persistent_process
-
-    if _persistent_process is None or _persistent_process.poll() is not None:
-        # Create new persistent bash process
-        _persistent_process = subprocess.Popen(
-            ["bash", "--noediting", "-i"],  # interactive for session persistence
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=str(_session_cwd),
-        )
-        logger.info(
-            "created persistent shell session (pid=%d)", _persistent_process.pid
-        )
-
-    return _persistent_process
-
-
-def _execute_in_session(
-    command: str, timeout: float = DEFAULT_TIMEOUT
-) -> tuple[int, str, str]:
-    """Execute a command in the persistent session.
-
-    Returns (exit_code, stdout, stderr).
-    """
-    global _session_cwd
-
-    proc = _get_persistent_session()
-
-    try:
-        # Write command with echo markers for parsing output
-        marker_start = "__YUZU_OUTPUT_START__"
-        marker_end = "__YUZU_OUTPUT_END__"
-        exit_code_var = "__YUZU_EXIT_CODE__"
-
-        full_command = f'echo "{marker_start}"; {command}; {exit_code_var}=$?; echo "{marker_end}"; echo "{exit_code_var}:${{{exit_code_var}}}"; cd "$PWD" > /dev/null 2>&1\n'
-
-        proc.stdin.write(full_command)
-        proc.stdin.flush()
-
-        # Read output with timeout
-        import threading
-
-        output_buffer: list[str] = []
-        error_buffer: list[str] = []
-
-        def read_output():
-            try:
-                while True:
-                    line = proc.stdout.readline()
-                    if not line:
-                        break
-                    output_buffer.append(line)
-                    if marker_end in line:
-                        break
-            except Exception:
-                pass
-
-        def read_error():
-            try:
-                while True:
-                    line = proc.stderr.readline()
-                    if not line:
-                        break
-                    error_buffer.append(line)
-            except Exception:
-                pass
-
-        output_thread = threading.Thread(target=read_output)
-        error_thread = threading.Thread(target=read_error)
-        output_thread.daemon = True
-        error_thread.daemon = True
-
-        output_thread.start()
-        error_thread.start()
-
-        output_thread.join(timeout=timeout)
-        error_thread.join(timeout=0.5)
-
-        # Parse output
-        full_output = "".join(output_buffer)
-        full_error = "".join(error_buffer)
-
-        # Extract content between markers
-        exit_code = 0
-        stdout = full_output
-
-        if marker_start in full_output and marker_end in full_output:
-            start_idx = full_output.index(marker_start) + len(marker_start)
-            end_idx = full_output.index(marker_end)
-            stdout = full_output[start_idx:end_idx].strip()
-
-            # Try to extract exit code
-            exit_code_line = [
-                line for line in full_output.split("\n") if f"{exit_code_var}:" in line
-            ]
-            if exit_code_line:
-                try:
-                    exit_code = int(exit_code_line[0].split(":")[-1].strip())
-                except (ValueError, IndexError):
-                    pass
-
-        # Update session cwd if cd was successful
-        # This is a best-effort; the shell's actual cwd is what matters
-        if command.strip().startswith("cd ") and exit_code == 0:
-            try:
-                new_dir = command.strip()[3:].strip()
-                if new_dir:
-                    _session_cwd = (_session_cwd / new_dir).resolve()
-            except Exception:
-                pass
-
-        return exit_code, stdout, full_error
-
-    except Exception as e:
-        logger.error("session execution error: %s", e)
-        return 1, "", str(e)
-
-
-def reset_session():
-    """Reset the persistent shell session.
-
-    Should be called after each orchestration cycle completes.
-    """
-    global _persistent_process, _session_cwd
-
-    if _persistent_process is not None:
-        try:
-            _persistent_process.terminate()
-            _persistent_process.wait(timeout=2)
-        except Exception:
-            try:
-                _persistent_process.kill()
-            except Exception:
-                pass
-        _persistent_process = None
-
-    _session_cwd = DEFAULT_CWD
-    logger.info("shell session reset")
-
-
 def _is_dangerous(command: str) -> tuple[bool, str]:
     if DANGEROUS_REGEX.search(command):
         return True, "Command matches dangerous pattern blocklist"
@@ -237,7 +87,7 @@ async def _get_partner_name_async(user_id: str | None = None) -> str:
     try:
         from app.db import Database
 
-        profile = await Database.get_profile_async(user_id) or {}
+        profile = await Database.get_profile(user_id) or {}
         return profile.get("partner_name", "Yuzu")
     except Exception:
         return "Yuzu"

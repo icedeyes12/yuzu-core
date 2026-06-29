@@ -313,7 +313,7 @@ async def _get_partner_name_async(user_id: str | None = None) -> str:
     try:
         from app.db import Database
 
-        profile = await Database.get_profile_async(user_id) if user_id else {}
+        profile = await Database.get_profile(user_id) if user_id else {}
         return profile.get("partner_name", "Yuzu")
     except Exception:
         return "Yuzu"

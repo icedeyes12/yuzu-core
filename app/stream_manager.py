@@ -77,7 +77,7 @@ class StreamBuffer:
                 final_content = f"{content}\n\n*[Stream Interrupted/Error]*"
 
             # Single insert - no placeholder, direct final content
-            await Database.add_message_async(
+            await Database.add_message(
                 "assistant",
                 final_content,
                 session_id=self.session_id,

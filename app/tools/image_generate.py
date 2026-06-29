@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import logging
 import os
@@ -42,7 +41,7 @@ async def execute(arguments, **kwargs):
             "Yuzu",
         )
 
-    profile = await Database.get_profile_async(kwargs.get("user_id")) or {}
+    profile = await Database.get_profile(kwargs.get("user_id")) or {}
     partner_name = profile.get("partner_name", "Yuzu")
 
     try:
@@ -125,7 +124,7 @@ async def execute(arguments, **kwargs):
 
     except Exception as e:
         logger.debug(f"[IMAGE TOOL] Exception: {str(e)}")
-        profile = await Database.get_profile_async(kwargs.get("user_id")) or {}
+        profile = await Database.get_profile(kwargs.get("user_id")) or {}
         partner_name = profile.get("partner_name", "Yuzu")
         return error_result(
             "Image generation failed. Please try again later.",
