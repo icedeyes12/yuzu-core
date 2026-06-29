@@ -174,6 +174,7 @@ async def _send_to_provider(
     messages: list[dict[str, Any]],
     *,
     source: str = "chat",
+    suppress_tools: bool = False,
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single LLM dispatch with timing log. Returns (text, raw_response)."""
     ai_manager = await get_ai_manager()
@@ -221,6 +222,7 @@ async def generate_ai_response(
     session_id: str | None = None,
     ephemeral_context: list[dict[str, str]] | None = None,
     is_tool_loop: bool = False,
+    suppress_tools: bool = False,
     user_id: str | None = None,
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single (text, raw_response) AI generation pass.
@@ -228,6 +230,9 @@ async def generate_ai_response(
     raw_response is the full API response dict, used for tool-call parsing.
     ephemeral_context: In-memory context (assistant tool calls + results)
     not yet persisted to DB. Stitched after build_messages() for synthesis.
+    suppress_tools: If True, strip tool definitions from provider call and
+    remove tool docs from system prompt. Used for synthesis/final passes to
+    prevent the model from re-invoking tools.
     """
     if session_id is None:
         session_id = (await Database.get_active_session_async(user_id))["id"]
@@ -235,7 +240,8 @@ async def generate_ai_response(
     provider, model = _resolve_provider(profile, None, None)
 
     messages = await build_messages(
-        profile, session_id, interface, user_message, user_id, include_image_paths=True
+        profile, session_id, interface, user_message, user_id,
+        include_image_paths=True, suppress_tools=suppress_tools,
     )
 
     if ephemeral_context:
@@ -246,6 +252,7 @@ async def generate_ai_response(
         model,
         messages,
         source="chat",
+        suppress_tools=suppress_tools,
     )
     return text, raw
 
@@ -256,6 +263,7 @@ async def _stream_from_provider(
     messages: list[dict[str, Any]],
     *,
     source: str = "chat",
+    suppress_tools: bool = False,
 ) -> AsyncIterator[str]:
     """Yield raw chunks from the provider's streaming API."""
     ai_manager = await get_ai_manager()
@@ -263,7 +271,8 @@ async def _stream_from_provider(
     received = 0
     try:
         async for chunk in ai_manager.send_message_streaming(
-            provider, model, messages, source=source, timeout=180
+            provider, model, messages, source=source, timeout=180,
+            suppress_tools=suppress_tools,
         ):
             if chunk:
                 received += len(chunk)
@@ -287,16 +296,23 @@ async def generate_ai_response_streaming(
     model: str | None = None,
     ephemeral_context: list[dict[str, str]] | None = None,
     is_tool_loop: bool = False,
+    suppress_tools: bool = False,
     user_id: str | None = None,
 ) -> AsyncIterator[str]:
-    """Stream a response from the configured provider chunk by chunk."""
+    """Stream a response from the configured provider chunk by chunk.
+
+    suppress_tools: If True, strip tool definitions from provider call and
+    remove tool docs from system prompt. Used for synthesis/final passes to
+    prevent the model from re-invoking tools.
+    """
     if session_id is None:
         session_id = (await Database.get_active_session_async(user_id))["id"]
 
     resolved_provider, resolved_model = _resolve_provider(profile, provider, model)
 
     messages = await build_messages(
-        profile, session_id, interface, user_message, user_id, include_image_paths=True
+        profile, session_id, interface, user_message, user_id,
+        include_image_paths=True, suppress_tools=suppress_tools,
     )
 
     if ephemeral_context:
@@ -307,5 +323,6 @@ async def generate_ai_response_streaming(
         resolved_model,
         messages,
         source="chat",
+        suppress_tools=suppress_tools,
     ):
         yield chunk

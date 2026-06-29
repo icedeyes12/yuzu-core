@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 from pathlib import Path
@@ -188,6 +189,100 @@ async def _execute_tool_calls_async(
     return results
 
 
+def _build_ephemeral_context(
+    assistant_text: str | None,
+    tool_results: list[tuple[str, dict]],
+    tool_calls: list[dict] | None = None,
+) -> list[dict[str, Any]]:
+    """Build ephemeral messages representing assistant tool_calls + tool results.
+
+    These messages are appended to the LLM payload during synthesis so the
+    model sees the full conversation including what was just executed.
+    They are NOT persisted to DB — only used for the current turn.
+    """
+    messages: list[dict[str, Any]] = []
+
+    if not tool_calls and not tool_results:
+        return messages
+
+    # Build assistant message with tool_calls
+    if tool_calls:
+        assistant_msg: dict[str, Any] = {
+            "role": "assistant",
+            "content": assistant_text or None,
+            "tool_calls": [
+                {
+                    "id": tc.get("id", f"call_{i}"),
+                    "type": "function",
+                    "function": {
+                        "name": bc["name"],
+                        "arguments": json.dumps(bc.get("arguments", {})),
+                    },
+                }
+                for i, bc in enumerate(tool_calls)
+            ],
+        }
+        messages.append(assistant_msg)
+
+    # Build tool result messages
+    if tool_calls:
+        # Match results to tool_calls by index
+        for i, tc in enumerate(tool_calls):
+            tc_id = tc.get("id", f"call_{i}")
+            result_text = ""
+            if i < len(tool_results):
+                _, result = tool_results[i]
+                result_text = result.get("markdown", str(result))
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc_id,
+                "content": result_text,
+            })
+    else:
+        # Fallback: no tool_calls info, just add results as tool role
+        for tool_name, result in tool_results:
+            result_text = result.get("markdown", str(result))
+            messages.append({
+                "role": "tool",
+                "content": result_text,
+            })
+
+    return messages
+
+
+def _build_streaming_ephemeral_context(
+    clean_text: str,
+    combined_tool_markdown: str,
+) -> list[dict[str, Any]]:
+    """Build ephemeral context for the streaming path.
+
+    The streaming path parses <command> blocks from text (no native tool_calls).
+    We reconstruct a minimal conversation snippet so the LLM synthesis sees:
+    - assistant text (clean text with tool blocks stripped)
+    - observation (tool results as a user message)
+
+    This is a simplified version of _build_ephemeral_context for the streaming
+    path where we don't have structured tool_calls.
+    """
+    messages: list[dict[str, Any]] = []
+
+    # Assistant message (clean text without tool blocks)
+    if clean_text and clean_text.strip():
+        messages.append({
+            "role": "assistant",
+            "content": clean_text.strip(),
+        })
+
+    # Tool results as a synthetic user message
+    if combined_tool_markdown and combined_tool_markdown.strip():
+        messages.append({
+            "role": "user",
+            "content": f"[Tool execution result]\n{combined_tool_markdown.strip()}",
+        })
+
+    return messages
+
+
 def _clean(text: str) -> str:
     return _TIMESTAMP_SUFFIX.sub("", text).strip()
 
@@ -205,33 +300,61 @@ async def _persist_user_async(
 
 
 async def _persist_assistant_async(
-    content: str, session_id: str, image_paths: list[str] | None = None, *, user_id: str
+    content: str,
+    session_id: str,
+    image_paths: list[str] | None = None,
+    *,
+    user_id: str,
+    tool_calls: list[dict[str, Any]] | None = None,
 ) -> None:
-    """Persist an assistant response, with optional image paths (async)."""
+    """Persist an assistant response, with optional image paths and tool_calls (async)."""
     await Database.add_message_async(
         "assistant",
         content,
         session_id=session_id,
         image_paths=image_paths,
         user_id=user_id,
+        tool_calls=tool_calls,
     )
 
 
 async def _persist_tool_result_async(
-    tool_name: str, markdown: str, session_id: str, *, user_id: str
+    tool_name: str,
+    markdown: str,
+    session_id: str,
+    *,
+    user_id: str,
+    tool_call_id: str | None = None,
 ) -> None:
-    """Persist a tool result (async)."""
+    """Persist a tool result (async).
+
+    If tool_call_id is provided, the role is normalized to "tool" (OpenAI format)
+    and the message is linked to the assistant's tool_call.
+    Without tool_call_id (legacy path), falls back to tool-specific role.
+    """
     image_paths = []
     if path := parse_image_path(markdown):
         image_paths.append(path)
 
-    await Database.add_message_async(
-        get_tool_role(tool_name),
-        markdown,
-        session_id=session_id,
-        image_paths=image_paths or None,
-        user_id=user_id,
-    )
+    if tool_call_id:
+        # OpenAI format: role="tool", link via tool_call_id
+        await Database.add_message_async(
+            "tool",
+            markdown,
+            session_id=session_id,
+            image_paths=image_paths or None,
+            user_id=user_id,
+            tool_call_id=tool_call_id,
+        )
+    else:
+        # Legacy fallback
+        await Database.add_message_async(
+            get_tool_role(tool_name),
+            markdown,
+            session_id=session_id,
+            image_paths=image_paths or None,
+            user_id=user_id,
+        )
 
 
 async def _persist_observation_async(
@@ -249,15 +372,23 @@ async def _run_synthesis_async(
     interface: str,
     tool_markdown: str,
     user_id: str | None = None,
+    ephemeral_context: list[dict[str, Any]] | None = None,
 ) -> str | None:
-    """Run a 2nd LLM pass to narrate around the tool result."""
+    """Run a 2nd LLM pass to narrate around the tool result.
+
+    ephemeral_context: in-memory messages (assistant tool_calls + tool results)
+    not yet persisted to DB. Appended to build_messages() output so the LLM
+    sees the full conversation including the tool that was just executed.
+    """
     text, _ = await generate_ai_response(
         profile,
         "",
         interface,
         session_id,
         is_tool_loop=True,
+        suppress_tools=True,
         user_id=user_id,
+        ephemeral_context=ephemeral_context,
     )
     if not text or not text.strip():
         return None
@@ -271,15 +402,23 @@ async def _stream_synthesis_async(
     interface: str,
     tool_markdown: str,
     user_id: str | None = None,
+    ephemeral_context: list[dict[str, Any]] | None = None,
 ) -> AsyncIterator[str]:
-    """Stream the 2nd LLM pass."""
+    """Stream the 2nd LLM pass.
+
+    ephemeral_context: in-memory messages (assistant tool_calls + tool results)
+    not yet persisted to DB. Appended to build_messages() output so the LLM
+    sees the full conversation including the tool that was just executed.
+    """
     async for chunk in generate_ai_response_streaming(
         profile,
         "",
         interface,
         session_id,
         is_tool_loop=True,
+        suppress_tools=True,
         user_id=user_id,
+        ephemeral_context=ephemeral_context,
     ):
         yield chunk
 
@@ -378,6 +517,7 @@ async def _run_orchestration_loop_async(
     active_session: dict[str, Any],
     *,
     user_id: str,
+    ephemeral_context: list[dict[str, Any]] | None = None,
 ) -> AsyncIterator[str]:
     """Run the orchestration loop for synthesis with tool block detection."""
     loop_count = 0
@@ -400,6 +540,7 @@ async def _run_orchestration_loop_async(
                 interface,
                 current_synthesis_context,
                 user_id=user_id,
+                ephemeral_context=ephemeral_context,
             ):
                 if chunk:
                     if abort_check and abort_check():
@@ -573,9 +714,9 @@ async def handle_user_message(
                 if path:
                     generated_paths.append(path)
 
-            # Run synthesis
+            # Run synthesis — single source of truth from DB history
             synthesis = await _run_synthesis_async(
-                profile, session_id, interface, combined, user_id=user_id
+                profile, session_id, interface, combined, user_id=user_id,
             )
             if synthesis:
                 await _persist_assistant_async(
@@ -630,55 +771,67 @@ async def handle_user_message(
             tool_calls, session_id, user_id=user_id
         )
 
-        if text_response and text_response.strip():
-            await _persist_assistant_async(text_response, session_id, user_id=user_id)
+        # Build OpenAI-format tool_calls JSON for persistence
+        tool_calls_json = [
+            {
+                "id": tc.get("id", f"call_{i}"),
+                "type": "function",
+                "function": {
+                    "name": tc["name"],
+                    "arguments": json.dumps(tc.get("arguments", {})),
+                },
+            }
+            for i, tc in enumerate(tool_calls)
+        ]
 
-        if tool_results:
-            tool_name, tool_result = tool_results[0]
+        # Persist assistant message WITH tool_calls
+        await _persist_assistant_async(
+            text_response, session_id, user_id=user_id,
+            tool_calls=tool_calls_json,
+        )
+
+        # Persist tool results WITH tool_call_id
+        all_generated_paths: list[str] = []
+        for i, (tool_name, tool_result) in enumerate(tool_results):
+            tc_id = tool_calls[i].get("id", f"call_{i}")
             tool_markdown = tool_result.get("markdown", str(tool_result))
+            if p := parse_image_path(tool_markdown):
+                all_generated_paths.append(p)
             await _persist_tool_result_async(
-                tool_name, tool_markdown, session_id, user_id=user_id
+                tool_name, tool_markdown, session_id,
+                user_id=user_id, tool_call_id=tc_id,
             )
 
-            is_image_tool = parse_image_path(tool_markdown) is not None
-            generated_paths = (
-                [parse_image_path(tool_markdown)] if is_image_tool else None
+        # Now synthesis — single source of truth from DB history
+        # No ephemeral context needed since history is correct
+        synthesis = await _run_synthesis_async(
+            profile, session_id, interface, "", user_id=user_id,
+        )
+
+        if synthesis:
+            await _persist_assistant_async(
+                synthesis, session_id, all_generated_paths or None, user_id=user_id
             )
-
-            synthesis = await _run_synthesis_async(
-                profile,
-                session_id,
-                interface,
-                tool_markdown,
-                user_id=user_id,
-            )
-
-            if synthesis:
-                await _persist_assistant_async(
-                    synthesis, session_id, generated_paths, user_id=user_id
-                )
-                final_response = (
-                    f"{tool_markdown}\n\n{synthesis}" if is_image_tool else synthesis
-                )
-                await _post_turn_async(
-                    profile,
-                    user_message,
-                    synthesis,
-                    session_id,
-                    active_session,
-                    user_id=user_id,
-                )
-                return final_response  # CLI display; DB has discrete messages
-
+            final_response = synthesis
             await _post_turn_async(
                 profile,
                 user_message,
-                tool_markdown,
+                synthesis,
                 session_id,
                 active_session,
                 user_id=user_id,
             )
-            return tool_markdown
+            return final_response
+
+        await _post_turn_async(
+            profile,
+            user_message,
+            "",
+            session_id,
+            active_session,
+            user_id=user_id,
+        )
+        return ""
 
     await _persist_assistant_async(text_response, session_id, user_id=user_id)
     await _post_turn_async(
@@ -924,6 +1077,12 @@ async def handle_user_message_streaming(
         )
         return
 
+    # Build ephemeral context for synthesis: assistant text + tool results
+    # so the LLM sees what was just executed
+    ephemeral_ctx = _build_streaming_ephemeral_context(
+        clean_text, combined_tool_markdown
+    )
+
     async for chunk in _run_orchestration_loop_async(
         profile=profile,
         session_id=session_id,
@@ -935,6 +1094,7 @@ async def handle_user_message_streaming(
         user_message=user_message,
         active_session=active_session,
         user_id=user_id,
+        ephemeral_context=ephemeral_ctx,
     ):
         yield chunk
 

@@ -272,8 +272,9 @@ class AIProvider:
         self, messages: list[dict], model: str, source: str = "llm", **kwargs
     ) -> AsyncGenerator[str, None]:
         """Yield raw chunks from the provider. Default delegates to abstract impl."""
+        suppress_tools = kwargs.get("suppress_tools", False)
         async for chunk in self._send_message_streaming_impl(
-            messages, model, source=source, **kwargs
+            messages, model, source=source, suppress_tools=suppress_tools, **kwargs
         ):
             yield chunk
 

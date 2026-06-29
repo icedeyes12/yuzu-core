@@ -21,7 +21,7 @@ class TestSessionIdResolution:
     def test_uses_explicit_session_id(self, monkeypatch):
         captured = {}
 
-        def fake_add_message(session_id, role, content, image_paths, user_id):
+        def fake_add_message(session_id, role, content, image_paths, user_id, **kwargs):
             captured["session_id"] = session_id
             captured["role"] = role
             captured["content"] = content
@@ -44,7 +44,7 @@ class TestSessionIdResolution:
     def test_falls_back_to_active_session(self, monkeypatch, fake_active):
         captured = {}
 
-        def fake_add_message(session_id, role, content, image_paths, user_id):
+        def fake_add_message(session_id, role, content, image_paths, user_id, **kwargs):
             captured["session_id"] = session_id
             return 1
 

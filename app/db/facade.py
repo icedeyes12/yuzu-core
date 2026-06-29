@@ -257,6 +257,8 @@ class Database:
         image_paths: list[str] | None = None,
         *,
         user_id: str,
+        tool_calls: list[dict[str, Any]] | None = None,
+        tool_call_id: str | None = None,
     ) -> int | None:
         """Add a message to a session (defaults to active session)."""
         _require_user_id("add_message", user_id)
@@ -266,6 +268,8 @@ class Database:
             content,
             image_paths,
             user_id=user_id,
+            tool_calls=tool_calls,
+            tool_call_id=tool_call_id,
         )
 
     @staticmethod
@@ -276,6 +280,8 @@ class Database:
         image_paths: list[str] | None = None,
         *,
         user_id: str,
+        tool_calls: list[dict[str, Any]] | None = None,
+        tool_call_id: str | None = None,
     ) -> int | None:
         """Add a message to a session (defaults to active session)."""
         _require_user_id("add_message_async", user_id)
@@ -285,6 +291,8 @@ class Database:
             content,
             image_paths,
             user_id=user_id,
+            tool_calls=tool_calls,
+            tool_call_id=tool_call_id,
         )
 
     @staticmethod

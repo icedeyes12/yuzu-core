@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from app.db.connection import PgSession, pg_execute, pg_fetchall, pg_fetchone
 from app.db.queries import (
@@ -329,6 +330,8 @@ def add_message(
     image_paths: list[str] | None = None,
     *,
     user_id: str,
+    tool_calls: list[dict[str, Any]] | None = None,
+    tool_call_id: str | None = None,
 ) -> int | None:
     """Insert a message row, bump the session's message_count, return id.
 
@@ -336,6 +339,7 @@ def add_message(
     """
     try:
         paths_json = json.dumps(image_paths or [])
+        tool_calls_json = json.dumps(tool_calls) if tool_calls else None
         with PgSession() as s:
             row = s.execute_returning(
                 SQL_MESSAGE_INSERT,
@@ -345,6 +349,8 @@ def add_message(
                     role,
                     content,
                     paths_json,
+                    tool_calls_json,
+                    tool_call_id,
                 ),  # timestamp handled by DB
             )
             if row:

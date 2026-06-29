@@ -171,8 +171,9 @@ class OpenRouterProvider(AIProvider):
             )
             return None
 
-    async def send_message_streaming(
-        self, messages: list[dict], model: str, **kwargs
+    async def _send_message_streaming_impl(
+        self, messages: list[dict], model: str, source: str = "llm",
+        suppress_tools: bool = False, **kwargs
     ) -> AsyncGenerator[str, None]:
         if model not in self.available_models:
             yield ""
@@ -180,6 +181,9 @@ class OpenRouterProvider(AIProvider):
 
         try:
             headers, payload = self._prepare_payload(messages, model, True, **kwargs)
+            if suppress_tools:
+                payload.pop("tools", None)
+                payload.pop("tool_choice", None)
             async with httpx.AsyncClient() as client:
                 async with client.stream(
                     "POST",

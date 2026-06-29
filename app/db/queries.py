@@ -511,12 +511,12 @@ def decrypt_api_key_rows(rows: list[dict]) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 SQL_MESSAGE_INSERT = """
-INSERT INTO messages (session_id, user_id, role, content, image_paths, timestamp, content_encrypted)
-VALUES (%s, %s, %s, %s, %s, NOW(), FALSE) RETURNING id, timestamp
+INSERT INTO messages (session_id, user_id, role, content, image_paths, tool_calls, tool_call_id, timestamp, content_encrypted)
+VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), FALSE) RETURNING id, timestamp
 """
 
 SQL_MESSAGE_SELECT_ASC_LIMIT = """
-SELECT id, session_id, role, content, image_paths, timestamp
+SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, timestamp
 FROM messages
 WHERE session_id = %s
 ORDER BY timestamp ASC
@@ -524,7 +524,7 @@ LIMIT %s
 """
 
 SQL_MESSAGE_SELECT_DESC_LIMIT = """
-SELECT id, session_id, role, content, image_paths, timestamp
+SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, timestamp
 FROM messages
 WHERE session_id = %s
 ORDER BY timestamp DESC
@@ -532,7 +532,7 @@ LIMIT %s
 """
 
 SQL_MESSAGE_SELECT_ASC_ALL = """
-SELECT id, session_id, role, content, image_paths, timestamp
+SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, timestamp
 FROM messages
 WHERE session_id = %s
 ORDER BY timestamp ASC
@@ -540,7 +540,7 @@ ORDER BY timestamp ASC
 
 # Query messages after a specific ID (for memory pipeline ID-based tracking)
 SQL_MESSAGE_SELECT_AFTER_ID = """
-SELECT id, session_id, role, content, image_paths, timestamp
+SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, timestamp
 FROM messages
 WHERE session_id = %s AND id > %s
 ORDER BY id ASC
@@ -624,6 +624,8 @@ def parse_message_row(row: dict) -> dict:
         "role": row.get("role"),
         "content": row.get("content"),
         "image_paths": parse_json(row.get("image_paths", "[]")),
+        "tool_calls": parse_json(row.get("tool_calls", "null")),
+        "tool_call_id": row.get("tool_call_id"),
         "timestamp": str(row.get("timestamp", "")),
     }
 
@@ -716,13 +718,38 @@ def format_ai_history_rows(
     if not filtered_rows:
         return []
 
-    formatted: list[dict] = []
+    formatted: list[dict[str, Any]] = []
     for msg in filtered_rows:
         role = msg.get("role", "")
         content = msg.get("content", "")
         image_paths = parse_json(msg.get("image_paths", "[]"))
+        tool_calls_raw = msg.get("tool_calls")
+        tool_call_id = msg.get("tool_call_id")
 
         if role == "event_log":
+            continue
+
+        # Normalize to OpenAI chat completion format
+        # tool_call_id present → this is a tool result message
+        if tool_call_id:
+            entry: dict[str, Any] = {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": content,
+            }
+            formatted.append(entry)
+            continue
+
+        # tool_calls present → this is an assistant message with tool calls
+        if tool_calls_raw and role == "assistant":
+            entry = {
+                "role": "assistant",
+                "content": content or None,
+                "tool_calls": tool_calls_raw,
+            }
+            if include_image_paths and image_paths:
+                entry["image_paths"] = image_paths
+            formatted.append(entry)
             continue
 
         if role == "user":
@@ -734,10 +761,9 @@ def format_ai_history_rows(
         elif role in ("assistant", "system"):
             entry = {"role": role, "content": content}
         elif role in ALL_TOOL_ROLES:
-            # Strip tool-contract markdown and keep only the raw result
-            # so the AI can actually read the tool output.
+            # Legacy tool result without tool_call_id → normalize to "tool"
             raw = extract_raw_result_from_markdown_contract(content)
-            entry = {"role": role, "content": raw}
+            entry = {"role": "tool", "content": raw}
         else:
             entry = {"role": role, "content": content}
 

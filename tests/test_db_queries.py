@@ -243,7 +243,8 @@ class TestFormatAiHistoryRows:
         rows = [{"role": "image_tools", "content": contract, "timestamp": ""}]
         out = format_ai_history_rows(rows)
         assert len(out) == 1
-        assert out[0]["role"] == "image_tools"
+        # Tool roles are normalized to OpenAI "tool" format
+        assert out[0]["role"] == "tool"
         assert out[0]["content"] == "image_url"
 
 

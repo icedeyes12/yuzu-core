@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from app.db.connection import (
     AsyncPgSession,
@@ -344,6 +345,8 @@ async def add_message_async(
     image_paths: list[str] | None = None,
     *,
     user_id: str,
+    tool_calls: list[dict[str, Any]] | None = None,
+    tool_call_id: str | None = None,
 ) -> int | None:
     """Insert a message row, bump the session's message_count, return id.
 
@@ -352,11 +355,12 @@ async def add_message_async(
     import json
 
     paths_json = json.dumps(image_paths or [])
+    tool_calls_json = json.dumps(tool_calls) if tool_calls else None
     try:
         async with AsyncPgSession() as s:
             row = await s.execute_returning(
                 SQL_MESSAGE_INSERT,
-                (session_id, user_id, role, content, paths_json),
+                (session_id, user_id, role, content, paths_json, tool_calls_json, tool_call_id),
             )
             if row:
                 await increment_message_count_async(session_id)
