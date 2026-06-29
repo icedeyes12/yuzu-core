@@ -285,21 +285,119 @@ The current audit report is therefore **incomplete**. The remaining work is conc
 
 ---
 
+## Phase 3 — Continued audit of remaining surfaces
+
+### 26. MEDIUM: `get_client_id()` uses Python's salted `hash()` and is not stable across restarts
+
+- **File:** `app/api/utils.py`
+- **Lines:** 7–10
+- **What's wrong:** `get_client_id()` builds the client key from `request.client.host` plus `hash(user_agent) % 10000`. Python's `hash()` is salted per process, so the same user agent can produce a different client ID after restart. The `% 10000` also keeps collisions cheap.
+- **Why it matters:** Session-tracking and duplicate-connection suppression become non-deterministic across restarts. A browser can look like a new client just because the process restarted.
+- **Impact:** Medium
+- **Simplest practical fix:** Replace the salted hash with a stable digest such as SHA-256 truncated to a small prefix, or use the authenticated session/user ID instead of user-agent hashing.
+
+### 27. LOW: History pagination helpers are exported but unused
+
+- **File:** `static/js/modules/history.js`, `static/js/modules/state.js`
+- **Lines:** history.js: 13–31; state.js: 6–10
+- **What's wrong:** `isHistoryLoading()`, `getPendingSessionId()`, and `_currentPage` are exported, but no code in the repository imports them. They are public API with no consumer.
+- **Why it matters:** Dead exports increase the frontend surface and make the history module look more stateful than it is. That makes future changes harder to reason about.
+- **Impact:** Low
+- **Simplest practical fix:** Remove the unused exports and keep the loading state local to `history.js` until there is an actual consumer.
+
+### 28. LOW: `MultimodalManager.finalizeStreamMessage()` is dead code
+
+- **File:** `static/js/modules/multimodal.js`
+- **Lines:** 486–529
+- **What's wrong:** `finalizeStreamMessage()` is defined but has no callers in the current repository. The live streaming path already finalizes through `renderStreamChunk()` and the stream completion flow, so this helper never runs.
+- **Why it matters:** There are now two finalization paths in the file, but only one is active. That is exactly the sort of leftover branch that makes streaming bugs harder to audit.
+- **Impact:** Medium
+- **Simplest practical fix:** Delete `finalizeStreamMessage()` and keep all finalization logic in the active completion path.
+
+### 29. LOW: `cli/widgets/chat_log.py` has a dead hidden-tag filtering path
+
+- **File:** `cli/widgets/chat_log.py`
+- **Lines:** 13–15, 57–91
+- **What's wrong:** `HIDDEN_TAGS` and `_filter_hidden_tags()` exist, but `_parse_and_render_content()` does not call them. Instead, it strips every angle-bracket tag with a generic regex. The specialized hidden-tag path is therefore unused.
+- **Why it matters:** The widget carries two competing sanitization ideas, but only the broad tag stripper actually executes. That makes the code look more intentional than it is.
+- **Impact:** Low
+- **Simplest practical fix:** Remove the dead hidden-tag helper and its constant, or wire it into `_parse_and_render_content()` if that was the real intent.
+
+### 30. MEDIUM: `init_new_session()` / `init_new_session_async()` are unused leftovers and the sync version assumes the wrong profile shape
+
+- **File:** `app/services/session_service.py`
+- **Lines:** 385–434
+- **What's wrong:** Neither `init_new_session()` nor `init_new_session_async()` has a caller in the live codebase. Worse, both treat `session_history` as a scalar counter (`(profile.get("session_history") or 0) + 1`), even though the active code paths elsewhere use it as a dictionary of session metadata.
+- **Why it matters:** This is dead code that also encodes the wrong data shape, so it is actively misleading if anyone finds it later and tries to reuse it.
+- **Impact:** Medium
+- **Simplest practical fix:** Delete both helpers. If a session bootstrap helper is still needed, reintroduce one version that matches the current `session_history` schema.
+
+---
+
+## Phase 4 — Additional findings from remaining audited surfaces
+
+### 31. LOW: `generate_token()` in `app/auth/session.py` is a one-line wrapper with no added value
+
+- **File:** `app/auth/session.py`
+- **Lines:** 17–19
+- **What's wrong:** `generate_token()` just returns `secrets.token_urlsafe(32)`, and it has only one caller (`create_session()`). The wrapper adds no policy, no validation, and no naming benefit.
+- **Why it matters:** This is pure ceremony. One extra function for a single standard-library call makes the session module look more complex than it is.
+- **Impact:** Low
+- **Simplest practical fix:** Inline the token generation into `create_session()` and delete `generate_token()`.
+
+### 32. LOW: `_persist_display_name()` in `app/api/endpoints/auth.py` is an unnecessary helper around a single DB call
+
+- **File:** `app/api/endpoints/auth.py`
+- **Lines:** 95–100
+- **What's wrong:** `_persist_display_name()` wraps a single `Database.update_profile_display_name_async()` call and is only used inside `_map_identity_to_profile()`.
+- **Why it matters:** The helper does not reduce duplication enough to justify another named function. It adds indirection in the exact place where the auth/profile flow should stay obvious.
+- **Impact:** Low
+- **Simplest practical fix:** Inline the display-name update call at the two call sites and delete `_persist_display_name()`.
+
+### 33. LOW: History loading state exports in `static/js/modules/history.js` and `static/js/modules/state.js` have no consumers
+
+- **File:** `static/js/modules/history.js`, `static/js/modules/state.js`
+- **Lines:** history.js: 13–31; state.js: 6–10
+- **What's wrong:** `isHistoryLoading()`, `getPendingSessionId()`, and `_currentPage` are exported, but nothing in the repository imports them. The loading guard is already private inside `history.js`.
+- **Why it matters:** Dead exports inflate the module surface and make the history/state split look intentional when it is really just leftover scaffolding.
+- **Impact:** Low
+- **Simplest practical fix:** Remove the unused exports and keep the history-loading state private until a real consumer appears.
+
+### 34. MEDIUM: `MultimodalManager.finalizeStreamMessage()` is dead code
+
+- **File:** `static/js/modules/multimodal.js`
+- **Lines:** 486–529
+- **What's wrong:** `finalizeStreamMessage()` has no callers in the current repository. The active streaming path finalizes through `renderStreamChunk()` and the stream completion flow instead.
+- **Why it matters:** This leaves two competing finalization concepts in the same module while only one is alive. That is needless complexity in the most fragile part of the frontend.
+- **Impact:** Medium
+- **Simplest practical fix:** Delete `finalizeStreamMessage()` and keep the single active completion path.
+
+### 35. LOW: `cli/widgets/chat_log.py` keeps a dead hidden-tag filtering path
+
+- **File:** `cli/widgets/chat_log.py`
+- **Lines:** 13–15, 57–91
+- **What's wrong:** `HIDDEN_TAGS` and `_filter_hidden_tags()` exist, but `_parse_and_render_content()` never calls them. The actual code path strips all angle-bracket tags with a generic regex, so the hidden-tag-specific helper is unused.
+- **Why it matters:** The widget carries two sanitization ideas, but only one executes. That is extra surface area with no behavior change.
+- **Impact:** Low
+- **Simplest practical fix:** Remove `HIDDEN_TAGS` and `_filter_hidden_tags()` unless you wire the helper into `_parse_and_render_content()`.
+
+---
+
 ## Priority Summary
 
 | Priority | Count | Est. Lines to Remove |
 |----------|-------|---------------------|
 | Critical | 2 | ~1,200 |
 | High | 5 | ~350 |
-| Medium | 8 | ~400 |
-| Low | 5 | ~30 |
-| **Total** | **20** | **~1,980** |
+| Medium | 9 | ~420 |
+| Low | 9 | ~60 |
+| **Total** | **25** | **~2,030** |
 
 ## Recommended Order of Attack
 
-1. **Dead function cleanup** (issues 3, 4, 5, 6, 7) — trivial, zero risk, immediate clarity
+1. **Dead function cleanup** (issues 3, 4, 5, 6, 7, 31, 32, 33, 35) — trivial, zero risk, immediate clarity
 2. **Remove sync `models.py`** (issue 1) — biggest single win, need to verify no CLI dependency
 3. **Unify tool protocol** (issue 2) — highest architectural impact
 4. **Fix sync-in-async providers** (issue 8) — correctness fix
-5. **Remove redundant aliases** (issues 10, 11, 12, 13) — incremental simplification
+5. **Remove redundant aliases** (issues 10, 11, 12, 13, 34) — incremental simplification
 6. **Clean up SQL/query issues** (issues 15, 17, 19, 20) — polish
