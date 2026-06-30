@@ -8,6 +8,7 @@ import time
 from typing import Dict, List, Optional
 
 from app.orchestrator import handle_user_message_streaming
+from app.tools.schemas import StreamToolEvent
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ class StreamBuffer:
         self.start_time = time.time()
         self.last_activity = self.start_time
         self.error: Optional[str] = None
+        self.turn_id: str = ""  # current turn correlation ID
 
         self.task = asyncio.create_task(self._process())
 
@@ -82,6 +84,7 @@ class StreamBuffer:
                 final_content,
                 session_id=self.session_id,
                 user_id=self.user_id,
+                turn_id=self.turn_id,
             )
             log.info(
                 f"[Stream] Persisted {len(final_content)} chars to DB for session {self.session_id}"
@@ -109,10 +112,21 @@ class StreamBuffer:
             )
 
             # No filter - pass through all chunks directly
+            # Chunks can be plain str (text tokens) or StreamToolEvent (typed events)
             async for chunk in raw_stream:
                 if chunk:
                     async with self.lock:
-                        self.full_content += chunk
+                        # Accumulate text content for persistence
+                        if isinstance(chunk, StreamToolEvent):
+                            if chunk.type == "token":
+                                self.full_content += str(chunk.data)
+                            # Track turn_id from any event that carries it
+                            if isinstance(chunk.data, dict):
+                                tid = chunk.data.get("turn_id", "")
+                                if tid:
+                                    self.turn_id = tid
+                        else:
+                            self.full_content += chunk
                         self.last_activity = time.time()
                         for q in self.queues:
                             await q.put(chunk)
@@ -244,6 +258,7 @@ class StreamBuffer:
             "checksum": self.get_checksum(),
             "started_at": self.start_time,
             "last_activity": self.last_activity,
+            "turn_id": self.turn_id,
         }
 
 

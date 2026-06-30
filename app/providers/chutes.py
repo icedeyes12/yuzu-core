@@ -5,7 +5,7 @@ import logging
 import httpx
 import asyncio
 from typing import AsyncGenerator
-from app.providers.base import AIProvider, _rate_limit_provider
+from app.providers.base import AIProvider, ProviderCapabilities, _rate_limit_provider
 from app.tools import multimodal_tools
 
 logger = logging.getLogger(__name__)
@@ -15,6 +15,11 @@ class ChutesProvider(AIProvider):
     def __init__(self, config: dict | None = None):
         super().__init__("chutes", config)
         self.base_url = "https://llm.chutes.ai/v1/chat/completions"
+        self.capabilities = ProviderCapabilities(
+            supports_native_fc=True,
+            supports_streaming_fc=False,  # TODO: implement streaming FC
+            supports_tool_call_parsing=True,
+        )
         self._last_error = None
         self.available_models = [
             "google/gemma-4-31B-turbo-TEE",

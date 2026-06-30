@@ -343,11 +343,15 @@ async def build_system_message_async(
     user_message: str | None,
     user_id: str,
     suppress_tools: bool = False,
+    provider_supports_fc: bool | None = None,
 ) -> str:
     """Render the full system prompt for a chat turn (async).
 
     suppress_tools: If True, omit tool documentation sections and add an
     instruction that this is a final response pass (no tool invocation).
+    provider_supports_fc: If False, include <command> syntax docs for
+    providers without native FC. If True, omit them. If None, include
+    them (backward compat).
     """
     current_time = datetime.now().strftime("%A, %Y-%m-%d %H:%M:%S")
 
@@ -366,9 +370,18 @@ async def build_system_message_async(
 
     tool_section = ""
     if not suppress_tools:
-        tool_section = """
+        # FC9-C: Use <command> syntax only for non-FC providers
+        # where native function calling is not available.
+        if provider_supports_fc is False:
+            tool_header = (
+                "- Output `<command>...</command>` blocks only (max 3 per response)."
+            )
+        else:
+            tool_header = "- **Preferred**: Use native function calling (tool_use) when the provider supports it.\n- **Legacy fallback**: Output `<command>...</command>` blocks (max 3 per response) for providers without native FC support. Deprecated — will be removed in a future release."
+
+        tool_section = f"""
 # TOOL EXECUTION
-- Output `<command>...</command>` blocks only (max 3 per response).
+{tool_header}
 - **Critical Rule**: Never generate `<tools>` or `</tools>` tags. Wait for system-injected observations.
 - **Iteration Limit**: Max 30 automatic iterations; abort on repeated errors.
 - **Global Abort**: Require human confirmation for destructive actions (`rm -rf`, DB writes).
@@ -509,6 +522,7 @@ async def build_messages(
     user_id: str,
     include_image_paths: bool = False,
     suppress_tools: bool = False,
+    provider_supports_fc: bool | None = None,
 ) -> list[dict[str, Any]]:
     """Build the full chat-completion messages list (async).
 
@@ -516,6 +530,7 @@ async def build_messages(
     blocks (OpenAI multimodal format) at build time so the LLM always
     carries the last 3 images regardless of role.
     suppress_tools: If True, strip tool docs from system prompt.
+    provider_supports_fc: If False, include <command> syntax docs.
     """
     system_message = await build_system_message_async(
         profile,
@@ -524,6 +539,7 @@ async def build_messages(
         user_message,
         user_id,
         suppress_tools=suppress_tools,
+        provider_supports_fc=provider_supports_fc,
     )
 
     # HARD CAP: Limit history

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import httpx
 from typing import AsyncGenerator
-from app.providers.base import AIProvider
+from app.providers.base import AIProvider, ProviderCapabilities
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +12,11 @@ class CerebrasProvider(AIProvider):
     def __init__(self, config: dict | None = None):
         super().__init__("cerebras", config)
         self.base_url = "https://api.cerebras.ai/v1/chat/completions"
+        self.capabilities = ProviderCapabilities(
+            supports_native_fc=False,  # Cerebras API doesn't expose FC yet
+            supports_streaming_fc=False,
+            supports_tool_call_parsing=False,
+        )
         self.available_models = [
             "qwen-3-235b-a22b-instruct-2507",
             "qwen-3-235b-a22b-thinking-2507",

@@ -13,6 +13,7 @@ from app.core.context import (
     MissingProviderKeyError,
 )
 from app.tools import multimodal_tools
+from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +196,32 @@ async def _retry_with_backoff(
 # ── AIProvider base class ───────────────────────────────────────────────────
 
 
+class ProviderCapabilities:
+    """Declares what calling features a provider supports.
+
+    Used by AIProviderManager to route requests correctly and by
+    the orchestrator to decide whether to attach tools.
+    """
+
+    def __init__(
+        self,
+        *,
+        supports_native_fc: bool = False,
+        supports_streaming_fc: bool = False,
+        supports_tool_call_parsing: bool = False,
+    ):
+        self.supports_native_fc = supports_native_fc
+        self.supports_streaming_fc = supports_streaming_fc
+        self.supports_tool_call_parsing = supports_tool_call_parsing
+
+    def to_dict(self) -> dict[str, bool]:
+        return {
+            "supports_native_fc": self.supports_native_fc,
+            "supports_streaming_fc": self.supports_streaming_fc,
+            "supports_tool_call_parsing": self.supports_tool_call_parsing,
+        }
+
+
 class AIProvider:
     def __init__(self, name: str, config: dict | None = None):
         self.name = name
@@ -202,6 +229,7 @@ class AIProvider:
         self.is_available = True
         self._last_raw_response: dict | None = None
         self.api_key = None  # Will be loaded async
+        self.capabilities = ProviderCapabilities()  # Subclasses override
 
     def resolve_api_key(self, fallback: str | None = None) -> str | None:
         """Resolve API key from request plane, then system plane, then fallback."""
@@ -261,7 +289,7 @@ class AIProvider:
 
     async def _send_message_streaming_impl(
         self, messages: list[dict], model: str, source: str = "llm", **kwargs
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[str | StreamToolEvent, None]:
         """Default implementation raises; subclasses override this."""
         raise NotImplementedError
         # pragma: no cover - kept as type-checker anchor
@@ -270,7 +298,7 @@ class AIProvider:
 
     async def send_message_streaming(
         self, messages: list[dict], model: str, source: str = "llm", **kwargs
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[str | StreamToolEvent, None]:
         """Yield raw chunks from the provider. Default delegates to abstract impl."""
         suppress_tools = kwargs.get("suppress_tools", False)
         async for chunk in self._send_message_streaming_impl(
@@ -402,6 +430,44 @@ class AIProviderManager:
         )
         return None
 
+    # -- Capability-aware helpers (FC2) -----------------------------------
+
+    def provider_supports_tools(self, provider_name: str) -> bool:
+        """Check if a provider supports native function calling."""
+        if provider_name not in self.providers:
+            return False
+        return self.providers[provider_name].capabilities.supports_native_fc
+
+    def provider_supports_streaming_tools(self, provider_name: str) -> bool:
+        """Check if a provider supports streaming tool-call events."""
+        if provider_name not in self.providers:
+            return False
+        return self.providers[provider_name].capabilities.supports_streaming_fc
+
+    def get_provider_capabilities(self, provider_name: str) -> dict[str, bool] | None:
+        """Return capability dict for a single provider."""
+        if provider_name not in self.providers:
+            return None
+        return self.providers[provider_name].capabilities.to_dict()
+
+    def get_all_provider_capabilities(self) -> dict[str, dict[str, bool]]:
+        """Return capability map for all registered providers."""
+        return {name: p.capabilities.to_dict() for name, p in self.providers.items()}
+
+    def parse_tool_calls(
+        self, provider_name: str, raw_response: dict | None
+    ) -> list[dict]:
+        """Parse tool calls from a raw response using the provider's parser.
+
+        Returns a canonical list of dicts: [{id, name, arguments}, ...]
+        """
+        if provider_name not in self.providers or raw_response is None:
+            return []
+        provider = self.providers[provider_name]
+        if not provider.capabilities.supports_tool_call_parsing:
+            return []
+        return provider.parse_tool_calls(raw_response)
+
     async def send_message_streaming(
         self,
         provider_name: str,
@@ -409,7 +475,7 @@ class AIProviderManager:
         messages: list[dict],
         source: str = "llm",
         **kwargs,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[str | StreamToolEvent, None]:
         if provider_name not in self.providers:
             yield ""
             return

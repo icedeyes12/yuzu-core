@@ -4,7 +4,7 @@ import json
 import httpx
 from typing import AsyncGenerator
 import logging
-from app.providers.base import AIProvider
+from app.providers.base import AIProvider, ProviderCapabilities
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +13,11 @@ class OllamaProvider(AIProvider):
     def __init__(self, config: dict | None = None):
         super().__init__("ollama", config)
         self.base_url = self.config.get("base_url", "http://127.0.0.1:11434")
+        self.capabilities = ProviderCapabilities(
+            supports_native_fc=False,  # Ollama FC support is model-dependent, disabled by default
+            supports_streaming_fc=False,
+            supports_tool_call_parsing=False,
+        )
         self.available_models = [
             "smollm:360m",
             "smollm2:360m",

@@ -11,6 +11,7 @@ from fastapi import UploadFile
 from app.db import get_active_session_async
 from app.stream_manager import StreamManager
 from app.orchestrator import handle_user_message
+from app.tools.schemas import StreamToolEvent
 
 log = logging.getLogger(__name__)
 
@@ -111,10 +112,23 @@ class ChatService:
                 # q is now an asyncio.Queue, so just await it
                 chunk = await q.get()
                 if chunk is None:
+                    # Emit turn-complete event
+                    done_event = json.dumps({"type": "done", "turn_id": buffer.turn_id})
+                    yield f"data: {done_event}\n\n"
                     break
                 if chunk:
-                    escaped_chunk = json.dumps(chunk)
-                    yield f'data: {{"chunk": {escaped_chunk}}}\n\n'
+                    if isinstance(chunk, StreamToolEvent):
+                        # Typed event — serialize via to_sse()
+                        payload = json.dumps(chunk.to_sse())
+                        yield f"data: {payload}\n\n"
+                    else:
+                        # Plain text token — backward-compatible + typed envelope
+                        token_event = json.dumps({
+                            "type": "token",
+                            "chunk": chunk,
+                            "turn_id": buffer.turn_id,
+                        })
+                        yield f"data: {token_event}\n\n"
         except asyncio.CancelledError:
             # Client disconnected - cancel the producer task
             log.info(f"[Stream] Client disconnected for session {session_id}")

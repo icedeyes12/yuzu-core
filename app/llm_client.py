@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, Iterable, AsyncIterator
+from typing import Any, AsyncGenerator, AsyncIterator
 
 import httpx
 
@@ -13,7 +13,8 @@ from app.logging_config import get_logger
 from app.prompts import build_messages
 from app.providers import get_ai_manager
 from app.providers.base import _rate_limit_provider
-from app.tools.registry import get_tool_definitions
+from app.tools.schemas import StreamToolEvent
+from app.tools.registry import get_tool_schemas
 
 log = get_logger(__name__)
 
@@ -132,16 +133,12 @@ def _apply_vision_routing(
     return messages, provider, model
 
 
-def _unique_tool_schemas() -> list[dict[str, Any]]:
-    seen: set[str] = set()
-    schemas: list[dict[str, Any]] = []
-    for tool in get_tool_definitions():
-        schema = tool.to_llm_schema()
-        name = schema.get("function", {}).get("name", "")
-        if name and name not in seen:
-            seen.add(name)
-            schemas.append(schema)
-    return schemas
+def _unique_tool_schemas(**kwargs) -> list[dict[str, Any]]:
+    """Get deduplicated tool schemas for LLM requests.
+
+    Delegates to the canonical registry function ``get_tool_schemas()``.
+    """
+    return get_tool_schemas(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +175,7 @@ async def _send_to_provider(
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single LLM dispatch with timing log. Returns (text, raw_response)."""
     ai_manager = await get_ai_manager()
-    schemas = _unique_tool_schemas()
+    schemas = _unique_tool_schemas() if not suppress_tools else []
 
     started = time.time()
     raw_response: dict[str, Any] | None = None
@@ -239,6 +236,10 @@ async def generate_ai_response(
 
     provider, model = _resolve_provider(profile, None, None)
 
+    # FC9-C: Check if provider supports native FC for prompt construction
+    ai_manager = await get_ai_manager()
+    provider_supports_fc = ai_manager.provider_supports_tools(provider)
+
     messages = await build_messages(
         profile,
         session_id,
@@ -247,6 +248,7 @@ async def generate_ai_response(
         user_id,
         include_image_paths=True,
         suppress_tools=suppress_tools,
+        provider_supports_fc=provider_supports_fc,
     )
 
     if ephemeral_context:
@@ -269,9 +271,12 @@ async def _stream_from_provider(
     *,
     source: str = "chat",
     suppress_tools: bool = False,
-) -> AsyncIterator[str]:
+) -> AsyncGenerator[str | StreamToolEvent, None]:
     """Yield raw chunks from the provider's streaming API."""
     ai_manager = await get_ai_manager()
+
+    # Generate tool schemas unless suppressed
+    tools = [] if suppress_tools else _unique_tool_schemas()
 
     received = 0
     try:
@@ -282,9 +287,10 @@ async def _stream_from_provider(
             source=source,
             timeout=180,
             suppress_tools=suppress_tools,
+            tools=tools,
         ):
             if chunk:
-                received += len(chunk)
+                received += len(chunk) if isinstance(chunk, str) else 0
                 yield chunk
     except asyncio.CancelledError:
         log.info(
@@ -307,8 +313,11 @@ async def generate_ai_response_streaming(
     is_tool_loop: bool = False,
     suppress_tools: bool = False,
     user_id: str | None = None,
-) -> AsyncIterator[str]:
+) -> AsyncGenerator[str | StreamToolEvent, None]:
     """Stream a response from the configured provider chunk by chunk.
+
+    Yields either plain text chunks (str) or StreamToolEvent objects
+    when the provider emits tool calls in streaming mode.
 
     suppress_tools: If True, strip tool definitions from provider call and
     remove tool docs from system prompt. Used for synthesis/final passes to
@@ -319,6 +328,10 @@ async def generate_ai_response_streaming(
 
     resolved_provider, resolved_model = _resolve_provider(profile, provider, model)
 
+    # FC9-C: Check if provider supports native FC for prompt construction
+    ai_manager = await get_ai_manager()
+    provider_supports_fc = ai_manager.provider_supports_tools(resolved_provider)
+
     messages = await build_messages(
         profile,
         session_id,
@@ -327,6 +340,7 @@ async def generate_ai_response_streaming(
         user_id,
         include_image_paths=True,
         suppress_tools=suppress_tools,
+        provider_supports_fc=provider_supports_fc,
     )
 
     if ephemeral_context:

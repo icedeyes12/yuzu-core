@@ -33,6 +33,7 @@ async def get_stream_status(
             "completed": stream.is_finished,
             "length": len(stream.full_content),
             "has_error": stream.error is not None,
+            "turn_id": stream.turn_id,
         }
 
     except Exception as e:
@@ -66,6 +67,7 @@ async def sync_stream_buffer(
             "length": length,
             "checksum": checksum,
             "completed": stream.is_finished,
+            "turn_id": stream.turn_id,
         }
 
     except Exception as e:

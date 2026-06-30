@@ -385,7 +385,6 @@ async def execute_commands(
     return results
 
 
-
 def parse_image_path(formatted_result: str) -> str | None:
     """Extract and validate a generated-image path from markdown blob."""
     if not formatted_result:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.providers.base import AIProviderManager, get_ai_manager, reload_ai_manager
+from app.providers.base import AIProviderManager, get_ai_manager, reload_ai_manager, ProviderCapabilities
 from app.providers.ollama import OllamaProvider
 from app.providers.cerebras import CerebrasProvider
 from app.providers.openrouter import OpenRouterProvider
@@ -35,4 +35,4 @@ async def load_all_providers(manager: AIProviderManager):
 # Note: AIProviderManager.initialize calls load_providers()
 AIProviderManager.load_providers = load_all_providers
 
-__all__ = ["get_ai_manager", "reload_ai_manager", "AIProviderManager"]
+__all__ = ["get_ai_manager", "reload_ai_manager", "AIProviderManager", "ProviderCapabilities"]

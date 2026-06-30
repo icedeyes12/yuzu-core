@@ -409,3 +409,30 @@
 .system-action-block[open] summary {
 	border-bottom: 1px solid var(--border-ai, rgba(255, 255, 255, 0.1));
 }
+
+/* FC6: Native tool event indicators */
+.tool-call-indicator {
+	margin: 0.5em 0;
+	border-left: 3px solid var(--accent, rgba(255, 255, 255, 0.3));
+	padding-left: 0.75em;
+	opacity: 0.85;
+}
+.tool-call-indicator summary {
+	cursor: pointer;
+	font-size: 0.85em;
+	color: var(--text-muted, rgba(255, 255, 255, 0.6));
+}
+.tool-result {
+	margin: 0.5em 0;
+	border-left: 3px solid var(--accent, rgba(255, 255, 255, 0.3));
+	padding-left: 0.75em;
+}
+.tool-result summary {
+	cursor: pointer;
+	font-size: 0.85em;
+	font-weight: 600;
+}
+.tool-result-content {
+	margin-top: 0.5em;
+	padding: 0.5em;
+}

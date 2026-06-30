@@ -335,6 +335,7 @@ async def add_message_async(
     user_id: str,
     tool_calls: list[dict[str, Any]] | None = None,
     tool_call_id: str | None = None,
+    turn_id: str | None = None,
 ) -> int | None:
     """Insert a message row, bump the session's message_count, return id.
 
@@ -356,6 +357,7 @@ async def add_message_async(
                     paths_json,
                     tool_calls_json,
                     tool_call_id,
+                    turn_id,
                 ),
             )
             if row:

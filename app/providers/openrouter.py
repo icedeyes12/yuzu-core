@@ -4,8 +4,9 @@ import json
 import logging
 import httpx
 from typing import AsyncGenerator
-from app.providers.base import AIProvider
+from app.providers.base import AIProvider, ProviderCapabilities
 from app.tools import multimodal_tools
+from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,11 @@ class OpenRouterProvider(AIProvider):
     def __init__(self, config: dict | None = None):
         super().__init__("openrouter", config)
         self.base_url = "https://openrouter.ai/api/v1/chat/completions"
+        self.capabilities = ProviderCapabilities(
+            supports_native_fc=True,
+            supports_streaming_fc=True,  # FC9: streaming tool-call parsing implemented
+            supports_tool_call_parsing=True,
+        )
         self.available_models = [
             "deepseek/deepseek-chat-v3-0324:free",
             "deepseek/deepseek-v4-flash:free",
@@ -104,8 +110,7 @@ class OpenRouterProvider(AIProvider):
         tools = kwargs.get("tools")
         if tools:
             payload["tools"] = tools
-            if not stream:  # Usually tool_choice is auto for non-streaming
-                payload["tool_choice"] = "auto"
+            payload["tool_choice"] = "auto"
 
         return headers, payload
 
@@ -175,9 +180,19 @@ class OpenRouterProvider(AIProvider):
             return None
 
     async def _send_message_streaming_impl(
-        self, messages: list[dict], model: str, source: str = "llm",
-        suppress_tools: bool = False, **kwargs
-    ) -> AsyncGenerator[str, None]:
+        self,
+        messages: list[dict],
+        model: str,
+        source: str = "llm",
+        suppress_tools: bool = False,
+        **kwargs,
+    ) -> AsyncGenerator[str | StreamToolEvent, None]:
+        """Stream response from OpenRouter, yielding text chunks or StreamToolEvent.
+
+        When the provider returns tool_calls in streaming delta chunks,
+        accumulates them and yields StreamToolEvent objects for structured
+        consumption by the orchestrator.
+        """
         if model not in self.available_models:
             yield ""
             return
@@ -187,6 +202,9 @@ class OpenRouterProvider(AIProvider):
             if suppress_tools:
                 payload.pop("tools", None)
                 payload.pop("tool_choice", None)
+
+            has_tools = bool(payload.get("tools"))
+
             async with httpx.AsyncClient() as client:
                 async with client.stream(
                     "POST",
@@ -196,8 +214,12 @@ class OpenRouterProvider(AIProvider):
                     timeout=kwargs.get("timeout", 180),
                 ) as response:
                     if response.status_code == 200:
-                        async for line in response.aiter_lines():
-                            if line and line.startswith("data: "):
+                        if has_tools:
+                            # FC9: Accumulate tool call fragments from delta chunks
+                            tool_call_fragments: dict[int, dict] = {}
+                            async for line in response.aiter_lines():
+                                if not line or not line.startswith("data: "):
+                                    continue
                                 if line == "data: [DONE]":
                                     break
                                 try:
@@ -207,10 +229,74 @@ class OpenRouterProvider(AIProvider):
                                         and len(json_data["choices"]) > 0
                                     ):
                                         delta = json_data["choices"][0].get("delta", {})
-                                        if "content" in delta and delta["content"]:
+                                        # Yield text content
+                                        if delta.get("content"):
                                             yield delta["content"]
+                                        # Accumulate tool call fragments
+                                        if delta.get("tool_calls"):
+                                            for tc_delta in delta["tool_calls"]:
+                                                idx = tc_delta.get("index", 0)
+                                                if idx not in tool_call_fragments:
+                                                    tool_call_fragments[idx] = {
+                                                        "id": "",
+                                                        "function": {
+                                                            "name": "",
+                                                            "arguments": "",
+                                                        },
+                                                    }
+                                                frag = tool_call_fragments[idx]
+                                                if tc_delta.get("id"):
+                                                    frag["id"] = tc_delta["id"]
+                                                fn = tc_delta.get("function", {})
+                                                if fn.get("name"):
+                                                    frag["function"]["name"] = fn[
+                                                        "name"
+                                                    ]
+                                                if fn.get("arguments"):
+                                                    frag["function"]["arguments"] += fn[
+                                                        "arguments"
+                                                    ]
                                 except (json.JSONDecodeError, KeyError):
                                     continue
+
+                            # Emit each accumulated tool call as individual StreamToolEvent
+                            for idx in sorted(tool_call_fragments.keys()):
+                                frag = tool_call_fragments[idx]
+                                try:
+                                    args = (
+                                        json.loads(frag["function"]["arguments"])
+                                        if frag["function"]["arguments"]
+                                        else {}
+                                    )
+                                except json.JSONDecodeError:
+                                    args = {}
+                                yield StreamToolEvent(
+                                    type="tool_call",
+                                    data={
+                                        "id": frag["id"],
+                                        "name": frag["function"]["name"],
+                                        "arguments": args,
+                                    },
+                                )
+                        else:
+                            # No tools — plain text streaming
+                            async for line in response.aiter_lines():
+                                if line and line.startswith("data: "):
+                                    if line == "data: [DONE]":
+                                        break
+                                    try:
+                                        json_data = json.loads(line[6:])
+                                        if (
+                                            "choices" in json_data
+                                            and len(json_data["choices"]) > 0
+                                        ):
+                                            delta = json_data["choices"][0].get(
+                                                "delta", {}
+                                            )
+                                            if delta.get("content"):
+                                                yield delta["content"]
+                                    except (json.JSONDecodeError, KeyError):
+                                        continue
                     else:
                         yield ""
         except Exception as e:

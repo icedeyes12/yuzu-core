@@ -8,7 +8,6 @@ from datetime import datetime
 from typing import Any
 
 
-
 TOOL_ROLES: dict[str, str] = {
     # Image generation
     "image_generate": "image_tools",
@@ -42,9 +41,6 @@ TOOL_ROLES: dict[str, str] = {
 ALL_TOOL_ROLES: list[str] = sorted(set(TOOL_ROLES.values()))
 
 
-
-
-
 def encrypt_api_key(api_key: str) -> str:
     """Encrypt an API key with the project-wide encryptor."""
     from app.encryption import encryptor
@@ -65,7 +61,6 @@ def decrypt_api_key(encrypted_key: str, is_encrypted: bool = True) -> str:
 
 
 DECRYPTION_ERROR = "[DECRYPTION_ERROR]"
-
 
 
 # Schema DDL — multi-tenant: profiles/chat_sessions use UUIDv7 PKs,
@@ -161,6 +156,7 @@ SCHEMA_DDL: tuple[str, ...] = (
         image_paths TEXT DEFAULT '[]',
         tool_calls JSONB,
         tool_call_id VARCHAR,
+        turn_id VARCHAR,
         timestamp VARCHAR NOT NULL,
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
         FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
@@ -229,7 +225,7 @@ SCHEMA_DDL: tuple[str, ...] = (
     EXCEPTION WHEN undefined_column THEN NULL;
     END $$;
     """,
-        # Phase 1.3: add user_id to tenant-scoped tables (already done via migration SQL)
+    # Phase 1.3: add user_id to tenant-scoped tables (already done via migration SQL)
     # Phase 1.7: drop NOT NULL on legacy mapping columns so new UUID rows can omit them
     # Wrapped in DO blocks because legacy_* columns don't exist on fresh installs
     """
@@ -250,9 +246,13 @@ SCHEMA_DDL: tuple[str, ...] = (
     EXCEPTION WHEN undefined_column THEN NULL;
     END $$;
     """,
+    """
+    DO $$ BEGIN
+      ALTER TABLE messages ADD COLUMN IF NOT EXISTS turn_id VARCHAR DEFAULT NULL;
+    EXCEPTION WHEN duplicate_column THEN NULL;
+    END $$;
+    """,
 )
-
-
 
 
 SQL_PROFILE_UNCLAIMED_LOOKUP = """
@@ -375,8 +375,6 @@ def parse_profile_row(row: dict | None) -> dict:
     }
 
 
-
-
 SQL_SESSION_SELECT_ACTIVE_FOR_USER = "SELECT * FROM chat_sessions WHERE user_id = %s AND is_active = TRUE AND deleted_at IS NULL LIMIT 1"
 
 SQL_SESSION_INSERT = """
@@ -436,8 +434,6 @@ def parse_session_row(row: dict | None) -> dict:
         "updated_at": row.get("updated_at"),
         "timestamp": row.get("timestamp"),
     }
-
-
 
 
 SQL_SESSION_MEMORY_NOTES = """
@@ -511,12 +507,12 @@ def decrypt_api_key_rows(rows: list[dict]) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 SQL_MESSAGE_INSERT = """
-INSERT INTO messages (session_id, user_id, role, content, image_paths, tool_calls, tool_call_id, timestamp, content_encrypted)
-VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), FALSE) RETURNING id, timestamp
+INSERT INTO messages (session_id, user_id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp, content_encrypted)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), FALSE) RETURNING id, timestamp
 """
 
 SQL_MESSAGE_SELECT_ASC_LIMIT = """
-SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, timestamp
+SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s
 ORDER BY timestamp ASC
@@ -524,7 +520,7 @@ LIMIT %s
 """
 
 SQL_MESSAGE_SELECT_DESC_LIMIT = """
-SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, timestamp
+SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s
 ORDER BY timestamp DESC
@@ -532,7 +528,7 @@ LIMIT %s
 """
 
 SQL_MESSAGE_SELECT_ASC_ALL = """
-SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, timestamp
+SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s
 ORDER BY timestamp ASC
@@ -540,7 +536,7 @@ ORDER BY timestamp ASC
 
 # Query messages after a specific ID (for memory pipeline ID-based tracking)
 SQL_MESSAGE_SELECT_AFTER_ID = """
-SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, timestamp
+SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s AND id > %s
 ORDER BY id ASC
@@ -626,6 +622,7 @@ def parse_message_row(row: dict) -> dict:
         "image_paths": parse_json(row.get("image_paths", "[]")),
         "tool_calls": parse_json(row.get("tool_calls", "null")),
         "tool_call_id": row.get("tool_call_id"),
+        "turn_id": row.get("turn_id"),
         "timestamp": str(row.get("timestamp", "")),
     }
 
@@ -725,28 +722,33 @@ def format_ai_history_rows(
         image_paths = parse_json(msg.get("image_paths", "[]"))
         tool_calls_raw = msg.get("tool_calls")
         tool_call_id = msg.get("tool_call_id")
+        turn_id = msg.get("turn_id")
 
         if role == "event_log":
             continue
 
         # Normalize to OpenAI chat completion format
-        # tool_call_id present → this is a tool result message
+        # tool_call_id present → this is a tool result message (native FC)
         if tool_call_id:
             entry: dict[str, Any] = {
                 "role": "tool",
                 "tool_call_id": tool_call_id,
                 "content": content,
             }
+            if turn_id:
+                entry["turn_id"] = turn_id
             formatted.append(entry)
             continue
 
-        # tool_calls present → this is an assistant message with tool calls
+        # tool_calls present → this is an assistant message with tool calls (native FC)
         if tool_calls_raw and role == "assistant":
             entry = {
                 "role": "assistant",
                 "content": content or None,
                 "tool_calls": tool_calls_raw,
             }
+            if turn_id:
+                entry["turn_id"] = turn_id
             if include_image_paths and image_paths:
                 entry["image_paths"] = image_paths
             formatted.append(entry)
@@ -762,6 +764,7 @@ def format_ai_history_rows(
             entry = {"role": role, "content": content}
         elif role in ALL_TOOL_ROLES:
             # Legacy tool result without tool_call_id → normalize to "tool"
+            # This path handles pre-migration data; FC7 will remove it.
             raw = extract_raw_result_from_markdown_contract(content)
             entry = {"role": "tool", "content": raw}
         else:

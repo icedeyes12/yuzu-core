@@ -152,8 +152,13 @@ class TestParseImagePath:
         assert parse_image_path("") is None
 
 
-class TestExecuteCommands:
-    """Tests for command execution (integration-ish)."""
+class TestExecuteCommandsLegacy:
+    """Tests for legacy command execution (FC7 retires <command> from runtime).
+
+    These tests validate the legacy execute_commands function still works
+    for backward compatibility, but it is no longer called in the
+    orchestrator runtime path. FC10-C verifies this isolation.
+    """
 
     @pytest.mark.asyncio
     async def test_empty_commands(self):
@@ -168,3 +173,30 @@ class TestExecuteCommands:
         tool_name, result = results[0]
         assert tool_name == "unknown"
         assert result.get("ok") is False
+
+
+class TestCommandExecutionNotInRuntime:
+    """FC10-C: Verify execute_commands is NOT importable from orchestrator runtime path.
+
+    This test ensures the legacy command execution path cannot silently
+    become active again. If someone re-adds `from app.commands import execute_commands`
+    to the orchestrator, this test will fail.
+    """
+
+    def test_orchestrator_does_not_import_execute_commands(self):
+        """Orchestrator module must not import execute_commands."""
+        import inspect
+        from app import orchestrator
+        source = inspect.getsource(orchestrator)
+        # Check that execute_commands is not imported (only parse_tool_blocks etc.)
+        assert "execute_commands" not in source or "execute_commands" in source and "parse_tool_blocks" in source
+        # More precise: check imports specifically
+        import ast
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                if node.module and "commands" in node.module:
+                    for alias in node.names:
+                        assert alias.name != "execute_commands", (
+                            "execute_commands must not be imported in orchestrator (FC7)"
+                        )

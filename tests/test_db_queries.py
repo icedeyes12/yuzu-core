@@ -247,6 +247,34 @@ class TestFormatAiHistoryRows:
         assert out[0]["role"] == "tool"
         assert out[0]["content"] == "image_url"
 
+    def test_native_fc_tool_call_includes_turn_id(self):
+        """FC4: Native FC assistant messages preserve tool_calls + turn_id."""
+        rows = [{
+            "id": 1, "session_id": "s1", "role": "assistant",
+            "content": "", "image_paths": "[]",
+            "tool_calls": [{"id": "call_1", "function": {"name": "bash", "arguments": "{}"}}],
+            "tool_call_id": None, "turn_id": "turn_abc", "timestamp": "2026-01-01",
+        }]
+        out = format_ai_history_rows(rows)
+        assert len(out) == 1
+        assert out[0]["role"] == "assistant"
+        assert "tool_calls" in out[0]
+        assert out[0]["turn_id"] == "turn_abc"
+
+    def test_native_fc_tool_result_includes_turn_id(self):
+        """FC4: Native FC tool results preserve tool_call_id + turn_id."""
+        rows = [{
+            "id": 2, "session_id": "s1", "role": "tool",
+            "content": "output", "image_paths": "[]",
+            "tool_calls": None, "tool_call_id": "call_1",
+            "turn_id": "turn_abc", "timestamp": "2026-01-01",
+        }]
+        out = format_ai_history_rows(rows)
+        assert len(out) == 1
+        assert out[0]["role"] == "tool"
+        assert out[0]["tool_call_id"] == "call_1"
+        assert out[0]["turn_id"] == "turn_abc"
+
 
 class TestEncryptionStatus:
     def test_build_encryption_status_with_all_none(self):
@@ -308,5 +336,5 @@ class TestMisc:
         assert "messages" in full
         assert "semantic_facts" in full
         assert "generate_uuidv7" in full
-        # 3 extensions + 1 function + 5 tables + 12 indexes + 3 migration DO-blocks = 24 statements
-        assert len(SCHEMA_DDL) == 30
+        # 3 extensions + 1 function + 5 tables + 12 indexes + 5 migration DO-blocks = 31 statements
+        assert len(SCHEMA_DDL) == 31
