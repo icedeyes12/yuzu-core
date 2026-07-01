@@ -42,6 +42,7 @@ TOOL_DEFINITION = ToolDefinition(
     ],
 )
 
+
 def _get_db_connection_params() -> dict[str, str]:
     return {
         "host": os.environ.get("PGHOST", os.environ.get("PG_HOST", "localhost")),
@@ -245,6 +246,3 @@ def execute(
             TOOL_DEFINITION,
             query[:100],
         )
-
-
-

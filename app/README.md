@@ -115,11 +115,11 @@ The single entry point for handling user messages. Coordinates:
 
 1. Image caching from user messages
 2. Vision model routing when images detected
-3. **Standard tool calling** — `tool_calls` from LLM + legacy `/command` fallback
+3. Native `tool_calls` execution via `app/tools/registry.py`
 4. Memory pipeline triggering
 5. Response generation via provider selection
 
-Streaming execution now runs in a background worker thread, with cooperative cancellation via `abort_check` and a 30-iteration orchestration ceiling.
+Streaming execution runs in a background worker thread, with cooperative cancellation via `abort_check` and a 30-iteration orchestration ceiling.
 
 ### `file app.py` — Core Application Facade
 
@@ -371,10 +371,7 @@ deepseek-ai/DeepSeek-V3, Qwen/Qwen3-8B, meta-llama/llama-3.3-70b-instruct
 
 ## Tool System
 
-The tool system has two execution modes:
-
-1. **Standard tool calling** — OpenAI `function` call format (primary, v2.1+)
-2. **Legacy** `/command` **text detection** — command-prefixed responses (fallback compat)
+The tool system is driven by native function calling and `ToolEvent` / `ToolResultEvent`. Legacy XML-style markup is cleanup text only and must not be treated as a live protocol.
 
 ### `file tools/schemas.py` — Tool Schema Definitions
 
@@ -415,12 +412,9 @@ Single source of truth for tool dispatch. Lazy-loads `TOOL_DEFINITIONS` from eac
 ```mermaid
 flowchart TD
     A[LLM response] --> B{tool_calls present?}
-    B -->|Yes| C[Structured function call]
-    B -->|No| D{Legacy /command?}
-    D -->|Yes| E[Text command detection]
-    D -->|No| F[Plain text response]
+    B -->|Yes| C[Structured native tool call]
+    B -->|No| F[Plain text response]
     C --> G[execute_tool name, args]
-    E --> G
     G --> H[Markdown contract]
     H --> I{Terminal tool?}
     I -->|Yes| J[Return result]
@@ -432,15 +426,14 @@ flowchart TD
 **Dispatch priority:**
 
 1. Structured `tool_calls[0]` from LLM → execute via registry → done
-2. Legacy `/command` text detection → execute via registry → done
-3. Plain text → return as-is
+2. Plain text → return as-is
 
 ### Registered Tool Schemas
 
 | Tool | Role | Params | Terminal |
 | --- | --- | --- | --- |
 | `image_generate` | `image_tools` | `prompt` (str, required) | ✅ |
-| `request` | `request_tools` | `url` (str, required), `method` (str, optional) | ❌ |
+| `http_request` | `request_tools` | `url` (str, required), `method` (str, optional) | ❌ |
 | `memory_search` | `memory_search_tools` | `query` (str, required) | ❌ |
 | `memory_store` | `memory_store_tools` | `fact` (str, required), `category` (str, optional) | ❌ |
 

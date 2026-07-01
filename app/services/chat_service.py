@@ -123,11 +123,13 @@ class ChatService:
                         yield f"data: {payload}\n\n"
                     else:
                         # Plain text token — backward-compatible + typed envelope
-                        token_event = json.dumps({
-                            "type": "token",
-                            "chunk": chunk,
-                            "turn_id": buffer.turn_id,
-                        })
+                        token_event = json.dumps(
+                            {
+                                "type": "token",
+                                "chunk": chunk,
+                                "turn_id": buffer.turn_id,
+                            }
+                        )
                         yield f"data: {token_event}\n\n"
         except asyncio.CancelledError:
             # Client disconnected - cancel the producer task

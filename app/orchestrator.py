@@ -9,13 +9,13 @@ import re
 from pathlib import Path
 from typing import Any, AsyncIterator
 
-from app.commands import (
+from app.legacy_markup import (
     IMAGE_SHORTCUT_WARNING,
     TOOL_ALIASES,
-    has_tool_blocks,
+    has_legacy_tool_markup,
     is_markdown_image_shortcut,
     parse_image_path,
-    parse_tool_blocks,
+    strip_legacy_tool_blocks,
 )
 from app.db import Database
 from app.llm_client import (
@@ -30,10 +30,8 @@ from app.tools import multimodal_tools
 from app.tools.registry import (
     execute_tool_event,
     get_tool_role,
-    new_turn_id,
-    make_tool_call_event,
 )
-from app.tools.schemas import StreamToolEvent
+from app.tools.schemas import StreamToolEvent, make_tool_call_event, new_turn_id
 
 log = get_logger(__name__)
 
@@ -289,13 +287,9 @@ def _build_streaming_ephemeral_context(
 ) -> list[dict[str, Any]]:
     """Build ephemeral context for the streaming path.
 
-    The streaming path parses <command> blocks from text (no native tool_calls).
-    We reconstruct a minimal conversation snippet so the LLM synthesis sees:
-    - assistant text (clean text with tool blocks stripped)
-    - observation (tool results as a user message)
-
-    This is a simplified version of _build_ephemeral_context for the streaming
-    path where we don't have structured tool_calls.
+    The streaming path reconstructs a minimal conversation snippet so the
+    synthesis pass sees assistant text plus any buffered tool-result markdown.
+    This is a fallback cleanup path, not a production XML tool protocol.
     """
     messages: list[dict[str, Any]] = []
 
@@ -515,9 +509,12 @@ async def _run_orchestration_loop_async(
     user_id: str,
     ephemeral_context: list[dict[str, Any]] | None = None,
 ) -> AsyncIterator[str]:
-    """Run the orchestration loop for synthesis with tool block detection."""
+    """Run the orchestration loop for synthesis and ToolEvents.
+
+    Native ToolEvents are the production path. Any leftover legacy XML-style
+    tool markup is treated as cleanup-only text and never executed.
+    """
     loop_count = 0
-    all_generated_paths: list[str] = []
 
     while loop_count < _MAX_ORCHESTRATION_LOOPS:
         loop_count += 1
@@ -572,16 +569,14 @@ async def _run_orchestration_loop_async(
             )
             return
 
-        if has_tool_blocks(synthesis):
-            # FC7: Legacy <command> blocks are no longer executed as tools.
-            # Strip them from the text and log a warning.
+        if has_legacy_tool_markup(synthesis):
+            # Legacy cleanup only: strip stale XML-style blocks without execution.
             log.warning(
-                "[stream] synthesis contains legacy <command> blocks — "
-                "stripping without execution (native FC only, loop %d/%d)",
+                "[stream] synthesis contains legacy tool markup — stripping without execution (loop %d/%d)",
                 loop_count,
                 _MAX_ORCHESTRATION_LOOPS,
             )
-            _, clean_synth = parse_tool_blocks(synthesis)
+            _, clean_synth = strip_legacy_tool_blocks(synthesis)
             synthesis = clean_synth or synthesis
 
         # No tool blocks — this is the final response.

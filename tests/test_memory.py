@@ -1,4 +1,3 @@
-
 from app.memory.db_memory_queries import (
     normalize_vector,
     vector_literal,

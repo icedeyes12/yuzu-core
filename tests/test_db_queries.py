@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from app.db import (
@@ -104,7 +103,7 @@ class TestBuildProfileUpdate:
 
     def test_default_profile_params_match_columns(self):
         # 9 values before timestamp/updated_at (datetimes added by caller at insert time)
-        assert len(DEFAULT_PROFILE_PARAMS) == 10
+        assert len(DEFAULT_PROFILE_PARAMS) == 9
 
 
 class TestSessionParsers:
@@ -249,12 +248,21 @@ class TestFormatAiHistoryRows:
 
     def test_native_fc_tool_call_includes_turn_id(self):
         """FC4: Native FC assistant messages preserve tool_calls + turn_id."""
-        rows = [{
-            "id": 1, "session_id": "s1", "role": "assistant",
-            "content": "", "image_paths": "[]",
-            "tool_calls": [{"id": "call_1", "function": {"name": "bash", "arguments": "{}"}}],
-            "tool_call_id": None, "turn_id": "turn_abc", "timestamp": "2026-01-01",
-        }]
+        rows = [
+            {
+                "id": 1,
+                "session_id": "s1",
+                "role": "assistant",
+                "content": "",
+                "image_paths": "[]",
+                "tool_calls": [
+                    {"id": "call_1", "function": {"name": "bash", "arguments": "{}"}}
+                ],
+                "tool_call_id": None,
+                "turn_id": "turn_abc",
+                "timestamp": "2026-01-01",
+            }
+        ]
         out = format_ai_history_rows(rows)
         assert len(out) == 1
         assert out[0]["role"] == "assistant"
@@ -263,12 +271,19 @@ class TestFormatAiHistoryRows:
 
     def test_native_fc_tool_result_includes_turn_id(self):
         """FC4: Native FC tool results preserve tool_call_id + turn_id."""
-        rows = [{
-            "id": 2, "session_id": "s1", "role": "tool",
-            "content": "output", "image_paths": "[]",
-            "tool_calls": None, "tool_call_id": "call_1",
-            "turn_id": "turn_abc", "timestamp": "2026-01-01",
-        }]
+        rows = [
+            {
+                "id": 2,
+                "session_id": "s1",
+                "role": "tool",
+                "content": "output",
+                "image_paths": "[]",
+                "tool_calls": None,
+                "tool_call_id": "call_1",
+                "turn_id": "turn_abc",
+                "timestamp": "2026-01-01",
+            }
+        ]
         out = format_ai_history_rows(rows)
         assert len(out) == 1
         assert out[0]["role"] == "tool"

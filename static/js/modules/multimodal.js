@@ -326,26 +326,38 @@ export class MultimodalManager {
 										if (eventType === "tool_call") {
 											const toolName = json.data?.name || "unknown";
 											const callId = json.data?.id || "";
-											console.log(`[Stream] tool_call: ${toolName} [call=${callId} turn=${turnId}]`);
+											console.log(
+												`[Stream] tool_call: ${toolName} [call=${callId} turn=${turnId}]`,
+											);
 											// Append tool call indicator to buffer
 											const callHtml = `\n<details class="tool-call-indicator"><summary>⚙️ Calling ${toolName}…</summary><pre data-call-id="${callId}">Waiting for result…</pre></details>\n`;
 											localBuffer += callHtml;
 											backgroundStreams.appendChunk(sessionId, callHtml);
-											this.renderStreamChunk(contentDiv, backgroundStreams.getBuffer(sessionId));
+											this.renderStreamChunk(
+												contentDiv,
+												backgroundStreams.getBuffer(sessionId),
+											);
 										} else if (eventType === "tool_result") {
 											const toolName = json.data?.name || "unknown";
 											const callId = json.data?.call_id || "";
 											const ok = json.data?.ok ?? true;
 											const resultMarkdown = json.data?.markdown || "";
-											console.log(`[Stream] tool_result: ${toolName} ok=${ok} [call=${callId} turn=${turnId}]`);
+											console.log(
+												`[Stream] tool_result: ${toolName} ok=${ok} [call=${callId} turn=${turnId}]`,
+											);
 											// Update or append result
 											const statusIcon = ok ? "✅" : "❌";
 											const resultHtml = `\n<details class="tool-result" open><summary>${statusIcon} ${toolName}</summary><div class="tool-result-content">${resultMarkdown}</div></details>\n`;
 											localBuffer += resultHtml;
 											backgroundStreams.appendChunk(sessionId, resultHtml);
-											this.renderStreamChunk(contentDiv, backgroundStreams.getBuffer(sessionId));
+											this.renderStreamChunk(
+												contentDiv,
+												backgroundStreams.getBuffer(sessionId),
+											);
 											// Update matching call indicator to show completed
-											const callPre = contentDiv.querySelector(`pre[data-call-id="${callId}"]`);
+											const callPre = contentDiv.querySelector(
+												`pre[data-call-id="${callId}"]`,
+											);
 											if (callPre) callPre.textContent = "Completed ✓";
 										}
 										scrollToBottom();

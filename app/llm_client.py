@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, AsyncGenerator, AsyncIterator
+from collections.abc import Iterable
+from typing import Any, AsyncGenerator
 
 import httpx
 

@@ -605,50 +605,14 @@ class MessageRenderer {
 	}
 
 	/**
-	 * Preprocess <command>...</command> blocks into styled UI badges.
-	 * CRITICAL: This must run BEFORE marked.js to prevent tag stripping.
-	 * STREAMING SUPPORT: Also handles UNCLOSED command blocks during active streaming.
+	 * Legacy compatibility passthrough for historical command-markup content.
+	 * Native ToolEvents are rendered elsewhere; this now leaves text unchanged.
 	 * @param {string} text - Raw markdown text
-	 * @returns {string} Text with command blocks converted to styled HTML
+	 * @returns {string} Unmodified text
 	 */
 	preprocessCommandBlocks(text) {
 		if (!text) return text;
-		const sourceText = typeof text === "string" ? text : String(text || "");
-
-		// PHASE 1: Handle fully closed <command>...</command> blocks
-		const closedPattern = /<command>([\s\S]*?)<\/command>/gi;
-		let result = sourceText.replace(closedPattern, (_match, content) => {
-			const trimmedContent = content.trim();
-			if (!trimmedContent) return "";
-
-			// Escape command content for safe display
-			const escapedContent = this.escapeHtml(trimmedContent);
-
-			// Minimalist header without emojis
-			return `<div class="system-action-block command-block">
-				<div class="action-header">Command</div>
-				<div class="action-content code-font">${escapedContent}</div>
-			</div>`;
-		});
-
-		// PHASE 2: Handle UNCLOSED command blocks (streaming state)
-		// This regex matches <command> that reaches end of string without closing tag
-		const unclosedPattern = /<command>([\s\S]*)$/gi;
-		result = result.replace(unclosedPattern, (_match, content) => {
-			const trimmedContent = content.trim();
-			if (!trimmedContent) return "";
-
-			// Escape command content for safe display
-			const escapedContent = this.escapeHtml(trimmedContent);
-
-			// Same structure as closed version, DOM parser safe
-			return `<div class="system-action-block command-block command-streaming">
-				<div class="action-header">Command</div>
-				<div class="action-content code-font">${escapedContent}</div>
-			</div>`;
-		});
-
-		return result;
+		return typeof text === "string" ? text : String(text || "");
 	}
 
 	/**
@@ -917,7 +881,7 @@ class MessageRenderer {
 		}
 
 		try {
-			// PRE-PROCESS: Handle <command> blocks FIRST (before markdown)
+			// PRE-PROCESS: Handle legacy cleanup passthrough first
 			let processedMarkdown = this.preprocessCommandBlocks(safeMarkdown);
 
 			// PRE-PROCESS: Handle <tools> blocks

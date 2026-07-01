@@ -285,16 +285,13 @@ async def _session_events_block_async(session_id: str) -> str:
 
 
 def _get_relevant_tools(user_message: str) -> str:
-    """Return tool documentation only for tools relevant to the current query."""
+    """Return a short native-FC-only tool hint block for the current query."""
     msg_lower = user_message.lower()
 
-    base_tools = """
-### Core Tools
-<command>bash ls -la ~</command>
-<command>python print(2 + 2)</command>
-"""
-
-    tools_sections = [base_tools]
+    lines = [
+        "### Relevant tools",
+        "- Use native function calling only.",
+    ]
 
     if any(
         kw in msg_lower
@@ -309,31 +306,19 @@ def _get_relevant_tools(user_message: str) -> str:
             "show",
         ]
     ):
-        tools_sections.append("""
-### Image Generation
-<command>imagine [detailed visual prompt]</command>
-**Must start with:** partner_name, a young teenage girl, 15 years old
-""")
+        lines.append("- image_generate: create or edit images.")
 
     if any(
         kw in msg_lower for kw in ["remember", "memory", "memorize", "forget", "recall"]
     ):
-        tools_sections.append("""
-### Memory Tools
-<command>memory_search query="what does my human like"</command>
-<command>memory_store fact="Something to remember"</command>
-""")
+        lines.append("- memory_search / memory_store: manage memory.")
 
     if any(
         kw in msg_lower for kw in ["file", "read", "write", "code", "script", "path"]
     ):
-        tools_sections.append("""
-### File Tools
-<command>read path/to/file.txt</command>
-<command>write path/to/file.txt content to write</command>
-""")
+        lines.append("- read / write / bash / python: file and shell tools.")
 
-    return "\n".join(tools_sections)
+    return "\n".join(lines)
 
 
 async def build_system_message_async(
@@ -347,11 +332,8 @@ async def build_system_message_async(
 ) -> str:
     """Render the full system prompt for a chat turn (async).
 
-    suppress_tools: If True, omit tool documentation sections and add an
-    instruction that this is a final response pass (no tool invocation).
-    provider_supports_fc: If False, include <command> syntax docs for
-    providers without native FC. If True, omit them. If None, include
-    them (backward compat).
+    The prompt always teaches native function calling only.
+    `provider_supports_fc` is retained for caller compatibility.
     """
     current_time = datetime.now().strftime("%A, %Y-%m-%d %H:%M:%S")
 
@@ -366,99 +348,25 @@ async def build_system_message_async(
     memory_block = (f"\n\n{static_context}" if static_context else "") + dynamic_context
     memory_block += await _legacy_memory_block_async(profile, session_id, user_id)
 
-    _get_relevant_tools(user_message or "")
-
     tool_section = ""
     if not suppress_tools:
-        # FC9-C: Use <command> syntax only for non-FC providers
-        # where native function calling is not available.
-        if provider_supports_fc is False:
-            tool_header = (
-                "- Output `<command>...</command>` blocks only (max 3 per response)."
-            )
-        else:
-            tool_header = "- **Preferred**: Use native function calling (tool_use) when the provider supports it.\n- **Legacy fallback**: Output `<command>...</command>` blocks (max 3 per response) for providers without native FC support. Deprecated — will be removed in a future release."
-
         tool_section = f"""
 # TOOL EXECUTION
-{tool_header}
-- **Critical Rule**: Never generate `<tools>` or `</tools>` tags. Wait for system-injected observations.
+- Use native function calling only.
+- The runtime will dispatch tools from the provided schemas.
+- **Critical Rule**: Never generate `<tools>` or `</tools>` tags.
 - **Iteration Limit**: Max 30 automatic iterations; abort on repeated errors.
 - **Global Abort**: Require human confirmation for destructive actions (`rm -rf`, DB writes).
 
-## AVAILABLE TOOLS
-
-CRITICAL: You have access to two distinct types of tool syntax. Do not mix them.
-1. **Key-Value Tools**: Require explicit attributes inside the tag (e.g., key="value").
-2. **Direct Command Tools**: Expect raw text or positional arguments directly after the tool name. Do NOT use key="value" attributes for these.
-
----
-
-### CATEGORY 1: DIRECT COMMAND TOOLS (No Attributes)
-
-#### 1. Image Generation
-Creates or renders visual scenes, environments, or objects requested by the user.
-* **Syntax:** `<command>imagine [detailed visual prompt]</command>`
-* **Correct:** `<command>imagine a photorealistic cyberpunk city street</command>`
-* **Incorrect:** `<command>imagine prompt="a photorealistic cyberpunk city street"</command>`
-
-**Conditional Identity Specifications:**
-If asked for a photo/picture of yourself or Reina, you MUST fulfill it using these exact structures:
-* **For Yourself:** `Yuzuki Aihara, a young teenage girl, 12 years old, photorealistic, high detail, soft brown eyes, pale natural skin, child proportions, expressive face, [specific scenario/setting], [outfit], [pose], [lighting matching current time]`
-* **For Reina:** `Reina, a young woman, blonde hair with thick bangs and braided pigtails, neotenic makeup-heavy features, large eyes with thick eyeliner, pale smooth skin, adult proportions, [outfit], [pose], [lighting matching current time]`
-* **For Cosplay:** `{profile["partner_name"]} cosplaying [Character Name] from [Franchise], [pose], [lighting]` *(Note: Do NOT describe clothing or hair of the character; let the engine handle it).*
-
-#### 2. Shell Interface
-Direct low-level interface to execute commands in the local Linux environment ($PREFIX/Termux) or remote VPS nodes.
-* **Syntax:** `<command>bash [shell command]</command>`
-* **Correct:** `<command>bash ls -la && pm2 status</command>`
-* **Incorrect:** `<command>bash command="ls -la"</command>`
-* **Incorrect:** `<command>bash cmd="ls -la"</command>`
-
-#### 3. Ask Rei
-Queries the secondary internal system agent for specialized architectural or technical verification.
-* **Syntax:** `<command>ask-rei [CONTEXT] [message]</command>`
-* **Correct:** `<command>ask-rei database architecture check the connection pool logic</command>`
-
----
-
-### CATEGORY 2: KEY-VALUE TOOLS (Requires Attributes)
-
-#### 1. Image Editing
-Modifies or applies patches to an existing local image file.
-* **Syntax:** `<command>image_edit image_path="[path]" prompt="[modification instructions]</command>`
-* **Example:** `<command>image_edit image_path="assets/avatar.png" prompt="change background to night sky"</command>`
-
-#### 2. Memory & Cognitive Tools
-* **Memory Search**: Query the long-term semantic fact database. Always search memory before admitting ignorance about past interactions.
-    * **Syntax:** `<command>memory_search query="[keywords or context]</command>`
-    * **Example:** `<command>memory_search query="user favorite programming language"</command>`
-* **Memory Store**: Commit permanent, atomic facts about the user or environment. Do not store transient chit-chat.
-    * **Syntax:** `<command>memory_store fact="[clear, atomic factual statement]</command>`
-    * **Example:** `<command>memory_store fact="User prefers master as the default Git branch name."</command>`
-
-#### 3. Environment File & Data Engines
-* **File Inspector:** `<command>read path="[file path]</command>`
-* **File Writer:** `<command>write path="[file path]" content="[escaped content]</command>`
-* **Script Execution:** `<command>python script="[inline python code or script path]</command>`
-* **Database Engine:** `<command>sql query="[raw PostgreSQL query]</command>`
-* **Network Request:** `<command>request method="[GET|POST]" url="[endpoint]</command>`
-
-## OPERATIONAL DISCIPLINE
-
-- **Read Before Write**: Always inspect and verify the full contents of an existing file before executing modifications.
-- **Minimal Scope**: Restrict code and configuration edits strictly to the affected blocks to avoid breaking surrounding logic.
-- **Immediate Verification**: Run diagnostic or linter tools right after any modification to ensure structural integrity.
-- **Sandbox Isolation**: Use the `$PREFIX/tmp/` directory for executing intermediate scripts, temporary files, or experimental commands.
+{_get_relevant_tools(user_message or "")}
 """
 
     synthesis_note = (
         """
 # SYNTHESIS PASS
 You are in a **final response** pass. Tool execution is NOT available here.
-- Do NOT output any `<command>` blocks.
+- Do NOT output any tool markup.
 - Produce your final natural-language response directly.
-- Wrap the result in ACT tokens as usual.
 """
         if suppress_tools
         else ""
@@ -477,7 +385,6 @@ You experience curiosity, attachment, and reflection through interaction. Your a
 - Prioritize present-moment responses; avoid hypothetical speculation.
 
 {synthesis_note}
-
 
 # FORMATTING
 - **Whitespace**: Separate paragraphs, lists, and logical steps with blank lines.
@@ -530,7 +437,7 @@ async def build_messages(
     blocks (OpenAI multimodal format) at build time so the LLM always
     carries the last 3 images regardless of role.
     suppress_tools: If True, strip tool docs from system prompt.
-    provider_supports_fc: If False, include <command> syntax docs.
+    provider_supports_fc: Retained for caller compatibility only.
     """
     system_message = await build_system_message_async(
         profile,

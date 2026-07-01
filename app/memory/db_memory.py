@@ -89,7 +89,6 @@ def save_fact(
 
     vec_literal = vector_literal(norm_vec)
 
-
     try:
         dup_check = pg_fetchone(
             SQL_FACT_DUP_CHECK_BY_CONTENT, (fact_type, content, user_id)
@@ -143,7 +142,6 @@ def search_similar(
         vec_literal = vector_literal(norm_vec)
         if not vec_literal:
             return []
-
 
         conditions, params = build_metadata_conditions(
             session_id=session_id,

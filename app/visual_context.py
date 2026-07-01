@@ -15,7 +15,8 @@ def store_visual_context(session_id: str, image_base64: str, mime: str) -> None:
 
 
 def consume_visual_context(
-    session_id: str, is_tool_loop: bool = False,
+    session_id: str,
+    is_tool_loop: bool = False,
 ) -> tuple[str | None, str | None]:
     """Deprecated — always returns (None, None)."""
     return None, None

@@ -1,25 +1,26 @@
 from __future__ import annotations
-import pytest
 
-from app.commands import (
-    execute_commands,
-    has_tool_blocks,
+import ast
+import inspect
+
+from app.legacy_markup import (
+    has_legacy_tool_markup,
     parse_image_path,
-    parse_tool_blocks,
+    strip_legacy_tool_blocks,
 )
 
 
-class TestParseToolBlocks:
-    """Tests for the core <command> block parser."""
+class TestStripLegacyToolBlocks:
+    """Tests for legacy XML tool-markup cleanup."""
 
     def test_empty_text(self):
-        commands, clean_text = parse_tool_blocks("")
+        commands, clean_text = strip_legacy_tool_blocks("")
         assert commands == []
         assert clean_text == ""
 
     def test_no_tool_blocks(self):
         text = "Hello there, this is just plain text.\nNo tools here."
-        commands, clean_text = parse_tool_blocks(text)
+        commands, clean_text = strip_legacy_tool_blocks(text)
         assert commands == []
         assert "Hello there" in clean_text
         assert "No tools here" in clean_text
@@ -30,7 +31,7 @@ class TestParseToolBlocks:
 ls -la
 </command>
 Mari tunggu hasilnya"""
-        commands, clean_text = parse_tool_blocks(text)
+        commands, clean_text = strip_legacy_tool_blocks(text)
         assert commands == ["ls -la"]
         assert "Baik saya cek dulu" in clean_text
         assert "Mari tunggu hasilnya" in clean_text
@@ -39,7 +40,7 @@ Mari tunggu hasilnya"""
 
     def test_multiple_tool_blocks(self):
         text = """<command>
-echo "hello"
+echo \"hello\"
 </command>
 <command>
 pwd
@@ -47,20 +48,19 @@ pwd
 <command>
 ls
 </command>"""
-        commands, clean_text = parse_tool_blocks(text)
+        commands, clean_text = strip_legacy_tool_blocks(text)
         assert len(commands) == 3
         assert commands[0] == 'echo "hello"'
         assert commands[1] == "pwd"
         assert commands[2] == "ls"
 
     def test_max_three_tool_blocks(self):
-        """More than 3 tool blocks should be ignored."""
         text = """<command>cmd1</command>
 <command>cmd2</command>
 <command>cmd3</command>
 <command>cmd4</command>
 <command>cmd5</command>"""
-        commands, clean_text = parse_tool_blocks(text)
+        commands, clean_text = strip_legacy_tool_blocks(text)
         assert len(commands) == 3
         assert commands == ["cmd1", "cmd2", "cmd3"]
 
@@ -69,9 +69,9 @@ ls
    
 </command>
 <command>
-echo "real"
+echo \"real\"
 </command>"""
-        commands, clean_text = parse_tool_blocks(text)
+        commands, clean_text = strip_legacy_tool_blocks(text)
         assert len(commands) == 1
         assert commands[0] == 'echo "real"'
 
@@ -81,7 +81,7 @@ for i in 1 2 3; do
     echo $i
 done
 </command>"""
-        commands, clean_text = parse_tool_blocks(text)
+        commands, clean_text = strip_legacy_tool_blocks(text)
         assert len(commands) == 1
         assert "for i in 1 2 3" in commands[0]
         assert "echo $i" in commands[0]
@@ -92,7 +92,7 @@ done
    ls -la   
    
 </command>"""
-        commands, clean_text = parse_tool_blocks(text)
+        commands, clean_text = strip_legacy_tool_blocks(text)
         assert commands == ["ls -la"]
 
     def test_preserves_conversational_text(self):
@@ -103,38 +103,34 @@ cat config.json
 </command>
 
 Ini hasilnya ya."""
-        commands, clean_text = parse_tool_blocks(text)
+        commands, clean_text = strip_legacy_tool_blocks(text)
         assert commands == ["cat config.json"]
         assert "Baik saya akan cek filenya" in clean_text
         assert "Ini hasilnya ya" in clean_text
 
     def test_no_nested_tool_support(self):
-        """Nested <command> tags are not supported - outer block wins."""
         text = """<command>
 outer <command>inner</command> command
 </command>"""
-        commands, clean_text = parse_tool_blocks(text)
-        # Behavior: regex is non-greedy, so it matches first <command>...</command>
-        # The inner <command> is just text inside the outer block
+        commands, clean_text = strip_legacy_tool_blocks(text)
         assert len(commands) == 1
         assert "outer" in commands[0]
-        # The "inner" is just text, not parsed as a separate block
 
 
-class TestHasToolBlocks:
-    """Tests for the has_tool_blocks helper."""
+class TestHasLegacyToolMarkup:
+    """Tests for the legacy markup detector."""
 
     def test_returns_true_for_tool_blocks(self):
-        assert has_tool_blocks("<command>ls</command>") is True
+        assert has_legacy_tool_markup("<command>ls</command>") is True
 
     def test_returns_false_for_no_tool_blocks(self):
-        assert has_tool_blocks("just text") is False
+        assert has_legacy_tool_markup("just text") is False
 
     def test_returns_false_for_empty(self):
-        assert has_tool_blocks("") is False
+        assert has_legacy_tool_markup("") is False
 
     def test_returns_true_with_narration(self):
-        assert has_tool_blocks("hello <command>cmd</command> world") is True
+        assert has_legacy_tool_markup("hello <command>cmd</command> world") is True
 
 
 class TestParseImagePath:
@@ -152,51 +148,19 @@ class TestParseImagePath:
         assert parse_image_path("") is None
 
 
-class TestExecuteCommandsLegacy:
-    """Tests for legacy command execution (FC7 retires <command> from runtime).
+class TestLegacyCleanupIsolation:
+    """Legacy cleanup utilities must not be wired into runtime execution."""
 
-    These tests validate the legacy execute_commands function still works
-    for backward compatibility, but it is no longer called in the
-    orchestrator runtime path. FC10-C verifies this isolation.
-    """
-
-    @pytest.mark.asyncio
-    async def test_empty_commands(self):
-        results = await execute_commands([])
-        assert results == []
-
-    @pytest.mark.asyncio
-    async def test_invalid_command_format(self):
-        """Invalid command string should return error result."""
-        results = await execute_commands(["   "])  # Empty/whitespace command
-        assert len(results) == 1
-        tool_name, result = results[0]
-        assert tool_name == "unknown"
-        assert result.get("ok") is False
-
-
-class TestCommandExecutionNotInRuntime:
-    """FC10-C: Verify execute_commands is NOT importable from orchestrator runtime path.
-
-    This test ensures the legacy command execution path cannot silently
-    become active again. If someone re-adds `from app.commands import execute_commands`
-    to the orchestrator, this test will fail.
-    """
-
-    def test_orchestrator_does_not_import_execute_commands(self):
-        """Orchestrator module must not import execute_commands."""
-        import inspect
+    def test_orchestrator_does_not_import_legacy_executor(self):
         from app import orchestrator
+
         source = inspect.getsource(orchestrator)
-        # Check that execute_commands is not imported (only parse_tool_blocks etc.)
-        assert "execute_commands" not in source or "execute_commands" in source and "parse_tool_blocks" in source
-        # More precise: check imports specifically
-        import ast
         tree = ast.parse(source)
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom):
-                if node.module and "commands" in node.module:
-                    for alias in node.names:
-                        assert alias.name != "execute_commands", (
-                            "execute_commands must not be imported in orchestrator (FC7)"
-                        )
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module
+                and "commands" in node.module
+            ):
+                for alias in node.names:
+                    assert alias.name not in {"execute_commands", "parse_tool_blocks"}

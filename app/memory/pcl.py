@@ -263,7 +263,7 @@ The conversation log may contain polluted patterns that encode bad habits, not r
 ### STRIP AWAY AND COMPLETELY IGNORE (never treat as signal):
 - **Flowery / Dramatic Language**: theatrical emotes (*sighs dramatically*, *gasps*, *shudders*), asterisk roleplay markers, poetic flourishes ("like a symphony", "a single tear falls", "the weight of silence"), overwrought dramatic closings ("...and so the night fades").
 - **Repetitive Tics**: emoji spam runs, looping conversational patterns ("i dont know i dont know i dont know"), excessive emoji density.
-- **Legacy markup**: any <command>...</command> or <tool>...</tool> blocks that leaked into the log.
+- **Legacy markup**: any XML-style tool markup that leaked into the log.
 - **Performative behavior descriptions**: roleplay actions, exaggerated emotional displays, robotic/quirky assistant mannerisms.
 
 ### NEVER EXTRACT these noisy elements AS:

@@ -303,7 +303,6 @@ DEFAULT_PROFILE_PARAMS = (
     "{}",
     "{}",
     "{}",
-    "{}",
 )
 
 _PROFILE_JSON_FIELDS = (

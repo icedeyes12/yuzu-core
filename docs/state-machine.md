@@ -16,7 +16,6 @@ The `StreamManager` is responsible for caching and managing the active state of 
 2. **Buffering & Yielding**
    - As the LLM yields chunks, the `StreamBuffer` stores every chunk in its internal history (`self.full_content`).
    - Simultaneously, chunks are pushed to an `asyncio.Queue` for the active HTTP response to consume.
-   - The `StreamFilter` (`app/commands.py`) acts as a middleware to detect `<command>` tags and suppress them from being yielded to the user interface.
 
 3. **Client Disconnection**
    - If the client closes the browser or the connection drops, the background LLM task **continues generating**.

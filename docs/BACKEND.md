@@ -55,7 +55,7 @@ Business logic extracted from endpoints into `app/services/`:
 ```
 1. Image cache detection
 2. LLM dispatch (app/llm_client.py)
-3. Tool-call parsing (<command> tags via app/commands.py)
+3. Native tool-call parsing via provider `tool_calls`
 4. Tool execution (app/tools/registry.py)
 5. Synthesis pass (2nd LLM call)
 6. Post-turn: async memory pipeline + cache cleanup

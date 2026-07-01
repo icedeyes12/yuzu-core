@@ -64,7 +64,7 @@ class StreamBuffer:
         # as assistant, tool results as tool roles, synthesis as assistant).
         # Skip the single-write persistence to prevent double-saving a
         # Frankenstein concatenation of all three.
-        if "<command>" in content or "<tool>" in content:
+        if "[Tool execution result]" in content or "<details>" in content:
             log.info(
                 f"[Stream] Skipping _persist_to_db — orchestrator handled "
                 f"discrete persistence for session {self.session_id}"

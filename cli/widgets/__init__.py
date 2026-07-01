@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from cli.widgets.chat_log import ChatLog

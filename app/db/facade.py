@@ -163,7 +163,7 @@ class Database:
         return await _pg_update_message_async(message_id, content)
 
     @staticmethod
-    async def add_message(
+    def add_message(
         role: str,
         content: str,
         session_id: str | None = None,
@@ -173,94 +173,122 @@ class Database:
         tool_calls: list[dict[str, Any]] | None = None,
         tool_call_id: str | None = None,
         turn_id: str | None = None,
-    ) -> int | None:
+    ) -> Any:
         """Add a message to a session (defaults to active session)."""
         _require_user_id("add_message", user_id)
-        return await _pg_add_message_async(
-            await _resolve_session_id_async(session_id, user_id),
-            role,
-            content,
-            image_paths,
-            user_id=user_id,
-            tool_calls=tool_calls,
-            tool_call_id=tool_call_id,
-            turn_id=turn_id,
-        )
+
+        async def _call() -> int | None:
+            return await _pg_add_message_async(
+                await _resolve_session_id_async(session_id, user_id),
+                role,
+                content,
+                image_paths,
+                user_id=user_id,
+                tool_calls=tool_calls,
+                tool_call_id=tool_call_id,
+                turn_id=turn_id,
+            )
+
+        return _call()
 
     @staticmethod
-    async def get_messages(
+    def get_messages(
         session_id: str | None = None, limit: int | None = None, *, user_id: str
-    ) -> list[dict]:
+    ) -> Any:
         """Get messages for a session (defaults to active session)."""
         _require_user_id("get_messages", user_id)
-        return await _pg_get_session_messages_async(
-            await _resolve_session_id_async(session_id, user_id), limit or 100
-        )
+
+        async def _call() -> list[dict]:
+            return await _pg_get_session_messages_async(
+                await _resolve_session_id_async(session_id, user_id), limit or 100
+            )
+
+        return _call()
 
     @staticmethod
-    async def get_chat_history(
+    def get_chat_history(
         session_id: str | None = None,
         limit: int | None = None,
         recent: bool = False,
         *,
         user_id: str,
-    ) -> list[dict]:
+    ) -> Any:
         """Get chat history for a session (defaults to active session)."""
         _require_user_id("get_chat_history", user_id)
-        return await _pg_get_chat_history_async(
-            await _resolve_session_id_async(session_id, user_id),
-            limit,
-            recent,
-            user_id=user_id,
-        )
+
+        async def _call() -> list[dict]:
+            return await _pg_get_chat_history_async(
+                await _resolve_session_id_async(session_id, user_id),
+                limit,
+                recent,
+                user_id=user_id,
+            )
+
+        return _call()
 
     @staticmethod
-    async def get_chat_history_for_ai(
+    def get_chat_history_for_ai(
         session_id: str | None = None,
         limit: int | None = None,
         recent: bool = False,
         include_image_paths: bool = False,
         *,
         user_id: str,
-    ) -> list[dict]:
+    ) -> Any:
         """Build message context for AI provider (defaults to active session)."""
         _require_user_id("get_chat_history_for_ai", user_id)
-        return await _pg_get_chat_history_for_ai_async(
-            await _resolve_session_id_async(session_id, user_id),
-            limit,
-            recent,
-            include_image_paths,
-            user_id=user_id,
-        )
+
+        async def _call() -> list[dict]:
+            return await _pg_get_chat_history_for_ai_async(
+                await _resolve_session_id_async(session_id, user_id),
+                limit,
+                recent,
+                include_image_paths,
+                user_id=user_id,
+            )
+
+        return _call()
 
     @staticmethod
-    async def clear_session(session_id: str | None = None, *, user_id: str) -> bool:
+    def clear_session(session_id: str | None = None, *, user_id: str) -> Any:
         """Clear all messages for a session (defaults to active session)."""
         _require_user_id("clear_session", user_id)
-        return await _pg_clear_session_messages_async(
-            await _resolve_session_id_async(session_id, user_id)
-        )
+
+        async def _call() -> bool:
+            return await _pg_clear_session_messages_async(
+                await _resolve_session_id_async(session_id, user_id)
+            )
+
+        return _call()
 
     clear_chat_history = clear_session
 
     @staticmethod
-    async def add_session_event(
+    def add_session_event(
         content: str, interface: str = "terminal", *, user_id: str
-    ) -> int | None:
+    ) -> Any:
         """Add a session event message to the active session."""
         _require_user_id("add_session_event", user_id)
-        active = await _pg_get_active_session_async(user_id)
-        return await _pg_add_session_event_async(active["id"], content, interface)
+
+        async def _call() -> int | None:
+            active = await _pg_get_active_session_async(user_id)
+            return await _pg_add_session_event_async(active["id"], content, interface)
+
+        return _call()
 
     @staticmethod
-    async def add_system_note(
+    def add_system_note(
         content: str, session_id: str | None = None, *, user_id: str
-    ) -> int | None:
+    ) -> Any:
         """Add a system note message (defaults to active session)."""
         _require_user_id("add_system_note", user_id)
-        return await _pg_add_system_note_async(
-            await _resolve_session_id_async(session_id, user_id), content
-        )
+
+        async def _call() -> int | None:
+            return await _pg_add_system_note_async(
+                await _resolve_session_id_async(session_id, user_id), content
+            )
+
+        return _call()
 
 
 __all__ = [

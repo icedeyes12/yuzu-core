@@ -19,6 +19,7 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 from app.db import Database  # noqa: E402
+from app.db import init_pg_tables_async  # noqa: E402
 from app.db.connection import get_sync_pool, get_async_pool, close_async_pool  # noqa: E402
 from app.api import api_router  # noqa: E402
 from app.api.utils import get_current_user  # noqa: E402
@@ -41,6 +42,10 @@ async def lifespan(app: FastAPI):
     # Initialize pools explicitly (no lazy init)
     sync_pool = get_sync_pool()
     async_pool = await get_async_pool()
+
+    # Run schema bootstrap before health check so missing columns are repaired
+    # during startup instead of failing later on first query.
+    await init_pg_tables_async()
 
     # Health check
     try:

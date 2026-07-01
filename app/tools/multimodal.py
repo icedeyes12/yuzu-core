@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import logging
 import requests
@@ -408,7 +407,6 @@ class MultimodalTools:
 
         return clean_text
 
-
     def detect_image_generation_request(
         self, text: str, is_ai_response: bool = False
     ) -> bool:
@@ -609,7 +607,9 @@ class MultimodalTools:
         return found_images
 
     def inject_vision_context(
-        self, messages: list[dict], current_model: str,
+        self,
+        messages: list[dict],
+        current_model: str,
     ) -> list[dict]:
         """Deprecated — returns *messages* unchanged.
 

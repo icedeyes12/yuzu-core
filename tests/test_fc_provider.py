@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.providers.base import AIProviderManager, ProviderCapabilities
+from app.providers.base import ProviderCapabilities
 from app.tools.schemas import StreamToolEvent
 
 
