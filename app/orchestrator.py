@@ -399,6 +399,37 @@ async def _persist_tool_result_async(
         )
 
 
+async def _persist_streaming_tool_results_async(
+    tool_calls_data: list[dict],
+    tool_results: list[tuple[str, dict]],
+    session_id: str,
+    *,
+    user_id: str,
+    turn_id: str,
+) -> tuple[list[str], list[str]]:
+    """Persist streaming tool results while preserving the provider call ID."""
+    tool_markdowns: list[str] = []
+    generated_paths: list[str] = []
+
+    for i, (tool_name, result) in enumerate(tool_results):
+        tool_markdown = result.get("markdown", str(result))
+        tool_markdowns.append(tool_markdown)
+        tool_call_id = tool_calls_data[i].get("id") if i < len(tool_calls_data) else None
+        await _persist_tool_result_async(
+            tool_name,
+            tool_markdown,
+            session_id,
+            user_id=user_id,
+            tool_call_id=tool_call_id,
+            turn_id=turn_id,
+        )
+        log.info("[stream] persisted tool result for %s [turn=%s]", tool_name, turn_id)
+        if p := parse_image_path(tool_markdown):
+            generated_paths.append(p)
+
+    return tool_markdowns, generated_paths
+
+
 async def _persist_observation_async(
     observation: str, session_id: str, *, user_id: str
 ) -> None:
@@ -999,30 +1030,18 @@ async def handle_user_message_streaming(
         tool_results = await _execute_tool_calls_async(
             tool_calls_data, session_id, user_id=user_id, turn_id=turn_id
         )
-        tool_markdowns: list[str] = []
-        all_generated_paths = []
-        for tool_name, result in tool_results:
-            tool_markdown = result.get("markdown", str(result))
-            tool_markdowns.append(tool_markdown)
-            await _persist_tool_result_async(
-                tool_name,
-                tool_markdown,
-                session_id,
-                user_id=user_id,
-                turn_id=turn_id,
-            )
-            log.info(
-                "[stream] persisted tool result for %s [turn=%s]", tool_name, turn_id
-            )
-            p = parse_image_path(tool_markdown)
-            if p is not None:
-                all_generated_paths.append(p)
-
-        combined_tool_markdown = "\n\n".join(tool_markdowns)
-        if combined_tool_markdown:
+        tool_markdowns, all_generated_paths = await _persist_streaming_tool_results_async(
+            tool_calls_data,
+            tool_results,
+            session_id,
+            user_id=user_id,
+            turn_id=turn_id,
+        )
+        if tool_markdowns:
+            combined_tool_markdown = "\n\n".join(tool_markdowns)
             yield "\n\n" + combined_tool_markdown
 
-        if not combined_tool_markdown:
+        if not tool_markdowns:
             await _finalize_and_persist_async(
                 session_id,
                 fence_id,

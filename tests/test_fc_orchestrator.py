@@ -14,6 +14,8 @@ from app.tools.schemas import (
 from app.orchestrator import (
     _parse_raw_tool_calls_async,
     _execute_tool_calls_async,
+    _persist_tool_result_async,
+    _persist_streaming_tool_results_async,
 )
 
 
@@ -146,6 +148,79 @@ class TestExecuteToolCallsAsync:
     async def test_empty_list(self):
         results = await _execute_tool_calls_async([], session_id="test_session")
         assert results == []
+
+
+class TestPersistToolResultAsync:
+    @pytest.mark.asyncio
+    async def test_native_tool_result_uses_canonical_tool_role(self):
+        add_message = AsyncMock(return_value=123)
+        with patch("app.orchestrator.Database.add_message", new=add_message):
+            await _persist_tool_result_async(
+                "bash",
+                "result",
+                "session_1",
+                user_id="user_1",
+                tool_call_id="call_1",
+                turn_id="turn_1",
+            )
+
+        assert add_message.await_count == 1
+        args, kwargs = add_message.await_args
+        assert args[0] == "tool"
+        assert args[1] == "result"
+        assert kwargs["session_id"] == "session_1"
+        assert kwargs["tool_call_id"] == "call_1"
+        assert kwargs["turn_id"] == "turn_1"
+
+    @pytest.mark.asyncio
+    async def test_streaming_tool_results_preserve_tool_call_ids(self):
+        add_message = AsyncMock(return_value=123)
+        with patch("app.orchestrator.Database.add_message", new=add_message):
+            tool_calls_data = [
+                {"id": "call_1", "name": "bash", "arguments": {}},
+                {"id": "call_2", "name": "python", "arguments": {}},
+            ]
+            tool_results = [
+                ("bash", {"markdown": "result-1"}),
+                ("python", {"markdown": "result-2"}),
+            ]
+            tool_markdowns, generated_paths = await _persist_streaming_tool_results_async(
+                tool_calls_data,
+                tool_results,
+                "session_1",
+                user_id="user_1",
+                turn_id="turn_1",
+            )
+
+        assert tool_markdowns == ["result-1", "result-2"]
+        assert generated_paths == []
+        assert add_message.await_count == 2
+        first_call = add_message.await_args_list[0]
+        second_call = add_message.await_args_list[1]
+        assert first_call.args[0] == "tool"
+        assert first_call.kwargs["tool_call_id"] == "call_1"
+        assert second_call.kwargs["tool_call_id"] == "call_2"
+
+    @pytest.mark.asyncio
+    async def test_legacy_fallback_stays_intact_when_no_tool_call_id(self):
+        add_message = AsyncMock(return_value=123)
+        with patch("app.orchestrator.get_tool_role", return_value="shell_tools") as role:
+            with patch("app.orchestrator.Database.add_message", new=add_message):
+                await _persist_tool_result_async(
+                    "bash",
+                    "result",
+                    "session_1",
+                    user_id="user_1",
+                    turn_id="turn_2",
+                )
+
+        role.assert_called_once_with("bash")
+        assert add_message.await_count == 1
+        args, kwargs = add_message.await_args
+        assert args[0] == "shell_tools"
+        assert args[1] == "result"
+        assert kwargs["session_id"] == "session_1"
+        assert kwargs["turn_id"] == "turn_2"
 
 
 class TestStreamToolEventHandling:
