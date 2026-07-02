@@ -17,7 +17,6 @@ log = get_logger(__name__)
 
 MAX_HISTORY_TOKENS = 15000
 _MAX_EMBEDDED_IMAGES = 3
-_IMAGE_ROLES = ("user", "image_tools", "image_edit")
 
 
 def _estimate_tokens(text: str) -> int:
@@ -466,13 +465,12 @@ async def build_messages(
     # ── Collect last N image paths globally (across all roles) ─────────
     last_images: list[tuple[str, str]] = []  # (path, role)
     for msg in reversed(history):
-        role = msg.get("role", "")
         paths = msg.get("image_paths") or []
-        if role in _IMAGE_ROLES and paths:
+        if paths:
             for p in reversed(paths):
                 if len(last_images) >= _MAX_EMBEDDED_IMAGES:
                     break
-                last_images.append((p, role))
+                last_images.append((p, msg.get("role", "")))
         if len(last_images) >= _MAX_EMBEDDED_IMAGES:
             break
     allowed_set = {p for p, _ in last_images}
@@ -484,7 +482,7 @@ async def build_messages(
         content = msg.get("content", "")
         paths = msg.get("image_paths") or []
 
-        if role in _IMAGE_ROLES and paths:
+        if paths:
             valid_paths = [p for p in paths if p in allowed_set and os.path.exists(p)]
             if valid_paths:
                 result.append(_build_multimodal_message(role, content, valid_paths))

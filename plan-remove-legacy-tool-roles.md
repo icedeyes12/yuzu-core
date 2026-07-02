@@ -6,7 +6,7 @@
 ## Task checklist
 
 - ☑ Phase 1: canonicalize streaming tool-result persistence
-- ☐ Phase 2: update prompt image detection to stop depending on legacy tool-role labels
+- ☑ Phase 2: update prompt image detection to stop depending on legacy tool-role labels
 - ☐ Phase 3: deprecate `ToolDefinition.role` as a write-path concept
 - ☐ Phase 4: remove legacy role constants/helpers and read-path shims
 - ☐ Phase 5: remove Chutes-specific message normalization if canonical payloads are sufficient
@@ -44,7 +44,7 @@
 
 ## Phase 2 — Update prompt image detection
 
-**Status:** TODO
+**Status:** DONE
 
 **Target commit message:** `fix(prompts): detect images by image_paths, not legacy tool roles`
 
