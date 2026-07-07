@@ -184,7 +184,10 @@ class TestPersistToolResultAsync:
                 ("bash", {"markdown": "result-1"}),
                 ("python", {"markdown": "result-2"}),
             ]
-            tool_markdowns, generated_paths = await _persist_streaming_tool_results_async(
+            (
+                tool_markdowns,
+                generated_paths,
+            ) = await _persist_streaming_tool_results_async(
                 tool_calls_data,
                 tool_results,
                 "session_1",
@@ -202,22 +205,20 @@ class TestPersistToolResultAsync:
         assert second_call.kwargs["tool_call_id"] == "call_2"
 
     @pytest.mark.asyncio
-    async def test_legacy_fallback_stays_intact_when_no_tool_call_id(self):
+    async def test_tool_results_always_persist_as_canonical_tool_role(self):
         add_message = AsyncMock(return_value=123)
-        with patch("app.orchestrator.get_tool_role", return_value="shell_tools") as role:
-            with patch("app.orchestrator.Database.add_message", new=add_message):
-                await _persist_tool_result_async(
-                    "bash",
-                    "result",
-                    "session_1",
-                    user_id="user_1",
-                    turn_id="turn_2",
-                )
+        with patch("app.orchestrator.Database.add_message", new=add_message):
+            await _persist_tool_result_async(
+                "bash",
+                "result",
+                "session_1",
+                user_id="user_1",
+                turn_id="turn_2",
+            )
 
-        role.assert_called_once_with("bash")
         assert add_message.await_count == 1
         args, kwargs = add_message.await_args
-        assert args[0] == "shell_tools"
+        assert args[0] == "tool"
         assert args[1] == "result"
         assert kwargs["session_id"] == "session_1"
         assert kwargs["turn_id"] == "turn_2"

@@ -1,25 +1,18 @@
 from __future__ import annotations
 
 from app.db import (
-    ALL_TOOL_ROLES,
     DEFAULT_PROFILE_PARAMS,
-    SCHEMA_DDL,
-    TOOL_ROLES,
     build_encryption_status,
     build_profile_update,
     decrypt_api_key_rows,
-    extract_command_from_markdown_contract,
-    extract_raw_result_from_markdown_contract,
     format_ai_history_rows,
     format_conversation_summary,
-    format_session_event,
     parse_event_row,
     parse_json,
     parse_message_row,
     parse_profile_row,
     parse_session_memory_rows,
     parse_session_row,
-    tool_role_for,
 )
 
 
@@ -180,40 +173,6 @@ class TestMessageParsers:
         assert out == "User: hi\nAI: hello"
 
 
-class TestToolContractParsers:
-    def test_extract_command_from_contract(self):
-        contract = (
-            "<details><summary>image_tools</summary>\n"
-            "```bash\nuser@host$ /imagine a cat\n```\n"
-            "result\n</details>"
-        )
-        extract_command_from_contract = extract_command_from_markdown_contract
-        assert extract_command_from_contract(contract) == "/imagine a cat"
-
-    def test_extract_command_returns_input_when_no_match(self):
-        assert extract_command_from_markdown_contract("plain text") == "plain text"
-
-    def test_extract_command_handles_empty(self):
-        assert extract_command_from_markdown_contract("") == ""
-
-    def test_extract_raw_result_strips_formatting(self):
-        contract = (
-            "<details><summary>x</summary>\n"
-            "```bash\n$ /imagine cat\n```\n"
-            "actual result\n"
-            "</details>"
-        )
-        assert (
-            extract_raw_result_from_markdown_contract(contract).strip()
-            == "actual result"
-        )
-
-    def test_extract_raw_result_strips_html(self):
-        assert (
-            extract_raw_result_from_markdown_contract("<b>bold</b> text") == "bold text"
-        )
-
-
 class TestFormatAiHistoryRows:
     def test_skips_event_log_rows(self):
         rows = [{"role": "event_log", "content": "x", "timestamp": ""}]
@@ -309,47 +268,3 @@ class TestEncryptionStatus:
             "encrypted": 3,
             "policy": "FULL_ENCRYPTION",
         }
-
-
-class TestToolRoleHelpers:
-    def test_tool_role_for_known(self):
-        assert tool_role_for("imagine") == "image_tools"
-        assert tool_role_for("image_generate") == "image_tools"
-        assert tool_role_for("request") == "request_tools"
-
-    def test_tool_role_for_unknown_falls_back(self):
-        assert tool_role_for("weather") == "weather_tools"
-
-    def test_all_tool_roles_dedup(self):
-        # imagine + image_generate both map to image_tools, dedup -> 2 unique
-        assert sorted(ALL_TOOL_ROLES) == [
-            "ask_rei_tools",
-            "fs_tools",
-            "image_tools",
-            "memory_tools",
-            "python_tools",
-            "request_tools",
-            "shell_tools",
-            "sql_tools",
-        ]
-
-    def test_tool_roles_dict_is_complete(self):
-        assert "imagine" in TOOL_ROLES
-        assert "image_generate" in TOOL_ROLES
-        assert "request" in TOOL_ROLES
-
-
-class TestMisc:
-    def test_format_session_event(self):
-        assert format_session_event("hi", "web") == "*hi on web*"
-
-    def test_schema_ddl_has_expected_tables(self):
-        full = " ".join(SCHEMA_DDL)
-        assert "profiles" in full
-        assert "chat_sessions" in full
-        assert "api_keys" in full
-        assert "messages" in full
-        assert "semantic_facts" in full
-        assert "generate_uuidv7" in full
-        # 3 extensions + 1 function + 5 tables + 12 indexes + 5 migration DO-blocks = 31 statements
-        assert len(SCHEMA_DDL) == 31

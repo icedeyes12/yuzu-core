@@ -48,7 +48,9 @@ async def test_runtime_prompt_uses_native_fc_only(monkeypatch):
     assert "native function calling" in prompt.lower()
     assert "<command>" not in prompt
     assert "</command>" not in prompt
+    assert "legacy tool markup" not in prompt.lower()
     assert "legacy fallback" not in prompt.lower()
+    assert "tool registry" in prompt.lower()
 
 
 @pytest.mark.asyncio
@@ -72,10 +74,18 @@ async def test_build_messages_uses_image_paths_without_role_filter(monkeypatch):
             },
         ]
 
-    monkeypatch.setattr(prompts, "build_system_message_async", _stub_build_system_message_async)
-    monkeypatch.setattr(prompts.Database, "get_chat_history_for_ai", _stub_get_chat_history_for_ai_async)
+    monkeypatch.setattr(
+        prompts, "build_system_message_async", _stub_build_system_message_async
+    )
+    monkeypatch.setattr(
+        prompts.Database, "get_chat_history_for_ai", _stub_get_chat_history_for_ai_async
+    )
     monkeypatch.setattr(prompts.os.path, "exists", lambda path: True)
-    monkeypatch.setattr(prompts, "_encode_image_safe", lambda path: {"type": "image_url", "image_url": {"url": f"data:{path}"}})
+    monkeypatch.setattr(
+        prompts,
+        "_encode_image_safe",
+        lambda path: {"type": "image_url", "image_url": {"url": f"data:{path}"}},
+    )
 
     messages = await prompts.build_messages(
         profile=profile,

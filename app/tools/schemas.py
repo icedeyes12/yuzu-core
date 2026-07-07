@@ -25,26 +25,15 @@ class ToolParam:
 
 @dataclass
 class ToolDefinition:
-    """Complete definition of a callable tool.
-
-    This object is the single source of truth for:
-    - The LLM's tools[] array (serialized to function-calling schema)
-    - Dispatcher routing (tool_name → module)
-    - Role categorization for DB storage
-    - Capability metadata for provider negotiation
-    """
-
-    name: str  # unique, matches module name, e.g. "image_generate"
-    description: str  # human-readable; LLM uses this to decide when to call
-    role: str  # DB storage role, e.g. "image_tools", "request_tools"
+    name: str
+    description: str
     parameters: list[ToolParam] = field(default_factory=list)
 
-    # Internal fields (not serialized to LLM schema)
-    needs_session: bool = False  # if True, dispatcher injects session_id from context
+    role: str | None = None
+    needs_session: bool = False
 
-    # Capability metadata (used by provider layer for FC negotiation)
-    supports_native_fc: bool = True  # tool is compatible with native function calling
-    supports_streaming_fc: bool = True  # tool works in streaming FC mode
+    supports_native_fc: bool = True
+    supports_streaming_fc: bool = True
 
     def to_llm_schema(self) -> dict:
         """Serialize to OpenAI function-calling schema format."""
@@ -227,23 +216,18 @@ def new_turn_id() -> str:
 # ---------------------------------------------------------------------------
 # Legacy markdown contract helpers
 #
-# These remain for backward compatibility during the migration.
-# They are presentation-only — never parsed for runtime semantics.
-# FC7 will remove them.
+# Kept only for cleanup of stored historical rows; runtime must not depend on
+# them for execution or tool dispatch.
 # ---------------------------------------------------------------------------
 
 
 def build_tool_contract(
-    tool_def: ToolDefinition,
+    tool_name: str,
     full_command: str,
     output_lines: list[str],
     partner_name: str = "Yuzu",
 ) -> str:
-    """Build the unified markdown contract for tool output.
-
-    Returns a ``<tools>`` block — the ONLY format stored in DB
-    and rendered by the frontend.
-    """
+    """Build the unified markdown contract for tool output."""
     quoted = []
     raw = []
     in_code_fence = False
@@ -263,7 +247,7 @@ def build_tool_contract(
     if raw:
         formatted_output += "\n\n" + "\n".join(raw)
 
-    return f"<tools>\n🔧 {tool_def.role}\n\n{formatted_output}\n\n</tools>"
+    return f"<tools>\n🔧 {tool_name}\n\n{formatted_output}\n\n</tools>"
 
 
 def ok_result(
@@ -277,7 +261,7 @@ def ok_result(
         "ok": True,
         "data": data,
         "markdown": build_tool_contract(
-            tool_def, full_command, _flatten_lines(data), partner_name
+            tool_def.name, full_command, _flatten_lines(data), partner_name
         ),
     }
 
@@ -293,7 +277,7 @@ def error_result(
         "ok": False,
         "error": message,
         "markdown": build_tool_contract(
-            tool_def, full_command, [f"Error: {message}"], partner_name
+            tool_def.name, full_command, [f"Error: {message}"], partner_name
         ),
     }
 

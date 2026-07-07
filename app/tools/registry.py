@@ -9,12 +9,9 @@ import asyncio
 import time
 
 from app.tools.schemas import (
-    ToolDefinition,
     ToolCallEvent,
     ToolResultEvent,
     make_tool_result_event,
-    error_result,
-    build_tool_contract,
 )
 
 logger = logging.getLogger(__name__)
@@ -196,26 +193,6 @@ def get_tool_definition(name: str):
     return _TOOL_DEFINITIONS.get(name)
 
 
-def get_tools_by_role(role: str) -> list:
-    """Return all tools that match the given role prefix."""
-    _collect_definitions()
-    return [t for t in _TOOL_DEFINITIONS.values() if t.role == role]
-
-
-def get_tool_role(tool_name: str) -> str:
-    """Get the storage role for a tool name (for DB)."""
-    _collect_definitions()
-    tool_def = _TOOL_DEFINITIONS.get(tool_name)
-    if tool_def:
-        return tool_def.role
-    return f"{tool_name}_tools"
-
-
-# --------------------------------------------------------------------
-# Legacy support
-# --------------------------------------------------------------------
-
-
 # --------------------------------------------------------------------
 # Main dispatch
 # --------------------------------------------------------------------
@@ -243,15 +220,8 @@ async def execute_tool(
         return {
             "ok": False,
             "error": f"Unknown tool: {tool_name}",
-            "markdown": build_tool_contract(
-                ToolDefinition(name="", description="", role=f"{tool_name}_tools"),
-                f"/{tool_name}",
-                [
-                    "Error: Unknown tool. Available tools: "
-                    + ", ".join(_TOOL_DEFINITIONS.keys())
-                ],
-                "Yuzu",
-            ),
+            "data": {"available_tools": sorted(_TOOL_DEFINITIONS.keys())},
+            "markdown": f"Unknown tool: {tool_name}",
         }
 
     # Inject session_id if tool expects it
@@ -260,12 +230,12 @@ async def execute_tool(
 
     module = _load_tool_module(tool_name)
     if not module:
-        return error_result(
-            f"Tool module unavailable: {tool_name}",
-            tool_def,
-            f"/{tool_name}",
-            await _get_partner_name_async(user_id),
-        )
+        return {
+            "ok": False,
+            "error": f"Tool module unavailable: {tool_name}",
+            "data": {},
+            "markdown": f"Tool module unavailable: {tool_name}",
+        }
 
     try:
         if asyncio.iscoroutinefunction(module.execute):
@@ -286,50 +256,23 @@ async def execute_tool(
         if isinstance(result, dict) and "ok" in result:
             return result
 
-        # Old-style: tools still return markdown directly — wrap it
-        if isinstance(result, str) and result.strip().startswith("<details>"):
-            return {
-                "ok": True,
-                "data": {},
-                "markdown": result,
-            }
+        if isinstance(result, str):
+            result = {"result": result}
 
-        # Fallback: treat as raw text
         return {
             "ok": True,
-            "data": {"result": result},
-            "markdown": build_tool_contract(
-                ToolDefinition(name="", description="", role=tool_def.role),
-                f"/{tool_name}",
-                [str(result)],
-                await _get_partner_name_async(user_id),
-            ),
+            "data": result if isinstance(result, dict) else {"result": result},
+            "markdown": "",
         }
 
     except Exception as e:
         logger.info(f"[tool_error] {tool_name}: {e}")
-        return error_result(
-            "Tool execution failed. Please try again later.",
-            tool_def,
-            f"/{tool_name}",
-            await _get_partner_name_async(user_id),
-        )
-
-
-async def _get_partner_name_async(user_id: str | None = None) -> str:
-    """Get partner name from profile for error messages (async)."""
-    try:
-        from app.db import Database
-
-        profile = await Database.get_profile(user_id) if user_id else {}
-        return profile.get("partner_name", "Yuzu")
-    except Exception:
-        return "Yuzu"
-
-
-def _get_partner_name(user_id: str | None = None) -> str:
-    """Legacy sync wrapper."""
-    return asyncio.run(_get_partner_name_async(user_id))
+        return {
+            "ok": False,
+            "error": "Tool execution failed. Please try again later.",
+            "data": {},
+            "markdown": "",
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -359,6 +302,15 @@ def get_tool_schemas(*, only_native_fc: bool = False) -> list[dict[str, Any]]:
             seen.add(name)
             schemas.append(schema)
     return schemas
+
+
+def get_tool_role(tool_name: str) -> str:
+    """Return the legacy storage role for compatibility."""
+    _collect_definitions()
+    tool_def = _TOOL_DEFINITIONS.get(tool_name)
+    if tool_def and getattr(tool_def, "role", None):
+        return tool_def.role
+    return f"{tool_name}_tools"
 
 
 def get_tool_capabilities(tool_name: str) -> dict[str, bool]:

@@ -28,7 +28,6 @@ class TestToolDefinitionSchema:
         tool = ToolDefinition(
             name="bash",
             description="Run shell commands",
-            role="shell_tools",
             parameters=[
                 ToolParam(name="cmd", description="Command to run", required=True),
             ],
@@ -44,7 +43,6 @@ class TestToolDefinitionSchema:
         tool = ToolDefinition(
             name="test_tool",
             description="A test tool",
-            role="test_tools",
             parameters=[
                 ToolParam(name="required_param", description="Required", required=True),
                 ToolParam(
@@ -60,7 +58,7 @@ class TestToolDefinitionSchema:
         assert "optional_param" not in schema["function"]["parameters"]["required"]
 
     def test_capability_flags_default_true(self):
-        tool = ToolDefinition(name="test", description="Test", role="test_tools")
+        tool = ToolDefinition(name="test", description="Test")
         assert tool.supports_native_fc is True
         assert tool.supports_streaming_fc is True
 

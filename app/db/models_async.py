@@ -9,8 +9,8 @@ from app.db.connection import (
     pg_fetchall_async,
     pg_fetchone_async,
 )
+from app.db.queries import TOOL_ROLES, ALL_TOOL_ROLES
 from app.db.queries import (
-    ALL_TOOL_ROLES,
     DEFAULT_PROFILE_PARAMS,
     SCHEMA_DDL,
     SQL_APIKEY_DELETE,
@@ -51,7 +51,6 @@ from app.db.queries import (
     SQL_SESSION_SELECT_ACTIVE_FOR_USER,
     SQL_SESSION_SELECT_ALL_FOR_USER,
     SQL_SESSIONS_RECENT_ACTIVE,
-    TOOL_ROLES,
     build_encryption_status,
     build_profile_update,
     decrypt_api_key_rows,
@@ -609,8 +608,6 @@ __all__ = [
     "get_all_encrypted_messages_async",
     "batch_decrypt_messages_async",
     # Tool roles (re-exported for backward-compat imports)
-    "TOOL_ROLES",
-    "ALL_TOOL_ROLES",
 ]
 
 # ---------------------------------------------------------------------------

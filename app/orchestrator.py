@@ -29,7 +29,6 @@ from app.services.memory_service import MemoryService
 from app.tools import multimodal_tools
 from app.tools.registry import (
     execute_tool_event,
-    get_tool_role,
 )
 from app.tools.schemas import StreamToolEvent, make_tool_call_event, new_turn_id
 
@@ -388,9 +387,8 @@ async def _persist_tool_result_async(
             turn_id=turn_id,
         )
     else:
-        # Legacy fallback
         await Database.add_message(
-            get_tool_role(tool_name),
+            "tool",
             markdown,
             session_id=session_id,
             image_paths=image_paths or None,
@@ -414,7 +412,9 @@ async def _persist_streaming_tool_results_async(
     for i, (tool_name, result) in enumerate(tool_results):
         tool_markdown = result.get("markdown", str(result))
         tool_markdowns.append(tool_markdown)
-        tool_call_id = tool_calls_data[i].get("id") if i < len(tool_calls_data) else None
+        tool_call_id = (
+            tool_calls_data[i].get("id") if i < len(tool_calls_data) else None
+        )
         await _persist_tool_result_async(
             tool_name,
             tool_markdown,
@@ -992,6 +992,7 @@ async def handle_user_message_streaming(
                             chunk.data.get("name", "?"),
                             turn_id,
                         )
+                        yield chunk
                     continue
 
                 response_chunks.append(chunk)
@@ -1007,7 +1008,7 @@ async def handle_user_message_streaming(
 
     full_response = "".join(response_chunks)
 
-    if not _clean(full_response):
+    if not _clean(full_response) and not tool_calls_data:
         await _finalize_and_persist_async(
             session_id,
             fence_id,
@@ -1027,19 +1028,38 @@ async def handle_user_message_streaming(
 
     # Handle native function calls if provider returned them
     if tool_calls_data:
+        log.info(
+            "[stream] executing %d native tool call(s) [turn=%s]",
+            len(tool_calls_data),
+            turn_id,
+        )
         tool_results = await _execute_tool_calls_async(
             tool_calls_data, session_id, user_id=user_id, turn_id=turn_id
         )
-        tool_markdowns, all_generated_paths = await _persist_streaming_tool_results_async(
+        (
+            tool_markdowns,
+            all_generated_paths,
+        ) = await _persist_streaming_tool_results_async(
             tool_calls_data,
             tool_results,
             session_id,
             user_id=user_id,
             turn_id=turn_id,
         )
-        if tool_markdowns:
-            combined_tool_markdown = "\n\n".join(tool_markdowns)
-            yield "\n\n" + combined_tool_markdown
+        combined_tool_markdown = "\n\n".join(tool_markdowns)
+
+        for i, (tool_name, tool_result) in enumerate(tool_results):
+            tc_id = tool_calls_data[i].get("id", f"call_{i}")
+            yield StreamToolEvent(
+                type="tool_result",
+                data={
+                    "call_id": tc_id,
+                    "name": tool_name,
+                    "ok": tool_result.get("ok", False),
+                    "markdown": tool_result.get("markdown", ""),
+                    "turn_id": turn_id,
+                },
+            )
 
         if not tool_markdowns:
             await _finalize_and_persist_async(
@@ -1047,7 +1067,7 @@ async def handle_user_message_streaming(
                 fence_id,
                 profile,
                 user_message,
-                full_response,
+                full_response or _EMPTY_RESPONSE_FALLBACK,
                 active_session,
                 user_id=user_id,
             )
