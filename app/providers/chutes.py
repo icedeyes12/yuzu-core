@@ -48,7 +48,7 @@ class ChutesProvider(AIProvider):
         }
 
     def _normalize_messages_for_chutes(self, messages: list[dict]) -> list[dict]:
-        """Merge non-standard roles into a single assistant content and collect system prompts."""
+        """Keep canonical chat roles and merge only system prompts."""
         if not messages:
             return messages
         standard_roles = {"system", "user", "assistant", "tool"}
@@ -58,14 +58,13 @@ class ChutesProvider(AIProvider):
             role = msg.get("role", "")
             if role == "system":
                 system_contents.append(msg.get("content", ""))
-            elif role not in standard_roles:
-                content = msg.get("content", "")
-                normalized_content = f"[{role}]\n{content}"
+                continue
+            if role not in standard_roles:
                 normalized_messages.append(
-                    {"role": "assistant", "content": normalized_content}
+                    {"role": "assistant", "content": msg.get("content", "")}
                 )
-            else:
-                normalized_messages.append(msg)
+                continue
+            normalized_messages.append(msg)
         if system_contents:
             merged_system = "\n\n".join(system_contents)
             return [{"role": "system", "content": merged_system}] + normalized_messages

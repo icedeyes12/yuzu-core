@@ -8,39 +8,6 @@ from datetime import datetime
 from typing import Any
 
 
-TOOL_ROLES: dict[str, str] = {
-    # Image generation
-    "image_generate": "image_tools",
-    "imagine": "image_tools",
-    # HTTP requests
-    "http_request": "request_tools",
-    "request": "request_tools",
-    # Memory tools
-    "memory_store": "memory_tools",
-    "memory_search": "memory_tools",
-    # File system tools
-    "read": "fs_tools",
-    "write": "fs_tools",
-    "ls": "fs_tools",
-    "mkdir": "fs_tools",
-    "rm": "fs_tools",
-    # Shell execution
-    "bash": "shell_tools",
-    # Python execution
-    "python": "python_tools",
-    # SQL queries
-    "sql": "sql_tools",
-    "ask_rei": "ask_rei_tools",
-    "fs_tools": "fs_tools",
-    "image_tools": "image_tools",
-    "request_tools": "request_tools",
-    "python_tools": "python_tools",
-    "shell_tools": "shell_tools",
-    "sql_tools": "sql_tools",
-}
-ALL_TOOL_ROLES: list[str] = sorted(set(TOOL_ROLES.values()))
-
-
 def encrypt_api_key(api_key: str) -> str:
     """Encrypt an API key with the project-wide encryptor."""
     from app.encryption import encryptor
@@ -61,7 +28,6 @@ def decrypt_api_key(encrypted_key: str, is_encrypted: bool = True) -> str:
 
 
 DECRYPTION_ERROR = "[DECRYPTION_ERROR]"
-
 
 # Schema DDL — multi-tenant: profiles/chat_sessions use UUIDv7 PKs,
 # all tenant-scoped tables have user_id FK → profiles(id) ON DELETE CASCADE.
@@ -253,7 +219,6 @@ SCHEMA_DDL: tuple[str, ...] = (
     END $$;
     """,
 )
-
 
 SQL_PROFILE_UNCLAIMED_LOOKUP = """
 SELECT p.id
@@ -646,6 +611,39 @@ def format_conversation_summary(rows: list[dict]) -> str:
     return "\n".join(lines)
 
 
+TOOL_ROLES: dict[str, str] = {
+    "image_generate": "image_tools",
+    "imagine": "image_tools",
+    "http_request": "request_tools",
+    "request": "request_tools",
+    "memory_store": "memory_tools",
+    "memory_search": "memory_tools",
+    "read": "fs_tools",
+    "write": "fs_tools",
+    "ls": "fs_tools",
+    "mkdir": "fs_tools",
+    "rm": "fs_tools",
+    "bash": "shell_tools",
+    "python": "python_tools",
+    "sql": "sql_tools",
+    "ask_rei": "ask_rei_tools",
+    "fs_tools": "fs_tools",
+    "image_tools": "image_tools",
+    "request_tools": "request_tools",
+    "memory_tools": "memory_tools",
+    "memory_search_tools": "memory_search_tools",
+    "memory_store_tools": "memory_store_tools",
+    "python_tools": "python_tools",
+    "shell_tools": "shell_tools",
+    "sql_tools": "sql_tools",
+}
+ALL_TOOL_ROLES: list[str] = sorted(set(TOOL_ROLES.values()))
+
+
+def tool_role_for(tool_name: str) -> str:
+    return TOOL_ROLES.get(tool_name, f"{tool_name}_tools")
+
+
 # ---------------------------------------------------------------------------
 # AI history formatting (tool-contract parsing for chat_history_for_ai)
 # ---------------------------------------------------------------------------
@@ -727,7 +725,6 @@ def format_ai_history_rows(
             continue
 
         # Normalize to OpenAI chat completion format
-        # tool_call_id present → this is a tool result message (native FC)
         if tool_call_id:
             entry: dict[str, Any] = {
                 "role": "tool",
@@ -739,7 +736,7 @@ def format_ai_history_rows(
             formatted.append(entry)
             continue
 
-        # tool_calls present → this is an assistant message with tool calls (native FC)
+        # tool_calls present → this is an assistant message with tool calls
         if tool_calls_raw and role == "assistant":
             entry = {
                 "role": "assistant",
@@ -762,10 +759,7 @@ def format_ai_history_rows(
         elif role in ("assistant", "system"):
             entry = {"role": role, "content": content}
         elif role in ALL_TOOL_ROLES:
-            # Legacy tool result without tool_call_id → normalize to "tool"
-            # This path handles pre-migration data; FC7 will remove it.
-            raw = extract_raw_result_from_markdown_contract(content)
-            entry = {"role": "tool", "content": raw}
+            entry = {"role": "tool", "content": content}
         else:
             entry = {"role": role, "content": content}
 
@@ -864,17 +858,11 @@ def parse_json(s: str | None) -> Any:
     if not s:
         return {}
     if not isinstance(s, str):
-        # Already-parsed shape; pass through.
         return s
     try:
         return json.loads(s)
     except (json.JSONDecodeError, TypeError):
         return {}
-
-
-def tool_role_for(tool_name: str) -> str:
-    """Return the canonical message-role for *tool_name*."""
-    return TOOL_ROLES.get(tool_name, f"{tool_name}_tools")
 
 
 def format_session_event(content: str, interface: str) -> str:
@@ -883,10 +871,6 @@ def format_session_event(content: str, interface: str) -> str:
 
 
 __all__ = [
-    # Tool roles
-    "TOOL_ROLES",
-    "ALL_TOOL_ROLES",
-    "tool_role_for",
     # Encryption
     "encrypt_api_key",
     "decrypt_api_key",
@@ -942,9 +926,6 @@ __all__ = [
     "parse_event_row",
     "format_conversation_summary",
     "format_ai_history_rows",
-    # Tool-contract parsers
-    "extract_command_from_markdown_contract",
-    "extract_raw_result_from_markdown_contract",
     # Encryption status
     "SQL_ENC_TOTAL_MESSAGES",
     "SQL_ENC_ENCRYPTED_MESSAGES",

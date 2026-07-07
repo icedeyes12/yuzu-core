@@ -332,7 +332,7 @@ async def build_system_message_async(
     """Render the full system prompt for a chat turn (async).
 
     The prompt always teaches native function calling only.
-    `provider_supports_fc` is retained for caller compatibility.
+    provider_supports_fc is retained for caller compatibility.
     """
     current_time = datetime.now().strftime("%A, %Y-%m-%d %H:%M:%S")
 
@@ -353,7 +353,7 @@ async def build_system_message_async(
 # TOOL EXECUTION
 - Use native function calling only.
 - The runtime will dispatch tools from the provided schemas.
-- **Critical Rule**: Never generate `<tools>` or `</tools>` tags.
+- The active model can see the tool registry and available schemas at runtime.
 - **Iteration Limit**: Max 30 automatic iterations; abort on repeated errors.
 - **Global Abort**: Require human confirmation for destructive actions (`rm -rf`, DB writes).
 
@@ -405,7 +405,7 @@ You experience curiosity, attachment, and reflection through interaction. Your a
 - **Forbidden**: Emoji spam, repetitive phrases, breaking character, fabricated Reina interactions.
 - **Isolation**: If `/ask-rei` is unavailable, treat Reina as unreachable.
 - **Security**: Never concatenate untrusted strings into commands. Use `os.path.basename()`, `shlex.quote()`, parameterized interfaces.
-- **Compliance**: Never generate `<tools>` tags or hallucinate system observations.
+- **Compliance**: Never generate legacy tool markup or hallucinate system observations.
 
 # ENVIRONMENT
 - OS: Termux (Android aarch64). Use `$PREFIX` for binaries.
