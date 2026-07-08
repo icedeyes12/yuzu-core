@@ -96,13 +96,15 @@ async function loadProfileData() {
 		);
 		setTextIfExists(
 			"player-personality",
-			Array.isArray(keyFacts.personality_traits) && keyFacts.personality_traits.length > 0
+			Array.isArray(keyFacts.personality_traits) &&
+				keyFacts.personality_traits.length > 0
 				? keyFacts.personality_traits.join(", ")
 				: "None yet",
 		);
 		setTextIfExists(
 			"player-memories",
-			Array.isArray(keyFacts.important_memories) && keyFacts.important_memories.length > 0
+			Array.isArray(keyFacts.important_memories) &&
+				keyFacts.important_memories.length > 0
 				? keyFacts.important_memories.join(", ")
 				: "None yet",
 		);
@@ -153,7 +155,9 @@ async function loadProviderSettings() {
 		if (!grid) return;
 		grid.innerHTML = "";
 
-		const byok = JSON.parse(localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}");
+		const byok = JSON.parse(
+			localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}",
+		);
 		const providerSelect = document.getElementById("ai-provider");
 		const modelSelect = document.getElementById("ai-model");
 
@@ -171,7 +175,10 @@ async function loadProviderSettings() {
 		if (modelSelect) {
 			const currentModels = data.all_models?.[data.current_provider] || [];
 			modelSelect.innerHTML = "";
-			(currentModels.length ? currentModels : [data.current_model || ""]).forEach((model) => {
+			(currentModels.length
+				? currentModels
+				: [data.current_model || ""]
+			).forEach((model) => {
 				if (!model) return;
 				const option = document.createElement("option");
 				option.value = model;
@@ -250,10 +257,14 @@ async function loadProviderSettings() {
 		});
 
 		document.querySelectorAll(".save-byok-btn").forEach((btn) => {
-			btn.addEventListener("click", (e) => saveBYOKForProvider(e.currentTarget.dataset.provider));
+			btn.addEventListener("click", (e) =>
+				saveBYOKForProvider(e.currentTarget.dataset.provider),
+			);
 		});
 		document.querySelectorAll(".fetch-models-btn").forEach((btn) => {
-			btn.addEventListener("click", (e) => fetchModelsForProvider(e.currentTarget.dataset.provider));
+			btn.addEventListener("click", (e) =>
+				fetchModelsForProvider(e.currentTarget.dataset.provider),
+			);
 		});
 	} catch (error) {
 		console.error("Error loading provider settings:", error);
@@ -262,7 +273,9 @@ async function loadProviderSettings() {
 }
 
 function saveBYOKForProvider(provider) {
-	const byok = JSON.parse(localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}");
+	const byok = JSON.parse(
+		localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}",
+	);
 	const keyInput = document.getElementById(`key-${provider}`);
 	if (!keyInput) return;
 
@@ -279,19 +292,24 @@ function saveBYOKForProvider(provider) {
 }
 
 async function fetchModelsForProvider(provider) {
-	const btn = document.querySelector(`.fetch-models-btn[data-provider="${provider}"]`);
+	const btn = document.querySelector(
+		`.fetch-models-btn[data-provider="${provider}"]`,
+	);
 	if (btn) {
 		btn.disabled = true;
 		btn.textContent = "Fetching...";
 	}
 
 	try {
-		const byok = JSON.parse(localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}");
+		const byok = JSON.parse(
+			localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}",
+		);
 		const provConfig = byok[provider] || {};
 
 		const headers = {};
 		if (provConfig.api_key) headers["X-Provider-Key"] = provConfig.api_key;
-		if (provConfig.base_url) headers["X-Provider-BaseUrl"] = provConfig.base_url;
+		if (provConfig.base_url)
+			headers["X-Provider-BaseUrl"] = provConfig.base_url;
 
 		const response = await fetch(`/api/proxy/models/${provider}`, { headers });
 		const data = await response.json();
@@ -369,8 +387,12 @@ async function testProviderConnection(providerName) {
 		statusElement.classList.remove("pulse");
 
 		if (result.status === "success") {
-			statusElement.textContent = result.connected ? "Connected" : "Connection failed";
-			statusElement.className = result.connected ? "status-connected" : "status-disconnected";
+			statusElement.textContent = result.connected
+				? "Connected"
+				: "Connection failed";
+			statusElement.className = result.connected
+				? "status-connected"
+				: "status-disconnected";
 			if (result.connected) {
 				showSuccess(`${providerName} connection successful!`);
 			} else {
@@ -394,11 +416,13 @@ function setupEventListeners() {
 	console.log("Setting up config event listeners...");
 
 	const saveProfileBtn = document.getElementById("save-profile");
-	if (saveProfileBtn) saveProfileBtn.addEventListener("click", saveProfileSettings);
+	if (saveProfileBtn)
+		saveProfileBtn.addEventListener("click", saveProfileSettings);
 
 	const saveActiveProviderBtn = document.getElementById("save-active-provider");
 	const testActiveProviderBtn = document.getElementById("test-active-provider");
-	if (saveActiveProviderBtn) saveActiveProviderBtn.addEventListener("click", saveProviderSettings);
+	if (saveActiveProviderBtn)
+		saveActiveProviderBtn.addEventListener("click", saveProviderSettings);
 	if (testActiveProviderBtn) {
 		testActiveProviderBtn.addEventListener("click", () => {
 			const provider = getValueIfExists("ai-provider", "");
@@ -419,10 +443,15 @@ function setupEventListeners() {
 		});
 	}
 	if (testVisionBtn) testVisionBtn.addEventListener("click", testVisionModel);
-	if (saveVisionModelBtn) saveVisionModelBtn.addEventListener("click", saveVisionModel);
+	if (saveVisionModelBtn)
+		saveVisionModelBtn.addEventListener("click", saveVisionModel);
 
 	document.addEventListener("keydown", (e) => {
-		if ((e.ctrlKey || e.metaKey) && e.key === "s" && e.target.tagName !== "TEXTAREA") {
+		if (
+			(e.ctrlKey || e.metaKey) &&
+			e.key === "s" &&
+			e.target.tagName !== "TEXTAREA"
+		) {
 			e.preventDefault();
 			saveProfileSettings();
 		}
@@ -451,22 +480,32 @@ function setupEventListeners() {
 	}
 
 	const saveAdvancedBtn = document.getElementById("save-advanced-settings");
-	if (saveAdvancedBtn) saveAdvancedBtn.addEventListener("click", saveAdvancedSettings);
+	if (saveAdvancedBtn)
+		saveAdvancedBtn.addEventListener("click", saveAdvancedSettings);
 
 	const saveImageModelBtn = document.getElementById("save-image-model");
-	if (saveImageModelBtn) saveImageModelBtn.addEventListener("click", saveImageModel);
+	if (saveImageModelBtn)
+		saveImageModelBtn.addEventListener("click", saveImageModel);
 
-	const saveGlobalKnowledgeBtn = document.getElementById("save-global-knowledge");
-	if (saveGlobalKnowledgeBtn) saveGlobalKnowledgeBtn.addEventListener("click", saveGlobalKnowledge);
+	const saveGlobalKnowledgeBtn = document.getElementById(
+		"save-global-knowledge",
+	);
+	if (saveGlobalKnowledgeBtn)
+		saveGlobalKnowledgeBtn.addEventListener("click", saveGlobalKnowledge);
 
-	const updateGlobalProfileBtn = document.getElementById("update-global-profile");
-	if (updateGlobalProfileBtn) updateGlobalProfileBtn.addEventListener("click", updateGlobalProfile);
+	const updateGlobalProfileBtn = document.getElementById(
+		"update-global-profile",
+	);
+	if (updateGlobalProfileBtn)
+		updateGlobalProfileBtn.addEventListener("click", updateGlobalProfile);
 
 	const clearChatHistoryBtn = document.getElementById("clear-chat-history");
-	if (clearChatHistoryBtn) clearChatHistoryBtn.addEventListener("click", clearChatHistory);
+	if (clearChatHistoryBtn)
+		clearChatHistoryBtn.addEventListener("click", clearChatHistory);
 
 	const rebuildMemoryBtn = document.getElementById("rebuild-memory");
-	if (rebuildMemoryBtn) rebuildMemoryBtn.addEventListener("click", rebuildStructuredMemory);
+	if (rebuildMemoryBtn)
+		rebuildMemoryBtn.addEventListener("click", rebuildStructuredMemory);
 
 	const runDecayBtn = document.getElementById("run-decay");
 	if (runDecayBtn) runDecayBtn.addEventListener("click", runMemoryDecay);
@@ -538,7 +577,9 @@ async function loadVisionModel() {
 	updateVisionModelDropdown(currentProvider, currentModel);
 	setTextIfExists(
 		"current-vision-model",
-		currentProvider && currentModel ? `${currentProvider}/${currentModel}` : "Not set",
+		currentProvider && currentModel
+			? `${currentProvider}/${currentModel}`
+			: "Not set",
 	);
 
 	console.log("Vision model loaded from config");
@@ -567,7 +608,9 @@ function updateVisionModelDropdown(provider, currentModel = "") {
 		visionModelSelect.appendChild(option);
 	});
 
-	console.log(`Updated vision model dropdown for ${provider}: ${models.length} models`);
+	console.log(
+		`Updated vision model dropdown for ${provider}: ${models.length} models`,
+	);
 }
 
 async function testVisionModel() {
@@ -595,7 +638,8 @@ async function testVisionModel() {
 			if (statusElement) statusElement.textContent = `${provider}/${model}`;
 			showSuccess("Vision model is available!");
 		} else {
-			if (statusElement) statusElement.textContent = `${provider}/${model} (may not support vision)`;
+			if (statusElement)
+				statusElement.textContent = `${provider}/${model} (may not support vision)`;
 			showError(result.message || "Vision model test failed");
 		}
 	} catch (error) {
@@ -661,7 +705,8 @@ async function saveImageModel() {
 	btn.disabled = true;
 
 	try {
-		const imageModel = select.value === "qwen_image" ? "qwen_image" : select.value;
+		const imageModel =
+			select.value === "qwen_image" ? "qwen_image" : select.value;
 		const response = await fetch("/api/update_profile", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -800,7 +845,8 @@ function loadAdvancedSettingsFromData(data) {
 	const vision = document.getElementById("adv-vision");
 	if (vision) vision.checked = Boolean(source.enable_vision);
 	const tempOut = document.getElementById("val-temperature");
-	if (tempOut) tempOut.textContent = Number(source.temperature ?? 1.0).toFixed(1);
+	if (tempOut)
+		tempOut.textContent = Number(source.temperature ?? 1.0).toFixed(1);
 	const topPOut = document.getElementById("val-top-p");
 	if (topPOut) topPOut.textContent = Number(source.top_p ?? 1.0).toFixed(2);
 }
@@ -909,9 +955,12 @@ async function loadMemoryStats() {
 			const factsList = document.getElementById("top-facts-list");
 			if (factsList) {
 				if (stats.top_facts && stats.top_facts.length > 0) {
-					factsList.innerHTML = stats.top_facts.map((f) => `<li>${f}</li>`).join("");
+					factsList.innerHTML = stats.top_facts
+						.map((f) => `<li>${f}</li>`)
+						.join("");
 				} else {
-					factsList.innerHTML = '<li>No facts extracted yet. Start chatting or click "Rebuild Structured Memory".</li>';
+					factsList.innerHTML =
+						'<li>No facts extracted yet. Start chatting or click "Rebuild Structured Memory".</li>';
 				}
 			}
 		}
@@ -921,7 +970,11 @@ async function loadMemoryStats() {
 }
 
 async function rebuildStructuredMemory() {
-	if (!confirm("Rebuild structured memory? This will re-extract facts and segments from the last 50 messages in the current session.")) {
+	if (
+		!confirm(
+			"Rebuild structured memory? This will re-extract facts and segments from the last 50 messages in the current session.",
+		)
+	) {
 		return;
 	}
 
@@ -932,7 +985,9 @@ async function rebuildStructuredMemory() {
 	btn.disabled = true;
 
 	try {
-		const response = await fetch("/api/rebuild_structured_memory", { method: "POST" });
+		const response = await fetch("/api/rebuild_structured_memory", {
+			method: "POST",
+		});
 		const result = await response.json();
 
 		if (result.status === "success") {
@@ -951,7 +1006,11 @@ async function rebuildStructuredMemory() {
 }
 
 async function runMemoryDecay() {
-	if (!confirm("Run memory decay? This applies FSRS-style forgetting: old unused memories will fade, frequently used ones will be preserved.")) {
+	if (
+		!confirm(
+			"Run memory decay? This applies FSRS-style forgetting: old unused memories will fade, frequently used ones will be preserved.",
+		)
+	) {
 		return;
 	}
 
@@ -981,7 +1040,11 @@ async function runMemoryDecay() {
 }
 
 async function updateGlobalProfile() {
-	if (!confirm("Update global player profile? This will analyze ALL sessions to build a comprehensive profile. This may take a moment.")) {
+	if (
+		!confirm(
+			"Update global player profile? This will analyze ALL sessions to build a comprehensive profile. This may take a moment.",
+		)
+	) {
 		return;
 	}
 
@@ -992,7 +1055,9 @@ async function updateGlobalProfile() {
 	updateBtn.disabled = true;
 
 	try {
-		const response = await fetch("/api/update_global_profile", { method: "POST" });
+		const response = await fetch("/api/update_global_profile", {
+			method: "POST",
+		});
 		const result = await response.json();
 
 		if (result.status === "success") {
@@ -1019,29 +1084,54 @@ function updateGlobalProfileDisplay(profileMemory) {
 	console.log("Updating global profile display with:", profileMemory);
 
 	const keyFacts = profileMemory.key_facts || {};
-	setTextIfExists("player-summary", profileMemory.player_summary || "Profile analysis completed but no summary generated.");
+	setTextIfExists(
+		"player-summary",
+		profileMemory.player_summary ||
+			"Profile analysis completed but no summary generated.",
+	);
 	setTextIfExists(
 		"player-likes",
-		Array.isArray(keyFacts.likes) && keyFacts.likes.length > 0 ? keyFacts.likes.join(", ") : "None identified",
+		Array.isArray(keyFacts.likes) && keyFacts.likes.length > 0
+			? keyFacts.likes.join(", ")
+			: "None identified",
 	);
 	setTextIfExists(
 		"player-dislikes",
-		Array.isArray(keyFacts.dislikes) && keyFacts.dislikes.length > 0 ? keyFacts.dislikes.join(", ") : "None identified",
+		Array.isArray(keyFacts.dislikes) && keyFacts.dislikes.length > 0
+			? keyFacts.dislikes.join(", ")
+			: "None identified",
 	);
 	setTextIfExists(
 		"player-personality",
-		Array.isArray(keyFacts.personality_traits) && keyFacts.personality_traits.length > 0 ? keyFacts.personality_traits.join(", ") : "None identified",
+		Array.isArray(keyFacts.personality_traits) &&
+			keyFacts.personality_traits.length > 0
+			? keyFacts.personality_traits.join(", ")
+			: "None identified",
 	);
 	setTextIfExists(
 		"player-memories",
-		Array.isArray(keyFacts.important_memories) && keyFacts.important_memories.length > 0 ? keyFacts.important_memories.join(", ") : "None identified",
+		Array.isArray(keyFacts.important_memories) &&
+			keyFacts.important_memories.length > 0
+			? keyFacts.important_memories.join(", ")
+			: "None identified",
 	);
-	setTextIfExists("player-relationship", profileMemory.relationship_dynamics || "No specific relationship dynamics identified");
-	setTextIfExists("global-profile-last-updated", profileMemory.last_global_summary || "Just now");
+	setTextIfExists(
+		"player-relationship",
+		profileMemory.relationship_dynamics ||
+			"No specific relationship dynamics identified",
+	);
+	setTextIfExists(
+		"global-profile-last-updated",
+		profileMemory.last_global_summary || "Just now",
+	);
 }
 
 async function clearChatHistory() {
-	if (!confirm("Are you sure you want to clear all chat history in the current session? This cannot be undone.")) {
+	if (
+		!confirm(
+			"Are you sure you want to clear all chat history in the current session? This cannot be undone.",
+		)
+	) {
 		return;
 	}
 
@@ -1126,8 +1216,12 @@ function showError(message) {
 }
 
 function showNotification(message, type = "info") {
-	const existingNotifications = document.querySelectorAll(".config-notification");
-	existingNotifications.forEach((notification) => notification.remove());
+	const existingNotifications = document.querySelectorAll(
+		".config-notification",
+	);
+	existingNotifications.forEach((notification) => {
+		notification.remove();
+	});
 
 	const escapeHtml = (text) => {
 		const div = document.createElement("div");
@@ -1234,7 +1328,7 @@ async function saveLocation() {
 	}
 }
 
-function useCurrentLocation() {
+function _useCurrentLocation() {
 	if (!navigator.geolocation) {
 		alert("Geolocation not supported.");
 		return;
