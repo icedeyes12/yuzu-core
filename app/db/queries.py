@@ -164,7 +164,6 @@ SCHEMA_DDL: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at)",
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_deleted ON chat_sessions(deleted_at)",
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON chat_sessions(user_id)",
-    "CREATE INDEX IF NOT EXISTS idx_api_keys_name ON api_keys(key_name)",
     "CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id)",
     "CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_messages_session_user ON messages(session_id, user_id)",
@@ -430,46 +429,6 @@ def parse_session_memory_rows(rows: list[dict]) -> dict:
         ],
         "count": len(rows),
     }
-
-
-# ---------------------------------------------------------------------------
-# API key SQL
-# ---------------------------------------------------------------------------
-
-SQL_APIKEY_SELECT_ALL = "SELECT key_name, key_value, key_encrypted FROM api_keys"
-SQL_APIKEY_SELECT_BY_NAME = (
-    "SELECT key_name, key_value, key_encrypted FROM api_keys WHERE key_name = %s"
-)
-SQL_APIKEY_SELECT_ID_BY_NAME = "SELECT id FROM api_keys WHERE key_name = %s"
-SQL_APIKEY_UPDATE = (
-    "UPDATE api_keys SET key_value = %s, key_encrypted = %s WHERE key_name = %s"
-)
-SQL_APIKEY_INSERT = (
-    "INSERT INTO api_keys (key_name, key_value, key_encrypted, created_at) "
-    "VALUES (%s, %s, %s, %s)"
-)
-SQL_APIKEY_DELETE = "DELETE FROM api_keys WHERE key_name = %s"
-
-
-def decrypt_api_key_rows(rows: list[dict]) -> dict[str, str]:
-    """Convert raw api_keys rows into a {name: decrypted_value} mapping.
-
-    Skips entries that fail to decrypt (returns DECRYPTION_ERROR sentinel).
-    """
-    out: dict[str, str] = {}
-    for r in rows:
-        name = r.get("key_name")
-        if not name:
-            continue
-        value = r.get("key_value", "")
-        encrypted = r.get("key_encrypted", True)
-        if encrypted:
-            decrypted = decrypt_api_key(value, True)
-            if decrypted != DECRYPTION_ERROR:
-                out[name] = decrypted
-        else:
-            out[name] = value
-    return out
 
 
 # ---------------------------------------------------------------------------
@@ -787,10 +746,6 @@ SQL_ENC_TOTAL_MESSAGES = "SELECT COUNT(*) as cnt FROM messages"
 SQL_ENC_ENCRYPTED_MESSAGES = (
     "SELECT COUNT(*) as cnt FROM messages WHERE content_encrypted = TRUE"
 )
-SQL_ENC_TOTAL_KEYS = "SELECT COUNT(*) as cnt FROM api_keys"
-SQL_ENC_ENCRYPTED_KEYS = (
-    "SELECT COUNT(*) as cnt FROM api_keys WHERE key_encrypted = TRUE"
-)
 
 
 def build_encryption_status(
@@ -899,14 +854,6 @@ __all__ = [
     "parse_session_row",
     "SQL_SESSION_MEMORY_NOTES",
     "parse_session_memory_rows",
-    # API keys
-    "SQL_APIKEY_SELECT_ALL",
-    "SQL_APIKEY_SELECT_BY_NAME",
-    "SQL_APIKEY_SELECT_ID_BY_NAME",
-    "SQL_APIKEY_UPDATE",
-    "SQL_APIKEY_INSERT",
-    "SQL_APIKEY_DELETE",
-    "decrypt_api_key_rows",
     # Messages
     "SQL_MESSAGE_INSERT",
     "SQL_MESSAGE_SELECT_ASC_LIMIT",
@@ -930,8 +877,6 @@ __all__ = [
     # Encryption status
     "SQL_ENC_TOTAL_MESSAGES",
     "SQL_ENC_ENCRYPTED_MESSAGES",
-    "SQL_ENC_TOTAL_KEYS",
-    "SQL_ENC_ENCRYPTED_KEYS",
     "build_encryption_status",
     # Auth
     "SQL_IDENTITY_LOOKUP",
