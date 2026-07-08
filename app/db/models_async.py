@@ -399,7 +399,7 @@ async def add_session_event_async(
 
 
 async def get_recent_active_sessions_async(
-    current_session_id: str, limit: int = 5
+    user_id: str, current_session_id: str, limit: int = 5
 ) -> list[dict]:
     """Fetch recently active sessions for meta-awareness block.
 
@@ -407,7 +407,7 @@ async def get_recent_active_sessions_async(
     Used by the LLM context system to show session-switching context.
     """
     rows = await pg_fetchall_async(
-        SQL_SESSIONS_RECENT_ACTIVE, (current_session_id, limit)
+        SQL_SESSIONS_RECENT_ACTIVE, (current_session_id, user_id, limit)
     )
     return [
         {

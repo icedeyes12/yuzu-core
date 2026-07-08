@@ -190,8 +190,15 @@ async def api_proxy_models(
             url = "https://openrouter.ai/api/v1/models"
         elif provider == "openai":
             url = "https://api.openai.com/v1/models"
-        elif provider == "custom" and base_url:
-            url = f"{base_url.rstrip('/')}/models"
+        elif provider.startswith("custom") and base_url:
+            # Handle if the base_url includes /chat/completions or similar
+            if "/chat/completions" in base_url:
+                base_dir = base_url.split("/chat/completions")[0]
+            elif "/v1/messages" in base_url:
+                base_dir = base_url.split("/v1/messages")[0]
+            else:
+                base_dir = base_url.rstrip("/")
+            url = f"{base_dir}/models"
 
         if url:
             headers = {}

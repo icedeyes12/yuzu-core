@@ -366,7 +366,7 @@ SQL_SESSION_DELETE_SCOPED = (
 SQL_SESSIONS_RECENT_ACTIVE = """
 SELECT id, name, updated_at, message_count, is_active
 FROM chat_sessions
-WHERE deleted_at IS NULL AND id != %s
+WHERE deleted_at IS NULL AND id != %s AND user_id = %s
 ORDER BY updated_at DESC
 LIMIT %s
 """

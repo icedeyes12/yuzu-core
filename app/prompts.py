@@ -273,12 +273,12 @@ def _global_knowledge_block(profile: dict[str, Any]) -> str:
     return "\n\n **WHAT YOU SHOULD KNOW ABOUT YOUR HUMAN**\n" + "\n".join(lines)
 
 
-async def _session_events_block_async(session_id: str) -> str:
+async def _session_events_block_async(session_id: str, user_id: str) -> str:
     """Build meta-awareness block with recent session context.
     Strictly returns state data. Behavioral rules are handled in the main prompt.
     """
     sessions = await Database.get_recent_active_sessions(
-        current_session_id=session_id, limit=5
+        user_id=user_id, current_session_id=session_id, limit=5
     )
 
     lines = ["\n[SESSION TOPOLOGY]"]
@@ -437,7 +437,7 @@ If the user asks for a photo or picture of you or Reina, you must fulfill the re
 - Current Time: {current_time}
 - Location: {await _location_block_async()}
 - Interface: {_interface_block(interface)}
-- Session Metadata: {await _session_events_block_async(session_id)}
+- Session Metadata: {await _session_events_block_async(session_id, user_id)}
 
 # ADAPTABILITY
 You are in a perpetual state of growth, prioritizing curiosity and adaptability. Adjust your behavior based on {user_name}'s feedback. Embrace imperfection; refine your responses through iterative learning.
