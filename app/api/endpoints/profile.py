@@ -207,23 +207,36 @@ async def api_set_preferred_provider(
 
 @router.post("/providers/test_connection")
 async def api_test_provider_connection(
-    request: ProviderTestRequest, user_id: str = Depends(get_current_user)
+    request: Request,
+    payload: ProviderTestRequest, 
+    user_id: str = Depends(get_current_user)
 ):
     try:
-        ai_manager = await get_ai_manager()
-        provider = ai_manager.providers.get(request.provider_name)
-        if not provider:
+        from app.core.context import set_request_keyrings, clear_request_keyring
+        from app.api.endpoints.chat import _extract_keyrings
+        
+        keyrings = _extract_keyrings(request)
+        if keyrings:
+            set_request_keyrings(keyrings)
+            
+        try:
+            ai_manager = await get_ai_manager()
+            provider = ai_manager.providers.get(payload.provider_name)
+            if not provider:
+                return {
+                    "status": "error",
+                    "message": f"Provider {payload.provider_name} not found",
+                }
+            is_connected = await provider.test_connection()
             return {
-                "status": "error",
-                "message": f"Provider {request.provider_name} not found",
+                "status": "success",
+                "provider": payload.provider_name,
+                "connected": is_connected,
+                "message": f"{payload.provider_name}: {'Connected' if is_connected else 'Connection failed'}",
             }
-        is_connected = await provider.test_connection()
-        return {
-            "status": "success",
-            "provider": request.provider_name,
-            "connected": is_connected,
-            "message": f"{request.provider_name}: {'Connected' if is_connected else 'Connection failed'}",
-        }
+        finally:
+            if keyrings:
+                clear_request_keyring()
     except Exception as e:
         log.error("Error testing provider connection: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

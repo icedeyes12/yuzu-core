@@ -124,11 +124,20 @@ async function loadProfileData() {
 		setValueIfExists("persona-preset", data.persona_preset || "warm");
 		setValueIfExists("persona-prompt", data.persona_prompt || "");
 
-		setTextIfExists("current-provider", data.current_provider || "Not set");
+		const prefProvider = data.providers_config?.preferred_provider;
+		const prefModel = data.providers_config?.preferred_model;
+		setTextIfExists(
+			"current-provider",
+			prefProvider && prefModel
+				? `${prefProvider}/${prefModel}`
+				: prefProvider || "Not set",
+		);
+
+		const visPrefs = data.providers_config?.vision_model_preferences || {};
 		setTextIfExists(
 			"current-vision-model",
-			data.vision?.current_provider && data.vision?.current_model
-				? `${data.vision.current_provider}/${data.vision.current_model}`
+			visPrefs.provider && visPrefs.model
+				? `${visPrefs.provider}/${visPrefs.model}`
 				: "Not set",
 		);
 
@@ -169,22 +178,16 @@ async function loadProviderSettings() {
 		);
 
 		const providersList = [
-			{ id: "openrouter", name: "OpenRouter" },
-			{ id: "openai", name: "OpenAI" },
-			{ id: "anthropic", name: "Anthropic" },
-			{ id: "google", name: "Google (Gemini)" },
-			{ id: "xai", name: "xAI (Grok)" },
-			{ id: "groq", name: "Groq" },
-			{ id: "cerebras", name: "Cerebras" },
-			{ id: "chutes", name: "Chutes" },
-			{ id: "custom_openai", name: "Custom OpenAI", custom: true },
-			{ id: "custom_anthropic", name: "Custom Anthropic", custom: true },
+			{ id: "chutes", name: "Chutes", custom: false },
+			{ id: "openrouter", name: "OpenRouter", custom: false },
+			{ id: "cerebras", name: "Cerebras", custom: false },
+			{ id: "ollama", name: "Ollama (Local)", custom: true },
 		];
 
 		providersList.forEach((provObj) => {
 			const provider = provObj.id;
 			const isCustom = provObj.custom;
-			const isActive = provider === data.current_provider;
+			const isActive = provider === data.providers_config?.preferred_provider;
 
 			const card = document.createElement("div");
 			card.className = `provider-card ${isActive ? "active-provider" : ""}`;
@@ -225,12 +228,14 @@ async function loadProviderSettings() {
 			if (modelsForThisProv.length > 0) {
 				modelsForThisProv.forEach((m) => {
 					const selected =
-						isActive && m === data.current_model ? "selected" : "";
+						isActive && m === data.providers_config?.preferred_model
+							? "selected"
+							: "";
 					innerHtml += `<option value="${m}" ${selected}>${m}</option>`;
 				});
 			} else {
-				if (isActive && data.current_model) {
-					innerHtml += `<option value="${data.current_model}" selected>${data.current_model}</option>`;
+				if (isActive && data.providers_config?.preferred_model) {
+					innerHtml += `<option value="${data.providers_config.preferred_model}" selected>${data.providers_config.preferred_model}</option>`;
 				} else {
 					innerHtml += `<option value="">Fetch models first...</option>`;
 				}
@@ -396,11 +401,17 @@ async function testProviderConnection(providerName) {
 	statusElement.classList.add("pulse");
 
 	try {
+		const headers = { "Content-Type": "application/json" };
+		try {
+			const raw = localStorage.getItem(window.BYOK_STORAGE_KEY);
+			if (raw) headers["X-BYOK-Config"] = btoa(encodeURIComponent(raw));
+		} catch (e) {
+			console.warn("Error attaching BYOK config for test:", e);
+		}
+
 		const response = await fetch("/api/providers/test_connection", {
 			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
+			headers: headers,
 			body: JSON.stringify({ provider_name: providerName }),
 		});
 

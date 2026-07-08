@@ -36,28 +36,21 @@ class MissingProviderKeyError(Exception):
         )
 
 
-_keyring_ctx: ContextVar[RequestKeyring | None] = ContextVar(
-    "yuzu_request_keyring", default=None
+_keyring_ctx: ContextVar[dict[str, RequestKeyring]] = ContextVar(
+    "yuzu_request_keyring", default={}
 )
 
 
-def set_request_keyring(keyring: RequestKeyring) -> None:
-    """Bind a keyring to the current async context (request plane)."""
-    _keyring_ctx.set(keyring)
+def set_request_keyrings(keyrings: dict[str, RequestKeyring]) -> None:
+    """Bind a map of keyrings to the current async context (request plane)."""
+    _keyring_ctx.set(keyrings)
 
 
-def get_request_keyring() -> RequestKeyring | None:
-    """Return the current request's keyring, or None if unset."""
-    return _keyring_ctx.get()
+def get_request_keyring(provider_name: str) -> RequestKeyring | None:
+    """Return the current request's keyring for the given provider, or None if unset."""
+    return _keyring_ctx.get().get(provider_name)
 
 
 def clear_request_keyring() -> None:
     """Unbind the keyring — call in finally to prevent cross-request leakage."""
-    _keyring_ctx.set(None)
-
-
-def _provider_matches(keyring: RequestKeyring | None, provider_name: str) -> bool:
-    """True if the keyring applies to the given provider (wildcard or exact)."""
-    if keyring is None or not keyring.key:
-        return False
-    return keyring.provider is None or keyring.provider == provider_name
+    _keyring_ctx.set({})

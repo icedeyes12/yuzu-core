@@ -45,25 +45,21 @@ class LLMContext:
         vision_model = vision_prefs.get("model")
 
         # 3. Credential and Runtime Resolution (BYOK -> Env)
-        keyring = get_request_keyring()
+        keyring = get_request_keyring(provider)
         api_key = None
         base_url = None
 
-        keyring_applies = keyring and (
-            keyring.provider is None or keyring.provider == provider
-        )
-
-        if keyring_applies and keyring.key:
+        if keyring and keyring.key:
             api_key = keyring.key
         else:
             api_key = os.environ.get(f"{provider.upper()}_API_KEY")
 
-        if keyring_applies and keyring.base_url:
+        if keyring and keyring.base_url:
             base_url = keyring.base_url
         else:
             base_url = os.environ.get(f"{provider.upper()}_BASE_URL")
 
-        if keyring_applies and keyring.model_id:
+        if keyring and keyring.model_id:
             model = keyring.model_id
 
         # 4. Parameters (temperature, etc.) could be pulled from profile here
