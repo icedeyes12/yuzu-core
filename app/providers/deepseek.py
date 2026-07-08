@@ -78,7 +78,9 @@ class DeepSeekProvider(AIProvider):
                 self._last_raw_response = result
                 content = result["choices"][0]["message"].get("content", "") or ""
                 return content.strip()
-            logger.warning("[DeepSeek] %s: %s", response.status_code, response.text[:300])
+            logger.warning(
+                "[DeepSeek] %s: %s", response.status_code, response.text[:300]
+            )
             return None
         except Exception as e:
             logger.error("[DeepSeek] send_message error: %s", e)
@@ -101,7 +103,9 @@ class DeepSeekProvider(AIProvider):
                 result = response.json()
                 self._last_raw_response = result
                 return result
-            logger.warning("[DeepSeek] raw %s: %s", response.status_code, response.text[:300])
+            logger.warning(
+                "[DeepSeek] raw %s: %s", response.status_code, response.text[:300]
+            )
             return None
         except Exception as e:
             logger.error("[DeepSeek] send_message_raw error: %s", e)
@@ -134,7 +138,9 @@ class DeepSeekProvider(AIProvider):
                 ) as response:
                     if response.status_code != 200:
                         body = await response.aread()
-                        logger.warning("[DeepSeek] stream %s: %s", response.status_code, body[:300])
+                        logger.warning(
+                            "[DeepSeek] stream %s: %s", response.status_code, body[:300]
+                        )
                         yield ""
                         return
 
@@ -174,12 +180,20 @@ class DeepSeekProvider(AIProvider):
                         for idx in sorted(tool_call_fragments):
                             frag = tool_call_fragments[idx]
                             try:
-                                args = json.loads(frag["function"]["arguments"]) if frag["function"]["arguments"] else {}
+                                args = (
+                                    json.loads(frag["function"]["arguments"])
+                                    if frag["function"]["arguments"]
+                                    else {}
+                                )
                             except json.JSONDecodeError:
                                 args = {}
                             yield StreamToolEvent(
                                 type="tool_call",
-                                data={"id": frag["id"], "name": frag["function"]["name"], "arguments": args},
+                                data={
+                                    "id": frag["id"],
+                                    "name": frag["function"]["name"],
+                                    "arguments": args,
+                                },
                             )
                     else:
                         async for line in response.aiter_lines():
@@ -209,11 +223,13 @@ class DeepSeekProvider(AIProvider):
             results = []
             for tc in message.get("tool_calls", []):
                 fn = tc.get("function", {})
-                results.append({
-                    "id": tc.get("id", ""),
-                    "name": fn.get("name", ""),
-                    "arguments": json.loads(fn.get("arguments", "{}")),
-                })
+                results.append(
+                    {
+                        "id": tc.get("id", ""),
+                        "name": fn.get("name", ""),
+                        "arguments": json.loads(fn.get("arguments", "{}")),
+                    }
+                )
             return results
         except Exception:
             return []

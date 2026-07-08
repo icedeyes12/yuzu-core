@@ -18,6 +18,7 @@ _DEFAULT_MODELS = [
     "claude-3-opus-20240229",
 ]
 
+
 class AnthropicProvider(AIProvider):
     def __init__(self, config: dict | None = None):
         super().__init__("anthropic", config)
@@ -37,11 +38,15 @@ class AnthropicProvider(AIProvider):
         for t in openai_tools:
             if t.get("type") == "function":
                 fn = t.get("function", {})
-                anthropic_tools.append({
-                    "name": fn.get("name", ""),
-                    "description": fn.get("description", ""),
-                    "input_schema": fn.get("parameters", {"type": "object", "properties": {}})
-                })
+                anthropic_tools.append(
+                    {
+                        "name": fn.get("name", ""),
+                        "description": fn.get("description", ""),
+                        "input_schema": fn.get(
+                            "parameters", {"type": "object", "properties": {}}
+                        ),
+                    }
+                )
         return anthropic_tools
 
     def _prepare_payload(
@@ -49,7 +54,7 @@ class AnthropicProvider(AIProvider):
     ) -> tuple[dict, dict]:
         system_text = ""
         anthropic_messages = []
-        
+
         for msg in messages:
             role = msg.get("role", "")
             content = msg.get("content", "")
@@ -59,16 +64,18 @@ class AnthropicProvider(AIProvider):
                 anthropic_messages.append({"role": role, "content": content})
             elif role == "tool":
                 # Convert tool role to Anthropic user with tool_result
-                anthropic_messages.append({
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": msg.get("tool_call_id", ""),
-                            "content": content
-                        }
-                    ]
-                })
+                anthropic_messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": msg.get("tool_call_id", ""),
+                                "content": content,
+                            }
+                        ],
+                    }
+                )
 
         headers = {
             "x-api-key": self._require_api_key(ctx),
@@ -84,7 +91,7 @@ class AnthropicProvider(AIProvider):
         }
         if system_text:
             payload["system"] = system_text.strip()
-            
+
         if "temperature" in kwargs:
             payload["temperature"] = kwargs["temperature"]
 
@@ -116,7 +123,9 @@ class AnthropicProvider(AIProvider):
                     if block.get("type") == "text":
                         text += block.get("text", "")
                 return text.strip()
-            logger.warning("[Anthropic] %s: %s", response.status_code, response.text[:300])
+            logger.warning(
+                "[Anthropic] %s: %s", response.status_code, response.text[:300]
+            )
             return None
         except Exception as e:
             logger.error("[Anthropic] send_message error: %s", e)
@@ -140,7 +149,9 @@ class AnthropicProvider(AIProvider):
                 self._last_raw_response = result
                 # Convert back to OpenAI format for caller compatibility
                 return self._convert_response_to_openai(result)
-            logger.warning("[Anthropic] raw %s: %s", response.status_code, response.text[:300])
+            logger.warning(
+                "[Anthropic] raw %s: %s", response.status_code, response.text[:300]
+            )
             return None
         except Exception as e:
             logger.error("[Anthropic] send_message_raw error: %s", e)
@@ -153,23 +164,20 @@ class AnthropicProvider(AIProvider):
             if block.get("type") == "text":
                 text += block.get("text", "")
             elif block.get("type") == "tool_use":
-                tool_calls.append({
-                    "id": block.get("id"),
-                    "type": "function",
-                    "function": {
-                        "name": block.get("name"),
-                        "arguments": json.dumps(block.get("input", {}))
+                tool_calls.append(
+                    {
+                        "id": block.get("id"),
+                        "type": "function",
+                        "function": {
+                            "name": block.get("name"),
+                            "arguments": json.dumps(block.get("input", {})),
+                        },
                     }
-                })
-        
+                )
+
         return {
             "choices": [
-                {
-                    "message": {
-                        "content": text.strip(),
-                        "tool_calls": tool_calls
-                    }
-                }
+                {"message": {"content": text.strip(), "tool_calls": tool_calls}}
             ]
         }
 
@@ -198,20 +206,22 @@ class AnthropicProvider(AIProvider):
                 ) as response:
                     if response.status_code != 200:
                         body = await response.aread()
-                        logger.warning("[Anthropic] stream %s: %s", response.status_code, body[:300])
+                        logger.warning(
+                            "[Anthropic] stream %s: %s",
+                            response.status_code,
+                            body[:300],
+                        )
                         yield ""
                         return
-
-                    current_tool_call_idx = 0
                     tool_call_fragments: dict[int, dict] = {}
-                    
+
                     async for line in response.aiter_lines():
                         if not line or not line.startswith("data: "):
                             continue
                         try:
                             data = json.loads(line[6:])
                             event_type = data.get("type")
-                            
+
                             if event_type == "content_block_delta":
                                 delta = data.get("delta", {})
                                 if delta.get("type") == "text_delta":
@@ -219,8 +229,10 @@ class AnthropicProvider(AIProvider):
                                 elif delta.get("type") == "input_json_delta":
                                     idx = data.get("index", 0)
                                     if idx in tool_call_fragments:
-                                        tool_call_fragments[idx]["function"]["arguments"] += delta.get("partial_json", "")
-                            
+                                        tool_call_fragments[idx]["function"][
+                                            "arguments"
+                                        ] += delta.get("partial_json", "")
+
                             elif event_type == "content_block_start":
                                 block = data.get("content_block", {})
                                 if block.get("type") == "tool_use":
@@ -229,25 +241,33 @@ class AnthropicProvider(AIProvider):
                                         "id": block.get("id", ""),
                                         "function": {
                                             "name": block.get("name", ""),
-                                            "arguments": ""
-                                        }
+                                            "arguments": "",
+                                        },
                                     }
-                            
+
                             elif event_type == "message_stop":
                                 break
-                                
+
                         except (json.JSONDecodeError, KeyError):
                             continue
 
                     for idx in sorted(tool_call_fragments):
                         frag = tool_call_fragments[idx]
                         try:
-                            args = json.loads(frag["function"]["arguments"]) if frag["function"]["arguments"] else {}
+                            args = (
+                                json.loads(frag["function"]["arguments"])
+                                if frag["function"]["arguments"]
+                                else {}
+                            )
                         except json.JSONDecodeError:
                             args = {}
                         yield StreamToolEvent(
                             type="tool_call",
-                            data={"id": frag["id"], "name": frag["function"]["name"], "arguments": args},
+                            data={
+                                "id": frag["id"],
+                                "name": frag["function"]["name"],
+                                "arguments": args,
+                            },
                         )
 
         except Exception as e:
@@ -263,11 +283,13 @@ class AnthropicProvider(AIProvider):
             results = []
             for tc in message.get("tool_calls", []):
                 fn = tc.get("function", {})
-                results.append({
-                    "id": tc.get("id", ""),
-                    "name": fn.get("name", ""),
-                    "arguments": json.loads(fn.get("arguments", "{}")),
-                })
+                results.append(
+                    {
+                        "id": tc.get("id", ""),
+                        "name": fn.get("name", ""),
+                        "arguments": json.loads(fn.get("arguments", "{}")),
+                    }
+                )
             return results
         except Exception:
             return []

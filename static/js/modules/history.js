@@ -114,6 +114,15 @@ export async function loadChatHistory(sessionId = null) {
 						msg.content,
 						msg.timestamp,
 					);
+					if (msg.tool_calls && msg.tool_calls.length > 0) {
+						const tcDiv = document.createElement("div");
+						tcDiv.className = "tool-calls-container";
+						tcDiv.innerHTML = `<pre class="tool-call"><code>${JSON.stringify(msg.tool_calls, null, 2)}</code></pre>`;
+						const contentDiv = msgElement.querySelector(".message-content");
+						if (contentDiv) {
+							contentDiv.appendChild(tcDiv);
+						}
+					}
 					fragment.appendChild(msgElement);
 				}
 			});
@@ -283,7 +292,16 @@ export function addScrollLoadListener(fullHistory) {
 							msg.content,
 							msg.timestamp,
 						);
-						fragment.appendChild(msgElement);
+						if (msg.tool_calls && msg.tool_calls.length > 0) {
+							const tcDiv = document.createElement("div");
+							tcDiv.className = "tool-calls-container";
+							tcDiv.innerHTML = `<pre class="tool-call"><code>${JSON.stringify(msg.tool_calls, null, 2)}</code></pre>`;
+							const contentDiv = msgElement.querySelector(".message-content");
+							if (contentDiv) {
+								contentDiv.appendChild(tcDiv);
+							}
+						}
+						fragment.insertBefore(msgElement, fragment.firstChild);
 					}
 				});
 

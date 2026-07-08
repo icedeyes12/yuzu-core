@@ -115,6 +115,14 @@ class ConfigService:
             "updated_at": profile["updated_at"].isoformat()
             if profile.get("updated_at")
             else None,
+            "persona_preset": profile.get("persona_preset"),
+            "persona_prompt": profile.get("persona_prompt"),
+            "temperature": profile.get("temperature"),
+            "top_p": profile.get("top_p"),
+            "max_tokens": profile.get("max_tokens"),
+            "history_limit": profile.get("history_limit"),
+            "enable_reasoning": profile.get("enable_reasoning"),
+            "enable_vision": profile.get("enable_vision"),
         }
 
     @staticmethod

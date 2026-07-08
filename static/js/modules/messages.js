@@ -39,7 +39,7 @@ export function createMessageElement(role, content, timestamp = null) {
 		// Render content through a single safe pipeline
 		if (typeof renderer !== "undefined") {
 			contentContainer.innerHTML = renderMessageContent(
-				String(content),
+				content == null ? "" : String(content),
 				role === "user",
 			);
 
@@ -55,7 +55,7 @@ export function createMessageElement(role, content, timestamp = null) {
 				}
 			}, 0);
 		} else {
-			contentContainer.textContent = String(content);
+			contentContainer.textContent = content == null ? "" : String(content);
 		}
 
 		bubble.appendChild(contentContainer);
@@ -208,6 +208,7 @@ export function isRenderableHistoryRole(role) {
 	return (
 		role === "user" ||
 		role === "assistant" ||
+		role === "tool" ||
 		(typeof role === "string" && role.endsWith("_tools"))
 	);
 }
