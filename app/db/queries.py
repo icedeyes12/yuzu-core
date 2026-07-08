@@ -314,6 +314,7 @@ def parse_profile_row(row: dict | None) -> dict:
     ctx = row.get("context") or {}
     if isinstance(ctx, str):
         import json
+
         try:
             ctx = json.loads(ctx)
         except Exception:
