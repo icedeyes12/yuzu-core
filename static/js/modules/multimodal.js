@@ -624,9 +624,13 @@ export class MultimodalManager {
 									const statusIcon = ok ? "✅" : "❌";
 									let markdown = json.data?.markdown || "";
 									if (json.data?.data?.image_path) {
-										const encodedPath = encodeURI(
-											`/${json.data.data.image_path.replace(/^\/+/, "")}`,
-										);
+										let imgPath = json.data.data.image_path.replace(/^\/+/, "");
+										if (!imgPath.startsWith("static/")) {
+											imgPath = imgPath.startsWith("generated_images/")
+												? `static/${imgPath}`
+												: imgPath;
+										}
+										const encodedPath = encodeURI(`/${imgPath}`);
 										markdown += `\n\n<img src="${encodedPath}" alt="Tool Output Image">`;
 									}
 									accumulatedText += `\n<details class="tool-result" open><summary>${statusIcon} ${toolName}</summary><div class="tool-result-content">${markdown}</div></details>\n`;

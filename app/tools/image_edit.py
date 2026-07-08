@@ -209,9 +209,10 @@ async def execute(arguments, **kwargs) -> dict:
         full_command = f"/image_edit {prompt}"
         return ok_result(
             {
-                "image_path": f"static/generated_images/{filename}",
-                "image_html": f'<img src="static/generated_images/{filename}" alt="Edited Image">',
+                "image_path": f"/static/generated_images/{filename}",
                 "original_path": image_path,
+                "image_html": f'<img src="/static/generated_images/{filename}" alt="Edited Image">',
+                "model": "qwen-image-edit",
             },
             TOOL_DEFINITION,
             full_command,

@@ -851,21 +851,28 @@ class MessageRenderer {
 			rawPath = String(rawPath);
 		}
 		const cleaned = rawPath.trim().replace(/\\/g, "/");
-		if (
-			/^(https?:)?\/\//i.test(cleaned) ||
-			cleaned.startsWith("data:") ||
-			cleaned.startsWith("/")
-		) {
+
+		if (/^(https?:)?\/\//i.test(cleaned) || cleaned.startsWith("data:")) {
 			return cleaned;
 		}
-		if (cleaned.startsWith("static/")) {
-			return `/${cleaned}`;
+
+		let strippedCleaned = cleaned;
+		if (strippedCleaned.startsWith("/")) {
+			strippedCleaned = strippedCleaned.substring(1);
+		}
+
+		if (strippedCleaned.startsWith("static/")) {
+			return `/${strippedCleaned}`;
 		}
 		if (
-			cleaned.startsWith("uploads/") ||
-			cleaned.startsWith("generated_images/")
+			strippedCleaned.startsWith("uploads/") ||
+			strippedCleaned.startsWith("generated_images/")
 		) {
-			return `/static/${cleaned}`;
+			return `/static/${strippedCleaned}`;
+		}
+
+		if (cleaned.startsWith("/")) {
+			return cleaned;
 		}
 		return cleaned;
 	}

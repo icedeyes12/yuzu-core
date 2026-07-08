@@ -118,8 +118,8 @@ async def execute(arguments, **kwargs):
         full_command = f"/imagine {prompt}"
         return ok_result(
             {
-                "image_path": f"static/generated_images/{filename}",
-                "image_html": f'<img src="static/generated_images/{filename}" alt="Generated Image">',
+                "image_path": f"/static/generated_images/{filename}",
+                "image_html": f'<img src="/static/generated_images/{filename}" alt="Generated Image">',
                 "model": image_model,
             },
             TOOL_DEFINITION,
