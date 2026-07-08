@@ -10,6 +10,14 @@ from app.providers.ollama import OllamaProvider
 from app.providers.cerebras import CerebrasProvider
 from app.providers.openrouter import OpenRouterProvider
 from app.providers.chutes import ChutesProvider
+from app.providers.openai import OpenAIProvider
+from app.providers.groq import GroqProvider
+from app.providers.deepseek import DeepSeekProvider
+from app.providers.grok import GrokProvider
+from app.providers.anthropic import AnthropicProvider
+from app.providers.custom_openai import CustomOpenAIProvider
+from app.providers.custom_anthropic import CustomAnthropicProvider
+from app.providers.google import GoogleProvider
 
 
 # Override load_providers to register actual provider implementations
@@ -29,6 +37,38 @@ async def load_all_providers(manager: AIProviderManager):
     chutes = ChutesProvider()
     await chutes.initialize()
     manager.register_provider("chutes", chutes)
+
+    openai = OpenAIProvider()
+    await openai.initialize()
+    manager.register_provider("openai", openai)
+
+    groq = GroqProvider()
+    await groq.initialize()
+    manager.register_provider("groq", groq)
+
+    deepseek = DeepSeekProvider()
+    await deepseek.initialize()
+    manager.register_provider("deepseek", deepseek)
+
+    grok = GrokProvider()
+    await grok.initialize()
+    manager.register_provider("grok", grok)
+
+    anthropic = AnthropicProvider()
+    await anthropic.initialize()
+    manager.register_provider("anthropic", anthropic)
+
+    custom_openai = CustomOpenAIProvider()
+    await custom_openai.initialize()
+    manager.register_provider("custom_openai", custom_openai)
+
+    custom_anthropic = CustomAnthropicProvider()
+    await custom_anthropic.initialize()
+    manager.register_provider("custom_anthropic", custom_anthropic)
+
+    google = GoogleProvider()
+    await google.initialize()
+    manager.register_provider("google", google)
 
 
 # Patch the AIProviderManager to use our load function
