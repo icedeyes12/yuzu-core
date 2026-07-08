@@ -42,11 +42,12 @@
 		const response = await _origFetch.call(this, input, init);
 
 		if (
-			response.status === 401 &&
-			url.includes("/api/") &&
-			!url.includes("/api/auth/")
+			(response.status === 401 || response.status === 403) &&
+			url.includes("/api/")
 		) {
-			_showAuthOverlay();
+			if (window.location.pathname !== "/login") {
+				window.location.href = "/login";
+			}
 		}
 		return response;
 	};
@@ -170,7 +171,7 @@ async function handleLogout() {
 		await fetch("/api/auth/logout", { method: "POST" });
 	} catch (_e) {}
 	_hideAuthOverlay();
-	_checkAuthState();
+	window.location.href = "/login";
 }
 
 function _initAuth() {

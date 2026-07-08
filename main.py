@@ -131,6 +131,17 @@ async def operational_error_handler(request: Request, exc: OperationalError):
     return HTMLResponse(content=_render_offline_page(), status_code=503)
 
 
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc: Exception):
+    """Handle 404 Not Found - redirect to home gracefully."""
+    from fastapi.responses import RedirectResponse
+
+    # Only redirect HTML requests
+    if request.headers.get("accept", "").find("text/html") >= 0:
+        return RedirectResponse(url="/", status_code=302)
+    return {"detail": "Not Found"}
+
+
 # Mount static directories
 app.mount(
     "/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static"
