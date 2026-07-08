@@ -105,7 +105,7 @@ async def callback(request: Request):
         raise HTTPException(status_code=502, detail="Token exchange failed")
 
     try:
-        provider_sub, email, avatar_url, display_name = await resolve_identity(
+        provider_sub, email, avatar_url, user_name = await resolve_identity(
             config, token_response, client_id
         )
     except Exception as e:
@@ -113,7 +113,7 @@ async def callback(request: Request):
         raise HTTPException(status_code=502, detail="Identity resolution failed")
 
     user_id = await _map_identity_to_profile(
-        provider_name, provider_sub, email, avatar_url, display_name
+        provider_name, provider_sub, email, avatar_url, user_name
     )
     token = await create_session(user_id)
 
@@ -129,7 +129,7 @@ async def _map_identity_to_profile(
     provider_sub: str,
     email: str | None,
     avatar_url: str | None = None,
-    display_name: str | None = None,
+    user_name: str | None = None,
 ) -> str:
     existing = await Database.lookup_identity(provider, provider_sub)
     if existing:
@@ -137,10 +137,8 @@ async def _map_identity_to_profile(
         # Refresh avatar + display name on each login (IdP may have updated them)
         if avatar_url:
             await Database.update_profile_avatar(user_id, avatar_url, datetime.now())
-        if display_name:
-            await Database.update_profile_display_name(
-                user_id, display_name, datetime.now()
-            )
+        if user_name:
+            await Database.update_profile_user_name(user_id, user_name, datetime.now())
         return user_id
 
     unclaimed = await Database.lookup_unclaimed_profile()
@@ -157,10 +155,8 @@ async def _map_identity_to_profile(
     # Persist avatar + display name for new profiles
     if avatar_url:
         await Database.update_profile_avatar(user_id, avatar_url, datetime.now())
-    if display_name:
-        await Database.update_profile_display_name(
-            user_id, display_name, datetime.now()
-        )
+    if user_name:
+        await Database.update_profile_user_name(user_id, user_name, datetime.now())
 
     await Database.insert_identity(user_id, provider, provider_sub, email)
     return user_id
@@ -190,6 +186,6 @@ async def me(request: Request):
     return {
         "user_id": user_id,
         "email": row.get("email"),
-        "display_name": row.get("display_name") or "",
+        "user_name": row.get("user_name") or "",
         "avatar_url": row.get("avatar_url"),
     }

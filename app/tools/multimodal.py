@@ -8,7 +8,7 @@ import os
 import hashlib
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
-from app.core.context import resolve_api_key
+from app.core.llm_context import LLMContext
 
 logger = logging.getLogger(__name__)
 
@@ -533,7 +533,7 @@ class MultimodalTools:
             logger.warning(f"[Vision] Could not load saved preference: {e}")
 
         # 2. Try Chutes first (preferred)
-        if resolve_api_key("chutes"):
+        if LLMContext.from_profile({}, override_provider="chutes").api_key:
             chutes_models = self.get_available_vision_models("chutes")
             if chutes_models:
                 default_model = chutes_models[0]
@@ -543,7 +543,7 @@ class MultimodalTools:
                 return "chutes", default_model
 
         # 3. Fallback to OpenRouter
-        if resolve_api_key("openrouter"):
+        if LLMContext.from_profile({}, override_provider="openrouter").api_key:
             openrouter_models = self.get_available_vision_models("openrouter")
             if openrouter_models:
                 return "openrouter", openrouter_models[0]

@@ -135,7 +135,7 @@ async function _checkAuthState() {
 function _renderAuthenticated(container, data) {
 	const userId = data?.user_id || "";
 	const email = data?.email || "";
-	const displayName = data?.display_name || "";
+	const displayName = data?.user_name || "";
 	const avatarUrl = data?.avatar_url || "";
 	const shortId = userId ? `${userId.slice(0, 8)}…` : "unknown";
 	const showName = displayName || email || shortId;

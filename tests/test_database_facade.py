@@ -123,19 +123,8 @@ class TestArgumentReordering:
 class TestProxiedMethods:
     def test_get_profile_proxies_directly(self, monkeypatch):
         async def fake_profile(user_id):
-            return {"id": 1, "display_name": "x"}
+            return {"id": 1, "user_name": "x"}
 
         monkeypatch.setattr(Database, "get_profile", staticmethod(fake_profile))
         result = asyncio.run(Database.get_profile("uid"))
-        assert result == {"id": 1, "display_name": "x"}
-
-    def test_get_api_key_passes_name(self, monkeypatch):
-        captured = {}
-
-        async def fake_get_key(name):
-            captured["name"] = name
-            return "sk-abc"
-
-        monkeypatch.setattr(Database, "get_api_key", staticmethod(fake_get_key))
-        assert asyncio.run(Database.get_api_key("chutes")) == "sk-abc"
-        assert captured["name"] == "chutes"
+        assert result == {"id": 1, "user_name": "x"}

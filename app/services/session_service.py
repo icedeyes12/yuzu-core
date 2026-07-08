@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from app.core.context import resolve_api_key
+from app.core.llm_context import LLMContext
 from app.db import Database
 from app.llm_client import chutes_chat
 from app.logging_config import get_logger
@@ -87,7 +87,7 @@ class SessionService:
                 pass
 
         disconnect_msg = SessionService.generate_disconnect_msg(
-            profile["display_name"], interface, duration_minutes, unexpected_exit
+            profile["user_name"], interface, duration_minutes, unexpected_exit
         )
         await Database.add_message(
             "system", disconnect_msg, session_id, user_id=user_id
@@ -127,7 +127,9 @@ class SessionService:
             )
             return
 
-        api_key = resolve_api_key("chutes")
+        profile = await Database.get_profile(user_id)
+        ctx = LLMContext.from_profile(profile, override_provider="chutes")
+        api_key = ctx.api_key
         summary = await Database.get_session_conversation_summary(session_id, limit=15)
 
         name: str | None = None
@@ -152,23 +154,23 @@ class SessionService:
 
     @staticmethod
     def generate_connection_msg(
-        display_name: str, interface: str, last_active: str, session_count: int
+        user_name: str, interface: str, last_active: str, session_count: int
     ) -> str:
         return (
-            f"*{display_name} connected to {interface} interface at {SessionService._format_now()}. "
+            f"*{user_name} connected to {interface} interface at {SessionService._format_now()}. "
             f"Last active: {last_active}. Session count: #{session_count}*"
         )
 
     @staticmethod
     def generate_disconnect_msg(
-        display_name: str,
+        user_name: str,
         interface: str,
         duration_minutes: float,
         unexpected_exit: bool = False,
     ) -> str:
         status = "unexpectedly " if unexpected_exit else ""
         return (
-            f"*{display_name} disconnected {status}from {interface} "
+            f"*{user_name} disconnected {status}from {interface} "
             f"at {SessionService._format_now()} after {duration_minutes:.1f} minutes*"
         )
 

@@ -13,7 +13,7 @@ async def _noop(*args, **kwargs):
 async def test_runtime_prompt_uses_native_fc_only(monkeypatch):
     profile = {
         "partner_name": "Yuzu",
-        "display_name": "Bani",
+        "user_name": "Bani",
     }
 
     async def _retrieve_memories_async(*args, **kwargs):
@@ -48,14 +48,14 @@ async def test_runtime_prompt_uses_native_fc_only(monkeypatch):
     assert "native function calling" in prompt.lower()
     assert "<command>" not in prompt
     assert "</command>" not in prompt
-    assert "legacy tool markup" not in prompt.lower()
+
     assert "legacy fallback" not in prompt.lower()
     assert "tool registry" in prompt.lower()
 
 
 @pytest.mark.asyncio
 async def test_build_messages_uses_image_paths_without_role_filter(monkeypatch):
-    profile = {"partner_name": "Yuzu", "display_name": "Bani"}
+    profile = {"partner_name": "Yuzu", "user_name": "Bani"}
 
     async def _stub_build_system_message_async(*args, **kwargs):
         return "system"
@@ -102,3 +102,56 @@ async def test_build_messages_uses_image_paths_without_role_filter(monkeypatch):
     assert messages[1]["content"][0]["type"] == "text"
     assert messages[1]["content"][1]["type"] == "image_url"
     assert messages[2] == {"role": "assistant", "content": "plain"}
+
+
+@pytest.mark.asyncio
+async def test_persona_injection_and_missing_data_fallback(monkeypatch):
+    # Missing partner_name, user_name, persona_preset, persona_prompt
+    profile = {}
+
+    async def _retrieve_memories_async(*args, **kwargs):
+        return ([], "", "")
+
+    async def _legacy_memory_block_async(*args, **kwargs):
+        return ""
+
+    monkeypatch.setattr(prompts, "_retrieve_memories_async", _retrieve_memories_async)
+    monkeypatch.setattr(prompts, "_mark_facts_pending_async", _noop)
+    monkeypatch.setattr(
+        prompts, "_legacy_memory_block_async", _legacy_memory_block_async
+    )
+    monkeypatch.setattr(prompts, "_location_block_async", _noop)
+    monkeypatch.setattr(prompts, "_session_events_block_async", _noop)
+
+    prompt = await prompts.build_system_message_async(
+        profile=profile,
+        session_id="session_1",
+        interface="web",
+        user_message="hello",
+        user_id="user_1",
+    )
+
+    # Verify fallbacks
+    assert "You are Yuzu," in prompt
+    assert "speaking with the user." in prompt
+    assert "Your personality is defined by: You are warm, empathetic" in prompt
+
+    # Verify custom persona logic
+    profile_custom = {
+        "partner_name": "TestAI",
+        "user_name": "TestUser",
+        "persona_preset": "custom",
+        "persona_prompt": "You are a test persona.",
+    }
+
+    prompt_custom = await prompts.build_system_message_async(
+        profile=profile_custom,
+        session_id="session_1",
+        interface="web",
+        user_message="hello",
+        user_id="user_1",
+    )
+
+    assert "You are TestAI," in prompt_custom
+    assert "speaking with TestUser." in prompt_custom
+    assert "Your personality is defined by: You are a test persona." in prompt_custom

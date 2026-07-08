@@ -6,6 +6,7 @@ import pytest
 
 from app.providers.base import ProviderCapabilities
 from app.tools.schemas import StreamToolEvent
+from app.core.llm_context import LLMContext
 
 
 class TestProviderCapabilities:
@@ -213,7 +214,12 @@ class TestOpenRouterPayloadPreparation:
             }
         ]
         headers, payload = provider._prepare_payload(
-            messages, "openai/gpt-4o-mini", False, tools=tools
+            LLMContext(
+                provider="openrouter", model="openai/gpt-4o-mini", api_key="test_key"
+            ),
+            messages,
+            False,
+            tools=tools,
         )
         assert payload["tools"] == tools
         assert payload["tool_choice"] == "auto"
@@ -229,7 +235,12 @@ class TestOpenRouterPayloadPreparation:
             }
         ]
         headers, payload = provider._prepare_payload(
-            messages, "openai/gpt-4o-mini", True, tools=tools
+            LLMContext(
+                provider="openrouter", model="openai/gpt-4o-mini", api_key="test_key"
+            ),
+            messages,
+            True,
+            tools=tools,
         )
         assert payload["tools"] == tools
         assert payload["tool_choice"] == "auto"
@@ -239,7 +250,11 @@ class TestOpenRouterPayloadPreparation:
         provider = self._make_provider()
         messages = [{"role": "user", "content": "test"}]
         headers, payload = provider._prepare_payload(
-            messages, "openai/gpt-4o-mini", False
+            LLMContext(
+                provider="openrouter", model="openai/gpt-4o-mini", api_key="test_key"
+            ),
+            messages,
+            False,
         )
         assert "tools" not in payload
 

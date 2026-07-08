@@ -16,6 +16,7 @@ from app.providers import get_ai_manager
 from app.providers.base import _rate_limit_provider
 from app.tools.schemas import StreamToolEvent
 from app.tools.registry import get_tool_schemas
+from app.core.llm_context import LLMContext
 
 log = get_logger(__name__)
 
@@ -167,8 +168,7 @@ def _resolve_provider(
 
 
 async def _send_to_provider(
-    provider: str,
-    model: str,
+    ctx: LLMContext,
     messages: list[dict[str, Any]],
     *,
     source: str = "chat",
@@ -182,15 +182,17 @@ async def _send_to_provider(
     raw_response: dict[str, Any] | None = None
     try:
         raw_response = await ai_manager.send_message_raw(
-            provider, model, messages, source=source, timeout=180, tools=schemas
+            ctx, messages, source=source, timeout=180, tools=schemas
         )
     except Exception as e:  # noqa: BLE001
-        log.error("send_message exception (%s/%s): %s", provider, model, e)
+        log.error("send_message exception (%s/%s): %s", ctx.provider, ctx.model, e)
         return None, None
 
     duration = time.time() - started
     if raw_response is None:
-        log.warning("chat %s/%s returned empty (%.1fs)", provider, model, duration)
+        log.warning(
+            "chat %s/%s returned empty (%.1fs)", ctx.provider, ctx.model, duration
+        )
         return None, None
 
     try:
@@ -202,14 +204,14 @@ async def _send_to_provider(
     if text:
         log.info(
             "chat %s/%s | tools=%d | %.1fs ok",
-            provider,
-            model,
+            ctx.provider,
+            ctx.model,
             len(schemas),
             duration,
         )
         return text, raw_response
 
-    log.warning("chat %s/%s returned empty (%.1fs)", provider, model, duration)
+    log.warning("chat %s/%s returned empty (%.1fs)", ctx.provider, ctx.model, duration)
     return text, raw_response
 
 
@@ -235,11 +237,11 @@ async def generate_ai_response(
     if session_id is None:
         session_id = (await Database.get_active_session(user_id))["id"]
 
-    provider, model = _resolve_provider(profile, None, None)
+    ctx = LLMContext.from_profile(profile)
 
     # FC9-C: Check if provider supports native FC for prompt construction
     ai_manager = await get_ai_manager()
-    provider_supports_fc = ai_manager.provider_supports_tools(provider)
+    provider_supports_fc = ai_manager.provider_supports_tools(ctx.provider)
 
     messages = await build_messages(
         profile,
@@ -256,8 +258,7 @@ async def generate_ai_response(
         messages.extend(ephemeral_context)
 
     text, raw = await _send_to_provider(
-        provider,
-        model,
+        ctx,
         messages,
         source="chat",
         suppress_tools=suppress_tools,
@@ -266,8 +267,7 @@ async def generate_ai_response(
 
 
 async def _stream_from_provider(
-    provider: str,
-    model: str,
+    ctx: LLMContext,
     messages: list[dict[str, Any]],
     *,
     source: str = "chat",
@@ -282,8 +282,7 @@ async def _stream_from_provider(
     received = 0
     try:
         async for chunk in ai_manager.send_message_streaming(
-            provider,
-            model,
+            ctx,
             messages,
             source=source,
             timeout=180,
@@ -299,7 +298,7 @@ async def _stream_from_provider(
         )
         raise
     except Exception as e:  # noqa: BLE001
-        log.error("streaming exception (%s/%s): %s", provider, model, e)
+        log.error("streaming exception (%s/%s): %s", ctx.provider, ctx.model, e)
         return
 
 
@@ -327,11 +326,13 @@ async def generate_ai_response_streaming(
     if session_id is None:
         session_id = (await Database.get_active_session(user_id))["id"]
 
-    resolved_provider, resolved_model = _resolve_provider(profile, provider, model)
+    ctx = LLMContext.from_profile(
+        profile, override_provider=provider, override_model=model
+    )
 
     # FC9-C: Check if provider supports native FC for prompt construction
     ai_manager = await get_ai_manager()
-    provider_supports_fc = ai_manager.provider_supports_tools(resolved_provider)
+    provider_supports_fc = ai_manager.provider_supports_tools(ctx.provider)
 
     messages = await build_messages(
         profile,
@@ -348,8 +349,7 @@ async def generate_ai_response_streaming(
         messages.extend(ephemeral_context)
 
     async for chunk in _stream_from_provider(
-        resolved_provider,
-        resolved_model,
+        ctx,
         messages,
         source="chat",
         suppress_tools=suppress_tools,

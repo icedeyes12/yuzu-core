@@ -4,6 +4,8 @@ import logging
 import httpx
 from typing import AsyncGenerator
 from app.providers.base import AIProvider, ProviderCapabilities
+from app.core.llm_context import LLMContext
+from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +34,9 @@ class CerebrasProvider(AIProvider):
         return self.available_models
 
     async def send_message(
-        self, messages: list[dict], model: str, **kwargs
+        self, ctx: LLMContext, messages: list[dict], **kwargs
     ) -> str | None:
-        if model not in self.available_models:
+        if ctx.model not in self.available_models:
             return None
 
         try:
@@ -46,12 +48,12 @@ class CerebrasProvider(AIProvider):
             typical_p = kwargs.get("typical_p", 0.8)
 
             headers = {
-                "Authorization": f"Bearer {self._require_api_key()}",
+                "Authorization": f"Bearer {self._require_api_key(ctx)}",
                 "Content-Type": "application/json",
             }
 
             payload = {
-                "model": self.resolve_model(model),
+                "model": ctx.model,
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
@@ -62,12 +64,12 @@ class CerebrasProvider(AIProvider):
             }
 
             logger.debug(
-                f"[Cerebras] {model} | new_msg=1 | max_tokens={max_tokens or 'unlimited'}"
+                f"[Cerebras] {ctx.model} | new_msg=1 | max_tokens={max_tokens or 'unlimited'}"
             )
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    self.resolve_base_url(self.base_url),
+                    ctx.base_url or self.base_url,
                     headers=headers,
                     json=payload,
                     timeout=kwargs.get("timeout", 120),
@@ -80,10 +82,10 @@ class CerebrasProvider(AIProvider):
         except Exception:
             return None
 
-    async def send_message_streaming(
-        self, messages: list[dict], model: str, **kwargs
-    ) -> AsyncGenerator[str, None]:
-        if model not in self.available_models:
+    async def _send_message_streaming_impl(
+        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
+    ) -> AsyncGenerator[str | StreamToolEvent, None]:
+        if ctx.model not in self.available_models:
             yield ""
             return
 
@@ -96,12 +98,12 @@ class CerebrasProvider(AIProvider):
             typical_p = kwargs.get("typical_p", 0.8)
 
             headers = {
-                "Authorization": f"Bearer {self._require_api_key()}",
+                "Authorization": f"Bearer {self._require_api_key(ctx)}",
                 "Content-Type": "application/json",
             }
 
             payload = {
-                "model": self.resolve_model(model),
+                "model": ctx.model,
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
@@ -114,7 +116,7 @@ class CerebrasProvider(AIProvider):
             async with httpx.AsyncClient() as client:
                 async with client.stream(
                     "POST",
-                    self.resolve_base_url(self.base_url),
+                    ctx.base_url or self.base_url,
                     headers=headers,
                     json=payload,
                     timeout=kwargs.get("timeout", 120),

@@ -10,7 +10,6 @@
 #   3. Legacy         — caller-provided fallback (DB-loaded self.api_key)
 from __future__ import annotations
 
-import os
 from contextvars import ContextVar
 from dataclasses import dataclass
 
@@ -62,33 +61,3 @@ def _provider_matches(keyring: RequestKeyring | None, provider_name: str) -> boo
     if keyring is None or not keyring.key:
         return False
     return keyring.provider is None or keyring.provider == provider_name
-
-
-def resolve_api_key(provider_name: str, fallback: str | None = None) -> str | None:
-    """Resolve the API key for a provider (request plane → env var → fallback)."""
-    keyring = get_request_keyring()
-    if _provider_matches(keyring, provider_name):
-        return keyring.key
-    env_val = os.environ.get(f"{provider_name.upper()}_API_KEY")
-    if env_val:
-        return env_val
-    return fallback
-
-
-def resolve_base_url(provider_name: str, fallback: str) -> str:
-    """Resolve the base URL for a provider (ContextVar → env var → fallback)."""
-    keyring = get_request_keyring()
-    if _provider_matches(keyring, provider_name) and keyring.base_url:
-        return keyring.base_url
-    env_val = os.environ.get(f"{provider_name.upper()}_BASE_URL")
-    if env_val:
-        return env_val
-    return fallback
-
-
-def resolve_model(provider_name: str, fallback: str) -> str:
-    """Resolve the model ID for a provider (ContextVar → fallback)."""
-    keyring = get_request_keyring()
-    if _provider_matches(keyring, provider_name) and keyring.model_id:
-        return keyring.model_id
-    return fallback

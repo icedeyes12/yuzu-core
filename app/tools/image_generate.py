@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime
 from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 from app.db import Database
-from app.core.context import resolve_api_key
+from app.core.llm_context import LLMContext
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,8 @@ async def execute(arguments, **kwargs):
     partner_name = profile.get("partner_name", "Yuzu")
 
     try:
-        api_key = resolve_api_key("chutes")
+        ctx = LLMContext.from_profile(profile, override_provider="chutes")
+        api_key = ctx.api_key
         if not api_key:
             return error_result(
                 "No Chutes API key available",

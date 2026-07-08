@@ -4,7 +4,6 @@ from app.db import (
     DEFAULT_PROFILE_PARAMS,
     build_encryption_status,
     build_profile_update,
-    decrypt_api_key_rows,
     format_ai_history_rows,
     format_conversation_summary,
     parse_event_row,
@@ -40,7 +39,7 @@ class TestProfileParsers:
     def test_parse_profile_row_full(self):
         row = {
             "id": 1,
-            "display_name": "Bani",
+            "user_name": "Bani",
             "partner_name": "Yuzu",
             "affection": 75,
             "theme": "dark",
@@ -55,14 +54,14 @@ class TestProfileParsers:
             "updated_at": None,
         }
         out = parse_profile_row(row)
-        assert out["display_name"] == "Bani"
+        assert out["user_name"] == "Bani"
         assert out["affection"] == 75
         assert out["memory"] == {"x": 1}
         assert out["providers_config"] == {"preferred_provider": "chutes"}
 
     def test_parse_profile_row_uses_defaults_for_missing(self):
         out = parse_profile_row({"id": 7})
-        assert out["display_name"] == ""
+        assert out["user_name"] == ""
         assert out["affection"] == 50
         assert out["theme"] == "default"
         assert out["memory"] == {}
@@ -74,10 +73,10 @@ class TestBuildProfileUpdate:
         assert build_profile_update({"unknown": "x"}) is None
 
     def test_text_field(self):
-        result = build_profile_update({"display_name": "new"})
+        result = build_profile_update({"user_name": "new"})
         assert result is not None
         query, params = result
-        assert "display_name = %s" in query
+        assert "user_name = %s" in query
         assert "updated_at = %s" in query
         assert params[0] == "new"
 
@@ -121,20 +120,6 @@ class TestSessionParsers:
         out = parse_session_memory_rows(rows)
         assert out["count"] == 2
         assert out["notes"][0]["content"] == "hi"
-
-
-class TestApiKeyDecryption:
-    def test_unencrypted_passes_through(self):
-        rows = [
-            {"key_name": "openrouter", "key_value": "sk-plain", "key_encrypted": False}
-        ]
-        out = decrypt_api_key_rows(rows)
-        assert out == {"openrouter": "sk-plain"}
-
-    def test_skips_rows_with_missing_name(self):
-        rows = [{"key_name": None, "key_value": "sk", "key_encrypted": False}]
-        out = decrypt_api_key_rows(rows)
-        assert out == {}
 
 
 class TestMessageParsers:
@@ -203,7 +188,7 @@ class TestFormatAiHistoryRows:
         assert len(out) == 1
         # Tool roles are normalized to OpenAI "tool" format
         assert out[0]["role"] == "tool"
-        assert out[0]["content"] == "image_url"
+        assert out[0]["content"] == contract
 
     def test_native_fc_tool_call_includes_turn_id(self):
         """FC4: Native FC assistant messages preserve tool_calls + turn_id."""
@@ -252,19 +237,13 @@ class TestFormatAiHistoryRows:
 
 class TestEncryptionStatus:
     def test_build_encryption_status_with_all_none(self):
-        out = build_encryption_status(None, None, None, None)
+        out = build_encryption_status(None, None)
         assert out["messages"]["total"] == 0
-        assert out["api_keys"]["encrypted"] == 0
 
     def test_build_encryption_status_populated(self):
-        out = build_encryption_status({"cnt": 100}, {"cnt": 5}, {"cnt": 3}, {"cnt": 3})
+        out = build_encryption_status({"cnt": 100}, {"cnt": 5})
         assert out["messages"] == {
             "total": 100,
             "encrypted": 5,
             "policy": "NO_ENCRYPTION",
-        }
-        assert out["api_keys"] == {
-            "total": 3,
-            "encrypted": 3,
-            "policy": "FULL_ENCRYPTION",
         }

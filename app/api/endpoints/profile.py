@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
+import httpx
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -147,6 +148,46 @@ async def api_list_providers(user_id: str = Depends(get_current_user)):
         }
     except Exception as e:
         log.error("Error listing providers: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/proxy/models/{provider}")
+async def api_proxy_models(
+    provider: str, request: Request, user_id: str = Depends(get_current_user)
+):
+    try:
+        api_key = request.headers.get("X-Provider-Key", "")
+        base_url = request.headers.get("X-Provider-BaseUrl", "")
+
+        url = ""
+        if provider == "openrouter":
+            url = "https://openrouter.ai/api/v1/models"
+        elif provider == "openai":
+            url = "https://api.openai.com/v1/models"
+        elif provider == "custom" and base_url:
+            url = f"{base_url.rstrip('/')}/models"
+
+        if url:
+            headers = {}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(url, headers=headers, timeout=5.0)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    models = [m.get("id") for m in data.get("data", []) if m.get("id")]
+                    if models:
+                        return {"status": "success", "models": models}
+
+        # Fallback to local hardcoded list
+        ai_manager = await get_ai_manager()
+        p = ai_manager.providers.get(provider)
+        if p:
+            return {"status": "success", "models": await p.get_models()}
+
+        return {"status": "error", "message": "Could not fetch models"}
+    except Exception as e:
+        log.error("Error in proxy models: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

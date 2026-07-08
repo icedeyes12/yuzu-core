@@ -66,7 +66,7 @@ SCHEMA_DDL: tuple[str, ...] = (
     """
     CREATE TABLE IF NOT EXISTS profiles (
         id UUID NOT NULL DEFAULT generate_uuidv7() PRIMARY KEY,
-        display_name VARCHAR(255) NOT NULL DEFAULT '',
+        user_name VARCHAR(255) NOT NULL DEFAULT '',
         partner_name VARCHAR(255) NOT NULL DEFAULT '',
         affection INTEGER NOT NULL DEFAULT 50,
         theme VARCHAR(255) NOT NULL DEFAULT 'default',
@@ -98,16 +98,6 @@ SCHEMA_DDL: tuple[str, ...] = (
         deleted_at TIMESTAMP DEFAULT NULL,
         timestamp TIMESTAMP DEFAULT NOW(),
         FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
-    )
-    """,
-    # ── api_keys (not multi-tenant — stays SERIAL integer PK) ──
-    """
-    CREATE TABLE IF NOT EXISTS api_keys (
-        id SERIAL PRIMARY KEY,
-        key_name VARCHAR(255) NOT NULL DEFAULT 'openrouter',
-        key_value TEXT NOT NULL,
-        key_encrypted BOOLEAN NOT NULL DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT NOW()
     )
     """,
     # ── messages (id stays SERIAL int; session_id + user_id are UUID FKs) ──
@@ -232,7 +222,7 @@ LIMIT 1
 SQL_PROFILE_SELECT_BY_ID = "SELECT * FROM profiles WHERE id = %s"
 
 SQL_AUTH_ME_LOOKUP = """
-SELECT p.display_name, p.avatar_url, ui.email
+SELECT p.user_name, p.avatar_url, ui.email
 FROM profiles p
 LEFT JOIN LATERAL (
   SELECT email FROM user_identities ui
@@ -248,11 +238,11 @@ SQL_PROFILE_UPDATE_AVATAR = (
 )
 
 SQL_PROFILE_UPDATE_DISPLAY_NAME = (
-    "UPDATE profiles SET display_name = %s, updated_at = %s WHERE id = %s"
+    "UPDATE profiles SET user_name = %s, updated_at = %s WHERE id = %s"
 )
 
 SQL_PROFILE_INSERT_DEFAULT = """
-INSERT INTO profiles (display_name, partner_name, affection, theme,
+INSERT INTO profiles (user_name, partner_name, affection, theme,
                       memory_state, session_history, global_knowledge,
                       providers_config, context, timestamp, updated_at)
 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -278,7 +268,7 @@ _PROFILE_JSON_FIELDS = (
     "context",
 )
 _PROFILE_TEXT_FIELDS = (
-    "display_name",
+    "user_name",
     "partner_name",
     "theme",
     "image_model",
@@ -323,7 +313,7 @@ def parse_profile_row(row: dict | None) -> dict:
         return {}
     return {
         "id": row.get("id"),
-        "display_name": row.get("display_name", ""),
+        "user_name": row.get("user_name", ""),
         "partner_name": row.get("partner_name", ""),
         "affection": row.get("affection", 50),
         "theme": row.get("theme", "default"),
@@ -788,10 +778,8 @@ SQL_ENC_ENCRYPTED_KEYS = (
 def build_encryption_status(
     total_msg: dict | None,
     encrypted_msg: dict | None,
-    total_keys: dict | None,
-    encrypted_keys: dict | None,
 ) -> dict:
-    """Assemble the encryption-status response from four count rows."""
+    """Assemble the encryption-status response from message count rows."""
 
     def cnt(row: dict | None) -> int:
         return row.get("cnt", 0) if row else 0
@@ -801,11 +789,6 @@ def build_encryption_status(
             "total": cnt(total_msg),
             "encrypted": cnt(encrypted_msg),
             "policy": "NO_ENCRYPTION",
-        },
-        "api_keys": {
-            "total": cnt(total_keys),
-            "encrypted": cnt(encrypted_keys),
-            "policy": "FULL_ENCRYPTION",
         },
     }
 
@@ -825,7 +808,7 @@ VALUES (%s, %s, %s, %s)
 """
 
 SQL_PROFILE_INSERT_DEFAULT_RETURNING = """
-INSERT INTO profiles (display_name, partner_name, affection, theme,
+INSERT INTO profiles (user_name, partner_name, affection, theme,
                       memory_state, session_history, global_knowledge,
                       providers_config, context, timestamp, updated_at)
 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)

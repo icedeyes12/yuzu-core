@@ -132,7 +132,7 @@ Focus: remove legacy sync wrappers, dead stubs, and duplicate identity logic fro
 | Status | Completed |
 | Commit hash | 6402122 |
 | Completion date | 2026-06-29 |
-| Notes | Removed fake vision test, weather_location alias, _persist_display_name wrapper. Fixed hash()→sha256 in get_client_id. Removed duplicate _get_session_id. -19 lines. |
+| Notes | Removed fake vision test, weather_location alias, _persist_user_name wrapper. Fixed hash()→sha256 in get_client_id. Removed duplicate _get_session_id. -19 lines. |
 | Master plan status | Scheduled |
 
 ### F13 — Stale pipeline constant in orchestrator

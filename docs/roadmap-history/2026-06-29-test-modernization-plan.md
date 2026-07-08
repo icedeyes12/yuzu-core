@@ -230,11 +230,11 @@ Additionally, `pytest-asyncio` was missing from the environment, masking async t
 |-------|-------|
 | File | `tests/test_tenant_isolation.py:778` |
 | Classification | Still valid, needs updating |
-| Current code | `await Database.update_profile_async({"display_name": "Modified A"}, TENANT_A)` |
+| Current code | `await Database.update_profile_async({"user_name": "Modified A"}, TENANT_A)` |
 | Issue | Facade exposes `Database.update_profile(data, user_id)` |
 | Intent | Verify cross-tenant update isolation |
 | Intent still valid? | Yes |
-| Action | Update — rename to `Database.update_profile({"display_name": "Modified A"}, user_id=TENANT_A)` |
+| Action | Update — rename to `Database.update_profile({"user_name": "Modified A"}, user_id=TENANT_A)` |
 | Priority | Medium |
 | Status | Planned |
 

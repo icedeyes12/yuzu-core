@@ -5,6 +5,8 @@ import httpx
 from typing import AsyncGenerator
 import logging
 from app.providers.base import AIProvider, ProviderCapabilities
+from app.core.llm_context import LLMContext
+from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +37,9 @@ class OllamaProvider(AIProvider):
         return self.available_models
 
     async def send_message(
-        self, messages: list[dict], model: str, **kwargs
+        self, ctx: LLMContext, messages: list[dict], **kwargs
     ) -> str | None:
-        if model not in self.available_models:
+        if ctx.model not in self.available_models:
             return None
 
         try:
@@ -48,7 +50,7 @@ class OllamaProvider(AIProvider):
             num_ctx = kwargs.get("num_ctx", 8192)
 
             payload = {
-                "model": model,
+                "model": ctx.model,
                 "messages": messages,
                 "stream": False,
                 "options": {
@@ -62,7 +64,7 @@ class OllamaProvider(AIProvider):
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"{self.base_url}/api/chat",
+                    f"{ctx.base_url or self.base_url}/api/chat",
                     json=payload,
                     timeout=kwargs.get("timeout", 180),
                 )
@@ -76,10 +78,10 @@ class OllamaProvider(AIProvider):
         except Exception:
             return None
 
-    async def send_message_streaming(
-        self, messages: list[dict], model: str, **kwargs
-    ) -> AsyncGenerator[str, None]:
-        if model not in self.available_models:
+    async def _send_message_streaming_impl(
+        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
+    ) -> AsyncGenerator[str | StreamToolEvent, None]:
+        if ctx.model not in self.available_models:
             yield ""
             return
 
@@ -91,7 +93,7 @@ class OllamaProvider(AIProvider):
             num_ctx = kwargs.get("num_ctx", 8192)
 
             payload = {
-                "model": model,
+                "model": ctx.model,
                 "messages": messages,
                 "stream": True,
                 "options": {
@@ -106,7 +108,7 @@ class OllamaProvider(AIProvider):
             async with httpx.AsyncClient() as client:
                 async with client.stream(
                     "POST",
-                    f"{self.base_url}/api/chat",
+                    f"{ctx.base_url or self.base_url}/api/chat",
                     json=payload,
                     timeout=kwargs.get("timeout", 180),
                 ) as response:
