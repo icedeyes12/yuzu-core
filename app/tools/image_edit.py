@@ -185,11 +185,15 @@ async def execute(arguments, **kwargs) -> dict:
         images_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_prompt = "".join(
-            c
-            for c in prompt[:30]
-            if c.isascii() and (c.isalnum() or c in (" ", "-", "_"))
-        ).strip()
+        safe_prompt = (
+            "".join(
+                c
+                for c in prompt[:30]
+                if c.isascii() and (c.isalnum() or c in (" ", "-", "_"))
+            )
+            .strip()
+            .replace(" ", "_")
+        )
         if not safe_prompt:
             safe_prompt = "edited"
         filename = f"{timestamp}_{safe_prompt}.jpg"

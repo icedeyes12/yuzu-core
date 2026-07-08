@@ -312,6 +312,12 @@ def parse_profile_row(row: dict | None) -> dict:
     if not row:
         return {}
     ctx = row.get("context") or {}
+    if isinstance(ctx, str):
+        import json
+        try:
+            ctx = json.loads(ctx)
+        except Exception:
+            ctx = {}
     return {
         "id": row.get("id"),
         "user_name": row.get("user_name", ""),

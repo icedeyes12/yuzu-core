@@ -622,7 +622,14 @@ export class MultimodalManager {
 									const toolName = json.data?.name || "unknown";
 									const ok = json.data?.ok ?? true;
 									const statusIcon = ok ? "✅" : "❌";
-									accumulatedText += `\n<details class="tool-result" open><summary>${statusIcon} ${toolName}</summary><div class="tool-result-content">${json.data?.markdown || ""}</div></details>\n`;
+									let markdown = json.data?.markdown || "";
+									if (json.data?.data?.image_path) {
+										const encodedPath = encodeURI(
+											`/${json.data.data.image_path.replace(/^\/+/, "")}`,
+										);
+										markdown += `\n\n<img src="${encodedPath}" alt="Tool Output Image">`;
+									}
+									accumulatedText += `\n<details class="tool-result" open><summary>${statusIcon} ${toolName}</summary><div class="tool-result-content">${markdown}</div></details>\n`;
 									this.renderStreamChunk(contentDiv, accumulatedText);
 								}
 								continue;

@@ -93,11 +93,15 @@ async def execute(arguments, **kwargs):
         images_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_prompt = "".join(
-            c
-            for c in prompt[:30]
-            if c.isascii() and (c.isalnum() or c in (" ", "-", "_"))
-        ).strip()
+        safe_prompt = (
+            "".join(
+                c
+                for c in prompt[:30]
+                if c.isascii() and (c.isalnum() or c in (" ", "-", "_"))
+            )
+            .strip()
+            .replace(" ", "_")
+        )
         if not safe_prompt:
             safe_prompt = "image"
         ext = "jpg" if image_model == "qwen_image" else "png"

@@ -70,6 +70,9 @@ function _focusChatInput() {
 async function handleSessionSwitch(sessionId, updateURL = true) {
 	console.log(`[Chat] Switching to session ${sessionId}`);
 
+	// 1. Update currentSessionId
+	router.currentSessionId = sessionId;
+
 	// [CRITICAL] Set active view BEFORE any DOM operations
 	backgroundStreams.setActiveView(sessionId);
 
@@ -83,9 +86,28 @@ async function handleSessionSwitch(sessionId, updateURL = true) {
 		window.syncActiveSidebarItem(sessionId);
 	}
 
+	// 2. Clear the current chat DOM and show a loading state
+	const chatContainer = document.getElementById("chatContainer");
+	if (chatContainer) {
+		chatContainer.innerHTML = "";
+		if (typeof showChatSkeleton === "function") {
+			showChatSkeleton();
+		} else {
+			chatContainer.innerHTML =
+				"<div class='loading-skeleton'>Loading session...</div>";
+		}
+	}
+
+	// 4. Disable the chat input during this transition
+	const userInput = document.getElementById("userInput");
+	if (userInput) userInput.disabled = true;
+
+	// 3. Fire loadChatHistory(newSessionId) to render the new messages
 	// [DOM REBIND FIX] Always load history, let loadChatHistory handle stream rebinding
 	// This ensures previous messages are shown even when there's an active stream
 	await loadChatHistory(sessionId);
+
+	if (userInput) userInput.disabled = false;
 
 	// Auto-focus input after session content loads
 	_focusChatInput();

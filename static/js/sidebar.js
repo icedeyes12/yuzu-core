@@ -198,9 +198,7 @@ function toggleSidebar() {
 		sidebar.classList.add("open");
 		overlay.classList.add("active");
 		hamburger.classList.add("active");
-		if (window.location.pathname.startsWith("/chat")) {
-			loadSidebarSessions();
-		}
+		loadSidebarSessions();
 	}
 }
 
@@ -576,9 +574,7 @@ document.addEventListener("DOMContentLoaded", () => {
 		}
 	}
 	_initAuth();
-	if (window.location.pathname.startsWith("/chat")) {
-		loadSidebarSessions();
-	}
+	loadSidebarSessions();
 });
 
 function syncActiveSidebarItem(sessionId) {
