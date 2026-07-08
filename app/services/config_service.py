@@ -93,6 +93,7 @@ class ConfigService:
     @staticmethod
     def format_profile_dict(profile: dict) -> dict[str, Any]:
         """Format raw profile row into a frontend-friendly dictionary."""
+        ctx = profile.get("context") or {}
         return {
             "id": profile["id"],
             "user_name": profile["user_name"],
@@ -103,7 +104,7 @@ class ConfigService:
             "session_history": profile["session_history"],
             "global_knowledge": profile["global_knowledge"],
             "providers_config": profile["providers_config"],
-            "context": profile["context"],
+            "context": ctx,
             "image_model": profile["image_model"],
             "vision_model": profile["vision_model"],
             "vision_model_preferences": profile.get("providers_config", {}).get(
@@ -115,14 +116,14 @@ class ConfigService:
             "updated_at": profile["updated_at"].isoformat()
             if profile.get("updated_at")
             else None,
-            "persona_preset": profile.get("persona_preset"),
-            "persona_prompt": profile.get("persona_prompt"),
-            "temperature": profile.get("temperature"),
-            "top_p": profile.get("top_p"),
-            "max_tokens": profile.get("max_tokens"),
-            "history_limit": profile.get("history_limit"),
-            "enable_reasoning": profile.get("enable_reasoning"),
-            "enable_vision": profile.get("enable_vision"),
+            "persona_preset": ctx.get("persona_preset"),
+            "persona_prompt": ctx.get("persona_prompt"),
+            "temperature": ctx.get("temperature"),
+            "top_p": ctx.get("top_p"),
+            "max_tokens": ctx.get("max_tokens"),
+            "history_limit": ctx.get("history_limit"),
+            "enable_reasoning": ctx.get("enable_reasoning"),
+            "enable_vision": ctx.get("enable_vision"),
         }
 
     @staticmethod

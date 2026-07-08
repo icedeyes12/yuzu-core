@@ -22,7 +22,7 @@
 #messageInput:disabled {
 	opacity: 0.45;
 	cursor: not-allowed;
-	border-color: rgba(255, 255, 255, 0.08) !important;
+	border-color: rgba(255, 255, 255, 0.08);
 }
 
 /* Preserve sidebar scroll position — explicit overflow-y already on .sidebar;

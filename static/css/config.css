@@ -521,6 +521,7 @@ input[type="range"]::-moz-range-thumb {
 
 /* Theme Transitions */
 .config-section,
+/* biome-ignore lint/style/noDescendingSpecificity: allow transitions */
 .form-group,
 .btn,
 .provider-status,

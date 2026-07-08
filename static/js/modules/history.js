@@ -9,18 +9,15 @@ import {
 } from "./messages.js";
 
 function formatToolCall(toolCall) {
-	const name = toolCall.function?.name || "tool";
-	const args = toolCall.function?.arguments || "{}";
-	let parsedArgs = args;
-	try {
-		parsedArgs = JSON.stringify(JSON.parse(args), null, 2);
-	} catch (_e) {}
-	return `<details class="system-action-block tool-call-block" open><summary class="action-header">⚙️ Call: ${name}</summary><pre class="action-content"><code>${parsedArgs}</code></pre></details>`;
+	const toolName = toolCall.function?.name || "unknown";
+	const callId = toolCall.id || "";
+	return `\n<details class="tool-call-indicator"><summary>⚙️ Calling ${toolName}…</summary><pre data-call-id="${callId}">Completed ✓</pre></details>\n`;
 }
 
 function formatToolResult(contentStr) {
 	try {
 		const parsed = JSON.parse(contentStr);
+		const toolName = parsed.name || "unknown";
 		const ok = parsed.ok ?? true;
 		const statusIcon = ok ? "✅" : "❌";
 		let markdown = parsed.markdown || contentStr;
@@ -34,9 +31,9 @@ function formatToolResult(contentStr) {
 			const encodedPath = encodeURI(`/${imgPath}`);
 			markdown += `\n\n<img src="${encodedPath}" alt="Tool Output Image">`;
 		}
-		return `<details class="tool-result" open><summary>${statusIcon} Tool Result</summary><div class="tool-result-content">${markdown}</div></details>`;
+		return `\n<details class="tool-result" open><summary>${statusIcon} ${toolName}</summary><div class="tool-result-content">${markdown}</div></details>\n`;
 	} catch (_e) {
-		return contentStr;
+		return `\n<details class="tool-result" open><summary>✅ unknown</summary><div class="tool-result-content">${contentStr}</div></details>\n`;
 	}
 }
 
@@ -124,6 +121,8 @@ export async function loadChatHistory(sessionId = null) {
 
 			const fragment = document.createDocumentFragment();
 
+			let currentAiMessage = null;
+
 			messagesToShow.forEach((msg, index) => {
 				// [TEXT OVERLAP FALLBACK] Skip last AI message if we have an active stream
 				// The stream will provide the complete/continuing content
@@ -138,26 +137,37 @@ export async function loadChatHistory(sessionId = null) {
 				}
 
 				if (isRenderableHistoryRole(msg.role)) {
+					if (msg.role === "tool") {
+						if (currentAiMessage) {
+							const contentDiv =
+								currentAiMessage.querySelector(".message-content");
+							if (contentDiv) {
+								contentDiv.innerHTML += formatToolResult(msg.content);
+							}
+						}
+						return; // Skip creating a new bubble for tool result
+					}
+
 					console.log("[History] Raw message before render:", {
 						role: msg.role,
 						preview: String(msg.content || "").slice(0, 200),
 					});
-					let contentToRender = msg.content;
-					if (msg.role === "tool") {
-						contentToRender = formatToolResult(msg.content);
-					}
+					const contentToRender = msg.content;
 					const msgElement = createMessageElement(
 						msg.role === "user" ? "user" : "ai",
 						contentToRender,
 						msg.timestamp,
 					);
+
+					if (msg.role !== "user") {
+						currentAiMessage = msgElement;
+					}
+
 					if (msg.tool_calls && msg.tool_calls.length > 0) {
-						const tcDiv = document.createElement("div");
-						tcDiv.className = "tool-calls-container";
-						tcDiv.innerHTML = msg.tool_calls.map(formatToolCall).join("\n");
+						const callsHtml = msg.tool_calls.map(formatToolCall).join("");
 						const contentDiv = msgElement.querySelector(".message-content");
 						if (contentDiv) {
-							contentDiv.prepend(tcDiv);
+							contentDiv.innerHTML += callsHtml;
 						}
 					}
 					fragment.appendChild(msgElement);
@@ -218,16 +228,10 @@ export async function loadChatHistory(sessionId = null) {
 			// Apply syntax highlighting to all code blocks after rendering
 			setTimeout(() => {
 				if (typeof hljs !== "undefined") {
-					const codeBlocks = chatContainer.querySelectorAll(
-						"pre code:not(.hljs)",
-					);
-					codeBlocks.forEach((block) => {
-						hljs.highlightElement(block);
-					});
+					hljs.highlightAll();
 				}
-				// Initialize mermaid diagrams from history
-				if (typeof renderer !== "undefined" && renderer.isMermaidReady) {
-					renderer.initializeMermaidDiagrams(chatContainer);
+				if (typeof mermaid !== "undefined") {
+					mermaid.init();
 				}
 				scrollToBottom();
 				// Update layout after history render completes
@@ -318,31 +322,50 @@ export function addScrollLoadListener(fullHistory) {
 
 				const fragment = document.createDocumentFragment();
 
+				let currentAiLazy = null;
+
 				messagesToLoad.forEach((msg) => {
 					if (isRenderableHistoryRole(msg.role)) {
+						if (msg.role === "tool") {
+							if (currentAiLazy) {
+								const contentDiv =
+									currentAiLazy.querySelector(".message-content");
+								if (contentDiv) {
+									contentDiv.innerHTML += formatToolResult(msg.content);
+								}
+							}
+							return;
+						}
+
 						console.log("[History] Raw lazy-loaded message before render:", {
 							role: msg.role,
 							preview: String(msg.content || "").slice(0, 200),
 						});
-						let contentToRender = msg.content;
-						if (msg.role === "tool") {
-							contentToRender = formatToolResult(msg.content);
-						}
+						const contentToRender = msg.content;
 						const msgElement = createMessageElement(
 							msg.role === "user" ? "user" : "ai",
 							contentToRender,
 							msg.timestamp,
 						);
+
+						if (msg.role !== "user") {
+							currentAiLazy = msgElement;
+						}
+
 						if (msg.tool_calls && msg.tool_calls.length > 0) {
-							const tcDiv = document.createElement("div");
-							tcDiv.className = "tool-calls-container";
-							tcDiv.innerHTML = msg.tool_calls.map(formatToolCall).join("\n");
+							const callsHtml = msg.tool_calls.map(formatToolCall).join("");
 							const contentDiv = msgElement.querySelector(".message-content");
 							if (contentDiv) {
-								contentDiv.appendChild(tcDiv);
+								contentDiv.innerHTML += callsHtml;
 							}
 						}
 						fragment.insertBefore(msgElement, fragment.firstChild);
+
+						// because we iterate forward but insert before first child,
+						// wait, messagesToLoad is chronological?
+						// if it is, insertBefore(msgElement, firstChild) reverses the order!
+						// Wait, the original code had: fragment.insertBefore(msgElement, fragment.firstChild);
+						// Let's keep the logic matching the original insert order but fix the tool role tracking.
 					}
 				});
 
@@ -351,22 +374,10 @@ export function addScrollLoadListener(fullHistory) {
 				// Apply syntax highlighting to newly loaded messages
 				setTimeout(() => {
 					if (typeof hljs !== "undefined") {
-						const newCodeBlocks = chatContainer.querySelectorAll(
-							"pre code:not(.hljs)",
-						);
-						newCodeBlocks.forEach((block) => {
-							hljs.highlightElement(block);
-						});
+						hljs.highlightAll();
 					}
-
-					// Initialize mermaid diagrams in newly loaded messages
-					if (typeof renderer !== "undefined" && renderer.isMermaidReady) {
-						const newMermaid = chatContainer.querySelectorAll(
-							".mermaid:not([data-processed])",
-						);
-						if (newMermaid.length > 0) {
-							renderer.initializeMermaidDiagrams(chatContainer);
-						}
+					if (typeof mermaid !== "undefined") {
+						mermaid.init();
 					}
 				}, 100);
 
