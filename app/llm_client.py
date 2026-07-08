@@ -182,7 +182,7 @@ async def _send_to_provider(
     raw_response: dict[str, Any] | None = None
     try:
         raw_response = await ai_manager.send_message_raw(
-            ctx, messages, source=source, timeout=180, tools=schemas
+            ctx, messages, source=source, timeout=180, tools=schemas, **ctx.parameters
         )
     except Exception as e:  # noqa: BLE001
         log.error("send_message exception (%s/%s): %s", ctx.provider, ctx.model, e)
@@ -288,6 +288,7 @@ async def _stream_from_provider(
             timeout=180,
             suppress_tools=suppress_tools,
             tools=tools,
+            **ctx.parameters,
         ):
             if chunk:
                 received += len(chunk) if isinstance(chunk, str) else 0

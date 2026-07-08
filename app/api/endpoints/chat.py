@@ -29,15 +29,15 @@ def _extract_keyrings(request: Request) -> dict[str, RequestKeyring] | None:
     import json
     import base64
     import urllib.parse
-    
+
     byok_header = request.headers.get("X-BYOK-Config")
     if not byok_header:
         return None
-        
+
     try:
         raw_json = urllib.parse.unquote(base64.b64decode(byok_header).decode("utf-8"))
         byok_config = json.loads(raw_json)
-        
+
         keyrings = {}
         for provider, cfg in byok_config.items():
             if not isinstance(cfg, dict):
@@ -52,6 +52,7 @@ def _extract_keyrings(request: Request) -> dict[str, RequestKeyring] | None:
     except Exception as e:
         log.error("Failed to parse X-BYOK-Config header: %s", e)
         return None
+
 
 class MessageRequest(BaseModel):
     message: str = Field(..., min_length=1, description="User message text")
@@ -179,9 +180,9 @@ async def api_generate_image(
     payload: MessageRequest,
     user_id: str = Depends(get_current_user),
 ):
-    keyring = _extract_keyring(request)
-    if keyring:
-        set_request_keyring(keyring)
+    keyrings = _extract_keyrings(request)
+    if keyrings:
+        set_request_keyrings(keyrings)
     try:
         prompt = payload.message.strip()
         if not prompt:
@@ -195,7 +196,7 @@ async def api_generate_image(
         log.error("Error generating image: %s", type(e).__name__)
         return {"reply": "Failed to generate image", "status": "error"}
     finally:
-        if keyring:
+        if keyrings:
             clear_request_keyring()
 
 

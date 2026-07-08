@@ -121,7 +121,33 @@ async def api_update_profile(
     request: ProfileUpdateRequest, user_id: str = Depends(get_current_user)
 ):
     try:
-        await update_profile_async(request.updates, user_id)
+        updates = request.updates
+
+        # Intercept fields that belong in context
+        context_keys = [
+            "persona_preset",
+            "persona_prompt",
+            "temperature",
+            "top_p",
+            "max_tokens",
+            "history_limit",
+            "enable_reasoning",
+            "enable_vision",
+        ]
+
+        context_updates = {}
+        for key in context_keys:
+            if key in updates:
+                context_updates[key] = updates.pop(key)
+
+        if context_updates:
+            # Fetch current profile to get existing context
+            profile = await get_profile_async(user_id)
+            ctx = profile.get("context") or {}
+            ctx.update(context_updates)
+            updates["context"] = ctx
+
+        await update_profile_async(updates, user_id)
         return {"status": "success"}
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -208,17 +234,17 @@ async def api_set_preferred_provider(
 @router.post("/providers/test_connection")
 async def api_test_provider_connection(
     request: Request,
-    payload: ProviderTestRequest, 
-    user_id: str = Depends(get_current_user)
+    payload: ProviderTestRequest,
+    user_id: str = Depends(get_current_user),
 ):
     try:
         from app.core.context import set_request_keyrings, clear_request_keyring
         from app.api.endpoints.chat import _extract_keyrings
-        
+
         keyrings = _extract_keyrings(request)
         if keyrings:
             set_request_keyrings(keyrings)
-            
+
         try:
             ai_manager = await get_ai_manager()
             provider = ai_manager.providers.get(payload.provider_name)

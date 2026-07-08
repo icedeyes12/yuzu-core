@@ -1028,6 +1028,28 @@ async def handle_user_message_streaming(
 
     # Handle native function calls if provider returned them
     if tool_calls_data:
+        # Build OpenAI-format tool_calls JSON for persistence
+        tool_calls_json = [
+            {
+                "id": tc.get("id", f"call_{i}"),
+                "type": "function",
+                "function": {
+                    "name": tc["name"],
+                    "arguments": json.dumps(tc.get("arguments", {})),
+                },
+            }
+            for i, tc in enumerate(tool_calls_data)
+        ]
+
+        # Persist assistant message WITH tool_calls
+        await _persist_assistant_async(
+            full_response,
+            session_id,
+            user_id=user_id,
+            tool_calls=tool_calls_json,
+            turn_id=turn_id,
+        )
+
         log.info(
             "[stream] executing %d native tool call(s) [turn=%s]",
             len(tool_calls_data),

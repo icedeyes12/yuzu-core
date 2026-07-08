@@ -242,6 +242,7 @@ def _global_knowledge_block(profile: dict[str, Any]) -> str:
 
     if isinstance(facts, str):
         import json
+
         try:
             parsed = json.loads(facts)
             if isinstance(parsed, list):
@@ -511,14 +512,26 @@ async def build_messages(
         role = msg.get("role", "")
         content = msg.get("content", "")
         paths = msg.get("image_paths") or []
+        tool_calls = msg.get("tool_calls")
+        tool_call_id = msg.get("tool_call_id")
 
         if paths:
             valid_paths = [p for p in paths if p in allowed_set and os.path.exists(p)]
             if valid_paths:
-                result.append(_build_multimodal_message(role, content, valid_paths))
+                m = _build_multimodal_message(role, content, valid_paths)
+                if tool_calls:
+                    m["tool_calls"] = tool_calls
+                if tool_call_id:
+                    m["tool_call_id"] = tool_call_id
+                result.append(m)
                 continue
 
-        result.append({"role": role, "content": content})
+        m = {"role": role, "content": content}
+        if tool_calls:
+            m["tool_calls"] = tool_calls
+        if tool_call_id:
+            m["tool_call_id"] = tool_call_id
+        result.append(m)
 
     return result
 

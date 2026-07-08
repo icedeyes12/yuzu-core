@@ -62,8 +62,15 @@ class LLMContext:
         if keyring and keyring.model_id:
             model = keyring.model_id
 
-        # 4. Parameters (temperature, etc.) could be pulled from profile here
+        # 4. Parameters (temperature, etc.) pulled from profile context
+        ctx_data = profile.get("context") or {}
         parameters = {}
+        if "temperature" in ctx_data:
+            parameters["temperature"] = float(ctx_data["temperature"])
+        if "top_p" in ctx_data:
+            parameters["top_p"] = float(ctx_data["top_p"])
+        if "max_tokens" in ctx_data:
+            parameters["max_tokens"] = int(ctx_data["max_tokens"])
 
         return cls(
             provider=provider,

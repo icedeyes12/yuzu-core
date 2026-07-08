@@ -122,7 +122,9 @@ class OpenAIProvider(AIProvider):
                 result = response.json()
                 self._last_raw_response = result
                 return result
-            logger.warning("[OpenAI] raw %s: %s", response.status_code, response.text[:300])
+            logger.warning(
+                "[OpenAI] raw %s: %s", response.status_code, response.text[:300]
+            )
             return None
         except Exception as e:
             logger.error("[OpenAI] send_message_raw error: %s", e)
@@ -155,7 +157,9 @@ class OpenAIProvider(AIProvider):
                 ) as response:
                     if response.status_code != 200:
                         body = await response.aread()
-                        logger.warning("[OpenAI] stream %s: %s", response.status_code, body[:300])
+                        logger.warning(
+                            "[OpenAI] stream %s: %s", response.status_code, body[:300]
+                        )
                         yield ""
                         return
 
@@ -195,12 +199,20 @@ class OpenAIProvider(AIProvider):
                         for idx in sorted(tool_call_fragments):
                             frag = tool_call_fragments[idx]
                             try:
-                                args = json.loads(frag["function"]["arguments"]) if frag["function"]["arguments"] else {}
+                                args = (
+                                    json.loads(frag["function"]["arguments"])
+                                    if frag["function"]["arguments"]
+                                    else {}
+                                )
                             except json.JSONDecodeError:
                                 args = {}
                             yield StreamToolEvent(
                                 type="tool_call",
-                                data={"id": frag["id"], "name": frag["function"]["name"], "arguments": args},
+                                data={
+                                    "id": frag["id"],
+                                    "name": frag["function"]["name"],
+                                    "arguments": args,
+                                },
                             )
                     else:
                         async for line in response.aiter_lines():
@@ -230,11 +242,13 @@ class OpenAIProvider(AIProvider):
             results = []
             for tc in message.get("tool_calls", []):
                 fn = tc.get("function", {})
-                results.append({
-                    "id": tc.get("id", ""),
-                    "name": fn.get("name", ""),
-                    "arguments": json.loads(fn.get("arguments", "{}")),
-                })
+                results.append(
+                    {
+                        "id": tc.get("id", ""),
+                        "name": fn.get("name", ""),
+                        "arguments": json.loads(fn.get("arguments", "{}")),
+                    }
+                )
             return results
         except Exception:
             return []

@@ -24,7 +24,9 @@ _DEFAULT_MODELS = [
 class GoogleProvider(AIProvider):
     def __init__(self, config: dict | None = None):
         super().__init__("google", config)
-        self.base_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        self.base_url = (
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        )
         self.capabilities = ProviderCapabilities(
             supports_native_fc=True,
             supports_streaming_fc=True,
@@ -105,7 +107,9 @@ class GoogleProvider(AIProvider):
                 result = response.json()
                 self._last_raw_response = result
                 return result
-            logger.warning("[Google] raw %s: %s", response.status_code, response.text[:300])
+            logger.warning(
+                "[Google] raw %s: %s", response.status_code, response.text[:300]
+            )
             return None
         except Exception as e:
             logger.error("[Google] send_message_raw error: %s", e)
@@ -138,7 +142,9 @@ class GoogleProvider(AIProvider):
                 ) as response:
                     if response.status_code != 200:
                         body = await response.aread()
-                        logger.warning("[Google] stream %s: %s", response.status_code, body[:300])
+                        logger.warning(
+                            "[Google] stream %s: %s", response.status_code, body[:300]
+                        )
                         yield ""
                         return
 
@@ -178,12 +184,20 @@ class GoogleProvider(AIProvider):
                         for idx in sorted(tool_call_fragments):
                             frag = tool_call_fragments[idx]
                             try:
-                                args = json.loads(frag["function"]["arguments"]) if frag["function"]["arguments"] else {}
+                                args = (
+                                    json.loads(frag["function"]["arguments"])
+                                    if frag["function"]["arguments"]
+                                    else {}
+                                )
                             except json.JSONDecodeError:
                                 args = {}
                             yield StreamToolEvent(
                                 type="tool_call",
-                                data={"id": frag["id"], "name": frag["function"]["name"], "arguments": args},
+                                data={
+                                    "id": frag["id"],
+                                    "name": frag["function"]["name"],
+                                    "arguments": args,
+                                },
                             )
                     else:
                         async for line in response.aiter_lines():
@@ -213,11 +227,13 @@ class GoogleProvider(AIProvider):
             results = []
             for tc in message.get("tool_calls", []):
                 fn = tc.get("function", {})
-                results.append({
-                    "id": tc.get("id", ""),
-                    "name": fn.get("name", ""),
-                    "arguments": json.loads(fn.get("arguments", "{}")),
-                })
+                results.append(
+                    {
+                        "id": tc.get("id", ""),
+                        "name": fn.get("name", ""),
+                        "arguments": json.loads(fn.get("arguments", "{}")),
+                    }
+                )
             return results
         except Exception:
             return []

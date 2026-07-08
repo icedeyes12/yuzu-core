@@ -311,6 +311,7 @@ def parse_profile_row(row: dict | None) -> dict:
     """Convert a raw profile row into the public dict shape."""
     if not row:
         return {}
+    ctx = row.get("context") or {}
     return {
         "id": row.get("id"),
         "user_name": row.get("user_name", ""),
@@ -321,11 +322,19 @@ def parse_profile_row(row: dict | None) -> dict:
         "session_history": row.get("session_history") or {},
         "global_knowledge": row.get("global_knowledge") or {},
         "providers_config": row.get("providers_config") or {},
-        "context": row.get("context") or {},
+        "context": ctx,
         "image_model": row.get("image_model", "qwen_image"),
         "vision_model": row.get("vision_model", "moonshotai/kimi-k2.5"),
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
+        "persona_preset": ctx.get("persona_preset"),
+        "persona_prompt": ctx.get("persona_prompt"),
+        "temperature": ctx.get("temperature"),
+        "top_p": ctx.get("top_p"),
+        "max_tokens": ctx.get("max_tokens"),
+        "history_limit": ctx.get("history_limit"),
+        "enable_reasoning": ctx.get("enable_reasoning"),
+        "enable_vision": ctx.get("enable_vision"),
     }
 
 
@@ -531,25 +540,25 @@ LIMIT %s
 """
 
 SQL_MESSAGE_HISTORY_FOR_AI_ASC_LIMIT = """
-SELECT id, role, content, image_paths, timestamp
+SELECT id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
-WHERE session_id = %s AND role IN ('user', 'assistant')
+WHERE session_id = %s AND role IN ('user', 'assistant', 'tool')
 ORDER BY timestamp ASC
 LIMIT %s
 """
 
 SQL_MESSAGE_HISTORY_FOR_AI_DESC_LIMIT = """
-SELECT id, role, content, image_paths, timestamp
+SELECT id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
-WHERE session_id = %s AND role IN ('user', 'assistant')
+WHERE session_id = %s AND role IN ('user', 'assistant', 'tool')
 ORDER BY timestamp DESC
 LIMIT %s
 """
 
 SQL_MESSAGE_HISTORY_FOR_AI_ASC_ALL = """
-SELECT id, role, content, image_paths, timestamp
+SELECT id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
-WHERE session_id = %s AND role IN ('user', 'assistant')
+WHERE session_id = %s AND role IN ('user', 'assistant', 'tool')
 ORDER BY timestamp ASC
 """
 
@@ -708,6 +717,8 @@ def format_ai_history_rows(
         content = msg.get("content", "")
         image_paths = parse_json(msg.get("image_paths", "[]"))
         tool_calls_raw = msg.get("tool_calls")
+        if isinstance(tool_calls_raw, str):
+            tool_calls_raw = parse_json(tool_calls_raw)
         tool_call_id = msg.get("tool_call_id")
         turn_id = msg.get("turn_id")
 
