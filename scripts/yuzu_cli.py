@@ -10,12 +10,13 @@ Usage:
     yuzu --seal --sig "custom" "hai"  # both signature and seal
 """
 
+import os
 import argparse
 import requests
 import json
 import datetime
 
-DEFAULT_URL = "http://localhost:5000"
+DEFAULT_URL = os.getenv("YUZU_BACKEND_URL", "http://localhost:5000")
 DEFAULT_SESSION = 37
 DEFAULT_TIMEOUT_GET = 10
 DEFAULT_TIMEOUT_POST = 120
