@@ -37,7 +37,6 @@
 	font-size: 0.75rem;
 	color: var(--text-color);
 	cursor: pointer;
-	transition: all 0.2s ease;
 }
 
 .copy-code-btn:hover {

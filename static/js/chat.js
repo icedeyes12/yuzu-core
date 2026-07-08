@@ -38,8 +38,26 @@ async function loadCurrentSessionName() {
 			sessionNameElement.textContent =
 				data.active_session.name || "Current Chat";
 		}
+
+		// Reflect partner/user name in header if present
+		const partnerEl = document.getElementById("partnerName");
+		if (partnerEl && data.partner_name) {
+			partnerEl.textContent = data.partner_name;
+		}
 	} catch (error) {
 		console.error("Failed to load session name:", error);
+	}
+}
+
+// ==================== FOCUS MANAGEMENT ====================
+/**
+ * Focus the chat input unless it is disabled.
+ * Safe to call even when the input doesn't exist yet.
+ */
+function _focusChatInput() {
+	const input = document.getElementById("messageInput");
+	if (input && !input.disabled) {
+		input.focus({ preventScroll: true });
 	}
 }
 
@@ -60,9 +78,17 @@ async function handleSessionSwitch(sessionId, updateURL = true) {
 		router.updateURL(sessionId);
 	}
 
+	// Sync sidebar active highlight immediately (no reload needed)
+	if (typeof window.syncActiveSidebarItem === "function") {
+		window.syncActiveSidebarItem(sessionId);
+	}
+
 	// [DOM REBIND FIX] Always load history, let loadChatHistory handle stream rebinding
 	// This ensures previous messages are shown even when there's an active stream
 	await loadChatHistory(sessionId);
+
+	// Auto-focus input after session content loads
+	_focusChatInput();
 }
 
 // ==================== INITIALIZATION ====================
@@ -138,14 +164,25 @@ async function initializeChat() {
 
 	// Normal initialization - load history
 	if (urlSessionId) {
-		loadChatHistory(urlSessionId);
+		await loadChatHistory(urlSessionId);
 	} else {
-		loadChatHistory();
+		const input = document.getElementById("messageInput");
+		const btn = document.getElementById("sendButton");
+		if (input) {
+			input.disabled = true;
+			input.placeholder = "No active session selected...";
+		}
+		if (btn) btn.disabled = true;
+		console.error("No session ID in URL path. Chat disabled.");
+		await loadChatHistory();
 	}
 
 	// Initialize multimodal
 	window.multimodal = new MultimodalManager();
 	window.multimodal.init();
+
+	// Auto-focus input on initial load
+	_focusChatInput();
 
 	console.log("Clean chat system ready!");
 }

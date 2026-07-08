@@ -26,6 +26,8 @@ async function loadAppConfig() {
 		if (data.status === "success") {
 			appConfig = data;
 			console.log("App config loaded:", appConfig);
+			// Try loading advanced settings if available in appConfig
+			loadAdvancedSettingsFromData(appConfig.profile || appConfig);
 		} else {
 			console.error("Failed to load app config:", data);
 		}
@@ -94,6 +96,9 @@ async function loadProfileData() {
 
 		// Load structured memory stats
 		loadMemoryStats();
+
+		// Load advanced settings
+		loadAdvancedSettingsFromData(data);
 	} catch (error) {
 		console.error("Error loading profile data:", error);
 		document.getElementById("player-summary").textContent =
@@ -114,24 +119,42 @@ async function loadProviderSettings() {
 			if (!grid) return;
 			grid.innerHTML = "";
 
-			const byok = JSON.parse(localStorage.getItem("yuzu_byok_config") || "{}");
+			const byok = JSON.parse(
+				localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}",
+			);
 
-			const providers = ["openrouter", "openai", "anthropic", "custom"];
+			const providersList = [
+				{ id: "openrouter", name: "OpenRouter" },
+				{ id: "openai", name: "OpenAI" },
+				{ id: "anthropic", name: "Anthropic" },
+				{ id: "google", name: "Google (Gemini)" },
+				{ id: "xai", name: "xAI (Grok)" },
+				{ id: "groq", name: "Groq" },
+				{ id: "cerebras", name: "Cerebras" },
+				{ id: "chutes", name: "Chutes" },
+				{ id: "custom_openai", name: "Custom OpenAI", custom: true },
+				{ id: "custom_anthropic", name: "Custom Anthropic", custom: true },
+			];
 
-			providers.forEach((provider) => {
-				const isCustom = provider === "custom";
+			providersList.forEach((provObj) => {
+				const provider = provObj.id;
+				const isCustom = provObj.custom;
 				const isActive = provider === data.current_provider;
 
 				const card = document.createElement("div");
 				card.className = `provider-card ${isActive ? "active-provider" : ""}`;
-				const titleHtml = `${provider.charAt(0).toUpperCase() + provider.slice(1)} ${isActive ? "<span class='badge-active'>Active</span>" : ""}`;
+				const titleHtml = `${provObj.name} ${isActive ? "<span class='badge-active'>Active</span>" : ""}`;
 
 				let innerHtml = `
-                    <h3>${titleHtml}</h3>
-                    <div class="form-group">
-                        <label>API Key (Saved in browser):</label>
-                        <input type="password" id="key-${provider}" placeholder="sk-..." value="${byok[provider]?.api_key || ""}">
+                    <div class="provider-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                        <h3 style="margin: 0;">${titleHtml}</h3>
+                        <span style="font-size: 1.2rem;">▼</span>
                     </div>
+                    <div class="provider-body" style="display: ${isActive ? "block" : "none"}; padding-top: 1rem;">
+                        <div class="form-group">
+                            <label>API Key (Saved in browser):</label>
+                            <input type="password" id="key-${provider}" placeholder="sk-..." value="${byok[provider]?.api_key || ""}">
+                        </div>
                 `;
 
 				if (isCustom) {
@@ -144,15 +167,16 @@ async function loadProviderSettings() {
 				}
 
 				innerHtml += `
-                    <div class="form-group">
-                        <label>Model:</label>
-                        <select id="model-${provider}" class="form-select">
-                            <option value="${data.current_model || ""}">${data.current_model || "Select model..."}</option>
-                        </select>
-                    </div>
-                    <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
-                        <button class="btn btn-primary btn-sm save-byok-btn" data-provider="${provider}">Save Key</button>
-                        <button class="btn btn-info btn-sm fetch-models-btn" data-provider="${provider}">Refresh Models</button>
+                        <div class="form-group">
+                            <label>Model:</label>
+                            <select id="model-${provider}" class="form-select">
+                                <option value="${data.current_model || ""}">${data.current_model || "Select model..."}</option>
+                            </select>
+                        </div>
+                        <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+                            <button class="btn btn-primary btn-sm save-byok-btn" data-provider="${provider}">Save Key</button>
+                            <button class="btn btn-info btn-sm fetch-models-btn" data-provider="${provider}">Refresh Models</button>
+                        </div>
                     </div>
                 `;
 
@@ -178,17 +202,19 @@ async function loadProviderSettings() {
 }
 
 function saveBYOKForProvider(provider) {
-	const byok = JSON.parse(localStorage.getItem("yuzu_byok_config") || "{}");
+	const byok = JSON.parse(
+		localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}",
+	);
 	const keyVal = document.getElementById(`key-${provider}`).value;
 
 	if (!byok[provider]) byok[provider] = {};
 	byok[provider].api_key = keyVal;
 
-	if (provider === "custom") {
+	if (provider.startsWith("custom")) {
 		byok[provider].base_url = document.getElementById(`url-${provider}`).value;
 	}
 
-	localStorage.setItem("yuzu_byok_config", JSON.stringify(byok));
+	localStorage.setItem(window.BYOK_STORAGE_KEY, JSON.stringify(byok));
 	showSuccess(`${provider} key saved in browser.`);
 }
 
@@ -202,7 +228,9 @@ async function fetchModelsForProvider(provider) {
 	}
 
 	try {
-		const byok = JSON.parse(localStorage.getItem("yuzu_byok_config") || "{}");
+		const byok = JSON.parse(
+			localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}",
+		);
 		const provConfig = byok[provider] || {};
 
 		const headers = {};
@@ -389,6 +417,30 @@ function setupEventListeners() {
 			}
 		}
 	});
+
+	// Advanced Settings Listeners
+	const tempSlider = document.getElementById("adv-temperature");
+	if (tempSlider) {
+		tempSlider.addEventListener("input", (e) => {
+			document.getElementById("val-temperature").textContent = parseFloat(
+				e.target.value,
+			).toFixed(1);
+		});
+	}
+
+	const topPSlider = document.getElementById("adv-top-p");
+	if (topPSlider) {
+		topPSlider.addEventListener("input", (e) => {
+			document.getElementById("val-top-p").textContent = parseFloat(
+				e.target.value,
+			).toFixed(2);
+		});
+	}
+
+	const saveAdvancedBtn = document.getElementById("save-advanced-settings");
+	if (saveAdvancedBtn) {
+		saveAdvancedBtn.addEventListener("click", saveAdvancedSettings);
+	}
 
 	console.log("Event listeners setup complete");
 }
@@ -730,7 +782,7 @@ async function saveProfileSettings() {
 }
 
 // === BYOK (Bring Your Own Key) — localStorage only, zero server storage ===
-const BYOK_STORAGE_KEY = "yuzu_byok_config";
+const BYOK_STORAGE_KEY = window.BYOK_STORAGE_KEY || "yuzu_byok_config";
 
 function saveBYOKConfig() {
 	const provider = document.getElementById("byok-provider")?.value || "";

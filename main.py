@@ -22,8 +22,9 @@ from app.db import Database  # noqa: E402
 from app.db import init_pg_tables_async  # noqa: E402
 from app.db.connection import get_sync_pool, get_async_pool, close_async_pool  # noqa: E402
 from app.api import api_router  # noqa: E402
-from app.api.utils import get_current_user  # noqa: E402
 from app.services.session_service import SessionService  # noqa: E402, F401
+from app.auth.session import SESSION_COOKIE_NAME, validate_session  # noqa: E402
+from fastapi import HTTPException  # noqa: E402
 from app.logging_config import get_logger  # noqa: E402
 
 log = get_logger(__name__)
@@ -184,8 +185,36 @@ async def favicon():
 # ---------------------------------------------------------------------------
 
 
+async def get_user_for_html(request: Request):
+    """Dependency for HTML routes that redirects to /login if unauthenticated."""
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if not token:
+        raise HTTPException(status_code=302, headers={"Location": "/login"})
+    user_id = await validate_session(token)
+    if not user_id:
+        raise HTTPException(status_code=302, headers={"Location": "/login"})
+    return user_id
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    from app.auth.session import SESSION_COOKIE_NAME, validate_session
+    from fastapi.responses import RedirectResponse
+
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if token:
+        user_id = await validate_session(token)
+        if user_id:
+            return RedirectResponse(url="/chat", status_code=302)
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={},
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request, user_id: str = Depends(get_current_user)):
+async def home(request: Request, user_id: str = Depends(get_user_for_html)):
     profile = await Database.get_profile(user_id)
     return templates.TemplateResponse(
         request=request,
@@ -195,7 +224,21 @@ async def home(request: Request, user_id: str = Depends(get_current_user)):
 
 
 @app.get("/chat", response_class=HTMLResponse)
-async def chat_page(request: Request, user_id: str = Depends(get_current_user)):
+async def chat_redirect(request: Request, user_id: str = Depends(get_user_for_html)):
+    from fastapi.responses import RedirectResponse
+
+    sessions = await Database.get_all_sessions(user_id=user_id)
+    if not sessions:
+        session_id = await Database.create_session("New Conversation", user_id=user_id)
+    else:
+        session_id = sessions[0]["id"]
+    return RedirectResponse(url=f"/chat/{session_id}", status_code=302)
+
+
+@app.get("/chat/{session_id}", response_class=HTMLResponse)
+async def chat_page(
+    session_id: str, request: Request, user_id: str = Depends(get_user_for_html)
+):
     profile = await Database.get_profile(user_id)
     return templates.TemplateResponse(
         request=request,
@@ -205,7 +248,7 @@ async def chat_page(request: Request, user_id: str = Depends(get_current_user)):
 
 
 @app.get("/config", response_class=HTMLResponse)
-async def config_page(request: Request, user_id: str = Depends(get_current_user)):
+async def config_page(request: Request, user_id: str = Depends(get_user_for_html)):
     profile = await Database.get_profile(user_id)
     return templates.TemplateResponse(
         request=request,
@@ -215,7 +258,7 @@ async def config_page(request: Request, user_id: str = Depends(get_current_user)
 
 
 @app.get("/about", response_class=HTMLResponse)
-async def about_page(request: Request, user_id: str = Depends(get_current_user)):
+async def about_page(request: Request, user_id: str = Depends(get_user_for_html)):
     profile = await Database.get_profile(user_id)
     return templates.TemplateResponse(
         request=request,

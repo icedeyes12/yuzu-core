@@ -35,6 +35,9 @@ export async function loadChatHistory(sessionId = null) {
 	_isLoadingHistory = true;
 	_pendingSessionId = sessionId;
 
+	// Fade out chat container for clean visual transition
+	chatContainer.classList.add("session-switching");
+
 	// Show skeleton loading
 	showChatSkeleton();
 	setTimeout(scrollToBottom, 50);
@@ -69,6 +72,9 @@ export async function loadChatHistory(sessionId = null) {
 
 		// Hide skeleton before rendering real content
 		hideChatSkeleton();
+
+		// Fade container back in
+		chatContainer.classList.remove("session-switching");
 
 		// [TEXT OVERLAP FALLBACK] Check for active stream
 		const activeStream = sessionId
@@ -221,6 +227,8 @@ export async function loadChatHistory(sessionId = null) {
 		// Reset loading state
 		_isLoadingHistory = false;
 		_pendingSessionId = null;
+		// Safety: always ensure fade class is removed even on error
+		chatContainer.classList.remove("session-switching");
 	}
 }
 

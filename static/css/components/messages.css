@@ -102,7 +102,6 @@
 	padding: 6px;
 	cursor: pointer;
 	opacity: 0.7;
-	transition: all 0.2s ease;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -254,7 +253,6 @@
 	font-size: 0.75rem;
 	color: var(--text-color);
 	cursor: pointer;
-	transition: all 0.2s ease;
 }
 
 .copy-table-btn:hover {

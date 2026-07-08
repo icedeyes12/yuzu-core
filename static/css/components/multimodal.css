@@ -17,7 +17,6 @@
 	align-items: center;
 	justify-content: center;
 	position: relative;
-	transition: all 0.2s ease;
 }
 
 .multimodal-toggle-btn:hover {
@@ -85,7 +84,6 @@
 	padding: 0.8rem;
 	border-radius: 8px;
 	cursor: pointer;
-	transition: all 0.2s ease;
 }
 
 .multimodal-option:hover {
@@ -147,7 +145,6 @@
 	border-radius: 8px;
 	cursor: pointer;
 	font-weight: 600;
-	transition: all 0.2s ease;
 }
 
 .upload-btn:hover {
@@ -238,7 +235,6 @@
 	border-radius: 6px;
 	cursor: pointer;
 	font-size: 0.85rem;
-	transition: all 0.2s ease;
 }
 
 .image-action-btn:hover {

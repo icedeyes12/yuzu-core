@@ -117,7 +117,7 @@ async def callback(request: Request):
     )
     token = await create_session(user_id)
 
-    redirect_target = os.environ.get("APP_BASE_URL") or "/"
+    redirect_target = os.environ.get("APP_BASE_URL") or "/chat"
     response = RedirectResponse(url=redirect_target, status_code=302)
     set_session_cookie(response, token)
     response.delete_cookie(key=OAUTH_STATE_COOKIE_NAME, path="/")
