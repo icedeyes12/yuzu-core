@@ -33,7 +33,7 @@ class OllamaProvider(AIProvider):
             "deepseek-v3.1:671b-cloud",
         ]
 
-    def get_models(self) -> list[str]:
+    async def get_models(self) -> list[str]:
         return self.available_models
 
     async def send_message(
