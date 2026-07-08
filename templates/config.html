@@ -36,8 +36,6 @@
     </header>
 
     <main class="config-content" aria-label="Configuration settings">
-
-      <!-- Identity Settings -->
       <section class="config-section" aria-labelledby="identity-heading">
         <h2 id="identity-heading">Identity Settings</h2>
         <form id="identity-form" novalidate>
@@ -46,23 +44,18 @@
 
             <div class="form-group">
               <label for="display-name">Your Name</label>
-              <input
-                type="text"
-                id="display-name"
-                name="display-name"
-                value="{{ profile.user_name }}"
-                placeholder="How should the AI call you?"
-                autocomplete="given-name">
+              <input type="text" id="display-name" name="display-name" value="{{ profile.user_name }}" placeholder="How should the AI call you?" autocomplete="given-name">
             </div>
 
             <div class="form-group">
               <label for="partner-name">Assistant Name</label>
-              <input
-                type="text"
-                id="partner-name"
-                name="partner-name"
-                value="{{ profile.partner_name }}"
-                placeholder="Name of your AI companion">
+              <input type="text" id="partner-name" name="partner-name" value="{{ profile.partner_name }}" placeholder="Name of your AI companion">
+            </div>
+
+            <div class="form-group">
+              <label for="affection-level">Affection Level</label>
+              <input type="range" id="affection-level" name="affection" min="0" max="100" value="{{ profile.affection }}" aria-describedby="affection-value">
+              <output id="affection-value" for="affection-level">{{ profile.affection }}</output>
             </div>
 
             <div class="form-group">
@@ -79,41 +72,124 @@
 
             <div class="form-group">
               <label for="persona-prompt">Persona Prompt</label>
-              <textarea
-                id="persona-prompt"
-                name="persona-prompt"
-                rows="4"
-                placeholder="Define the AI's personality, traits, and behavior here..."></textarea>
+              <textarea id="persona-prompt" name="persona-prompt" rows="4" placeholder="Define the AI's personality, traits, and behavior here..."></textarea>
             </div>
           </fieldset>
           <button id="save-profile" type="button" class="btn btn-primary">Save Identity Settings</button>
         </form>
       </section>
 
-      <!-- Providers (BYOK) -->
-      <section class="config-section" aria-labelledby="providers-heading">
-        <h2 id="providers-heading">Providers (Bring Your Own Key)</h2>
-        <p class="section-description">
-          Configure your API keys directly in the browser. Keys are sent per-request and are
-          <strong>NEVER</strong> stored on the server.
-        </p>
+      <section class="config-section" aria-labelledby="provider-heading">
+        <h2 id="provider-heading">Provider Settings</h2>
+        <p class="section-description">Pick your active provider and model, then test the connection.</p>
 
-        <div class="providers-grid" id="providers-grid" role="list" aria-label="Provider list">
-          <!-- Managed by config.js dynamically -->
+        <div class="provider-status">
+          <p><strong>Current provider:</strong> <span id="current-provider">Not set</span></p>
+          <p><strong>Connection status:</strong> <span id="connection-status">Idle</span></p>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="ai-provider">Provider</label>
+            <select id="ai-provider" class="form-select"></select>
+          </div>
+          <div class="form-group">
+            <label for="ai-model">Model</label>
+            <select id="ai-model" class="form-select"></select>
+          </div>
         </div>
 
         <div class="config-actions">
-          <button id="save-active-provider" type="button" class="btn btn-primary">Save Active Provider</button>
+          <button id="save-provider" type="button" class="btn btn-primary">Save Active Provider</button>
           <button id="test-active-provider" type="button" class="btn btn-success">Test Active Connection</button>
+        </div>
+
+        <div class="providers-grid" id="providers-grid" role="list" aria-label="Provider list"></div>
+      </section>
+
+      <section class="config-section" aria-labelledby="media-heading">
+        <h2 id="media-heading">Media Models</h2>
+        <p class="section-description">Choose the image and vision models used by the app.</p>
+
+        <div class="provider-status">
+          <p><strong>Current image model:</strong> <span id="current-image-model">Not set</span></p>
+          <p><strong>Current vision model:</strong> <span id="current-vision-model">Not set</span></p>
+        </div>
+
+        <div class="form-group">
+          <label for="image-model">Image model</label>
+          <select id="image-model" class="form-select"></select>
+        </div>
+        <div class="config-actions">
+          <button id="save-image-model" type="button" class="btn btn-primary">Save Image Model</button>
+        </div>
+
+        <div class="form-row" style="margin-top: 1rem;">
+          <div class="form-group">
+            <label for="vision-provider">Vision provider</label>
+            <select id="vision-provider" class="form-select"></select>
+          </div>
+          <div class="form-group">
+            <label for="vision-model">Vision model</label>
+            <select id="vision-model" class="form-select"></select>
+          </div>
+        </div>
+        <div class="config-actions">
+          <button id="test-vision" type="button" class="btn btn-success">Test Vision Model</button>
+          <button id="save-vision-model" type="button" class="btn btn-primary">Save Vision Model</button>
         </div>
       </section>
 
-      <!-- Advanced Settings -->
-      <section class="config-section" id="advanced-settings-section" aria-labelledby="advanced-heading">
+      <section class="config-section" aria-labelledby="memory-heading">
+        <h2 id="memory-heading">Global Memory &amp; Knowledge</h2>
+        <p class="section-description">Review the remembered profile, notes, and memory stats.</p>
+
+        <div class="memory-stats">
+          <p><strong>Summary:</strong> <span id="player-summary">Loading…</span></p>
+          <p><strong>Likes:</strong> <span id="player-likes">Loading…</span></p>
+          <p><strong>Dislikes:</strong> <span id="player-dislikes">Loading…</span></p>
+          <p><strong>Personality:</strong> <span id="player-personality">Loading…</span></p>
+          <p><strong>Important memories:</strong> <span id="player-memories">Loading…</span></p>
+          <p><strong>Relationship:</strong> <span id="player-relationship">Loading…</span></p>
+          <p><strong>Last updated:</strong> <span id="global-profile-last-updated">Loading…</span></p>
+        </div>
+
+        <div class="form-group">
+          <label for="global-knowledge">Global knowledge</label>
+          <textarea id="global-knowledge" rows="4" placeholder="Facts that should apply across sessions."></textarea>
+        </div>
+
+        <div class="config-actions">
+          <button id="save-global-knowledge" type="button" class="btn btn-primary">Save Global Knowledge</button>
+          <button id="update-global-profile" type="button" class="btn btn-success">Update Global Profile</button>
+          <button id="rebuild-memory" type="button" class="btn btn-warning">Rebuild Structured Memory</button>
+          <button id="run-decay" type="button" class="btn btn-danger">Run Memory Decay</button>
+        </div>
+
+        <div class="form-row" style="margin-top: 1rem;">
+          <div class="form-group">
+            <label>Semantic facts</label>
+            <div id="semantic-count">0</div>
+          </div>
+          <div class="form-group">
+            <label>Episodic facts</label>
+            <div id="episodic-count">0</div>
+          </div>
+          <div class="form-group">
+            <label>Segments</label>
+            <div id="segment-count">0</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Top facts</label>
+          <ul id="top-facts-list"></ul>
+        </div>
+      </section>
+
+      <section class="config-section" aria-labelledby="advanced-heading">
         <h2 id="advanced-heading">Advanced Settings</h2>
-        <p class="section-description">
-          Configure generation parameters, history limits, and multimodal toggles.
-        </p>
+        <p class="section-description">Tune generation settings and feature toggles.</p>
 
         <form id="advanced-form" novalidate>
           <fieldset>
@@ -123,15 +199,7 @@
               <label for="adv-temperature">
                 Temperature: <output id="val-temperature" for="adv-temperature">1.0</output>
               </label>
-              <input
-                type="range"
-                id="adv-temperature"
-                name="temperature"
-                min="0.0"
-                max="2.0"
-                step="0.1"
-                value="1.0"
-                aria-describedby="temperature-hint">
+              <input type="range" id="adv-temperature" name="temperature" min="0.0" max="2.0" step="0.1" value="1.0" aria-describedby="temperature-hint">
               <span id="temperature-hint" class="form-hint">Controls randomness. Lower = more deterministic.</span>
             </div>
 
@@ -139,15 +207,7 @@
               <label for="adv-top-p">
                 Top P: <output id="val-top-p" for="adv-top-p">1.0</output>
               </label>
-              <input
-                type="range"
-                id="adv-top-p"
-                name="top_p"
-                min="0.0"
-                max="1.0"
-                step="0.05"
-                value="1.0"
-                aria-describedby="top-p-hint">
+              <input type="range" id="adv-top-p" name="top_p" min="0.0" max="1.0" step="0.05" value="1.0" aria-describedby="top-p-hint">
               <span id="top-p-hint" class="form-hint">Nucleus sampling threshold.</span>
             </div>
           </fieldset>
@@ -157,23 +217,11 @@
             <div class="form-row">
               <div class="form-group">
                 <label for="adv-max-tokens">Max Tokens</label>
-                <input
-                  type="number"
-                  id="adv-max-tokens"
-                  name="max_tokens"
-                  min="1"
-                  max="128000"
-                  value="4096">
+                <input type="number" id="adv-max-tokens" name="max_tokens" min="1" max="128000" value="4096">
               </div>
               <div class="form-group">
                 <label for="adv-history-limit">History Limit (Turns)</label>
-                <input
-                  type="number"
-                  id="adv-history-limit"
-                  name="history_limit"
-                  min="1"
-                  max="100"
-                  value="20">
+                <input type="number" id="adv-history-limit" name="history_limit" min="1" max="100" value="20">
               </div>
             </div>
           </fieldset>
@@ -198,6 +246,26 @@
         </form>
       </section>
 
+      <section class="config-section" aria-labelledby="location-heading">
+        <h2 id="location-heading">Location</h2>
+        <p class="section-description">Optional location context used by location-aware features.</p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="location-lat">Latitude</label>
+            <input type="number" id="location-lat" step="0.000001" placeholder="-6.200000">
+          </div>
+          <div class="form-group">
+            <label for="location-lon">Longitude</label>
+            <input type="number" id="location-lon" step="0.000001" placeholder="106.816666">
+          </div>
+        </div>
+
+        <div class="config-actions">
+          <button id="save-location" type="button" class="btn btn-primary">Save Location</button>
+          <button type="button" class="btn btn-secondary" onclick="useCurrentLocation()">Use Current Location</button>
+        </div>
+      </section>
     </main>
 
     {% include "partials/footer.html" %}

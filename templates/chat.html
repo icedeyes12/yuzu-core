@@ -58,16 +58,13 @@
       <!-- Messages rendered here by chat.js -->
     </main>
 
-    <!-- Floating scroll-to-bottom button -->
     <button id="scrollToBottomBtn" class="scroll-to-bottom-btn hidden" aria-label="Scroll to latest message">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <path d="M12 5v14M19 12l-7 7-7-7"/>
       </svg>
     </button>
 
-    <!-- Chat input area -->
     <form class="input-area" id="chatForm" onsubmit="return false;" aria-label="Send a message">
-      <!-- Multimodal toggle button will be inserted here by JavaScript -->
       <label for="messageInput" class="sr-only">Message input</label>
       <textarea
         id="messageInput"
@@ -80,7 +77,6 @@
     </form>
   </div>
 
-  <!-- HTML Preview Modal -->
   <dialog id="html-preview-modal" aria-labelledby="preview-modal-title" aria-modal="true">
     <div class="html-modal-backdrop" onclick="renderer.closeHtmlModal()" aria-hidden="true"></div>
     <article class="html-modal-content" role="document">
@@ -129,12 +125,6 @@
     </article>
   </dialog>
 
-  <!-- External libraries -->
-  <script src="https://cdn.jsdelivr.net/npm/marked@18.0.2/lib/marked.umd.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
-
-  <!-- Application scripts -->
   <script src="{{ url_for('static', path='js/sidebar.js') }}"></script>
   <script src="{{ url_for('static', path='js/renderer.js') }}"></script>
   <script type="module" src="{{ url_for('static', path='js/chat.js') }}"></script>

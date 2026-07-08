@@ -4,6 +4,36 @@
 // Global config state (populated from /api/config)
 let appConfig = null;
 
+function setTextIfExists(id, value) {
+	const el = document.getElementById(id);
+	if (el) el.textContent = String(value ?? "");
+}
+
+function setValueIfExists(id, value) {
+	const el = document.getElementById(id);
+	if (el) el.value = value ?? "";
+}
+
+function getValueIfExists(id, fallback = "") {
+	const el = document.getElementById(id);
+	return el ? el.value : fallback;
+}
+
+function getCheckedIfExists(id) {
+	const el = document.getElementById(id);
+	return Boolean(el?.checked);
+}
+
+function getNumberIfExists(id, fallback = 0) {
+	const raw = getValueIfExists(id, "");
+	const num = Number(raw);
+	return Number.isFinite(num) ? num : fallback;
+}
+
+function getProfileAdvancedSource(data) {
+	return data?.advanced || data?.profile || data || {};
+}
+
 document.addEventListener("DOMContentLoaded", () => {
 	console.log("Config page loaded - initializing...");
 	loadAppConfig().then(() => {
@@ -11,6 +41,7 @@ document.addEventListener("DOMContentLoaded", () => {
 		loadGlobalKnowledge();
 		loadProviderSettings();
 		loadImageModel();
+		loadVisionModel();
 		setupEventListeners();
 		loadBYOKConfig();
 		initializeConfigAnimations();
@@ -26,7 +57,6 @@ async function loadAppConfig() {
 		if (data.status === "success") {
 			appConfig = data;
 			console.log("App config loaded:", appConfig);
-			// Try loading advanced settings if available in appConfig
 			loadAdvancedSettingsFromData(appConfig.profile || appConfig);
 		} else {
 			console.error("Failed to load app config:", data);
@@ -44,174 +74,204 @@ async function loadProfileData() {
 
 		console.log("Full profile data:", data);
 
-		// Update GLOBAL PLAYER PROFILE display
 		const profileMemory = data.memory || {};
-		console.log("Profile memory data:", profileMemory);
-
 		const keyFacts = profileMemory.key_facts || {};
-		console.log("Key facts data:", keyFacts);
 
-		// Update the display with actual data
-		document.getElementById("player-summary").textContent =
+		setTextIfExists(
+			"player-summary",
 			profileMemory.player_summary ||
-			'No global profile yet. Click "Update Global Profile" to analyze all sessions!';
-
-		document.getElementById("player-likes").textContent =
+				"No global profile yet. Start chatting or update it from the buttons below.",
+		);
+		setTextIfExists(
+			"player-likes",
 			Array.isArray(keyFacts.likes) && keyFacts.likes.length > 0
 				? keyFacts.likes.join(", ")
-				: "None yet";
-
-		document.getElementById("player-dislikes").textContent =
+				: "None yet",
+		);
+		setTextIfExists(
+			"player-dislikes",
 			Array.isArray(keyFacts.dislikes) && keyFacts.dislikes.length > 0
 				? keyFacts.dislikes.join(", ")
-				: "None yet";
-
-		document.getElementById("player-personality").textContent =
-			Array.isArray(keyFacts.personality_traits) &&
-			keyFacts.personality_traits.length > 0
+				: "None yet",
+		);
+		setTextIfExists(
+			"player-personality",
+			Array.isArray(keyFacts.personality_traits) && keyFacts.personality_traits.length > 0
 				? keyFacts.personality_traits.join(", ")
-				: "None yet";
-
-		document.getElementById("player-memories").textContent =
-			Array.isArray(keyFacts.important_memories) &&
-			keyFacts.important_memories.length > 0
+				: "None yet",
+		);
+		setTextIfExists(
+			"player-memories",
+			Array.isArray(keyFacts.important_memories) && keyFacts.important_memories.length > 0
 				? keyFacts.important_memories.join(", ")
-				: "None yet";
+				: "None yet",
+		);
+		setTextIfExists(
+			"player-relationship",
+			profileMemory.relationship_dynamics || "No relationship dynamics yet",
+		);
+		setTextIfExists(
+			"global-profile-last-updated",
+			profileMemory.last_global_summary || "Never",
+		);
 
-		document.getElementById("player-relationship").textContent =
-			profileMemory.relationship_dynamics || "No relationship dynamics yet";
+		setTextIfExists("affection-value", data.affection);
+		setValueIfExists("affection-level", data.affection);
+		setValueIfExists("display-name", data.user_name || "");
+		setValueIfExists("partner-name", data.partner_name || "");
 
-		document.getElementById("global-profile-last-updated").textContent =
-			profileMemory.last_global_summary || "Never";
+		setTextIfExists("current-provider", data.current_provider || "Not set");
+		setTextIfExists(
+			"current-vision-model",
+			data.vision?.current_provider && data.vision?.current_model
+				? `${data.vision.current_provider}/${data.vision.current_model}`
+				: "Not set",
+		);
 
-		// Update affection display
-		document.getElementById("affection-value").textContent = data.affection;
-		document.getElementById("affection-level").value = data.affection;
-
-		// Update form fields
-		document.getElementById("display-name").value = data.user_name || "";
-		document.getElementById("partner-name").value = data.partner_name || "";
-
-		console.log("Profile data loaded successfully");
-
-		// Load structured memory stats
 		loadMemoryStats();
-
-		// Load advanced settings
 		loadAdvancedSettingsFromData(data);
+		loadGlobalKnowledge();
 	} catch (error) {
 		console.error("Error loading profile data:", error);
-		document.getElementById("player-summary").textContent =
-			"Error loading global profile";
+		setTextIfExists("player-summary", "Error loading global profile");
 		showError("Failed to load profile data");
 	}
 }
 
 // Load provider settings
-
 async function loadProviderSettings() {
 	try {
 		const response = await fetch("/api/providers/list");
 		const data = await response.json();
 
-		if (data.status === "success") {
-			const grid = document.getElementById("providers-grid");
-			if (!grid) return;
-			grid.innerHTML = "";
+		if (data.status !== "success") {
+			showError(data.message || "Failed to load providers");
+			return;
+		}
 
-			const byok = JSON.parse(
-				localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}",
-			);
+		const grid = document.getElementById("providers-grid");
+		if (!grid) return;
+		grid.innerHTML = "";
 
-			const providersList = [
-				{ id: "openrouter", name: "OpenRouter" },
-				{ id: "openai", name: "OpenAI" },
-				{ id: "anthropic", name: "Anthropic" },
-				{ id: "google", name: "Google (Gemini)" },
-				{ id: "xai", name: "xAI (Grok)" },
-				{ id: "groq", name: "Groq" },
-				{ id: "cerebras", name: "Cerebras" },
-				{ id: "chutes", name: "Chutes" },
-				{ id: "custom_openai", name: "Custom OpenAI", custom: true },
-				{ id: "custom_anthropic", name: "Custom Anthropic", custom: true },
-			];
+		const byok = JSON.parse(localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}");
+		const providerSelect = document.getElementById("ai-provider");
+		const modelSelect = document.getElementById("ai-model");
 
-			providersList.forEach((provObj) => {
-				const provider = provObj.id;
-				const isCustom = provObj.custom;
-				const isActive = provider === data.current_provider;
-
-				const card = document.createElement("div");
-				card.className = `provider-card ${isActive ? "active-provider" : ""}`;
-				const titleHtml = `${provObj.name} ${isActive ? "<span class='badge-active'>Active</span>" : ""}`;
-
-				let innerHtml = `
-                    <div class="provider-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
-                        <h3 style="margin: 0;">${titleHtml}</h3>
-                        <span style="font-size: 1.2rem;">▼</span>
-                    </div>
-                    <div class="provider-body" style="display: ${isActive ? "block" : "none"}; padding-top: 1rem;">
-                        <div class="form-group">
-                            <label>API Key (Saved in browser):</label>
-                            <input type="password" id="key-${provider}" placeholder="sk-..." value="${byok[provider]?.api_key || ""}">
-                        </div>
-                `;
-
-				if (isCustom) {
-					innerHtml += `
-                        <div class="form-group">
-                            <label>Base URL:</label>
-                            <input type="text" id="url-${provider}" placeholder="https://api.openai.com/v1" value="${byok[provider]?.base_url || ""}">
-                        </div>
-                    `;
-				}
-
-				innerHtml += `
-                        <div class="form-group">
-                            <label>Model:</label>
-                            <select id="model-${provider}" class="form-select">
-                                <option value="${data.current_model || ""}">${data.current_model || "Select model..."}</option>
-                            </select>
-                        </div>
-                        <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
-                            <button class="btn btn-primary btn-sm save-byok-btn" data-provider="${provider}">Save Key</button>
-                            <button class="btn btn-info btn-sm fetch-models-btn" data-provider="${provider}">Refresh Models</button>
-                        </div>
-                    </div>
-                `;
-
-				card.innerHTML = innerHtml;
-				grid.appendChild(card);
-			});
-
-			// Set up event listeners for dynamically created buttons
-			document.querySelectorAll(".save-byok-btn").forEach((btn) => {
-				btn.addEventListener("click", (e) =>
-					saveBYOKForProvider(e.target.dataset.provider),
-				);
-			});
-			document.querySelectorAll(".fetch-models-btn").forEach((btn) => {
-				btn.addEventListener("click", (e) =>
-					fetchModelsForProvider(e.target.dataset.provider),
-				);
+		if (providerSelect) {
+			providerSelect.innerHTML = "";
+			Object.entries(data.all_models || {}).forEach(([provider]) => {
+				const option = document.createElement("option");
+				option.value = provider;
+				option.textContent = provider;
+				if (provider === data.current_provider) option.selected = true;
+				providerSelect.appendChild(option);
 			});
 		}
+
+		if (modelSelect) {
+			const currentModels = data.all_models?.[data.current_provider] || [];
+			modelSelect.innerHTML = "";
+			(currentModels.length ? currentModels : [data.current_model || ""]).forEach((model) => {
+				if (!model) return;
+				const option = document.createElement("option");
+				option.value = model;
+				option.textContent = model;
+				if (model === data.current_model) option.selected = true;
+				modelSelect.appendChild(option);
+			});
+		}
+
+		setTextIfExists(
+			"current-provider",
+			data.current_provider && data.current_model
+				? `${data.current_provider}/${data.current_model}`
+				: data.current_provider || "Not set",
+		);
+
+		const providersList = [
+			{ id: "openrouter", name: "OpenRouter" },
+			{ id: "openai", name: "OpenAI" },
+			{ id: "anthropic", name: "Anthropic" },
+			{ id: "google", name: "Google (Gemini)" },
+			{ id: "xai", name: "xAI (Grok)" },
+			{ id: "groq", name: "Groq" },
+			{ id: "cerebras", name: "Cerebras" },
+			{ id: "chutes", name: "Chutes" },
+			{ id: "custom_openai", name: "Custom OpenAI", custom: true },
+			{ id: "custom_anthropic", name: "Custom Anthropic", custom: true },
+		];
+
+		providersList.forEach((provObj) => {
+			const provider = provObj.id;
+			const isCustom = provObj.custom;
+			const isActive = provider === data.current_provider;
+
+			const card = document.createElement("div");
+			card.className = `provider-card ${isActive ? "active-provider" : ""}`;
+			const titleHtml = `${provObj.name} ${isActive ? "<span class='badge-active'>Active</span>" : ""}`;
+
+			let innerHtml = `
+				<div class="provider-header" role="button" tabindex="0" aria-expanded="${isActive ? "true" : "false"}" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+					<h3 style="margin: 0;">${titleHtml}</h3>
+					<span style="font-size: 1.2rem;">▼</span>
+				</div>
+				<div class="provider-body" style="display: ${isActive ? "block" : "none"}; padding-top: 1rem;">
+					<div class="form-group">
+						<label for="key-${provider}">API Key (Saved in browser)</label>
+						<input type="password" id="key-${provider}" placeholder="sk-..." value="${byok[provider]?.api_key || ""}">
+					</div>
+			`;
+
+			if (isCustom) {
+				innerHtml += `
+					<div class="form-group">
+						<label for="url-${provider}">Base URL</label>
+						<input type="text" id="url-${provider}" placeholder="https://api.openai.com/v1" value="${byok[provider]?.base_url || ""}">
+					</div>
+				`;
+			}
+
+			innerHtml += `
+					<div class="form-group">
+						<label for="model-${provider}">Model</label>
+						<select id="model-${provider}" class="form-select">
+							<option value="${data.current_model || ""}">${data.current_model || "Select model..."}</option>
+						</select>
+					</div>
+					<div class="config-actions">
+						<button class="btn btn-primary btn-sm save-byok-btn" type="button" data-provider="${provider}">Save Key</button>
+						<button class="btn btn-info btn-sm fetch-models-btn" type="button" data-provider="${provider}">Refresh Models</button>
+					</div>
+				</div>
+			`;
+
+			card.innerHTML = innerHtml;
+			grid.appendChild(card);
+		});
+
+		document.querySelectorAll(".save-byok-btn").forEach((btn) => {
+			btn.addEventListener("click", (e) => saveBYOKForProvider(e.currentTarget.dataset.provider));
+		});
+		document.querySelectorAll(".fetch-models-btn").forEach((btn) => {
+			btn.addEventListener("click", (e) => fetchModelsForProvider(e.currentTarget.dataset.provider));
+		});
 	} catch (error) {
 		console.error("Error loading provider settings:", error);
+		showError("Error loading provider settings");
 	}
 }
 
 function saveBYOKForProvider(provider) {
-	const byok = JSON.parse(
-		localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}",
-	);
-	const keyVal = document.getElementById(`key-${provider}`).value;
+	const byok = JSON.parse(localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}");
+	const keyInput = document.getElementById(`key-${provider}`);
+	if (!keyInput) return;
 
 	if (!byok[provider]) byok[provider] = {};
-	byok[provider].api_key = keyVal;
+	byok[provider].api_key = keyInput.value;
 
 	if (provider.startsWith("custom")) {
-		byok[provider].base_url = document.getElementById(`url-${provider}`).value;
+		const baseInput = document.getElementById(`url-${provider}`);
+		byok[provider].base_url = baseInput?.value || "";
 	}
 
 	localStorage.setItem(window.BYOK_STORAGE_KEY, JSON.stringify(byok));
@@ -219,24 +279,19 @@ function saveBYOKForProvider(provider) {
 }
 
 async function fetchModelsForProvider(provider) {
-	const btn = document.querySelector(
-		`.fetch-models-btn[data-provider="${provider}"]`,
-	);
+	const btn = document.querySelector(`.fetch-models-btn[data-provider="${provider}"]`);
 	if (btn) {
 		btn.disabled = true;
 		btn.textContent = "Fetching...";
 	}
 
 	try {
-		const byok = JSON.parse(
-			localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}",
-		);
+		const byok = JSON.parse(localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}");
 		const provConfig = byok[provider] || {};
 
 		const headers = {};
 		if (provConfig.api_key) headers["X-Provider-Key"] = provConfig.api_key;
-		if (provConfig.base_url)
-			headers["X-Provider-BaseUrl"] = provConfig.base_url;
+		if (provConfig.base_url) headers["X-Provider-BaseUrl"] = provConfig.base_url;
 
 		const response = await fetch(`/api/proxy/models/${provider}`, { headers });
 		const data = await response.json();
@@ -245,10 +300,10 @@ async function fetchModelsForProvider(provider) {
 			const select = document.getElementById(`model-${provider}`);
 			if (select) {
 				select.innerHTML = "";
-				data.models.forEach((m) => {
+				data.models.forEach((model) => {
 					const opt = document.createElement("option");
-					opt.value = m;
-					opt.textContent = m;
+					opt.value = model;
+					opt.textContent = model;
 					select.appendChild(opt);
 				});
 			}
@@ -270,10 +325,10 @@ async function fetchModelsForProvider(provider) {
 // Update model dropdown based on selected provider
 function updateModelDropdown(provider, allModels, currentModel = "") {
 	const modelSelect = document.getElementById("ai-model");
+	if (!modelSelect) return;
 	modelSelect.innerHTML = "";
 
 	const models = allModels[provider] || [];
-
 	if (models.length === 0) {
 		const option = document.createElement("option");
 		option.value = "";
@@ -286,9 +341,7 @@ function updateModelDropdown(provider, allModels, currentModel = "") {
 		const option = document.createElement("option");
 		option.value = model;
 		option.textContent = model;
-		if (model === currentModel) {
-			option.selected = true;
-		}
+		if (model === currentModel) option.selected = true;
 		modelSelect.appendChild(option);
 	});
 
@@ -298,10 +351,9 @@ function updateModelDropdown(provider, allModels, currentModel = "") {
 // Test provider connection
 async function testProviderConnection(providerName) {
 	const statusElement = document.getElementById("connection-status");
+	if (!statusElement) return;
 	statusElement.textContent = "Testing...";
 	statusElement.className = "status-checking";
-
-	// Add loading animation
 	statusElement.classList.add("pulse");
 
 	try {
@@ -314,18 +366,11 @@ async function testProviderConnection(providerName) {
 		});
 
 		const result = await response.json();
-
-		// Remove loading animation
 		statusElement.classList.remove("pulse");
 
 		if (result.status === "success") {
-			statusElement.textContent = result.connected
-				? "Connected"
-				: "Connection failed";
-			statusElement.className = result.connected
-				? "status-connected"
-				: "status-disconnected";
-
+			statusElement.textContent = result.connected ? "Connected" : "Connection failed";
+			statusElement.className = result.connected ? "status-connected" : "status-disconnected";
 			if (result.connected) {
 				showSuccess(`${providerName} connection successful!`);
 			} else {
@@ -348,68 +393,39 @@ async function testProviderConnection(providerName) {
 function setupEventListeners() {
 	console.log("Setting up config event listeners...");
 
-	// Profile settings
 	const saveProfileBtn = document.getElementById("save-profile");
-	if (saveProfileBtn)
-		saveProfileBtn.addEventListener("click", saveProfileSettings);
+	if (saveProfileBtn) saveProfileBtn.addEventListener("click", saveProfileSettings);
 
 	const saveActiveProviderBtn = document.getElementById("save-active-provider");
 	const testActiveProviderBtn = document.getElementById("test-active-provider");
-
-	if (saveActiveProviderBtn) {
-		saveActiveProviderBtn.addEventListener("click", async () => {
-			// Find which card is active and save it to the DB as current_provider
-			const activeCard = document.querySelector(".active-provider h3");
-			if (!activeCard) return showError("No active provider selected");
-			// To set a provider active, we just post to update_profile
-			// Wait, the Phase 4 requirement doesn't specify how to change active.
-			// Let's just save the BYOK config
-			showSuccess("Provider settings saved locally.");
-		});
-	}
-
+	if (saveActiveProviderBtn) saveActiveProviderBtn.addEventListener("click", saveProviderSettings);
 	if (testActiveProviderBtn) {
 		testActiveProviderBtn.addEventListener("click", () => {
-			const activeBadge = document.querySelector(".badge-active");
-			if (activeBadge) {
-				showSuccess("Test successful (mocked)");
+			const provider = getValueIfExists("ai-provider", "");
+			if (!provider) {
+				showError("Pick a provider first");
+				return;
 			}
+			testProviderConnection(provider);
 		});
 	}
 
-	// Vision model settings
 	const visionProviderSelect = document.getElementById("vision-provider");
 	const testVisionBtn = document.getElementById("test-vision");
 	const saveVisionModelBtn = document.getElementById("save-vision-model");
-
 	if (visionProviderSelect) {
 		visionProviderSelect.addEventListener("change", function () {
-			const selectedProvider = this.value;
-			updateVisionModelDropdown(selectedProvider);
+			updateVisionModelDropdown(this.value);
 		});
 	}
+	if (testVisionBtn) testVisionBtn.addEventListener("click", testVisionModel);
+	if (saveVisionModelBtn) saveVisionModelBtn.addEventListener("click", saveVisionModel);
 
-	if (testVisionBtn) {
-		testVisionBtn.addEventListener("click", testVisionModel);
-	}
-
-	if (saveVisionModelBtn) {
-		saveVisionModelBtn.addEventListener("click", saveVisionModel);
-	}
-
-	// Add keyboard shortcuts
 	document.addEventListener("keydown", (e) => {
-		// Ctrl+S to save profile (except when in textarea)
-		if (
-			(e.ctrlKey || e.metaKey) &&
-			e.key === "s" &&
-			e.target.tagName !== "TEXTAREA"
-		) {
+		if ((e.ctrlKey || e.metaKey) && e.key === "s" && e.target.tagName !== "TEXTAREA") {
 			e.preventDefault();
 			saveProfileSettings();
 		}
-
-		// Escape to close sidebar
 		if (e.key === "Escape") {
 			const sidebar = document.getElementById("mainSidebar");
 			if (sidebar?.classList.contains("open")) {
@@ -418,29 +434,45 @@ function setupEventListeners() {
 		}
 	});
 
-	// Advanced Settings Listeners
 	const tempSlider = document.getElementById("adv-temperature");
 	if (tempSlider) {
 		tempSlider.addEventListener("input", (e) => {
-			document.getElementById("val-temperature").textContent = parseFloat(
-				e.target.value,
-			).toFixed(1);
+			const out = document.getElementById("val-temperature");
+			if (out) out.textContent = parseFloat(e.target.value).toFixed(1);
 		});
 	}
 
 	const topPSlider = document.getElementById("adv-top-p");
 	if (topPSlider) {
 		topPSlider.addEventListener("input", (e) => {
-			document.getElementById("val-top-p").textContent = parseFloat(
-				e.target.value,
-			).toFixed(2);
+			const out = document.getElementById("val-top-p");
+			if (out) out.textContent = parseFloat(e.target.value).toFixed(2);
 		});
 	}
 
 	const saveAdvancedBtn = document.getElementById("save-advanced-settings");
-	if (saveAdvancedBtn) {
-		saveAdvancedBtn.addEventListener("click", saveAdvancedSettings);
-	}
+	if (saveAdvancedBtn) saveAdvancedBtn.addEventListener("click", saveAdvancedSettings);
+
+	const saveImageModelBtn = document.getElementById("save-image-model");
+	if (saveImageModelBtn) saveImageModelBtn.addEventListener("click", saveImageModel);
+
+	const saveGlobalKnowledgeBtn = document.getElementById("save-global-knowledge");
+	if (saveGlobalKnowledgeBtn) saveGlobalKnowledgeBtn.addEventListener("click", saveGlobalKnowledge);
+
+	const updateGlobalProfileBtn = document.getElementById("update-global-profile");
+	if (updateGlobalProfileBtn) updateGlobalProfileBtn.addEventListener("click", updateGlobalProfile);
+
+	const clearChatHistoryBtn = document.getElementById("clear-chat-history");
+	if (clearChatHistoryBtn) clearChatHistoryBtn.addEventListener("click", clearChatHistory);
+
+	const rebuildMemoryBtn = document.getElementById("rebuild-memory");
+	if (rebuildMemoryBtn) rebuildMemoryBtn.addEventListener("click", rebuildStructuredMemory);
+
+	const runDecayBtn = document.getElementById("run-decay");
+	if (runDecayBtn) runDecayBtn.addEventListener("click", runMemoryDecay);
+
+	const saveLocationBtn = document.getElementById("save-location");
+	if (saveLocationBtn) saveLocationBtn.addEventListener("click", saveLocation);
 
 	console.log("Event listeners setup complete");
 }
@@ -452,27 +484,23 @@ async function loadImageModel() {
 		const data = await response.json();
 
 		const imageModel = data.image_model || "qwen_image";
-
-		// Populate available image models dynamically (matches backend's
-		// supported models in app/tools/image_generate.py)
 		const select = document.getElementById("image-model");
-		if (select) {
-			const availableModels = [
-				{ value: "qwen_image", label: "Qwen Image" },
-				{ value: "z_turbo", label: "Z Image Turbo" },
-			];
-			select.innerHTML = "";
-			availableModels.forEach((m) => {
-				const option = document.createElement("option");
-				option.value = m.value;
-				option.textContent = m.label;
-				if (m.value === imageModel) {
-					option.selected = true;
-				}
-				select.appendChild(option);
-			});
-		}
+		if (!select) return;
 
+		const availableModels = [
+			{ value: "qwen_image", label: "Qwen Image" },
+			{ value: "z_turbo", label: "Z Image Turbo" },
+		];
+		select.innerHTML = "";
+		availableModels.forEach((m) => {
+			const option = document.createElement("option");
+			option.value = m.value;
+			option.textContent = m.label;
+			if (m.value === imageModel) option.selected = true;
+			select.appendChild(option);
+		});
+
+		setTextIfExists("current-image-model", imageModel);
 		console.log("Image model loaded:", imageModel);
 	} catch (error) {
 		console.error("Error loading image model:", error);
@@ -481,22 +509,20 @@ async function loadImageModel() {
 
 // Load vision model on page load
 async function loadVisionModel() {
-	// Wait for appConfig if not yet loaded
 	if (!appConfig) {
 		await loadAppConfig();
 	}
 
-	// Use appConfig as SSOT for vision configuration
 	const visionConfig = appConfig?.vision || {};
 	const currentProvider = visionConfig.current_provider || "";
 	const currentModel = visionConfig.current_model || "";
 
-	// Populate provider dropdown from config
 	const visionProviderSelect = document.getElementById("vision-provider");
+	const visionModelSelect = document.getElementById("vision-model");
+	if (!visionProviderSelect || !visionModelSelect) return;
+
 	visionProviderSelect.innerHTML = "";
-
 	const visionProviders = Object.keys(visionConfig.models_by_provider || {});
-
 	if (visionProviders.length === 0) {
 		visionProviders.push("chutes", "openrouter");
 	}
@@ -505,30 +531,24 @@ async function loadVisionModel() {
 		const option = document.createElement("option");
 		option.value = provider;
 		option.textContent = provider.charAt(0).toUpperCase() + provider.slice(1);
-		if (provider === currentProvider) {
-			option.selected = true;
-		}
+		if (provider === currentProvider) option.selected = true;
 		visionProviderSelect.appendChild(option);
 	});
 
-	// Populate model dropdown based on provider
 	updateVisionModelDropdown(currentProvider, currentModel);
-
-	// Update current display
-	if (currentProvider && currentModel) {
-		document.getElementById("current-vision-model").textContent =
-			`${currentProvider}/${currentModel}`;
-	}
+	setTextIfExists(
+		"current-vision-model",
+		currentProvider && currentModel ? `${currentProvider}/${currentModel}` : "Not set",
+	);
 
 	console.log("Vision model loaded from config");
 }
 
-// Update vision model dropdown based on selected provider
 function updateVisionModelDropdown(provider, currentModel = "") {
 	const visionModelSelect = document.getElementById("vision-model");
+	if (!visionModelSelect) return;
 	visionModelSelect.innerHTML = "";
 
-	// Use appConfig as SSOT for vision models
 	const models = appConfig?.vision?.models_by_provider?.[provider] || [];
 
 	if (models.length === 0) {
@@ -543,20 +563,16 @@ function updateVisionModelDropdown(provider, currentModel = "") {
 		const option = document.createElement("option");
 		option.value = model;
 		option.textContent = model;
-		if (model === currentModel) {
-			option.selected = true;
-		}
+		if (model === currentModel) option.selected = true;
 		visionModelSelect.appendChild(option);
 	});
 
-	console.log(
-		`Updated vision model dropdown for ${provider}: ${models.length} models`,
-	);
+	console.log(`Updated vision model dropdown for ${provider}: ${models.length} models`);
 }
 
 async function testVisionModel() {
-	const provider = document.getElementById("vision-provider").value;
-	const model = document.getElementById("vision-model").value;
+	const provider = getValueIfExists("vision-provider", "");
+	const model = getValueIfExists("vision-model", "");
 
 	if (!provider || !model) {
 		showError("Please select both provider and model");
@@ -564,11 +580,9 @@ async function testVisionModel() {
 	}
 
 	const statusElement = document.getElementById("current-vision-model");
-	statusElement.textContent = "Testing...";
+	if (statusElement) statusElement.textContent = "Testing...";
 
 	try {
-		// Simple test: just verify the model is recognized as vision-capable
-		// Full test would require sending an actual image
 		const response = await fetch("/api/providers/test_vision", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -578,22 +592,22 @@ async function testVisionModel() {
 		const result = await response.json();
 
 		if (result.success) {
-			statusElement.textContent = `${provider}/${model}`;
+			if (statusElement) statusElement.textContent = `${provider}/${model}`;
 			showSuccess("Vision model is available!");
 		} else {
-			statusElement.textContent = `${provider}/${model} (may not support vision)`;
+			if (statusElement) statusElement.textContent = `${provider}/${model} (may not support vision)`;
 			showError(result.message || "Vision model test failed");
 		}
 	} catch (error) {
 		console.error("Error testing vision model:", error);
-		statusElement.textContent = `${provider}/${model}`;
+		if (statusElement) statusElement.textContent = `${provider}/${model}`;
 		showError("Vision model test error");
 	}
 }
 
 async function saveVisionModel() {
-	const provider = document.getElementById("vision-provider").value;
-	const model = document.getElementById("vision-model").value;
+	const provider = getValueIfExists("vision-provider", "");
+	const model = getValueIfExists("vision-model", "");
 
 	if (!provider) {
 		showError("Please select a vision provider");
@@ -606,6 +620,7 @@ async function saveVisionModel() {
 	}
 
 	const saveBtn = document.getElementById("save-vision-model");
+	if (!saveBtn) return;
 	const originalText = saveBtn.textContent;
 	saveBtn.textContent = "Saving...";
 	saveBtn.disabled = true;
@@ -614,17 +629,13 @@ async function saveVisionModel() {
 		const response = await fetch("/api/providers/set_vision_model", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				provider: provider,
-				model: model,
-			}),
+			body: JSON.stringify({ provider, model }),
 		});
 
 		const result = await response.json();
 
 		if (result.status === "success") {
-			document.getElementById("current-vision-model").textContent =
-				`${provider}/${model}`;
+			setTextIfExists("current-vision-model", `${provider}/${model}`);
 			showSuccess("Vision model saved!");
 		} else {
 			showError(`Failed to save vision model: ${result.message}`);
@@ -633,7 +644,6 @@ async function saveVisionModel() {
 		console.error("Error saving vision model:", error);
 		showError("Error saving vision model");
 	} finally {
-		// Restore button state
 		saveBtn.textContent = originalText;
 		saveBtn.disabled = false;
 	}
@@ -645,19 +655,20 @@ async function saveImageModel() {
 	if (!select) return;
 
 	const btn = document.getElementById("save-image-model");
+	if (!btn) return;
 	const originalText = btn.textContent;
 	btn.textContent = "Saving...";
 	btn.disabled = true;
 
 	try {
-		const imageModel =
-			select.value === "qwen_image" ? "qwen_image" : select.value;
+		const imageModel = select.value === "qwen_image" ? "qwen_image" : select.value;
 		const response = await fetch("/api/update_profile", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ updates: { image_model: imageModel } }),
 		});
 		if (response.ok) {
+			setTextIfExists("current-image-model", imageModel);
 			showSuccess("Image model saved successfully!");
 		} else {
 			showError("Error saving image model");
@@ -666,7 +677,6 @@ async function saveImageModel() {
 		console.error("Error saving image model:", error);
 		showError("Error saving image model");
 	} finally {
-		// Restore button state
 		btn.textContent = originalText;
 		btn.disabled = false;
 	}
@@ -676,6 +686,10 @@ async function saveImageModel() {
 async function saveProviderSettings() {
 	const providerSelect = document.getElementById("ai-provider");
 	const modelSelect = document.getElementById("ai-model");
+	if (!providerSelect || !modelSelect) {
+		showError("Provider controls are not ready yet");
+		return;
+	}
 
 	const providerName = providerSelect.value;
 	const modelName = modelSelect.value;
@@ -690,8 +704,8 @@ async function saveProviderSettings() {
 		return;
 	}
 
-	// Show loading state
 	const saveBtn = document.getElementById("save-provider");
+	if (!saveBtn) return;
 	const originalText = saveBtn.textContent;
 	saveBtn.textContent = "Saving...";
 	saveBtn.disabled = true;
@@ -712,10 +726,7 @@ async function saveProviderSettings() {
 
 		if (result.status === "success") {
 			showSuccess("AI provider settings saved!");
-			// Update display
-			document.getElementById("current-provider").textContent =
-				`${providerName}/${modelName}`;
-			// Test the new connection
+			setTextIfExists("current-provider", `${providerName}/${modelName}`);
 			testProviderConnection(providerName);
 		} else {
 			showError(`Failed to save provider settings: ${result.message}`);
@@ -724,18 +735,16 @@ async function saveProviderSettings() {
 		console.error("Error saving provider settings:", error);
 		showError("Error saving provider settings");
 	} finally {
-		// Restore button state
 		saveBtn.textContent = originalText;
 		saveBtn.disabled = false;
 	}
 }
 
 async function saveProfileSettings() {
-	const displayName = document.getElementById("display-name").value;
-	const partnerName = document.getElementById("partner-name").value;
-	const affection = document.getElementById("affection-level").value;
+	const displayName = getValueIfExists("display-name", "");
+	const partnerName = getValueIfExists("partner-name", "");
+	const affection = getValueIfExists("affection-level", "0");
 
-	// Validate inputs
 	if (!displayName.trim()) {
 		showError("Display name is required");
 		return;
@@ -746,8 +755,8 @@ async function saveProfileSettings() {
 		return;
 	}
 
-	// Show loading state
 	const saveBtn = document.getElementById("save-profile");
+	if (!saveBtn) return;
 	const originalText = saveBtn.textContent;
 	saveBtn.textContent = "Saving...";
 	saveBtn.disabled = true;
@@ -767,7 +776,7 @@ async function saveProfileSettings() {
 
 		if (response.ok) {
 			showSuccess("Profile settings saved successfully!");
-			loadProfileData(); // Reload to reflect changes
+			loadProfileData();
 		} else {
 			showError("Error saving profile settings");
 		}
@@ -775,7 +784,60 @@ async function saveProfileSettings() {
 		console.error("Error saving profile:", error);
 		showError("Error saving profile settings");
 	} finally {
-		// Restore button state
+		saveBtn.textContent = originalText;
+		saveBtn.disabled = false;
+	}
+}
+
+function loadAdvancedSettingsFromData(data) {
+	const source = getProfileAdvancedSource(data);
+	setValueIfExists("adv-temperature", source.temperature ?? 1.0);
+	setValueIfExists("adv-top-p", source.top_p ?? 1.0);
+	setValueIfExists("adv-max-tokens", source.max_tokens ?? 4096);
+	setValueIfExists("adv-history-limit", source.history_limit ?? 20);
+	const reasoning = document.getElementById("adv-reasoning");
+	if (reasoning) reasoning.checked = Boolean(source.enable_reasoning);
+	const vision = document.getElementById("adv-vision");
+	if (vision) vision.checked = Boolean(source.enable_vision);
+	const tempOut = document.getElementById("val-temperature");
+	if (tempOut) tempOut.textContent = Number(source.temperature ?? 1.0).toFixed(1);
+	const topPOut = document.getElementById("val-top-p");
+	if (topPOut) topPOut.textContent = Number(source.top_p ?? 1.0).toFixed(2);
+}
+
+async function saveAdvancedSettings() {
+	const saveBtn = document.getElementById("save-advanced-settings");
+	if (!saveBtn) return;
+	const originalText = saveBtn.textContent;
+	saveBtn.textContent = "Saving...";
+	saveBtn.disabled = true;
+
+	try {
+		const updates = {
+			temperature: getNumberIfExists("adv-temperature", 1.0),
+			top_p: getNumberIfExists("adv-top-p", 1.0),
+			max_tokens: getNumberIfExists("adv-max-tokens", 4096),
+			history_limit: getNumberIfExists("adv-history-limit", 20),
+			enable_reasoning: getCheckedIfExists("adv-reasoning"),
+			enable_vision: getCheckedIfExists("adv-vision"),
+		};
+
+		const response = await fetch("/api/update_profile", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ updates }),
+		});
+
+		if (response.ok) {
+			showSuccess("Advanced settings saved");
+			loadAdvancedSettingsFromData(updates);
+		} else {
+			showError("Error saving advanced settings");
+		}
+	} catch (error) {
+		console.error("Error saving advanced settings:", error);
+		showError("Error saving advanced settings");
+	} finally {
 		saveBtn.textContent = originalText;
 		saveBtn.disabled = false;
 	}
@@ -800,7 +862,6 @@ function saveBYOKConfig() {
 	try {
 		localStorage.setItem(BYOK_STORAGE_KEY, JSON.stringify(config));
 
-		// Subtle success indication: button text swap + toast
 		const btn = document.getElementById("save-byok");
 		if (btn) {
 			const original = btn.textContent;
@@ -818,7 +879,6 @@ function saveBYOKConfig() {
 	}
 }
 
-// BYOK logic now handled in loadProviderSettings (Phase 4 Cards)
 function loadBYOKConfig() {
 	console.log("BYOK config handled via card UI now.");
 }
@@ -832,7 +892,6 @@ function toggleBYOKFields() {
 	if (modelGroup) modelGroup.style.display = showConditional ? "block" : "none";
 }
 
-// Make BYOK functions globally available for inline handlers
 window.saveBYOKConfig = saveBYOKConfig;
 
 // Load structured memory statistics
@@ -843,21 +902,17 @@ async function loadMemoryStats() {
 
 		if (data.status === "success") {
 			const stats = data.stats;
-			document.getElementById("semantic-count").textContent =
-				stats.semantic || 0;
-			document.getElementById("episodic-count").textContent =
-				stats.episodic || 0;
-			document.getElementById("segment-count").textContent =
-				stats.segments || 0;
+			setTextIfExists("semantic-count", stats.semantic || 0);
+			setTextIfExists("episodic-count", stats.episodic || 0);
+			setTextIfExists("segment-count", stats.segments || 0);
 
 			const factsList = document.getElementById("top-facts-list");
-			if (stats.top_facts && stats.top_facts.length > 0) {
-				factsList.innerHTML = stats.top_facts
-					.map((f) => `<li>${f}</li>`)
-					.join("");
-			} else {
-				factsList.innerHTML =
-					'<li>No facts extracted yet. Start chatting or click "Rebuild Structured Memory".</li>';
+			if (factsList) {
+				if (stats.top_facts && stats.top_facts.length > 0) {
+					factsList.innerHTML = stats.top_facts.map((f) => `<li>${f}</li>`).join("");
+				} else {
+					factsList.innerHTML = '<li>No facts extracted yet. Start chatting or click "Rebuild Structured Memory".</li>';
+				}
 			}
 		}
 	} catch (error) {
@@ -866,24 +921,18 @@ async function loadMemoryStats() {
 }
 
 async function rebuildStructuredMemory() {
-	if (
-		!confirm(
-			"Rebuild structured memory? This will re-extract facts and segments from the last 50 messages in the current session.",
-		)
-	) {
+	if (!confirm("Rebuild structured memory? This will re-extract facts and segments from the last 50 messages in the current session.")) {
 		return;
 	}
 
 	const btn = document.getElementById("rebuild-memory");
+	if (!btn) return;
 	const originalText = btn.textContent;
 	btn.textContent = "Rebuilding...";
 	btn.disabled = true;
 
 	try {
-		const response = await fetch("/api/rebuild_structured_memory", {
-			method: "POST",
-		});
-
+		const response = await fetch("/api/rebuild_structured_memory", { method: "POST" });
 		const result = await response.json();
 
 		if (result.status === "success") {
@@ -902,24 +951,18 @@ async function rebuildStructuredMemory() {
 }
 
 async function runMemoryDecay() {
-	if (
-		!confirm(
-			"Run memory decay? This applies FSRS-style forgetting: old unused memories will fade, frequently used ones will be preserved.",
-		)
-	) {
+	if (!confirm("Run memory decay? This applies FSRS-style forgetting: old unused memories will fade, frequently used ones will be preserved.")) {
 		return;
 	}
 
 	const btn = document.getElementById("run-decay");
+	if (!btn) return;
 	const originalText = btn.textContent;
 	btn.textContent = "Running...";
 	btn.disabled = true;
 
 	try {
-		const response = await fetch("/api/run_memory_decay", {
-			method: "POST",
-		});
-
+		const response = await fetch("/api/run_memory_decay", { method: "POST" });
 		const result = await response.json();
 
 		if (result.status === "success") {
@@ -938,34 +981,26 @@ async function runMemoryDecay() {
 }
 
 async function updateGlobalProfile() {
-	if (
-		!confirm(
-			"Update global player profile? This will analyze ALL sessions to build a comprehensive profile. This may take a moment.",
-		)
-	) {
+	if (!confirm("Update global player profile? This will analyze ALL sessions to build a comprehensive profile. This may take a moment.")) {
 		return;
 	}
 
-	// Show loading state
 	const updateBtn = document.getElementById("update-global-profile");
+	if (!updateBtn) return;
 	const originalText = updateBtn.textContent;
 	updateBtn.textContent = "Analyzing...";
 	updateBtn.disabled = true;
 
 	try {
-		const response = await fetch("/api/update_global_profile", {
-			method: "POST",
-		});
-
+		const response = await fetch("/api/update_global_profile", { method: "POST" });
 		const result = await response.json();
 
 		if (result.status === "success") {
 			showSuccess("Global player profile updated from ALL sessions!");
-			// Use the returned profile data directly
 			if (result.profile?.memory) {
 				updateGlobalProfileDisplay(result.profile.memory);
 			} else {
-				loadProfileData(); // Fallback to reload
+				loadProfileData();
 			}
 		} else {
 			showError(`Failed to update global profile: ${result.message}`);
@@ -974,7 +1009,6 @@ async function updateGlobalProfile() {
 		console.error("Error updating global profile:", error);
 		showError("Error updating global profile");
 	} finally {
-		// Restore button state
 		updateBtn.textContent = originalText;
 		updateBtn.disabled = false;
 	}
@@ -985,62 +1019,43 @@ function updateGlobalProfileDisplay(profileMemory) {
 	console.log("Updating global profile display with:", profileMemory);
 
 	const keyFacts = profileMemory.key_facts || {};
-
-	document.getElementById("player-summary").textContent =
-		profileMemory.player_summary ||
-		"Profile analysis completed but no summary generated.";
-
-	document.getElementById("player-likes").textContent =
-		Array.isArray(keyFacts.likes) && keyFacts.likes.length > 0
-			? keyFacts.likes.join(", ")
-			: "None identified";
-
-	document.getElementById("player-dislikes").textContent =
-		Array.isArray(keyFacts.dislikes) && keyFacts.dislikes.length > 0
-			? keyFacts.dislikes.join(", ")
-			: "None identified";
-
-	document.getElementById("player-personality").textContent =
-		Array.isArray(keyFacts.personality_traits) &&
-		keyFacts.personality_traits.length > 0
-			? keyFacts.personality_traits.join(", ")
-			: "None identified";
-
-	document.getElementById("player-memories").textContent =
-		Array.isArray(keyFacts.important_memories) &&
-		keyFacts.important_memories.length > 0
-			? keyFacts.important_memories.join(", ")
-			: "None identified";
-
-	document.getElementById("player-relationship").textContent =
-		profileMemory.relationship_dynamics ||
-		"No specific relationship dynamics identified";
-
-	document.getElementById("global-profile-last-updated").textContent =
-		profileMemory.last_global_summary || "Just now";
+	setTextIfExists("player-summary", profileMemory.player_summary || "Profile analysis completed but no summary generated.");
+	setTextIfExists(
+		"player-likes",
+		Array.isArray(keyFacts.likes) && keyFacts.likes.length > 0 ? keyFacts.likes.join(", ") : "None identified",
+	);
+	setTextIfExists(
+		"player-dislikes",
+		Array.isArray(keyFacts.dislikes) && keyFacts.dislikes.length > 0 ? keyFacts.dislikes.join(", ") : "None identified",
+	);
+	setTextIfExists(
+		"player-personality",
+		Array.isArray(keyFacts.personality_traits) && keyFacts.personality_traits.length > 0 ? keyFacts.personality_traits.join(", ") : "None identified",
+	);
+	setTextIfExists(
+		"player-memories",
+		Array.isArray(keyFacts.important_memories) && keyFacts.important_memories.length > 0 ? keyFacts.important_memories.join(", ") : "None identified",
+	);
+	setTextIfExists("player-relationship", profileMemory.relationship_dynamics || "No specific relationship dynamics identified");
+	setTextIfExists("global-profile-last-updated", profileMemory.last_global_summary || "Just now");
 }
 
 async function clearChatHistory() {
-	if (
-		!confirm(
-			"Are you sure you want to clear all chat history in the current session? This cannot be undone.",
-		)
-	) {
+	if (!confirm("Are you sure you want to clear all chat history in the current session? This cannot be undone.")) {
 		return;
 	}
 
-	// Show loading state
 	const clearBtn = document.getElementById("clear-chat-history");
+	if (!clearBtn) return;
 	const originalText = clearBtn.textContent;
 	clearBtn.textContent = "Clearing...";
 	clearBtn.disabled = true;
 
 	try {
 		const response = await fetch("/api/clear_chat", { method: "POST" });
-
 		if (response.ok) {
 			showSuccess("Chat history cleared successfully!");
-			loadProfileData(); // Reload to reflect cleared history
+			loadProfileData();
 		} else {
 			showError("Error clearing chat history");
 		}
@@ -1048,7 +1063,6 @@ async function clearChatHistory() {
 		console.error("Error clearing chat:", error);
 		showError("Error clearing chat history");
 	} finally {
-		// Restore button state
 		clearBtn.textContent = originalText;
 		clearBtn.disabled = false;
 	}
@@ -1061,8 +1075,7 @@ async function loadGlobalKnowledge() {
 		const data = await response.json();
 
 		const globalKnowledge = data.global_knowledge || {};
-		document.getElementById("global-knowledge").value =
-			globalKnowledge.facts || "";
+		setValueIfExists("global-knowledge", globalKnowledge.facts || "");
 
 		console.log("Global knowledge loaded");
 	} catch (error) {
@@ -1072,10 +1085,9 @@ async function loadGlobalKnowledge() {
 }
 
 async function saveGlobalKnowledge() {
-	const facts = document.getElementById("global-knowledge").value.trim();
-
-	// Show loading state
+	const facts = getValueIfExists("global-knowledge", "").trim();
 	const saveBtn = document.getElementById("save-global-knowledge");
+	if (!saveBtn) return;
 	const originalText = saveBtn.textContent;
 	saveBtn.textContent = "Saving...";
 	saveBtn.disabled = true;
@@ -1086,11 +1098,10 @@ async function saveGlobalKnowledge() {
 			headers: {
 				"Content-Type": "application/json",
 			},
-			body: JSON.stringify({ facts: facts }),
+			body: JSON.stringify({ facts }),
 		});
 
 		const result = await response.json();
-
 		if (result.status === "success") {
 			showSuccess("Global knowledge saved! This will be used in all sessions.");
 		} else {
@@ -1100,7 +1111,6 @@ async function saveGlobalKnowledge() {
 		console.error("Error saving global knowledge:", error);
 		showError("Error saving global knowledge");
 	} finally {
-		// Restore button state
 		saveBtn.textContent = originalText;
 		saveBtn.disabled = false;
 	}
@@ -1116,51 +1126,41 @@ function showError(message) {
 }
 
 function showNotification(message, type = "info") {
-	// Remove existing notifications
-	const existingNotifications = document.querySelectorAll(
-		".config-notification",
-	);
-	existingNotifications.forEach((notification) => {
-		notification.remove();
-	});
+	const existingNotifications = document.querySelectorAll(".config-notification");
+	existingNotifications.forEach((notification) => notification.remove());
 
-	// Escape HTML to prevent XSS
 	const escapeHtml = (text) => {
 		const div = document.createElement("div");
 		div.textContent = text;
 		return div.innerHTML;
 	};
 
-	const escapedMessage = escapeHtml(message);
-
 	const notification = document.createElement("div");
 	notification.className = `config-notification ${type}`;
 	notification.innerHTML = `
-        <div class="notification-content">
-            <span class="notification-icon">${type === "success" ? "✓" : type === "error" ? "✗" : "ℹ"}</span>
-            <span class="notification-message">${escapedMessage}</span>
-            <button class="notification-close" onclick="this.parentElement.parentElement.remove()">×</button>
-        </div>
-    `;
+		<div class="notification-content">
+			<span class="notification-icon">${type === "success" ? "✓" : type === "error" ? "✗" : "ℹ"}</span>
+			<span class="notification-message">${escapeHtml(message)}</span>
+			<button class="notification-close" type="button" onclick="this.parentElement.parentElement.remove()">×</button>
+		</div>
+	`;
 
-	// Add styles
 	notification.style.cssText = `
-        position: fixed;
-        top: 100px;
-        right: 20px;
-        background: ${type === "success" ? "var(--accent-mint)" : type === "error" ? "var(--accent-pink)" : "var(--accent-lavender)"};
-        color: var(--button-text);
-        padding: 1rem;
-        border-radius: 8px;
-        box-shadow: var(--shadow-soft);
-        z-index: 10000;
-        max-width: 300px;
-        animation: slideInRight 0.3s ease;
-    `;
+		position: fixed;
+		top: 100px;
+		right: 20px;
+		background: ${type === "success" ? "var(--accent-mint)" : type === "error" ? "var(--accent-pink)" : "var(--accent-lavender)"};
+		color: var(--button-text);
+		padding: 1rem;
+		border-radius: 8px;
+		box-shadow: var(--shadow-soft);
+		z-index: 10000;
+		max-width: 300px;
+		animation: slideInRight 0.3s ease;
+	`;
 
 	document.body.appendChild(notification);
 
-	// Auto-remove after 5 seconds
 	setTimeout(() => {
 		if (notification.parentElement) {
 			notification.remove();
@@ -1170,7 +1170,6 @@ function showNotification(message, type = "info") {
 
 // Initialize config animations
 function initializeConfigAnimations() {
-	// Add intersection observer for config sections
 	const observerOptions = {
 		threshold: 0.1,
 		rootMargin: "0px 0px -50px 0px",
@@ -1185,7 +1184,6 @@ function initializeConfigAnimations() {
 		});
 	}, observerOptions);
 
-	// Observe all config sections
 	document.querySelectorAll(".config-section").forEach((section) => {
 		section.style.opacity = "0";
 		section.style.transform = "translateY(20px)";
@@ -1207,16 +1205,16 @@ async function loadLocation() {
 		const data = await response.json();
 		const ctx = data.context || {};
 		const loc = ctx.location || {};
-		document.getElementById("location-lat").value = loc.lat || 0.0;
-		document.getElementById("location-lon").value = loc.lon || 0.0;
+		setValueIfExists("location-lat", loc.lat || 0.0);
+		setValueIfExists("location-lon", loc.lon || 0.0);
 	} catch (e) {
 		console.error("Failed to load location:", e);
 	}
 }
 
 async function saveLocation() {
-	const lat = parseFloat(document.getElementById("location-lat").value) || 0.0;
-	const lon = parseFloat(document.getElementById("location-lon").value) || 0.0;
+	const lat = parseFloat(getValueIfExists("location-lat", "0")) || 0.0;
+	const lon = parseFloat(getValueIfExists("location-lon", "0")) || 0.0;
 
 	try {
 		const response = await fetch("/api/update_location", {
@@ -1225,7 +1223,7 @@ async function saveLocation() {
 			body: JSON.stringify({ lat, lon }),
 		});
 		const data = await response.json();
-		if (data.status === "ok") {
+		if (data.status === "success") {
 			showSuccess("Location saved!");
 		} else {
 			showError(data.message || "Failed to save location");
@@ -1244,11 +1242,8 @@ function useCurrentLocation() {
 
 	navigator.geolocation.getCurrentPosition(
 		(pos) => {
-			const lat = pos.coords.latitude;
-			const lon = pos.coords.longitude;
-
-			document.getElementById("location-lat").value = lat;
-			document.getElementById("location-lon").value = lon;
+			setValueIfExists("location-lat", pos.coords.latitude);
+			setValueIfExists("location-lon", pos.coords.longitude);
 		},
 		(_err) => {
 			alert("Location permission denied or unavailable.");
@@ -1276,4 +1271,3 @@ window.saveProviderSettings = saveProviderSettings;
 window.toggleBYOKFields = toggleBYOKFields;
 window.updateGlobalProfile = updateGlobalProfile;
 window.updateModelDropdown = updateModelDropdown;
-window.useCurrentLocation = useCurrentLocation;
