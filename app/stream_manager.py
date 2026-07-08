@@ -47,6 +47,7 @@ class StreamBuffer:
         self.last_activity = self.start_time
         self.error: Optional[str] = None
         self.turn_id: str = ""  # current turn correlation ID
+        self.has_tools = False
 
         self.task = asyncio.create_task(self._process())
 
@@ -59,12 +60,15 @@ class StreamBuffer:
         if not content and not is_error:
             return
 
-        # FRANKENSTEIN GUARD: If the accumulated content contains tool blocks,
+        # FRANKENSTEIN GUARD: If the stream contained any tool interactions,
         # the orchestrator has already persisted discrete messages (clean_text
         # as assistant, tool results as tool roles, synthesis as assistant).
-        # Skip the single-write persistence to prevent double-saving a
-        # Frankenstein concatenation of all three.
-        if "[Tool execution result]" in content or "<details>" in content:
+        # Skip the single-write persistence to prevent double-saving.
+        if (
+            self.has_tools
+            or "[Tool execution result]" in content
+            or "<details>" in content
+        ):
             log.info(
                 f"[Stream] Skipping _persist_to_db — orchestrator handled "
                 f"discrete persistence for session {self.session_id}"
@@ -118,6 +122,8 @@ class StreamBuffer:
                     async with self.lock:
                         # Accumulate text content for persistence
                         if isinstance(chunk, StreamToolEvent):
+                            if chunk.type in ("tool_call", "tool_result"):
+                                self.has_tools = True
                             if chunk.type == "token":
                                 self.full_content += str(chunk.data)
                             # Track turn_id from any event that carries it

@@ -25,9 +25,13 @@ function formatToolResult(contentStr) {
 		const statusIcon = ok ? "✅" : "❌";
 		let markdown = parsed.markdown || contentStr;
 		if (parsed.data?.image_path) {
-			const encodedPath = encodeURI(
-				`/${parsed.data.image_path.replace(/^\/+/, "")}`,
-			);
+			let imgPath = parsed.data.image_path.replace(/^\/+/, "");
+			if (!imgPath.startsWith("static/")) {
+				imgPath = imgPath.startsWith("generated_images/")
+					? `static/${imgPath}`
+					: imgPath;
+			}
+			const encodedPath = encodeURI(`/${imgPath}`);
 			markdown += `\n\n<img src="${encodedPath}" alt="Tool Output Image">`;
 		}
 		return `<details class="tool-result" open><summary>${statusIcon} Tool Result</summary><div class="tool-result-content">${markdown}</div></details>`;
