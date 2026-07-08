@@ -127,6 +127,19 @@
     </article>
   </dialog>
 
+  <!-- Load marked.js v18.0.2 for markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@18.0.2/lib/marked.umd.js"></script>
+  
+  <!-- Load Mermaid.js v11.4.0 for diagram rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.min.js"></script>
+
+  <!-- Load Highlight.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/bash.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/json.min.js"></script>
+
   <script src="{{ url_for('static', path='js/sidebar.js') }}"></script>
   <script src="{{ url_for('static', path='js/renderer.js') }}"></script>
   <script type="module" src="{{ url_for('static', path='js/chat.js') }}"></script>

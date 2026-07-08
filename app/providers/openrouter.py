@@ -118,8 +118,6 @@ class OpenRouterProvider(AIProvider):
     async def send_message(
         self, ctx: LLMContext, messages: list[dict], **kwargs
     ) -> str | None:
-        if ctx.model not in self.available_models:
-            return None
 
         try:
             headers, payload = self._prepare_payload(ctx, messages, False, **kwargs)
@@ -153,8 +151,6 @@ class OpenRouterProvider(AIProvider):
     async def send_message_raw(
         self, ctx: LLMContext, messages: list[dict], **kwargs
     ) -> dict | None:
-        if ctx.model not in self.available_models:
-            return None
 
         try:
             headers, payload = self._prepare_payload(ctx, messages, False, **kwargs)
@@ -194,9 +190,6 @@ class OpenRouterProvider(AIProvider):
         accumulates them and yields StreamToolEvent objects for structured
         consumption by the orchestrator.
         """
-        if ctx.model not in self.available_models:
-            yield ""
-            return
 
         try:
             headers, payload = self._prepare_payload(ctx, messages, True, **kwargs)

@@ -39,8 +39,6 @@ class OllamaProvider(AIProvider):
     async def send_message(
         self, ctx: LLMContext, messages: list[dict], **kwargs
     ) -> str | None:
-        if ctx.model not in self.available_models:
-            return None
 
         try:
             temperature = kwargs.get("temperature", 0.69)
@@ -81,9 +79,6 @@ class OllamaProvider(AIProvider):
     async def _send_message_streaming_impl(
         self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
-        if ctx.model not in self.available_models:
-            yield ""
-            return
 
         try:
             temperature = kwargs.get("temperature", 0.69)
