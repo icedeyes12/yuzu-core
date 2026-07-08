@@ -310,24 +310,27 @@ def parse_profile_row(row: dict | None) -> dict:
     """Convert a raw profile row into the public dict shape."""
     if not row:
         return {}
-    ctx = row.get("context") or {}
-    if isinstance(ctx, str):
-        import json
+    import json
 
-        try:
-            ctx = json.loads(ctx)
-        except Exception:
-            ctx = {}
+    def _parse_json(val: Any) -> dict:
+        if isinstance(val, str):
+            try:
+                return json.loads(val)
+            except Exception:
+                return {}
+        return val or {}
+
+    ctx = _parse_json(row.get("context"))
     return {
         "id": row.get("id"),
         "user_name": row.get("user_name", ""),
         "partner_name": row.get("partner_name", ""),
         "affection": row.get("affection", 50),
         "theme": row.get("theme", "default"),
-        "memory": row.get("memory_state") or {},
-        "session_history": row.get("session_history") or {},
-        "global_knowledge": row.get("global_knowledge") or {},
-        "providers_config": row.get("providers_config") or {},
+        "memory": _parse_json(row.get("memory_state")),
+        "session_history": _parse_json(row.get("session_history")),
+        "global_knowledge": _parse_json(row.get("global_knowledge")),
+        "providers_config": _parse_json(row.get("providers_config")),
         "context": ctx,
         "image_model": row.get("image_model", "qwen_image"),
         "vision_model": row.get("vision_model", "moonshotai/kimi-k2.5"),
