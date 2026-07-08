@@ -30,7 +30,7 @@ class CerebrasProvider(AIProvider):
             "llama3.1-8b",
         ]
 
-    def get_models(self) -> list[str]:
+    async def get_models(self) -> list[str]:
         return self.available_models
 
     async def send_message(

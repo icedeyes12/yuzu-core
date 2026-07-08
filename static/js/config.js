@@ -121,6 +121,8 @@ async function loadProfileData() {
 		setValueIfExists("affection-level", data.affection);
 		setValueIfExists("display-name", data.user_name || "");
 		setValueIfExists("partner-name", data.partner_name || "");
+		setValueIfExists("persona-preset", data.persona_preset || "warm");
+		setValueIfExists("persona-prompt", data.persona_prompt || "");
 
 		setTextIfExists("current-provider", data.current_provider || "Not set");
 		setTextIfExists(
@@ -804,6 +806,8 @@ async function saveProfileSettings() {
 	const displayName = getValueIfExists("display-name", "");
 	const partnerName = getValueIfExists("partner-name", "");
 	const affection = getValueIfExists("affection-level", "0");
+	const personaPreset = getValueIfExists("persona-preset", "warm");
+	const personaPrompt = getValueIfExists("persona-prompt", "");
 
 	if (!displayName.trim()) {
 		showError("Display name is required");
@@ -828,9 +832,13 @@ async function saveProfileSettings() {
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({
-				user_name: displayName,
-				partner_name: partnerName,
-				affection: parseInt(affection, 10),
+				updates: {
+					user_name: displayName,
+					partner_name: partnerName,
+					affection: parseInt(affection, 10),
+					persona_preset: personaPreset,
+					persona_prompt: personaPrompt,
+				},
 			}),
 		});
 

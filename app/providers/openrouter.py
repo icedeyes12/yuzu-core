@@ -64,7 +64,7 @@ class OpenRouterProvider(AIProvider):
             "openrouter/owl-alpha",
         ]
 
-    def get_models(self) -> list[str]:
+    async def get_models(self) -> list[str]:
         return self.available_models
 
     def _prepare_payload(
