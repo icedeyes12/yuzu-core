@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 
 from collections.abc import AsyncIterator
 import json
@@ -14,10 +15,10 @@ class YuzuClient:
     database models or internal services.
     """
 
-    def __init__(
-        self, base_url: str = "http://localhost:5000", timeout: float = 60.0
-    ) -> None:
-        self.base_url = base_url.rstrip("/")
+    def __init__(self, base_url: str | None = None, timeout: float = 60.0) -> None:
+        self.base_url = (
+            base_url or os.getenv("YUZU_BACKEND_URL", "http://localhost:5000")
+        ).rstrip("/")
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
 

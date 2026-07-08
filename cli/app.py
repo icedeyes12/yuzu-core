@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 
 import asyncio
 import httpx
@@ -39,16 +40,18 @@ class YuzuTUI(App):
         Binding("shift+tab", "focus_previous", "Prev", show=False),
     ]
 
-    def __init__(self, backend_url: str = "http://localhost:5000") -> None:
+    def __init__(self, backend_url: str | None = None) -> None:
         super().__init__()
-        self.backend_url = backend_url
-        self.client = YuzuClient(base_url=backend_url)
+        self.backend_url = backend_url or os.getenv(
+            "YUZU_BACKEND_URL", "http://localhost:5000"
+        )
+        self.client = YuzuClient(base_url=self.backend_url)
         self._processing = False
         self._session_id: int = 1
         self._sidebar_visible = False
         self._last_response_widget: Static | None
         self._response_start_time: float | None = None
-        log.info(f"YuzuTUI initialized with backend: {backend_url}")
+        log.info(f"YuzuTUI initialized with backend: {self.backend_url}")
 
     def compose(self) -> ComposeResult:
         """Compose the main application layout."""
@@ -359,8 +362,10 @@ class YuzuTUI(App):
             log.error(f"Failed to toggle sidebar: {e}")
 
 
-def run_app(backend_url: str = "http://localhost:5000") -> None:
+def run_app(backend_url: str | None = None) -> None:
     """Entry point for the Yuzu Companion TUI."""
+    backend_url = backend_url or os.getenv("YUZU_BACKEND_URL", "http://localhost:5000")
+    print(f"Yuzu Companion CLI (v1.0.0) connecting to {backend_url}")
     app = YuzuTUI(backend_url=backend_url)
     app.run()
 
