@@ -126,8 +126,6 @@ class ChutesProvider(AIProvider):
     async def send_message(
         self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
     ) -> str | None:
-        if ctx.model not in self.available_models:
-            return None
 
         log_prefix = kwargs.pop("log_prefix", "[CHAT]")
         kwargs.pop("model", None)
@@ -280,19 +278,6 @@ class ChutesProvider(AIProvider):
     async def _send_message_streaming_impl(
         self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
-        if ctx.model not in self.available_models:
-            reason = (
-                "missing API key"
-                if not ctx.api_key
-                else f"model {ctx.model} not in available"
-            )
-            logger.warning("Chutes stream aborted: %s", reason)
-            yield (
-                "\n[System] Chutes provider error: "
-                + reason
-                + ". Please check configuration."
-            )
-            return
 
         try:
             headers, payload = self._prepare_payload(

@@ -36,8 +36,6 @@ class CerebrasProvider(AIProvider):
     async def send_message(
         self, ctx: LLMContext, messages: list[dict], **kwargs
     ) -> str | None:
-        if ctx.model not in self.available_models:
-            return None
 
         try:
             messages = self._normalize_messages(messages)
@@ -85,9 +83,6 @@ class CerebrasProvider(AIProvider):
     async def _send_message_streaming_impl(
         self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
-        if ctx.model not in self.available_models:
-            yield ""
-            return
 
         try:
             messages = self._normalize_messages(messages)
