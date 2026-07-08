@@ -124,8 +124,8 @@ async function loadProfileData() {
 		setValueIfExists("persona-preset", data.persona_preset || "warm");
 		setValueIfExists("persona-prompt", data.persona_prompt || "");
 
-		const prefProvider = data.providers_config?.preferred_provider;
-		const prefModel = data.providers_config?.preferred_model;
+		const prefProvider = data.current_provider;
+		const prefModel = data.current_model;
 		setTextIfExists(
 			"current-provider",
 			prefProvider && prefModel
@@ -195,7 +195,7 @@ async function loadProviderSettings() {
 		providersList.forEach((provObj) => {
 			const provider = provObj.id;
 			const isCustom = provObj.custom;
-			const isActive = provider === data.providers_config?.preferred_provider;
+			const isActive = provider === data.current_provider;
 
 			const card = document.createElement("div");
 			card.className = `provider-card ${isActive ? "active-provider" : ""}`;
@@ -236,14 +236,12 @@ async function loadProviderSettings() {
 			if (modelsForThisProv.length > 0) {
 				modelsForThisProv.forEach((m) => {
 					const selected =
-						isActive && m === data.providers_config?.preferred_model
-							? "selected"
-							: "";
+						isActive && m === data.current_model ? "selected" : "";
 					innerHtml += `<option value="${m}" ${selected}>${m}</option>`;
 				});
 			} else {
-				if (isActive && data.providers_config?.preferred_model) {
-					innerHtml += `<option value="${data.providers_config.preferred_model}" selected>${data.providers_config.preferred_model}</option>`;
+				if (isActive && data.current_model) {
+					innerHtml += `<option value="${data.current_model}" selected>${data.current_model}</option>`;
 				} else {
 					innerHtml += `<option value="">Fetch models first...</option>`;
 				}
