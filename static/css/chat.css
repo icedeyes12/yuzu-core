@@ -17,17 +17,47 @@
 /* ==================== BASE STYLES ==================== */
 html,
 body {
-	overflow: hidden;
 	height: 100%;
 	margin: 0;
 	padding: 0;
+	overflow: hidden;
 }
 
-.chat-app {
-	position: relative;
-	height: 100vh;
-	overflow: hidden;
+body {
 	display: flex;
 	flex-direction: column;
-	background: var(--bg-color);
+	min-height: 100vh;
+}
+
+.chat-layout {
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+	overflow: hidden;
+}
+
+.chat-container {
+	padding-top: 64px;
+	padding-bottom: 7rem;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.input-area {
+	left: 0;
+	right: 0;
+}
+
+.scroll-to-bottom-btn {
+	position: fixed;
+	right: 1rem;
+	bottom: 6.5rem;
+	z-index: 40;
+}
+
+/* When the sidebar opens, keep the chat surface from feeling frozen */
+.chat-layout > .chat-container {
+	overflow-y: auto;
+	overflow-x: hidden;
+	overflow-anchor: none;
 }

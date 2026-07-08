@@ -14,7 +14,7 @@
 	flex-direction: column;
 	backdrop-filter: var(--backdrop-blur);
 	box-shadow: 4px 0 25px var(--shadow-base);
-	overflow-y: auto;
+	overflow: hidden;
 }
 
 .sidebar.open {
@@ -44,6 +44,7 @@
 	padding: 1.2rem;
 	border-bottom: 1.5px solid var(--accent-secondary);
 	background: var(--header-bg);
+	flex-shrink: 0;
 }
 
 .sidebar-header h2 {
@@ -77,15 +78,16 @@
 	flex: 1;
 	padding: 1rem;
 	overflow-y: auto;
+	overflow-x: hidden;
 }
 
 .sidebar-section {
-	margin-bottom: 2rem;
+	margin-bottom: 1.5rem;
 }
 
 .sidebar-section h3 {
-	margin: 0 0 1rem 0;
-	font-size: 1rem;
+	margin: 0 0 0.8rem 0;
+	font-size: 0.95rem;
 	color: var(--accent-primary);
 	font-weight: 600;
 	text-transform: uppercase;
@@ -109,11 +111,7 @@
 }
 
 .sidebar-link.active {
-	background: linear-gradient(
-		135deg,
-		rgba(255, 182, 193, 0.2),
-		rgba(221, 160, 221, 0.2)
-	);
+	background: linear-gradient(135deg, rgba(255, 182, 193, 0.2), rgba(221, 160, 221, 0.2));
 	border: 1px solid var(--accent-primary);
 }
 
@@ -122,6 +120,7 @@
 	font-size: 1.2rem;
 	width: 24px;
 	text-align: center;
+	flex-shrink: 0;
 }
 
 /* Custom Dropdown Styles */
@@ -142,6 +141,7 @@
 	color: var(--text-color);
 	cursor: pointer;
 	font-weight: 500;
+	width: 100%;
 }
 
 .dropdown-selected:hover {
@@ -262,6 +262,18 @@
 	background: var(--button-hover);
 }
 
+.sessions-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	max-height: min(44vh, 26rem);
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
 /* Session item with actions */
 .sidebar-session-item {
 	display: flex;
@@ -271,8 +283,8 @@
 	border: 1px solid rgba(255, 255, 255, 0.1);
 	border-radius: 8px;
 	padding: 0.8rem;
-	margin-bottom: 0.5rem;
 	cursor: pointer;
+	gap: 0.75rem;
 }
 
 .sidebar-session-item:hover {
@@ -281,11 +293,7 @@
 }
 
 .sidebar-session-item.active {
-	background: linear-gradient(
-		135deg,
-		rgba(255, 182, 193, 0.2),
-		rgba(221, 160, 221, 0.2)
-	);
+	background: linear-gradient(135deg, rgba(255, 182, 193, 0.2), rgba(221, 160, 221, 0.2));
 	border-color: var(--accent-primary);
 }
 
@@ -330,6 +338,7 @@
 	opacity: 0;
 	transition: opacity 0.2s ease;
 	margin-left: 8px;
+	flex-shrink: 0;
 }
 
 .sidebar-session-item:hover .session-actions {
@@ -384,29 +393,17 @@
 }
 
 .session-notification.success {
-	background: linear-gradient(
-		135deg,
-		rgba(76, 175, 80, 0.9),
-		rgba(56, 142, 60, 0.9)
-	);
+	background: linear-gradient(135deg, rgba(76, 175, 80, 0.9), rgba(56, 142, 60, 0.9));
 	color: white;
 }
 
 .session-notification.error {
-	background: linear-gradient(
-		135deg,
-		rgba(244, 67, 54, 0.9),
-		rgba(198, 40, 40, 0.9)
-	);
+	background: linear-gradient(135deg, rgba(244, 67, 54, 0.9), rgba(198, 40, 40, 0.9));
 	color: white;
 }
 
 .session-notification.info {
-	background: linear-gradient(
-		135deg,
-		rgba(33, 150, 243, 0.9),
-		rgba(25, 118, 210, 0.9)
-	);
+	background: linear-gradient(135deg, rgba(33, 150, 243, 0.9), rgba(25, 118, 210, 0.9));
 	color: white;
 }
 
@@ -423,23 +420,24 @@
 
 /* Loading and empty states */
 .loading,
-.no-sessions {
+.no-sessions,
+.error {
 	text-align: center;
-	padding: 1.5rem;
-	color: var(--text-secondary);
-	font-style: italic;
-	background: rgba(255, 255, 255, 0.05);
+	padding: 1.25rem;
 	border-radius: 8px;
+	font-style: italic;
+}
+
+.loading,
+.no-sessions {
+	color: var(--text-secondary);
+	background: rgba(255, 255, 255, 0.05);
 	border: 1px dashed rgba(255, 255, 255, 0.1);
 }
 
 .error {
-	text-align: center;
-	padding: 1.5rem;
 	color: #ff6b6b;
-	font-style: italic;
 	background: rgba(255, 107, 107, 0.1);
-	border-radius: 8px;
 	border: 1px dashed rgba(255, 107, 107, 0.3);
 }
 
@@ -545,7 +543,7 @@
 	}
 
 	.sidebar-section {
-		margin-bottom: 1.5rem;
+		margin-bottom: 1.25rem;
 	}
 
 	.sidebar-link {
