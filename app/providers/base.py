@@ -267,7 +267,7 @@ class AIProvider:
         self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
         """Yield raw chunks from the provider. Default delegates to abstract impl."""
-        suppress_tools = kwargs.get("suppress_tools", False)
+        suppress_tools = kwargs.pop("suppress_tools", False)
         async for chunk in self._send_message_streaming_impl(
             ctx, messages, source=source, suppress_tools=suppress_tools, **kwargs
         ):
