@@ -493,38 +493,35 @@ async def build_messages(
     # Apply token-based trimming
     history = _trim_history_to_token_limit(history, MAX_HISTORY_TOKENS)
 
-    # ── Collect last N image paths globally (across all roles) ─────────
-    last_images: list[tuple[str, str]] = []  # (path, role)
+    # ── Keep only the 3 MOST RECENT images globally ─────────
+    images_kept = 0
     for msg in reversed(history):
         paths = msg.get("image_paths") or []
+        valid_paths = []
         if paths:
             for p in reversed(paths):
-                if len(last_images) >= _MAX_EMBEDDED_IMAGES:
-                    break
-                last_images.append((p, msg.get("role", "")))
-        if len(last_images) >= _MAX_EMBEDDED_IMAGES:
-            break
-    allowed_set = {p for p, _ in last_images}
+                if images_kept < _MAX_EMBEDDED_IMAGES and os.path.exists(p):
+                    valid_paths.insert(0, p)
+                    images_kept += 1
+        msg["_valid_paths"] = valid_paths
 
-    # ── Convert messages with image_paths to multimodal content ────────
+    # ── Convert messages with valid images to multimodal content ────────
     result: list[dict[str, Any]] = [{"role": "system", "content": system_message}]
     for msg in history:
         role = msg.get("role", "")
         content = msg.get("content", "")
-        paths = msg.get("image_paths") or []
+        valid_paths = msg.get("_valid_paths", [])
         tool_calls = msg.get("tool_calls")
         tool_call_id = msg.get("tool_call_id")
 
-        if paths:
-            valid_paths = [p for p in paths if p in allowed_set and os.path.exists(p)]
-            if valid_paths:
-                m = _build_multimodal_message(role, content, valid_paths)
-                if tool_calls:
-                    m["tool_calls"] = tool_calls
-                if tool_call_id:
-                    m["tool_call_id"] = tool_call_id
-                result.append(m)
-                continue
+        if valid_paths:
+            m = _build_multimodal_message(role, content, valid_paths)
+            if tool_calls:
+                m["tool_calls"] = tool_calls
+            if tool_call_id:
+                m["tool_call_id"] = tool_call_id
+            result.append(m)
+            continue
 
         m = {"role": role, "content": content}
         if tool_calls:

@@ -407,6 +407,14 @@ export class MultimodalManager {
 				const contentDiv = this._getContentDivForMessage(messageId);
 				if (contentDiv) {
 					this.renderStreamChunk(contentDiv, localBuffer, true);
+
+					const msgEl = contentDiv.closest(".message");
+					if (msgEl) {
+						const copyBtn = msgEl.querySelector(".copy-message-btn");
+						if (copyBtn) {
+							copyBtn.setAttribute("data-message-content", localBuffer);
+						}
+					}
 				}
 			}
 
@@ -460,6 +468,18 @@ export class MultimodalManager {
 			// Initialize table copy buttons during streaming
 			if (typeof renderer !== "undefined") {
 				renderer.initializeTableCopyButtons(contentDiv);
+			}
+
+			// Bug 1 Fix: trigger global highlight and mermaid on complete
+			if (isComplete) {
+				setTimeout(() => {
+					if (typeof hljs !== "undefined") {
+						hljs.highlightAll();
+					}
+					if (typeof mermaid !== "undefined") {
+						mermaid.init();
+					}
+				}, 0);
 			}
 		} else {
 			// Fallback: just show raw text
@@ -659,6 +679,15 @@ export class MultimodalManager {
 
 			// Final render
 			this.renderStreamChunk(contentDiv, accumulatedText, true);
+
+			const msgEl = contentDiv.closest(".message");
+			if (msgEl) {
+				const copyBtn = msgEl.querySelector(".copy-message-btn");
+				if (copyBtn) {
+					copyBtn.setAttribute("data-message-content", accumulatedText);
+				}
+			}
+
 			this.clearInput();
 		} catch (error) {
 			console.error("Image generation failed:", error);
@@ -699,7 +728,7 @@ export class MultimodalManager {
 			sendBtn.style.opacity = "1";
 		} else {
 			sendBtn.disabled = false;
-			sendBtn.textContent = "Send";
+			sendBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
 			sendBtn.classList.remove("stop-mode");
 			sendBtn.style.opacity = "1";
 		}

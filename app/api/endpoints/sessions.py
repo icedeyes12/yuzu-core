@@ -82,7 +82,7 @@ async def api_create_session(
     user_id: str = Depends(get_current_user),
 ):
     try:
-        session_id = await create_session_async(request.name, user_id)
+        session_id = await create_session_async(request.name, user_id=user_id)
         await switch_session_async(session_id, user_id)
 
         client_id = get_client_id(http_request)

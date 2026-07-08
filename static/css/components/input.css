@@ -41,7 +41,11 @@
 	min-width: 42px;
 	height: 42px;
 	border-radius: 50%;
-	background: linear-gradient(135deg, var(--accent-color), var(--accent-primary));
+	background: linear-gradient(
+		135deg,
+		var(--accent-color),
+		var(--accent-primary)
+	);
 	color: white;
 	border: none;
 	cursor: pointer;
@@ -50,7 +54,9 @@
 	align-items: center;
 	justify-content: center;
 	box-shadow: 0 4px 12px var(--shadow-accent);
-	transition: transform 0.2s ease, box-shadow 0.2s ease;
+	transition:
+		transform 0.2s ease,
+		box-shadow 0.2s ease;
 }
 
 #sendButton svg {

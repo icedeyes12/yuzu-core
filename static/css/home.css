@@ -194,7 +194,9 @@
 	color: var(--accent-primary);
 	margin-bottom: 1rem;
 	opacity: 0.9;
-	transition: transform 0.3s ease, color 0.3s ease;
+	transition:
+		transform 0.3s ease,
+		color 0.3s ease;
 }
 
 .card:hover .card-icon {
