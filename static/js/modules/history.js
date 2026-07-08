@@ -7,6 +7,35 @@ import {
 	findMessageById,
 	isRenderableHistoryRole,
 } from "./messages.js";
+
+function formatToolCall(toolCall) {
+	const name = toolCall.function?.name || "tool";
+	const args = toolCall.function?.arguments || "{}";
+	let parsedArgs = args;
+	try {
+		parsedArgs = JSON.stringify(JSON.parse(args), null, 2);
+	} catch (_e) {}
+	return `<details class="system-action-block tool-call-block" open><summary class="action-header">⚙️ Call: ${name}</summary><pre class="action-content"><code>${parsedArgs}</code></pre></details>`;
+}
+
+function formatToolResult(contentStr) {
+	try {
+		const parsed = JSON.parse(contentStr);
+		const ok = parsed.ok ?? true;
+		const statusIcon = ok ? "✅" : "❌";
+		let markdown = parsed.markdown || contentStr;
+		if (parsed.data?.image_path) {
+			const encodedPath = encodeURI(
+				`/${parsed.data.image_path.replace(/^\/+/, "")}`,
+			);
+			markdown += `\n\n<img src="${encodedPath}" alt="Tool Output Image">`;
+		}
+		return `<details class="tool-result" open><summary>${statusIcon} Tool Result</summary><div class="tool-result-content">${markdown}</div></details>`;
+	} catch (_e) {
+		return contentStr;
+	}
+}
+
 import { scrollToBottom } from "./scroll.js";
 import { hideChatSkeleton, showChatSkeleton } from "./skeleton.js";
 import { MESSAGES_PER_PAGE } from "./state.js";
@@ -109,18 +138,22 @@ export async function loadChatHistory(sessionId = null) {
 						role: msg.role,
 						preview: String(msg.content || "").slice(0, 200),
 					});
+					let contentToRender = msg.content;
+					if (msg.role === "tool") {
+						contentToRender = formatToolResult(msg.content);
+					}
 					const msgElement = createMessageElement(
 						msg.role === "user" ? "user" : "ai",
-						msg.content,
+						contentToRender,
 						msg.timestamp,
 					);
 					if (msg.tool_calls && msg.tool_calls.length > 0) {
 						const tcDiv = document.createElement("div");
 						tcDiv.className = "tool-calls-container";
-						tcDiv.innerHTML = `<pre class="tool-call"><code>${JSON.stringify(msg.tool_calls, null, 2)}</code></pre>`;
+						tcDiv.innerHTML = msg.tool_calls.map(formatToolCall).join("\n");
 						const contentDiv = msgElement.querySelector(".message-content");
 						if (contentDiv) {
-							contentDiv.appendChild(tcDiv);
+							contentDiv.prepend(tcDiv);
 						}
 					}
 					fragment.appendChild(msgElement);
@@ -287,15 +320,19 @@ export function addScrollLoadListener(fullHistory) {
 							role: msg.role,
 							preview: String(msg.content || "").slice(0, 200),
 						});
+						let contentToRender = msg.content;
+						if (msg.role === "tool") {
+							contentToRender = formatToolResult(msg.content);
+						}
 						const msgElement = createMessageElement(
 							msg.role === "user" ? "user" : "ai",
-							msg.content,
+							contentToRender,
 							msg.timestamp,
 						);
 						if (msg.tool_calls && msg.tool_calls.length > 0) {
 							const tcDiv = document.createElement("div");
 							tcDiv.className = "tool-calls-container";
-							tcDiv.innerHTML = `<pre class="tool-call"><code>${JSON.stringify(msg.tool_calls, null, 2)}</code></pre>`;
+							tcDiv.innerHTML = msg.tool_calls.map(formatToolCall).join("\n");
 							const contentDiv = msgElement.querySelector(".message-content");
 							if (contentDiv) {
 								contentDiv.appendChild(tcDiv);
