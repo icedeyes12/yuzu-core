@@ -38,25 +38,35 @@
 }
 
 #sendButton {
-	min-width: 70px;
+	min-width: 42px;
 	height: 42px;
-	background: var(--accent-primary);
+	border-radius: 50%;
+	background: linear-gradient(135deg, var(--accent-color), var(--accent-primary));
 	color: white;
 	border: none;
-	border-radius: 20px;
-	font-weight: 600;
 	cursor: pointer;
 	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-shadow: 0 4px 12px var(--shadow-accent);
+	transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+#sendButton svg {
+	margin-right: 2px;
+	margin-top: 2px;
 }
 
 #sendButton:hover {
-	background: var(--accent-primary);
-	transform: scale(1.05);
+	transform: scale(1.1) translateY(-2px);
+	box-shadow: 0 6px 16px var(--shadow-accent);
 }
 
 #sendButton:disabled {
 	opacity: 0.6;
 	cursor: not-allowed;
+	transform: none;
 }
 
 #sendButton.stop-mode {

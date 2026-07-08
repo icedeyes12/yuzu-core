@@ -162,3 +162,42 @@
 		font-size: 1.3rem;
 	}
 }
+
+.header-subtitle {
+	display: flex;
+	gap: 0.75rem;
+	justify-content: center;
+	align-items: center;
+	margin-top: 1rem;
+}
+
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.4rem 1rem;
+	background: var(--surface-elevated);
+	border: 1px solid var(--border-lavender, var(--border-secondary));
+	border-radius: 9999px;
+	font-size: 0.95rem;
+	color: var(--text-secondary);
+	backdrop-filter: blur(8px);
+	box-shadow: var(--shadow-soft);
+}
+
+.affection-chip {
+	color: var(--accent-primary);
+	border-color: var(--border-primary);
+}
+
+.card-icon {
+	color: var(--accent-primary);
+	margin-bottom: 1rem;
+	opacity: 0.9;
+	transition: transform 0.3s ease, color 0.3s ease;
+}
+
+.card:hover .card-icon {
+	transform: scale(1.1) rotate(-5deg);
+	color: var(--accent-highlight);
+}

@@ -254,6 +254,21 @@ async function loadProviderSettings() {
 
 			card.innerHTML = innerHtml;
 			grid.appendChild(card);
+
+			// Add accordion toggle
+			const header = card.querySelector(".provider-header");
+			const body = card.querySelector(".provider-body");
+			const icon = header.querySelector("span:last-child");
+
+			// Set initial icon
+			if (icon) icon.textContent = isActive ? "▲" : "▼";
+
+			header.addEventListener("click", () => {
+				const isExpanded = body.style.display === "block";
+				body.style.display = isExpanded ? "none" : "block";
+				header.setAttribute("aria-expanded", !isExpanded);
+				if (icon) icon.textContent = isExpanded ? "▼" : "▲";
+			});
 		});
 
 		document.querySelectorAll(".save-byok-btn").forEach((btn) => {
@@ -1165,7 +1180,18 @@ async function loadGlobalKnowledge() {
 		const data = await response.json();
 
 		const globalKnowledge = data.global_knowledge || {};
-		setValueIfExists("global-knowledge", globalKnowledge.facts || "");
+		let gkText = "";
+		if (typeof globalKnowledge === "string") {
+			gkText = globalKnowledge;
+		} else if (globalKnowledge.facts) {
+			gkText =
+				typeof globalKnowledge.facts === "string"
+					? globalKnowledge.facts
+					: JSON.stringify(globalKnowledge.facts, null, 2);
+		} else if (Object.keys(globalKnowledge).length > 0) {
+			gkText = JSON.stringify(globalKnowledge, null, 2);
+		}
+		setValueIfExists("global-knowledge", gkText);
 
 		console.log("Global knowledge loaded");
 	} catch (error) {
