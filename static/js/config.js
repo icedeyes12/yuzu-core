@@ -178,10 +178,18 @@ async function loadProviderSettings() {
 		);
 
 		const providersList = [
-			{ id: "chutes", name: "Chutes", custom: false },
 			{ id: "openrouter", name: "OpenRouter", custom: false },
+			{ id: "openai", name: "OpenAI", custom: false },
+			{ id: "anthropic", name: "Anthropic", custom: false },
+			{ id: "google", name: "Google (Gemini)", custom: false },
+			{ id: "grok", name: "xAI (Grok)", custom: false },
+			{ id: "groq", name: "Groq", custom: false },
+			{ id: "deepseek", name: "DeepSeek", custom: false },
 			{ id: "cerebras", name: "Cerebras", custom: false },
+			{ id: "chutes", name: "Chutes", custom: false },
 			{ id: "ollama", name: "Ollama (Local)", custom: true },
+			{ id: "custom_openai", name: "Custom OpenAI", custom: true },
+			{ id: "custom_anthropic", name: "Custom Anthropic", custom: true },
 		];
 
 		providersList.forEach((provObj) => {
