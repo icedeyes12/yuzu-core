@@ -236,9 +236,21 @@ def _global_knowledge_block(profile: dict[str, Any]) -> str:
         except Exception:
             return ""
 
-    facts = global_knowledge.get("facts") or []
+    facts = global_knowledge.get("facts")
     if not facts:
         return ""
+
+    if isinstance(facts, str):
+        import json
+        try:
+            parsed = json.loads(facts)
+            if isinstance(parsed, list):
+                facts = parsed
+            else:
+                facts = [facts]
+        except Exception:
+            # Not valid JSON, split by lines if multiple
+            facts = [line.strip() for line in facts.split("\n") if line.strip()]
 
     lines = []
     for fact in facts:
@@ -459,12 +471,19 @@ async def build_messages(
         provider_supports_fc=provider_supports_fc,
     )
 
+    # Fetch advanced settings limits
+    context_settings = profile.get("context", {})
+    history_limit = int(context_settings.get("history_limit", 100))
+    # If the user sets it to 0 or very small, enforce a minimum sanity limit of 5
+    if history_limit < 5:
+        history_limit = 5
+
     # HARD CAP: Limit history
     history = (
         await Database.get_chat_history_for_ai(
             session_id=session_id,
             user_id=user_id,
-            limit=100,
+            limit=history_limit,
             recent=True,
             include_image_paths=True,
         )

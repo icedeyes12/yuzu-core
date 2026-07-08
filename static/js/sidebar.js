@@ -32,11 +32,7 @@
 			try {
 				const raw = localStorage.getItem(window.BYOK_STORAGE_KEY);
 				if (raw) {
-					const cfg = JSON.parse(raw);
-					if (cfg.apiKey) init.headers.set("X-Provider-Key", cfg.apiKey);
-					if (cfg.provider) init.headers.set("X-Provider-Name", cfg.provider);
-					if (cfg.baseUrl) init.headers.set("X-Base-Url", cfg.baseUrl);
-					if (cfg.modelId) init.headers.set("X-Model-Id", cfg.modelId);
+					init.headers.set("X-BYOK-Config", btoa(encodeURIComponent(raw)));
 				}
 			} catch (e) {
 				console.warn("BYOK config parse failed:", e);

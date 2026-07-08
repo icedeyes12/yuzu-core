@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.core.context import (
     RequestKeyring,
-    set_request_keyring,
+    set_request_keyrings,
     clear_request_keyring,
     MissingProviderKeyError,
 )
@@ -24,21 +24,34 @@ log = get_logger(__name__)
 router = APIRouter(tags=["chat"])
 
 
-def _extract_keyring(request: Request) -> RequestKeyring | None:
-    """Read BYOK headers from the request and build a RequestKeyring."""
-    provider_name = request.headers.get("X-Provider-Name")
-    key = request.headers.get("X-Provider-Key")
-    base_url = request.headers.get("X-Base-Url")
-    model_id = request.headers.get("X-Model-Id")
-    if not key and not base_url and not model_id:
+def _extract_keyrings(request: Request) -> dict[str, RequestKeyring] | None:
+    """Read BYOK headers from the request and build a map of RequestKeyring."""
+    import json
+    import base64
+    import urllib.parse
+    
+    byok_header = request.headers.get("X-BYOK-Config")
+    if not byok_header:
         return None
-    return RequestKeyring(
-        provider=provider_name,
-        key=key,
-        base_url=base_url,
-        model_id=model_id,
-    )
-
+        
+    try:
+        raw_json = urllib.parse.unquote(base64.b64decode(byok_header).decode("utf-8"))
+        byok_config = json.loads(raw_json)
+        
+        keyrings = {}
+        for provider, cfg in byok_config.items():
+            if not isinstance(cfg, dict):
+                continue
+            keyrings[provider] = RequestKeyring(
+                provider=provider,
+                key=cfg.get("api_key"),
+                base_url=cfg.get("base_url"),
+                model_id=cfg.get("model_id"),
+            )
+        return keyrings
+    except Exception as e:
+        log.error("Failed to parse X-BYOK-Config header: %s", e)
+        return None
 
 class MessageRequest(BaseModel):
     message: str = Field(..., min_length=1, description="User message text")
@@ -51,9 +64,9 @@ async def api_send_message(
     payload: MessageRequest,
     user_id: str = Depends(get_current_user),
 ):
-    keyring = _extract_keyring(request)
-    if keyring:
-        set_request_keyring(keyring)
+    keyrings = _extract_keyrings(request)
+    if keyrings:
+        set_request_keyrings(keyrings)
     try:
         user_message = payload.message.strip()
         if not user_message:
@@ -79,7 +92,7 @@ async def api_send_message(
         log.error("Error in api_send_message: %s", type(e).__name__)
         return {"reply": "Sorry, I encountered an error processing your message."}
     finally:
-        if keyring:
+        if keyrings:
             clear_request_keyring()
 
 
@@ -117,11 +130,11 @@ async def api_send_message_stream(
 
         log.info("[%s] streaming unified message: %s...", interface, user_message[:200])
 
-        keyring = _extract_keyring(request)
+        keyrings = _extract_keyrings(request)
 
         async def _keyring_scoped_stream():
-            if keyring:
-                set_request_keyring(keyring)
+            if keyrings:
+                set_request_keyrings(keyrings)
             try:
                 async for chunk in ChatService.get_stream_generator(
                     user_message,
@@ -143,7 +156,7 @@ async def api_send_message_stream(
                 )
                 yield f"data: {payload}\n\n"
             finally:
-                if keyring:
+                if keyrings:
                     clear_request_keyring()
 
         return StreamingResponse(
