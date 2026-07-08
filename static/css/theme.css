@@ -606,7 +606,6 @@ body {
 .brain-box,
 .tool-execution,
 .agentic-status-bar {
-	transition: all 0.3s ease;
 }
 
 /* ========================================

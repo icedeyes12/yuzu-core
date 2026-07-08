@@ -371,7 +371,6 @@
 	font-size: 0.75rem;
 	color: rgba(255, 255, 255, 0.85);
 	cursor: pointer;
-	transition: all 0.2s ease;
 }
 
 .copy-code-btn:hover {
@@ -458,7 +457,6 @@
 	text-decoration: underline;
 	text-decoration-color: rgba(168, 200, 255, 0.4);
 	text-underline-offset: 2px;
-	transition: all 0.2s ease;
 }
 
 .message-content a:hover {
@@ -508,7 +506,6 @@
 	font-size: 0.8rem;
 	font-weight: 600;
 	cursor: pointer;
-	transition: all 0.2s ease;
 }
 
 .preview-btn:hover {
@@ -597,7 +594,6 @@
 	cursor: pointer;
 	position: relative;
 	background: var(--bg-secondary, transparent);
-	transition: all 0.2s ease;
 }
 
 .message-content input[type="checkbox"]:checked {
@@ -753,7 +749,6 @@
 	font-size: 0.75rem;
 	color: rgba(255, 255, 255, 0.85);
 	cursor: pointer;
-	transition: all 0.2s ease;
 }
 .copy-mermaid-btn:hover {
 	background: rgba(255, 255, 255, 0.18);
@@ -840,7 +835,6 @@
 	font-size: 0.75rem;
 	color: rgba(255, 255, 255, 0.85);
 	cursor: pointer;
-	transition: all 0.2s ease;
 }
 
 .copy-mermaid-btn:hover {

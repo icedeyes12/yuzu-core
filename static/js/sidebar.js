@@ -7,6 +7,18 @@
 // 2. Reads yuzu_byok_config from localStorage and injects X-Provider-Key,
 //    X-Base-Url, X-Model-Id headers into LLM endpoint requests.
 (() => {
+	const metaUserId =
+		document.querySelector('meta[name="user-id"]')?.content || "default";
+	window.BYOK_STORAGE_KEY = `yuzu_byok_config_${metaUserId}`;
+
+	const legacyConfig = localStorage.getItem("yuzu_byok_config");
+	if (legacyConfig) {
+		if (!localStorage.getItem(window.BYOK_STORAGE_KEY)) {
+			localStorage.setItem(window.BYOK_STORAGE_KEY, legacyConfig);
+		}
+		localStorage.removeItem("yuzu_byok_config");
+	}
+
 	const _origFetch = window.fetch;
 	const _LLM_ENDPOINTS = [
 		"/api/send_message",
@@ -23,7 +35,7 @@
 		// BYOK: inject provider config headers for LLM endpoints
 		if (_LLM_ENDPOINTS.some((ep) => url.includes(ep))) {
 			try {
-				const raw = localStorage.getItem("yuzu_byok_config");
+				const raw = localStorage.getItem(window.BYOK_STORAGE_KEY);
 				if (raw) {
 					const cfg = JSON.parse(raw);
 					if (cfg.apiKey) init.headers.set("X-Provider-Key", cfg.apiKey);
@@ -213,8 +225,10 @@ function toggleSidebar() {
 		overlay.classList.add("active");
 		hamburger.classList.add("active");
 
-		// Load sessions if on chat page
-		loadSidebarSessions();
+		// Load sessions if on chat page (always refresh when opening)
+		if (window.location.pathname.startsWith("/chat")) {
+			loadSidebarSessions();
+		}
 	}
 }
 
@@ -364,8 +378,13 @@ function loadSidebarSessions() {
 
 				data.sessions.forEach((session) => {
 					const sessionItem = document.createElement("div");
-					sessionItem.className = `sidebar-session-item ${session.is_active ? "active" : ""}`;
-
+					// Determine active state by URL path segment, not backend is_active flag
+					const urlParts = window.location.pathname.split("/").filter((p) => p);
+					const urlSessionId =
+						urlParts.length >= 2 && urlParts[0] === "chat" ? urlParts[1] : null;
+					const isCurrentSession = String(session.id) === String(urlSessionId);
+					sessionItem.className = `sidebar-session-item ${isCurrentSession ? "active" : ""}`;
+					sessionItem.setAttribute("data-session-id", session.id);
 					// Create session content
 					const sessionContent = document.createElement("div");
 					sessionContent.className = "session-content";
@@ -568,14 +587,12 @@ function switchSession(sessionId) {
 		}
 	}
 
-	// [CROSS-PAGE FIX] If we're not on the chat page, navigate to chat with session param
-	const isOnChatPage =
-		window.location.pathname === "/chat" ||
-		window.location.pathname === "/chat/";
+	// [CROSS-PAGE FIX] If we're not on a chat session page, navigate there
+	const isOnChatPage = window.location.pathname.startsWith("/chat");
 
 	if (!isOnChatPage) {
 		// Navigate to chat page with session parameter
-		window.location.href = `/chat?session=${sessionId}`;
+		window.location.href = `/chat/${sessionId}`;
 		toggleSidebar();
 		return;
 	}
@@ -715,12 +732,28 @@ document.addEventListener("DOMContentLoaded", () => {
 	// Initialize auth widget + BYOK placeholder
 	_initAuth();
 
-	// Debug: Check if elements exist
-	console.log("Sidebar elements check:");
-	console.log("- mainSidebar:", document.getElementById("mainSidebar"));
-	console.log("- themeDropdown:", document.getElementById("themeDropdown"));
-	console.log("- hamburgerMenu:", document.getElementById("hamburgerMenu"));
+	// Pre-load sessions in the background on chat pages.
+	// The sidebar list will be ready the first time the user opens it,
+	// and the active item will be highlighted correctly from the URL.
+	if (window.location.pathname.startsWith("/chat")) {
+		loadSidebarSessions();
+	}
 });
+
+/**
+ * Synchronise the sidebar active highlight to the given sessionId.
+ * Called after every session switch from chat.js so the sidebar
+ * stays in sync without a full reload.
+ * @param {string} sessionId
+ */
+function syncActiveSidebarItem(sessionId) {
+	const list = document.getElementById("sidebarSessionsList");
+	if (!list) return;
+	list.querySelectorAll(".sidebar-session-item").forEach((item) => {
+		const id = item.getAttribute("data-session-id");
+		item.classList.toggle("active", String(id) === String(sessionId));
+	});
+}
 
 // Make functions globally available
 window.toggleSidebar = toggleSidebar;
@@ -732,5 +765,6 @@ window.renameSession = renameSession;
 window.deleteSessionPrompt = deleteSessionPrompt;
 window.deleteSession = deleteSession;
 window.loadSidebarSessions = loadSidebarSessions;
+window.syncActiveSidebarItem = syncActiveSidebarItem;
 window.loginWith = loginWith;
 window.handleLogout = handleLogout;

@@ -3,96 +3,207 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configuration - Yuzu Companion</title>
-    
-    <!-- IMPORT CSS MODULES -->
-    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='css/config.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='css/sidebar.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='css/theme.css') }}">
+  <meta charset="UTF-8">
+  <meta name="user-id" content="{{ profile.user_name }}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Configure your Yuzu Companion — providers, identity, and advanced settings.">
+  <title>Configuration | Yuzu Companion</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/config.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/sidebar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/theme.css') }}">
 </head>
 <body class="config-body">
-    {% include 'sidebar.html' %}
+  {% include 'sidebar.html' %}
 
-    <header class="config-header header-content">
-        <button class="hamburger-menu hamburger" id="hamburgerMenu" onclick="toggleSidebar()">
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
-        <div class="header-title">
-            <h1>Configuration</h1>
-            <p>Customize your Yuzu Companion experience</p>
-        </div>
+  <div class="page-layout">
+    <header class="config-header header-content" role="banner">
+      <button
+        class="hamburger-menu hamburger"
+        id="hamburgerMenu"
+        onclick="toggleSidebar()"
+        aria-label="Open navigation sidebar"
+        aria-expanded="false"
+        aria-controls="mainSidebar">
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+      </button>
+      <div class="header-title">
+        <h1>Configuration</h1>
+        <p>Customize your Yuzu Companion experience</p>
+      </div>
     </header>
 
-    <main class="config-content">
-        <!-- Phase 4: Identity Section -->
-        <div class="config-section">
-            <h2>Identity Settings</h2>
-            
+    <main class="config-content" aria-label="Configuration settings">
+
+      <!-- Identity Settings -->
+      <section class="config-section" aria-labelledby="identity-heading">
+        <h2 id="identity-heading">Identity Settings</h2>
+        <form id="identity-form" novalidate>
+          <fieldset>
+            <legend class="sr-only">User and companion identity</legend>
+
             <div class="form-group">
-                <label for="display-name">User Name (Your Name):</label>
-                <input type="text" id="display-name" value="{{ profile.user_name }}" placeholder="How should the AI call you?">
+              <label for="display-name">Your Name</label>
+              <input
+                type="text"
+                id="display-name"
+                name="display-name"
+                value="{{ profile.user_name }}"
+                placeholder="How should the AI call you?"
+                autocomplete="given-name">
             </div>
 
             <div class="form-group">
-                <label for="partner-name">Assistant Name:</label>
-                <input type="text" id="partner-name" value="{{ profile.partner_name }}" placeholder="Name of your AI companion">
+              <label for="partner-name">Assistant Name</label>
+              <input
+                type="text"
+                id="partner-name"
+                name="partner-name"
+                value="{{ profile.partner_name }}"
+                placeholder="Name of your AI companion">
             </div>
 
             <div class="form-group">
-                <label for="persona-preset">Persona Preset:</label>
-                <select id="persona-preset" class="form-select">
-                    <option value="warm">Warm & Empathetic</option>
-                    <option value="professional">Professional Assistant</option>
-                    <option value="smug">Smug & Teasing</option>
-                    <option value="pirate">Pirate Captain</option>
-                    <option value="neko">Neko / Catgirl</option>
-                    <option value="custom">Custom (Write your own)</option>
-                </select>
+              <label for="persona-preset">Persona Preset</label>
+              <select id="persona-preset" name="persona-preset" class="form-select">
+                <option value="warm">Warm &amp; Empathetic</option>
+                <option value="professional">Professional Assistant</option>
+                <option value="smug">Smug &amp; Teasing</option>
+                <option value="pirate">Pirate Captain</option>
+                <option value="neko">Neko / Catgirl</option>
+                <option value="custom">Custom (Write your own)</option>
+              </select>
             </div>
 
             <div class="form-group">
-                <label for="persona-prompt">Persona Prompt:</label>
-                <textarea id="persona-prompt" rows="4" placeholder="Define the AI's personality, traits, and behavior here..."></textarea>
+              <label for="persona-prompt">Persona Prompt</label>
+              <textarea
+                id="persona-prompt"
+                name="persona-prompt"
+                rows="4"
+                placeholder="Define the AI's personality, traits, and behavior here..."></textarea>
             </div>
+          </fieldset>
+          <button id="save-profile" type="button" class="btn btn-primary">Save Identity Settings</button>
+        </form>
+      </section>
 
-            <button id="save-profile" class="btn btn-primary">Save Identity Settings</button>
+      <!-- Providers (BYOK) -->
+      <section class="config-section" aria-labelledby="providers-heading">
+        <h2 id="providers-heading">Providers (Bring Your Own Key)</h2>
+        <p class="section-description">
+          Configure your API keys directly in the browser. Keys are sent per-request and are
+          <strong>NEVER</strong> stored on the server.
+        </p>
+
+        <div class="providers-grid" id="providers-grid" role="list" aria-label="Provider list">
+          <!-- Managed by config.js dynamically -->
         </div>
 
-        <!-- Phase 4: Providers (Card-based layout) -->
-        <div class="config-section">
-            <h2>Providers (Bring Your Own Key)</h2>
-            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                Configure your API keys directly in the browser. Keys are sent per-request and are NEVER stored on the server. Select a provider below to set it as your active AI.
-            </p>
-
-            <div class="providers-grid" id="providers-grid">
-                <!-- Managed by config.js dynamically -->
-            </div>
-            
-            <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <button id="save-active-provider" class="btn btn-primary">Save Active Provider</button>
-                <button id="test-active-provider" class="btn" style="background: #10b981; color: white;">Test Active Connection</button>
-            </div>
+        <div class="config-actions">
+          <button id="save-active-provider" type="button" class="btn btn-primary">Save Active Provider</button>
+          <button id="test-active-provider" type="button" class="btn btn-success">Test Active Connection</button>
         </div>
+      </section>
 
-        <!-- Phase 5 Preview / Advanced UI Hook -->
-        <div class="config-section">
-            <h2>Advanced Settings (Coming Soon)</h2>
-            <p style="color: var(--text-secondary); font-size: 0.9rem;">
-                Generation parameters (Temperature, Top P), Memory controls, and Developer prompt configurations will be available here in Phase 5.
-            </p>
-        </div>
+      <!-- Advanced Settings -->
+      <section class="config-section" id="advanced-settings-section" aria-labelledby="advanced-heading">
+        <h2 id="advanced-heading">Advanced Settings</h2>
+        <p class="section-description">
+          Configure generation parameters, history limits, and multimodal toggles.
+        </p>
+
+        <form id="advanced-form" novalidate>
+          <fieldset>
+            <legend class="sr-only">Generation parameters</legend>
+
+            <div class="form-group">
+              <label for="adv-temperature">
+                Temperature: <output id="val-temperature" for="adv-temperature">1.0</output>
+              </label>
+              <input
+                type="range"
+                id="adv-temperature"
+                name="temperature"
+                min="0.0"
+                max="2.0"
+                step="0.1"
+                value="1.0"
+                aria-describedby="temperature-hint">
+              <span id="temperature-hint" class="form-hint">Controls randomness. Lower = more deterministic.</span>
+            </div>
+
+            <div class="form-group">
+              <label for="adv-top-p">
+                Top P: <output id="val-top-p" for="adv-top-p">1.0</output>
+              </label>
+              <input
+                type="range"
+                id="adv-top-p"
+                name="top_p"
+                min="0.0"
+                max="1.0"
+                step="0.05"
+                value="1.0"
+                aria-describedby="top-p-hint">
+              <span id="top-p-hint" class="form-hint">Nucleus sampling threshold.</span>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="sr-only">Token and history limits</legend>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="adv-max-tokens">Max Tokens</label>
+                <input
+                  type="number"
+                  id="adv-max-tokens"
+                  name="max_tokens"
+                  min="1"
+                  max="128000"
+                  value="4096">
+              </div>
+              <div class="form-group">
+                <label for="adv-history-limit">History Limit (Turns)</label>
+                <input
+                  type="number"
+                  id="adv-history-limit"
+                  name="history_limit"
+                  min="1"
+                  max="100"
+                  value="20">
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="sr-only">Feature toggles</legend>
+            <div class="toggle-row">
+              <label class="toggle-label" for="adv-reasoning">
+                <input type="checkbox" id="adv-reasoning" name="enable_reasoning">
+                <span>Enable Reasoning</span>
+              </label>
+              <label class="toggle-label" for="adv-vision">
+                <input type="checkbox" id="adv-vision" name="enable_vision">
+                <span>Enable Vision</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="config-actions">
+            <button id="save-advanced-settings" type="button" class="btn btn-primary">Save Advanced Settings</button>
+          </div>
+        </form>
+      </section>
 
     </main>
 
     {% include "partials/footer.html" %}
+  </div>
 
-    <script src="{{ url_for('static', path='js/sidebar.js') }}"></script>
-    <script src="{{ url_for('static', path='js/config.js') }}"></script>
+  <script src="{{ url_for('static', path='js/sidebar.js') }}"></script>
+  <script src="{{ url_for('static', path='js/config.js') }}"></script>
 </body>
 </html>

@@ -46,7 +46,6 @@
 	font-size: 0.8rem;
 	font-weight: 600;
 	cursor: pointer;
-	transition: all 0.2s ease;
 }
 
 .preview-btn:hover {
@@ -186,7 +185,6 @@
 	padding: 5px 7px;
 	display: flex;
 	align-items: center;
-	transition: all 0.2s;
 }
 
 .html-modal-btn:hover {

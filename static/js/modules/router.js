@@ -16,14 +16,21 @@ export class RouterManager {
 	 * @returns {string|null} Session ID (UUID) from URL or null
 	 */
 	initFromURL() {
-		const params = new URLSearchParams(window.location.search);
-		const sessionId = params.get("session");
-
-		if (sessionId) {
-			this.currentSessionId = sessionId;
+		const pathParts = window.location.pathname.split("/").filter((p) => p);
+		if (pathParts.length >= 2 && pathParts[0] === "chat") {
+			this.currentSessionId = pathParts[1];
 			console.log(
 				`[Router] Initialized with session ${this.currentSessionId} from URL`,
 			);
+		} else {
+			const params = new URLSearchParams(window.location.search);
+			const sessionId = params.get("session");
+			if (sessionId) {
+				this.currentSessionId = sessionId;
+				console.log(
+					`[Router] Fallback initialized with session ${this.currentSessionId} from query`,
+				);
+			}
 		}
 
 		this.isInitialized = true;
@@ -40,7 +47,9 @@ export class RouterManager {
 
 		this.currentSessionId = sessionId;
 		const url = new URL(window.location.href);
-		url.searchParams.set("session", sessionId.toString());
+
+		url.pathname = `/chat/${sessionId}`;
+		url.searchParams.delete("session");
 
 		window.history.pushState({ sessionId }, "", url);
 		console.log(`[Router] URL updated to session ${sessionId}`);

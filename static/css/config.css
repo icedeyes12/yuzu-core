@@ -1,5 +1,18 @@
 /* FILE: static/css/config.css */
 /* DESCRIPTION: Configuration page styling with theme support */
+
+/* ── Color tokens specific to config UI ── */
+:root {
+	--color-warning: #f59e0b;
+	--color-warning-hover: #d97706;
+	--color-danger: #ef4444;
+	--color-danger-hover: #dc2626;
+	--color-info: #8b5cf6;
+	--color-info-hover: #7c3aed;
+	--color-status-connected: #10b981;
+	--color-status-disconnected: #059669;
+}
+
 .config-body {
 	padding-top: 80px;
 	padding-bottom: 50px;
@@ -7,7 +20,6 @@
 	display: flex;
 	flex-direction: column;
 	background: var(--bg-color);
-	transition: all 0.3s ease;
 }
 
 /* Fixed Header - Mobile Optimized */
@@ -22,7 +34,6 @@
 	background: var(--header-bg);
 	backdrop-filter: var(--backdrop-blur);
 	border-bottom: 1.5px solid var(--accent-secondary);
-	transition: all 0.3s ease;
 }
 
 .header-content {
@@ -47,7 +58,6 @@
 	font-size: 1.5rem;
 	font-weight: 700;
 	color: var(--accent-secondary);
-	transition: all 0.3s ease;
 }
 
 .config-header p {
@@ -55,7 +65,6 @@
 	color: var(--accent-primary);
 	font-weight: 500;
 	font-size: 0.9rem;
-	transition: all 0.3s ease;
 }
 
 /* Config Content Area */
@@ -67,7 +76,6 @@
 	max-width: 600px;
 	margin: 0 auto;
 	width: 100%;
-	transition: all 0.3s ease;
 }
 
 /* Config Sections */
@@ -79,7 +87,6 @@
 	backdrop-filter: var(--backdrop-blur);
 	border: 1.5px solid var(--border-lavender);
 	box-shadow: var(--shadow-soft);
-	transition: all 0.3s ease;
 }
 
 .config-section:hover {
@@ -95,13 +102,11 @@
 	color: var(--accent-secondary);
 	border-bottom: 1.5px solid var(--border-lavender);
 	padding-bottom: 0.5rem;
-	transition: all 0.3s ease;
 }
 
 /* Form Elements */
 .form-group {
 	margin-bottom: 0.8rem;
-	transition: all 0.3s ease;
 }
 
 .form-group label {
@@ -110,7 +115,6 @@
 	font-weight: 600;
 	color: var(--accent-primary);
 	font-size: 0.9rem;
-	transition: all 0.3s ease;
 }
 
 .form-group input,
@@ -123,7 +127,6 @@
 	color: var(--text-color);
 	font-size: 0.9rem;
 	backdrop-filter: var(--backdrop-blur);
-	transition: all 0.3s ease;
 	font-family: inherit;
 }
 
@@ -189,7 +192,6 @@ textarea {
 	font-family: inherit;
 	resize: vertical;
 	min-height: 80px;
-	transition: all 0.3s ease;
 }
 
 textarea:focus {
@@ -205,7 +207,6 @@ textarea:focus {
 	border-radius: 8px;
 	cursor: pointer;
 	font-weight: 600;
-	transition: all 0.3s ease;
 	backdrop-filter: var(--backdrop-blur);
 	border: 1.5px solid transparent;
 	font-size: 0.9rem;
@@ -231,27 +232,27 @@ textarea:focus {
 
 /* Button variants */
 .btn-success {
-	background: #10b981;
+	background: var(--color-success, #10b981);
 	color: white;
-	border-color: #059669;
+	border-color: var(--color-success-hover, #059669);
 }
 
 .btn-warning {
-	background: #f59e0b;
+	background: var(--color-warning, #f59e0b);
 	color: white;
-	border-color: #d97706;
+	border-color: var(--color-warning-hover, #d97706);
 }
 
 .btn-danger {
-	background: #ef4444;
+	background: var(--color-danger, #ef4444);
 	color: white;
-	border-color: #dc2626;
+	border-color: var(--color-danger-hover, #dc2626);
 }
 
 .btn-info {
-	background: #8b5cf6;
+	background: var(--color-info, #8b5cf6);
 	color: white;
-	border-color: #7c3aed;
+	border-color: var(--color-info-hover, #7c3aed);
 }
 
 /* Provider Status */
@@ -262,21 +263,19 @@ textarea:focus {
 	margin: 0.8rem 0;
 	font-size: 0.9rem;
 	border: 1px solid var(--border-lavender);
-	transition: all 0.3s ease;
 }
 
 .provider-status p {
 	margin: 0.3rem 0;
-	transition: all 0.3s ease;
 }
 
 .status-connected {
-	color: #10b981;
+	color: var(--color-status-connected, #10b981);
 	font-weight: 600;
 }
 
 .status-disconnected {
-	color: #ef4444;
+	color: var(--color-status-disconnected, #ef4444);
 	font-weight: 600;
 }
 
@@ -289,12 +288,10 @@ textarea:focus {
 .memory-stats {
 	font-size: 0.9rem;
 	line-height: 1.4;
-	transition: all 0.3s ease;
 }
 
 .memory-stats p {
 	margin: 0.3rem 0;
-	transition: all 0.3s ease;
 }
 
 .memory-stats strong {
@@ -310,7 +307,6 @@ textarea:focus {
 	max-height: 150px;
 	background: var(--input-bg);
 	border: 1.5px solid var(--border-lavender);
-	transition: all 0.3s ease;
 }
 
 #global-knowledge:focus {
@@ -335,7 +331,6 @@ textarea:focus {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	transition: all 0.3s ease;
 }
 
 #keys-list li:hover {
@@ -501,12 +496,10 @@ textarea:focus,
 	background: var(--header-bg);
 	border-top: 1.5px solid var(--accent-secondary);
 	backdrop-filter: var(--backdrop-blur);
-	transition: all 0.3s ease;
 }
 
 .footer-link {
 	cursor: pointer;
-	transition: all 0.2s ease;
 	text-decoration: underline;
 	text-decoration-color: rgba(255, 255, 255, 0.4);
 	text-underline-offset: 2px;
@@ -523,51 +516,50 @@ textarea:focus,
 
 /* Provider Cards Grid */
 .providers-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1rem;
-    margin-top: 1rem;
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	gap: 1rem;
+	margin-top: 1rem;
 }
 
 .provider-card {
-    background: var(--input-bg);
-    border: 1.5px solid var(--border-lavender);
-    border-radius: 8px;
-    padding: 1.2rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-    transition: all 0.3s ease;
+	background: var(--input-bg);
+	border: 1.5px solid var(--border-lavender);
+	border-radius: 8px;
+	padding: 1.2rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.8rem;
 }
 
 .provider-card:hover {
-    border-color: var(--accent-primary);
-    box-shadow: 0 4px 15px var(--shadow-accent);
+	border-color: var(--accent-primary);
+	box-shadow: 0 4px 15px var(--shadow-accent);
 }
 
 .provider-card h3 {
-    margin: 0;
-    font-size: 1.1rem;
-    color: var(--accent-secondary);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+	margin: 0;
+	font-size: 1.1rem;
+	color: var(--accent-secondary);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
 }
 
 .provider-card.active-provider {
-    border-color: var(--accent-mint);
-    box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+	border-color: var(--accent-mint);
+	box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
 }
 
 .provider-card .badge-active {
-    font-size: 0.7rem;
-    background: var(--accent-mint);
-    color: #fff;
-    padding: 2px 6px;
-    border-radius: 12px;
-    text-transform: uppercase;
+	font-size: 0.7rem;
+	background: var(--accent-mint);
+	color: #fff;
+	padding: 2px 6px;
+	border-radius: 12px;
+	text-transform: uppercase;
 }
 
 .provider-card .form-group {
-    margin-bottom: 0;
+	margin-bottom: 0;
 }

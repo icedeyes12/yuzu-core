@@ -100,7 +100,6 @@
 	text-decoration: none;
 	border-radius: 10px;
 	margin-bottom: 0.5rem;
-	transition: all 0.2s ease;
 	font-weight: 500;
 }
 
@@ -142,7 +141,6 @@
 	background: var(--input-bg);
 	color: var(--text-color);
 	cursor: pointer;
-	transition: all 0.2s ease;
 	font-weight: 500;
 }
 
@@ -178,7 +176,6 @@
 	overflow: hidden;
 	opacity: 0;
 	visibility: hidden;
-	transition: all 0.3s ease;
 	z-index: 10002;
 	box-shadow: 0 4px 20px var(--shadow-base);
 }
@@ -196,7 +193,6 @@
 	padding: 0.8rem;
 	color: var(--text-color);
 	cursor: pointer;
-	transition: all 0.2s ease;
 	border-bottom: 1px solid var(--border-color);
 }
 
@@ -256,7 +252,6 @@
 	cursor: pointer;
 	margin-bottom: 1rem;
 	font-weight: 600;
-	transition: all 0.2s ease;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -278,7 +273,6 @@
 	padding: 0.8rem;
 	margin-bottom: 0.5rem;
 	cursor: pointer;
-	transition: all 0.2s ease;
 }
 
 .sidebar-session-item:hover {
@@ -351,7 +345,6 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	transition: all 0.2s ease;
 	color: var(--text-secondary);
 }
 
@@ -464,7 +457,6 @@
 	justify-content: center;
 	gap: 3px;
 	cursor: pointer;
-	transition: all 0.3s ease;
 	backdrop-filter: blur(10px);
 	box-shadow: 0 2px 8px var(--shadow-base);
 }
@@ -473,7 +465,6 @@
 	width: 16px;
 	height: 2px;
 	background: var(--text-color);
-	transition: all 0.3s ease;
 }
 
 .hamburger-menu:hover {
@@ -910,7 +901,6 @@
 	background: transparent;
 	color: var(--text-color, #e5e9f0);
 	cursor: pointer;
-	transition: all 0.15s ease;
 }
 .auth-logout-btn:hover {
 	background: rgba(239, 68, 68, 0.18);

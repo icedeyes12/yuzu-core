@@ -4,7 +4,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="user-id" content="{{ profile.user_name }}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Yuzu Companion — your personal AI companion dashboard.">
   <title>Home | Yuzu Companion</title>
   <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', path='css/sidebar.css') }}">
@@ -13,31 +15,41 @@
 </head>
 <body class="home-body">
   {% include 'sidebar.html' %}
-  
-  <header class="home-header header-content">
-    <button class="hamburger-menu hamburger" id="hamburgerMenu" onclick="toggleSidebar()">
-      <span></span>
-      <span></span>
-      <span></span>
-    </button>
-    <div class="header-title">
-      <h1>Welcome, {{ profile.user_name|capitalize }}</h1>
-      <p>Partner: {{ profile.partner_name|capitalize }} | Affection: {{ profile.affection }}</p>
-    </div>
-  </header>
 
-  <div class="menu">
-    <a href="/chat" class="card">
-      <h2>Chat</h2>
-      <p>Talk with your partner</p>
-    </a>
-    <a href="/config" class="card">
-      <h2>Config</h2>
-      <p>Adjust settings</p>
-    </a>
+  <div class="page-layout">
+    <header class="home-header header-content" role="banner">
+      <button
+        class="hamburger-menu hamburger"
+        id="hamburgerMenu"
+        onclick="toggleSidebar()"
+        aria-label="Open navigation sidebar"
+        aria-expanded="false"
+        aria-controls="mainSidebar">
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+      </button>
+      <div class="header-title">
+        <h1>Welcome, {{ profile.user_name|capitalize }}</h1>
+        <p>Partner: {{ profile.partner_name|capitalize }} · Affection: {{ profile.affection }}</p>
+      </div>
+    </header>
+
+    <main class="home-content" aria-label="Home dashboard">
+      <nav class="menu" aria-label="Quick navigation">
+        <a href="/chat" class="card" aria-label="Go to Chat — Talk with your partner">
+          <h2>Chat</h2>
+          <p>Talk with your partner</p>
+        </a>
+        <a href="/config" class="card" aria-label="Go to Config — Adjust settings">
+          <h2>Config</h2>
+          <p>Adjust settings</p>
+        </a>
+      </nav>
+    </main>
+
+    {% include "partials/footer.html" %}
   </div>
-
-  {% include "partials/footer.html" %}
 
   <script src="{{ url_for('static', path='js/sidebar.js') }}"></script>
   <script src="{{ url_for('static', path='js/home.js') }}"></script>

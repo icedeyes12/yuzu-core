@@ -1,0 +1,126 @@
+/* FILE: static/css/login.css */
+/* DESCRIPTION: Login page styles — extracted from inline login.html <style> block.
+   All colors reference CSS custom properties from theme.css. No hardcoded hex values. */
+
+/* Brand color tokens — social provider identities */
+:root {
+	--color-google: #db4437;
+	--color-google-hover: #c53929;
+	--color-github: #24292e;
+	--color-github-hover: #1b1f23;
+}
+
+/* ── Layout ── */
+.login-body {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	min-height: 100vh;
+	background: var(--surface-base);
+	color: var(--text-primary);
+	font-family: var(
+		--font-family,
+		"Segoe UI",
+		Tahoma,
+		Geneva,
+		Verdana,
+		sans-serif
+	);
+	margin: 0;
+}
+
+.login-page {
+	width: 100%;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	padding: var(--spacing-lg);
+}
+
+.login-container {
+	background: var(--surface-elevated);
+	padding: var(--spacing-xl);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-soft);
+	text-align: center;
+	max-width: 400px;
+	width: 100%;
+	border: 1px solid var(--border-secondary);
+}
+
+/* ── Typography ── */
+.login-title {
+	font-size: 2rem;
+	margin-bottom: var(--spacing-sm);
+	color: var(--accent-primary);
+}
+
+.login-subtitle {
+	margin-bottom: var(--spacing-xl);
+	color: var(--text-secondary);
+	font-size: 0.95rem;
+}
+
+/* ── Buttons ── */
+.login-buttons {
+	display: flex;
+	flex-direction: column;
+	gap: var(--spacing-md);
+}
+
+.login-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--spacing-sm);
+	padding: 0.75rem 1rem;
+	border: none;
+	border-radius: var(--radius-md);
+	font-size: 1rem;
+	font-weight: 600;
+	cursor: pointer;
+	text-decoration: none;
+	transition:
+		background-color 0.2s ease,
+		transform 0.15s ease,
+		box-shadow 0.2s ease;
+}
+
+.login-btn:focus-visible {
+	outline: 2px solid var(--accent-primary);
+	outline-offset: 3px;
+}
+
+.login-btn:hover {
+	transform: translateY(-1px);
+	box-shadow: var(--shadow-soft);
+}
+
+.btn-google {
+	background-color: var(--color-google);
+	color: #ffffff;
+}
+
+.btn-google:hover {
+	background-color: var(--color-google-hover);
+}
+
+.btn-github {
+	background-color: var(--color-github);
+	color: #ffffff;
+}
+
+.btn-github:hover {
+	background-color: var(--color-github-hover);
+}
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+	.login-container {
+		padding: var(--spacing-lg);
+	}
+
+	.login-title {
+		font-size: 1.6rem;
+	}
+}

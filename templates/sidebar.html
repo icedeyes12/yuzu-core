@@ -3,92 +3,91 @@
      Included via Jinja include in all page templates.
      Active nav link is driven by the current_page context variable. -->
 
-  <!-- Unified Sidebar -->
-  <div class="sidebar" id="mainSidebar">
-    <div class="sidebar-header">
-      <h2>Yuzu Companion</h2>
-      <button class="close-sidebar" onclick="toggleSidebar()">×</button>
-    </div>
-
-    <div class="sidebar-content">
-      <!-- Navigation -->
-      <div class="sidebar-section">
-        <h3>Navigation</h3>
-        <a href="/" class="sidebar-link {% if current_page == 'home' %}active{% endif %}" onclick="toggleSidebar()">
-          <span class="sidebar-icon home-icon"></span> Home
-        </a>
-        <a href="/chat" class="sidebar-link {% if current_page == 'chat' %}active{% endif %}" onclick="toggleSidebar()">
-          <span class="sidebar-icon chat-icon"></span> Chat
-        </a>
-        <a href="/config" class="sidebar-link {% if current_page == 'config' %}active{% endif %}" onclick="toggleSidebar()">
-          <span class="sidebar-icon config-icon"></span> Config
-        </a>
-        <a href="/about" class="sidebar-link {% if current_page == 'about' %}active{% endif %}" onclick="toggleSidebar()">
-          <span class="sidebar-icon about-icon"></span> About
-        </a>
-      </div>
-
-      <!-- Theme Selector -->
-      <div class="sidebar-section">
-        <h3>Theme</h3>
-        <div class="custom-dropdown" id="themeDropdown">
-          <div class="dropdown-selected">
-            <span class="selected-text">Dark Blue</span>
-            <span class="dropdown-arrow">▼</span>
-          </div>
-          <div class="dropdown-options">
-            <div class="dropdown-option" data-value="dark">
-              <span class="theme-preview dark-preview"></span>
-              Dark Blue
-            </div>
-            <div class="dropdown-option" data-value="light">
-              <span class="theme-preview light-preview"></span>
-              Soft Light
-            </div>
-            <div class="dropdown-option" data-value="stellar-night-suisei">
-              <span class="theme-preview suisei-preview"></span>
-              Stellar Night (Suisei Edition)
-            </div>
-            <div class="dropdown-option" data-value="tokyonight">
-              <span class="theme-preview tokyonight-preview"></span>
-              Tokyo Night
-            </div>
-            <div class="dropdown-option" data-value="lavender">
-              <span class="theme-preview lavender-preview"></span>
-              Pastel Lavender
-            </div>
-            <div class="dropdown-option" data-value="mint">
-              <span class="theme-preview mint-preview"></span>
-              Pastel Mint
-            </div>
-            <div class="dropdown-option" data-value="peach">
-              <span class="theme-preview peach-preview"></span>
-              Pastel Peach
-            </div>
-            <div class="dropdown-option" data-value="dark-lavender">
-              <span class="theme-preview dark-lavender-preview"></span>
-              Dark Lavender
-            </div>
-            <div class="dropdown-option" data-value="vanilla-orange">
-              <span class="theme-preview vanilla-orange-preview"></span>
-              Vanilla Orange
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Session Management -->
-      <div class="sidebar-section" id="sessionSection">
-        <h3>Sessions</h3>
-        <button class="sidebar-btn" onclick="createNewSession()">
-          <span class="sidebar-icon add-icon"></span> New Chat
-        </button>
-        <div class="sessions-list" id="sidebarSessionsList">
-          <div class="loading">Loading sessions...</div>
-        </div>
-      </div>
-    </div>
+<aside class="sidebar" id="mainSidebar" aria-label="Application sidebar">
+  <div class="sidebar-header">
+    <h2>Yuzu Companion</h2>
+    <button class="close-sidebar" onclick="toggleSidebar()" aria-label="Close sidebar" type="button">×</button>
   </div>
 
-  <!-- Overlay -->
-  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+  <div class="sidebar-content">
+    <!-- Navigation -->
+    <nav class="sidebar-section" aria-label="Main navigation">
+      <h3>Navigation</h3>
+      <a href="/" class="sidebar-link {% if current_page == 'home' %}active{% endif %}" onclick="toggleSidebar()" aria-current="{% if current_page == 'home' %}page{% else %}false{% endif %}">
+        <span class="sidebar-icon home-icon" aria-hidden="true"></span> Home
+      </a>
+      <a href="/chat" class="sidebar-link {% if current_page == 'chat' %}active{% endif %}" onclick="toggleSidebar()" aria-current="{% if current_page == 'chat' %}page{% else %}false{% endif %}">
+        <span class="sidebar-icon chat-icon" aria-hidden="true"></span> Chat
+      </a>
+      <a href="/config" class="sidebar-link {% if current_page == 'config' %}active{% endif %}" onclick="toggleSidebar()" aria-current="{% if current_page == 'config' %}page{% else %}false{% endif %}">
+        <span class="sidebar-icon config-icon" aria-hidden="true"></span> Config
+      </a>
+      <a href="/about" class="sidebar-link {% if current_page == 'about' %}active{% endif %}" onclick="toggleSidebar()" aria-current="{% if current_page == 'about' %}page{% else %}false{% endif %}">
+        <span class="sidebar-icon about-icon" aria-hidden="true"></span> About
+      </a>
+    </nav>
+
+    <!-- Theme Selector -->
+    <section class="sidebar-section" aria-label="Theme selector">
+      <h3>Theme</h3>
+      <div class="custom-dropdown" id="themeDropdown" role="listbox" aria-label="Select theme">
+        <button class="dropdown-selected" type="button" aria-haspopup="listbox" aria-expanded="false">
+          <span class="selected-text">Stellar Night</span>
+          <span class="dropdown-arrow" aria-hidden="true">▼</span>
+        </button>
+        <div class="dropdown-options" role="listbox">
+          <div class="dropdown-option" data-value="dark" role="option" tabindex="0">
+            <span class="theme-preview dark-preview" aria-hidden="true"></span>
+            Dark Blue
+          </div>
+          <div class="dropdown-option" data-value="light" role="option" tabindex="0">
+            <span class="theme-preview light-preview" aria-hidden="true"></span>
+            Soft Light
+          </div>
+          <div class="dropdown-option" data-value="stellar-night-suisei" role="option" tabindex="0">
+            <span class="theme-preview suisei-preview" aria-hidden="true"></span>
+            Stellar Night (Suisei Edition)
+          </div>
+          <div class="dropdown-option" data-value="tokyonight" role="option" tabindex="0">
+            <span class="theme-preview tokyonight-preview" aria-hidden="true"></span>
+            Tokyo Night
+          </div>
+          <div class="dropdown-option" data-value="lavender" role="option" tabindex="0">
+            <span class="theme-preview lavender-preview" aria-hidden="true"></span>
+            Pastel Lavender
+          </div>
+          <div class="dropdown-option" data-value="mint" role="option" tabindex="0">
+            <span class="theme-preview mint-preview" aria-hidden="true"></span>
+            Pastel Mint
+          </div>
+          <div class="dropdown-option" data-value="peach" role="option" tabindex="0">
+            <span class="theme-preview peach-preview" aria-hidden="true"></span>
+            Pastel Peach
+          </div>
+          <div class="dropdown-option" data-value="dark-lavender" role="option" tabindex="0">
+            <span class="theme-preview dark-lavender-preview" aria-hidden="true"></span>
+            Dark Lavender
+          </div>
+          <div class="dropdown-option" data-value="vanilla-orange" role="option" tabindex="0">
+            <span class="theme-preview vanilla-orange-preview" aria-hidden="true"></span>
+            Vanilla Orange
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Session Management -->
+    <section class="sidebar-section" id="sessionSection" aria-label="Chat sessions">
+      <h3>Sessions</h3>
+      <button class="sidebar-btn" type="button" onclick="createNewSession()" aria-label="Create new chat session">
+        <span class="sidebar-icon add-icon" aria-hidden="true"></span> New Chat
+      </button>
+      <ul class="sessions-list" id="sidebarSessionsList" aria-label="Session list">
+        <li class="loading" role="status" aria-live="polite">Loading sessions...</li>
+      </ul>
+    </section>
+  </div>
+</aside>
+
+<!-- Overlay -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()" aria-hidden="true"></div>
