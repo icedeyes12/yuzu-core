@@ -137,7 +137,8 @@ function _renderAuthenticated(container, data) {
 	const avatarUrl = data?.avatar_url || "";
 	const shortId = userId ? `${userId.slice(0, 8)}…` : "unknown";
 	const showName = displayName || email || shortId;
-	const safeAvatarUrl = avatarUrl && /^(https?:|data:)/i.test(avatarUrl) ? avatarUrl : "";
+	const safeAvatarUrl =
+		avatarUrl && /^(https?:|data:)/i.test(avatarUrl) ? avatarUrl : "";
 	const avatarHtml = safeAvatarUrl
 		? `<img class="auth-user-avatar" src="${safeAvatarUrl}" alt="avatar" referrerpolicy="no-referrer" />`
 		: `<div class="auth-user-avatar auth-avatar-placeholder">${_escapeHtml((showName[0] || "?").toUpperCase())}</div>`;
@@ -171,8 +172,7 @@ function loginWith(provider) {
 async function handleLogout() {
 	try {
 		await fetch("/api/auth/logout", { method: "POST" });
-	} catch (_e) {
-	}
+	} catch (_e) {}
 	_hideAuthOverlay();
 	_checkAuthState();
 }
@@ -219,29 +219,31 @@ function initCustomDropdown() {
 	selected.addEventListener("click", (e) => {
 		e.stopPropagation();
 		const isActive = options.classList.contains("active");
-		document.querySelectorAll(".dropdown-options.active").forEach((opt) => {
+		for (const opt of document.querySelectorAll(".dropdown-options.active")) {
 			if (opt !== options) opt.classList.remove("active");
-		});
-		document.querySelectorAll(".dropdown-selected.active").forEach((sel) => {
+		}
+		for (const sel of document.querySelectorAll(".dropdown-selected.active")) {
 			if (sel !== selected) sel.classList.remove("active");
-		});
+		}
 		options.classList.toggle("active", !isActive);
 		selected.classList.toggle("active", !isActive);
 	});
 
-	optionItems.forEach((option) => {
+	for (const option of optionItems) {
 		option.addEventListener("click", function () {
 			const value = this.getAttribute("data-value");
 			const text = this.textContent.trim();
 			const selectedText = selected.querySelector(".selected-text");
 			if (selectedText) selectedText.textContent = text;
-			optionItems.forEach((opt) => opt.classList.remove("active"));
+			for (const opt of optionItems) {
+				opt.classList.remove("active");
+			}
 			this.classList.add("active");
 			options.classList.remove("active");
 			selected.classList.remove("active");
 			switchTheme(value);
 		});
-	});
+	}
 
 	document.addEventListener("click", () => {
 		options.classList.remove("active");
@@ -259,7 +261,9 @@ function switchTheme(theme) {
 			const text = option.textContent.trim();
 			const selectedText = dropdown.querySelector(".selected-text");
 			if (selectedText) selectedText.textContent = text;
-			dropdown.querySelectorAll(".dropdown-option").forEach((opt) => opt.classList.remove("active"));
+			for (const opt of dropdown.querySelectorAll(".dropdown-option")) {
+				opt.classList.remove("active");
+			}
 			option.classList.add("active");
 		}
 	}
@@ -299,9 +303,10 @@ function loadSidebarSessions() {
 			}
 
 			const urlParts = window.location.pathname.split("/").filter((p) => p);
-			const urlSessionId = urlParts.length >= 2 && urlParts[0] === "chat" ? urlParts[1] : null;
+			const urlSessionId =
+				urlParts.length >= 2 && urlParts[0] === "chat" ? urlParts[1] : null;
 
-			sessions.forEach((session) => {
+			for (const session of sessions) {
 				const sessionItem = document.createElement("li");
 				const isCurrentSession = String(session.id) === String(urlSessionId);
 				sessionItem.className = `sidebar-session-item ${isCurrentSession ? "active" : ""}`;
@@ -352,7 +357,7 @@ function loadSidebarSessions() {
 				sessionItem.appendChild(sessionContent);
 				sessionItem.appendChild(sessionActions);
 				sessionsList.appendChild(sessionItem);
-			});
+			}
 		})
 		.catch((error) => {
 			console.error("Error loading sidebar sessions:", error);
@@ -402,7 +407,11 @@ function renameSession(sessionId, newName) {
 }
 
 function deleteSessionPrompt(sessionId) {
-	if (confirm("Are you sure you want to delete this session? This action cannot be undone.")) {
+	if (
+		confirm(
+			"Are you sure you want to delete this session? This action cannot be undone.",
+		)
+	) {
 		deleteSession(sessionId);
 	}
 }
@@ -442,7 +451,10 @@ function createNewSession() {
 				if (window.router) {
 					window.router.updateURL(data.session_id);
 				}
-				if (window.location.pathname === "/chat" && window.handleSessionSwitch) {
+				if (
+					window.location.pathname === "/chat" &&
+					window.handleSessionSwitch
+				) {
 					window.handleSessionSwitch(data.session_id);
 				} else {
 					window.location.href = "/chat";
@@ -459,8 +471,13 @@ function switchSession(sessionId) {
 	if (_sessionSwitchCooldown || _isSessionSwitching) return;
 	if (window.backgroundStreams && window.router) {
 		const currentSession = window.router.currentSessionId;
-		if (currentSession && window.backgroundStreams.hasActiveStream(currentSession)) {
-			console.log(`[Sidebar] Active stream in session ${currentSession}, pausing`);
+		if (
+			currentSession &&
+			window.backgroundStreams.hasActiveStream(currentSession)
+		) {
+			console.log(
+				`[Sidebar] Active stream in session ${currentSession}, pausing`,
+			);
 		}
 	}
 
@@ -498,9 +515,9 @@ function _setSessionSwitchingVisual(_sessionId, isLoading) {
 	const sessionsList = document.getElementById("sidebarSessionsList");
 	if (!sessionsList) return;
 
-	sessionsList.querySelectorAll(".sidebar-session-item").forEach((item) => {
+	for (const item of sessionsList.querySelectorAll(".sidebar-session-item")) {
 		item.classList.remove("switching");
-	});
+	}
 
 	if (isLoading) {
 		sessionsList.classList.add("switching-active");
@@ -543,7 +560,8 @@ function showNotification(message, type = "info") {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-	const savedTheme = localStorage.getItem("yuzu-theme") || "stellar-night-suisei";
+	const savedTheme =
+		localStorage.getItem("yuzu-theme") || "stellar-night-suisei";
 	document.body.setAttribute("data-theme", savedTheme);
 	_currentTheme = savedTheme;
 	initCustomDropdown();
@@ -554,7 +572,9 @@ document.addEventListener("DOMContentLoaded", () => {
 			const text = option.textContent.trim();
 			const selectedText = dropdown.querySelector(".selected-text");
 			if (selectedText) selectedText.textContent = text;
-			dropdown.querySelectorAll(".dropdown-option").forEach((opt) => opt.classList.remove("active"));
+			for (const opt of dropdown.querySelectorAll(".dropdown-option")) {
+				opt.classList.remove("active");
+			}
 			option.classList.add("active");
 		}
 	}
@@ -567,10 +587,10 @@ document.addEventListener("DOMContentLoaded", () => {
 function syncActiveSidebarItem(sessionId) {
 	const list = document.getElementById("sidebarSessionsList");
 	if (!list) return;
-	list.querySelectorAll(".sidebar-session-item").forEach((item) => {
+	for (const item of list.querySelectorAll(".sidebar-session-item")) {
 		const id = item.getAttribute("data-session-id");
 		item.classList.toggle("active", String(id) === String(sessionId));
-	});
+	}
 }
 
 window.toggleSidebar = toggleSidebar;
