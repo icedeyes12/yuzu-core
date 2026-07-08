@@ -145,7 +145,7 @@ class GoogleProvider(AIProvider):
                         logger.warning(
                             "[Google] stream %s: %s", response.status_code, body[:300]
                         )
-                        yield ""
+                        yield f"\n[System] {self.name} API returned HTTP {response.status_code}. Please try again."
                         return
 
                     if has_tools:

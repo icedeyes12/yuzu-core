@@ -203,7 +203,7 @@ class CustomAnthropicProvider(AIProvider):
                             response.status_code,
                             body[:300],
                         )
-                        yield ""
+                        yield f"\n[System] {self.name} API returned HTTP {response.status_code}. Please try again."
                         return
                     tool_call_fragments: dict[int, dict] = {}
 

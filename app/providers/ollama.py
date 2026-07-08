@@ -120,7 +120,15 @@ class OllamaProvider(AIProvider):
                                 except json.JSONDecodeError:
                                     continue
                     else:
-                        yield ""
+                        await response.aread()
+                        logger.warning(
+                            "[%s] HTTP %d for model %s: %s",
+                            self.name,
+                            response.status_code,
+                            ctx.model,
+                            response.text[:200],
+                        )
+                        yield f"\n[System] API returned HTTP {response.status_code}. Please try again."
 
         except Exception as e:
             logger.error("Ollama streaming error: %s", repr(e), exc_info=True)
