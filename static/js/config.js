@@ -158,35 +158,6 @@ async function loadProviderSettings() {
 		const byok = JSON.parse(
 			localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}",
 		);
-		const providerSelect = document.getElementById("ai-provider");
-		const modelSelect = document.getElementById("ai-model");
-
-		if (providerSelect) {
-			providerSelect.innerHTML = "";
-			Object.entries(data.all_models || {}).forEach(([provider]) => {
-				const option = document.createElement("option");
-				option.value = provider;
-				option.textContent = provider;
-				if (provider === data.current_provider) option.selected = true;
-				providerSelect.appendChild(option);
-			});
-		}
-
-		if (modelSelect) {
-			const currentModels = data.all_models?.[data.current_provider] || [];
-			modelSelect.innerHTML = "";
-			(currentModels.length
-				? currentModels
-				: [data.current_model || ""]
-			).forEach((model) => {
-				if (!model) return;
-				const option = document.createElement("option");
-				option.value = model;
-				option.textContent = model;
-				if (model === data.current_model) option.selected = true;
-				modelSelect.appendChild(option);
-			});
-		}
 
 		setTextIfExists(
 			"current-provider",
@@ -220,12 +191,15 @@ async function loadProviderSettings() {
 			let innerHtml = `
 				<div class="provider-header" role="button" tabindex="0" aria-expanded="${isActive ? "true" : "false"}" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
 					<h3 style="margin: 0;">${titleHtml}</h3>
-					<span style="font-size: 1.2rem;">▼</span>
+					<span style="font-size: 1.2rem;">${isActive ? "▼" : "▲"}</span>
 				</div>
 				<div class="provider-body" style="display: ${isActive ? "block" : "none"}; padding-top: 1rem;">
 					<div class="form-group">
 						<label for="key-${provider}">API Key (Saved in browser)</label>
-						<input type="password" id="key-${provider}" placeholder="sk-..." value="${byok[provider]?.api_key || ""}">
+						<div style="display: flex; gap: 10px;">
+							<input type="password" id="key-${provider}" style="flex: 1;" placeholder="sk-..." value="${byok[provider]?.api_key || ""}">
+							<button class="btn btn-secondary btn-sm save-byok-btn" type="button" data-provider="${provider}">Save Key</button>
+						</div>
 					</div>
 			`;
 
@@ -241,13 +215,33 @@ async function loadProviderSettings() {
 			innerHtml += `
 					<div class="form-group">
 						<label for="model-${provider}">Model</label>
-						<select id="model-${provider}" class="form-select">
-							<option value="${data.current_model || ""}">${data.current_model || "Select model..."}</option>
-						</select>
+						<div style="display: flex; gap: 10px;">
+							<select id="model-${provider}" class="form-select" style="flex: 1;">
+			`;
+
+			const modelsForThisProv = data.all_models?.[provider] || [];
+			if (modelsForThisProv.length > 0) {
+				modelsForThisProv.forEach((m) => {
+					const selected =
+						isActive && m === data.current_model ? "selected" : "";
+					innerHtml += `<option value="${m}" ${selected}>${m}</option>`;
+				});
+			} else {
+				if (isActive && data.current_model) {
+					innerHtml += `<option value="${data.current_model}" selected>${data.current_model}</option>`;
+				} else {
+					innerHtml += `<option value="">Fetch models first...</option>`;
+				}
+			}
+
+			innerHtml += `
+							</select>
+							<button class="btn btn-info btn-sm fetch-models-btn" type="button" data-provider="${provider}">Refresh Models</button>
+						</div>
 					</div>
-					<div class="config-actions">
-						<button class="btn btn-primary btn-sm save-byok-btn" type="button" data-provider="${provider}">Save Key</button>
-						<button class="btn btn-info btn-sm fetch-models-btn" type="button" data-provider="${provider}">Refresh Models</button>
+					<div class="config-actions" style="margin-top: 1.5rem; display: flex; gap: 10px;">
+						<button class="btn btn-primary set-active-btn" type="button" data-provider="${provider}">Set as Active</button>
+						<button class="btn btn-success test-conn-btn" type="button" data-provider="${provider}">Test Connection</button>
 					</div>
 				</div>
 			`;
@@ -279,6 +273,16 @@ async function loadProviderSettings() {
 		document.querySelectorAll(".fetch-models-btn").forEach((btn) => {
 			btn.addEventListener("click", (e) =>
 				fetchModelsForProvider(e.currentTarget.dataset.provider),
+			);
+		});
+		document.querySelectorAll(".set-active-btn").forEach((btn) => {
+			btn.addEventListener("click", (e) =>
+				setProviderActive(e.currentTarget.dataset.provider),
+			);
+		});
+		document.querySelectorAll(".test-conn-btn").forEach((btn) => {
+			btn.addEventListener("click", (e) =>
+				testProviderConnection(e.currentTarget.dataset.provider),
 			);
 		});
 	} catch (error) {
@@ -433,21 +437,6 @@ function setupEventListeners() {
 	const saveProfileBtn = document.getElementById("save-profile");
 	if (saveProfileBtn)
 		saveProfileBtn.addEventListener("click", saveProfileSettings);
-
-	const saveActiveProviderBtn = document.getElementById("save-active-provider");
-	const testActiveProviderBtn = document.getElementById("test-active-provider");
-	if (saveActiveProviderBtn)
-		saveActiveProviderBtn.addEventListener("click", saveProviderSettings);
-	if (testActiveProviderBtn) {
-		testActiveProviderBtn.addEventListener("click", () => {
-			const provider = getValueIfExists("ai-provider", "");
-			if (!provider) {
-				showError("Pick a provider first");
-				return;
-			}
-			testProviderConnection(provider);
-		});
-	}
 
 	const visionProviderSelect = document.getElementById("vision-provider");
 	const testVisionBtn = document.getElementById("test-vision");
@@ -743,32 +732,26 @@ async function saveImageModel() {
 }
 
 // Save provider settings
-async function saveProviderSettings() {
-	const providerSelect = document.getElementById("ai-provider");
-	const modelSelect = document.getElementById("ai-model");
-	if (!providerSelect || !modelSelect) {
-		showError("Provider controls are not ready yet");
+async function setProviderActive(providerName) {
+	const modelSelect = document.getElementById(`model-${providerName}`);
+	if (!modelSelect) {
+		showError("Model selection not found for this provider");
 		return;
 	}
 
-	const providerName = providerSelect.value;
 	const modelName = modelSelect.value;
-
-	if (!providerName) {
-		showError("Please select an AI provider");
-		return;
-	}
-
 	if (!modelName) {
-		showError("Please select a model");
+		showError("Please select a model first (fetch models if empty)");
 		return;
 	}
 
-	const saveBtn = document.getElementById("save-provider");
-	if (!saveBtn) return;
-	const originalText = saveBtn.textContent;
-	saveBtn.textContent = "Saving...";
-	saveBtn.disabled = true;
+	const saveBtn = document.querySelector(
+		`.set-active-btn[data-provider="${providerName}"]`,
+	);
+	if (saveBtn) {
+		saveBtn.textContent = "Saving...";
+		saveBtn.disabled = true;
+	}
 
 	try {
 		const response = await fetch("/api/providers/set_preferred", {
@@ -785,18 +768,35 @@ async function saveProviderSettings() {
 		const result = await response.json();
 
 		if (result.status === "success") {
-			showSuccess("AI provider settings saved!");
+			showSuccess(`${providerName} set as active!`);
 			setTextIfExists("current-provider", `${providerName}/${modelName}`);
-			testProviderConnection(providerName);
+
+			// Update UI to reflect new active state
+			document.querySelectorAll(".provider-card").forEach((card) => {
+				card.classList.remove("active-provider");
+				const badge = card.querySelector(".badge-active");
+				if (badge) badge.remove();
+			});
+
+			const activeCard = saveBtn.closest(".provider-card");
+			if (activeCard) {
+				activeCard.classList.add("active-provider");
+				const h3 = activeCard.querySelector("h3");
+				if (h3 && !h3.querySelector(".badge-active")) {
+					h3.innerHTML += " <span class='badge-active'>Active</span>";
+				}
+			}
 		} else {
-			showError(`Failed to save provider settings: ${result.message}`);
+			showError(`Failed to set active provider: ${result.message}`);
 		}
 	} catch (error) {
-		console.error("Error saving provider settings:", error);
-		showError("Error saving provider settings");
+		console.error("Error setting active provider:", error);
+		showError("Error setting active provider");
 	} finally {
-		saveBtn.textContent = originalText;
-		saveBtn.disabled = false;
+		if (saveBtn) {
+			saveBtn.textContent = "Set as Active";
+			saveBtn.disabled = false;
+		}
 	}
 }
 
@@ -1387,7 +1387,8 @@ window.runMemoryDecay = runMemoryDecay;
 window.saveGlobalKnowledge = saveGlobalKnowledge;
 window.saveImageModel = saveImageModel;
 window.saveLocation = saveLocation;
-window.saveProviderSettings = saveProviderSettings;
+window.setProviderActive = setProviderActive;
+window.testProviderConnection = testProviderConnection;
 window.toggleBYOKFields = toggleBYOKFields;
 window.updateGlobalProfile = updateGlobalProfile;
 window.updateModelDropdown = updateModelDropdown;
