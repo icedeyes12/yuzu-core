@@ -8,6 +8,7 @@ from typing import Any, AsyncGenerator
 import httpx
 
 from app.providers.base import AIProvider, ProviderCapabilities, _rate_limit_provider
+from app.core.llm_context import LLMContext
 from app.tools import multimodal_tools
 from app.tools.schemas import StreamToolEvent
 
@@ -41,9 +42,9 @@ class ChutesProvider(AIProvider):
             "zai-org/GLM-5.1-TEE",
         ]
 
-    def _build_headers(self) -> dict[str, str]:
+    def _build_headers(self, ctx: LLMContext) -> dict[str, str]:
         return {
-            "Authorization": f"Bearer {self._require_api_key()}",
+            "Authorization": f"Bearer {self._require_api_key(ctx)}",
             "Content-Type": "application/json",
         }
 
@@ -71,7 +72,7 @@ class ChutesProvider(AIProvider):
         return normalized_messages
 
     def _prepare_payload(
-        self, messages: list[dict], model: str, stream: bool, **kwargs
+        self, ctx: LLMContext, model: str, messages: list[dict], stream: bool, **kwargs
     ) -> tuple[dict[str, str], dict[str, Any]]:
         messages = self._normalize_messages_for_chutes(list(messages))
 
@@ -94,7 +95,7 @@ class ChutesProvider(AIProvider):
         typical_p = kwargs.get("typical_p", 0.85)
 
         payload: dict[str, Any] = {
-            "model": self.resolve_model(model),
+            "model": model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
@@ -109,7 +110,7 @@ class ChutesProvider(AIProvider):
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
 
-        return self._build_headers(), payload
+        return self._build_headers(ctx), payload
 
     def _extract_message_content(self, response_json: dict[str, Any]) -> str:
         try:
@@ -123,16 +124,16 @@ class ChutesProvider(AIProvider):
         return self.available_models
 
     async def send_message(
-        self, messages: list[dict], model: str, source: str = "llm", **kwargs
+        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
     ) -> str | None:
-        if model not in self.available_models:
+        if ctx.model not in self.available_models:
             return None
 
         log_prefix = kwargs.pop("log_prefix", "[CHAT]")
         kwargs.pop("model", None)
         kwargs.pop("model_name", None)
 
-        model_hint = kwargs.get("model") or kwargs.get("model_name")
+        model_hint = ctx.model
         explicit_model = model_hint and model_hint in self.available_models
         retryable_codes = {0, 400, 429, 500, 502, 503, 504}
 
@@ -146,7 +147,7 @@ class ChutesProvider(AIProvider):
 
         while attempt < max_model_attempts:
             attempt += 1
-            current_model = model if attempt == 1 else None
+            current_model = ctx.model if attempt == 1 else None
 
             if current_model is None:
                 priority = [m for m in self.available_models if m not in tried_models]
@@ -168,7 +169,9 @@ class ChutesProvider(AIProvider):
                 error_msg = None
 
                 async with _rate_limit_provider("chutes", current_model, source):
-                    result = await self._chutes_raw(current_model, messages, kwargs)
+                    result = await self._chutes_raw(
+                        ctx, current_model, messages, kwargs
+                    )
                     status = result[0]
                     data = result[1] if len(result) > 1 else None
                     error_msg = result[2] if len(result) > 2 else str(status)
@@ -220,15 +223,17 @@ class ChutesProvider(AIProvider):
         return None
 
     async def send_message_raw(
-        self, messages: list[dict], model: str, source: str = "llm", **kwargs
+        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
     ) -> dict[str, Any] | None:
-        headers, payload = self._prepare_payload(messages, model, False, **kwargs)
+        headers, payload = self._prepare_payload(
+            ctx, ctx.model, messages, False, **kwargs
+        )
 
-        async with _rate_limit_provider("chutes", model, source):
+        async with _rate_limit_provider("chutes", ctx.model, source):
             async with httpx.AsyncClient() as client:
                 try:
                     response = await client.post(
-                        self.resolve_base_url(self.base_url),
+                        ctx.base_url or self.base_url,
                         headers=headers,
                         json=payload,
                         timeout=kwargs.get("timeout", 120),
@@ -243,8 +248,10 @@ class ChutesProvider(AIProvider):
                     self._last_raw_response = None
                     return None
 
-    async def _chutes_raw(self, model: str, messages: list[dict], kwargs) -> tuple:
-        headers, payload = self._prepare_payload(messages, model, False, **kwargs)
+    async def _chutes_raw(
+        self, ctx: LLMContext, model: str, messages: list[dict], kwargs
+    ) -> tuple:
+        headers, payload = self._prepare_payload(ctx, model, messages, False, **kwargs)
 
         log_prefix = kwargs.get("log_prefix", "[CHAT]")
         logger.debug(
@@ -257,7 +264,7 @@ class ChutesProvider(AIProvider):
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(
-                    self.resolve_base_url(self.base_url),
+                    ctx.base_url or self.base_url,
                     headers=headers,
                     json=payload,
                     timeout=kwargs.get("timeout", 120),
@@ -270,14 +277,14 @@ class ChutesProvider(AIProvider):
             except Exception as e:
                 return (0, None, str(e))
 
-    async def send_message_streaming(
-        self, messages: list[dict], model: str, source: str = "llm", **kwargs
+    async def _send_message_streaming_impl(
+        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
-        if model not in self.available_models:
+        if ctx.model not in self.available_models:
             reason = (
                 "missing API key"
-                if not self.resolve_api_key()
-                else f"model {model} not in available"
+                if not ctx.api_key
+                else f"model {ctx.model} not in available"
             )
             logger.warning("Chutes stream aborted: %s", reason)
             yield (
@@ -288,18 +295,20 @@ class ChutesProvider(AIProvider):
             return
 
         try:
-            headers, payload = self._prepare_payload(messages, model, True, **kwargs)
+            headers, payload = self._prepare_payload(
+                ctx, ctx.model, messages, True, **kwargs
+            )
             if kwargs.get("suppress_tools"):
                 payload.pop("tools", None)
                 payload.pop("tool_choice", None)
 
             has_tools = bool(payload.get("tools"))
 
-            async with _rate_limit_provider("chutes", model, source):
+            async with _rate_limit_provider("chutes", ctx.model, source):
                 async with httpx.AsyncClient() as client:
                     async with client.stream(
                         "POST",
-                        self.resolve_base_url(self.base_url),
+                        ctx.base_url or self.base_url,
                         headers=headers,
                         json=payload,
                         timeout=kwargs.get("timeout", 120),
@@ -389,7 +398,7 @@ class ChutesProvider(AIProvider):
                             logger.warning(
                                 "Chutes HTTP %d for model %s",
                                 response.status_code,
-                                model,
+                                ctx.model,
                             )
                             yield (
                                 "\n[System] Chutes API returned HTTP "

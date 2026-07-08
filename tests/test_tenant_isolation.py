@@ -268,7 +268,7 @@ class MockTenantDB:
         self.profiles = {
             TENANT_A: {
                 "id": TENANT_A,
-                "display_name": "Tenant A",
+                "user_name": "Tenant A",
                 "partner_name": "Partner A",
                 "affection": 50,
                 "theme": "dark",
@@ -285,7 +285,7 @@ class MockTenantDB:
             },
             TENANT_B: {
                 "id": TENANT_B,
-                "display_name": "Tenant B",
+                "user_name": "Tenant B",
                 "partner_name": "Partner B",
                 "affection": 75,
                 "theme": "light",
@@ -635,7 +635,7 @@ class MockTenantDB:
             uid = f"new-profile-{self._next_id}"
             row = {
                 "id": uid,
-                "display_name": "New User",
+                "user_name": "New User",
                 "partner_name": "Yuzu",
                 "affection": 0,
                 "theme": "dark",
@@ -759,28 +759,28 @@ class TestProfileIsolation:
     async def test_tenant_a_reads_own_profile(self, tenant_db):
         profile = await Database.get_profile(TENANT_A)
         assert profile["id"] == TENANT_A
-        assert profile["display_name"] == "Tenant A"
+        assert profile["user_name"] == "Tenant A"
 
     @pytest.mark.asyncio
     async def test_tenant_b_reads_own_profile(self, tenant_db):
         profile = await Database.get_profile(TENANT_B)
         assert profile["id"] == TENANT_B
-        assert profile["display_name"] == "Tenant B"
+        assert profile["user_name"] == "Tenant B"
 
     @pytest.mark.asyncio
     async def test_profiles_are_distinct(self, tenant_db):
         a = await Database.get_profile(TENANT_A)
         b = await Database.get_profile(TENANT_B)
         assert a["id"] != b["id"]
-        assert a["display_name"] != b["display_name"]
+        assert a["user_name"] != b["user_name"]
 
     @pytest.mark.asyncio
     async def test_tenant_a_update_does_not_affect_tenant_b(self, tenant_db):
-        await Database.update_profile({"display_name": "Modified A"}, TENANT_A)
+        await Database.update_profile({"user_name": "Modified A"}, TENANT_A)
         b = await Database.get_profile(TENANT_B)
-        assert b["display_name"] == "Tenant B"
+        assert b["user_name"] == "Tenant B"
         a = await Database.get_profile(TENANT_A)
-        assert a["display_name"] == "Modified A"
+        assert a["user_name"] == "Modified A"
 
 
 # ── Session Isolation ─────────────────────────────────────────────────────────

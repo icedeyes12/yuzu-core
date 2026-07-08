@@ -5,6 +5,7 @@ import logging
 import httpx
 from typing import AsyncGenerator
 from app.providers.base import AIProvider, ProviderCapabilities
+from app.core.llm_context import LLMContext
 from app.tools import multimodal_tools
 from app.tools.schemas import StreamToolEvent
 
@@ -67,11 +68,11 @@ class OpenRouterProvider(AIProvider):
         return self.available_models
 
     def _prepare_payload(
-        self, messages: list[dict], model: str, stream: bool, **kwargs
+        self, ctx: LLMContext, messages: list[dict], stream: bool, **kwargs
     ) -> tuple[dict, dict]:
         messages = self._normalize_messages(messages)
 
-        if self.supports_vision(model) and messages:
+        if self.supports_vision(ctx.model) and messages:
             last_user_message = self._get_last_user_message(messages)
             if last_user_message and multimodal_tools.has_images(last_user_message):
                 vision_messages = self.format_vision_message(last_user_message)
@@ -85,19 +86,19 @@ class OpenRouterProvider(AIProvider):
         top_k = kwargs.get("top_k", 40)
         typical_p = kwargs.get("typical_p", 0.8)
 
-        if model.endswith(":free"):
+        if ctx.model.endswith(":free"):
             max_tokens = min(max_tokens or 2048, 2048)
             temperature = min(temperature, 0.8)
 
         headers = {
-            "Authorization": f"Bearer {self._require_api_key()}",
+            "Authorization": f"Bearer {self._require_api_key(ctx)}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://github.com/icedeyes12/yuzu-companion",
             "X-Title": "Yuzu-Companion",
         }
 
         payload = {
-            "model": self.resolve_model(model),
+            "model": ctx.model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
@@ -115,20 +116,20 @@ class OpenRouterProvider(AIProvider):
         return headers, payload
 
     async def send_message(
-        self, messages: list[dict], model: str, **kwargs
+        self, ctx: LLMContext, messages: list[dict], **kwargs
     ) -> str | None:
-        if model not in self.available_models:
+        if ctx.model not in self.available_models:
             return None
 
         try:
-            headers, payload = self._prepare_payload(messages, model, False, **kwargs)
+            headers, payload = self._prepare_payload(ctx, messages, False, **kwargs)
             logger.debug(
-                f"[OpenRouter] {model} | max_tokens={payload['max_tokens'] or 'unlimited'}"
+                f"[OpenRouter] {ctx.model} | max_tokens={payload['max_tokens'] or 'unlimited'}"
             )
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    self.resolve_base_url(self.base_url),
+                    ctx.base_url or self.base_url,
                     headers=headers,
                     json=payload,
                     timeout=kwargs.get("timeout", 180),
@@ -150,16 +151,16 @@ class OpenRouterProvider(AIProvider):
             return None
 
     async def send_message_raw(
-        self, messages: list[dict], model: str, **kwargs
+        self, ctx: LLMContext, messages: list[dict], **kwargs
     ) -> dict | None:
-        if model not in self.available_models:
+        if ctx.model not in self.available_models:
             return None
 
         try:
-            headers, payload = self._prepare_payload(messages, model, False, **kwargs)
+            headers, payload = self._prepare_payload(ctx, messages, False, **kwargs)
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    self.resolve_base_url(self.base_url),
+                    ctx.base_url or self.base_url,
                     headers=headers,
                     json=payload,
                     timeout=kwargs.get("timeout", 180),
@@ -181,8 +182,8 @@ class OpenRouterProvider(AIProvider):
 
     async def _send_message_streaming_impl(
         self,
+        ctx: LLMContext,
         messages: list[dict],
-        model: str,
         source: str = "llm",
         suppress_tools: bool = False,
         **kwargs,
@@ -193,12 +194,12 @@ class OpenRouterProvider(AIProvider):
         accumulates them and yields StreamToolEvent objects for structured
         consumption by the orchestrator.
         """
-        if model not in self.available_models:
+        if ctx.model not in self.available_models:
             yield ""
             return
 
         try:
-            headers, payload = self._prepare_payload(messages, model, True, **kwargs)
+            headers, payload = self._prepare_payload(ctx, messages, True, **kwargs)
             if suppress_tools:
                 payload.pop("tools", None)
                 payload.pop("tool_choice", None)
@@ -208,7 +209,7 @@ class OpenRouterProvider(AIProvider):
             async with httpx.AsyncClient() as client:
                 async with client.stream(
                     "POST",
-                    self.resolve_base_url(self.base_url),
+                    ctx.base_url or self.base_url,
                     headers=headers,
                     json=payload,
                     timeout=kwargs.get("timeout", 180),

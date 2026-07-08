@@ -224,7 +224,7 @@ erDiagram
 
     PROFILE {
         int id PK
-        string display_name
+        string user_name
         string partner_name
         int affection
         string memory_json
@@ -687,7 +687,7 @@ On session start:
 
 ```python
 {
-    "display_name": str,      # User's display name
+    "user_name": str,      # User's display name
     "partner_name": str,      # AI companion name
     "affection": int,         # 0-100 affection level
     "theme": str,             # UI theme
@@ -707,13 +707,15 @@ On session start:
 }
 ```
 
-### API Key Management
+### API Key Management (BYOK Architecture)
 
-API keys are stored encrypted in `api_keys` table:
+Yuzu Companion employs a strict Bring Your Own Key (BYOK) architecture. 
+The server does NOT act as a password manager. Credentials only live in memory during the request lifecycle.
 
-- `cerebras` — Cerebras API key
-- `chutes` — Chutes API key
-- `openrouter` — OpenRouter API key
+- **Frontend Storage:** API keys are stored securely in the browser's `localStorage` (`yuzu_byok_config`).
+- **Transmission:** Keys are injected dynamically via the `X-Provider-Key` and `X-Provider-BaseUrl` HTTP headers.
+- **Backend Role:** The backend resolves these headers into a transient `LLMContext` object, ensuring zero persistent secret storage in the database. 
+- **Legacy:** The `api_keys` table has been destructively removed to comply with this security model.
 
 ---
 

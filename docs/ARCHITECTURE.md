@@ -489,7 +489,7 @@ The live buffer persists across disconnects for up to 15 minutes. The profile re
 erDiagram
     PROFILE {
         int id PK
-        string display_name
+        string user_name
         string partner_name
         int affection
         json memory_json
@@ -543,7 +543,7 @@ erDiagram
 
 | Table | Purpose | Key Columns |
 | --- | --- | --- |
-| `profiles` | User/companion settings | `display_name`, `partner_name`, `affection`, `memory_json`, `providers_config_json` |
+| `profiles` | User/companion settings | `user_name`, `partner_name`, `affection`, `memory_json`, `providers_config_json` |
 | `chat_sessions` | Session tracking | `name`, `is_active`, `message_count`, `memory_json` |
 | `messages` | Conversation log | `session_id`, `role`, `content`, `content_encrypted`, `image_paths` |
 | `api_keys` | Encrypted API key storage | `provider`, `encrypted_key` (ChaCha20-Poly1305) |

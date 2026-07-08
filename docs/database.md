@@ -16,7 +16,7 @@ The single source of truth for all SQL queries and Data Definition Language (DDL
 
 1. **`profiles`**
    - Stores user and companion settings.
-   - Key fields: `display_name`, `partner_name`, `affection`, `memory_json`, `providers_config_json`.
+   - Key fields: `user_name`, `partner_name`, `affection`, `memory_json`, `providers_config_json`.
 
 2. **`chat_sessions`**
    - Tracks individual conversation threads.

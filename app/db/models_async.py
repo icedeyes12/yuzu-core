@@ -13,15 +13,7 @@ from app.db.queries import TOOL_ROLES, ALL_TOOL_ROLES
 from app.db.queries import (
     DEFAULT_PROFILE_PARAMS,
     SCHEMA_DDL,
-    SQL_APIKEY_DELETE,
-    SQL_APIKEY_INSERT,
-    SQL_APIKEY_SELECT_ALL,
-    SQL_APIKEY_SELECT_BY_NAME,
-    SQL_APIKEY_SELECT_ID_BY_NAME,
-    SQL_APIKEY_UPDATE,
-    SQL_ENC_ENCRYPTED_KEYS,
     SQL_ENC_ENCRYPTED_MESSAGES,
-    SQL_ENC_TOTAL_KEYS,
     SQL_ENC_TOTAL_MESSAGES,
     SQL_MESSAGE_CONVERSATION_SUMMARY,
     SQL_MESSAGE_COUNT_CONVERSATIONAL,
@@ -53,8 +45,6 @@ from app.db.queries import (
     SQL_SESSIONS_RECENT_ACTIVE,
     build_encryption_status,
     build_profile_update,
-    decrypt_api_key_rows,
-    encrypt_api_key,
     format_ai_history_rows,
     format_conversation_summary,
     format_session_event,
@@ -275,52 +265,6 @@ async def update_memory_state_async(session_id: str, state: dict) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# API keys
-# ---------------------------------------------------------------------------
-
-
-async def get_api_keys_async(key_name: str | None = None) -> dict[str, str]:
-    if key_name:
-        rows = await pg_fetchall_async(SQL_APIKEY_SELECT_BY_NAME, (key_name,))
-    else:
-        rows = await pg_fetchall_async(SQL_APIKEY_SELECT_ALL)
-    return decrypt_api_key_rows(rows)
-
-
-async def get_api_key_async(key_name: str) -> str | None:
-    return (await get_api_keys_async(key_name)).get(key_name)
-
-
-async def add_api_key_async(key_name: str, key_value: str) -> bool:
-    encrypted = encrypt_api_key(key_value)
-    is_encrypted = encrypted != key_value
-    try:
-        existing = await pg_fetchone_async(SQL_APIKEY_SELECT_ID_BY_NAME, (key_name,))
-        if existing:
-            await pg_execute_async(
-                SQL_APIKEY_UPDATE, (encrypted, is_encrypted, key_name)
-            )
-        else:
-            await pg_execute_async(
-                SQL_APIKEY_INSERT,
-                (key_name, encrypted, is_encrypted, datetime.now()),
-            )
-        return True
-    except Exception as e:  # noqa: BLE001
-        log.error("add_api_key_async failed: %s", e)
-        return False
-
-
-async def remove_api_key_async(key_name: str) -> bool:
-    try:
-        await pg_execute_async(SQL_APIKEY_DELETE, (key_name,))
-        return True
-    except Exception as e:  # noqa: BLE001
-        log.error("remove_api_key_async failed: %s", e)
-        return False
-
-
-# ---------------------------------------------------------------------------
 # Messages
 # ---------------------------------------------------------------------------
 
@@ -528,8 +472,6 @@ async def get_encryption_status_async() -> dict:
     return build_encryption_status(
         await pg_fetchone_async(SQL_ENC_TOTAL_MESSAGES),
         await pg_fetchone_async(SQL_ENC_ENCRYPTED_MESSAGES),
-        await pg_fetchone_async(SQL_ENC_TOTAL_KEYS),
-        await pg_fetchone_async(SQL_ENC_ENCRYPTED_KEYS),
     )
 
 
@@ -584,11 +526,6 @@ __all__ = [
     "increment_message_count_async",
     "get_memory_state_async",
     "update_memory_state_async",
-    # API keys
-    "get_api_keys_async",
-    "get_api_key_async",
-    "add_api_key_async",
-    "remove_api_key_async",
     # Messages
     "add_message_async",
     "update_message_async",
@@ -665,14 +602,12 @@ async def update_profile_avatar_async(
     await pg_execute_async(SQL_PROFILE_UPDATE_AVATAR, (avatar_url, now, user_id))
 
 
-async def update_profile_display_name_async(
-    user_id: str, display_name: str, now: datetime
+async def update_profile_user_name_async(
+    user_id: str, user_name: str, now: datetime
 ) -> None:
     from app.db.queries import SQL_PROFILE_UPDATE_DISPLAY_NAME
 
-    await pg_execute_async(
-        SQL_PROFILE_UPDATE_DISPLAY_NAME, (display_name, now, user_id)
-    )
+    await pg_execute_async(SQL_PROFILE_UPDATE_DISPLAY_NAME, (user_name, now, user_id))
 
 
 async def insert_identity_async(

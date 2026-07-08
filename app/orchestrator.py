@@ -22,6 +22,7 @@ from app.llm_client import (
     generate_ai_response,
     generate_ai_response_streaming,
 )
+from app.core.llm_context import LLMContext
 from app.logging_config import get_logger
 from app.providers import get_ai_manager
 from app.services.session_service import SessionService
@@ -674,9 +675,8 @@ async def handle_user_message(
     session_id = active_session["id"]
     cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
 
-    provider_name = (profile.get("providers_config") or {}).get(
-        "preferred_provider", "ollama"
-    )
+    ctx = LLMContext.from_profile(profile)
+    provider_name = ctx.provider
     turn_id = new_turn_id()
 
     try:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.core.context import resolve_api_key
+from app.core.llm_context import LLMContext
 from app.db import Database
 from app.providers import get_ai_manager, reload_ai_manager
 
@@ -29,7 +29,7 @@ class ConfigService:
             capabilities["vision_provider"] = vision_provider
             capabilities["vision_model"] = vision_model
 
-        if resolve_api_key("openrouter"):
+        if LLMContext.from_profile({}, override_provider="openrouter").api_key:
             capabilities["has_image_generation"] = True
             capabilities["image_generation_provider"] = "openrouter"
 
@@ -95,7 +95,7 @@ class ConfigService:
         """Format raw profile row into a frontend-friendly dictionary."""
         return {
             "id": profile["id"],
-            "display_name": profile["display_name"],
+            "user_name": profile["user_name"],
             "partner_name": profile["partner_name"],
             "affection": profile["affection"],
             "theme": profile["theme"],

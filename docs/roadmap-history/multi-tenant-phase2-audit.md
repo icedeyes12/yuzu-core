@@ -11,7 +11,7 @@ Phases 1 and 2 are **structurally complete and verified**: UUID migration landed
 
 The rot is concentrated in two places:
 
-1. **The server-rendered HTML page layer was never brought into the multi-tenant model.** `file main.py`'s four page routes are *unauthenticated* and call `Database.get_profile_async()` with **no** `user_id`, silently falling back to `SELECT * FROM profiles LIMIT 1`. This leaks the first tenant's `display_name` / `partner_name` / `affection` into every visitor's page, including other authenticated tenants.
+1. **The server-rendered HTML page layer was never brought into the multi-tenant model.** `file main.py`'s four page routes are *unauthenticated* and call `Database.get_profile_async()` with **no** `user_id`, silently falling back to `SELECT * FROM profiles LIMIT 1`. This leaks the first tenant's `user_name` / `partner_name` / `affection` into every visitor's page, including other authenticated tenants.
 2. **Phase 4 isolation is opt-in, not enforced.** `user_id` is `str | None = None` everywhere (facade, `models_async`, orchestrator). Scoped SQL exists, but every tenant method keeps an **unscoped fallback** to the old `LIMIT 1` / global queries. Forgetting to pass `user_id` produces a silent cross-tenant read, not a `TypeError`. The plan's 4.1 "required parameter" and 4.4 "anti-regression guardrail" are both unimplemented.
 
 Phase 3 (BYOK) is **half done**: the *additive* path works (ContextVar + frontend interceptor + chat-endpoint keyring binding), but the *decommission* half is entirely missing — `api_keys` is not purged, `file base.py` still falls back to DB keys, and three orphaned key-write endpoints remain live.
@@ -34,7 +34,7 @@ async def home(request: Request):
 
 - No `Depends(get_current_user)`. Routes are **public**.
 - `get_profile_async(None)` → `SQL_PROFILE_SELECT_FIRST` = `SELECT * FROM profiles LIMIT 1` (`file app/db/models_async.py` L113–117, `file app/db/queries.py` L285).
-- Effect: `{{ profile.display_name }}`, `{{ profile.partner_name }}`, `{{ profile.affection }}` in `file index.html` / `file chat.html` / `file config.html` always render **User #1's** companion identity to every visitor. `/chat` header shows User #1's partner name; `/config` pre-fills User #1's profile fields.
+- Effect: `{{ profile.user_name }}`, `{{ profile.partner_name }}`, `{{ profile.affection }}` in `file index.html` / `file chat.html` / `file config.html` always render **User #1's** companion identity to every visitor. `/chat` header shows User #1's partner name; `/config` pre-fills User #1's profile fields.
 - `chat_page` also runs legacy single-tenant bootstrapping: `SessionService.start_session(interface="web")` + `_get_session_id()` (host+UA hash — the dedup-only identifier the plan A.3 explicitly flags as "not auth"), and contains `print()` statements (violates AGENTS.md §2 rule 6).
 - Git history confirms the page routes were **never touched** by the refactor — last `file main.py` change was the `web.py → main.py` rename, pre-Phase-1.
 
@@ -97,7 +97,7 @@ This page is served unauthenticated (see 1.1) and actively misrepresents the sta
 
 - **Duplicated sidebar ×4**: `file index.html`, `file chat.html`, `file config.html`, `file about.html` each carry an inline copy of the full sidebar (Navigation + 9-option Theme dropdown + Sessions section). \~120 lines duplicated four times. The `serve_sidebar` route (`file main.py` L229) tries to load a `file templates/sidebar.html` that **does not exist** → always falls back to a hardcoded inline string. Dead route + duplicated surface.
 - **Hardcoded image-model options** (`file config.html`): `<option value="z_turbo">` / `<option value="qwen_image">` — not driven by config, drifts from the DB default `hunyuan` (`SCHEMA_DDL` L141) and `file config.js`'s `data.image_model || "qwen_image"` fallback.
-- **Single-tenant Jinja binding**: `{{ profile.display_name|capitalize }}` (index), `{{ profile.partner_name }}` / `{{ profile.affection }}` (chat, config) — all rely on the leaking page-route injection (1.1).
+- **Single-tenant Jinja binding**: `{{ profile.user_name|capitalize }}` (index), `{{ profile.partner_name }}` / `{{ profile.affection }}` (chat, config) — all rely on the leaking page-route injection (1.1).
 - **Legacy "All Sessions" wording** (`file config.html`): "Comprehensive profile from ALL sessions", "persist across all sessions", "analyze ALL sessions" — single-tenant framing that is now ambiguous (should mean "all of *this user's* sessions"). Backend is per-user via `profiles.memory` / `global_knowledge`, but the labels read as global.
 - **Stale copyright**: `©2025 hkkm project` in `file index.html`, `file about.html`, `file config.html` footers (now 2026).
 - **Inconsistent** `lang`: `file chat.html` is `lang="id"`, the other three are `lang="en"`.

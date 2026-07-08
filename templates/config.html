@@ -29,213 +29,65 @@
     </header>
 
     <main class="config-content">
+        <!-- Phase 4: Identity Section -->
         <div class="config-section">
-            <h2>Profile Settings</h2>
+            <h2>Identity Settings</h2>
             
             <div class="form-group">
-                <label for="display-name">Your Display Name:</label>
-                <input type="text" id="display-name" value="{{ profile.display_name }}">
+                <label for="display-name">User Name (Your Name):</label>
+                <input type="text" id="display-name" value="{{ profile.user_name }}" placeholder="How should the AI call you?">
             </div>
 
             <div class="form-group">
-                <label for="partner-name">Partner Name:</label>
-                <input type="text" id="partner-name" value="{{ profile.partner_name }}">
+                <label for="partner-name">Assistant Name:</label>
+                <input type="text" id="partner-name" value="{{ profile.partner_name }}" placeholder="Name of your AI companion">
             </div>
 
             <div class="form-group">
-                <label for="affection-level">Affection Level (0-100): <span id="affection-value">{{ profile.affection }}</span></label>
-                <input type="range" id="affection-level" min="0" max="100" value="{{ profile.affection }}">
-            </div>
-
-            <button id="save-profile" class="btn btn-primary">Save Profile Settings</button>
-        </div>
-
-        <!-- AI Provider Settings Section -->
-        <div class="config-section">
-            <h2>AI Provider Settings</h2>
-            
-            <div class="form-group">
-                <label for="ai-provider">Preferred AI Provider:</label>
-                <select id="ai-provider" class="form-select">
-                    <option value="">Loading providers...</option>
+                <label for="persona-preset">Persona Preset:</label>
+                <select id="persona-preset" class="form-select">
+                    <option value="warm">Warm & Empathetic</option>
+                    <option value="professional">Professional Assistant</option>
+                    <option value="smug">Smug & Teasing</option>
+                    <option value="pirate">Pirate Captain</option>
+                    <option value="neko">Neko / Catgirl</option>
+                    <option value="custom">Custom (Write your own)</option>
                 </select>
             </div>
 
             <div class="form-group">
-                <label for="ai-model">Preferred Model:</label>
-                <select id="ai-model" class="form-select">
-                    <option value="">Select provider first...</option>
-                </select>
+                <label for="persona-prompt">Persona Prompt:</label>
+                <textarea id="persona-prompt" rows="4" placeholder="Define the AI's personality, traits, and behavior here..."></textarea>
             </div>
 
-            <div class="provider-status" id="provider-status">
-                <p><strong>Current:</strong> <span id="current-provider">Loading...</span></p>
-                <p><strong>Status:</strong> <span id="connection-status">Checking...</span></p>
-            </div>
-
-            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                <button id="test-provider" class="btn" style="background: #10b981; color: white;">Test Connection</button>
-                <button id="save-provider" class="btn btn-primary">Save Provider Settings</button>
-            </div>
+            <button id="save-profile" class="btn btn-primary">Save Identity Settings</button>
         </div>
 
-        <!-- Image Generation Model Section -->
+        <!-- Phase 4: Providers (Card-based layout) -->
         <div class="config-section">
-            <h2>Image Generation Model</h2>
-            
-            <div class="form-group">
-                <label for="image-model">Preferred Image Model:</label>
-                <select id="image-model" class="form-select">
-                    <option value="">Loading...</option>
-                </select>
-            </div>
-
-            <button id="save-image-model" class="btn btn-primary">Save Image Model</button>
-        </div>
-
-        <!-- Vision Model Section -->
-        <div class="config-section">
-            <h2>Vision Model (Image Processing)</h2>
+            <h2>Providers (Bring Your Own Key)</h2>
             <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                Model for processing images in chat. Auto-switches when you send an image with a text-only model.
-            </p>
-            
-            <div class="form-group">
-                <label for="vision-provider">Provider:</label>
-                <select id="vision-provider" class="form-select">
-                    <option value="">Loading...</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="vision-model">Model:</label>
-                <select id="vision-model" class="form-select">
-                    <option value="">Select provider first...</option>
-                </select>
-            </div>
-
-            <div class="provider-status" id="vision-status">
-                <p><strong>Current:</strong> <span id="current-vision-model">Loading...</span></p>
-            </div>
-
-            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                <button id="test-vision" class="btn" style="background: #10b981; color: white;">Test Vision</button>
-                <button id="save-vision-model" class="btn btn-primary">Save Vision Model</button>
-            </div>
-        </div>
-
-        <!-- Structured Memory Section -->
-        <div class="config-section">
-            <h2>Structured Memory</h2>
-            
-            <div class="memory-stats">
-                <p><strong>Memory statistics for current session:</strong></p>
-                <div id="memory-stats-display" style="padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0.5rem 0; min-height: 60px;">
-                    <p><strong>Semantic Facts:</strong> <span id="semantic-count">Loading...</span></p>
-                    <p><strong>Episodic Memories:</strong> <span id="episodic-count">Loading...</span></p>
-                    <p><strong>Conversation Segments:</strong> <span id="segment-count">Loading...</span></p>
-                </div>
-                <div id="top-facts-display" style="padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0.5rem 0; min-height: 40px;">
-                    <p><strong>Top Known Facts:</strong></p>
-                    <ul id="top-facts-list" style="margin: 0.3rem 0; padding-left: 1.2rem;">
-                        <li>Loading...</li>
-                    </ul>
-                </div>
-            </div>
-
-            <div style="display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;">
-                <button id="rebuild-memory" class="btn" style="background: #f59e0b; color: white;">Rebuild Structured Memory</button>
-                <button id="run-decay" class="btn" style="background: #8b5cf6; color: white;">Run Memory Decay</button>
-                <button id="clear-chat-history" class="btn" style="background: #ef4444; color: white;">Clear Chat History</button>
-            </div>
-        </div>
-
-        <!-- Global Player Profile Section -->
-        <div class="config-section">
-            <h2>Global Player Profile</h2>
-            
-            <div class="memory-stats">
-                <p><strong>Comprehensive profile from all of your sessions</strong></p>
-                <div id="global-profile" style="padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 10px; margin: 0.5rem 0;">
-                    <p><strong>Summary:</strong> <span id="player-summary">Loading...</span></p>
-                    <p><strong>Likes:</strong> <span id="player-likes">Loading...</span></p>
-                    <p><strong>Dislikes:</strong> <span id="player-dislikes">Loading...</span></p>
-                    <p><strong>Personality:</strong> <span id="player-personality">Loading...</span></p>
-                    <p><strong>Memories:</strong> <span id="player-memories">Loading...</span></p>
-                    <p><strong>Relationship:</strong> <span id="player-relationship">Loading...</span></p>
-                </div>
-                <p><strong>Last Updated:</strong> <span id="global-profile-last-updated">Never</span></p>
-            </div>
-
-            <button id="update-global-profile" class="btn btn-primary" style="margin-top: 1rem; background: #8b5cf6;">Update Global Profile (All Your Sessions)</button>
-        </div>
-
-        <!-- Global Knowledge Section -->
-        <div class="config-section">
-            <h2>Global Knowledge</h2>
-            
-            <div class="memory-stats">
-                <p><strong>Manual facts that persist across all of your sessions</strong></p>
-                <textarea id="global-knowledge" placeholder="Enter global facts about yourself/partner that should be remembered across all of your sessions..." rows="6" style="width: 100%; padding: 0.8rem; border-radius: 10px; background: var(--input-bg); color: var(--text-color); border: 1px solid rgba(255,255,255,0.1); resize: vertical; font-family: inherit;"></textarea>
-            </div>
-
-            <button id="save-global-knowledge" class="btn btn-primary" style="margin-top: 1rem;">Save Global Knowledge</button>
-        </div>
-
-        <!-- Location Section -->
-        <div class="config-section">
-            <h2>Location</h2>
-            
-            <div class="form-group">
-                <label for="location-lat">Latitude:</label>
-                <input type="number" id="location-lat" step="0.0001" placeholder="0.0" value="0.0">
-            </div>
-
-            <div class="form-group">
-                <label for="location-lon">Longitude:</label>
-                <input type="number" id="location-lon" step="0.0001" placeholder="0.0" value="0.0">
-            </div>
-
-            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                <button id="use-current-location" class="btn" style="background: #10b981; color: white;">Use current device location</button>
-                <button id="save-location" class="btn btn-primary">Save Location</button>
-            </div>
-        </div>
-
-        <div class="config-section">
-            <h2>Provider Keys (Bring Your Own Key)</h2>
-            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                Your API keys are stored only in this browser and sent per-request to the backend. They never touch the server database.
+                Configure your API keys directly in the browser. Keys are sent per-request and are NEVER stored on the server. Select a provider below to set it as your active AI.
             </p>
 
-            <div class="form-group">
-                <label for="byok-provider">Provider:</label>
-                <select id="byok-provider" class="form-select">
-                    <option value="openrouter">OpenRouter</option>
-                    <option value="cerebras">Cerebras</option>
-                    <option value="chutes">Chutes</option>
-                    <option value="ollama">Ollama</option>
-                    <option value="custom">Custom</option>
-                </select>
+            <div class="providers-grid" id="providers-grid">
+                <!-- Managed by config.js dynamically -->
             </div>
-
-            <div class="form-group" id="byok-apikey-group">
-                <label for="byok-api-key">API Key:</label>
-                <input type="password" id="byok-api-key" placeholder="Enter your API key (optional for Ollama)" style="background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.6rem 0.8rem; width: 100%;">
+            
+            <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <button id="save-active-provider" class="btn btn-primary">Save Active Provider</button>
+                <button id="test-active-provider" class="btn" style="background: #10b981; color: white;">Test Active Connection</button>
             </div>
-
-            <div class="form-group byok-conditional" id="byok-baseurl-group" style="display: none;">
-                <label for="byok-base-url">Custom Base URL:</label>
-                <input type="text" id="byok-base-url" placeholder="e.g. http://localhost:11434" style="background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.6rem 0.8rem; width: 100%;">
-            </div>
-
-            <div class="form-group byok-conditional" id="byok-modelid-group" style="display: none;">
-                <label for="byok-model-id">Custom Model ID:</label>
-                <input type="text" id="byok-model-id" placeholder="e.g. llama3" style="background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.6rem 0.8rem; width: 100%;">
-            </div>
-
-            <button id="save-byok" class="btn btn-primary">Save Provider Configuration</button>
         </div>
+
+        <!-- Phase 5 Preview / Advanced UI Hook -->
+        <div class="config-section">
+            <h2>Advanced Settings (Coming Soon)</h2>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                Generation parameters (Temperature, Top P), Memory controls, and Developer prompt configurations will be available here in Phase 5.
+            </p>
+        </div>
+
     </main>
 
     {% include "partials/footer.html" %}

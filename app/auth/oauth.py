@@ -178,8 +178,8 @@ async def _get_github_identity(
                     email = entry["email"]
                     break
         avatar_url = data.get("avatar_url")
-        display_name = data.get("name") or data.get("login")
-        return provider_sub, email, avatar_url, display_name
+        user_name = data.get("name") or data.get("login")
+        return provider_sub, email, avatar_url, user_name
 
 
 async def resolve_identity(
@@ -187,7 +187,7 @@ async def resolve_identity(
     token_response: dict,
     client_id: str,
 ) -> tuple[str, str | None, str | None, str | None]:
-    """Resolve OAuth identity → (provider_sub, email, avatar_url, display_name)."""
+    """Resolve OAuth identity → (provider_sub, email, avatar_url, user_name)."""
     if config.has_id_token:
         id_token = token_response.get("id_token")
         if not id_token:

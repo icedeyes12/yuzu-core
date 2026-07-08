@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from app.db.models_async import (
-    add_api_key_async as _pg_add_api_key_async,
     add_message_async as _pg_add_message_async,
     update_message_async as _pg_update_message_async,
     add_session_event_async as _pg_add_session_event_async,
@@ -17,8 +16,6 @@ from app.db.models_async import (
     get_active_session_async as _pg_get_active_session_async,
     get_all_encrypted_messages_async as _pg_get_all_encrypted_messages_async,
     get_all_sessions_async as _pg_get_all_sessions_async,
-    get_api_key_async as _pg_get_api_key_async,
-    get_api_keys_async as _pg_get_api_keys_async,
     get_chat_history_async as _pg_get_chat_history_async,
     get_chat_history_for_ai_async as _pg_get_chat_history_for_ai_async,
     get_context_async as _pg_get_context_async,
@@ -31,7 +28,6 @@ from app.db.models_async import (
     get_session_notes_async as _pg_get_session_notes_async,
     get_session_messages_async as _pg_get_session_messages_async,
     increment_message_count_async as _pg_increment_message_count_async,
-    remove_api_key_async as _pg_remove_api_key_async,
     rename_session_async as _pg_rename_session_async,
     switch_session_async as _pg_switch_session_async,
     update_context_async as _pg_update_context_async,
@@ -44,7 +40,7 @@ from app.db.models_async import (
     lookup_unclaimed_profile_async as _pg_lookup_unclaimed_profile_async,
     insert_default_profile_returning_async as _pg_insert_default_profile_returning_async,
     update_profile_avatar_async as _pg_update_profile_avatar_async,
-    update_profile_display_name_async as _pg_update_profile_display_name_async,
+    update_profile_user_name_async as _pg_update_profile_user_name_async,
     insert_identity_async as _pg_insert_identity_async,
     lookup_auth_me_async as _pg_lookup_auth_me_async,
 )
@@ -112,12 +108,6 @@ class Database:
     get_context = _proxy_async(_pg_get_context_async)
     update_context = _proxy_async(_pg_update_context_async)
 
-    # API keys
-    get_api_keys = _proxy_async(_pg_get_api_keys_async)
-    get_api_key = _proxy_async(_pg_get_api_key_async)
-    add_api_key = _proxy_async(_pg_add_api_key_async)
-    remove_api_key = _proxy_async(_pg_remove_api_key_async)
-
     # Sessions
     create_session = _proxy_async(_pg_create_session_async)
     get_active_session = _proxy_async(_pg_get_active_session_async)
@@ -152,7 +142,7 @@ class Database:
         _pg_insert_default_profile_returning_async
     )
     update_profile_avatar = _proxy_async(_pg_update_profile_avatar_async)
-    update_profile_display_name = _proxy_async(_pg_update_profile_display_name_async)
+    update_profile_user_name = _proxy_async(_pg_update_profile_user_name_async)
     insert_identity = _proxy_async(_pg_insert_identity_async)
     lookup_auth_me = _proxy_async(_pg_lookup_auth_me_async)
 
