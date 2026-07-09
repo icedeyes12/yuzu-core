@@ -211,17 +211,15 @@ async def _send_to_provider(
 
     # Phase 1: structured payload audit log (non-stream path)
     if any(
-        isinstance(m.get("content"), list)
-        and m.get("role") == "system"
+        isinstance(m.get("content"), list) and m.get("role") == "system"
         for m in messages
     ):
-        sys_count = sum(
-            1 for m in messages
-            if m.get("role") == "system"
-        )
+        sys_count = sum(1 for m in messages if m.get("role") == "system")
         log.info(
             "[LLMClient] structured payload: %d system message(s), %d total messages, params=%s",
-            sys_count, len(messages), sorted(ctx.parameters.keys()),
+            sys_count,
+            len(messages),
+            sorted(ctx.parameters.keys()),
         )
 
     started = time.time()
@@ -288,8 +286,8 @@ async def generate_ai_response(
     # FC9-C: Check if provider supports native FC for prompt construction
     ai_manager = await get_ai_manager()
     provider_supports_fc = ai_manager.provider_supports_tools(ctx.provider)
-    provider_supports_struct = (
-        ai_manager.provider_supports_structured_system(ctx.provider)
+    provider_supports_struct = ai_manager.provider_supports_structured_system(
+        ctx.provider
     )
     additional_instructions = _resolve_additional_instructions(profile)
 
@@ -333,17 +331,15 @@ async def _stream_from_provider(
 
     # Phase 1: structured payload audit log (stream path)
     if any(
-        isinstance(m.get("content"), list)
-        and m.get("role") == "system"
+        isinstance(m.get("content"), list) and m.get("role") == "system"
         for m in messages
     ):
-        sys_count = sum(
-            1 for m in messages
-            if m.get("role") == "system"
-        )
+        sys_count = sum(1 for m in messages if m.get("role") == "system")
         log.info(
             "[LLMClient] structured payload: %d system message(s), %d total messages, params=%s",
-            sys_count, len(messages), sorted(ctx.parameters.keys()),
+            sys_count,
+            len(messages),
+            sorted(ctx.parameters.keys()),
         )
 
     received = 0
@@ -401,8 +397,8 @@ async def generate_ai_response_streaming(
     # FC9-C: Check if provider supports native FC for prompt construction
     ai_manager = await get_ai_manager()
     provider_supports_fc = ai_manager.provider_supports_tools(ctx.provider)
-    provider_supports_struct = (
-        ai_manager.provider_supports_structured_system(ctx.provider)
+    provider_supports_struct = ai_manager.provider_supports_structured_system(
+        ctx.provider
     )
     additional_instructions = _resolve_additional_instructions(profile)
 

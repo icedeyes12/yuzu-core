@@ -128,7 +128,11 @@ async def api_ensure_default_preset(user_id: str = Depends(get_current_user)):
             context["presets"] = presets
             context = sync_top_level_with_active(context)
             await _save_context(context, user_id)
-        return {"status": "success", "presets": presets, "active": active_preset(context)}
+        return {
+            "status": "success",
+            "presets": presets,
+            "active": active_preset(context),
+        }
     except Exception as exc:
         log.error("ensure_default_preset failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")

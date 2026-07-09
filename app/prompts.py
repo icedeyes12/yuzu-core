@@ -393,11 +393,13 @@ async def build_system_message_async(
 """
 
     comm_style_preset = profile.get("persona_preset") or "helpful"
-    comm_style = COMMUNICATION_STYLES.get(comm_style_preset, COMMUNICATION_STYLES["helpful"])
+    comm_style = COMMUNICATION_STYLES.get(
+        comm_style_preset, COMMUNICATION_STYLES["helpful"]
+    )
 
     partner_name = profile.get("partner_name", "Yuzu")
     user_name = profile.get("user_name", "the user")
-    
+
     try:
         comm_style = comm_style.format(partner_name=partner_name)
     except KeyError:
@@ -489,11 +491,16 @@ async def build_messages(
 
     if structured_enabled:
         sections = await _build_sections_async(
-            profile, session_id, interface, user_message, user_id,
+            profile,
+            session_id,
+            interface,
+            user_message,
+            user_id,
             suppress_tools=suppress_tools,
         )
         system_entry = _compose_structured_system_message(
-            sections, additional_instructions=additional_instructions,
+            sections,
+            additional_instructions=additional_instructions,
         )
     else:
         system_message = await build_system_message_async(
@@ -581,9 +588,7 @@ async def build_messages(
     # In structured mode this lives AFTER the last user/assistant turn, as
     # required by the contract.
     if additional_instructions and structured_enabled:
-        result.append(
-            {"role": "system", "content": additional_instructions.strip()}
-        )
+        result.append({"role": "system", "content": additional_instructions.strip()})
 
     return result
 
@@ -637,6 +642,7 @@ def _encode_image_safe(path: str) -> dict[str, Any] | None:
 
     return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}}
 
+
 # ── Phase 1: Structured-payload message builder (helpers) ────────────────
 
 
@@ -658,7 +664,9 @@ async def _build_sections_async(
     memory_block += await _legacy_memory_block_async(profile, session_id, user_id)
 
     comm_style_preset = profile.get("persona_preset") or "helpful"
-    comm_style = COMMUNICATION_STYLES.get(comm_style_preset, COMMUNICATION_STYLES["helpful"])
+    comm_style = COMMUNICATION_STYLES.get(
+        comm_style_preset, COMMUNICATION_STYLES["helpful"]
+    )
     try:
         comm_style = comm_style.format(partner_name=partner_name)
     except KeyError:
@@ -842,11 +850,12 @@ def _compose_structured_system_message(sections, additional_instructions=""):
         {"type": "text", "text": _json_escape(knowledge_payload)},
         {
             "type": "text",
-            "text": _json_escape({"type": "instructions", "instructions": instructions_list}),
+            "text": _json_escape(
+                {"type": "instructions", "instructions": instructions_list}
+            ),
         },
     ]
     if natural_language_tail:
         parts.append({"type": "text", "text": natural_language_tail})
 
     return {"role": "system", "content": parts}
-

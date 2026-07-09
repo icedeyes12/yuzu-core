@@ -219,8 +219,7 @@ class ProviderCapabilities:
             "supports_native_fc": self.supports_native_fc,
             "supports_streaming_fc": self.supports_streaming_fc,
             "supports_tool_call_parsing": self.supports_tool_call_parsing,
-            "supports_structured_system_content":
-                self.supports_structured_system_content,
+            "supports_structured_system_content": self.supports_structured_system_content,
         }
 
 
@@ -452,7 +451,9 @@ class AIProviderManager:
         """
         if provider_name not in self.providers:
             return False
-        return self.providers[provider_name].capabilities.supports_structured_system_content
+        return self.providers[
+            provider_name
+        ].capabilities.supports_structured_system_content
 
     def get_all_provider_capabilities(self) -> dict[str, dict[str, bool]]:
         """Return capability map for all registered providers."""

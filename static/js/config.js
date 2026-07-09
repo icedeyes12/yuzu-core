@@ -357,7 +357,7 @@ async function fetchModelsForProvider(provider) {
 			const select = document.getElementById(`model-${provider}`);
 			if (select) {
 				const currentSelect = document.getElementById("ai-model");
-				const prev = currentSelect && currentSelect.value ? currentSelect.value : null;
+				const prev = currentSelect?.value || null;
 				select.innerHTML = "";
 				const list = data.models.slice();
 				if (prev && !list.includes(prev)) list.unshift(prev);
