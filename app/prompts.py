@@ -333,7 +333,7 @@ def _get_relevant_tools(user_message: str) -> str:
     return "\n".join(lines)
 
 
-PERSONA_PRESETS = {
+COMMUNICATION_STYLES = {
     "helpful": "You are {partner_name}, a helpful, friendly AI assistant.",
     "concise": "You are {partner_name}, a concise assistant. Keep responses brief and to the point.",
     "technical": "You are {partner_name}, a technical expert. Provide detailed, accurate technical information.",
@@ -391,23 +391,23 @@ async def build_system_message_async(
 {_get_relevant_tools(user_message or "")}
 """
 
-    persona_preset = profile.get("persona_preset") or "helpful"
-    if persona_preset == "custom":
-        persona_text = profile.get("persona_prompt") or "You are a helpful AI."
-    else:
-        persona_text = PERSONA_PRESETS.get(persona_preset, PERSONA_PRESETS["helpful"])
+    comm_style_preset = profile.get("persona_preset") or "helpful"
+    comm_style = COMMUNICATION_STYLES.get(comm_style_preset, COMMUNICATION_STYLES["helpful"])
 
     partner_name = profile.get("partner_name", "Yuzu")
     user_name = profile.get("user_name", "the user")
     
     try:
-        persona_text = persona_text.format(partner_name=partner_name)
+        comm_style = comm_style.format(partner_name=partner_name)
     except KeyError:
         pass
 
+    persona_desc = profile.get("persona_prompt")
+    character_block = f"\nCharacter Profile: {persona_desc}" if persona_desc else ""
+
     return f"""# IDENTITY
-You are {partner_name}, a helpful AI companion.
-Your personality is defined by: {persona_text}
+You are {partner_name}.{character_block}
+Communication Style: {comm_style}
 You are speaking with {user_name}.
 
 # DIGITAL NATURE
