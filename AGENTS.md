@@ -1,60 +1,141 @@
-# Yuzu Companion — Native Function Calling Guide
+# Yuzu Companion — Agent Operating Guide
 
-This is the compact operating guide for the current repository state.
+Compact routing index for AI code generation. Reflects the current state of
+the repository at HEAD of `dev`.
 
-## Architecture in one sentence
+## Core Tech Stack & Environment
 
-Native function calling is the only production tool-execution architecture.
-The orchestrator consumes provider tool calls, executes them through `file app/tools/registry.py`, persists `ToolEvent`-based results, and does not depend on XML tool invocation at runtime.
+- **Language / Runtime:** Python 3.12+
+- **Web framework:** FastAPI + Uvicorn (`main.py` is the ASGI entry point;
+  `cli/app.py` is the terminal entry point registered as `yuzu` console script)
+- **Database:** PostgreSQL with the `pgcrypto`, `vector` (pgvector), and
+  `pg_trgm` extensions
+- **DB adapter:** `psycopg[binary,pool]` v3 (raw SQL — no ORM)
+- **Schema DDL:** `app/db/queries.py` (`SCHEMA_DDL` tuple) — single source of
+  truth. UUIDv7 primary keys for `profiles` / `chat_sessions`; SERIAL int PKs
+  for `messages` and `semantic_facts`. All tenant-scoped tables carry
+  `user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE`
+- **Embeddings:** Qwen3-Embedding-8B via Chutes
+  (`https://chutes-qwen-qwen3-embedding-8b-tee.chutes.ai/v1/embeddings`);
+  `EMBEDDING_DIM = 4096`
+- **Memory decay:** `fsrs` package
+- **Encryption:** ChaCha20-Poly1305 (`pycryptodome`) for API keys
+- **Frontend linting:** Biome (run via `npx --yes @biomejs/biome check static/`)
+- **Python linting:** `ruff check .` and `ruff format --check .`
+- **Templates:** Jinja2 + vanilla JS / CSS in `templates/` and `static/`
 
-## Active production surfaces
+## Architectural Compass
 
-- `file app/orchestrator.py` — single message-entry pipeline
-- `file app/llm_client.py` — provider dispatch and streaming
-- `file app/prompts.py` and `file app/prompt.md` — system prompt assembly
-- `file app/providers.py` — provider capability and tool-call parsing
-- `file app/tools/registry.py` — canonical tool execution
-- `file app/tools/schemas.py` — `ToolEvent` / `ToolResultEvent` types
-- `file app/stream_manager.py` — live stream buffering and persistence
-- `file app/db/queries.py` — SQL, schema bootstrap, and legacy-result cleanup helpers
-- `file static/js/renderer.js` and `file static/js/chat.js` — streaming UI and ToolEvent rendering
+### Backend (`app/`)
 
-## Legacy surface that may remain
+- `app/orchestrator.py` — single entry point for user messages. Streaming +
+  non-streaming paths. Owns image dedup, vision routing, native tool call
+  dispatch, and the synthesis orchestration loop (max 4 iterations).
+- `app/llm_client.py` — payload construction + provider dispatch (streaming
+  and non-streaming). Calls `build_messages()` and passes
+  `**ctx.parameters` to providers.
+- `app/prompts.py` — system prompt assembly and the
+  `build_messages(profile, session_id, interface, user_message, user_id, ...)`
+  function. Structured content-array path is selected when the provider
+  reports `supports_structured_system_content=True`.
+- `app/providers/` — one file per provider (`base.py`, `chutes.py`,
+  `openrouter.py`, `anthropic.py`, `openai.py`, `ollama.py`, `cerebras.py`,
+  `deepseek.py`, `google.py`, `grok.py`, `groq.py`, `custom_anthropic.py`,
+  `custom_openai.py`). All declare a `ProviderCapabilities` instance.
+- `app/core/llm_context.py` — runtime SSOT dataclass assembled from profile,
+  BYOK keyring, and the active preset payload. Holds the resolved
+  `parameters` dict.
+- `app/core/presets.py` — preset CRUD + `resolve_active_preset_payload()`
+  used as the only source of runtime generation parameters when a preset is
+  active.
+- `app/db/queries.py` — SQL constants, `SCHEMA_DDL`, row parsers, encryption
+  helpers. **All SQL lives here** — do not inline schema drift into business
+  logic.
+- `app/memory/embedder.py` — embedding client. `EMBEDDING_DIM = 4096`.
+- `app/memory/retrieval.py` — pgvector + trigram hybrid retrieval.
+  `retrieve_memories_combined()`, `retrieve_static_memories()`,
+  `retrieve_dynamic_memories()`, `retrieve_segments()`,
+  `retrieve_for_context()`. All accept a `user_id` filter.
+- `app/memory/db_memory.py` — unified CRUD over `semantic_facts`.
+- `app/memory/memory.py` — background pipeline + segmentation.
+- `app/memory/review.py` — FSRS-style decay and reinforcement.
+- `app/tools/registry.py` — canonical tool dispatch via `ToolEvent` /
+  `ToolResultEvent`. `execute_tool_event()` is the production execution path.
+- `app/tools/schemas.py` — `ToolEvent`, `ToolResultEvent`, `StreamToolEvent`
+  dataclasses.
+- `app/tools/multimodal.py` — `MultimodalTools` class: image caching, base64
+  encoding, vision model detection, `format_vision_message()`.
+- `app/services/` — `SessionService`, `MemoryService`, `ChatService`,
+  `ConfigService` — orchestration glue for the API layer.
+- `app/stream_manager.py` — `StreamBuffer`: in-RAM chunk accumulation,
+  single DB write on completion, self-cleanup after persistence.
+- `app/legacy_markup.py` — strip-only helpers for archived XML-style
+  `<command>` / `<tool>` blocks. **Not** an execution path.
+- `app/api/endpoints/` — FastAPI routers: `auth.py`, `chat.py`, `memory.py`,
+  `presets_endpoint.py`, `profile.py`, `sessions.py`, `stream.py`.
 
-`file app/commands.py` is a legacy cleanup utility only. It may strip archived XML-style tool markup from stored content, but it is not a production protocol parser and must not be used as an execution path.
+### Frontend
 
-## Hard rules
+- `templates/` — Jinja2 HTML pages (`index.html`, `chat.html`, `config.html`,
+  `about.html`, `login.html`, `offline.html`, plus `partials/`).
+- `static/js/` — vanilla JS modules (`chat.js`, `config.js`, `home.js`,
+  `about.js`, `sidebar.js`, `renderer.js`, plus `modules/`).
+- `static/css/` — per-page stylesheets (`chat.css`, `config.css`, etc.).
+- `static/uploads/`, `static/generated_images/`, `static/image_cache/` —
+  runtime image storage; safe to gitignore.
 
-1. Do not reintroduce XML tool invocation as an active protocol.
-2. Do not teach legacy markup as a live tool format in prompts, docs, or UI text.
-3. Do not route runtime execution through legacy command dispatch.
-4. Keep `ToolEvent` / `ToolResultEvent` as the only production execution contract.
-5. Keep SQL in `file app/db/queries.py`; do not inline schema drift into business logic.
-6. Keep stream ownership in `file app/stream_manager.py`; do not add parallel streaming stacks.
+## Rules of Engagement (The "Constitution")
 
-## What to update when changing behavior
-
-- Prompt text: `file app/prompts.py`, `file app/prompt.md`, `file docs/prompt.md`
-- Architecture docs: `file docs/ARCHITECTURE.md`, `file docs/BACKEND.md`, `file docs/tools.md`, `file docs/state-machine.md`
-- Frontend rendering: `file static/js/renderer.js`
-- Legacy cleanup logic: `file app/commands.py`, `file app/db/queries.py`, `file app/stream_manager.py`
-- Tests: prefer native FC coverage and cleanup-behavior tests for legacy markup only
-
-## Validation expectations
-
-After changes that touch Python or JS:
-
-- `ruff check .`
-- `ruff format --check .`
-- `pytest`
-- `biome check static/js/`
-
-## Current stance on old protocol terms
-
-References to legacy XML tool markup, parser helpers, execution helpers, and `/command` are only acceptable in:
-
-- historical migration notes
-- cleanup utilities that strip old stored output
-- tests that verify legacy cleanup behavior
-
-They must not appear as active architecture in production docs or prompts.
+1. **Native function calling is the only production tool protocol.**
+   `ToolEvent` / `ToolResultEvent` flow through `app/tools/registry.py`.
+   `app/commands.py` and `app/legacy_markup.py` are cleanup-only and must
+   not be reintroduced as live execution paths.
+2. **All SQL lives in `app/db/queries.py`.** No inline DDL or schema drift
+   in business logic. Migrations are additive only — never drop tables.
+3. **Tenant isolation is mandatory.** Every read/write against a
+   `user_id`-scoped table must filter by `user_id`. Memory retrieval
+   (`app/memory/retrieval.py`) accepts and forwards `user_id`; do not
+   add a retrieval path that omits it.
+4. **Runtime parameters come from the active preset.** `LLMContext.from_profile`
+   calls `resolve_active_preset_payload()` and uses that as the only source
+   of `temperature`, `top_p`, `top_k`, `max_tokens`, and
+   `additional_instructions` when a preset is active. Loose top-level
+   context values are ignored in that case to keep the runtime payload
+   reproducible.
+5. **Structured system content is capability-gated.** When a provider's
+   `ProviderCapabilities.supports_structured_system_content` is `True`,
+   `build_messages` emits the system message as a content array (persona,
+   metadata, memory, knowledge, instructions). Otherwise it falls back to
+   legacy single-string assembly, but still appends `additional_instructions`
+   as a second system message.
+6. **Image deduplication is layered.**
+   - `app/orchestrator.py` `_dedupe_image_paths` merges `cached_images` and
+     `image_paths` by `os.path.realpath`, preserving first-occurrence order.
+   - `app/prompts.py` `_build_multimodal_message` keeps a `seen` set so the
+     same file referenced via different path forms cannot produce duplicate
+     `image_url` blocks.
+   - `app/tools/multimodal.py` `format_vision_message` keeps a parallel
+     `seen` set as defense-in-depth.
+7. **Stream ownership lives in `app/stream_manager.py`.** Do not add parallel
+   streaming stacks. The orchestrator yields, `StreamBuffer` writes to DB
+   once on completion.
+8. **Vision routing is provider-via-`AIProviderManager.format_vision_message`.**
+   `app/tools/multimodal.py` is the home of vision model detection and
+   image cache; the orchestrator delegates through the base provider.
+9. **Frontend lint/format with Biome.** Run `npx --yes @biomejs/biome check
+   static/` before committing JS/CSS changes. Do not add new
+   frontend packages without coordinating with the existing
+   per-page stylesheet layout.
+10. **Slider drag-threshold is required.** All `<input type="range">`
+    elements must be wrapped with `attachSliderGuard(slider)` so vertical
+    scroll does not move the slider. The guard activates on horizontal
+    movement after a 6px touch-slop threshold and ignores minor vertical
+    drift.
+11. **API keys never persist server-side.** BYOK architecture: keys live
+    only in browser `localStorage` (`yuzu_byok_config`) and arrive via
+    `X-Provider-Key` / `X-Provider-BaseUrl` headers. The `api_keys` table
+    was destructively purged; do not recreate it.
+12. **Validation before commit.** After touching Python: `ruff check .` and
+    `ruff format --check .`. After touching JS/CSS: `npx --yes
+    @biomejs/biome check static/`. Run `python -m py_compile` on changed
+    `.py` files.
