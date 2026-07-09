@@ -132,14 +132,14 @@ def _detect_time_window(query):
     return None
 
 
-def _search_temporal_messages(session_id, start, end, limit=200):
-    """Search messages within a time window using PostgreSQL."""
+def _search_temporal_messages(session_id, start, end, user_id, limit=200):
+    """Search messages within a time window using PostgreSQL. User-scoped."""
     results = []
     try:
         start_str = start.strftime("%Y-%m-%d %H:%M:%S")
         end_str = end.strftime("%Y-%m-%d %H:%M:%S")
 
-        rows = pg_fetchall(SQL_MESSAGE_SELECT_ASC_LIMIT, (session_id, limit))
+        rows = pg_fetchall(SQL_MESSAGE_SELECT_ASC_LIMIT, (session_id, user_id, limit))
         messages = [parse_message_row(r) for r in rows]
 
         for msg in messages:
@@ -840,7 +840,9 @@ def retrieve_memory(session_id: str, query=None, user_id: str | None = None):
             time_window = _detect_time_window(query)
             if time_window:
                 start, end = time_window
-                temporal_messages = _search_temporal_messages(session_id, start, end)
+                temporal_messages = _search_temporal_messages(
+                    session_id, start, end, user_id=user_id
+                )
         except Exception:
             pass
 
@@ -1172,7 +1174,9 @@ async def retrieve_memory_async(
             time_window = _detect_time_window(query)
             if time_window:
                 start, end = time_window
-                temporal_messages = _search_temporal_messages(session_id, start, end)
+                temporal_messages = _search_temporal_messages(
+                    session_id, start, end, user_id=user_id
+                )
         except Exception:
             pass
 

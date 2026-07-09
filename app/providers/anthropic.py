@@ -27,6 +27,10 @@ class AnthropicProvider(AIProvider):
             supports_native_fc=True,
             supports_streaming_fc=True,
             supports_tool_call_parsing=True,
+            # Anthropic uses a top-level `system` field (str or content blocks),
+            # not a content array on the system message. We keep the legacy
+            # text-only path until we wire a dedicated translator.
+            supports_structured_system_content=False,
         )
         self.available_models = list(_DEFAULT_MODELS)
 
