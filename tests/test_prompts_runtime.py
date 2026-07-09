@@ -132,15 +132,15 @@ async def test_persona_injection_and_missing_data_fallback(monkeypatch):
     )
 
     # Verify fallbacks
-    assert "You are Yuzu," in prompt
-    assert "speaking with the user." in prompt
-    assert "Your personality is defined by: You are Yuzu, a helpful, friendly AI assistant." in prompt
+    assert "You are Yuzu." in prompt
+    assert "Communication Style: You are Yuzu, a helpful, friendly AI assistant." in prompt
+    assert "You are speaking with the user." in prompt
 
     # Verify custom persona logic
     profile_custom = {
         "partner_name": "TestAI",
         "user_name": "TestUser",
-        "persona_preset": "custom",
+        "persona_preset": "helpful",
         "persona_prompt": "You are a test persona.",
     }
 
@@ -152,6 +152,6 @@ async def test_persona_injection_and_missing_data_fallback(monkeypatch):
         user_id="user_1",
     )
 
-    assert "You are TestAI," in prompt_custom
-    assert "speaking with TestUser." in prompt_custom
-    assert "Your personality is defined by: You are a test persona." in prompt_custom
+    assert "You are TestAI." in prompt_custom
+    assert "Character Profile: You are a test persona." in prompt_custom
+    assert "Communication Style: You are TestAI, a helpful, friendly AI assistant." in prompt_custom
