@@ -121,7 +121,7 @@ async function loadProfileData() {
 		setValueIfExists("affection-level", data.affection);
 		setValueIfExists("display-name", data.user_name || "");
 		setValueIfExists("partner-name", data.partner_name || "");
-		setValueIfExists("persona-preset", data.persona_preset || "warm");
+		setValueIfExists("persona-preset", data.persona_preset || "helpful");
 		setValueIfExists("persona-prompt", data.persona_prompt || "");
 
 		const prefProvider = data.current_provider;
@@ -830,7 +830,7 @@ async function saveProfileSettings() {
 	const displayName = getValueIfExists("display-name", "");
 	const partnerName = getValueIfExists("partner-name", "");
 	const affection = getValueIfExists("affection-level", "0");
-	const personaPreset = getValueIfExists("persona-preset", "warm");
+	const personaPreset = getValueIfExists("persona-preset", "helpful");
 	const personaPrompt = getValueIfExists("persona-prompt", "");
 
 	if (!displayName.trim()) {
