@@ -94,10 +94,9 @@ class ChutesProvider(AIProvider):
                 )
             if len(system_payload) == 1 and system_payload[0].get("type") == "text":
                 # Single plain string after merging — collapse to flat form.
-                return (
-                    [{"role": "system", "content": system_payload[0]["text"]}]
-                    + normalized_messages
-                )
+                return [
+                    {"role": "system", "content": system_payload[0]["text"]}
+                ] + normalized_messages
             return [{"role": "system", "content": system_payload}] + normalized_messages
         return normalized_messages
 
@@ -152,18 +151,25 @@ class ChutesProvider(AIProvider):
 
     async def get_models(self) -> list[str]:
         return self.available_models
+
     async def fetch_live_models(self, api_key: str | None = None) -> list[str]:
         import time as _t
         import httpx
+
         now = _t.time()
-        if self._models_cache_data is not None and (now - self._models_cache_at) < self._models_cache_ttl:
+        if (
+            self._models_cache_data is not None
+            and (now - self._models_cache_at) < self._models_cache_ttl
+        ):
             return self._models_cache_data
         try:
             headers = {}
             if api_key:
                 headers["Authorization"] = f"Bearer {api_key}"
             async with httpx.AsyncClient() as client:
-                resp = await client.get(self.api_models_url, headers=headers, timeout=5.0)
+                resp = await client.get(
+                    self.api_models_url, headers=headers, timeout=5.0
+                )
             if resp.status_code == 200:
                 data = resp.json()
                 ids = [m.get("id") for m in data.get("data", []) if m.get("id")]

@@ -1,4 +1,5 @@
 """Phase 2 round-trip + payload-assertion tests for presets and parameters."""
+
 from __future__ import annotations
 
 
@@ -57,7 +58,10 @@ def test_round_trip_preserves_all_fields():
 
 def test_no_active_preset_returns_none():
     """If no preset is active, no payload override is applied."""
-    ctx = {"temperature": 0.7, "presets": [{"name": "x", "payload": {}, "is_active": False}]}
+    ctx = {
+        "temperature": 0.7,
+        "presets": [{"name": "x", "payload": {}, "is_active": False}],
+    }
     assert presets_mod.resolve_active_preset_payload(ctx) is None
 
 
@@ -78,10 +82,13 @@ def test_payload_to_parameters_overrides_context():
     from app.core.llm_context import LLMContext
 
     profile = {
-        "providers_config": {"preferred_provider": "ollama", "preferred_model": "glm-4.6:cloud"},
+        "providers_config": {
+            "preferred_provider": "ollama",
+            "preferred_model": "glm-4.6:cloud",
+        },
         "context": {
             "temperature": 1.5,  # loose
-            "top_k": 99,         # loose
+            "top_k": 99,  # loose
             "presets": [
                 {
                     "name": "strict",

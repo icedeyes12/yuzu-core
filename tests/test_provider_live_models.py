@@ -1,8 +1,6 @@
 import pytest
 
-from app.providers.base import AIProviderManager
 from app.providers.openrouter import OpenRouterProvider
-from app.providers.chutes import ChutesProvider
 
 
 @pytest.mark.asyncio

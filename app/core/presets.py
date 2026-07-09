@@ -11,6 +11,7 @@ Round-trip contract for Phase 2:
   uses that as the *only* source for runtime parameters, never mixing loose context
   overrides with preset values.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -103,13 +104,13 @@ def find_active_preset(ctx: dict[str, Any] | None) -> dict[str, Any] | None:
     presets = list_presets(ctx)
     if not presets:
         return None
-    named = (ctx or {}).get('active_preset')
+    named = (ctx or {}).get("active_preset")
     if isinstance(named, str) and named:
         for entry in presets:
-            if entry.get('name') == named:
+            if entry.get("name") == named:
                 return entry
     for entry in reversed(presets):
-        if entry.get('is_active'):
+        if entry.get("is_active"):
             return entry
     return None
 
@@ -141,7 +142,9 @@ def upsert_preset(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Insert or update a preset by name. Returns the new preset list + the target entry."""
     presets = list_presets(ctx)
-    payload_clean = {k: v for k, v in (payload or {}).items() if k in PRESET_PAYLOAD_KEYS}
+    payload_clean = {
+        k: v for k, v in (payload or {}).items() if k in PRESET_PAYLOAD_KEYS
+    }
     target: dict[str, Any] | None = None
     for entry in presets:
         if entry.get("name") == name:
