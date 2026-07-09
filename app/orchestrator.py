@@ -53,6 +53,36 @@ _ALLOWED_IMAGE_DIRS = [
 _ALLOWED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 
+def _dedupe_image_paths(
+    *sources: list[str] | None,
+) -> list[str]:
+    """Merge multiple image-path lists, deduping by realpath.
+
+    Preserves first-occurrence order. Falls back to the literal path when
+    os.path.realpath cannot resolve it (e.g. URL strings or non-existent
+    files) so URL-based entries are still retained. Non-string / empty
+    entries are skipped. Each source list is consumed in the order it is
+    passed; subsequent sources may not reintroduce a path already seen.
+    """
+    seen: set[str] = set()
+    out: list[str] = []
+    for source in sources:
+        if not source:
+            continue
+        for raw in source:
+            if not raw or not isinstance(raw, str):
+                continue
+            try:
+                key = os.path.realpath(raw)
+            except (OSError, ValueError):
+                key = raw
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(raw)
+    return out
+
+
 def _validate_image_path_safely(user_path: str) -> Path | None:
     """Validate a user-provided image path by searching trusted directories."""
     if not user_path or not isinstance(user_path, str):
@@ -950,10 +980,10 @@ async def handle_user_message_streaming(
     # Cache any images referenced in the message (URLs, etc.)
     cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
 
-    # Merge with explicitly provided image_paths
-    all_image_paths = list(cached_images) if cached_images else []
-    if image_paths:
-        all_image_paths.extend(image_paths)
+    # Merge with explicitly provided image_paths, deduping by realpath so the
+    # same file referenced via different forms (relative, absolute, with .., etc.)
+    # is collapsed before persistence and downstream payload construction.
+    all_image_paths = _dedupe_image_paths(cached_images, image_paths)
 
     turn_id = new_turn_id()
     user_msg_id = await _persist_user_async(

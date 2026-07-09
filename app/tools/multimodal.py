@@ -345,7 +345,20 @@ class MultimodalTools:
 
         content = [{"type": "text", "text": clean_text or "What's in this image?"}]
 
+        # Defense-in-depth: even when a single source is listed once, dedupe
+        # by realpath so a duplicate reference (e.g. the same file shown via
+        # both a remote URL and a local cache path) never produces two
+        # image_url blocks in the payload.
+        seen: set[str] = set()
         for source in image_sources[:3]:  # Limit to 3 images
+            try:
+                key = os.path.realpath(source)
+            except (OSError, ValueError):
+                key = source
+            if key in seen:
+                continue
+            seen.add(key)
+
             if source.startswith(("http://", "https://")):
                 # Remote URL — download to cache, then encode
                 cached_path = self.download_image_to_cache(source)

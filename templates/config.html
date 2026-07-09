@@ -204,6 +204,34 @@
               <input type="range" id="adv-top-p" name="top_p" min="0.0" max="1.0" step="0.05" value="1.0" aria-describedby="top-p-hint">
               <span id="top-p-hint" class="form-hint">Nucleus sampling threshold.</span>
             </div>
+
+            <div class="form-group">
+              <label for="adv-top-k">
+                Top K: <output id="val-top-k" for="adv-top-k">40</output>
+              </label>
+              <input type="range" id="adv-top-k" name="top_k" min="1" max="100" step="1" value="40" aria-describedby="top-k-hint">
+              <span id="top-k-hint" class="form-hint">Sample from the K most likely next tokens. Lower = more focused.</span>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="sr-only">Post-history instructions</legend>
+            <div class="form-group">
+              <label for="adv-additional-instructions">
+                Additional Instructions
+                <span class="form-hint-inline">(appended as a second system message after chat history)</span>
+              </label>
+              <textarea
+                id="adv-additional-instructions"
+                name="additional_instructions"
+                rows="4"
+                maxlength="4000"
+                placeholder="Optional. Injected as a post-history system message. e.g. 'Always answer in Indonesian.' or 'Prefer concise replies.'"
+                aria-describedby="additional-instructions-hint"></textarea>
+              <span id="additional-instructions-hint" class="form-hint">
+                Free-form, single string. Max 4000 chars.
+              </span>
+            </div>
           </fieldset>
 
           <fieldset>
