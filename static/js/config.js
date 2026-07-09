@@ -356,11 +356,16 @@ async function fetchModelsForProvider(provider) {
 		if (data.status === "success" && data.models) {
 			const select = document.getElementById(`model-${provider}`);
 			if (select) {
+				const currentSelect = document.getElementById("ai-model");
+				const prev = currentSelect && currentSelect.value ? currentSelect.value : null;
 				select.innerHTML = "";
-				data.models.forEach((model) => {
+				const list = data.models.slice();
+				if (prev && !list.includes(prev)) list.unshift(prev);
+				list.forEach((model) => {
 					const opt = document.createElement("option");
 					opt.value = model;
 					opt.textContent = model;
+					if (model === prev) opt.selected = true;
 					select.appendChild(opt);
 				});
 			}

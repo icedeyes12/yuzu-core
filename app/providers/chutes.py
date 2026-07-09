@@ -25,6 +25,11 @@ class ChutesProvider(AIProvider):
             supports_tool_call_parsing=True,
             supports_structured_system_content=True,
         )
+        self.api_models_url = "https://llm.chutes.ai/v1/models"
+        self._models_cache_ttl = 600
+        self._models_cache_at = 0.0
+        self._models_cache_data: list[str] | None = None
+
         self._last_error: str | None = None
         self.available_models = [
             "google/gemma-4-31B-turbo-TEE",
@@ -146,6 +151,28 @@ class ChutesProvider(AIProvider):
             return ""
 
     async def get_models(self) -> list[str]:
+        return self.available_models
+    async def fetch_live_models(self, api_key: str | None = None) -> list[str]:
+        import time as _t
+        import httpx
+        now = _t.time()
+        if self._models_cache_data is not None and (now - self._models_cache_at) < self._models_cache_ttl:
+            return self._models_cache_data
+        try:
+            headers = {}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(self.api_models_url, headers=headers, timeout=5.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                ids = [m.get("id") for m in data.get("data", []) if m.get("id")]
+                if ids:
+                    self._models_cache_data = sorted(set(ids))
+                    self._models_cache_at = now
+                    return self._models_cache_data
+        except Exception:
+            pass
         return self.available_models
 
     async def send_message(
