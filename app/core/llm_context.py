@@ -62,21 +62,43 @@ class LLMContext:
         if keyring and keyring.model_id:
             model = keyring.model_id
 
-        # 4. Parameters (temperature, etc.) pulled from profile context
+        # 4. Parameters (temperature, etc.) pulled from profile context.
+        #
+        # Preset payload wins over loose context when an active preset is
+        # present. This is the only path the runtime uses; there is no
+        # fallback to loose context when a preset is active. Without this
+        # precedence, the same preset would not produce a reproducible
+        # payload, which violates the persistence contract.
+        from app.core.presets import (
+            PRESET_PAYLOAD_KEYS,
+            resolve_active_preset_payload,
+        )
+
         ctx_data = profile.get("context") or {}
-        parameters = {}
-        if "temperature" in ctx_data:
-            parameters["temperature"] = float(ctx_data["temperature"])
-        if "top_p" in ctx_data:
-            parameters["top_p"] = float(ctx_data["top_p"])
-        if "max_tokens" in ctx_data:
-            parameters["max_tokens"] = int(ctx_data["max_tokens"])
-        if "top_k" in ctx_data:
-            parameters["top_k"] = int(ctx_data["top_k"])
-        if "additional_instructions" in ctx_data:
+        active_payload = resolve_active_preset_payload(ctx_data)
+        effective_ctx = active_payload if active_payload is not None else ctx_data
+
+        parameters: dict[str, Any] = {}
+        if "temperature" in effective_ctx:
+            parameters["temperature"] = float(effective_ctx["temperature"])
+        if "top_p" in effective_ctx:
+            parameters["top_p"] = float(effective_ctx["top_p"])
+        if "max_tokens" in effective_ctx:
+            parameters["max_tokens"] = int(effective_ctx["max_tokens"])
+        if "top_k" in effective_ctx:
+            parameters["top_k"] = int(effective_ctx["top_k"])
+        if "additional_instructions" in effective_ctx:
             parameters["additional_instructions"] = str(
-                ctx_data["additional_instructions"] or ""
+                effective_ctx["additional_instructions"] or ""
             )
+
+        # Tag the active payload for downstream consumers (e.g. the
+        # message builder) so they can reproduce the exact field set that
+        # drove this request. Tests and audit logs use this marker.
+        if active_payload is not None:
+            parameters["_payload_source"] = "preset"
+            parameters["_payload_keys"] = list(PRESET_PAYLOAD_KEYS)
+
 
         return cls(
             provider=provider,

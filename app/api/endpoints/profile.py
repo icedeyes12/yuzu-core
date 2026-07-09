@@ -130,6 +130,8 @@ async def api_update_profile(
             "temperature",
             "top_p",
             "max_tokens",
+            "top_k",
+            "additional_instructions",
             "history_limit",
             "enable_reasoning",
             "enable_vision",
