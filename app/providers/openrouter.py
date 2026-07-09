@@ -68,6 +68,45 @@ class OpenRouterProvider(AIProvider):
     async def get_models(self) -> list[str]:
         return self.available_models
 
+    async def fetch_live_models(self) -> list[str]:
+        """Fetch the canonical model list from OpenRouter's /models endpoint.
+
+        Used by ``AIProviderManager.get_all_models`` to merge freshly
+        discovered models into the static ``available_models`` so the
+        Settings UI keeps them after a page reload (otherwise only the
+        hardcoded list would be returned by ``/api/providers/list``).
+        """
+        try:
+            import httpx
+
+            url = "https://openrouter.ai/api/v1/models"
+            key = None
+            try:
+                from app.core.context import get_request_keyring
+
+                keyring = get_request_keyring("openrouter")
+                if keyring and keyring.key:
+                    key = keyring.key
+            except Exception:  # noqa: BLE001
+                pass
+            if not key:
+                import os
+
+                key = os.environ.get("OPENROUTER_API_KEY")
+            headers = {"Authorization": f"Bearer {key}"} if key else {}
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(url, headers=headers, timeout=8.0)
+                if resp.status_code != 200:
+                    return []
+                data = resp.json()
+            return [
+                m.get("id")
+                for m in (data.get("data") or [])
+                if isinstance(m, dict) and m.get("id")
+            ]
+        except Exception:
+            return []
+
     def _prepare_payload(
         self, ctx: LLMContext, messages: list[dict], stream: bool, **kwargs
     ) -> tuple[dict, dict]:
