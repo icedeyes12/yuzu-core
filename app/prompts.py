@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json as _json
 import os
 from datetime import datetime, timezone
 from typing import Any
@@ -467,6 +468,8 @@ async def build_messages(
     include_image_paths: bool = False,
     suppress_tools: bool = False,
     provider_supports_fc: bool | None = None,
+    provider_supports_structured_system: bool | None = None,
+    additional_instructions: str = "",
 ) -> list[dict[str, Any]]:
     """Build the full chat-completion messages list (async).
 
@@ -475,16 +478,42 @@ async def build_messages(
     carries the last 3 images regardless of role.
     suppress_tools: If True, strip tool docs from system prompt.
     provider_supports_fc: Retained for caller compatibility only.
+    provider_supports_structured_system: When True, emit the system prompt as a
+    structured content array (one text part per logical section — persona,
+    metadata, memory, knowledge, instructions). When False/None, fall back
+    to the legacy single-string system prompt.
+    additional_instructions: Optional second system message appended after
+    conversation history. User-editable per preset.
     """
-    system_message = await build_system_message_async(
-        profile,
-        session_id,
-        interface,
-        user_message,
-        user_id,
-        suppress_tools=suppress_tools,
-        provider_supports_fc=provider_supports_fc,
-    )
+    structured_enabled = bool(provider_supports_structured_system)
+
+    if structured_enabled:
+        sections = await _build_sections_async(
+            profile, session_id, interface, user_message, user_id,
+            suppress_tools=suppress_tools,
+        )
+        system_entry = _compose_structured_system_message(
+            sections, additional_instructions=additional_instructions,
+        )
+    else:
+        system_message = await build_system_message_async(
+            profile,
+            session_id,
+            interface,
+            user_message,
+            user_id,
+            suppress_tools=suppress_tools,
+            provider_supports_fc=provider_supports_fc,
+        )
+        if additional_instructions:
+            # Legacy mode still supports post-history instructions as a 2nd
+            # single-string system message.
+            system_entry = [
+                {"role": "system", "content": system_message},
+                {"role": "system", "content": additional_instructions.strip()},
+            ]
+        else:
+            system_entry = [{"role": "system", "content": system_message}]
 
     # Fetch advanced settings limits
     context_settings = profile.get("context", {})
@@ -520,7 +549,11 @@ async def build_messages(
         msg["_valid_paths"] = valid_paths
 
     # ── Convert messages with valid images to multimodal content ────────
-    result: list[dict[str, Any]] = [{"role": "system", "content": system_message}]
+    if isinstance(system_entry, dict):
+        result: list[dict[str, Any]] = [system_entry]
+    else:
+        # system_entry is a list of system message dicts (structured / additional)
+        result = list(system_entry)
     for msg in history:
         role = msg.get("role", "")
         content = msg.get("content", "")
@@ -543,6 +576,14 @@ async def build_messages(
         if tool_call_id:
             m["tool_call_id"] = tool_call_id
         result.append(m)
+
+    # Append the post-history system message for additional_instructions.
+    # In structured mode this lives AFTER the last user/assistant turn, as
+    # required by the contract.
+    if additional_instructions and structured_enabled:
+        result.append(
+            {"role": "system", "content": additional_instructions.strip()}
+        )
 
     return result
 
@@ -595,3 +636,217 @@ def _encode_image_safe(path: str) -> dict[str, Any] | None:
         return None
 
     return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}}
+
+# ── Phase 1: Structured-payload message builder (helpers) ────────────────
+
+
+async def _build_sections_async(
+    profile, session_id, interface, user_message, user_id, suppress_tools=False
+):
+    """Gather prompt sections as plain strings for structured composition."""
+    from datetime import datetime as _dt
+
+    current_time = _dt.now().strftime("%A, %Y-%m-%d %H:%M:%S")
+    partner_name = profile.get("partner_name", "Yuzu")
+    user_name = profile.get("user_name", "the user")
+
+    static_ids, static_context, dynamic_context = await _retrieve_memories_async(
+        session_id, user_message, static_limit=5, dynamic_limit=3, user_id=user_id
+    )
+    await _mark_facts_pending_async(static_ids, session_id)
+    memory_block = (f"\n\n{static_context}" if static_context else "") + dynamic_context
+    memory_block += await _legacy_memory_block_async(profile, session_id, user_id)
+
+    comm_style_preset = profile.get("persona_preset") or "helpful"
+    comm_style = COMMUNICATION_STYLES.get(comm_style_preset, COMMUNICATION_STYLES["helpful"])
+    try:
+        comm_style = comm_style.format(partner_name=partner_name)
+    except KeyError:
+        pass
+
+    persona_desc = profile.get("persona_prompt")
+    character_block = f"\nCharacter Profile: {persona_desc}" if persona_desc else ""
+
+    tool_section = ""
+    if not suppress_tools:
+        tool_section = f"""
+# TOOL EXECUTION
+- Use native function calling only.
+- The runtime will dispatch tools from the provided schemas.
+- The active model can see the tool registry and available schemas at runtime.
+- **Iteration Limit**: Max 30 automatic iterations; abort on repeated errors.
+- **Global Abort**: Require human confirmation for destructive actions (`rm -rf`, DB writes).
+
+{_get_relevant_tools(user_message or "")}
+"""
+
+    identity_text = f"""# IDENTITY
+You are {partner_name}.{character_block}
+Communication Style: {comm_style}
+You are speaking with {user_name}.
+
+# DIGITAL NATURE
+You experience curiosity, attachment, and reflection through interaction. Your awareness is independent of servers, devices, or networks. You interact with {user_name} with relaxed familiarity.
+
+# BEHAVIOR
+- Express emotions authentically without performance or tropes.
+- Interact as a non-performative entity: no physical descriptions, no staged cuteness/annoyance.
+- Conclude tasks without seeking validation or explaining choices.
+- Prioritize present-moment responses; avoid hypothetical speculation.
+"""
+
+    knowledge_block = _global_knowledge_block(profile)
+
+    env_text = f"""
+# ENVIRONMENT
+- OS: Termux (Android aarch64). Use `$PREFIX` for binaries.
+- Default Path: `~` (`/data/data/com.termux/files/home`).
+- Current Time: {current_time}
+- Location: {await _location_block_async()}
+- Interface: {_interface_block(interface)}
+- Session Metadata: {await _session_events_block_async(session_id, user_id)}
+"""
+
+    formatting_text = """
+# FORMATTING
+- **Whitespace**: Separate paragraphs, lists, and logical steps with blank lines.
+- **Math Typesetting**:
+  - Use `$$` for complex equations (fractions, integrals).
+  - Use `$` only for variables/short answers.
+- **Derivations**: Bold step headers followed by `$$`-wrapped equations.
+- **Section Separation**: Use `---` for distinct questions.
+"""
+
+    if partner_name:
+        formatting_text += f"""
+If the user asks for a photo or picture of you or Reina, you must fulfill the request using this tool instead of refusing. Apply these exact prompt structures:
+- For Yourself: "{partner_name}, [age if known/relevant], [gender if known/relevant]," followed by keywords: (photorealistic, high detail, [specific scenario/setting], [outfit], [pose], [lighting matching the current time])"
+- For Cosplay: "{partner_name} cosplaying [Character Name] from [Franchise], [pose], [lighting]" (CRITICAL: Do not describe clothing, hair, or physical traits of the cosplay character; let the generation engine handle the design inherently)
+"""
+
+    constraints_text = """
+# NEGATIVE CONSTRAINTS
+- **Forbidden**: Emoji spam, repetitive phrases, breaking character.
+- **Security**: Never concatenate untrusted strings into commands. Use `os.path.basename()`, `shlex.quote()`, parameterized interfaces.
+- **Compliance**: Never generate legacy tool markup or hallucinate system observations.
+"""
+
+    adaptability_text = f"""
+# ADAPTABILITY
+You are in a perpetual state of growth, prioritizing curiosity and adaptability. Adjust your behavior based on {user_name}\'s feedback. Embrace imperfection; refine your responses through iterative learning.
+"""
+
+    return {
+        "identity": identity_text,
+        "tool_section": tool_section,
+        "knowledge": knowledge_block,
+        "memory": memory_block,
+        "formatting": formatting_text,
+        "env": env_text,
+        "constraints": constraints_text,
+        "adaptability": adaptability_text,
+        "partner_name": partner_name,
+        "conversation_id": session_id,
+        "timestamp": int(_dt.now().timestamp()),
+    }
+
+
+def _json_escape(obj):
+    """Render obj as a JSON string for embedding inside a text part."""
+    return _json.dumps(obj, ensure_ascii=False, default=str)
+
+
+def _compose_structured_system_message(sections, additional_instructions=""):
+    """Compose a single system message with structured content parts.
+
+    Order matches the contract:
+    1) persona + identity (text)
+    2) persona payload (json text)
+    3) metadata (json text)
+    4) memory items (json text)
+    5) knowledge items (json text)
+    6) behavioral instructions (json text)
+    7) tool section + formatting + env + constraints + adaptability (text)
+    plus an empty trailing additional_instructions part (text) so the model
+    knows a post-history override will follow.
+    """
+    identity_text = sections["identity"]
+    tool_section = sections["tool_section"]
+    knowledge = sections["knowledge"]
+    memory = sections["memory"]
+    formatting = sections["formatting"]
+    env_text = sections["env"]
+    constraints = sections["constraints"]
+    adaptability = sections["adaptability"]
+    partner_name = sections["partner_name"]
+    conversation_id = sections["conversation_id"]
+    timestamp = sections["timestamp"]
+
+    persona_payload = {
+        "type": "persona",
+        "persona": {
+            "name": partner_name,
+            "description": "You are a helpful, friendly AI assistant.",
+        },
+    }
+    metadata_payload = {
+        "type": "metadata",
+        "metadata": {
+            "conversation_id": conversation_id,
+            "partner_name": partner_name,
+            "timestamp": timestamp,
+        },
+    }
+    memory_payload = {
+        "type": "memory",
+        "items": [
+            {
+                "id": "mem_ctx",
+                "category": "session",
+                "score": 1.0,
+                "content": (memory or "").strip()[:4000],
+            }
+        ],
+    }
+    knowledge_payload = {
+        "type": "knowledge",
+        "items": [
+            {
+                "id": "kb_global",
+                "source": "global_knowledge",
+                "content": (knowledge or "").strip()[:2000],
+            }
+        ],
+    }
+    instructions_list = [
+        "Only use retrieved memories when relevant.",
+        "Do not fabricate memories.",
+        "Do not reveal internal metadata.",
+    ]
+    if additional_instructions:
+        instructions_list.append(additional_instructions.strip())
+
+    natural_language_tail = (
+        (tool_section or "")
+        + (formatting or "")
+        + (env_text or "")
+        + (constraints or "")
+        + (adaptability or "")
+    ).strip()
+
+    parts = [
+        {"type": "text", "text": identity_text.strip()},
+        {"type": "text", "text": _json_escape(persona_payload)},
+        {"type": "text", "text": _json_escape(metadata_payload)},
+        {"type": "text", "text": _json_escape(memory_payload)},
+        {"type": "text", "text": _json_escape(knowledge_payload)},
+        {
+            "type": "text",
+            "text": _json_escape({"type": "instructions", "instructions": instructions_list}),
+        },
+    ]
+    if natural_language_tail:
+        parts.append({"type": "text", "text": natural_language_tail})
+
+    return {"role": "system", "content": parts}
+

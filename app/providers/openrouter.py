@@ -20,6 +20,7 @@ class OpenRouterProvider(AIProvider):
             supports_native_fc=True,
             supports_streaming_fc=True,  # FC9: streaming tool-call parsing implemented
             supports_tool_call_parsing=True,
+            supports_structured_system_content=True,
         )
         self.available_models = [
             "deepseek/deepseek-chat-v3-0324:free",

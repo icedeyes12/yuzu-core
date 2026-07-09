@@ -23,6 +23,7 @@ class ChutesProvider(AIProvider):
             supports_native_fc=True,
             supports_streaming_fc=True,
             supports_tool_call_parsing=True,
+            supports_structured_system_content=True,
         )
         self._last_error: str | None = None
         self.available_models = [
@@ -49,16 +50,29 @@ class ChutesProvider(AIProvider):
         }
 
     def _normalize_messages_for_chutes(self, messages: list[dict]) -> list[dict]:
-        """Keep canonical chat roles and merge only system prompts."""
+        """Keep canonical chat roles; preserve structured system content arrays.
+
+        Plain-string system prompts are concatenated. Structured (list-of-parts)
+        system prompts are preserved as a single content array under one system
+        role so upstream providers can render them as multi-part content.
+        """
         if not messages:
             return messages
         standard_roles = {"system", "user", "assistant", "tool"}
-        system_contents: list[str] = []
+        system_string_parts: list[str] = []
+        system_structured_parts: list[dict] = []
         normalized_messages: list[dict] = []
         for msg in messages:
             role = msg.get("role", "")
             if role == "system":
-                system_contents.append(msg.get("content", ""))
+                content = msg.get("content", "")
+                if isinstance(content, list):
+                    for part in content:
+                        if isinstance(part, dict):
+                            system_structured_parts.append(part)
+                elif isinstance(content, str):
+                    if content:
+                        system_string_parts.append(content)
                 continue
             if role not in standard_roles:
                 normalized_messages.append(
@@ -66,9 +80,20 @@ class ChutesProvider(AIProvider):
                 )
                 continue
             normalized_messages.append(msg)
-        if system_contents:
-            merged_system = "\n\n".join(system_contents)
-            return [{"role": "system", "content": merged_system}] + normalized_messages
+        if system_string_parts or system_structured_parts:
+            system_payload: list[dict] | str
+            system_payload = list(system_structured_parts)
+            if system_string_parts:
+                system_payload.insert(
+                    0, {"type": "text", "text": "\n\n".join(system_string_parts)}
+                )
+            if len(system_payload) == 1 and system_payload[0].get("type") == "text":
+                # Single plain string after merging — collapse to flat form.
+                return (
+                    [{"role": "system", "content": system_payload[0]["text"]}]
+                    + normalized_messages
+                )
+            return [{"role": "system", "content": system_payload}] + normalized_messages
         return normalized_messages
 
     def _prepare_payload(

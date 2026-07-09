@@ -71,6 +71,12 @@ class LLMContext:
             parameters["top_p"] = float(ctx_data["top_p"])
         if "max_tokens" in ctx_data:
             parameters["max_tokens"] = int(ctx_data["max_tokens"])
+        if "top_k" in ctx_data:
+            parameters["top_k"] = int(ctx_data["top_k"])
+        if "additional_instructions" in ctx_data:
+            parameters["additional_instructions"] = str(
+                ctx_data["additional_instructions"] or ""
+            )
 
         return cls(
             provider=provider,

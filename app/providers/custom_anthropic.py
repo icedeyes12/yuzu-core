@@ -20,6 +20,7 @@ class CustomAnthropicProvider(AIProvider):
             supports_native_fc=True,
             supports_streaming_fc=True,
             supports_tool_call_parsing=True,
+            supports_structured_system_content=False,
         )
 
     async def get_models(self) -> list[str]:

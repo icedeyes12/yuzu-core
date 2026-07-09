@@ -28,6 +28,37 @@ _DEFAULT_HEADERS = {
 }
 
 
+# Allowed keys for additional_instructions (post-history system message)
+# These are the only fields the user can attach. Free-form is intentionally
+# kept as a single string for transparency.
+_MAX_ADDITIONAL_INSTRUCTIONS_LEN = 4000
+
+
+def _resolve_additional_instructions(profile: dict[str, Any]) -> str:
+    """Return the user-configured additional instructions, if any.
+
+    Source of truth order:
+      1. profile["context"]["additional_instructions"] (preset-aware, persistent)
+      2. profile["additional_instructions"] (legacy top-level)
+
+    Hard-truncated to prevent prompt-bloat abuse.
+    """
+    if not profile:
+        return ""
+    ctx = profile.get("context") or {}
+    raw = ctx.get("additional_instructions") or profile.get(
+        "additional_instructions", ""
+    )
+    if not raw:
+        return ""
+    raw = str(raw).strip()
+    if not raw:
+        return ""
+    if len(raw) > _MAX_ADDITIONAL_INSTRUCTIONS_LEN:
+        raw = raw[:_MAX_ADDITIONAL_INSTRUCTIONS_LEN]
+    return raw
+
+
 # Shared Chutes HTTP helper
 
 
@@ -178,6 +209,21 @@ async def _send_to_provider(
     ai_manager = await get_ai_manager()
     schemas = _unique_tool_schemas() if not suppress_tools else []
 
+    # Phase 1: structured payload audit log (non-stream path)
+    if any(
+        isinstance(m.get("content"), list)
+        and m.get("role") == "system"
+        for m in messages
+    ):
+        sys_count = sum(
+            1 for m in messages
+            if m.get("role") == "system"
+        )
+        log.info(
+            "[LLMClient] structured payload: %d system message(s), %d total messages, params=%s",
+            sys_count, len(messages), sorted(ctx.parameters.keys()),
+        )
+
     started = time.time()
     raw_response: dict[str, Any] | None = None
     try:
@@ -242,6 +288,10 @@ async def generate_ai_response(
     # FC9-C: Check if provider supports native FC for prompt construction
     ai_manager = await get_ai_manager()
     provider_supports_fc = ai_manager.provider_supports_tools(ctx.provider)
+    provider_supports_struct = (
+        ai_manager.provider_supports_structured_system(ctx.provider)
+    )
+    additional_instructions = _resolve_additional_instructions(profile)
 
     messages = await build_messages(
         profile,
@@ -252,6 +302,8 @@ async def generate_ai_response(
         include_image_paths=True,
         suppress_tools=suppress_tools,
         provider_supports_fc=provider_supports_fc,
+        provider_supports_structured_system=provider_supports_struct,
+        additional_instructions=additional_instructions,
     )
 
     if ephemeral_context:
@@ -278,6 +330,21 @@ async def _stream_from_provider(
 
     # Generate tool schemas unless suppressed
     tools = [] if suppress_tools else _unique_tool_schemas()
+
+    # Phase 1: structured payload audit log (stream path)
+    if any(
+        isinstance(m.get("content"), list)
+        and m.get("role") == "system"
+        for m in messages
+    ):
+        sys_count = sum(
+            1 for m in messages
+            if m.get("role") == "system"
+        )
+        log.info(
+            "[LLMClient] structured payload: %d system message(s), %d total messages, params=%s",
+            sys_count, len(messages), sorted(ctx.parameters.keys()),
+        )
 
     received = 0
     try:
@@ -334,6 +401,10 @@ async def generate_ai_response_streaming(
     # FC9-C: Check if provider supports native FC for prompt construction
     ai_manager = await get_ai_manager()
     provider_supports_fc = ai_manager.provider_supports_tools(ctx.provider)
+    provider_supports_struct = (
+        ai_manager.provider_supports_structured_system(ctx.provider)
+    )
+    additional_instructions = _resolve_additional_instructions(profile)
 
     messages = await build_messages(
         profile,
@@ -344,6 +415,8 @@ async def generate_ai_response_streaming(
         include_image_paths=True,
         suppress_tools=suppress_tools,
         provider_supports_fc=provider_supports_fc,
+        provider_supports_structured_system=provider_supports_struct,
+        additional_instructions=additional_instructions,
     )
 
     if ephemeral_context:

@@ -207,16 +207,20 @@ class ProviderCapabilities:
         supports_native_fc: bool = False,
         supports_streaming_fc: bool = False,
         supports_tool_call_parsing: bool = False,
+        supports_structured_system_content: bool = False,
     ):
         self.supports_native_fc = supports_native_fc
         self.supports_streaming_fc = supports_streaming_fc
         self.supports_tool_call_parsing = supports_tool_call_parsing
+        self.supports_structured_system_content = supports_structured_system_content
 
     def to_dict(self) -> dict[str, bool]:
         return {
             "supports_native_fc": self.supports_native_fc,
             "supports_streaming_fc": self.supports_streaming_fc,
             "supports_tool_call_parsing": self.supports_tool_call_parsing,
+            "supports_structured_system_content":
+                self.supports_structured_system_content,
         }
 
 
@@ -415,6 +419,14 @@ class AIProviderManager:
         if provider_name not in self.providers:
             return None
         return self.providers[provider_name].capabilities.to_dict()
+
+    def provider_supports_structured_system(self, provider_name: str) -> bool:
+        """Return True if the provider can ingest a structured content-array
+        system message. False / unknown providers fall back to legacy text.
+        """
+        if provider_name not in self.providers:
+            return False
+        return self.providers[provider_name].capabilities.supports_structured_system_content
 
     def get_all_provider_capabilities(self) -> dict[str, dict[str, bool]]:
         """Return capability map for all registered providers."""
