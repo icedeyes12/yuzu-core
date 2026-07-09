@@ -134,11 +134,9 @@ async def _map_identity_to_profile(
     existing = await Database.lookup_identity(provider, provider_sub)
     if existing:
         user_id = str(existing["user_id"])
-        # Refresh avatar + display name on each login (IdP may have updated them)
+        # Refresh avatar on each login (IdP may have updated it)
         if avatar_url:
             await Database.update_profile_avatar(user_id, avatar_url, datetime.now())
-        if user_name:
-            await Database.update_profile_user_name(user_id, user_name, datetime.now())
         return user_id
 
     unclaimed = await Database.lookup_unclaimed_profile()

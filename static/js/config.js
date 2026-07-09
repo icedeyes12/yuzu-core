@@ -234,6 +234,13 @@ async function loadProviderSettings() {
 
 			const modelsForThisProv = data.all_models?.[provider] || [];
 			if (modelsForThisProv.length > 0) {
+				if (
+					isActive &&
+					data.current_model &&
+					!modelsForThisProv.includes(data.current_model)
+				) {
+					modelsForThisProv.unshift(data.current_model);
+				}
 				modelsForThisProv.forEach((m) => {
 					const selected =
 						isActive && m === data.current_model ? "selected" : "";
