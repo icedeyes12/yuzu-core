@@ -596,10 +596,26 @@ async def build_messages(
 def _build_multimodal_message(
     role: str, text: str, image_paths: list[str]
 ) -> dict[str, Any]:
-    """Build a single multimodal content array (text + base64 images)."""
+    """Build a single multimodal content array (text + base64 images).
+
+    Defense-in-depth: even if the orchestrator already deduped image_paths
+    by realpath, we still collapse duplicate image_url blocks here in case
+    future callers hand us a list with the same file under different path
+    forms. Skips already-seen files and (best-effort) skipped URLs.
+    """
     parts: list[dict[str, Any]] = [{"type": "text", "text": text or ""}]
+    seen: set[str] = set()
 
     for path in image_paths:
+        key: str
+        try:
+            key = os.path.realpath(path)
+        except (OSError, ValueError):
+            key = path
+        if key in seen:
+            continue
+        seen.add(key)
+
         encoded = _encode_image_safe(path)
         if encoded:
             parts.append(encoded)

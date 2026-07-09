@@ -504,6 +504,7 @@ function setupEventListeners() {
 			const out = document.getElementById("val-temperature");
 			if (out) out.textContent = parseFloat(e.target.value).toFixed(1);
 		});
+		attachSliderGuard(tempSlider);
 	}
 
 	const topPSlider = document.getElementById("adv-top-p");
@@ -512,6 +513,16 @@ function setupEventListeners() {
 			const out = document.getElementById("val-top-p");
 			if (out) out.textContent = parseFloat(e.target.value).toFixed(2);
 		});
+		attachSliderGuard(topPSlider);
+	}
+
+	const topKSlider = document.getElementById("adv-top-k");
+	if (topKSlider) {
+		topKSlider.addEventListener("input", (e) => {
+			const out = document.getElementById("val-top-k");
+			if (out) out.textContent = parseInt(e.target.value, 10).toString();
+		});
+		attachSliderGuard(topKSlider);
 	}
 
 	const saveAdvancedBtn = document.getElementById("save-advanced-settings");
@@ -890,8 +901,13 @@ function loadAdvancedSettingsFromData(data) {
 	const source = getProfileAdvancedSource(data);
 	setValueIfExists("adv-temperature", source.temperature ?? 1.0);
 	setValueIfExists("adv-top-p", source.top_p ?? 1.0);
+	setValueIfExists("adv-top-k", source.top_k ?? 40);
 	setValueIfExists("adv-max-tokens", source.max_tokens ?? 4096);
 	setValueIfExists("adv-history-limit", source.history_limit ?? 20);
+	setValueIfExists(
+		"adv-additional-instructions",
+		source.additional_instructions ?? "",
+	);
 	const reasoning = document.getElementById("adv-reasoning");
 	if (reasoning) reasoning.checked = Boolean(source.enable_reasoning);
 	const vision = document.getElementById("adv-vision");
@@ -901,6 +917,8 @@ function loadAdvancedSettingsFromData(data) {
 		tempOut.textContent = Number(source.temperature ?? 1.0).toFixed(1);
 	const topPOut = document.getElementById("val-top-p");
 	if (topPOut) topPOut.textContent = Number(source.top_p ?? 1.0).toFixed(2);
+	const topKOut = document.getElementById("val-top-k");
+	if (topKOut) topKOut.textContent = String(source.top_k ?? 40);
 }
 
 async function saveAdvancedSettings() {
@@ -914,10 +932,15 @@ async function saveAdvancedSettings() {
 		const updates = {
 			temperature: getNumberIfExists("adv-temperature", 1.0),
 			top_p: getNumberIfExists("adv-top-p", 1.0),
+			top_k: getNumberIfExists("adv-top-k", 40),
 			max_tokens: getNumberIfExists("adv-max-tokens", 4096),
 			history_limit: getNumberIfExists("adv-history-limit", 20),
 			enable_reasoning: getCheckedIfExists("adv-reasoning"),
 			enable_vision: getCheckedIfExists("adv-vision"),
+			additional_instructions: getValueIfExists(
+				"adv-additional-instructions",
+				"",
+			),
 		};
 
 		const response = await fetch("/api/update_profile", {
@@ -1429,3 +1452,99 @@ window.testProviderConnection = testProviderConnection;
 window.toggleBYOKFields = toggleBYOKFields;
 window.updateGlobalProfile = updateGlobalProfile;
 window.updateModelDropdown = updateModelDropdown;
+
+// ── Slider drag-guard ────────────────────────────────────────────────────
+// Range inputs in this UI were firing during vertical page scroll
+// (the thumb follows a tiny accidental horizontal jitter). This guard
+// requires the pointer to commit to a *predominantly horizontal* drag
+// before the slider starts emitting "input" events, and suppresses
+// value changes from a near-vertical gesture.
+//
+// Behaviour:
+//   1. On pointerdown, snapshot the pointer position and the slider
+//      value, and capture the pointer so the page cannot scroll while
+//      we are deciding.
+//   2. Mark the gesture as "armed" only after |dx| > 6px AND
+//      |dx| > |dy| * 1.4. Until then we do nothing — vertical scroll
+//      wins, the slider value is unchanged.
+//   3. While armed, map horizontal drag to step-multiple value changes
+//      so the user sees a real change once they commit horizontally.
+//   4. On pointerup, if the gesture never armed, restore the original
+//      value (no accidental change persists).
+function attachSliderGuard(slider) {
+	if (!slider) return;
+	const ARM_THRESHOLD_PX = 6;
+	const HORIZONTAL_BIAS = 1.4;
+	let startX = 0;
+	let startY = 0;
+	let startValue = 0;
+	let pointerId = -1;
+	let armed = false;
+
+	const step = parseFloat(slider.getAttribute("step")) || 1;
+	const min = parseFloat(slider.getAttribute("min")) || 0;
+	const max = parseFloat(slider.getAttribute("max")) || 100;
+	const clamp = (v) => Math.min(max, Math.max(min, v));
+
+	const onDown = (e) => {
+		if (e.pointerType === "mouse" && e.button !== 0) return;
+		pointerId = e.pointerId;
+		startX = e.clientX;
+		startY = e.clientY;
+		startValue = parseFloat(slider.value);
+		armed = false;
+		try {
+			slider.setPointerCapture(pointerId);
+		} catch (_err) {
+			// Capture can fail on some browsers — fall through, native
+			// behaviour is still acceptable.
+		}
+	};
+
+	const onMove = (e) => {
+		if (e.pointerId !== pointerId) return;
+		const dx = e.clientX - startX;
+		const dy = e.clientY - startY;
+		if (!armed) {
+			if (
+				Math.abs(dx) > ARM_THRESHOLD_PX &&
+				Math.abs(dx) > Math.abs(dy) * HORIZONTAL_BIAS
+			) {
+				armed = true;
+			} else {
+				return; // still a vertical scroll — do nothing
+			}
+		}
+		const rect = slider.getBoundingClientRect();
+		const width = Math.max(1, rect.width);
+		const pxPerUnit = width / (max - min || 1);
+		const deltaUnits = dx / pxPerUnit;
+		const newValue = clamp(startValue + Math.round(deltaUnits / step) * step);
+		if (parseFloat(slider.value) !== newValue) {
+			slider.value = String(newValue);
+			slider.dispatchEvent(new Event("input", { bubbles: true }));
+		}
+		e.preventDefault();
+	};
+
+	const onUp = (e) => {
+		if (e.pointerId !== pointerId) return;
+		try {
+			slider.releasePointerCapture(pointerId);
+		} catch (_err) {
+			// Already released — ignore.
+		}
+		if (!armed) {
+			// Vertical scroll never armed: revert any visual drift and
+			// emit no change.
+			slider.value = String(startValue);
+		}
+		armed = false;
+		pointerId = -1;
+	};
+
+	slider.addEventListener("pointerdown", onDown);
+	slider.addEventListener("pointermove", onMove);
+	slider.addEventListener("pointerup", onUp);
+	slider.addEventListener("pointercancel", onUp);
+}
