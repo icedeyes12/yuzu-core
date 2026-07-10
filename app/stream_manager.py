@@ -60,15 +60,11 @@ class StreamBuffer:
         if not content and not is_error:
             return
 
-        # FRANKENSTEIN GUARD: If the stream contained any tool interactions,
-        # the orchestrator has already persisted discrete messages (clean_text
-        # as assistant, tool results as tool roles, synthesis as assistant).
-        # Skip the single-write persistence to prevent double-saving.
-        if (
-            self.has_tools
-            or "[Tool execution result]" in content
-            or "<details>" in content
-        ):
+        # FRANKENSTEIN GUARD: When the stream contained any tool interactions,
+        # the orchestrator has already persisted discrete messages (assistant
+        # tool_calls row, tool result rows, synthesis as assistant). Skip the
+        # single-write persistence to prevent double-saving.
+        if self.has_tools or "<details>" in content:
             log.info(
                 f"[Stream] Skipping _persist_to_db — orchestrator handled "
                 f"discrete persistence for session {self.session_id}"

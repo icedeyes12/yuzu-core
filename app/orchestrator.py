@@ -251,93 +251,57 @@ def _build_ephemeral_context(
     tool_results: list[tuple[str, dict]],
     tool_calls: list[dict] | None = None,
 ) -> list[dict[str, Any]]:
-    """Build ephemeral messages representing assistant tool_calls + tool results.
+    """Build ephemeral OpenAI-format messages for in-turn synthesis.
 
-    These messages are appended to the LLM payload during synthesis so the
-    model sees the full conversation including what was just executed.
-    They are NOT persisted to DB — only used for the current turn.
+    Assembles the assistant tool_calls message plus matching tool result
+    messages, linked by tool_call_id, so the LLM sees the conversation
+    as a standard OpenAI tool sequence:
+
+        assistant { tool_calls=[...] }
+        tool     { tool_call_id=..., content=... }
+
+    These messages are NOT persisted to DB — only used for the current
+    synthesis pass. Tool results are already persisted as proper
+    `role=tool` rows by _persist_tool_result_async, so this builder
+    must mirror that exact shape.
     """
     messages: list[dict[str, Any]] = []
 
     if not tool_calls and not tool_results:
         return messages
 
-    # Build assistant message with tool_calls
+    # Assistant message carrying the tool_calls that were just executed.
     if tool_calls:
-        assistant_msg: dict[str, Any] = {
-            "role": "assistant",
-            "content": assistant_text or None,
-            "tool_calls": [
-                {
-                    "id": bc.get("id", f"call_{i}"),
-                    "type": "function",
-                    "function": {
-                        "name": bc["name"],
-                        "arguments": json.dumps(bc.get("arguments", {})),
-                    },
-                }
-                for i, bc in enumerate(tool_calls)
-            ],
-        }
-        messages.append(assistant_msg)
-
-    # Build tool result messages
-    if tool_calls:
-        # Match results to tool_calls by index
-        for i, tc in enumerate(tool_calls):
-            tc_id = tc.get("id", f"call_{i}")
-            result_text = ""
-            if i < len(tool_results):
-                _, result = tool_results[i]
-                result_text = result.get("markdown", str(result))
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tc_id,
-                    "content": result_text,
-                }
-            )
-    else:
-        # Fallback: no tool_calls info, just add results as tool role
-        for tool_name, result in tool_results:
-            result_text = result.get("markdown", str(result))
-            messages.append(
-                {
-                    "role": "tool",
-                    "content": result_text,
-                }
-            )
-
-    return messages
-
-
-def _build_streaming_ephemeral_context(
-    clean_text: str,
-    combined_tool_markdown: str,
-) -> list[dict[str, Any]]:
-    """Build ephemeral context for the streaming path.
-
-    The streaming path reconstructs a minimal conversation snippet so the
-    synthesis pass sees assistant text plus any buffered tool-result markdown.
-    This is a fallback cleanup path, not a production XML tool protocol.
-    """
-    messages: list[dict[str, Any]] = []
-
-    # Assistant message (clean text without tool blocks)
-    if clean_text and clean_text.strip():
         messages.append(
             {
                 "role": "assistant",
-                "content": clean_text.strip(),
+                "content": assistant_text or None,
+                "tool_calls": [
+                    {
+                        "id": tc.get("id", f"call_{i}"),
+                        "type": "function",
+                        "function": {
+                            "name": tc["name"],
+                            "arguments": json.dumps(tc.get("arguments", {})),
+                        },
+                    }
+                    for i, tc in enumerate(tool_calls)
+                ],
             }
         )
 
-    # Tool results as a synthetic user message
-    if combined_tool_markdown and combined_tool_markdown.strip():
+    # Tool result messages — one per tool_call, linked by tool_call_id.
+    for i, tc in enumerate(tool_calls or []):
+        tc_id = tc.get("id", f"call_{i}")
+        result_text = ""
+        if i < len(tool_results):
+            _, result = tool_results[i]
+            result_text = result.get("markdown", str(result))
         messages.append(
             {
-                "role": "user",
-                "content": f"[Tool execution result]\n{combined_tool_markdown.strip()}",
+                "role": "tool",
+                "tool_call_id": tc_id,
+                "content": result_text,
             }
         )
 
@@ -393,39 +357,29 @@ async def _persist_tool_result_async(
     session_id: str,
     *,
     user_id: str,
-    tool_call_id: str | None = None,
+    tool_call_id: str,
     turn_id: str = "",
 ) -> None:
-    """Persist a tool result (async).
+    """Persist a tool result as an OpenAI-format `tool` message (async).
 
-    If tool_call_id is provided, the role is normalized to "tool" (OpenAI format)
-    and the message is linked to the assistant's tool_call.
-    Without tool_call_id (legacy path), falls back to tool-specific role.
+    The tool result is stored as a single row with role="tool" and the
+    assistant's tool_call_id, matching the standard OpenAI function-calling
+    conversation shape. There is no legacy fallback: native function calling
+    is the only tool protocol in production.
     """
     image_paths = []
     if path := parse_image_path(markdown):
         image_paths.append(path)
 
-    if tool_call_id:
-        # OpenAI format: role="tool", link via tool_call_id
-        await Database.add_message(
-            "tool",
-            markdown,
-            session_id=session_id,
-            image_paths=image_paths or None,
-            user_id=user_id,
-            tool_call_id=tool_call_id,
-            turn_id=turn_id,
-        )
-    else:
-        await Database.add_message(
-            "tool",
-            markdown,
-            session_id=session_id,
-            image_paths=image_paths or None,
-            user_id=user_id,
-            turn_id=turn_id,
-        )
+    await Database.add_message(
+        "tool",
+        markdown,
+        session_id=session_id,
+        image_paths=image_paths or None,
+        user_id=user_id,
+        tool_call_id=tool_call_id,
+        turn_id=turn_id,
+    )
 
 
 async def _persist_streaming_tool_results_async(
@@ -1126,8 +1080,8 @@ async def handle_user_message_streaming(
             return
 
         current_synthesis_context = combined_tool_markdown
-        ephemeral_ctx = _build_streaming_ephemeral_context(
-            full_response, combined_tool_markdown
+        ephemeral_ctx = _build_ephemeral_context(
+            full_response, tool_results, tool_calls_data
         )
 
         async for chunk in _run_orchestration_loop_async(
