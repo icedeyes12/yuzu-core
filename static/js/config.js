@@ -1380,9 +1380,10 @@ window.showError = showError;
 
 async function loadLocation() {
 	try {
-		const response = await fetch("/api/profile/me");
+		const response = await fetch("/api/profile");
 		if (!response.ok) return;
-		const profile = await response.json();
+		const data = await response.json();
+		const profile = data.profile || {};
 		setValueIfExists("location-lat", profile.location_lat || "");
 		setValueIfExists("location-lon", profile.location_lon || "");
 	} catch (e) {
