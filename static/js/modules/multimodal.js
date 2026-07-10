@@ -14,7 +14,8 @@ import {
 	setCurrentStreamMessage,
 	setIsProcessingMessage,
 } from "./state.js";
-import { backgroundStreams } from "./stream-manager.js";
+import { formatToolResult } from "./history.js";
+import { BackgroundStreams } from "./background-streams.js";
 import {
 	hideTypingIndicator,
 	showTypingIndicator,
@@ -338,16 +339,8 @@ export class MultimodalManager {
 												backgroundStreams.getBuffer(sessionId),
 											);
 										} else if (eventType === "tool_result") {
-											const toolName = json.data?.name || "unknown";
 											const callId = json.data?.call_id || "";
-											const ok = json.data?.ok ?? true;
-											const resultMarkdown = json.data?.markdown || "";
-											console.log(
-												`[Stream] tool_result: ${toolName} ok=${ok} [call=${callId} turn=${turnId}]`,
-											);
-											// Update or append result
-											const statusIcon = ok ? "✅" : "❌";
-											const resultHtml = `\n<details class="tool-result" open><summary>${statusIcon} ${toolName}</summary><div class="tool-result-content">${resultMarkdown}</div></details>\n`;
+											const resultHtml = formatToolResult(json.data);
 											localBuffer += resultHtml;
 											backgroundStreams.appendChunk(sessionId, resultHtml);
 											this.renderStreamChunk(
@@ -639,21 +632,8 @@ export class MultimodalManager {
 									const toolName = json.data?.name || "unknown";
 									accumulatedText += `\n<details class="tool-call-indicator"><summary>⚙️ Calling ${toolName}…</summary></details>\n`;
 								} else if (eventType === "tool_result") {
-									const toolName = json.data?.name || "unknown";
-									const ok = json.data?.ok ?? true;
-									const statusIcon = ok ? "✅" : "❌";
-									let markdown = json.data?.markdown || "";
-									if (json.data?.data?.image_path) {
-										let imgPath = json.data.data.image_path.replace(/^\/+/, "");
-										if (!imgPath.startsWith("static/")) {
-											imgPath = imgPath.startsWith("generated_images/")
-												? `static/${imgPath}`
-												: imgPath;
-										}
-										const encodedPath = encodeURI(`/${imgPath}`);
-										markdown += `\n\n<img src="${encodedPath}" alt="Tool Output Image">`;
-									}
-									accumulatedText += `\n<details class="tool-result" open><summary>${statusIcon} ${toolName}</summary><div class="tool-result-content">${markdown}</div></details>\n`;
+									const resultHtml = formatToolResult(json.data);
+									accumulatedText += resultHtml;
 									this.renderStreamChunk(contentDiv, accumulatedText);
 								}
 								continue;

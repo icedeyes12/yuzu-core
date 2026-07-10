@@ -351,6 +351,8 @@
 
 .tool-result-block {
 	border-left: 3px solid var(--accent-primary, #3b82f6);
+	width: 100%;
+	display: block;
 }
 
 .action-header {

@@ -86,7 +86,10 @@ the repository at HEAD of `dev`.
 
 ## Rules of Engagement (The "Constitution")
 
-1. **Native function calling is the only production tool protocol.**
+1. **Strict Runtime Data Boundaries.** Backend tools (`app/tools/`) must return purely structured data via Pydantic schema validation. Backend must NEVER format Markdown, HTML, or UI-centric presentation logic. Tool results are cleanly serialized objects.
+2. **Centralized Frontend Runtime Validation.** All tools payloads reaching the client (via SSE or API fetch) MUST pass through `validator.js` (`validateToolResult()`). Renderers consume normalized objects only. UI code must not contain try-catch patching logic for broken backend strings.
+3. **No Private/Location Data Leak to LLM.** User location (`lat`/`lon`) is strictly stored in the PostgreSQL `profiles` table. It is NOT injected into the system prompt. LLMs must call the `weather` tool which securely resolves coordinates from the database during execution.
+4. **Native function calling is the only production tool protocol.**
    `ToolEvent` / `ToolResultEvent` flow through `app/tools/registry.py`.
    `app/commands.py` and `app/legacy_markup.py` are cleanup-only and must
    not be reintroduced as live execution paths.

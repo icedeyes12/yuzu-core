@@ -1378,15 +1378,13 @@ function initializeConfigAnimations() {
 window.showSuccess = showSuccess;
 window.showError = showError;
 
-// Location functions
 async function loadLocation() {
 	try {
-		const response = await fetch("/api/profile");
-		const data = await response.json();
-		const ctx = data.context || {};
-		const loc = ctx.location || {};
-		setValueIfExists("location-lat", loc.lat || 0.0);
-		setValueIfExists("location-lon", loc.lon || 0.0);
+		const response = await fetch("/api/profile/me");
+		if (!response.ok) return;
+		const profile = await response.json();
+		setValueIfExists("location-lat", profile.location_lat || "");
+		setValueIfExists("location-lon", profile.location_lon || "");
 	} catch (e) {
 		console.error("Failed to load location:", e);
 	}
