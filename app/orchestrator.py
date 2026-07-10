@@ -382,6 +382,8 @@ async def _persist_tool_result_async(
     )
 
 
+import json
+
 async def _persist_streaming_tool_results_async(
     tool_calls_data: list[dict],
     tool_results: list[tuple[str, dict]],
@@ -395,22 +397,22 @@ async def _persist_streaming_tool_results_async(
     generated_paths: list[str] = []
 
     for i, (tool_name, result) in enumerate(tool_results):
-        tool_markdown = result.get("markdown", str(result))
-        tool_markdowns.append(tool_markdown)
-        tool_call_id = (
+        tool_markdown = result.get("markdown") if result.get("markdown") else json.dumps(result)
+        tool_markdown_str = str(tool_markdown)
+        tool_markdowns.append(tool_markdown_str)
+        tool_call_id: str | None = (
             tool_calls_data[i].get("id") if i < len(tool_calls_data) else None
         )
         await _persist_tool_result_async(
             tool_name,
-            tool_markdown,
+            tool_markdown_str,
             session_id,
             user_id=user_id,
-            tool_call_id=tool_call_id,
+            tool_call_id=tool_call_id or "",
             turn_id=turn_id,
         )
-        log.info("[stream] persisted tool result for %s [turn=%s]", tool_name, turn_id)
-        if p := parse_image_path(tool_markdown):
-            generated_paths.append(p)
+        if path := parse_image_path(tool_markdown_str):
+            generated_paths.append(path)
 
     return tool_markdowns, generated_paths
 
