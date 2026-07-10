@@ -115,16 +115,13 @@ async def execute(arguments, **kwargs):
 
         logger.debug(f"[IMAGE TOOL] Saved: {filepath}")
 
-        full_command = f"/imagine {prompt}"
         return ok_result(
             {
                 "image_path": f"/static/generated_images/{filename}",
-                "image_html": f'<img src="/static/generated_images/{filename}" alt="Generated Image">',
                 "model": image_model,
             },
-            TOOL_DEFINITION,
-            full_command,
-            partner_name,
+            TOOL_DEFINITION["image_generate"] if isinstance(TOOL_DEFINITION, dict) else TOOL_DEFINITION,
+            partner_name=partner_name,
         )
 
     except Exception as e:
