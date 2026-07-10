@@ -124,15 +124,6 @@ async function loadProfileData() {
 		setValueIfExists("persona-preset", data.persona_preset || "helpful");
 		setValueIfExists("persona-prompt", data.persona_prompt || "");
 
-		const prefProvider = data.current_provider;
-		const prefModel = data.current_model;
-		setTextIfExists(
-			"current-provider",
-			prefProvider && prefModel
-				? `${prefProvider}/${prefModel}`
-				: prefProvider || "Not set",
-		);
-
 		const visPrefs = data.providers_config?.vision_model_preferences || {};
 		setTextIfExists(
 			"current-vision-model",
