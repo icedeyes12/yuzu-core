@@ -3,6 +3,8 @@
  * DESCRIPTION: Strict runtime payload validation before UI rendering
  */
 
+import { ToolRenderers } from "./tool-renderers.js";
+
 /**
  * Validates and normalizes ToolResultEvent payloads
  * @param {string|Object} rawPayload
@@ -11,33 +13,42 @@
 export function validateToolResult(rawPayload) {
     let parsed = {};
 
-    // 1. Parse JSON safely
     if (typeof rawPayload === 'string') {
         try {
             parsed = JSON.parse(rawPayload);
         } catch (e) {
-            console.warn("[Validator] Failed to parse raw tool payload as JSON", e);
-            // Fallback for completely malformed strings
+            console.warn("[Validator] Failed to parse raw tool payload as JSON");
             return {
                 name: "unknown",
                 ok: false,
                 data: { raw: rawPayload },
-                error: "Malformed payload format."
+                error: "Malformed payload format.",
+                html: ToolRenderers.error("Malformed payload format. The backend did not return valid JSON.")
             };
         }
     } else if (typeof rawPayload === 'object' && rawPayload !== null) {
         parsed = rawPayload;
     }
 
-    // 2. Normalize Schema
-    const normalized = {
-        name: typeof parsed.name === 'string' ? parsed.name : "unknown",
-        ok: typeof parsed.ok === 'boolean' ? parsed.ok : true,
-        data: typeof parsed.data === 'object' && parsed.data !== null ? parsed.data : {},
-        error: typeof parsed.error === 'string' ? parsed.error : "",
-        // Derived safe string output if components still want to render raw fallback
-        rawString: typeof rawPayload === 'string' ? rawPayload : JSON.stringify(parsed, null, 2)
-    };
+    const name = typeof parsed.name === 'string' ? parsed.name : "unknown";
+    const ok = typeof parsed.ok === 'boolean' ? parsed.ok : true;
+    const data = typeof parsed.data === 'object' && parsed.data !== null ? parsed.data : {};
+    const error = typeof parsed.error === 'string' ? parsed.error : "";
+    
+    // Generate HTML using Component Registry immediately after validation
+    let html = "";
+    if (!ok && error) {
+        html = ToolRenderers.error(error);
+    } else {
+        const renderFn = ToolRenderers[name] || ToolRenderers.default;
+        html = renderFn(data);
+        
+        // Handle standalone encoded image fallback globally
+        if (data.encoded_image_path) {
+            const encodedPath = encodeURI(data.encoded_image_path);
+            html += `\n<img src="${encodedPath}" alt="Tool Output Image" style="max-width:100%; border-radius:8px; margin-top:10px;">`;
+        }
+    }
 
-    return normalized;
+    return { name, ok, data, error, html };
 }
