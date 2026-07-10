@@ -15,7 +15,7 @@ import {
 	setIsProcessingMessage,
 } from "./state.js";
 import { formatToolResult } from "./history.js";
-import { BackgroundStreams } from "./background-streams.js";
+import { backgroundStreams } from "./stream-manager.js";
 import {
 	hideTypingIndicator,
 	showTypingIndicator,
