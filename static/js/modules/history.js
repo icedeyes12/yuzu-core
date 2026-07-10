@@ -15,7 +15,7 @@ function formatToolCall(toolCall) {
 	return `\n<details class="tool-call-indicator"><summary>⚙️ Calling ${toolName}…</summary><pre data-call-id="${callId}">Completed ✓</pre></details>\n`;
 }
 
-function formatToolResult(contentStr) {
+export function formatToolResult(contentStr) {
 	const parsed = validateToolResult(contentStr);
 	const toolName = parsed.name;
 	const ok = parsed.ok;
