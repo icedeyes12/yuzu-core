@@ -382,9 +382,6 @@ async def _persist_tool_result_async(
     )
 
 
-import json
-
-
 async def _persist_streaming_tool_results_async(
     tool_calls_data: list[dict],
     tool_results: list[tuple[str, dict]],
