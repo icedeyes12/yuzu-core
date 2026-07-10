@@ -64,6 +64,23 @@ export function formatToolResult(contentStr) {
 			</div>
 		</div>`;
 	}
+	// Custom render for Image Generate tool
+	else if ((toolName === "image_generate" || toolName === "imagine") && parsed.data && parsed.data.image_path) {
+		let imgPath = parsed.data.image_path.replace(/^\/+/, "");
+		if (!imgPath.startsWith("static/")) {
+			imgPath = imgPath.startsWith("generated_images/")
+				? `static/${imgPath}`
+				: imgPath;
+		}
+		const encodedPath = encodeURI(`/${imgPath}`);
+		htmlContent = `<div class="image-generate-card" style="margin-top: 10px; border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.2);">
+			<img src="${encodedPath}" alt="Generated Image" style="width: 100%; height: auto; display: block;">
+			<div style="padding: 8px 12px; font-size: 0.85em; color: rgba(255,255,255,0.7); display: flex; justify-content: space-between; align-items: center;">
+				<span>Generated with ${parsed.data.model || 'AI'}</span>
+				<a href="${encodedPath}" target="_blank" style="color: var(--accent-primary, #3b82f6); text-decoration: none;">Open</a>
+			</div>
+		</div>`;
+	}
 	// Fallback raw object render
 	else if (Object.keys(parsed.data).length > 0) {
 		htmlContent = `<pre style="white-space: pre-wrap; font-size: 0.9em; margin: 0;">${JSON.stringify(parsed.data, null, 2)}</pre>`;
@@ -76,15 +93,6 @@ export function formatToolResult(contentStr) {
 	if (parsed.data?.encoded_image_path) {
 		const encodedPath = encodeURI(parsed.data.encoded_image_path);
 		htmlContent += `\n\n<img src="${encodedPath}" alt="Tool Output Image">`;
-	} else if (parsed.data?.image_path) {
-		let imgPath = parsed.data.image_path.replace(/^\/+/, "");
-		if (!imgPath.startsWith("static/")) {
-			imgPath = imgPath.startsWith("generated_images/")
-				? `static/${imgPath}`
-				: imgPath;
-		}
-		const encodedPath = encodeURI(`/${imgPath}`);
-		htmlContent += `\n\n<img src="${encodedPath}" alt="Generated Image" style="max-width: 100%; border-radius: 8px; margin-top: 10px;">`;
 	}
 
 	return `\n<details class="tool-result" open><summary>${statusIcon} ${toolName}</summary><div class="tool-result-content">${htmlContent}</div></details>\n`;
