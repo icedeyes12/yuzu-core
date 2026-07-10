@@ -7,6 +7,7 @@ import {
 	findMessageById,
 	isRenderableHistoryRole,
 } from "./messages.js";
+import { validateToolResult } from "./validator.js";
 
 function formatToolCall(toolCall) {
 	const toolName = toolCall.function?.name || "unknown";
@@ -15,26 +16,69 @@ function formatToolCall(toolCall) {
 }
 
 function formatToolResult(contentStr) {
-	try {
-		const parsed = JSON.parse(contentStr);
-		const toolName = parsed.name || "unknown";
-		const ok = parsed.ok ?? true;
-		const statusIcon = ok ? "✅" : "❌";
-		let markdown = parsed.markdown || contentStr;
-		if (parsed.data?.image_path) {
-			let imgPath = parsed.data.image_path.replace(/^\/+/, "");
-			if (!imgPath.startsWith("static/")) {
-				imgPath = imgPath.startsWith("generated_images/")
-					? `static/${imgPath}`
-					: imgPath;
-			}
-			const encodedPath = encodeURI(`/${imgPath}`);
-			markdown += `\n\n<img src="${encodedPath}" alt="Tool Output Image">`;
-		}
-		return `\n<details class="tool-result" open><summary>${statusIcon} ${toolName}</summary><div class="tool-result-content">${markdown}</div></details>\n`;
-	} catch (_e) {
-		return `\n<details class="tool-result" open><summary>✅ unknown</summary><div class="tool-result-content">${contentStr}</div></details>\n`;
+	const parsed = validateToolResult(contentStr);
+	const toolName = parsed.name;
+	const ok = parsed.ok;
+	const statusIcon = ok ? "✅" : "❌";
+	
+	let htmlContent = "";
+
+	// Custom render for Terminal tool
+	if (toolName === "terminal" && parsed.data) {
+		const output = parsed.data.output || "(empty)";
+		const exitCode = parsed.data.exit_code ?? 0;
+		const duration = parsed.data.duration_ms ?? 0;
+
+		htmlContent = `<div class="terminal-card" style="font-family: monospace; background: #000; color: #fff; padding: 10px; border-radius: 4px; overflow-x: auto;">
+			<div style="color: #4ade80; margin-bottom: 8px;">$ ${parsed.data.command || "command"}</div>
+			<pre style="margin: 0; white-space: pre-wrap;">${output}</pre>
+			<div style="margin-top: 8px; color: ${exitCode === 0 ? '#4ade80' : '#f87171'}; font-size: 0.9em;">
+				Exit: ${exitCode} | Time: ${duration}ms
+			</div>
+		</div>`;
 	}
+
+	// Custom render for Weather tool
+	else if (toolName === "weather" && parsed.data && parsed.data.current) {
+		const current = parsed.data.current;
+		const temp = current.temperature_2m;
+		const humidity = current.relative_humidity_2m;
+		const code = current.weather_code;
+
+		// WMO codes mapped to Lucide icons via CDN
+		let iconName = "cloud";
+		if (code <= 1) iconName = "sun";
+		else if (code <= 3) iconName = "cloud-sun";
+		else if (code <= 49) iconName = "cloud-fog";
+		else if (code <= 69) iconName = "cloud-rain";
+		else if (code <= 79) iconName = "cloud-snow";
+		else if (code <= 99) iconName = "cloud-lightning";
+
+		const iconUrl = `https://unpkg.com/lucide-static@0.344.0/icons/${iconName}.svg`;
+
+		htmlContent = `<div class="weather-card" style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
+			<div style="width: 48px; height: 48px; background-color: var(--accent-primary, currentColor); -webkit-mask: url('${iconUrl}') no-repeat center; mask: url('${iconUrl}') no-repeat center; -webkit-mask-size: contain; mask-size: contain;"></div>
+			<div>
+				<div style="font-size: 1.5rem; font-weight: bold;">${temp}°C</div>
+				<div style="opacity: 0.8;">Humidity: ${humidity}%</div>
+			</div>
+		</div>`;
+	}
+	// Fallback raw object render
+	else if (Object.keys(parsed.data).length > 0) {
+		htmlContent = `<pre style="white-space: pre-wrap; font-size: 0.9em; margin: 0;">${JSON.stringify(parsed.data, null, 2)}</pre>`;
+	} else if (parsed.error) {
+		htmlContent = `<pre style="color: #f87171;">Error: ${parsed.error}</pre>`;
+	} else {
+		htmlContent = `<pre>${parsed.rawString}</pre>`;
+	}
+
+	if (parsed.data?.encoded_image_path) {
+		const encodedPath = encodeURI(parsed.data.encoded_image_path);
+		htmlContent += `\n\n<img src="${encodedPath}" alt="Tool Output Image">`;
+	}
+
+	return `\n<details class="tool-result" open><summary>${statusIcon} ${toolName}</summary><div class="tool-result-content">${htmlContent}</div></details>\n`;
 }
 
 import { scrollToBottom } from "./scroll.js";

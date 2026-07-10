@@ -62,7 +62,7 @@ def _load_tool_module(tool_name: str):
             from app.tools import fs_operations
 
             _TOOL_MODULES[tool_name] = fs_operations
-        elif tool_name == "bash":
+        elif tool_name == "terminal":
             from app.tools import shell_exec
 
             _TOOL_MODULES[tool_name] = shell_exec
@@ -78,6 +78,10 @@ def _load_tool_module(tool_name: str):
             from app.tools import ask_rei
 
             _TOOL_MODULES[tool_name] = ask_rei
+        elif tool_name == "weather":
+            from app.tools import weather
+
+            _TOOL_MODULES[tool_name] = weather
         else:
             return None
     return _TOOL_MODULES.get(tool_name)
@@ -172,6 +176,15 @@ def _collect_definitions():
         _TOOL_MODULES["ask_rei"] = ask_rei
     except Exception as e:
         logger.info(f"[registry] Failed to load ask_rei definition: {e}")
+
+    # Weather tool
+    try:
+        from app.tools import weather
+
+        _TOOL_DEFINITIONS["weather"] = weather.TOOL_DEFINITION["weather"]
+        _TOOL_MODULES["weather"] = weather
+    except Exception as e:
+        logger.info(f"[registry] Failed to load weather definition: {e}")
 
     _DEFINITIONS_INITIALIZED = True
 

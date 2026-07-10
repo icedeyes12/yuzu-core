@@ -18,6 +18,7 @@ def test_tool_definition_exists():
 
 def test_ls_tmp_dir():
     import os
+
     tmp_dir = os.environ.get("TMPDIR", "/tmp")
     result = execute_ls({"path": tmp_dir})
     assert result["ok"] is True

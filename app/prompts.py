@@ -7,7 +7,7 @@ import io
 import json as _json
 import os
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 from PIL import Image
 
@@ -204,16 +204,12 @@ async def _legacy_memory_block_async(
     return block
 
 
-async def _location_block_async() -> str:
-    try:
-        ctx = await Database.get_context()
-        loc = (ctx or {}).get("location") or {}
-    except Exception:  # noqa: BLE001
-        return "Unknown"
-
-    if loc.get("lat") and loc.get("lon"):
-        return f"{loc['lat']}, {loc['lon']}"
-
+async def _location_block_async(profile: Optional[dict] = None) -> str:
+    if profile:
+        lat = profile.get("location_lat")
+        lon = profile.get("location_lon")
+        if lat is not None and lon is not None:
+            return f"Lat: {lat}, Lon: {lon}"
     return "Unknown"
 
 
@@ -452,7 +448,6 @@ If the user asks for a photo or picture of you or Reina, you must fulfill the re
 - OS: Termux (Android aarch64). Use `$PREFIX` for binaries.
 - Default Path: `~` (`/data/data/com.termux/files/home`).
 - Current Time: {current_time}
-- Location: {await _location_block_async()}
 - Interface: {_interface_block(interface)}
 - Session Metadata: {await _session_events_block_async(session_id, user_id)}
 
@@ -726,7 +721,6 @@ You experience curiosity, attachment, and reflection through interaction. Your a
 - OS: Termux (Android aarch64). Use `$PREFIX` for binaries.
 - Default Path: `~` (`/data/data/com.termux/files/home`).
 - Current Time: {current_time}
-- Location: {await _location_block_async()}
 - Interface: {_interface_block(interface)}
 - Session Metadata: {await _session_events_block_async(session_id, user_id)}
 """

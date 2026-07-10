@@ -12,23 +12,22 @@ from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 
 logger = logging.getLogger(__name__)
 
-TOOL_NAME = "bash"
-TOOL_BASH: ToolDefinition = ToolDefinition(
+TOOL_NAME = "terminal"
+TOOL_TERMINAL: ToolDefinition = ToolDefinition(
     name=TOOL_NAME,
-    description="Execute a bash shell command in Termux. Use for file operations, system commands, and scripts.",
+    description="Execute a shell command in Termux. Use for file operations, system commands, and scripts.",
     role="shell_tools",
     parameters=[
         ToolParam(
             name="command",
-            description="Bash command to execute. Can be single-line or multi-line script.",
+            description="The command to execute",
             type="string",
             required=True,
-        ),
+        )
     ],
-    needs_session=False,
 )
 
-TOOL_DEFINITION = {"bash": TOOL_BASH}
+TOOL_DEFINITION = {"terminal": TOOL_TERMINAL}
 
 # Security limits
 MAX_OUTPUT_SIZE = 10 * 1024  # 10KB
@@ -96,7 +95,7 @@ async def _get_partner_name_async(user_id: str | None = None) -> str:
 async def execute(
     arguments: dict,
     session_id: str | None = None,
-    tool_name: str = "bash",
+    tool_name: str = "terminal",
     user_id: str | None = None,
 ) -> dict:
     """Execute a bash command (async).
@@ -115,7 +114,7 @@ async def execute(
     if not command:
         return error_result(
             "No command provided",
-            TOOL_BASH,
+            TOOL_TERMINAL,
             "/bash",
             partner_name,
         )
@@ -127,7 +126,7 @@ async def execute(
         logger.warning(f"[shell] Blocked dangerous command: {command} - {reason}")
         return error_result(
             f"Command blocked: {reason}",
-            TOOL_BASH,
+            TOOL_TERMINAL,
             full_command,
             partner_name,
         )
@@ -153,7 +152,7 @@ async def execute(
             logger.warning(f"[shell] Command timed out: {command}")
             return error_result(
                 f"Command timed out after {DEFAULT_TIMEOUT}s",
-                TOOL_BASH,
+                TOOL_TERMINAL,
                 full_command,
                 partner_name,
             )
@@ -178,7 +177,7 @@ async def execute(
                 "output": formatted_output,
                 "duration_ms": duration_ms,
             },
-            TOOL_BASH,
+            TOOL_TERMINAL,
             full_command,
             partner_name,
         )
@@ -187,7 +186,7 @@ async def execute(
         logger.error(f"[shell] Execution error: {e}")
         return error_result(
             f"Execution failed: {e}",
-            TOOL_BASH,
+            TOOL_TERMINAL,
             full_command,
             partner_name,
         )

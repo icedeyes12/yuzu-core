@@ -252,33 +252,30 @@ def build_tool_contract(
 
 def ok_result(
     data: dict,
-    tool_def: ToolDefinition,
-    full_command: str,
+    tool_def: ToolDefinition | None = None,
+    full_command: str = "",
     partner_name: str = "Yuzu",
 ) -> dict:
-    """Construct a successful tool result."""
+    """Construct a successful tool result payload (pure data)."""
     return {
         "ok": True,
         "data": data,
-        "markdown": build_tool_contract(
-            tool_def.name, full_command, _flatten_lines(data), partner_name
-        ),
+        "markdown": "",  # Markdown is strictly the frontend's job
     }
 
 
 def error_result(
     message: str,
-    tool_def: ToolDefinition,
-    full_command: str,
+    tool_def: ToolDefinition | None = None,
+    full_command: str = "",
     partner_name: str = "Yuzu",
 ) -> dict:
-    """Construct an error tool result."""
+    """Construct an error tool result payload."""
     return {
         "ok": False,
         "error": message,
-        "markdown": build_tool_contract(
-            tool_def.name, full_command, [f"Error: {message}"], partner_name
-        ),
+        "data": {"error": message},
+        "markdown": "",
     }
 
 
