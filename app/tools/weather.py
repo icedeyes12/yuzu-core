@@ -2,7 +2,7 @@ import logging
 import httpx
 from pydantic import BaseModel, ConfigDict
 from app.db import Database
-from app.tools.schemas import ToolDefinition, ok_result, error_result
+from app.tools.schemas import ToolDefinition, error_result
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ async def execute(
 
     # 1. Validation (Pydantic)
     try:
-        req = WeatherRequest(**arguments)
+        WeatherRequest(**arguments)
     except Exception as e:
         return error_result(
             f"Invalid parameters: {e}", TOOL_WEATHER, "weather_fetch", partner_name
