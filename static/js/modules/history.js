@@ -76,6 +76,15 @@ export function formatToolResult(contentStr) {
 	if (parsed.data?.encoded_image_path) {
 		const encodedPath = encodeURI(parsed.data.encoded_image_path);
 		htmlContent += `\n\n<img src="${encodedPath}" alt="Tool Output Image">`;
+	} else if (parsed.data?.image_path) {
+		let imgPath = parsed.data.image_path.replace(/^\/+/, "");
+		if (!imgPath.startsWith("static/")) {
+			imgPath = imgPath.startsWith("generated_images/")
+				? `static/${imgPath}`
+				: imgPath;
+		}
+		const encodedPath = encodeURI(`/${imgPath}`);
+		htmlContent += `\n\n<img src="${encodedPath}" alt="Generated Image" style="max-width: 100%; border-radius: 8px; margin-top: 10px;">`;
 	}
 
 	return `\n<details class="tool-result" open><summary>${statusIcon} ${toolName}</summary><div class="tool-result-content">${htmlContent}</div></details>\n`;
