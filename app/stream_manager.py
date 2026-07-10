@@ -52,46 +52,8 @@ class StreamBuffer:
         self.task = asyncio.create_task(self._process())
 
     async def _persist_to_db(self, content: str, is_error: bool = False) -> None:
-        """Persist the final assistant message to database.
-
-        Single DB write after stream completes or is interrupted.
-        Called from finally block to ensure cleanup.
-        """
-        if not content and not is_error:
-            return
-
-        # FRANKENSTEIN GUARD: When the stream contained any tool interactions,
-        # the orchestrator has already persisted discrete messages (assistant
-        # tool_calls row, tool result rows, synthesis as assistant). Skip the
-        # single-write persistence to prevent double-saving.
-        if self.has_tools or "<details>" in content:
-            log.info(
-                f"[Stream] Skipping _persist_to_db — orchestrator handled "
-                f"discrete persistence for session {self.session_id}"
-            )
-            return
-
-        try:
-            from app.db import Database
-
-            final_content = content
-            if is_error and content:
-                final_content = f"{content}\n\n*[Stream Interrupted/Error]*"
-
-            # Single insert - no placeholder, direct final content
-            await Database.add_message(
-                "assistant",
-                final_content,
-                session_id=self.session_id,
-                user_id=self.user_id,
-                turn_id=self.turn_id,
-            )
-            log.info(
-                f"[Stream] Persisted {len(final_content)} chars to DB for session {self.session_id}"
-            )
-
-        except Exception as e:
-            log.error(f"[Stream] Failed to persist to DB: {e}", exc_info=True)
+        """(Deprecated) Handled by Orchestrator."""
+        pass
 
     async def _process(self):
         """Asynchronously process chunks from the orchestrator.

@@ -2,7 +2,7 @@ import logging
 import httpx
 from pydantic import BaseModel, ConfigDict
 from app.db import Database
-from app.tools.schemas import ToolDefinition, error_result
+from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result, ToolResponse
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ async def execute(
     session_id: str | None = None,
     tool_name: str = "weather",
     user_id: str | None = None,
-) -> dict:
+) -> ToolResponse:
     partner_name = "Yuzu"
 
     # 1. Validation (Pydantic)
@@ -75,17 +75,12 @@ async def execute(
             response = await client.get(url, timeout=10.0)
             response.raise_for_status()
             data = response.json()
-
             # Return pure structure
-            return {
-                "ok": True,
-                "data": {"source": "open-meteo", "current": data.get("current", {})},
-            }
-
+            return ok_result({
+                "source": "open-meteo",
+                "current": data.get("current", {})
+            })
+            
     except Exception as e:
         logger.error(f"[weather] Failed to fetch data: {e}")
-        return {
-            "ok": False,
-            "error": str(e),
-            "data": {"error_code": "FETCH_FAILED", "message": str(e)},
-        }
+        return error_result(f"Failed to fetch weather data: {e}")

@@ -7,7 +7,7 @@ import re
 import time
 
 from app.logging_config import get_logger
-from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
+from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result, ToolResponse
 
 log = get_logger(__name__)
 
@@ -166,12 +166,12 @@ def _execute_python(code: str) -> tuple[bool, str, str, int]:
             pass
 
 
-def execute(
+async def execute(
     arguments: dict,
     session_id: str | None = None,
-    tool_name: str = TOOL_NAME,
+    tool_name: str = "python",
     user_id: str | None = None,
-) -> dict:
+) -> ToolResponse:
     code_raw = arguments.get("code", "").strip()
     full_command = f"/python {code_raw[:50]}{'...' if len(code_raw) > 50 else ''}"
 
