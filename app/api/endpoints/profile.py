@@ -308,12 +308,10 @@ async def api_update_location(
     try:
         profile = await Database.get_profile(user_id)
         if not profile:
-             raise HTTPException(status_code=404, detail="Profile not found")
+            raise HTTPException(status_code=404, detail="Profile not found")
 
         await Database.update_profile(
-             user_id,
-             location_lat=request.lat,
-             location_lon=request.lon
+            user_id, location_lat=request.lat, location_lon=request.lon
         )
         return {"status": "success", "message": "Location updated"}
     except Exception as e:

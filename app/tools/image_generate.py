@@ -120,7 +120,9 @@ async def execute(arguments, **kwargs):
                 "image_path": f"/static/generated_images/{filename}",
                 "model": image_model,
             },
-            TOOL_DEFINITION["image_generate"] if isinstance(TOOL_DEFINITION, dict) else TOOL_DEFINITION,
+            TOOL_DEFINITION["image_generate"]
+            if isinstance(TOOL_DEFINITION, dict)
+            else TOOL_DEFINITION,
             partner_name=partner_name,
         )
 

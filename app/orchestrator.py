@@ -384,6 +384,7 @@ async def _persist_tool_result_async(
 
 import json
 
+
 async def _persist_streaming_tool_results_async(
     tool_calls_data: list[dict],
     tool_results: list[tuple[str, dict]],
@@ -397,7 +398,9 @@ async def _persist_streaming_tool_results_async(
     generated_paths: list[str] = []
 
     for i, (tool_name, result) in enumerate(tool_results):
-        tool_markdown = result.get("markdown") if result.get("markdown") else json.dumps(result)
+        tool_markdown = (
+            result.get("markdown") if result.get("markdown") else json.dumps(result)
+        )
         tool_markdown_str = str(tool_markdown)
         tool_markdowns.append(tool_markdown_str)
         tool_call_id: str | None = (
