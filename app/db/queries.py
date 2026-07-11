@@ -100,16 +100,16 @@ SCHEMA_DDL: tuple[str, ...] = (
         FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
     )
     """,
-    # ── messages (id stays SERIAL int; session_id + user_id are UUID FKs) ──
+    # ── messages (id UUID, session_id + user_id are UUID FKs) ──
     """
     CREATE TABLE IF NOT EXISTS messages (
-        id SERIAL PRIMARY KEY,
+        id UUID NOT NULL DEFAULT generate_uuidv7() PRIMARY KEY,
         session_id UUID,
         user_id UUID NOT NULL,
         role VARCHAR(50) NOT NULL,
         content TEXT NOT NULL,
         content_encrypted BOOLEAN NOT NULL DEFAULT FALSE,
-        image_paths TEXT DEFAULT '[]',
+        attachments JSONB DEFAULT '[]',
         tool_calls JSONB,
         tool_call_id VARCHAR,
         turn_id VARCHAR,
@@ -443,12 +443,12 @@ def parse_session_memory_rows(rows: list[dict]) -> dict:
 # ---------------------------------------------------------------------------
 
 SQL_MESSAGE_INSERT = """
-INSERT INTO messages (session_id, user_id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp, content_encrypted)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), FALSE) RETURNING id, timestamp
+INSERT INTO messages (id, session_id, user_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp, content_encrypted)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), FALSE) RETURNING id, timestamp
 """
 
 SQL_MESSAGE_SELECT_ASC_LIMIT = """
-SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp
+SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s AND user_id = %s
 ORDER BY timestamp ASC
@@ -456,7 +456,7 @@ LIMIT %s
 """
 
 SQL_MESSAGE_SELECT_DESC_LIMIT = """
-SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp
+SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s AND user_id = %s
 ORDER BY timestamp DESC
@@ -464,7 +464,7 @@ LIMIT %s
 """
 
 SQL_MESSAGE_SELECT_ASC_ALL = """
-SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp
+SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s
 ORDER BY timestamp ASC
@@ -472,14 +472,14 @@ ORDER BY timestamp ASC
 
 # Query messages after a specific ID (for memory pipeline ID-based tracking)
 SQL_MESSAGE_SELECT_AFTER_ID = """
-SELECT id, session_id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp
+SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s AND id > %s
 ORDER BY id ASC
 LIMIT %s
 """
 
-SQL_MESSAGE_UPDATE = "UPDATE messages SET content = %s, image_paths = %s WHERE id = %s"
+SQL_MESSAGE_UPDATE = "UPDATE messages SET content = %s, attachments = %s WHERE id = %s"
 
 SQL_MESSAGE_DELETE_FOR_SESSION = "DELETE FROM messages WHERE session_id = %s"
 
@@ -669,7 +669,7 @@ def _format_user_timestamp(ts: Any) -> str:
 
 
 def format_ai_history_rows(
-    rows: list[dict], include_image_paths: bool = False
+    rows: list[dict], include_attachments: bool = False
 ) -> list[dict]:
     """Format message rows for AI consumption.
 
@@ -688,7 +688,7 @@ def format_ai_history_rows(
     for msg in filtered_rows:
         role = msg.get("role", "")
         content = msg.get("content", "")
-        image_paths = parse_json(msg.get("image_paths", "[]"))
+        attachments = parse_json(msg.get("attachments", "[]"))
         tool_calls_raw = msg.get("tool_calls")
         if isinstance(tool_calls_raw, str):
             tool_calls_raw = parse_json(tool_calls_raw)
@@ -719,8 +719,8 @@ def format_ai_history_rows(
             }
             if turn_id:
                 entry["turn_id"] = turn_id
-            if include_image_paths and image_paths:
-                entry["image_paths"] = image_paths
+            if include_attachments and attachments:
+                entry["attachments"] = attachments
             formatted.append(entry)
             continue
 
@@ -737,8 +737,8 @@ def format_ai_history_rows(
         else:
             entry = {"role": role, "content": content}
 
-        if include_image_paths and image_paths:
-            entry["image_paths"] = image_paths
+        if include_attachments and attachments:
+            entry["attachments"] = attachments
 
         formatted.append(entry)
 
