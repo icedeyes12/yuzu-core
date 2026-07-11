@@ -273,7 +273,7 @@ async def add_message_async(
     session_id: str,
     role: str,
     content: str,
-    attachments: list[str] | None = None,
+    attachments: list[dict[str, Any]] | list[str] | None = None,
     *,
     user_id: str,
     tool_calls: list[dict[str, Any]] | None = None,

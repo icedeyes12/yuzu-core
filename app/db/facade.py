@@ -157,7 +157,7 @@ class Database:
         role: str,
         content: str,
         session_id: str | None = None,
-        attachments: list[str] | None = None,
+        attachments: list[dict[str, Any]] | list[str] | None = None,
         *,
         user_id: str,
         tool_calls: list[dict[str, Any]] | None = None,
