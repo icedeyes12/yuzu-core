@@ -270,9 +270,8 @@ class AIProvider:
         self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
         """Yield raw chunks from the provider. Default delegates to abstract impl."""
-        suppress_tools = kwargs.pop("suppress_tools", False)
         async for chunk in self._send_message_streaming_impl(
-            ctx, messages, source=source, suppress_tools=suppress_tools, **kwargs
+            ctx, messages, source=source, **kwargs
         ):
             yield chunk
 
@@ -335,11 +334,16 @@ class AIProviderManager:
 
     async def initialize(self):
         """Async initialization of all registered providers."""
-        if hasattr(self, "load_providers"):
-            if asyncio.iscoroutinefunction(self.load_providers):
-                await self.load_providers()
-            else:
-                self.load_providers()
+        try:
+            load_fn = getattr(self, "load_providers", None)
+            if load_fn:
+                import inspect
+                if inspect.iscoroutinefunction(load_fn):
+                    await load_fn()
+                else:
+                    load_fn()
+        except Exception:
+            pass
 
         await asyncio.gather(*[p.initialize() for p in self.providers.values()])
 
@@ -530,7 +534,7 @@ class AIProviderManager:
 
         for attempt in range(3):
             result = await provider.send_message(
-                messages, MAIN_MODEL, source=source, skip_vision=True, **kwargs
+                ctx=LLMContext(provider="chutes", model=MAIN_MODEL), messages=messages, source=source, skip_vision=True, **kwargs
             )
             if result:
                 logger.debug(f"[INT] Success with {MAIN_MODEL}: {len(result)} chars")
@@ -553,7 +557,7 @@ class AIProviderManager:
         await asyncio.sleep(1.0)
         logger.warning(f"[INT] Falling back to {FALLBACK_MODEL}")
         result = await provider.send_message(
-            messages, FALLBACK_MODEL, source=source, skip_vision=True, **kwargs
+            ctx=LLMContext(provider="chutes", model=FALLBACK_MODEL), messages=messages, source=source, skip_vision=True, **kwargs
         )
         if result:
             logger.debug(f"[INT] Success with {FALLBACK_MODEL}: {len(result)} chars")

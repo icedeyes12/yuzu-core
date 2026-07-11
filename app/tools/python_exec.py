@@ -12,7 +12,6 @@ from app.tools.schemas import (
     ToolParam,
     error_result,
     ok_result,
-    ToolResponse,
 )
 
 log = get_logger(__name__)
@@ -115,7 +114,7 @@ def _check_security(code: str) -> tuple[bool, str]:
     return True, ""
 
 
-def _execute_python(code: str) -> tuple[bool, str, str, int]:
+def _execute_python(code: str, timeout: float = 10.0) -> tuple[bool, str, str, int]:
     start_time = time.time()
     duration_ms = 0
 
@@ -128,7 +127,7 @@ def _execute_python(code: str) -> tuple[bool, str, str, int]:
             ["python3", temp_path],
             capture_output=True,
             text=True,
-            timeout=TIMEOUT_SECONDS,
+            timeout=timeout,
             cwd=DEFAULT_CWD,
             env={**os.environ, "PYTHONIOENCODING": "utf-8"},
         )
@@ -177,8 +176,9 @@ async def execute(
     session_id: str | None = None,
     tool_name: str = "python",
     user_id: str | None = None,
-) -> ToolResponse:
+) -> dict:
     code_raw = arguments.get("code", "").strip()
+    timeout = float(arguments.get("timeout", 10.0))
     full_command = f"/python {code_raw[:50]}{'...' if len(code_raw) > 50 else ''}"
 
     if not code_raw:
@@ -201,7 +201,7 @@ async def execute(
             _get_partner_name(),
         )
 
-    success, stdout, stderr, duration_ms = _execute_python(code)
+    success, stdout, stderr, duration_ms = _execute_python(code, timeout=timeout)
 
     # Mapping success ke Exit Code standar
     exit_code = 0 if success else 1

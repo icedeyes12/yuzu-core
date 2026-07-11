@@ -2,7 +2,7 @@ import logging
 import httpx
 from pydantic import BaseModel, ConfigDict
 from app.db import Database
-from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result, ToolResponse
+from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ async def execute(
     session_id: str | None = None,
     tool_name: str = "weather",
     user_id: str | None = None,
-) -> ToolResponse:
+) -> dict:
     partner_name = "Yuzu"
 
     # 1. Validation (Pydantic)

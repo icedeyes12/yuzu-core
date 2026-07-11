@@ -120,9 +120,9 @@ class GoogleProvider(AIProvider):
         ctx: LLMContext,
         messages: list[dict],
         source: str = "llm",
-        suppress_tools: bool = False,
         **kwargs,
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
+        suppress_tools = kwargs.pop("suppress_tools", False)
         try:
             headers, payload = self._prepare_payload(ctx, messages, True, **kwargs)
             if suppress_tools:

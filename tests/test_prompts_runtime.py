@@ -41,7 +41,6 @@ async def test_runtime_prompt_uses_native_fc_only(monkeypatch):
         interface="web",
         user_message="please help",
         user_id="user_1",
-        suppress_tools=False,
         provider_supports_fc=True,
     )
 
