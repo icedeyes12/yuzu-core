@@ -118,7 +118,6 @@ class ToolResultEvent:
     name: str
     ok: bool
     data: dict[str, Any] = field(default_factory=dict)
-    markdown: str = ""
     error: str = ""
     turn_id: str = ""
     tool_ms: int = 0
@@ -130,7 +129,6 @@ class ToolResultEvent:
             "name": self.name,
             "ok": self.ok,
             "data": self.data,
-            "markdown": self.markdown,
             "turn_id": self.turn_id,
         }
         if self.error:
@@ -191,7 +189,6 @@ def make_tool_result_event(
     name: str,
     ok: bool,
     data: dict[str, Any] | None = None,
-    markdown: str = "",
     error: str = "",
     turn_id: str = "",
     tool_ms: int = 0,
@@ -201,7 +198,6 @@ def make_tool_result_event(
         name=name,
         ok=ok,
         data=data or {},
-        markdown=markdown,
         error=error,
         turn_id=turn_id,
         tool_ms=tool_ms,
@@ -214,40 +210,8 @@ def new_turn_id() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Legacy markdown contract helpers
-#
-# Kept only for cleanup of stored historical rows; runtime must not depend on
-# them for execution or tool dispatch.
+# Legacy format removal - build_tool_contract removed as UI renderer handles this
 # ---------------------------------------------------------------------------
-
-
-def build_tool_contract(
-    tool_name: str,
-    full_command: str,
-    output_lines: list[str],
-    partner_name: str = "Yuzu",
-) -> str:
-    """Build the unified markdown contract for tool output."""
-    quoted = []
-    raw = []
-    in_code_fence = False
-
-    for line in output_lines:
-        if line.strip() == "```":
-            in_code_fence = not in_code_fence
-            raw.append(line)
-        elif in_code_fence:
-            raw.append(line)
-        elif line.startswith("<img ") or line.startswith("<video "):
-            raw.append(line)
-        else:
-            quoted.append(line)
-
-    formatted_output = "\n".join(quoted)
-    if raw:
-        formatted_output += "\n\n" + "\n".join(raw)
-
-    return f"<tools>\n🔧 {tool_name}\n\n{formatted_output}\n\n</tools>"
 
 
 def ok_result(
@@ -260,7 +224,6 @@ def ok_result(
     return {
         "ok": True,
         "data": data,
-        "markdown": "",  # Markdown is strictly the frontend's job
     }
 
 
@@ -275,7 +238,6 @@ def error_result(
         "ok": False,
         "error": message,
         "data": {"error": message},
-        "markdown": "",
     }
 
 

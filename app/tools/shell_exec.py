@@ -106,7 +106,7 @@ async def execute(
         tool_name: Tool name for dispatch (default: "bash")
 
     Returns:
-        {"ok": True/False, "data": {...}, "markdown": "..."}
+        {"ok": True/False, "data": {...}}
     """
     partner_name = await _get_partner_name_async()
     command = arguments.get("command", "").strip()

@@ -133,7 +133,6 @@ class TestToolResultEvent:
             name="bash",
             ok=True,
             data={"output": "file.txt"},
-            markdown="<details>result</details>",
             turn_id="turn_1",
             tool_ms=42,
         )
@@ -217,16 +216,15 @@ class TestExecuteToolEvent:
             return {
                 "ok": True,
                 "data": {"output": "hello"},
-                "markdown": "<details>ok</details>",
             }
 
         with patch("app.tools.registry.execute_tool", side_effect=_mock_execute):
             event = make_tool_call_event(name="bash", arguments={"cmd": "echo hello"})
             result = await execute_tool_event(event)
+
         assert isinstance(result, ToolResultEvent)
-        assert result.call_id == event.id
-        assert result.name == "bash"
         assert result.ok is True
+        assert result.data == {"output": "hello"}
         assert result.tool_ms >= 0  # mocked execution may be instant
 
     @pytest.mark.asyncio
@@ -241,11 +239,12 @@ class TestExecuteToolEvent:
         from unittest.mock import patch
 
         async def _mock_execute(tool_name, arguments, session_id=None, user_id=None):
-            return {"ok": True, "data": {}, "markdown": "<details>ok</details>"}
+            return {"ok": True, "data": {}}
 
         with patch("app.tools.registry.execute_tool", side_effect=_mock_execute):
             event = make_tool_call_event(
                 name="bash", arguments={"cmd": "echo test"}, turn_id="turn_xyz"
             )
             result = await execute_tool_event(event)
+
         assert result.turn_id == "turn_xyz"

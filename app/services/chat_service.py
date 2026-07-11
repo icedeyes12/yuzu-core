@@ -86,11 +86,13 @@ class ChatService:
         active_session = await get_active_session_async(user_id)
         session_id = active_session["id"]
 
-        # Build markdown for display in history
+        # Build text string for display in history
+        history_summary = "Processed pending knowledge items"
         if image_paths:
             image_markdown = "\n".join(
                 [f"![Uploaded Image]({path})" for path in image_paths]
             )
+            history_summary += "\n\n" + image_markdown
             if user_message:
                 user_message = f"{user_message}\n\n{image_markdown}"
             else:

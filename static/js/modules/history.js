@@ -17,9 +17,10 @@ function formatToolCall(toolCall) {
 
 export function formatToolResult(contentStr) {
 	const parsed = validateToolResult(contentStr);
-	const statusIcon = parsed.ok ? "✅" : "❌";
+	if (!parsed.html) return ""; // Do not render empty UI wrappers
 	
-	return `\n<details class="tool-result" open><summary>${statusIcon} ${parsed.name}</summary><div class="tool-result-content">${parsed.html}</div></details>\n`;
+	const statusIcon = parsed.ok ? "✅" : "❌";
+	return `\n<details class="tool-result"><summary>${statusIcon} ${parsed.name}</summary><div class="tool-result-content">${parsed.html}</div></details>\n`;
 }
 
 import { scrollToBottom } from "./scroll.js";

@@ -31,7 +31,12 @@ from app.tools import multimodal_tools
 from app.tools.registry import (
     execute_tool_event,
 )
-from app.tools.schemas import StreamToolEvent, make_tool_call_event, new_turn_id
+from app.tools.schemas import (
+    StreamToolEvent,
+    ToolResultEvent,
+    make_tool_call_event,
+    new_turn_id,
+)
 
 log = get_logger(__name__)
 
@@ -210,15 +215,12 @@ async def _execute_tool_calls_async(
     session_id: str,
     user_id: str | None = None,
     turn_id: str = "",
-) -> list[tuple[str, dict]]:
+) -> list[ToolResultEvent]:
     """Execute a list of tool calls and return results (async).
 
-    Uses the canonical execute_tool_event() path from FC1. Each tool call
-    is wrapped as a ToolCallEvent, executed, and the ToolResultEvent is
-    converted back to the legacy result dict for backward compatibility
-    with persistence/synthesis layers.
+    Uses the canonical execute_tool_event() path.
     """
-    results: list[tuple[str, dict]] = []
+    results: list[ToolResultEvent] = []
     for tc in tool_calls:
         raw_name: str = tc["name"]
         tool_name: str = TOOL_ALIASES.get(raw_name, raw_name)
@@ -234,37 +236,16 @@ async def _execute_tool_calls_async(
         result_event = await execute_tool_event(
             call_event, session_id=session_id, user_id=user_id
         )
-        # Convert ToolResultEvent back to legacy dict shape
-        result_dict = {
-            "ok": result_event.ok,
-            "data": result_event.data,
-            "markdown": result_event.markdown,
-        }
-        if result_event.error:
-            result_dict["error"] = result_event.error
-        results.append((tool_name, result_dict))
+        results.append(result_event)
     return results
 
 
 def _build_ephemeral_context(
     assistant_text: str | None,
-    tool_results: list[tuple[str, dict]],
+    tool_results: list[ToolResultEvent],
     tool_calls: list[dict] | None = None,
 ) -> list[dict[str, Any]]:
-    """Build ephemeral OpenAI-format messages for in-turn synthesis.
-
-    Assembles the assistant tool_calls message plus matching tool result
-    messages, linked by tool_call_id, so the LLM sees the conversation
-    as a standard OpenAI tool sequence:
-
-        assistant { tool_calls=[...] }
-        tool     { tool_call_id=..., content=... }
-
-    These messages are NOT persisted to DB — only used for the current
-    synthesis pass. Tool results are already persisted as proper
-    `role=tool` rows by _persist_tool_result_async, so this builder
-    must mirror that exact shape.
-    """
+    """Build ephemeral OpenAI-format messages for in-turn synthesis."""
     messages: list[dict[str, Any]] = []
 
     if not tool_calls and not tool_results:
@@ -295,8 +276,10 @@ def _build_ephemeral_context(
         tc_id = tc.get("id", f"call_{i}")
         result_text = ""
         if i < len(tool_results):
-            _, result = tool_results[i]
-            result_text = result.get("markdown", str(result))
+            result = tool_results[i]
+            result_text = json.dumps(
+                {"ok": result.ok, "data": result.data}, ensure_ascii=False
+            )
         messages.append(
             {
                 "role": "tool",
@@ -353,29 +336,23 @@ async def _persist_assistant_async(
 
 async def _persist_tool_result_async(
     tool_name: str,
-    markdown: str,
+    content_json: str,
     session_id: str,
     *,
     user_id: str,
     tool_call_id: str,
     turn_id: str = "",
 ) -> None:
-    """Persist a tool result as an OpenAI-format `tool` message (async).
-
-    The tool result is stored as a single row with role="tool" and the
-    assistant's tool_call_id, matching the standard OpenAI function-calling
-    conversation shape. There is no legacy fallback: native function calling
-    is the only tool protocol in production.
-    """
+    """Persist a tool result as an OpenAI-format `tool` message (async)."""
     image_paths = []
-    if path := parse_image_path(markdown):
+    if path := parse_image_path(content_json):
         image_paths.append(path)
 
     await Database.add_message(
         "tool",
-        markdown,
+        content_json,
         session_id=session_id,
-        image_paths=image_paths or None,
+        image_paths=image_paths,
         user_id=user_id,
         tool_call_id=tool_call_id,
         turn_id=turn_id,
@@ -383,26 +360,27 @@ async def _persist_tool_result_async(
 
 
 async def _persist_streaming_tool_results_async(
+    tool_results: list[ToolResultEvent],
     tool_calls_data: list[dict],
-    tool_results: list[tuple[str, dict]],
     session_id: str,
     *,
     user_id: str,
     turn_id: str,
 ) -> tuple[list[str], list[str]]:
     """Persist streaming tool results while preserving the provider call ID."""
-    tool_markdowns: list[str] = []
+    tool_jsons: list[str] = []
     generated_paths: list[str] = []
 
-    for i, (tool_name, result) in enumerate(tool_results):
-        # We always dumps as the dictionary 'markdown' field is abolished.
-        tool_json_str = json.dumps(result, ensure_ascii=False)
-        tool_markdowns.append(tool_json_str)
+    for i, result_event in enumerate(tool_results):
+        tool_json_str = json.dumps(
+            {"ok": result_event.ok, "data": result_event.data}, ensure_ascii=False
+        )
+        tool_jsons.append(tool_json_str)
         tool_call_id: str | None = (
             tool_calls_data[i].get("id") if i < len(tool_calls_data) else None
         )
         await _persist_tool_result_async(
-            tool_name,
+            result_event.name,
             tool_json_str,
             session_id,
             user_id=user_id,
@@ -412,7 +390,7 @@ async def _persist_streaming_tool_results_async(
         if path := parse_image_path(tool_json_str):
             generated_paths.append(path)
 
-    return tool_markdowns, generated_paths
+    return tool_jsons, generated_paths
 
 
 async def _persist_observation_async(
@@ -718,14 +696,18 @@ async def handle_user_message(
 
         # Persist tool results WITH tool_call_id
         all_generated_paths: list[str] = []
-        for i, (tool_name, tool_result) in enumerate(tool_results):
+        tool_jsons: list[str] = []
+        for i, result_event in enumerate(tool_results):
             tc_id = tool_calls[i].get("id", f"call_{i}")
-            tool_markdown = tool_result.get("markdown", str(tool_result))
-            if p := parse_image_path(tool_markdown):
+            tool_json_str = json.dumps(
+                {"ok": result_event.ok, "data": result_event.data}, ensure_ascii=False
+            )
+            tool_jsons.append(tool_json_str)
+            if p := parse_image_path(tool_json_str):
                 all_generated_paths.append(p)
             await _persist_tool_result_async(
-                tool_name,
-                tool_markdown,
+                result_event.name,
+                tool_json_str,
                 session_id,
                 user_id=user_id,
                 tool_call_id=tc_id,
@@ -738,10 +720,9 @@ async def handle_user_message(
             profile,
             session_id,
             interface,
-            "",
+            "\n\n".join(tool_jsons),
             user_id=user_id,
         )
-
         if synthesis:
             await _persist_assistant_async(
                 synthesis,
@@ -1042,32 +1023,28 @@ async def handle_user_message_streaming(
         tool_results = await _execute_tool_calls_async(
             tool_calls_data, session_id, user_id=user_id, turn_id=turn_id
         )
-        (
-            tool_markdowns,
-            all_generated_paths,
-        ) = await _persist_streaming_tool_results_async(
-            tool_calls_data,
+        tool_jsons, all_generated_paths = await _persist_streaming_tool_results_async(
             tool_results,
+            tool_calls_data,
             session_id,
             user_id=user_id,
             turn_id=turn_id,
         )
-        combined_tool_markdown = "\n\n".join(tool_markdowns)
 
-        for i, (tool_name, tool_result) in enumerate(tool_results):
+        for i, result_event in enumerate(tool_results):
             tc_id = tool_calls_data[i].get("id", f"call_{i}")
             yield StreamToolEvent(
                 type="tool_result",
                 data={
                     "call_id": tc_id,
-                    "name": tool_name,
-                    "ok": tool_result.get("ok", False),
-                    "markdown": tool_result.get("markdown", ""),
+                    "name": result_event.name,
+                    "ok": result_event.ok,
+                    "data": result_event.data,
                     "turn_id": turn_id,
                 },
             )
 
-        if not tool_markdowns:
+        if not tool_jsons:
             await _finalize_and_persist_async(
                 session_id,
                 fence_id,
@@ -1079,7 +1056,7 @@ async def handle_user_message_streaming(
             )
             return
 
-        current_synthesis_context = combined_tool_markdown
+        current_synthesis_context = "\n\n".join(tool_jsons)
         ephemeral_ctx = _build_ephemeral_context(
             full_response, tool_results, tool_calls_data
         )

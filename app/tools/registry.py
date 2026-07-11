@@ -223,8 +223,9 @@ async def execute_tool(
     All tool execution MUST go through this function.
 
     Returns:
-        {"ok": True,  "data": {...}, "markdown": "..."}
-        {"ok": False, "error": "...", "markdown": "..."}
+        {"ok": True,  "data": {...}}
+    or:
+        {"ok": False, "error": "..."}
     """
     _collect_definitions()
 
@@ -234,7 +235,6 @@ async def execute_tool(
             "ok": False,
             "error": f"Unknown tool: {tool_name}",
             "data": {"available_tools": sorted(_TOOL_DEFINITIONS.keys())},
-            "markdown": f"Unknown tool: {tool_name}",
         }
 
     # Inject session_id if tool expects it
@@ -247,7 +247,6 @@ async def execute_tool(
             "ok": False,
             "error": f"Tool module unavailable: {tool_name}",
             "data": {},
-            "markdown": f"Tool module unavailable: {tool_name}",
         }
 
     try:
@@ -265,7 +264,6 @@ async def execute_tool(
                 user_id=user_id,
             )
 
-        # New-style structured result (already a dict with ok/data/markdown)
         if isinstance(result, dict) and "ok" in result:
             return result
 
@@ -275,16 +273,14 @@ async def execute_tool(
         return {
             "ok": True,
             "data": result if isinstance(result, dict) else {"result": result},
-            "markdown": "",
         }
 
     except Exception as e:
         logger.info(f"[tool_error] {tool_name}: {e}")
         return {
             "ok": False,
-            "error": "Tool execution failed. Please try again later.",
+            "error": str(e),
             "data": {},
-            "markdown": "",
         }
 
 
@@ -374,7 +370,6 @@ async def execute_tool_event(
         name=call_event.name,
         ok=result.get("ok", False),
         data=result.get("data", {}),
-        markdown=result.get("markdown", ""),
         error=result.get("error", ""),
         turn_id=call_event.turn_id,
         tool_ms=elapsed,

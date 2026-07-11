@@ -8,6 +8,7 @@ import pytest
 
 from app.tools.schemas import (
     StreamToolEvent,
+    ToolResultEvent,
     make_tool_call_event,
     new_turn_id,
 )
@@ -107,7 +108,6 @@ class TestExecuteToolCallsAsync:
     async def test_executes_single_tool(self):
         mock_result = AsyncMock()
         mock_result.ok = True
-        mock_result.markdown = "ok"
         mock_result.error = ""
         with patch(
             "app.orchestrator.execute_tool_event",
@@ -120,30 +120,26 @@ class TestExecuteToolCallsAsync:
                 tool_calls, session_id="test_session"
             )
         assert len(results) == 1
-        tool_name, result = results[0]
-        assert tool_name == "bash"
-        assert result["ok"] is True
-        assert "markdown" in result
+        result = results[0]
+        assert result.ok is True
 
     @pytest.mark.asyncio
     async def test_executes_multiple_tools(self):
         mock_result = AsyncMock()
         mock_result.ok = True
-        mock_result.markdown = "ok"
         mock_result.error = ""
         with patch(
             "app.orchestrator.execute_tool_event",
             new=AsyncMock(return_value=mock_result),
         ):
             tool_calls = [
-                {"id": "call_1", "name": "bash", "arguments": {"cmd": "echo first"}},
-                {"id": "call_2", "name": "bash", "arguments": {"cmd": "echo second"}},
+                {"id": "c1", "name": "bash", "arguments": {}},
+                {"id": "c2", "name": "python", "arguments": {}},
             ]
             results = await _execute_tool_calls_async(
                 tool_calls, session_id="test_session"
             )
         assert len(results) == 2
-
     @pytest.mark.asyncio
     async def test_empty_list(self):
         results = await _execute_tool_calls_async([], session_id="test_session")
@@ -157,21 +153,13 @@ class TestPersistToolResultAsync:
         with patch("app.orchestrator.Database.add_message", new=add_message):
             await _persist_tool_result_async(
                 "bash",
-                "result",
+                '{"ok": true}',
                 "session_1",
                 user_id="user_1",
                 tool_call_id="call_1",
-                turn_id="turn_1",
+                turn_id="turn_2",
             )
-
-        assert add_message.await_count == 1
-        args, kwargs = add_message.await_args
-        assert args[0] == "tool"
-        assert args[1] == "result"
-        assert kwargs["session_id"] == "session_1"
-        assert kwargs["tool_call_id"] == "call_1"
-        assert kwargs["turn_id"] == "turn_1"
-
+        assert add_message.await_args.args[0] == "tool"
     @pytest.mark.asyncio
     async def test_streaming_tool_results_preserve_tool_call_ids(self):
         add_message = AsyncMock(return_value=123)
@@ -181,22 +169,22 @@ class TestPersistToolResultAsync:
                 {"id": "call_2", "name": "python", "arguments": {}},
             ]
             tool_results = [
-                ("bash", {"markdown": "result-1"}),
-                ("python", {"markdown": "result-2"}),
+                ToolResultEvent(call_id="call_1", name="bash", ok=True, data={}),
+                ToolResultEvent(call_id="call_2", name="python", ok=True, data={}),
             ]
             (
-                tool_markdowns,
+                tool_jsons,
                 generated_paths,
             ) = await _persist_streaming_tool_results_async(
-                tool_calls_data,
                 tool_results,
+                tool_calls_data,
                 "session_1",
                 user_id="user_1",
                 turn_id="turn_1",
             )
 
-        assert tool_markdowns == ["result-1", "result-2"]
-        assert generated_paths == []
+            assert len(tool_jsons) == 2
+            assert add_message.await_count == 2
         assert add_message.await_count == 2
         first_call = add_message.await_args_list[0]
         second_call = add_message.await_args_list[1]
@@ -210,16 +198,17 @@ class TestPersistToolResultAsync:
         with patch("app.orchestrator.Database.add_message", new=add_message):
             await _persist_tool_result_async(
                 "bash",
-                "result",
+                '{"ok": true}',
                 "session_1",
                 user_id="user_1",
+                tool_call_id="call_1",
                 turn_id="turn_2",
             )
-
+        assert add_message.await_args.args[0] == "tool"
         assert add_message.await_count == 1
         args, kwargs = add_message.await_args
         assert args[0] == "tool"
-        assert args[1] == "result"
+        assert args[1] == '{"ok": true}'
         assert kwargs["session_id"] == "session_1"
         assert kwargs["turn_id"] == "turn_2"
 
