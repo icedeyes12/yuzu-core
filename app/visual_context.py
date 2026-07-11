@@ -1,7 +1,7 @@
 """Visual context helpers — DEPRECATED.
 
 Image embedding is now handled entirely in ``app.prompts.build_messages()``
-which converts ``image_paths`` on history messages to base64 ``image_url``
+which converts ``attachments`` on history messages to base64 ``image_url``
 blocks at build time.  This module is retained as a stub so existing imports
 do not break; all functions are no-ops and will be removed in a future
 release.

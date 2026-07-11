@@ -28,7 +28,7 @@ class StreamBuffer:
         interface: str = "web",
         provider: Optional[str] = None,
         model: Optional[str] = None,
-        image_paths: Optional[List[str]] = None,
+        attachments: Optional[List[str]] = None,
         user_id: Optional[str] = None,
     ):
         self.session_id = session_id
@@ -36,7 +36,7 @@ class StreamBuffer:
         self.interface = interface
         self.provider = provider
         self.model = model
-        self.image_paths = image_paths or []
+        self.attachments = attachments or []
         self.user_id = user_id
 
         self.full_content = ""
@@ -69,7 +69,7 @@ class StreamBuffer:
                 session_id=self.session_id,
                 provider=self.provider,
                 model=self.model,
-                image_paths=self.image_paths,
+                attachments=self.attachments,
                 user_id=self.user_id,
             )
 
@@ -245,7 +245,7 @@ class StreamManager:
         interface: str = "web",
         provider: Optional[str] = None,
         model: Optional[str] = None,
-        image_paths: Optional[List[str]] = None,
+        attachments: Optional[List[str]] = None,
         user_id: Optional[str] = None,
     ) -> StreamBuffer:
         """Start a new stream or return an existing one."""
@@ -264,7 +264,7 @@ class StreamManager:
                 interface,
                 provider,
                 model,
-                image_paths,
+                attachments,
                 user_id,
             )
             cls._streams[session_id] = stream

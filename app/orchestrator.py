@@ -52,7 +52,7 @@ _ALLOWED_IMAGE_DIRS = [
 _ALLOWED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 
-def _dedupe_image_paths(
+def _dedupe_attachments(
     *sources: list[str] | None,
 ) -> list[str]:
     """Merge multiple image-path lists, deduping by realpath.
@@ -246,7 +246,7 @@ def _clean(text: str) -> str:
 async def _persist_user_async(
     message: str,
     session_id: str,
-    image_paths: list[str] | None,
+    attachments: list[str] | None,
     *,
     user_id: str,
     turn_id: str = "",
@@ -255,7 +255,7 @@ async def _persist_user_async(
         "user",
         message,
         session_id=session_id,
-        image_paths=image_paths or None,
+        attachments=attachments or None,
         user_id=user_id,
         turn_id=turn_id,
     )
@@ -264,7 +264,7 @@ async def _persist_user_async(
 async def _persist_assistant_async(
     content: str,
     session_id: str,
-    image_paths: list[str] | None = None,
+    attachments: list[str] | None = None,
     *,
     user_id: str,
     tool_calls: list[dict[str, Any]] | None = None,
@@ -275,7 +275,7 @@ async def _persist_assistant_async(
         "assistant",
         content,
         session_id=session_id,
-        image_paths=image_paths,
+        attachments=attachments,
         user_id=user_id,
         tool_calls=tool_calls,
         turn_id=turn_id,
@@ -292,15 +292,15 @@ async def _persist_tool_result_async(
     turn_id: str = "",
 ) -> None:
     """Persist a tool result as an OpenAI-format `tool` message (async)."""
-    image_paths = []
+    attachments = []
     if path := _parse_image_path(content_json):
-        image_paths.append(path)
+        attachments.append(path)
 
     await Database.add_message(
         "tool",
         content_json,
         session_id=session_id,
-        image_paths=image_paths,
+        attachments=attachments,
         user_id=user_id,
         tool_call_id=tool_call_id,
         turn_id=turn_id,
@@ -615,7 +615,7 @@ async def handle_user_message_streaming(
     provider: str | None = None,
     model: str | None = None,
     abort_check: callable[[], bool] | None = None,
-    image_paths: list[str] | None = None,
+    attachments: list[str] | None = None,
     *,
     user_id: str,
 ) -> AsyncIterator[str | StreamToolEvent]:
@@ -628,7 +628,7 @@ async def handle_user_message_streaming(
     to native functions, returning responses to the stream.
     """
     profile = await Database.get_profile(user_id)
-    if not user_message.strip() and not image_paths:
+    if not user_message.strip() and not attachments:
         yield "Please enter a message!"
         return
 
@@ -644,16 +644,16 @@ async def handle_user_message_streaming(
     # Cache any images referenced in the message (URLs, etc.)
     cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
 
-    # Merge with explicitly provided image_paths, deduping by realpath so the
+    # Merge with explicitly provided attachments, deduping by realpath so the
     # same file referenced via different forms (relative, absolute, with .., etc.)
     # is collapsed before persistence and downstream payload construction.
-    all_image_paths = _dedupe_image_paths(cached_images, image_paths)
+    all_attachments = _dedupe_attachments(cached_images, attachments)
 
     turn_id = new_turn_id()
     user_msg_id = await _persist_user_async(
         user_message,
         session_id,
-        all_image_paths or None,
+        all_attachments or None,
         user_id=user_id,
         turn_id=turn_id,
     )

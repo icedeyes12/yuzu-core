@@ -513,7 +513,7 @@ LIMIT %s
 """
 
 SQL_MESSAGE_HISTORY_FOR_AI_ASC_LIMIT = """
-SELECT id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp
+SELECT id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s AND user_id = %s AND role IN ('user', 'assistant', 'tool')
 ORDER BY timestamp ASC
@@ -521,7 +521,7 @@ LIMIT %s
 """
 
 SQL_MESSAGE_HISTORY_FOR_AI_DESC_LIMIT = """
-SELECT id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp
+SELECT id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s AND user_id = %s AND role IN ('user', 'assistant', 'tool')
 ORDER BY timestamp DESC
@@ -529,7 +529,7 @@ LIMIT %s
 """
 
 SQL_MESSAGE_HISTORY_FOR_AI_ASC_ALL = """
-SELECT id, role, content, image_paths, tool_calls, tool_call_id, turn_id, timestamp
+SELECT id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s AND user_id = %s AND role IN ('user', 'assistant', 'tool')
 ORDER BY timestamp ASC
@@ -555,7 +555,7 @@ def parse_message_row(row: dict) -> dict:
         "session_id": row.get("session_id"),
         "role": row.get("role"),
         "content": row.get("content"),
-        "image_paths": parse_json(row.get("image_paths", "[]")),
+        "attachments": parse_json(row.get("attachments", "[]")),
         "tool_calls": parse_json(row.get("tool_calls", "null")),
         "tool_call_id": row.get("tool_call_id"),
         "turn_id": row.get("turn_id"),

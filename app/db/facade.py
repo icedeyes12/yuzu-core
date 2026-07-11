@@ -148,7 +148,7 @@ class Database:
 
     @staticmethod
     async def update_message(
-        message_id: int, content: str, image_paths: list[str] | None = None
+        message_id: int, content: str, attachments: list[str] | None = None
     ) -> bool:
         return await _pg_update_message_async(message_id, content)
 
@@ -157,7 +157,7 @@ class Database:
         role: str,
         content: str,
         session_id: str | None = None,
-        image_paths: list[str] | None = None,
+        attachments: list[str] | None = None,
         *,
         user_id: str,
         tool_calls: list[dict[str, Any]] | None = None,
@@ -172,7 +172,7 @@ class Database:
                 await _resolve_session_id_async(session_id, user_id),
                 role,
                 content,
-                image_paths,
+                attachments,
                 user_id=user_id,
                 tool_calls=tool_calls,
                 tool_call_id=tool_call_id,
@@ -221,7 +221,7 @@ class Database:
         session_id: str | None = None,
         limit: int | None = None,
         recent: bool = False,
-        include_image_paths: bool = False,
+        include_attachments: bool = False,
         *,
         user_id: str,
     ) -> Any:
@@ -233,7 +233,7 @@ class Database:
                 await _resolve_session_id_async(session_id, user_id),
                 limit,
                 recent,
-                include_image_paths,
+                include_attachments,
                 user_id=user_id,
             )
 
