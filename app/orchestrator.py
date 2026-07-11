@@ -624,9 +624,8 @@ async def handle_user_message_streaming(
     FENCE PROTECTION: Wraps user message persistence in a fence to prevent
     ghost turns if stream is interrupted before completion.
 
-    COORDINATOR: Delegates tool execution to native function calling,
-    synthesis loops to _run_orchestration_loop_async, and finalization
-    to _finalize_and_persist_async.
+    COORDINATOR: Drives the single execution loop delegating tool calls
+    to native functions, returning responses to the stream.
     """
     profile = await Database.get_profile(user_id)
     if not user_message.strip() and not image_paths:

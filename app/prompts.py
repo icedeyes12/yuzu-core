@@ -748,7 +748,7 @@ You are in a perpetual state of growth, prioritizing curiosity and adaptability.
 
     return {
         "identity": identity_text,
-        "tool_section": tool_section,
+        "instructions": instructions,
         "knowledge": knowledge_block,
         "memory": memory_block,
         "formatting": formatting_text,
@@ -781,7 +781,7 @@ def _compose_structured_system_message(sections, additional_instructions=""):
     knows a post-history override will follow.
     """
     identity_text = sections["identity"]
-    tool_section = sections["tool_section"]
+    instructions = sections["instructions"]
     knowledge = sections["knowledge"]
     memory = sections["memory"]
     formatting = sections["formatting"]
@@ -856,6 +856,11 @@ def _compose_structured_system_message(sections, additional_instructions=""):
                 {"type": "instructions", "instructions": instructions_list}
             ),
         },
+        {"type": "text", "text": instructions},
+        {"type": "text", "text": formatting},
+        {"type": "text", "text": env_text},
+        {"type": "text", "text": constraints},
+        {"type": "text", "text": adaptability},
     ]
     if natural_language_tail:
         parts.append({"type": "text", "text": natural_language_tail})
