@@ -267,7 +267,7 @@ class MultimodalTools:
 
     def has_images(self, text: str) -> bool:
         if "![" in text and "](" in text and ")" in text:
-            image_sources = self._extract_image_sources_from_markdown(text)
+            image_sources = self._extract_image_sources(text)
             if image_sources:
                 return True
 
@@ -336,7 +336,7 @@ class MultimodalTools:
     def format_vision_message(
         self, user_message: str, provider: str = None
     ) -> List[Dict]:
-        image_sources = self._extract_image_sources_from_markdown(user_message)
+        image_sources = self._extract_image_sources(user_message)
 
         if not image_sources:
             return [{"role": "user", "content": user_message}]
@@ -375,8 +375,8 @@ class MultimodalTools:
 
         return [{"role": "user", "content": content}]
 
-    def _extract_image_sources_from_markdown(self, text: str) -> List[str]:
-        """Extract image sources from markdown.  Returns local file paths for
+    def _extract_image_sources(self, text: str) -> List[str]:
+        """Extract image sources from text.  Returns local file paths for
         on-disk images and URLs for remote images."""
         import re
 

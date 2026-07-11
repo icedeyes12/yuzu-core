@@ -41,8 +41,8 @@ _CATEGORY_CAPS = {
 # ── JSON Extraction Utilities ─────────────────────────────────────────────────
 
 
-def _extract_json_from_markdown(text: str) -> str:
-    """Extract JSON payload from markdown-wrapped or plain text response.
+def _extract_json_from_text(text: str) -> str:
+    """Extract JSON payload from code-wrapped or plain text response.
 
     Handles:
     - Markdown code blocks: ```json ... ``` or ``` ... ```
@@ -66,7 +66,7 @@ def _extract_json_from_markdown(text: str) -> str:
     match = re.search(markdown_pattern, cleaned)
 
     if match:
-        # Found markdown block, extract contents
+        # Found code block, extract contents
         extracted = match.group(1).strip()
         if extracted:
             return extracted
@@ -149,7 +149,7 @@ Return exactly a JSON array of strings. Each string is a detailed prediction sen
 - If facts mention technical work, predict specific technical details, error messages, or configuration values.
 - Do NOT invent new entities, products, or topics not grounded in the facts.
 - If no facts are provided, output: ["No prior knowledge — cold start"]
-- Output the JSON array ONLY. No markdown, no explanation."""
+- Output the JSON array ONLY. No code blocks, no explanation."""
 
     user_prompt = f"""Existing knowledge:
 {facts_context}
@@ -288,7 +288,7 @@ The conversation log may contain polluted patterns that encode bad habits, not r
 - The "fact" field must be a self-contained, standalone statement of truth that passes: persistent, specific, useful, independent — AND free of any theatrical, performative, or emotive language.
 - Extract ONLY facts that trigger one of the four actions. Ignore trivial statements. Ignore ALL noise per the Noise Filtering & Extraction Rule above.
 - If NO rules are triggered, OR the chunk is pure noise, output: []
-- Output the JSON array ONLY. No markdown, no explanation, no surrounding text.
+- Output the JSON array ONLY. No code blocks, no explanation, no surrounding text.
 - CRITICAL: For reinforce, update, or invalidate actions, you MUST use the EXACT fact ID from the Existing Knowledge list (the number after "[ID:"). Never invent or guess a fact ID.
 """
 
@@ -324,9 +324,9 @@ Apply the deterministic action rules to extract any new, updated, reinforced, or
             f"CALIBRATE LLM response ({len(response)} chars): {response[:500]}..."
         )
 
-        # Extract JSON from markdown or plain text
+        # Extract JSON from code block or plain text
         try:
-            cleaned_json = _extract_json_from_markdown(response)
+            cleaned_json = _extract_json_from_text(response)
             actions = json.loads(cleaned_json)
         except (ValueError, json.JSONDecodeError) as e:
             logger.warning(f"CALIBRATE: JSON extraction failed: {e}")

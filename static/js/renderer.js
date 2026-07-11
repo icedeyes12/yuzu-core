@@ -580,28 +580,7 @@ class MessageRenderer {
 	 * @returns {string} Text with tool blocks converted to HTML
 	 */
 	preprocessToolBlocks(text) {
-		if (!text) return text;
-		const sourceText = typeof text === "string" ? text : String(text || "");
-
-		// Pattern to match <tools>...</tools> blocks (including multiline)
-		const toolPattern = /<tools>([\s\S]*?)(?:<\/tools>|$)/g;
-
-		const result = sourceText.replace(toolPattern, (_match, content) => {
-			const trimmedContent = content.trim();
-			if (!trimmedContent) return "";
-
-			// DO NOT escape content - tool output may contain HTML like <img> tags
-			// Tool outputs come from backend and are trusted
-			const unescapedContent = trimmedContent;
-
-			// Minimalist header without emojis
-			return `<details class="system-action-block tool-result-block">
-				<summary class="action-header">Tool</summary>
-				<div class="action-content">${unescapedContent}</div>
-			</details>`;
-		});
-
-		return result;
+		return text;
 	}
 
 	/**
@@ -924,12 +903,10 @@ class MessageRenderer {
 		return div.innerHTML;
 	}
 
-	// initToolObserver disabled - now handled by preprocessToolBlocks in render()
+	// initToolObserver disabled
 	static initToolObserver() {
-		// Disabled: Tool blocks are now pre-parsed before markdown rendering
-		// See preprocessToolBlocks() method
 		console.log(
-			"[Renderer] Tool MutationObserver disabled - using pre-parsing instead",
+			"[Renderer] Tool MutationObserver disabled - handled by Component Registry",
 		);
 	}
 
@@ -1336,7 +1313,7 @@ const renderer = new MessageRenderer();
 // Expose ClipboardUtils globally for use by other scripts (e.g., chat.js)
 window.ClipboardUtils = ClipboardUtils;
 
-// NOTE: Tool MutationObserver removed - tools are now pre-parsed via preprocessToolBlocks()
+// NOTE: Tool MutationObserver removed - handled by Component Registry
 // Event delegation for copy buttons is handled at the top of the file (see line 68)
 // === HTML Preview Modal Close Handler ===
 document.addEventListener("click", (e) => {

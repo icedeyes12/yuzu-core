@@ -400,7 +400,7 @@ These labels carry numerical weights used for vector search priority:
 - Cover ALL messages contiguously. Last segment's end_idx must be the last message index.
 - Prefer 5-20 messages per segment; only break earlier if a boundary is triggered.
 - Base title and summary STRICTLY on conversation content. Do NOT embellish or infer.
-- Output the JSON array ONLY. No markdown, no backticks, no surrounding text."""
+- Output the JSON array ONLY. No code blocks, no backticks, no surrounding text."""
 
     user_prompt = f"Segment this conversation:\n\n{conversation}"
 
@@ -536,7 +536,7 @@ async def _llm_batch_segment_async(messages: list[dict]) -> list[dict]:
         import json
         import re
 
-        # Strip markdown code blocks if present
+        # Strip code blocks if present
         stripped = response.strip()
         if stripped.startswith("```"):
             # Remove ```json or ``` at start
@@ -653,7 +653,7 @@ async def _enhance_temporal_segments_async(
 - Base the title and summary STRICTLY on the conversation content provided. Do not infer, embellish, or add external context.
 - Write the summary in third-person, present tense. Describe only what was explicitly discussed.
 - Do NOT mention segment indices or message positions.
-- Output the JSON object ONLY. No markdown, no backticks, no surrounding text.
+- Output the JSON object ONLY. No code blocks, no backticks, no surrounding text.
 
 Conversation:
 {conversation}"""
@@ -670,7 +670,7 @@ Conversation:
 
                 # Parse JSON response
                 try:
-                    # Strip markdown if present
+                    # Strip code block markers if present
                     stripped = response.strip()
                     if stripped.startswith("```"):
                         import re

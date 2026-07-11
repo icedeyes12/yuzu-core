@@ -42,12 +42,6 @@ export function validateToolResult(rawPayload) {
     } else {
         const renderFn = ToolRenderers[name] || ToolRenderers.default;
         html = renderFn(data);
-        
-        // Handle standalone encoded image fallback globally
-        if (data.encoded_image_path) {
-            const encodedPath = encodeURI(data.encoded_image_path);
-            html += `\n<img src="${encodedPath}" alt="Tool Output Image" style="max-width:100%; border-radius:8px; margin-top:10px;">`;
-        }
     }
 
     return { name, ok, data, error, html };

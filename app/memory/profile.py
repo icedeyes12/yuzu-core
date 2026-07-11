@@ -187,7 +187,7 @@ Relationship Dynamics: [Provide analysis of the relationship dynamics between Us
 ### CRITICAL RULES:
 - Base EVERYTHING on evidence from the conversations
 - Be specific and concrete - avoid vague statements
-- No markdown formatting, no bullet points, no numbering
+- No code block formatting, no bullet points, no numbering
 - Follow the EXACT format above - no additional sections"""
 
 
