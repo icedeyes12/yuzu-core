@@ -273,7 +273,7 @@ async def add_message_async(
     session_id: str,
     role: str,
     content: str,
-    image_paths: list[str] | None = None,
+    attachments: list[str] | None = None,
     *,
     user_id: str,
     tool_calls: list[dict[str, Any]] | None = None,
@@ -286,7 +286,7 @@ async def add_message_async(
     """
     import json
 
-    paths_json = json.dumps(image_paths or [])
+    paths_json = json.dumps(attachments or [])
     tool_calls_json = json.dumps(tool_calls) if tool_calls else None
     try:
         async with AsyncPgSession() as s:
@@ -443,7 +443,7 @@ async def get_chat_history_for_ai_async(
     session_id: str,
     limit: int | None = None,
     recent: bool = False,
-    include_image_paths: bool = False,
+    include_attachments: bool = False,
     *,
     user_id: str,
 ) -> list[dict]:
@@ -460,7 +460,7 @@ async def get_chat_history_for_ai_async(
         rows = await pg_fetchall_async(
             SQL_MESSAGE_HISTORY_FOR_AI_ASC_ALL, (session_id, user_id)
         )
-    return format_ai_history_rows(rows, include_image_paths=include_image_paths)
+    return format_ai_history_rows(rows, include_attachments=include_attachments)
 
 
 # ---------------------------------------------------------------------------

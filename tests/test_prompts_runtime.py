@@ -53,7 +53,7 @@ async def test_runtime_prompt_uses_native_fc_only(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_build_messages_uses_image_paths_without_role_filter(monkeypatch):
+async def test_build_messages_uses_attachments_without_role_filter(monkeypatch):
     profile = {"partner_name": "Yuzu", "user_name": "Bani"}
 
     async def _stub_build_system_message_async(*args, **kwargs):
@@ -64,12 +64,12 @@ async def test_build_messages_uses_image_paths_without_role_filter(monkeypatch):
             {
                 "role": "tool",
                 "content": "result",
-                "image_paths": ["/tmp/img-a.png"],
+                "attachments": ["/tmp/img-a.png"],
             },
             {
                 "role": "assistant",
                 "content": "plain",
-                "image_paths": [],
+                "attachments": [],
             },
         ]
 
@@ -92,7 +92,7 @@ async def test_build_messages_uses_image_paths_without_role_filter(monkeypatch):
         interface="web",
         user_message="hello",
         user_id="u1",
-        include_image_paths=True,
+        include_attachments=True,
     )
 
     assert messages[0] == {"role": "system", "content": "system"}

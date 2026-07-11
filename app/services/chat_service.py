@@ -79,18 +79,18 @@ class ChatService:
         Start a streaming message response (async).
         Images are saved to disk and paths are passed to the orchestrator.
         """
-        image_paths = []
+        attachments = []
         if images:
-            image_paths = await ChatService.process_image_uploads(images)
+            attachments = await ChatService.process_image_uploads(images)
 
         active_session = await get_active_session_async(user_id)
         session_id = active_session["id"]
 
         # Build text string for display in history
         history_summary = "Processed pending knowledge items"
-        if image_paths:
+        if attachments:
             image_markdown = "\n".join(
-                [f"![Uploaded Image]({path})" for path in image_paths]
+                [f"![Uploaded Image]({path})" for path in attachments]
             )
             history_summary += "\n\n" + image_markdown
             if user_message:
@@ -104,7 +104,7 @@ class ChatService:
             interface=interface,
             provider=provider,
             model=model,
-            image_paths=image_paths,  # Pass paths for vision context
+            attachments=attachments,  # Pass paths for vision context
             user_id=user_id,
         )
 

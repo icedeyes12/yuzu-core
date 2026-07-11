@@ -627,7 +627,7 @@ class MultimodalTools:
         """Deprecated — returns *messages* unchanged.
 
         Image embedding is now handled in ``app.prompts.build_messages()``
-        which converts ``image_paths`` to base64 ``image_url`` blocks at
+        which converts ``attachments`` to base64 ``image_url`` blocks at
         build time.  This method is retained as a no-op stub so existing
         callers do not break.
         """

@@ -25,19 +25,19 @@ class TestSessionIdResolution:
         captured = {}
 
         async def fake_add_message(
-            session_id, role, content, image_paths, user_id, **kwargs
+            session_id, role, content, attachments, user_id, **kwargs
         ):
             captured["session_id"] = session_id
             captured["role"] = role
             captured["content"] = content
-            captured["image_paths"] = image_paths
+            captured["attachments"] = attachments
             return 99
 
         monkeypatch.setattr(db_module, "_pg_add_message_async", fake_add_message)
 
         result = asyncio.run(
             Database.add_message(
-                "user", "hi", session_id="7", image_paths=None, user_id="uid"
+                "user", "hi", session_id="7", attachments=None, user_id="uid"
             )
         )
         assert result == 99
@@ -45,14 +45,14 @@ class TestSessionIdResolution:
             "session_id": "7",
             "role": "user",
             "content": "hi",
-            "image_paths": None,
+            "attachments": None,
         }
 
     def test_falls_back_to_active_session(self, monkeypatch, fake_active):
         captured = {}
 
         async def fake_add_message(
-            session_id, role, content, image_paths, user_id, **kwargs
+            session_id, role, content, attachments, user_id, **kwargs
         ):
             captured["session_id"] = session_id
             return 1

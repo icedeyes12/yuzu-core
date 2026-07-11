@@ -459,14 +459,14 @@ async def build_messages(
     interface: str,
     user_message: str | None,
     user_id: str,
-    include_image_paths: bool = False,
+    include_attachments: bool = False,
     provider_supports_fc: bool | None = None,
     provider_supports_structured_system: bool | None = None,
     additional_instructions: str = "",
 ) -> list[dict[str, Any]]:
     """Build the full chat-completion messages list (async).
 
-    Converts ``image_paths`` on history messages into base64 ``image_url``
+    Converts ``attachments`` on history messages into base64 ``image_url``
     blocks (OpenAI multimodal format) at build time so the LLM always
     carries the last 3 images regardless of role.
     provider_supports_fc: Retained for caller compatibility only.
@@ -524,7 +524,7 @@ async def build_messages(
             user_id=user_id,
             limit=history_limit,
             recent=True,
-            include_image_paths=True,
+            include_attachments=True,
         )
     ) or []
 
@@ -534,7 +534,7 @@ async def build_messages(
     # ── Keep only the 3 MOST RECENT images globally ─────────
     images_kept = 0
     for msg in reversed(history):
-        paths = msg.get("image_paths") or []
+        paths = msg.get("attachments") or []
         valid_paths = []
         if paths:
             for p in reversed(paths):
@@ -582,11 +582,11 @@ async def build_messages(
 
 
 def _build_multimodal_message(
-    role: str, text: str, image_paths: list[str]
+    role: str, text: str, attachments: list[str]
 ) -> dict[str, Any]:
     """Build a single multimodal content array (text + base64 images).
 
-    Defense-in-depth: even if the orchestrator already deduped image_paths
+    Defense-in-depth: even if the orchestrator already deduped attachments
     by realpath, we still collapse duplicate image_url blocks here in case
     future callers hand us a list with the same file under different path
     forms. Skips already-seen files and (best-effort) skipped URLs.
@@ -594,7 +594,7 @@ def _build_multimodal_message(
     parts: list[dict[str, Any]] = [{"type": "text", "text": text or ""}]
     seen: set[str] = set()
 
-    for path in image_paths:
+    for path in attachments:
         key: str
         try:
             key = os.path.realpath(path)
