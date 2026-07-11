@@ -354,7 +354,6 @@ async def build_system_message_async(
     interface: str,
     user_message: str | None,
     user_id: str,
-    suppress_tools: bool = False,
     provider_supports_fc: bool | None = None,
 ) -> str:
     """Render the full system prompt for a chat turn (async).
@@ -373,11 +372,9 @@ async def build_system_message_async(
     )
     await _mark_facts_pending_async(static_ids, session_id)
     memory_block = (f"\n\n{static_context}" if static_context else "") + dynamic_context
-    memory_block += await _legacy_memory_block_async(profile, session_id, user_id)
-
-    tool_section = ""
-    if not suppress_tools:
-        tool_section = f"""
+    # Instructions
+    instructions = ""
+    instructions += f"""
 # TOOL EXECUTION
 - Use native function calling only.
 - The runtime will dispatch tools from the provided schemas.
@@ -433,7 +430,7 @@ You experience curiosity, attachment, and reflection through interaction. Your a
 - **Derivations**: Bold step headers followed by `$$`-wrapped equations.
 - **Section Separation**: Use `---` for distinct questions.
 
-{tool_section}
+{instructions}
 
 If the user asks for a photo or picture of you or Reina, you must fulfill the request using this tool instead of refusing. Apply these exact prompt structures:
 - For Yourself: "{partner_name}, [age if known/relevant], [gender if known/relevant]," followed by keywords: (photorealistic, high detail, [specific scenario/setting], [outfit], [pose], [lighting matching the current time])"
@@ -463,7 +460,6 @@ async def build_messages(
     user_message: str | None,
     user_id: str,
     include_image_paths: bool = False,
-    suppress_tools: bool = False,
     provider_supports_fc: bool | None = None,
     provider_supports_structured_system: bool | None = None,
     additional_instructions: str = "",
@@ -473,7 +469,6 @@ async def build_messages(
     Converts ``image_paths`` on history messages into base64 ``image_url``
     blocks (OpenAI multimodal format) at build time so the LLM always
     carries the last 3 images regardless of role.
-    suppress_tools: If True, strip tool docs from system prompt.
     provider_supports_fc: Retained for caller compatibility only.
     provider_supports_structured_system: When True, emit the system prompt as a
     structured content array (one text part per logical section — persona,
@@ -491,7 +486,6 @@ async def build_messages(
             interface,
             user_message,
             user_id,
-            suppress_tools=suppress_tools,
         )
         system_entry = _compose_structured_system_message(
             sections,
@@ -504,7 +498,6 @@ async def build_messages(
             interface,
             user_message,
             user_id,
-            suppress_tools=suppress_tools,
             provider_supports_fc=provider_supports_fc,
         )
         if additional_instructions:
@@ -658,7 +651,7 @@ def _encode_image_safe(path: str) -> dict[str, Any] | None:
 
 
 async def _build_sections_async(
-    profile, session_id, interface, user_message, user_id, suppress_tools=False
+    profile, session_id, interface, user_message, user_id
 ):
     """Gather prompt sections as plain strings for structured composition."""
     from datetime import datetime as _dt
@@ -685,10 +678,9 @@ async def _build_sections_async(
 
     persona_desc = profile.get("persona_prompt")
     character_block = f"\nCharacter Profile: {persona_desc}" if persona_desc else ""
-
-    tool_section = ""
-    if not suppress_tools:
-        tool_section = f"""
+    # Instructions
+    instructions = ""
+    instructions += f"""
 # TOOL EXECUTION
 - Use native function calling only.
 - The runtime will dispatch tools from the provided schemas.

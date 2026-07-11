@@ -303,8 +303,8 @@ orchestrator.handle_user_message()
     │           └─ AIProviderManager → Ollama/Cerebras/OpenRouter/Chutes
     │
     ├─► Response processing
-    │     ├─ Native tool_calls detected? → execute_tool() → _run_synthesis()
-    │     └─ Plain text         → persist + return
+    │     ├─ Native tool_calls detected? → execute_tool() → recursive loop
+    │     └─ Final text         → persist + return
     │
     └─► _post_turn()
           ├─ auto_name_session_if_needed()
@@ -331,8 +331,8 @@ orchestrator.handle_user_message_streaming()
     │
     ├─► StreamFilter.buffering               [commands.py]
     │     ├─ Buffer chunks until structured tool-call state is confirmed
-    │     ├─ No tool call → yield chunks live
-    │     └─ Tool call detected → execute tool, stream synthesis
+    │     ├─ No tool call → stream to client
+    │     └─ Tool call detected → execute tool, loop to stream next assistant turn
     │
     ├─► generate_ai_response_streaming()      [llm_client.py]
     │     └─ Same message building as sync path
@@ -417,8 +417,8 @@ tools.registry.execute_tool()                  [registry.py]
     │
     └─► Return {"ok": bool, "data": {}, "markdown": "<details>...</details>"}
           │
-          ├─ Terminal tool (image_generate) → return directly
-          └─ Non-terminal tool → synthesis pass (2nd LLM call)
+          ├─ Plain text turn (no tools) → stream directly to user
+          └─ Assistant triggers tool → execute tools locally → recursive loop
 ```
 
 ### 5.6 Multimodal Pipeline

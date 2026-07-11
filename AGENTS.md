@@ -29,8 +29,8 @@ the repository at HEAD of `dev`.
 ### Backend (`app/`)
 
 - `app/orchestrator.py` — single entry point for user messages. Streaming +
-  non-streaming paths. Owns image dedup, vision routing, native tool call
-  dispatch, and the synthesis orchestration loop (max 4 iterations).
+  non-streaming paths. Owns image dedup, vision routing, and the canonical
+  execution loop (max 4 iterations).
 - `app/llm_client.py` — payload construction + provider dispatch (streaming
   and non-streaming). Calls `build_messages()` and passes
   `**ctx.parameters` to providers.

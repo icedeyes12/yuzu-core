@@ -8,8 +8,8 @@ from app.tools.schemas import (
     ToolDefinition,
     ToolParam,
     error_result,
+    error_result,
     ok_result,
-    ToolResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -162,7 +162,7 @@ def _get_partner_name(user_id: str | None = None) -> str:
         return "Yuzu"
 
 
-def execute(arguments: dict, session_id: str | None = None, **kwargs) -> ToolResponse:
+def execute(arguments: dict, session_id: str | None = None, **kwargs) -> dict:
     tool_name = kwargs.get("tool_name", "read")
 
     if tool_name == "read":
@@ -184,7 +184,7 @@ def execute(arguments: dict, session_id: str | None = None, **kwargs) -> ToolRes
         )
 
 
-def execute_read(arguments: dict, session_id: str | None = None) -> ToolResponse:
+def execute_read(arguments: dict, session_id: str | None = None) -> dict:
     partner_name = _get_partner_name()
     path_arg = arguments.get("path", "")
 
@@ -268,7 +268,7 @@ def execute_read(arguments: dict, session_id: str | None = None) -> ToolResponse
     )
 
 
-def execute_write(arguments: dict, session_id: str | None = None) -> ToolResponse:
+def execute_write(arguments: dict, session_id: str | None = None) -> dict:
     partner_name = _get_partner_name()
     path_arg = arguments.get("path", "")
     content = arguments.get("content", "")
@@ -328,7 +328,7 @@ def execute_write(arguments: dict, session_id: str | None = None) -> ToolRespons
     )
 
 
-def execute_ls(arguments: dict, session_id: str | None = None) -> ToolResponse:
+def execute_ls(arguments: dict, session_id: str | None = None) -> dict:
     partner_name = _get_partner_name()
     path_arg = arguments.get("path", "~/workspace")
 
@@ -418,7 +418,7 @@ def execute_ls(arguments: dict, session_id: str | None = None) -> ToolResponse:
     )
 
 
-def execute_mkdir(arguments: dict, session_id: str | None = None) -> ToolResponse:
+def execute_mkdir(arguments: dict, session_id: str | None = None) -> dict:
     partner_name = _get_partner_name()
     path_arg = arguments.get("path", "")
 
@@ -462,7 +462,7 @@ def execute_mkdir(arguments: dict, session_id: str | None = None) -> ToolRespons
     )
 
 
-def execute_rm(arguments: dict, session_id: str | None = None) -> ToolResponse:
+def execute_rm(arguments: dict, session_id: str | None = None) -> dict:
     partner_name = _get_partner_name()
     path_arg = arguments.get("path", "")
 

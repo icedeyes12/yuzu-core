@@ -203,11 +203,10 @@ async def _send_to_provider(
     messages: list[dict[str, Any]],
     *,
     source: str = "chat",
-    suppress_tools: bool = False,
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single LLM dispatch with timing log. Returns (text, raw_response)."""
     ai_manager = await get_ai_manager()
-    schemas = _unique_tool_schemas() if not suppress_tools else []
+    schemas = _unique_tool_schemas()
 
     # Phase 1: structured payload audit log (non-stream path)
     if any(
@@ -264,19 +263,11 @@ async def generate_ai_response(
     user_message: str,
     interface: str = "terminal",
     session_id: str | None = None,
-    ephemeral_context: list[dict[str, str]] | None = None,
-    is_tool_loop: bool = False,
-    suppress_tools: bool = False,
     user_id: str | None = None,
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single (text, raw_response) AI generation pass.
 
     raw_response is the full API response dict, used for tool-call parsing.
-    ephemeral_context: In-memory context (assistant tool calls + results)
-    not yet persisted to DB. Stitched after build_messages() for synthesis.
-    suppress_tools: If True, strip tool definitions from provider call and
-    remove tool docs from system prompt. Used for synthesis/final passes to
-    prevent the model from re-invoking tools.
     """
     if session_id is None:
         session_id = (await Database.get_active_session(user_id))["id"]
@@ -298,20 +289,15 @@ async def generate_ai_response(
         user_message,
         user_id,
         include_image_paths=True,
-        suppress_tools=suppress_tools,
         provider_supports_fc=provider_supports_fc,
         provider_supports_structured_system=provider_supports_struct,
         additional_instructions=additional_instructions,
     )
 
-    if ephemeral_context:
-        messages.extend(ephemeral_context)
-
     text, raw = await _send_to_provider(
         ctx,
         messages,
         source="chat",
-        suppress_tools=suppress_tools,
     )
     return text, raw
 
@@ -321,13 +307,12 @@ async def _stream_from_provider(
     messages: list[dict[str, Any]],
     *,
     source: str = "chat",
-    suppress_tools: bool = False,
 ) -> AsyncGenerator[str | StreamToolEvent, None]:
     """Yield raw chunks from the provider's streaming API."""
     ai_manager = await get_ai_manager()
 
-    # Generate tool schemas unless suppressed
-    tools = [] if suppress_tools else _unique_tool_schemas()
+    # Generate tool schemas
+    tools = _unique_tool_schemas()
 
     # Phase 1: structured payload audit log (stream path)
     if any(
@@ -349,7 +334,6 @@ async def _stream_from_provider(
             messages,
             source=source,
             timeout=180,
-            suppress_tools=suppress_tools,
             tools=tools,
             **ctx.parameters,
         ):
@@ -373,19 +357,12 @@ async def generate_ai_response_streaming(
     session_id: str | None = None,
     provider: str | None = None,
     model: str | None = None,
-    ephemeral_context: list[dict[str, str]] | None = None,
-    is_tool_loop: bool = False,
-    suppress_tools: bool = False,
     user_id: str | None = None,
 ) -> AsyncGenerator[str | StreamToolEvent, None]:
     """Stream a response from the configured provider chunk by chunk.
 
     Yields either plain text chunks (str) or StreamToolEvent objects
     when the provider emits tool calls in streaming mode.
-
-    suppress_tools: If True, strip tool definitions from provider call and
-    remove tool docs from system prompt. Used for synthesis/final passes to
-    prevent the model from re-invoking tools.
     """
     if session_id is None:
         session_id = (await Database.get_active_session(user_id))["id"]
@@ -409,19 +386,14 @@ async def generate_ai_response_streaming(
         user_message,
         user_id,
         include_image_paths=True,
-        suppress_tools=suppress_tools,
         provider_supports_fc=provider_supports_fc,
         provider_supports_structured_system=provider_supports_struct,
         additional_instructions=additional_instructions,
     )
 
-    if ephemeral_context:
-        messages.extend(ephemeral_context)
-
     async for chunk in _stream_from_provider(
         ctx,
         messages,
         source="chat",
-        suppress_tools=suppress_tools,
     ):
         yield chunk

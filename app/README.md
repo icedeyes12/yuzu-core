@@ -307,7 +307,7 @@ flowchart TD
     G --> H[ToolResultEvent]
     H --> I{Terminal tool?}
     I -->|Yes| J[Persist + return]
-    I---|No| K[Synthesis pass via orchestrator loop]
+    I---|No| K[Recursive pass via orchestrator loop]
     K --> L[Final response]
     J --> L
 ```
@@ -647,8 +647,8 @@ sequenceDiagram
     L-->>O: streamed chunks
     O->>T: execute_tool_event (if tool_calls)
     T-->>O: ToolResultEvent
-    O->>L: synthesis pass
-    L->>PV: chat completions (suppress_tools)
+    O->>L: recursive loop pass
+    L->>PV: chat completions (with tool results)
     PV-->>L: final chunks
     L-->>O: final response
     O->>DB: persist assistant message

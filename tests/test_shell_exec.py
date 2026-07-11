@@ -19,7 +19,7 @@ from app.tools.shell_exec import execute as bash_execute, TOOL_DEFINITION
 
 
 def test_tool_definition_exists():
-    assert "bash" in TOOL_DEFINITION
+    assert "terminal" in TOOL_DEFINITION
 
 
 @pytest.mark.asyncio

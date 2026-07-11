@@ -221,16 +221,9 @@ class OpenRouterProvider(AIProvider):
         ctx: LLMContext,
         messages: list[dict],
         source: str = "llm",
-        suppress_tools: bool = False,
         **kwargs,
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
-        """Stream response from OpenRouter, yielding text chunks or StreamToolEvent.
-
-        When the provider returns tool_calls in streaming delta chunks,
-        accumulates them and yields StreamToolEvent objects for structured
-        consumption by the orchestrator.
-        """
-
+        suppress_tools = kwargs.pop("suppress_tools", False)
         try:
             headers, payload = self._prepare_payload(ctx, messages, True, **kwargs)
             if suppress_tools:

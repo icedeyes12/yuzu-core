@@ -134,10 +134,10 @@ class ChutesProvider(AIProvider):
             "stream": stream,
         }
 
-        tools = kwargs.get("tools")
-        if tools and not kwargs.get("suppress_tools"):
+        tools = kwargs.pop("tools", [])
+        if tools and not kwargs.pop("suppress_tools", False):
             payload["tools"] = tools
-            payload["tool_choice"] = "auto"
+
 
         return self._build_headers(ctx), payload
 
