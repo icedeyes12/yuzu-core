@@ -318,7 +318,6 @@ export class MultimodalManager {
 		try {
 			console.log("Generating image with prompt:", prompt);
 
-			addMessage("user", prompt);
 
 			// Use dynamic typing indicator
 			showTypingIndicator();
@@ -382,14 +381,14 @@ export class MultimodalManager {
 		)
 			? String(imageUrl)
 			: `![Generated Image](${imageUrl})`;
-		addMessage("ai", generatedMarkdown);
+		chatStore.appendMessage({ role: "assistant", content: generatedMarkdown });
 	}
 
 	displayUploadedImage(imageUrl, caption) {
 		const uploadedMarkdown = caption
 			? `![Uploaded Image](${imageUrl})\n\n${caption}`
 			: `![Uploaded Image](${imageUrl})`;
-		addMessage("user", uploadedMarkdown);
+		chatStore.appendMessage({ role: "user", content: uploadedMarkdown });
 	}
 
 	setSendButtonState(state) {
