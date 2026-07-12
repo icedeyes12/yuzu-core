@@ -42,10 +42,10 @@ export {
 	setIsProcessingMessage,
 } from "./state.js";
 // Stream manager
-export {
+import {
 	BackgroundStreamManager,
 	backgroundStreams,
-} from "./stream-manager.js";
+} from "./event-router.js"; // temporary alias for backward compatibility until all consumers are updated
 // Typing indicator
 export {
 	hideTypingIndicator,
