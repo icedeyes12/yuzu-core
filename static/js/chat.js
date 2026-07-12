@@ -5,7 +5,6 @@ console.log("Starting clean chat rebuild...");
 // ==================== MODULE IMPORTS ====================
 import {
 	addMessage,
-	backgroundStreams,
 	copyFullMessage,
 	createScrollButton,
 	findMessageById,
@@ -25,7 +24,6 @@ import {
 // ==================== GLOBAL EXPORTS FOR MODULES ====================
 // Make modules available globally for backward compatibility with inline handlers
 window.router = router;
-window.backgroundStreams = backgroundStreams;
 
 // ==================== SESSION NAME LOADING ====================
 async function loadCurrentSessionName() {
@@ -123,60 +121,7 @@ async function initializeChat() {
 	// Load session name
 	loadCurrentSessionName();
 
-	// [CRITICAL] Set active view to URL session (or null)
-	backgroundStreams.setActiveView(urlSessionId);
-
-	// Check if returning to a session with active stream
-	if (urlSessionId && backgroundStreams.hasActiveStream(urlSessionId)) {
-		console.log(
-			`[Init] Session ${urlSessionId} has active stream, resuming...`,
-		);
-
-		const stream = backgroundStreams.getStream(urlSessionId);
-		const chatContainer = document.getElementById("chatContainer");
-
-		if (stream && chatContainer) {
-			// Find or create message element
-			let messageElement = findMessageById(stream.messageId);
-
-			if (!messageElement) {
-				// Create message element
-				messageElement = document.createElement("div");
-				messageElement.className = "message ai";
-				messageElement.setAttribute("data-streaming", "true");
-				messageElement.setAttribute("data-message-id", stream.messageId);
-				messageElement.innerHTML = `<div class="message-content"></div>`;
-				chatContainer.appendChild(messageElement);
-			}
-
-			// Flush buffer
-			const contentDiv = messageElement.querySelector(".message-content");
-			if (contentDiv && stream.buffer) {
-				console.log(
-					`[Init] Flushing ${stream.buffer.length} chars from buffer`,
-				);
-				// Use simple text rendering for init, full render will happen on next chunk
-				contentDiv.innerHTML = stream.buffer;
-				scrollToBottom();
-			}
-
-			// Re-attach global state
-			window.currentStreamMessage = messageElement;
-			window.currentAbortController = stream.controller;
-			window.isProcessingMessage = true;
-
-			// Restore UI state
-			if (window.multimodal) {
-				window.multimodal.setSendButtonState("sending");
-			}
-
-			// Don't load history - stream is active
-			// Initialize multimodal and return
-			window.multimodal = new MultimodalManager();
-			window.multimodal.init();
-			return;
-		}
-	}
+	// Stream state is now fully managed by ConversationStore + EventRouter
 
 	// Normal initialization - load history
 	if (urlSessionId) {
