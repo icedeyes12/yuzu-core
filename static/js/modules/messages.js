@@ -66,41 +66,6 @@ export function createMessageElement(role, content, timestamp = null) {
 }
 
 /**
- * Add a message to the chat container.
- * @param {string} role - 'user' or 'ai'
- * @param {string} content - Message content
- * @param {string|null} timestamp - Optional timestamp
- * @param {boolean} isHistory - Whether this is from history (skip scroll)
- * @returns {HTMLElement|null} The message element
- */
-export function addMessage(role, content, timestamp = null, isHistory = false) {
-	const chatContainer = document.getElementById("chatContainer");
-	if (!chatContainer) {
-		console.error("Cannot add message: chat container not found!");
-		return null;
-	}
-
-	const msg = createMessageElement(role, content, timestamp);
-	chatContainer.appendChild(msg);
-
-	if (!isHistory) {
-		setTimeout(() => {
-			// Import scrollToBottom dynamically to avoid circular dependency
-			import("./scroll.js").then(({ scrollToBottom }) => {
-				scrollToBottom();
-			});
-			// Update layout after message append
-			if (typeof window.updateDynamicLayout === "function") {
-				window.updateDynamicLayout();
-			}
-		}, 50);
-	}
-
-	console.log(`Added ${role} message`);
-	return msg;
-}
-
-/**
  * Copy full message content to clipboard.
  * @param {string} content - Content to copy
  */

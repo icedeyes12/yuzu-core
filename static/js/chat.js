@@ -4,7 +4,6 @@ console.log("Starting clean chat rebuild...");
 
 // ==================== MODULE IMPORTS ====================
 import {
-	addMessage,
 	copyFullMessage,
 	createScrollButton,
 	findMessageById,
@@ -150,7 +149,6 @@ async function initializeChat() {
 
 // ==================== GLOBAL EXPORTS ====================
 // Export functions that are called from HTML or other scripts
-window.addMessage = addMessage;
 window.scrollToBottom = scrollToBottom;
 window.copyFullMessage = copyFullMessage;
 window.loadChatHistory = loadChatHistory;
