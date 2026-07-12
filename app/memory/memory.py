@@ -232,9 +232,11 @@ async def _is_fence_active_async(session_id: str) -> bool:
         return False
 
 
-async def _get_session_idle_hours_async(session_id: str) -> float | None:
+async def _get_session_idle_hours_async(session_id: str, user_id: str | None = None) -> float | None:
     """Get idle hours (async)."""
-    messages = await get_session_messages_async(session_id, limit=1, order="DESC")
+    if not user_id:
+        return None
+    messages = await get_session_messages_async(session_id, limit=1, order="DESC", user_id=user_id)
     if not messages:
         return None
     last_ts = messages[0].get("timestamp")
@@ -250,7 +252,7 @@ async def _get_session_idle_hours_async(session_id: str) -> float | None:
 
 
 async def should_trigger_segmentation_async(
-    session_id: str, current_count: int
+    session_id: str, current_count: int, user_id: str | None = None
 ) -> tuple[bool, int]:
     """Check if segmentation should trigger (async).
 
@@ -280,7 +282,8 @@ async def should_trigger_segmentation_async(
     if last_message_id > 0:
         try:
             messages_after = await get_session_messages_after_id_async(
-                session_id, last_message_id, limit=10000
+                session_id, last_message_id, limit=10000,
+                user_id=user_id or ""
             )
             # Filter to conversation messages only
             delta = len(
@@ -310,7 +313,7 @@ async def should_trigger_segmentation_async(
     if delta < WINDOW_BASE:
         return False, delta
 
-    idle_hours = await _get_session_idle_hours_async(session_id)
+    idle_hours = await _get_session_idle_hours_async(session_id, user_id=user_id)
     if idle_hours is not None and idle_hours < IDLE_GATE_HOURS:
         return False, delta
 
@@ -851,6 +854,10 @@ async def run_memory_review_async(session_id: str, user_id: str | None = None) -
     from app.memory.memory_review import review_memory_async
     from app.memory.db_memory_facade import MemoryDB, FACT_TYPE_STATIC
 
+    if not user_id:
+        logger.warning("run_memory_review_async called without user_id — skipping")
+        return {"reviewed": 0}
+
     try:
         # Get facts pending review
         facts = await MemoryDB.get_facts_by_session_async(
@@ -865,7 +872,7 @@ async def run_memory_review_async(session_id: str, user_id: str | None = None) -
             return {"reviewed": 0}
 
         # Get conversation context
-        messages = await get_session_messages_async(session_id, limit=20)
+        messages = await get_session_messages_async(session_id, limit=20, user_id=user_id)
         context = (
             "\n".join(
                 f"{m.get('role', 'unknown')}: {m.get('content', '')[:200]}"
@@ -922,14 +929,14 @@ async def run_memory_pipeline_async(
                     f"ID-based query failed, falling back to count-based: {e}"
                 )
                 # Fallback
-                all_messages = await get_session_messages_async(session_id, limit=10000)
+                all_messages = await get_session_messages_async(session_id, limit=10000, user_id=user_id)
                 conversation_messages = [
                     m for m in all_messages if m.get("role") in ("user", "assistant")
                 ]
                 unsegmented = conversation_messages[last_count:]
         else:
             # Initial state: use count-based
-            all_messages = await get_session_messages_async(session_id, limit=10000)
+            all_messages = await get_session_messages_async(session_id, limit=10000, user_id=user_id)
             conversation_messages = [
                 m for m in all_messages if m.get("role") in ("user", "assistant")
             ]
@@ -1083,7 +1090,7 @@ async def trigger_memory_pipeline_async(
     Returns True if pipeline was triggered.
     """
     should_trigger, delta = await should_trigger_segmentation_async(
-        session_id, current_count
+        session_id, current_count, user_id=user_id
     )
 
     if not should_trigger:

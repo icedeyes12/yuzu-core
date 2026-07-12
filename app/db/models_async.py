@@ -323,7 +323,7 @@ async def update_message_async(message_id: int, content: str) -> bool:
 
 
 async def get_session_messages_async(
-    session_id: str, limit: int = 100, order: str = "ASC"
+    session_id: str, limit: int = 100, order: str = "ASC", *, user_id: str
 ) -> list[dict]:
     """Fetch messages for a session in chronological order.
 
@@ -333,7 +333,7 @@ async def get_session_messages_async(
         query = SQL_MESSAGE_SELECT_DESC_LIMIT
     else:
         query = SQL_MESSAGE_SELECT_ASC_LIMIT
-    rows = await pg_fetchall_async(query, (session_id, limit))
+    rows = await pg_fetchall_async(query, (session_id, user_id, limit))
     return [parse_message_row(r) for r in rows]
 
 
@@ -372,9 +372,9 @@ async def get_chat_history_async(
     return [parse_message_row(r) for r in rows]
 
 
-async def clear_session_messages_async(session_id: str) -> bool:
+async def clear_session_messages_async(session_id: str, *, user_id: str) -> bool:
     try:
-        await pg_execute_async(SQL_MESSAGE_DELETE_FOR_SESSION, (session_id,))
+        await pg_execute_async(SQL_MESSAGE_DELETE_FOR_SESSION, (session_id, user_id))
         await pg_execute_async(
             SQL_SESSION_RESET_COUNT_AND_MEMORY,
             (datetime.now(), session_id),
@@ -422,10 +422,10 @@ async def get_recent_active_sessions_async(
 
 
 async def get_session_conversation_summary_async(
-    session_id: str, limit: int = 20
+    session_id: str, limit: int = 20, *, user_id: str
 ) -> str:
     rows = await pg_fetchall_async(
-        SQL_MESSAGE_CONVERSATION_SUMMARY, (session_id, limit)
+        SQL_MESSAGE_CONVERSATION_SUMMARY, (session_id, user_id, limit)
     )
     return format_conversation_summary(rows)
 

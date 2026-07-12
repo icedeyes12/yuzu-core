@@ -487,7 +487,7 @@ LIMIT %s
 
 SQL_MESSAGE_UPDATE = "UPDATE messages SET content = %s, attachments = %s WHERE id = %s"
 
-SQL_MESSAGE_DELETE_FOR_SESSION = "DELETE FROM messages WHERE session_id = %s"
+SQL_MESSAGE_DELETE_FOR_SESSION = "DELETE FROM messages WHERE session_id = %s AND user_id = %s"
 
 SQL_MESSAGE_COUNT_CONVERSATIONAL = (
     "SELECT COUNT(*) as cnt FROM messages "
@@ -513,7 +513,7 @@ LIMIT %s
 SQL_MESSAGE_CONVERSATION_SUMMARY = """
 SELECT role, content
 FROM messages
-WHERE session_id = %s AND role IN ('user', 'assistant')
+WHERE session_id = %s AND user_id = %s AND role IN ('user', 'assistant')
 ORDER BY timestamp ASC
 LIMIT %s
 """

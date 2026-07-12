@@ -120,7 +120,7 @@ async def api_switch_session(
         SessionService.mark_client_connected(client_id)
 
         chat_history = await get_chat_history_async(
-            session_id=request.session_id, user_id=user_id
+            session_id=request.session_id, limit=50, recent=True, user_id=user_id
         )
         session_memory = await get_memory_state_async(request.session_id)
 
@@ -170,7 +170,7 @@ async def api_delete_session(
             active_session = await get_active_session_async(user_id)
             if active_session:
                 chat_history = await get_chat_history_async(
-                    active_session["id"], user_id=user_id
+                    active_session["id"], limit=50, recent=True, user_id=user_id
                 )
                 session_memory = await get_memory_state_async(active_session["id"])
             else:

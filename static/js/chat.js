@@ -68,8 +68,6 @@ function _focusChatInput() {
  * @param {boolean} updateURL - Whether to update browser URL (default: true)
  */
 async function handleSessionSwitch(sessionId, updateURL = true) {
-	console.log(`[Chat] Switching to session ${sessionId}`);
-
 	// 1. Update currentSessionId
 	router.currentSessionId = sessionId;
 
@@ -109,7 +107,6 @@ async function handleSessionSwitch(sessionId, updateURL = true) {
 
 // ==================== INITIALIZATION ====================
 async function initializeChat() {
-	console.log("Initializing clean chat system...");
 
 	// Initialize scroll button
 	createScrollButton();
@@ -149,8 +146,6 @@ async function initializeChat() {
 
 	// Auto-focus input on initial load
 	_focusChatInput();
-
-	console.log("Clean chat system ready!");
 }
 
 // ==================== GLOBAL EXPORTS ====================
