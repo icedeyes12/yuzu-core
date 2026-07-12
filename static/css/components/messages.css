@@ -22,12 +22,12 @@
 /* ==================== MESSAGES ==================== */
 .message {
 	position: relative;
-	max-width: 85%;
-	padding: 0.8rem 1rem;
-	border-radius: 12px;
 	animation: fadeIn 0.3s ease;
-	word-wrap: break-word;
-	overflow-wrap: break-word;
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	margin-bottom: 0.5rem;
+	max-width: 95%;
 }
 
 @keyframes fadeIn {
@@ -72,24 +72,28 @@
 	align-self: flex-start;
 	background: transparent;
 	border: none;
-	max-width: 95%;
-	padding: 1rem 0.5rem;
+	padding: 0;
 }
 
 .assistant-message .message-bubble {
 	background: transparent;
+	color: var(--text-color);
 	border: none;
-	padding: 0;
+	border-radius: 12px;
+	border-top-left-radius: 0.2rem;
+	padding: 0.8rem 1rem;
+	word-wrap: break-word;
+	overflow-wrap: break-word;
 }
 
 /* === TOOL AND SYSTEM MESSAGES === */
 .message.tool-message,
 .message.event_log-message {
-	align-self: center;
+	align-self: stretch;
+	margin: 0 auto;
 	background: transparent;
 	border: none;
-	max-width: 95%;
-	padding: 0.5rem;
+	padding: 0;
 	opacity: 0.8;
 }
 
