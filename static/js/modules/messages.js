@@ -12,133 +12,55 @@ import { findMessageById } from "./state.js";
  */
 export function createMessageElement(role, content, timestamp = null) {
 	const msg = document.createElement("div");
-	msg.className = `message ${role}`;
+	msg.className = `message ${role}-message`;
 
-	// User messages use nested bubble structure: wrapper > bubble + footer
-	// AI messages keep the original flat structure for backward compatibility
-	const isUserMessage = role === "user";
+	const bubble = document.createElement("div");
+	bubble.className = "message-bubble";
 
-	// Format timestamp
-	const displayTime = timestamp
-		? formatTimestamp(timestamp)
-		: getCurrentTime24h();
-
-	if (isUserMessage) {
-		// === USER MESSAGE: NESTED BUBBLE STRUCTURE ===
-		// Outer wrapper contains bubble + footer stacked vertically
-		// This keeps the colored background only on the text content
-
-		// Bubble container - holds the colored background
-		const bubble = document.createElement("div");
-		bubble.className = "message-bubble";
-
-		// Content inside the bubble
-		const contentContainer = document.createElement("div");
-		contentContainer.className = "message-content";
-
-		// Render content through a single safe pipeline
-		if (typeof renderer !== "undefined") {
-			contentContainer.innerHTML = renderMessageContent(
-				content == null ? "" : String(content),
-				role === "user",
-			);
-
-			// Apply syntax highlighting to code blocks after rendering
-			setTimeout(() => {
-				if (typeof hljs !== "undefined") {
-					const codeBlocks = contentContainer.querySelectorAll("pre code");
-					codeBlocks.forEach((block) => {
-						if (!block.classList.contains("hljs")) {
-							hljs.highlightElement(block);
-						}
-					});
-				}
-			}, 0);
-		} else {
-			contentContainer.textContent = content == null ? "" : String(content);
-		}
-
-		bubble.appendChild(contentContainer);
-		msg.appendChild(bubble);
-
-		// Footer OUTSIDE the bubble (timestamp + copy button)
-		const footer = document.createElement("div");
-		footer.className = "message-footer message-footer--user";
-
-		const timeDiv = document.createElement("div");
-		timeDiv.className = "timestamp";
-		timeDiv.textContent = displayTime;
-		footer.appendChild(timeDiv);
-
-		const copyBtn = document.createElement("button");
-		copyBtn.className = "copy-message-btn";
-		copyBtn.setAttribute("data-action", "copy-message");
-		copyBtn.setAttribute("data-message-content", content);
-		copyBtn.title = "Copy full message";
-		copyBtn.innerHTML = `
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-				<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-			</svg>
-		`;
-		// Note: onclick removed - event delegation handles copy in renderer.js
-		// Content is passed via data-message-content attribute or looked up dynami
-		footer.appendChild(copyBtn);
-
-		msg.appendChild(footer);
-	} else {
-		// === AI MESSAGE: ORIGINAL FLAT STRUCTURE ===
-		// Kept for backward compatibility with existing CSS
-		const contentContainer = document.createElement("div");
-		contentContainer.className = "message-content";
-
-		if (typeof renderer !== "undefined") {
-			contentContainer.innerHTML = renderMessageContent(
-				String(content),
-				role === "user",
-			);
-
-			setTimeout(() => {
-				if (typeof hljs !== "undefined") {
-					const codeBlocks = contentContainer.querySelectorAll("pre code");
-					codeBlocks.forEach((block) => {
-						if (!block.classList.contains("hljs")) {
-							hljs.highlightElement(block);
-						}
-					});
-				}
-			}, 0);
-		} else {
-			contentContainer.textContent = String(content);
-		}
-
-		msg.appendChild(contentContainer);
-
-		const footer = document.createElement("div");
-		footer.className = "message-footer";
-
-		const timeDiv = document.createElement("div");
-		timeDiv.className = "timestamp";
-		timeDiv.textContent = displayTime;
-		footer.appendChild(timeDiv);
-
-		const copyBtn = document.createElement("button");
-		copyBtn.className = "copy-message-btn";
-		copyBtn.setAttribute("data-action", "copy-message");
-		copyBtn.setAttribute("data-message-content", content);
-		copyBtn.title = "Copy full message";
-		copyBtn.innerHTML = `
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-				<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-			</svg>
-		`;
-		// Note: onclick removed - event delegation handles copy in renderer.js
-		// Content is passed via data-message-content attribute or looked up dynami
-		footer.appendChild(copyBtn);
-
-		msg.appendChild(footer);
+	// Header INSIDE the bubble for tool messages, else hidden/omitted
+	if (role === "tool" || role === "event_log") {
+		const header = document.createElement("div");
+		header.className = "message-header";
+		header.textContent = role === "tool" ? "Tool Output" : "System Event";
+		bubble.appendChild(header);
 	}
+
+	const contentContainer = document.createElement("div");
+	contentContainer.className = "message-content markdown-body";
+
+	// Initial render
+	if (window.renderMessageContent) {
+		contentContainer.innerHTML = window.renderMessageContent(content, role === "user");
+	} else {
+		contentContainer.textContent = content == null ? "" : String(content);
+	}
+
+	bubble.appendChild(contentContainer);
+	msg.appendChild(bubble);
+
+	// Footer OUTSIDE the bubble (timestamp + copy button)
+	const footer = document.createElement("div");
+	footer.className = `message-footer message-footer--${role}`;
+
+	const timeDiv = document.createElement("div");
+	timeDiv.className = "timestamp";
+	timeDiv.textContent = timestamp || getCurrentTime24h();
+	footer.appendChild(timeDiv);
+
+	const copyBtn = document.createElement("button");
+	copyBtn.className = "copy-message-btn";
+	copyBtn.setAttribute("data-action", "copy-message");
+	copyBtn.setAttribute("data-message-content", content);
+	copyBtn.title = "Copy full message";
+	copyBtn.innerHTML = `
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+			<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+		</svg>
+	`;
+	footer.appendChild(copyBtn);
+
+	msg.appendChild(footer);
 
 	return msg;
 }
