@@ -915,9 +915,8 @@ async def run_memory_pipeline_async(
         # ID-based query: fetch messages AFTER the last processed message ID
         if last_message_id > 0:
             try:
-                all_messages = await get_session_messages_after_id_async(
-                    session_id, last_message_id, limit=10000
-                )
+                from app.db import get_session_messages_after_id_async
+                all_messages = await get_session_messages_after_id_async(session_id, last_message_id, limit=10000)
             except Exception as e:
                 logger.warning(
                     f"ID-based query failed, falling back to count-based: {e}"
