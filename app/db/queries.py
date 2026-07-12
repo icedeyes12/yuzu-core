@@ -197,6 +197,12 @@ SCHEMA_DDL: tuple[str, ...] = (
     """,
     """
     DO $$ BEGIN
+      ALTER TABLE messages RENAME COLUMN image_paths TO attachments;
+    EXCEPTION WHEN undefined_column THEN NULL;
+    END $$;
+    """,
+    """
+    DO $$ BEGIN
       ALTER TABLE profiles ALTER COLUMN legacy_int_id DROP NOT NULL;
     EXCEPTION WHEN undefined_column THEN NULL;
     END $$;
@@ -466,7 +472,7 @@ LIMIT %s
 SQL_MESSAGE_SELECT_ASC_ALL = """
 SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
-WHERE session_id = %s
+WHERE session_id = %s AND user_id = %s
 ORDER BY timestamp ASC
 """
 

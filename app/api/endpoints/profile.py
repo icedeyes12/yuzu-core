@@ -72,7 +72,7 @@ async def api_get_profile(
             active_session = {"id": session_id}
         session_id = active_session["id"]
         chat_history = await get_chat_history_async(
-            session_id=session_id, limit=None, user_id=user_id
+            session_id=session_id, limit=50, recent=True, user_id=user_id
         )
         session_memory = await get_memory_state_async(active_session["id"])
 

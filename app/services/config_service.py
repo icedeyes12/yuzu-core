@@ -128,6 +128,8 @@ class ConfigService:
             "history_limit": ctx.get("history_limit"),
             "enable_reasoning": ctx.get("enable_reasoning"),
             "enable_vision": ctx.get("enable_vision"),
+            "location_lat": profile.get("location_lat"),
+            "location_lon": profile.get("location_lon"),
         }
 
     @staticmethod
