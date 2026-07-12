@@ -111,13 +111,14 @@ class TestArgumentReordering:
     def test_clear_chat_history_is_alias(self, monkeypatch):
         called = {}
 
-        async def fake_clear(session_id):
+        async def fake_clear(session_id, *, user_id):
             called["session_id"] = session_id
+            called["user_id"] = user_id
             return True
 
         monkeypatch.setattr(db_module, "_pg_clear_session_messages_async", fake_clear)
         asyncio.run(Database.clear_chat_history(session_id="5", user_id="uid"))
-        assert called == {"session_id": "5"}
+        assert called == {"session_id": "5", "user_id": "uid"}
 
 
 class TestProxiedMethods:

@@ -190,7 +190,8 @@ class Database:
 
         async def _call() -> list[dict]:
             return await _pg_get_session_messages_async(
-                await _resolve_session_id_async(session_id, user_id), limit or 100
+                await _resolve_session_id_async(session_id, user_id), limit or 100,
+                user_id=user_id
             )
 
         return _call()
@@ -246,7 +247,8 @@ class Database:
 
         async def _call() -> bool:
             return await _pg_clear_session_messages_async(
-                await _resolve_session_id_async(session_id, user_id)
+                await _resolve_session_id_async(session_id, user_id),
+                user_id=user_id
             )
 
         return _call()
