@@ -1147,8 +1147,8 @@ async def retrieve_memory_async(
     session_id: str, query=None, user_id: str | None = None
 ):
     """
-    Async version of retrieve_memory.
-    Main retrieval entry point.
+    Async wrapper for retrieving contextual memory segments.
+    The primary orchestrator retrieval entry point, supporting context generation.
     """
     if not user_id:
         raise ValueError("retrieve_memory_async: user_id is required")

@@ -259,6 +259,7 @@ async def upsert_semantic_memory_async(
         vector = None
 
     if vector is not None:
+        from app.memory.db_memory_facade import MemoryDB
         existing = await MemoryDB.search_similar_async(
             embedding=vector,
             session_id=session_id,
@@ -279,6 +280,8 @@ async def upsert_semantic_memory_async(
                     ids = [episode_id] if episode_id else []
                 meta["source_episodic_ids"] = ids
                 meta["category"] = category
+                from app.db import pg_execute_async
+                from psycopg.types.json import Json
                 await pg_execute_async(
                     "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
                     (datetime.now(), Json(meta), e["id"]),
@@ -298,6 +301,8 @@ async def upsert_semantic_memory_async(
                 ids = [episode_id] if episode_id else []
             meta["source_episodic_ids"] = ids
             meta["category"] = category
+            from app.db import pg_execute_async
+            from psycopg.types.json import Json
             await pg_execute_async(
                 "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
                 (datetime.now(), Json(meta), existing_exact["id"]),
@@ -318,6 +323,7 @@ async def upsert_semantic_memory_async(
     if episode_id:
         metadata["source_episodic_ids"] = [episode_id]
 
+    from app.memory.db_memory_facade import MemoryDB
     await MemoryDB.save_fact_async(
         session_id=session_id,
         content=f"{entity} {relation} {target}",

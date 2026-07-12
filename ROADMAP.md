@@ -60,4 +60,23 @@ The orchestrator has now been stripped of arbitrary modes (e.g. Synthesis, Ephem
 - Re-map vector memories, search structures, and semantic facts onto the new canonical message flows natively.
 
 ### Phase 11: Runtime Validator
-- Harden boundaries. Prove correctness globally per event.
+- Prove the architecture architecture correctly handles execution limits under stress, without relying on features/optimizations.
+- Certify the architecture across the following boundaries:
+    - **Conversation Invariants:** One state owner, no DOM-derived logic.
+    - **Runtime Rules:** Transport interpreted exactly once, zero legacy paths.
+    - **Tool Sandbox:** Visual isolation from presentation, immutable output execution.
+    - **Memory Purity:** No bypass fetching, no cross-tenant leakage.
+    - **Navigation Binding:** Single-owner paths.
+    - **Streaming Matrix:** Clean transitions across wait/think/tool/pause/complete.
+- Provide a **Final Certification Report** and document remaining debt.
+
+### Complete History & Details
+Full audit histories for completed phases are available in `docs/roadmap-history/`:
+- [Phase 1: DB Schema Migration](docs/roadmap-history/PHASE1_DB_SCHEMA.md)
+- [Phase 2: DB Connection Migration](docs/roadmap-history/PHASE2_DB_CONNECTION.md)
+- [Phase 3: DB API Security](docs/roadmap-history/PHASE3_DB_API_SECURITY.md)
+- [Phase 4: Application Layer](docs/roadmap-history/PHASE4_APP_LAYER.md)
+- [Phase 5: Transport Layer](docs/roadmap-history/PHASE5_TRANSPORT_LAYER.md)
+- [Phase 6: Provider Layer](docs/roadmap-history/PHASE6_PROVIDER_LAYER.md)
+- [Phase 8: Frontend Runtime](docs/roadmap-history/PHASE8_FRONTEND_OWNERSHIP.md)
+- [Phase 10: Memory Architecture](docs/roadmap-history/PHASE10_MEMORY_ARCHITECTURE.md)
