@@ -368,7 +368,7 @@ async def get_chat_history_async(
             SQL_MESSAGE_SELECT_ASC_LIMIT, (session_id, limit)
         )
     else:
-        rows = await pg_fetchall_async(SQL_MESSAGE_SELECT_ASC_ALL, (session_id,))
+        rows = await pg_fetchall_async(SQL_MESSAGE_SELECT_ASC_ALL, (session_id, user_id))
     return [parse_message_row(r) for r in rows]
 
 

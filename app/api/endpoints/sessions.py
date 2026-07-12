@@ -43,22 +43,28 @@ class SessionDeleteRequest(BaseModel):
 
 @router.get("/chat_history")
 async def api_get_chat_history(
-    session_id: str | None = None, user_id: str = Depends(get_current_user)
+    session_id: str | None = None,
+    limit: int | None = 50,
+    user_id: str = Depends(get_current_user),
 ):
-    """Get chat history for a specific session or the active session."""
+    """Get chat history for a specific session or the active session.
+    Defaults to the 50 most recent messages to avoid loading massive histories.
+    Pass limit=0 to load all (use with caution on large sessions).
+    """
     try:
+        effective_limit = limit if limit and limit > 0 else None
         if session_id:
             chat_history = await get_chat_history_async(
-                session_id=session_id, user_id=user_id
+                session_id=session_id, limit=effective_limit, recent=True, user_id=user_id
             )
         else:
             active_session = await get_active_session_async(user_id)
             if active_session:
                 chat_history = await get_chat_history_async(
-                    active_session["id"], user_id=user_id
+                    active_session["id"], limit=effective_limit, recent=True, user_id=user_id
                 )
             else:
-                chat_history = await get_chat_history_async(user_id=user_id)
+                chat_history = []
         return {"status": "success", "chat_history": chat_history}
     except Exception as e:
         log.error("Error getting chat history: %s", e)
