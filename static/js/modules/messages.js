@@ -32,7 +32,7 @@ export function createMessageElement(role, content, timestamp = null) {
 	if (window.renderMessageContent) {
 		contentContainer.innerHTML = window.renderMessageContent(content, role === "user");
 	} else {
-		contentContainer.textContent = content == null ? "" : String(content);
+		contentContainer.textContent = content === null || content === undefined ? "" : String(content);
 	}
 
 	bubble.appendChild(contentContainer);
@@ -71,8 +71,8 @@ export function createMessageElement(role, content, timestamp = null) {
  */
 export function copyFullMessage(content) {
 	// Uses centralized ClipboardUtils from renderer.js for consistent behavior
-	if (typeof ClipboardUtils !== "undefined") {
-		ClipboardUtils.copyText(content);
+	if (typeof window.ClipboardUtils !== "undefined") {
+		window.ClipboardUtils.copyText(content);
 	} else {
 		// Fallback for cases where renderer.js hasn't loaded
 		navigator.clipboard
@@ -106,12 +106,12 @@ export function isRenderableHistoryRole(role) {
  * @param {boolean} isUser - Whether this is a user message
  * @returns {string} Rendered HTML
  */
-export function renderMessageContent(rawText, isUser = false) {
+export function renderMessageContent(rawText, _isUser = false) {
 	const safeText = String(rawText ?? "");
 	console.log("User raw message:", JSON.stringify(safeText));
 	const escapedText = escapeMessageHtml(safeText);
 	try {
-		let processed = safeText;
+		const _processed = safeText;
 		return escapedText;
 	} catch (e) {
 		console.error("Render error:", e, safeText);

@@ -1,13 +1,10 @@
 // FILE: static/js/modules/multimodal.js
 // DESCRIPTION: Multimodal manager for image upload, generation, and streaming
 
-import { captureDetailsState, restoreDetailsState } from "./dom-utils.js";
 import { router } from "./router.js";
-import { scrollToBottom } from "./scroll.js";
 import {
 	currentAbortController,
 	currentStreamMessage,
-	generateMessageId,
 	isProcessingMessage,
 	setCurrentAbortController,
 	setCurrentStreamMessage,
@@ -16,7 +13,6 @@ import {
 import { eventRouter } from "./event-router.js";
 import { chatStore } from "./store.js";
 import {
-	hideTypingIndicator,
 	showTypingIndicator,
 } from "./typing-indicator.js";
 
@@ -188,7 +184,6 @@ export class MultimodalManager {
 	async sendMessageStreaming(message, images = []) {
 		try {
 			const chatContainer = document.getElementById("chatContainer");
-
 			if (!chatContainer) {
 				console.error("Chat container not found");
 				setIsProcessingMessage(false);
@@ -235,8 +230,7 @@ export class MultimodalManager {
 
 			const reader = response.body.getReader();
 			const decoder = new TextDecoder();
-			let firstChunk = true;
-			let sseBuffer = "";
+			let sseBuffer = ""; // [FIX] Tail-buffer nahan chunk yang kepotong
 
 			while (true) {
 				const { done, value } = await reader.read();
@@ -282,7 +276,7 @@ export class MultimodalManager {
 		return msgEl?.querySelector(".message-content") || null;
 	}
 
-	renderStreamChunk(contentDiv, text, isComplete = false) {
+	renderStreamChunk(_contentDiv, _text, _isComplete = false) {
 		// [ACCORDION PRESERVATION] Capture current <details> open states (index-based)
 		// DELETED: DOM is no longer the source of truth, ConversationStore is.
 		// DOMRenderer handles all updates now.
@@ -290,7 +284,7 @@ export class MultimodalManager {
 		return;
 	}
 
-	createStreamingMessageElement(role, messageId = null) {
+	createStreamingMessageElement(_role, _messageId = null) {
 		// DELETED: Store and DOMRenderer handle all message element creation now.
 		// Returns a dummy element to prevent crashes in un-migrated legacy callers.
 		const dummy = document.createElement("div");
@@ -338,12 +332,8 @@ export class MultimodalManager {
 			currentStreamMessage.style.display = "none";
 			chatContainer.appendChild(currentStreamMessage);
 
-			const contentDiv = currentStreamMessage.querySelector(".message-content");
-			let accumulatedText = "";
-
 			const reader = response.body.getReader();
 			const decoder = new TextDecoder();
-			let firstChunk = true;
 			let sseBuffer = ""; // [FIX] Tail-buffer nahan chunk yang kepotong
 
 			while (true) {

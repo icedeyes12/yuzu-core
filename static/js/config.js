@@ -484,7 +484,7 @@ function setupEventListeners() {
 		if (e.key === "Escape") {
 			const sidebar = document.getElementById("mainSidebar");
 			if (sidebar?.classList.contains("open")) {
-				toggleSidebar();
+				window.toggleSidebar();
 			}
 		}
 	});
@@ -1368,6 +1368,7 @@ function initializeConfigAnimations() {
 // Make functions globally available
 window.showSuccess = showSuccess;
 window.showError = showError;
+window.toggleSidebar = window.toggleSidebar || (() => {});
 
 async function loadLocation() {
 	try {

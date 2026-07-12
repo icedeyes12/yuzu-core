@@ -16,7 +16,7 @@ export function validateToolResult(rawPayload) {
     if (typeof rawPayload === 'string') {
         try {
             parsed = JSON.parse(rawPayload);
-        } catch (e) {
+        } catch (_e) {
             console.warn("[Validator] Failed to parse raw tool payload as JSON");
             return {
                 name: "unknown",
