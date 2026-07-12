@@ -1,12 +1,9 @@
-/* FILE: static/css/components/code-blocks.css */
-/* DESCRIPTION: Code block styling with copy functionality */
-
 /* ==================== CODE BLOCKS ==================== */
 .code-block-container {
 	margin: 1rem 0;
 	border-radius: 8px;
 	overflow: hidden;
-	background: var(--code-bg);
+	background: var(--bg-tertiary, rgba(0, 0, 0, 0.2));
 	border: 1px solid var(--border-color);
 }
 
@@ -59,7 +56,7 @@
 }
 
 .code-block-container code {
-	font-family: "Hack", "Fira Code", "Consolas", "Monaco", monospace;
+	font-family: "JetBrains Mono", "Fira Code", "Consolas", "Monaco", monospace;
 	font-size: 0.9rem;
 	line-height: 1.5;
 }

@@ -12,11 +12,11 @@ from app.core.context import (
     clear_request_keyring,
     MissingProviderKeyError,
 )
-from app.services.chat_service import ChatService
+from app.services.conversation_service import ConversationService
 from app.services.session_service import SessionService
 from app.api.utils import get_client_id, get_current_user
 from fastapi import Depends
-from app.orchestrator import handle_user_message
+
 from app.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -76,7 +76,7 @@ async def api_send_message(
         interface = payload.interface
         log.info("[%s] message: %s...", interface, user_message[:200])
 
-        ai_reply = await ChatService.send_message_async(
+        ai_reply = await ConversationService.process_user_message_async(
             user_message, interface=interface, user_id=user_id
         )
 
@@ -137,7 +137,7 @@ async def api_send_message_stream(
             if keyrings:
                 set_request_keyrings(keyrings)
             try:
-                async for chunk in ChatService.get_stream_generator(
+                async for chunk in ConversationService.get_stream_generator(
                     user_message,
                     interface=interface,
                     provider=provider,
@@ -188,7 +188,7 @@ async def api_generate_image(
         if not prompt:
             return {"reply": "Prompt required", "status": "error"}
 
-        ai_reply = await handle_user_message(
+        ai_reply = await ConversationService.process_user_message_async(
             f"/imagine {prompt}", interface="web", user_id=user_id
         )
         return {"reply": ai_reply, "status": "success"}

@@ -1,6 +1,8 @@
 // FILE: static/js/modules/index.js
 // DESCRIPTION: Module index - exports all module components
 
+import "./store-renderer.js"; // Initialize renderer subscriber on load
+
 // History loading
 export { addScrollLoadListener, loadChatHistory } from "./history.js";
 // Input behavior
@@ -44,6 +46,9 @@ export {
 export {
 	eventRouter
 } from "./event-router.js";
+export {
+	chatStore
+} from "./store.js";
 // Typing indicator
 export {
 	hideTypingIndicator,

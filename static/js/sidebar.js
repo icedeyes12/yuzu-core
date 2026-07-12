@@ -464,11 +464,13 @@ function createNewSession() {
 
 function switchSession(sessionId) {
 	if (_sessionSwitchCooldown || _isSessionSwitching) return;
-	if (window.backgroundStreams && window.router) {
+	
+	// Dynamic import to avoid module issues outside module scripts
+	if (window.eventRouter && window.router) {
 		const currentSession = window.router.currentSessionId;
 		if (
 			currentSession &&
-			window.backgroundStreams.hasActiveStream(currentSession)
+			window.chatStore && window.chatStore.isGenerating && window.chatStore.sessionId === currentSession
 		) {
 			console.log(
 				`[Sidebar] Active stream in session ${currentSession}, pausing`,
