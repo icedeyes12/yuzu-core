@@ -147,18 +147,6 @@ export function renderMessageContent(rawText, isUser = false) {
 	const escapedText = escapeMessageHtml(safeText);
 	try {
 		let processed = safeText;
-		if (
-			typeof renderer !== "undefined" &&
-			typeof renderer.preprocessGeneratedImages === "function"
-		) {
-			processed = renderer.preprocessGeneratedImages(processed);
-		}
-		if (
-			typeof renderer !== "undefined" &&
-			typeof renderer.renderMessage === "function"
-		) {
-			return renderer.renderMessage(processed, isUser);
-		}
 		return escapedText;
 	} catch (e) {
 		console.error("Render error:", e, safeText);
@@ -172,12 +160,6 @@ export function renderMessageContent(rawText, isUser = false) {
  * @returns {string} Escaped text
  */
 export function escapeMessageHtml(text) {
-	if (
-		typeof renderer !== "undefined" &&
-		typeof renderer.escapeHtml === "function"
-	) {
-		return renderer.escapeHtml(text);
-	}
 	return String(text).replace(
 		/[&<>"']/g,
 		(c) =>
