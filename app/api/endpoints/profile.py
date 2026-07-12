@@ -14,7 +14,6 @@ from app.db import (
     update_profile_async,
 )
 from app.api.utils import get_current_user
-from app.stream_manager import StreamManager
 from app.services.config_service import ConfigService
 from app.providers import get_ai_manager
 from app.logging_config import get_logger
@@ -75,26 +74,6 @@ async def api_get_profile(
         chat_history = await get_chat_history_async(
             session_id=session_id, limit=None, user_id=user_id
         )
-
-        # Inject ongoing stream if it exists
-        active_buf = await StreamManager.get_stream(session_id)
-        if active_buf and active_buf.full_content:
-            # Check if the last message in history is already this response
-            last_msg = chat_history[-1] if chat_history else None
-            is_duplicate = False
-            if last_msg and last_msg.get("role") == "assistant":
-                if len(last_msg.get("content", "")) >= len(active_buf.full_content):
-                    is_duplicate = True
-
-            if not is_duplicate:
-                chat_history.append(
-                    {
-                        "id": -99,  # Sentinel ID for live content
-                        "role": "assistant",
-                        "content": active_buf.full_content,
-                        "timestamp": datetime.now().isoformat(),
-                    }
-                )
         session_memory = await get_memory_state_async(active_session["id"])
 
         profile_dict = ConfigService.format_profile_dict(profile)
