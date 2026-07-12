@@ -285,124 +285,18 @@ export class MultimodalManager {
 
 	renderStreamChunk(contentDiv, text, isComplete = false) {
 		// [ACCORDION PRESERVATION] Capture current <details> open states (index-based)
-		const detailsStates = captureDetailsState(contentDiv);
-
-		// For streaming: render markdown incrementally
-		// Use streaming-aware render to handle incomplete mermaid blocks
-		if (typeof renderer !== "undefined" && renderer.isMarkedReady) {
-			// Use streaming render for incomplete, normal render for complete
-			contentDiv.innerHTML = isComplete
-				? renderer.render(text)
-				: renderer.renderStreaming(text, true);
-
-			// [ACCORDION PRESERVATION] Restore <details> open states after innerHTML update
-			restoreDetailsState(contentDiv, detailsStates);
-
-			// Initialize mermaid diagrams with DEBOUNCE during streaming
-			// This prevents UI freeze from synchronous mermaid.run() on every chunk
-			if (renderer.isMermaidReady) {
-				renderer.initializeMermaidDiagrams(contentDiv, !isComplete);
-			}
-
-			// Initialize table copy buttons during streaming
-			if (typeof renderer !== "undefined") {
-				renderer.initializeTableCopyButtons(contentDiv);
-			}
-
-			// Bug 1 Fix: trigger global highlight and mermaid on complete
-			if (isComplete) {
-				setTimeout(() => {
-					if (typeof hljs !== "undefined") {
-						hljs.highlightAll();
-					}
-					if (typeof mermaid !== "undefined") {
-						mermaid.init();
-					}
-				}, 0);
-			}
-		} else {
-			// Fallback: just show raw text
-			contentDiv.textContent = text;
-		}
+		// DELETED: DOM is no longer the source of truth, ConversationStore is.
+		// DOMRenderer handles all updates now.
+		// This method is a no-op shim until multimodal.js is fully stripped.
+		return;
 	}
 
 	createStreamingMessageElement(role, messageId = null) {
-		const msg = document.createElement("div");
-		msg.className = `message ${role}`;
-		msg.setAttribute("data-streaming", "true");
-
-		// [CRITICAL] Set message ID for DOM tracking
-		if (messageId) {
-			msg.setAttribute("data-message-id", messageId);
-		} else {
-			msg.setAttribute("data-message-id", generateMessageId());
-		}
-
-		// User messages use nested bubble structure: wrapper > bubble + footer
-		// AI messages keep the original flat structure
-		const isUserMessage = role === "user";
-
-		if (isUserMessage) {
-			// === USER MESSAGE: NESTED BUBBLE STRUCTURE ===
-			const bubble = document.createElement("div");
-			bubble.className = "message-bubble";
-
-			const contentDiv = document.createElement("div");
-			contentDiv.className = "message-content";
-			bubble.appendChild(contentDiv);
-			msg.appendChild(bubble);
-
-			// Footer OUTSIDE the bubble
-			const footer = document.createElement("div");
-			footer.className = "message-footer message-footer--user";
-
-			const timeDiv = document.createElement("div");
-			timeDiv.className = "timestamp";
-			timeDiv.textContent = this.getCurrentTime();
-			footer.appendChild(timeDiv);
-
-			const copyBtn = document.createElement("button");
-			copyBtn.className = "copy-message-btn";
-			copyBtn.title = "Copy full message";
-			copyBtn.innerHTML = `
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-					<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-				</svg>
-			`;
-			footer.appendChild(copyBtn);
-
-			msg.appendChild(footer);
-			return msg;
-		}
-
-		// === AI MESSAGE: ORIGINAL FLAT STRUCTURE ===
-		const contentDiv = document.createElement("div");
-		contentDiv.className = "message-content";
-		msg.appendChild(contentDiv);
-
-		const footer = document.createElement("div");
-		footer.className = "message-footer";
-
-		const timeDiv = document.createElement("div");
-		timeDiv.className = "timestamp";
-		timeDiv.textContent = this.getCurrentTime();
-		footer.appendChild(timeDiv);
-
-		const copyBtn = document.createElement("button");
-		copyBtn.className = "copy-message-btn";
-		copyBtn.setAttribute("data-action", "copy-message");
-		copyBtn.title = "Copy full message";
-		copyBtn.innerHTML = `
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-				<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-			</svg>
-		`;
-		footer.appendChild(copyBtn);
-
-		msg.appendChild(footer);
-		return msg;
+		// DELETED: Store and DOMRenderer handle all message element creation now.
+		// Returns a dummy element to prevent crashes in un-migrated legacy callers.
+		const dummy = document.createElement("div");
+		dummy.style.display = "none";
+		return dummy;
 	}
 
 	cleanupStreamState() {
