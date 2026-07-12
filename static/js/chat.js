@@ -1,11 +1,10 @@
 // FILE: static/js/chat.js
 // DESCRIPTION: Chat interface entry point - imports and initializes all modules
-console.log("Starting clean chat rebuild...");
-
 // ==================== MODULE IMPORTS ====================
 import {
 	copyFullMessage,
 	createScrollButton,
+	setupScrollListener,
 	findMessageById,
 	generateMessageId,
 	hideChatSkeleton,
@@ -123,6 +122,9 @@ async function initializeChat() {
 
 	// Load session name
 	loadCurrentSessionName();
+	
+	// Initialize Scroll Listener
+	setupScrollListener();
 
 	// Stream state is now fully managed by ConversationStore + EventRouter
 

@@ -40,7 +40,8 @@ Thumbs.db
 
 # tool artifacts
 tools/static/
-package-lock.json
+node_modules/
+app/schemas/
 
 
 copilot/

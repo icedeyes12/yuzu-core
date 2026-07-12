@@ -70,11 +70,11 @@ export function createMessageElement(role, content, timestamp = null) {
  * @param {string} content - Content to copy
  */
 export function copyFullMessage(content) {
-	// Uses centralized ClipboardUtils from renderer.js for consistent behavior
+	// Uses global ClipboardUtils
 	if (typeof window.ClipboardUtils !== "undefined") {
 		window.ClipboardUtils.copyText(content);
 	} else {
-		// Fallback for cases where renderer.js hasn't loaded
+		// Fallback for cases where utility hasn't loaded
 		navigator.clipboard
 			.writeText(content)
 			.then(() => {

@@ -4,7 +4,7 @@
 import "./store-renderer.js"; // Initialize renderer subscriber on load
 
 // History loading
-export { addScrollLoadListener, loadChatHistory } from "./history.js";
+export { setupScrollListener, loadChatHistory } from "./history.js";
 // Input behavior
 export { initializeInputBehavior } from "./input.js";
 // Messages
