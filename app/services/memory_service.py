@@ -134,7 +134,7 @@ class MemoryService:
         return await asyncio.to_thread(summarize_global_player_profile, user_id)
 
     @staticmethod
-    async def rebuild_structured_memory_async(session_id: str) -> dict[str, Any]:
+    async def rebuild_structured_memory_async(session_id: str, user_id: str) -> dict[str, Any]:
         """Run the full memory pipeline for a session.
 
         Returns a summary dict with segments, episodes, and pcl_runs counts.
@@ -150,14 +150,14 @@ class MemoryService:
         count = await Database.get_session_messages_count(session_id)
 
         # Run the full pipeline
-        result = await run_memory_pipeline_async(session_id, count)
+        result = await run_memory_pipeline_async(session_id, count, user_id=user_id)
 
         # Get final counts
         semantic_count = MemoryDB.count_facts(
-            fact_type=FACT_TYPE_STATIC, session_id=session_id
+            fact_type=FACT_TYPE_STATIC, session_id=session_id, user_id=user_id
         )
         episodic_count = MemoryDB.count_facts(
-            fact_type=FACT_TYPE_DYNAMIC, session_id=session_id
+            fact_type=FACT_TYPE_DYNAMIC, session_id=session_id, user_id=user_id
         )
 
         return {
