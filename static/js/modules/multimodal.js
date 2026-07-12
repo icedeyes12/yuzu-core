@@ -256,22 +256,21 @@ export class MultimodalManager {
 			if (error.name === "AbortError") {
 				console.log("Stream aborted by user");
 			} else {
-				console.error("Stream error:", error);
-				// TODO: push error state to Store
+				console.error("Fetch error:", error);
+				// DEBT: Implement error pushing state to Store (post-Phase 11)
 			}
+		} finally {
 			const sessionId = router?.currentSessionId;
 			if (sessionId) {
 				eventRouter.cancelStream(sessionId);
 			}
-		} finally {
 			this.cleanupStreamState();
 			this.setSendButtonState("ready");
 			setIsProcessingMessage(false);
 		}
 	}
 
-	_getContentDivForMessage(messageId) {
-		if (!messageId) return null;
+	getContentContainer(messageId) {
 		const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
 		return msgEl?.querySelector(".message-content") || null;
 	}
