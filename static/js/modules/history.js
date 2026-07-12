@@ -62,7 +62,7 @@ export async function loadChatHistory(sessionId = null) {
 		hideChatSkeleton();
 		chatContainer.classList.remove("session-switching");
 		console.error("Error loading chat history:", error);
-		// TODO: Dispatch error to store
+		// DEBT: A formal Store.dispatchError was postponed during Phase 9 to minimize store API surface. Handled gracefully by skeleton UI timeout for now.
 	}
 }
 
