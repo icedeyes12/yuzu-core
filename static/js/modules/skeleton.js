@@ -8,7 +8,9 @@ export function showChatSkeleton() {
 	const chatContainer = document.getElementById("chatContainer");
 	if (!chatContainer) return;
 
-	chatContainer.innerHTML = `
+	const skeletonDiv = document.createElement("div");
+	skeletonDiv.id = "chatSkeletonContainer";
+	skeletonDiv.innerHTML = `
 		<div class="skeleton-message ai">
 			<div class="skeleton skeleton-message-line"></div>
 			<div class="skeleton skeleton-message-line"></div>
@@ -24,17 +26,15 @@ export function showChatSkeleton() {
 			<div class="skeleton skeleton-message-line"></div>
 		</div>
 	`;
+	chatContainer.appendChild(skeletonDiv);
 }
 
 /**
  * Hide skeleton and prepare for real content.
  */
 export function hideChatSkeleton() {
-	const chatContainer = document.getElementById("chatContainer");
-	if (!chatContainer) return;
-
-	const skeletons = chatContainer.querySelectorAll(".skeleton-message");
-	for (const s of skeletons) {
-		s.remove();
+	const skeletonDiv = document.getElementById("chatSkeletonContainer");
+	if (skeletonDiv) {
+		skeletonDiv.remove();
 	}
 }
