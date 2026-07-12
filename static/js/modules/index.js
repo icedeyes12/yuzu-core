@@ -7,7 +7,6 @@ export { addScrollLoadListener, loadChatHistory } from "./history.js";
 export { initializeInputBehavior } from "./input.js";
 // Messages
 export {
-	addMessage,
 	copyFullMessage,
 	createMessageElement,
 	escapeMessageHtml,
