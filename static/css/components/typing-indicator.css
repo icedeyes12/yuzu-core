@@ -1,25 +1,21 @@
-/* FILE: static/css/components/typing-indicator.css */
-/* DESCRIPTION: Typing indicator animation for streaming responses */
-
 /* ==================== TYPING INDICATOR MESSAGE ==================== */
-.typing-indicator-message {
-	align-self: flex-start;
-	background: var(--message-ai-bg);
-	border: 1px solid var(--border-ai);
-	padding: 0.8rem 1rem;
-	border-radius: 12px;
-	max-width: 60px;
-	animation: fadeIn 0.3s ease;
-}
-
-.typing-indicator-message .typing-dots {
+.typing-indicator {
 	display: flex;
 	gap: 0.4rem;
-	justify-content: center;
 	align-items: center;
+	padding: 0.5rem 1rem;
+	animation: fadeIn 0.3s ease;
+	opacity: 0.7;
+	background: transparent;
+	max-width: fit-content;
+	align-self: flex-start;
+	margin-top: -0.5rem;
+	margin-bottom: 1rem;
+	margin-left: 0.5rem;
+	border-radius: 1rem;
 }
 
-.typing-indicator-message .typing-dots span {
+.typing-indicator span {
 	width: 8px;
 	height: 8px;
 	background: var(--text-secondary);
@@ -27,11 +23,11 @@
 	animation: typing-bounce 1.4s infinite ease-in-out both;
 }
 
-.typing-indicator-message .typing-dots span:nth-child(1) {
+.typing-indicator span:nth-child(1) {
 	animation-delay: -0.32s;
 }
 
-.typing-indicator-message .typing-dots span:nth-child(2) {
+.typing-indicator span:nth-child(2) {
 	animation-delay: -0.16s;
 }
 

@@ -357,7 +357,8 @@ export class MultimodalManager {
 
 				for (const line of lines) {
 					if (line.startsWith("data: ")) {
-						eventRouter.handleEvent(sessionId, line.substring(6));
+						const currentSessionId = document.querySelector(".chat-container")?.dataset?.sessionId || "default";
+						eventRouter.handleEvent(currentSessionId, line.substring(6));
 					}
 				}
 			}
