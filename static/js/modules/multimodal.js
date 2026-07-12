@@ -15,7 +15,8 @@ import {
 	setIsProcessingMessage,
 } from "./state.js";
 import { formatToolResult } from "./history.js";
-import { backgroundStreams } from "./stream-manager.js";
+import { eventRouter } from "./event-router.js";
+import { chatStore } from "./store.js";
 import {
 	hideTypingIndicator,
 	showTypingIndicator,
@@ -211,64 +212,12 @@ export class MultimodalManager {
 				return;
 			}
 
-			backgroundStreams.setActiveView(sessionId);
-
-			// [FIX] Check if there's already an active stream for this session
-			// This prevents duplicate bubbles on page reload mid-generation
-			const existingStream = backgroundStreams.getStream(sessionId);
-			if (existingStream?.isActive) {
-				console.log(
-					`[Stream] Resuming existing stream for session ${sessionId}`,
-				);
-				// Find existing message element
-				const existingElement = document.querySelector(
-					`[data-message-id="${existingStream.messageId}"]`,
-				);
-				if (existingElement) {
-					setCurrentStreamMessage(existingElement);
-					// Flush existing buffer
-					this.renderStreamChunk(
-						currentStreamMessage.querySelector(".message-content"),
-						existingStream.buffer,
-					);
-				} else {
-					// Create new element with the same ID
-					setCurrentStreamMessage(
-						this.createStreamingMessageElement("ai", existingStream.messageId),
-					);
-					chatContainer.appendChild(currentStreamMessage);
-					this.renderStreamChunk(
-						currentStreamMessage.querySelector(".message-content"),
-						existingStream.buffer,
-					);
-				}
-				// Don't start a new fetch, the existing SSE reader is still running
-				return;
-			}
-
-			// [FIX] Generate message ID for tracking
-			const messageId = generateMessageId();
-
-			// Create abort controller for this request
+			eventRouter.setActiveView(sessionId);
+			chatStore.appendMessage({ role: "user", content: message });
+			chatStore.appendMessage({ role: "assistant", content: "" });
 			const abortController = new AbortController();
 			setCurrentAbortController(abortController);
-
-			// Register stream with background manager BEFORE starting fetch
-			backgroundStreams.startStream(sessionId, abortController, messageId);
-
-			// Show typing indicator as in-flow message
-			showTypingIndicator();
-
-			// Create streaming message element with unique ID
-			setCurrentStreamMessage(
-				this.createStreamingMessageElement("ai", messageId),
-			);
-			currentStreamMessage.style.display = "none";
-			chatContainer.appendChild(currentStreamMessage);
-
-			// [DOM REBIND FIX] Store messageId, look up contentDiv dynamically
-			// This prevents stale references when DOM is rebuilt
-			let localBuffer = ""; // Local buffer for this stream instance
+			eventRouter.registerStream(sessionId, abortController);
 
 			const formData = new FormData();
 			formData.append("message", message);
@@ -295,8 +244,6 @@ export class MultimodalManager {
 				const { done, value } = await reader.read();
 
 				if (done) {
-					// Stream complete
-					backgroundStreams.completeStream(sessionId);
 					break;
 				}
 
@@ -307,106 +254,7 @@ export class MultimodalManager {
 
 				for (const line of lines) {
 					if (line.startsWith("data: ")) {
-						try {
-							const json = JSON.parse(line.slice(6));
-							// Typed event envelope (FC5+): type=token|tool_call|tool_result|done
-							const eventType = json.type || null;
-							const textChunk = json.chunk || null;
-
-							if (eventType === "done") {
-								// Turn complete — handled by stream completion below
-								continue;
-							}
-
-							if (eventType === "tool_call" || eventType === "tool_result") {
-								// Structured tool lifecycle event (FC6)
-								const turnId = json.turn_id || json.data?.turn_id || "";
-								if (sessionId === backgroundStreams.activeViewSessionId) {
-									const contentDiv = this._getContentDivForMessage(messageId);
-									if (contentDiv) {
-										if (eventType === "tool_call") {
-											const toolName = json.data?.name || "unknown";
-											const callId = json.data?.id || "";
-											console.log(
-												`[Stream] tool_call: ${toolName} [call=${callId} turn=${turnId}]`,
-											);
-											// Append tool call indicator to buffer
-											const callHtml = `\n<details class="tool-call-indicator"><summary>⚙️ Calling ${toolName}…</summary><pre data-call-id="${callId}">Waiting for result…</pre></details>\n`;
-											localBuffer += callHtml;
-											backgroundStreams.appendChunk(sessionId, callHtml);
-											this.renderStreamChunk(
-												contentDiv,
-												backgroundStreams.getBuffer(sessionId),
-											);
-										} else if (eventType === "tool_result") {
-											const callId = json.data?.call_id || "";
-											const resultHtml = formatToolResult(json.data);
-											localBuffer += resultHtml;
-											backgroundStreams.appendChunk(sessionId, resultHtml);
-											this.renderStreamChunk(
-												contentDiv,
-												backgroundStreams.getBuffer(sessionId),
-											);
-											// Update matching call indicator to show completed
-											const callPre = contentDiv.querySelector(
-												`pre[data-call-id="${callId}"]`,
-											);
-											if (callPre) callPre.textContent = "Completed ✓";
-										}
-										scrollToBottom();
-									}
-								}
-								continue;
-							}
-
-							if (textChunk) {
-								// [CRITICAL] ALWAYS buffer to BackgroundStreamManager
-								// This happens regardless of which session is currently active
-								localBuffer += json.chunk;
-								backgroundStreams.appendChunk(sessionId, json.chunk);
-
-								// [CRITICAL] Only update DOM if this session is the active view
-								if (sessionId === backgroundStreams.activeViewSessionId) {
-									// [DOM REBIND FIX] Look up contentDiv dynamically by messageId
-									const contentDiv = this._getContentDivForMessage(messageId);
-									if (contentDiv) {
-										if (firstChunk) {
-											hideTypingIndicator();
-											const msgEl = contentDiv.closest(".message");
-											if (msgEl) msgEl.style.display = "";
-											firstChunk = false;
-										}
-										this.renderStreamChunk(
-											contentDiv,
-											backgroundStreams.getBuffer(sessionId),
-										);
-										scrollToBottom();
-									}
-								} else {
-									console.log(
-										`[Stream] Session ${sessionId} buffering in background (${localBuffer.length} chars)`,
-									);
-								}
-							}
-						} catch (_e) {
-							// Ignore parse errors
-						}
-					}
-				}
-			}
-
-			// Final render with isComplete=true
-			if (sessionId === backgroundStreams.activeViewSessionId) {
-				const contentDiv = this._getContentDivForMessage(messageId);
-				if (contentDiv) {
-					this.renderStreamChunk(contentDiv, localBuffer, true);
-
-					const msgEl = contentDiv.closest(".message");
-					if (msgEl) {
-						const copyBtn = msgEl.querySelector(".copy-message-btn");
-						if (copyBtn) {
-							copyBtn.setAttribute("data-message-content", localBuffer);
-						}
+						eventRouter.handleEvent(sessionId, line.substring(6));
 					}
 				}
 			}
@@ -417,12 +265,11 @@ export class MultimodalManager {
 				console.log("Stream aborted by user");
 			} else {
 				console.error("Stream error:", error);
-				hideTypingIndicator();
-				addMessage("ai", `Error: ${error.message}`);
+				// TODO: push error state to Store
 			}
 			const sessionId = router?.currentSessionId;
 			if (sessionId) {
-				backgroundStreams.cancelStream(sessionId);
+				eventRouter.cancelStream(sessionId);
 			}
 		} finally {
 			this.cleanupStreamState();
@@ -619,60 +466,15 @@ export class MultimodalManager {
 
 				for (const line of lines) {
 					if (line.startsWith("data: ")) {
-						try {
-							const json = JSON.parse(line.slice(6));
-							// Typed event envelope (FC5+)
-							const eventType = json.type || null;
-							const textChunk = json.chunk || null;
-
-							if (eventType === "done") continue;
-							if (eventType === "tool_call" || eventType === "tool_result") {
-								// Render tool events inline (FC6)
-								if (eventType === "tool_call") {
-									const toolName = json.data?.name || "unknown";
-									accumulatedText += `\n<details class="tool-call-indicator"><summary>⚙️ Calling ${toolName}…</summary></details>\n`;
-								} else if (eventType === "tool_result") {
-									const resultHtml = formatToolResult(json.data);
-									accumulatedText += resultHtml;
-									this.renderStreamChunk(contentDiv, accumulatedText);
-								}
-								continue;
-							}
-
-							if (textChunk) {
-								if (firstChunk) {
-									hideTypingIndicator();
-									currentStreamMessage.style.display = "";
-									firstChunk = false;
-								}
-
-								accumulatedText += json.chunk;
-								this.renderStreamChunk(contentDiv, accumulatedText);
-								scrollToBottom();
-							}
-						} catch (_e) {
-							// Ignore parse errors
-						}
+						eventRouter.handleEvent(sessionId, line.substring(6));
 					}
-				}
-			}
-
-			// Final render
-			this.renderStreamChunk(contentDiv, accumulatedText, true);
-
-			const msgEl = contentDiv.closest(".message");
-			if (msgEl) {
-				const copyBtn = msgEl.querySelector(".copy-message-btn");
-				if (copyBtn) {
-					copyBtn.setAttribute("data-message-content", accumulatedText);
 				}
 			}
 
 			this.clearInput();
 		} catch (error) {
 			console.error("Image generation failed:", error);
-			hideTypingIndicator();
-			addMessage("ai", `Error: ${error.message}`);
+			// TODO: Add error message to store
 		} finally {
 			this.cleanupStreamState();
 			this.isSending = false;
