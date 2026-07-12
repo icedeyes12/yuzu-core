@@ -464,7 +464,7 @@ async def save_fact_async(
             )
             return row["id"] if row else None
     except Exception as e:
-        logger.error(f"save_fact_async failed: {e}")
+        logger.error(f"save_fact_async EXCEPTION: {e}")
         return None
 
 

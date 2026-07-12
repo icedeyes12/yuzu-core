@@ -338,7 +338,7 @@ async def get_session_messages_async(
 
 
 async def get_session_messages_after_id_async(
-    session_id: str, after_message_id: int, limit: int = 1000
+    session_id: str, after_message_id: int, limit: int = 1000, *, user_id: str
 ) -> list[dict]:
     """Fetch messages for a session after a specific message ID.
 
@@ -346,7 +346,7 @@ async def get_session_messages_after_id_async(
     with id > after_message_id, ordered by id ascending.
     """
     rows = await pg_fetchall_async(
-        SQL_MESSAGE_SELECT_AFTER_ID, (session_id, after_message_id, limit)
+        SQL_MESSAGE_SELECT_AFTER_ID, (session_id, user_id, after_message_id, limit)
     )
     return [parse_message_row(r) for r in rows]
 

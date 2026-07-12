@@ -474,7 +474,7 @@ ORDER BY timestamp ASC
 SQL_MESSAGE_SELECT_AFTER_ID = """
 SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
-WHERE session_id = %s AND id > %s
+WHERE session_id = %s AND user_id = %s AND id > %s
 ORDER BY id ASC
 LIMIT %s
 """

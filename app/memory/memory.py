@@ -889,7 +889,7 @@ async def run_memory_review_async(session_id: str, user_id: str | None = None) -
 
 
 async def run_memory_pipeline_async(
-    session_id: str, message_count: int, user_id: str | None = None
+    session_id: str, message_count: int, user_id: str
 ) -> dict:
     """Run the full memory pipeline for a session.
 
@@ -916,7 +916,7 @@ async def run_memory_pipeline_async(
         if last_message_id > 0:
             try:
                 from app.db import get_session_messages_after_id_async
-                all_messages = await get_session_messages_after_id_async(session_id, last_message_id, limit=10000)
+                all_messages = await get_session_messages_after_id_async(session_id, last_message_id, limit=10000, user_id=user_id)
             except Exception as e:
                 logger.warning(
                     f"ID-based query failed, falling back to count-based: {e}"
@@ -1042,6 +1042,9 @@ async def _background_worker_async():
     """Async background worker."""
     while True:
         session_to_process, user_id = await _pending_sessions.get()
+        if not session_to_process or not user_id:
+            _pending_sessions.task_done()
+            continue
         try:
             # Retrieve count from DB-persisted fence
             from app.db import get_memory_state_async
@@ -1057,9 +1060,9 @@ async def _background_worker_async():
 
 
 async def enqueue_memory_pipeline_async(
-    session_id: str, user_id: str | None = None
-) -> None:
-    """Queue a session for background memory processing.
+    session_id: str, user_id: str
+):
+    """Enqueue a session for background memory pipeline processing.
 
     Non-blocking — returns immediately.
     """
@@ -1073,7 +1076,7 @@ async def enqueue_memory_pipeline_async(
 
 
 async def trigger_memory_pipeline_async(
-    session_id: str, current_count: int, user_id: str | None = None
+    session_id: str, current_count: int, user_id: str
 ) -> bool:
     """Check and trigger memory pipeline in background if threshold met.
 
