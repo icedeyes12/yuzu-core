@@ -14,7 +14,6 @@ import {
 	setCurrentStreamMessage,
 	setIsProcessingMessage,
 } from "./state.js";
-import { formatToolResult } from "./history.js";
 import { eventRouter } from "./event-router.js";
 import { chatStore } from "./store.js";
 import {

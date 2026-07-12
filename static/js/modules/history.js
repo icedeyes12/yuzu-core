@@ -1,3 +1,4 @@
+// Frontend state ownership: ConversationStore owns rendering, history.js only triggers loads.
 import { chatStore } from "./store.js";
 import { eventRouter } from "./event-router.js";
 import { showChatSkeleton, hideChatSkeleton } from "./skeleton.js";
@@ -62,26 +63,20 @@ export async function loadChatHistory(sessionId = null) {
 		hideChatSkeleton();
 		chatContainer.classList.remove("session-switching");
 		console.error("Error loading chat history:", error);
-		chatContainer.innerHTML = `<div class="message-row system-message">Error loading history: ${error.message}</div>`;
+		// TODO: Dispatch error to store
 	}
 }
 
 /**
  * Pagination logic: only requests more data and prepends to the store.
- * (Requires Store update to handle prepend properly - we will add this later if needed,
- * but for now we dispatch to loadHistory with the full sliced array)
  */
 export function setupScrollListener() {
 	const chatContainer = document.getElementById("chatContainer");
 	
 	chatContainer.addEventListener("scroll", async () => {
 		if (chatContainer.scrollTop === 0 && !isLoadingOlder) {
-			const history = chatStore.messages; // We should fetch from API, but keeping it simple for now
-			// If we had a real pagination endpoint we'd fetch here.
-			// Since we load all history at once in the current API, this scroll listener 
-			// isn't actually fetching new data, it was just doing DOM trickery. 
-			// We can leave this as a no-op until backend pagination is implemented,
-			// because chatStore now holds the full array anyway.
+			// No-op for now; store handles full history. Pagination will be
+			// re-implemented correctly when the backend API supports limit/offset.
 		}
 	});
 }
