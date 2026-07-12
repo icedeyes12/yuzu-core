@@ -1,6 +1,6 @@
 # Yuzu Companion — Application Module
 
-The `app/` directory is the core of Yuzu Companion — the AI companion system that powers long-running conversations with persistent memory, multimodal input, and multi-provider dispatch.
+The `app/` directory is the core of Yuzu Companion — the AI companion system that powers long-running conversations with persistent memory, multimodal input, and canonical event flows.
 
 
 ---
@@ -92,20 +92,19 @@ app/
 
 ---
 
-## Core Entry Points
+## Architectural Pipeline
 
-### `file app/orchestrator.py` — Message Orchestration
+### 1. `app/orchestrator.py` — Message Orchestration
 
 The single entry point for handling user messages. Coordinates:
 
-1. Image caching from user messages and explicit `image_paths`
-2. Image deduplication by `os.path.realpath` (preserves first-occurrence order)
-3. Vision model routing when images are detected
-4. Native `tool_calls` execution via `app/tools/registry.py` (`ToolEvent` / `ToolResultEvent`)
-5. Synthesis orchestration loop (max 4 iterations) with structured-system-content support
-6. Response generation via provider selection
-7. Memory pipeline triggering via `MemoryService.run_per_message_checks_async`
-8. Auto session rename and post-turn cleanup
+1. **Canonical Schema Conversion**: Forces all upstream requests into strict Event flows. No HTML parsing.
+2. **Image deduplication**: Deduplicates paths by `os.path.realpath`.
+3. **Vision model routing**: Defers to Provider Capabilities.
+4. **Execution Sandbox**: Strict native `tool_calls` execution isolated via `app/tools/registry.py`. Tools NEVER format presentation strings.
+5. **Orchestration Loop**: Recursive iteration loop bounded by a max cap (4 turns).
+6. **System Persona Prompting**: Dynamic provider-specific generation (structured vs legacy string assembly based on `supports_structured_system_content`).
+7. **Memory Triggering**: `MemoryService` triggers the background worker queue via `trigger_memory_pipeline_async`.
 
 Streaming execution runs in a background worker thread with cooperative cancellation via `abort_check` and the `StreamFence` mechanism (UUID fence ID, 300s timeout).
 
@@ -340,15 +339,17 @@ Each tool module exports a `TOOL_DEFINITION` dict alongside its `execute()` func
 
 ---
 
-## Memory System
+## Memory Architecture (Phase 10 Certified)
 
-The memory subsystem lives in `app/memory/` and provides long-term, structured memory with FSRS-inspired retention dynamics.
+The memory architecture natively restricts all search structures and fact updates via the canonical `user_id`. No multi-tenant bleeds exist.
 
-**Performance optimizations:**
-- Request-scoped caching for memory state and embeddings (`_clear_embedding_cache()`)
-- Throttled pipeline checks (every 5th turn, not every turn)
-- Combined retrieval (single embedding for static + dynamic)
-- Short query skip (< 4 chars → no embedding)
+1. **`file memory/db_memory.py` & `memory/db_memory_facade.py`**: Mandatory gateway for all reads/writes guaranteeing `user_id` encapsulation against pgvector storage.
+2. **`file memory/memory.py`**: Background async worker reading standard `models_async.get_session_messages_after_id_async`. Segments temporal gaps.
+3. **`file memory/embedder.py`**: Asynchronous model adapter (e.g. `Qwen3-Embedding-8B` via Chutes).
+4. **`file memory/extractor.py`**: Parses new segments to deduce structural facts. Overlapping exact matches are intercepted before DB writes.
+5. **`file memory/pcl.py`**: Reduces duplicate knowledge using predictive alignment to maintain finite importance limits.
+6. **`file memory/retrieval.py`**: Re-scoped retrieval using pure DB standard models avoiding legacy pipeline overrides. Single-call hybrid search injected straight into context.
+7. **`file memory/review.py`**: FSRS spaced repetition module processing active/inactive facts sequentially for stability decay calculations.
 
 ```mermaid
 flowchart LR

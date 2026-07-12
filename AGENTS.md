@@ -79,7 +79,7 @@ the repository at HEAD of `dev`.
 - `templates/` — Jinja2 HTML pages (`index.html`, `chat.html`, `config.html`,
   `about.html`, `login.html`, `offline.html`, plus `partials/`).
 - `static/js/` — vanilla JS modules (`chat.js`, `config.js`, `home.js`,
-  `about.js`, `sidebar.js`, `renderer.js`, plus `modules/`).
+  `about.js`, `sidebar.js`, plus `modules/`).
 - `static/css/` — per-page stylesheets (`chat.css`, `config.css`, etc.).
 - `static/uploads/`, `static/generated_images/`, `static/image_cache/` —
   runtime image storage; safe to gitignore.
@@ -89,29 +89,27 @@ the repository at HEAD of `dev`.
 1. **Strict Runtime Data Boundaries.** Backend tools (`app/tools/`) must return purely structured data via Pydantic schema validation. Backend must NEVER format Markdown, HTML, or UI-centric presentation logic. Tool results are cleanly serialized objects.
 2. **Centralized Frontend Runtime Validation.** All tools payloads reaching the client (via SSE or API fetch) MUST pass through `validator.js` (`validateToolResult()`). Renderers consume normalized objects only. UI code must not contain try-catch patching logic for broken backend strings.
 3. **No Private/Location Data Leak to LLM.** User location (`lat`/`lon`) is strictly stored in the PostgreSQL `profiles` table. It is NOT injected into the system prompt. LLMs must call the `weather` tool which securely resolves coordinates from the database during execution.
-4. **Native function calling is the only production tool protocol.**
+2. **Native function calling is the only production tool protocol.**
    `ToolEvent` / `ToolResultEvent` flow through `app/tools/registry.py`.
-   `app/commands.py` and `app/legacy_markup.py` are cleanup-only and must
-   not be reintroduced as live execution paths.
-2. **All SQL lives in `app/db/queries.py`.** No inline DDL or schema drift
-   in business logic. Migrations are additive only — never drop tables.
-3. **Tenant isolation is mandatory.** Every read/write against a
-   `user_id`-scoped table must filter by `user_id`. Memory retrieval
-   (`app/memory/retrieval.py`) accepts and forwards `user_id`; do not
-   add a retrieval path that omits it.
-4. **Runtime parameters come from the active preset.** `LLMContext.from_profile`
+   Legacy `app/commands.py` and `app/legacy_markup.py` were removed.
+3. **All SQL lives in `app/db/queries.py`.** No inline DDL or schema drift
+   in business logic. Migrations are additive only.
+4. **Tenant isolation is mandatory.** Every read/write against a
+   `user_id`-scoped table must filter by `user_id`. Memory abstractions
+   (`app/memory/db_memory.py` & `app/db/models_async.py`) inherently enforce this.
+5. **Runtime parameters come from the active preset.** `LLMContext.from_profile`
    calls `resolve_active_preset_payload()` and uses that as the only source
    of `temperature`, `top_p`, `top_k`, `max_tokens`, and
    `additional_instructions` when a preset is active. Loose top-level
    context values are ignored in that case to keep the runtime payload
    reproducible.
-5. **Structured system content is capability-gated.** When a provider's
+6. **Structured system content is capability-gated.** When a provider's
    `ProviderCapabilities.supports_structured_system_content` is `True`,
    `build_messages` emits the system message as a content array (persona,
    metadata, memory, knowledge, instructions). Otherwise it falls back to
    legacy single-string assembly, but still appends `additional_instructions`
    as a second system message.
-6. **Image deduplication is layered.**
+7. **Image deduplication is layered.**
    - `app/orchestrator.py` `_dedupe_image_paths` merges `cached_images` and
      `image_paths` by `os.path.realpath`, preserving first-occurrence order.
    - `app/prompts.py` `_build_multimodal_message` keeps a `seen` set so the
@@ -119,26 +117,27 @@ the repository at HEAD of `dev`.
      `image_url` blocks.
    - `app/tools/multimodal.py` `format_vision_message` keeps a parallel
      `seen` set as defense-in-depth.
-7. **Stream ownership lives in `app/stream_manager.py`.** Do not add parallel
+8. **Stream ownership lives in `app/stream_manager.py`.** Do not add parallel
    streaming stacks. The orchestrator yields, `StreamBuffer` writes to DB
    once on completion.
 8. **Vision routing is provider-via-`AIProviderManager.format_vision_message`.**
    `app/tools/multimodal.py` is the home of vision model detection and
    image cache; the orchestrator delegates through the base provider.
-9. **Frontend lint/format with Biome.** Run `npx --yes @biomejs/biome check
-   static/` before committing JS/CSS changes. Do not add new
-   frontend packages without coordinating with the existing
-   per-page stylesheet layout.
-10. **Slider drag-threshold is required.** All `<input type="range">`
+9. **Frontend Architecture.** `ConversationStore` owns the state. `DOMRenderer` owns the DOM. Do not bypass the store with direct `innerHTML` appends.
+10. **Frontend lint/format.** Run `npx --yes eslint static/js/` before 
+    committing JS changes. Do not add new
+    frontend packages without coordinating with the existing
+    per-page stylesheet layout.
+11. **Slider drag-threshold is required.** All `<input type="range">`
     elements must be wrapped with `attachSliderGuard(slider)` so vertical
     scroll does not move the slider. The guard activates on horizontal
     movement after a 6px touch-slop threshold and ignores minor vertical
     drift.
-11. **API keys never persist server-side.** BYOK architecture: keys live
+12. **API keys never persist server-side.** BYOK architecture: keys live
     only in browser `localStorage` (`yuzu_byok_config`) and arrive via
     `X-Provider-Key` / `X-Provider-BaseUrl` headers. The `api_keys` table
     was destructively purged; do not recreate it.
-12. **Validation before commit.** After touching Python: `ruff check .` and
+13. **Validation before commit.** After touching Python: `ruff check .` and
     `ruff format --check .`. After touching JS/CSS: `npx --yes
-    @biomejs/biome check static/`. Run `python -m py_compile` on changed
+    eslint static/js/`. Run `python -m py_compile` on changed
     `.py` files.
