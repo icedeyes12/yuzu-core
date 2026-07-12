@@ -44,7 +44,7 @@ function initializeHomePage() {
 		if (e.key === "Escape") {
 			const sidebar = document.getElementById("mainSidebar");
 			if (sidebar?.classList.contains("open")) {
-				toggleSidebar();
+				window.toggleSidebar();
 			}
 		}
 	});
@@ -286,3 +286,4 @@ window.addEventListener("resize", () => {
 
 // Export functions for global access
 window.loadRecentSessions = loadRecentSessions;
+window.toggleSidebar = window.toggleSidebar || (() => {});

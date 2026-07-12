@@ -2,7 +2,6 @@
 import { chatStore } from "./store.js";
 import { eventRouter } from "./event-router.js";
 import { showChatSkeleton, hideChatSkeleton } from "./skeleton.js";
-import { MESSAGES_PER_PAGE } from "./state.js";
 
 // Export pagination state (useful for UI but shouldn't own data)
 export let olderMessagesLoaded = 0;

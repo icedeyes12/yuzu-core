@@ -97,7 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
 		if (e.key === "Escape") {
 			const sidebar = document.getElementById("mainSidebar");
 			if (sidebar?.classList.contains("open")) {
-				toggleSidebar();
+				window.toggleSidebar();
 			}
 		}
 
@@ -113,7 +113,7 @@ document.addEventListener("DOMContentLoaded", () => {
 			];
 			const themeIndex = parseInt(e.key, 10) - 1;
 			if (themes[themeIndex]) {
-				switchTheme(themes[themeIndex]);
+				window.switchTheme(themes[themeIndex]);
 			}
 		}
 	});
@@ -213,3 +213,5 @@ function showSecretMessage() {
 
 // Export functions for global access
 window.showSecretMessage = showSecretMessage;
+window.toggleSidebar = window.toggleSidebar || (() => {});
+window.switchTheme = window.switchTheme || (() => {});

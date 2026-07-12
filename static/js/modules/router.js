@@ -88,7 +88,8 @@ export class RouterManager {
 			} else {
 				// Fallback to query string
 				const params = new URLSearchParams(window.location.search);
-				sessionId = params.get("session");
+				const fallbackSessionId = params.get("session");
+				if (fallbackSessionId) sessionId = fallbackSessionId;
 			}
 
 			if (sessionId && sessionId !== this.currentSessionId) {
