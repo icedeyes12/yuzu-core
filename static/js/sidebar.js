@@ -169,7 +169,9 @@ function loginWith(provider) {
 async function handleLogout() {
 	try {
 		await fetch("/api/auth/logout", { method: "POST" });
-	} catch (_e) {}
+	} catch (_e) {
+		// Ignore error on logout
+	}
 	_hideAuthOverlay();
 	window.location.href = "/login";
 }

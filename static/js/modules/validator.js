@@ -36,7 +36,7 @@ export function validateToolResult(rawPayload) {
     const error = typeof parsed.error === 'string' ? parsed.error : "";
     
     // Generate HTML using Component Registry immediately after validation
-    let html = "";
+    let html;
     if (!ok && error) {
         html = ToolRenderers.error(error);
     } else {

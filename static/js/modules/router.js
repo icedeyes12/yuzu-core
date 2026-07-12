@@ -42,14 +42,20 @@ export class RouterManager {
 	 * Update URL to reflect current session without page reload.
 	 * @param {string} sessionId - Session ID (UUID) to set in URL
 	 */
-	updateURL(sessionId) {
+	updateUrl(sessionId) {
 		if (!sessionId || sessionId === this.currentSessionId) return;
 
 		this.currentSessionId = sessionId;
 		const url = new URL(window.location.href);
 
-		url.pathname = `/chat/${sessionId}`;
-		url.searchParams.delete("session");
+		// If we're already on a RESTful route, update the path
+		if (url.pathname.startsWith("/chat/")) {
+			url.pathname = `/chat/${sessionId}`;
+			url.searchParams.delete("session");
+		} else {
+			// Fallback to query param if not on RESTful route
+			url.searchParams.set("session", sessionId);
+		}
 
 		window.history.pushState({ sessionId }, "", url);
 		console.log(`[Router] URL updated to session ${sessionId}`);
@@ -60,6 +66,9 @@ export class RouterManager {
 	 */
 	clearURL() {
 		const url = new URL(window.location.href);
+		if (url.pathname.startsWith("/chat/")) {
+			url.pathname = "/chat";
+		}
 		url.searchParams.delete("session");
 		window.history.pushState({}, "", url);
 		this.currentSessionId = null;
@@ -70,8 +79,17 @@ export class RouterManager {
 	 */
 	setupPopStateHandler() {
 		window.addEventListener("popstate", (_event) => {
-			const params = new URLSearchParams(window.location.search);
-			const sessionId = params.get("session");
+			// Extract from path first
+			const pathParts = window.location.pathname.split("/").filter((p) => p);
+			let sessionId = null;
+
+			if (pathParts.length >= 2 && pathParts[0] === "chat") {
+				sessionId = pathParts[1];
+			} else {
+				// Fallback to query string
+				const params = new URLSearchParams(window.location.search);
+				sessionId = params.get("session");
+			}
 
 			if (sessionId && sessionId !== this.currentSessionId) {
 				console.log(`[Router] PopState: switching to session ${sessionId}`);
