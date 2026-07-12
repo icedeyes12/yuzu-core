@@ -86,16 +86,10 @@ async function handleSessionSwitch(sessionId, updateURL = true) {
 		window.syncActiveSidebarItem(sessionId);
 	}
 
-	// 2. Clear the current chat DOM and show a loading state
+	// 2. Hide previous session completely (we don't wait for the network request)
 	const chatContainer = document.getElementById("chatContainer");
 	if (chatContainer) {
-		chatContainer.innerHTML = "";
-		if (typeof showChatSkeleton === "function") {
-			showChatSkeleton();
-		} else {
-			chatContainer.innerHTML =
-				"<div class='loading-skeleton'>Loading session...</div>";
-		}
+		chatContainer.innerHTML = ""; // Handled by Store clearing now, but keeping for intermediate visual clear before fetch
 	}
 
 	// 4. Disable the chat input during this transition
