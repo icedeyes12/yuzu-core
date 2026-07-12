@@ -81,10 +81,4 @@ export class EventRouter {
 
 export const eventRouter = new EventRouter();
 
-// Temporary shim for legacy callers
-export const backgroundStreams = {
-	setActiveView: (id) => eventRouter.setActiveView(id),
-	hasActiveStream: (id) => chatStore.isGenerating && chatStore.sessionId === id,
-	getStream: (id) => chatStore.isGenerating && chatStore.sessionId === id ? {} : null
-};
-export class BackgroundStreamManager {}
+

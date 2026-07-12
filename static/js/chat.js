@@ -17,12 +17,16 @@ import {
 	renderMessageContent,
 	router,
 	scrollToBottom,
+	eventRouter,
 	showChatSkeleton,
+	chatStore,
 } from "./modules/index.js";
 
 // ==================== GLOBAL EXPORTS FOR MODULES ====================
 // Make modules available globally for backward compatibility with inline handlers
 window.router = router;
+window.chatStore = chatStore;
+window.eventRouter = eventRouter;
 
 // ==================== SESSION NAME LOADING ====================
 async function loadCurrentSessionName() {
@@ -71,7 +75,7 @@ async function handleSessionSwitch(sessionId, updateURL = true) {
 	router.currentSessionId = sessionId;
 
 	// [CRITICAL] Set active view BEFORE any DOM operations
-	backgroundStreams.setActiveView(sessionId);
+	eventRouter.setActiveView(sessionId);
 
 	// Update URL if needed
 	if (updateURL) {

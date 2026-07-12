@@ -8,12 +8,6 @@
    MARKDOWN CONTENT BASE
    ======================================== */
 
-.message-content {
-	color: var(--text-color);
-	line-height: 1.6;
-	font-size: 0.95rem;
-}
-
 /* ========================================
    HEADERS
    ======================================== */
@@ -975,33 +969,6 @@
 
 .code-font {
 	font-family: "JetBrains Mono", "Fira Code", "Consolas", "Monaco", monospace;
-}
-
-/* Remove default focus outlines on summary */
-.system-action-block summary {
-	outline: none;
-}
-
-.system-action-block summary::-webkit-details-marker {
-	display: none;
-}
-
-.system-action-block summary::marker {
-	display: none;
-}
-
-.system-action-block summary:focus {
-	outline: none;
-}
-
-/* Hover state for tool result header */
-.tool-result-block summary:hover {
-	background: rgba(255, 255, 255, 0.05);
-}
-
-/* Open state border */
-.system-action-block[open] summary {
-	border-bottom: 1px solid var(--border-ai, rgba(255, 255, 255, 0.1));
 }
 
 /* ========================================

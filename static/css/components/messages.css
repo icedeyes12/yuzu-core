@@ -41,8 +41,8 @@
 	}
 }
 
-/* === USER MESSAGES: NESTED BUBBLE STRUCTURE === */
-.message.user {
+/* === USER MESSAGES === */
+.message.user-message {
 	align-self: flex-end;
 	margin-left: auto;
 	background: transparent;
@@ -50,11 +50,13 @@
 	padding: 0;
 }
 
-.message-bubble {
+.user-message .message-bubble {
 	background: var(--user-bubble);
-	border: 1px solid var(--border-color);
-	border-radius: 12px;
+	color: var(--text-primary);
+	border-radius: 1.2rem;
+	border-bottom-right-radius: 0.2rem;
 	padding: 0.8rem 1rem;
+	box-shadow: var(--shadow-sm);
 	word-wrap: break-word;
 	overflow-wrap: break-word;
 }
@@ -65,13 +67,51 @@
 	padding: 0 0.25rem;
 }
 
-/* === ASSISTANT MESSAGES: ORIGINAL FLAT STRUCTURE === */
-.message.ai {
+/* === ASSISTANT MESSAGES === */
+.message.assistant-message {
 	align-self: flex-start;
 	background: transparent;
 	border: none;
 	max-width: 95%;
 	padding: 1rem 0.5rem;
+}
+
+.assistant-message .message-bubble {
+	background: transparent;
+	border: none;
+	padding: 0;
+}
+
+/* === TOOL AND SYSTEM MESSAGES === */
+.message.tool-message,
+.message.event_log-message {
+	align-self: center;
+	background: transparent;
+	border: none;
+	max-width: 95%;
+	padding: 0.5rem;
+	opacity: 0.8;
+}
+
+.tool-message .message-bubble,
+.event_log-message .message-bubble {
+	background: var(--bg-tertiary);
+	border: 1px dashed var(--border-color);
+	border-radius: 8px;
+	padding: 0.5rem;
+	font-family: var(--font-mono);
+	font-size: 0.85rem;
+}
+
+/* Headers inside bubbles (for Tool/System events) */
+.message-header {
+	font-size: 0.75rem;
+	color: var(--text-muted);
+	margin-bottom: 0.5rem;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	border-bottom: 1px dashed var(--border-color);
+	padding-bottom: 0.25rem;
 }
 
 .message-content {
@@ -92,6 +132,19 @@
 	align-items: center;
 	margin-top: 0.5rem;
 	gap: 0.5rem;
+}
+
+.message-footer--assistant {
+	justify-content: flex-start;
+}
+
+.message-footer--user {
+	justify-content: flex-end;
+}
+
+.message-footer--tool,
+.message-footer--event_log {
+	justify-content: center;
 }
 
 /* Copy full message button */
@@ -409,6 +462,37 @@
 .system-action-block[open] summary {
 	border-bottom: 1px solid var(--border-ai, rgba(255, 255, 255, 0.1));
 }
+
+/* Native tool block styles rendered by store-renderer.js */
+.tools-container {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin: 0.5rem 0;
+}
+
+.tool-call-block {
+	background: var(--bg-tertiary);
+	border-left: 3px solid var(--accent-primary);
+	border-radius: 4px;
+	padding: 0.5rem;
+	font-size: 0.85rem;
+	opacity: 0.9;
+}
+
+.tool-header {
+	font-weight: 600;
+	color: var(--text-primary);
+	margin-bottom: 0.25rem;
+}
+
+.tool-body pre {
+	margin: 0;
+	padding: 0;
+	background: transparent;
+	border: none;
+}
+
 
 /* FC6: Native tool event indicators */
 .tool-call-indicator {

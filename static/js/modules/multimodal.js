@@ -2,7 +2,6 @@
 // DESCRIPTION: Multimodal manager for image upload, generation, and streaming
 
 import { captureDetailsState, restoreDetailsState } from "./dom-utils.js";
-import { addMessage } from "./messages.js";
 import { router } from "./router.js";
 import { scrollToBottom } from "./scroll.js";
 import {
@@ -174,7 +173,7 @@ export class MultimodalManager {
 			imageBlobs.push(image);
 		});
 
-		addMessage("user", combinedMarkdown.trim());
+		chatStore.appendMessage({ role: "user", content: combinedMarkdown.trim() });
 		this.clearInput();
 
 		// Use streaming endpoint for real-time rendering of all message types
