@@ -389,11 +389,17 @@ async def _finalize_and_persist_async(
     active_session: dict[str, Any],
     *,
     user_id: str,
+    turn_id: str = "",
 ) -> None:
     """Complete the stream fence and persist final state.
 
     This is the final cleanup step for a completed stream.
     """
+    if final_response and session_id:
+        await _persist_assistant_async(
+            final_response, session_id, user_id=user_id, turn_id=turn_id
+        )
+
     await StreamFence.complete(session_id or "", fence_id)
     log.info(f"[stream] fence {fence_id} completed")
     await _post_turn_async(
@@ -441,9 +447,6 @@ async def handle_user_message(
             break
 
         text_response = _clean(text_response) or _EMPTY_RESPONSE_FALLBACK
-
-        if is_markdown_image_shortcut(text_response):
-            return IMAGE_SHORTCUT_WARNING
 
         tool_calls = await _parse_raw_tool_calls_async(
             provider_name, raw_api_response, turn_id=turn_id
@@ -724,11 +727,6 @@ async def handle_user_message_streaming(
                 yield _EMPTY_RESPONSE_FALLBACK
             return
 
-        if is_markdown_image_shortcut(full_response):
-            await StreamFence.complete(session_id, fence_id)
-            yield IMAGE_SHORTCUT_WARNING
-            return
-
         # Handle native function calls if provider returned them
         if tool_calls_data:
             # Build OpenAI-format tool_calls JSON for persistence
@@ -795,6 +793,7 @@ async def handle_user_message_streaming(
             full_response,
             active_session,
             user_id=user_id,
+            turn_id=turn_id,
         )
         return
         
@@ -807,4 +806,6 @@ async def handle_user_message_streaming(
         "",
         active_session,
         user_id=user_id,
+        turn_id=turn_id,
     )
+    return
