@@ -360,12 +360,12 @@ async def get_chat_history_async(
 ) -> list[dict]:
     if limit and recent:
         rows = await pg_fetchall_async(
-            SQL_MESSAGE_SELECT_DESC_LIMIT, (session_id, limit)
+            SQL_MESSAGE_SELECT_DESC_LIMIT, (session_id, user_id, limit)
         )
         rows = list(reversed(rows))
     elif limit:
         rows = await pg_fetchall_async(
-            SQL_MESSAGE_SELECT_ASC_LIMIT, (session_id, limit)
+            SQL_MESSAGE_SELECT_ASC_LIMIT, (session_id, user_id, limit)
         )
     else:
         rows = await pg_fetchall_async(SQL_MESSAGE_SELECT_ASC_ALL, (session_id, user_id))
