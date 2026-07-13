@@ -206,7 +206,6 @@ export class MultimodalManager {
 			}
 
 			eventRouter.setActiveView(sessionId);
-			chatStore.appendMessage({ role: "user", content: message });
 			chatStore.appendMessage({ role: "assistant", content: "" });
 			const abortController = new AbortController();
 			setCurrentAbortController(abortController);
