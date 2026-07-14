@@ -77,42 +77,56 @@ export class ConversationStore {
 	}
 
 	/**
-	 * Append a text chunk to the LAST message in the store.
-	 * If the last message is frozen or not an assistant message, this is a no-op or error.
+	 * Get the active (unfrozen) assistant message from the end of messages list.
+	 * Falls back to the last message if no active assistant is found.
+	 * @private
+	 */
+	_getActiveAssistant() {
+		for (let i = this.messages.length - 1; i >= 0; i--) {
+			const msg = this.messages[i];
+			if (msg.role === "assistant" && !msg.isFrozen) {
+				return msg;
+			}
+		}
+		return this.messages.length > 0 ? this.messages[this.messages.length - 1] : null;
+	}
+
+	/**
+	 * Append a text chunk to the active assistant message in the store.
 	 * @param {string} textChunk
 	 */
 	appendAssistantToken(textChunk) {
-		if (this.messages.length === 0) return;
-		const lastMsg = this.messages[this.messages.length - 1];
+		const activeMsg = this._getActiveAssistant();
+		if (!activeMsg) return;
 
-		if (lastMsg.role !== "assistant" || lastMsg.isFrozen) {
-			console.warn("[Store] Cannot append token to frozen or non-assistant message.");
+		if (activeMsg.role !== "assistant" || activeMsg.isFrozen) {
+			console.warn("[Store] Cannot append token to frozen or non-assistant message.", activeMsg);
 			return;
 		}
 
-		lastMsg.content = (lastMsg.content || "") + textChunk;
+		activeMsg.content = (activeMsg.content || "") + textChunk;
 		this._notify();
 	}
 
 	/**
-	 * Update an active tool call's state on the last assistant message.
+	 * Update an active tool call's state on the active assistant message.
 	 * @param {Object} toolPayload - { id, name, arguments_chunk, status }
 	 */
 	updateToolCall(toolPayload) {
-		if (this.messages.length === 0) return;
-		const lastMsg = this.messages[this.messages.length - 1];
+		const activeMsg = this._getActiveAssistant();
+		if (!activeMsg) return;
 
-		if (lastMsg.role !== "assistant" || lastMsg.isFrozen) {
-			console.warn("[Store] Cannot update tool call on frozen or non-assistant message.");
+		if (activeMsg.role !== "assistant" || activeMsg.isFrozen) {
+			console.warn("[Store] Cannot update tool call on frozen or non-assistant message.", activeMsg);
 			return;
 		}
 
 		// Ensure tool_calls array exists
-		if (!lastMsg.tool_calls) {
-			lastMsg.tool_calls = [];
+		if (!activeMsg.tool_calls) {
+			activeMsg.tool_calls = [];
 		}
 
-		const existingTool = lastMsg.tool_calls.find(t => t.id === toolPayload.id);
+		const existingTool = activeMsg.tool_calls.find(t => t.id === toolPayload.id);
 		if (existingTool) {
 			// Update existing
 			if (toolPayload.arguments_chunk) {
@@ -123,7 +137,7 @@ export class ConversationStore {
 			}
 		} else {
 			// Create new
-			lastMsg.tool_calls.push({
+			activeMsg.tool_calls.push({
 				id: toolPayload.id,
 				name: toolPayload.name,
 				arguments: toolPayload.arguments_chunk || "",
