@@ -29,7 +29,16 @@ export function createMessageElement(role, content, timestamp = null) {
 	contentContainer.className = "message-content markdown-body";
 
 	// Initial render
-	if (window.renderMessageContent) {
+	if (role === "tool") {
+		// Try to parse the content as JSON for the tool renderer
+		try {
+			// Find the actual tool name from a passed message object (handled by store-renderer later)
+			// But since createMessageElement doesn't get the full object, store-renderer handles tool rendering
+			contentContainer.innerHTML = window.renderMessageContent(content, false);
+		} catch (_e) {
+			contentContainer.innerHTML = window.renderMessageContent(content, false);
+		}
+	} else if (window.renderMessageContent) {
 		contentContainer.innerHTML = window.renderMessageContent(content, role === "user");
 	} else {
 		contentContainer.textContent = content === null || content === undefined ? "" : String(content);
