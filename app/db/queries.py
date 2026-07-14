@@ -449,8 +449,8 @@ def parse_session_memory_rows(rows: list[dict]) -> dict:
 # ---------------------------------------------------------------------------
 
 SQL_MESSAGE_INSERT = """
-INSERT INTO messages (id, session_id, user_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp, content_encrypted)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), FALSE) RETURNING id, timestamp
+INSERT INTO messages (session_id, user_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp, content_encrypted)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), FALSE) RETURNING id, timestamp
 """
 
 SQL_MESSAGE_SELECT_ASC_LIMIT = """
