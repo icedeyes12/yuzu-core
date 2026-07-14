@@ -1428,6 +1428,9 @@ document.addEventListener("DOMContentLoaded", loadLocation);
 // Load image model on page load
 document.addEventListener("DOMContentLoaded", loadImageModel);
 
+// Export to window for inline onclick handlers
+window.useCurrentLocation = _useCurrentLocation;
+
 // Load vision model on page load
 document.addEventListener("DOMContentLoaded", loadVisionModel);
 
