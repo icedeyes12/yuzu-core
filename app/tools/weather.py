@@ -8,9 +8,8 @@ logger = logging.getLogger(__name__)
 
 
 class WeatherRequest(BaseModel):
-    # No params needed from LLM if reading from DB, but kept as optional
-    # in case LLM wants to check another location explicitly.
-    model_config = ConfigDict(extra="forbid")
+    # Ignore extra inputs like injected session_id/user_id from registry
+    model_config = ConfigDict(extra="ignore")
 
 
 TOOL_NAME = "weather"
