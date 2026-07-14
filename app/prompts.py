@@ -162,13 +162,17 @@ async def _retrieve_memories_async(
         return [], "", ""
 
 
-async def _mark_facts_pending_async(static_ids: list[int], session_id: str) -> None:
+async def _mark_facts_pending_async(
+    static_ids: list[int], session_id: str, user_id: str | None = None
+) -> None:
     if not static_ids:
         return
     try:
         from app.memory.memory_review import mark_retrieved_as_pending_review_async
 
-        await mark_retrieved_as_pending_review_async(static_ids, session_id)
+        await mark_retrieved_as_pending_review_async(
+            static_ids, session_id, user_id=user_id
+        )
     except Exception as e:  # noqa: BLE001
         log.warning("pending-review marking failed: %s", e)
 
@@ -370,7 +374,7 @@ async def build_system_message_async(
         dynamic_limit=3,
         user_id=user_id,
     )
-    await _mark_facts_pending_async(static_ids, session_id)
+    await _mark_facts_pending_async(static_ids, session_id, user_id)
     memory_block = (f"\n\n{static_context}" if static_context else "") + dynamic_context
     # Instructions
     instructions = ""
@@ -663,7 +667,7 @@ async def _build_sections_async(
     static_ids, static_context, dynamic_context = await _retrieve_memories_async(
         session_id, user_message, static_limit=5, dynamic_limit=3, user_id=user_id
     )
-    await _mark_facts_pending_async(static_ids, session_id)
+    await _mark_facts_pending_async(static_ids, session_id, user_id)
     memory_block = (f"\n\n{static_context}" if static_context else "") + dynamic_context
     memory_block += await _legacy_memory_block_async(profile, session_id, user_id)
 
@@ -837,7 +841,7 @@ def _compose_structured_system_message(sections, additional_instructions=""):
         instructions_list.append(additional_instructions.strip())
 
     natural_language_tail = (
-        (tool_section or "")
+        (instructions or "")
         + (formatting or "")
         + (env_text or "")
         + (constraints or "")
@@ -856,11 +860,6 @@ def _compose_structured_system_message(sections, additional_instructions=""):
                 {"type": "instructions", "instructions": instructions_list}
             ),
         },
-        {"type": "text", "text": instructions},
-        {"type": "text", "text": formatting},
-        {"type": "text", "text": env_text},
-        {"type": "text", "text": constraints},
-        {"type": "text", "text": adaptability},
     ]
     if natural_language_tail:
         parts.append({"type": "text", "text": natural_language_tail})

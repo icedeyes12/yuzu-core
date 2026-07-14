@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 from typing import AsyncIterator
 from pathlib import Path
@@ -75,13 +77,37 @@ class ConversationService:
             user_id=user_id,
         )
 
-        async for chunk in buffer:
-            if isinstance(chunk, str):
-                yield chunk
-            else:
-                import json
+        q = buffer.subscribe()
+        try:
+            from app.tools.schemas import StreamToolEvent
 
-                yield f"data: {json.dumps(chunk.to_sse() if hasattr(chunk, 'to_sse') else chunk)}\n\n"
+            while True:
+                chunk = await q.get()
+                if chunk is None:
+                    done_event = json.dumps(
+                        {"type": "done", "turn_id": buffer.turn_id}
+                    )
+                    yield f"data: {done_event}\n\n"
+                    break
+                if chunk:
+                    if isinstance(chunk, StreamToolEvent):
+                        payload = json.dumps(chunk.to_sse())
+                        yield f"data: {payload}\n\n"
+                    else:
+                        token_event = json.dumps(
+                            {
+                                "type": "token",
+                                "chunk": chunk,
+                                "turn_id": buffer.turn_id,
+                            }
+                        )
+                        yield f"data: {token_event}\n\n"
+        except asyncio.CancelledError:
+            log.info(f"[Stream] Client disconnected for session {session_id}")
+            buffer.cancel()
+            raise
+        finally:
+            buffer.unsubscribe(q)
 
     @staticmethod
     async def process_image_uploads(images: list[UploadFile]) -> list[str]:
