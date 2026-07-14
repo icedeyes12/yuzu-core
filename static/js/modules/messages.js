@@ -44,7 +44,7 @@ export function createMessageElement(role, content, timestamp = null) {
 
 	const timeDiv = document.createElement("div");
 	timeDiv.className = "timestamp";
-	timeDiv.textContent = timestamp || getCurrentTime24h();
+	timeDiv.textContent = timestamp ? formatTimestamp(timestamp) : getCurrentTime24h();
 	footer.appendChild(timeDiv);
 
 	const copyBtn = document.createElement("button");
@@ -108,13 +108,27 @@ export function isRenderableHistoryRole(role) {
  */
 export function renderMessageContent(rawText, _isUser = false) {
 	const safeText = String(rawText ?? "");
-	console.log("User raw message:", JSON.stringify(safeText));
-	const escapedText = escapeMessageHtml(safeText);
+	
 	try {
-		const _processed = safeText;
-		return escapedText;
+		// Use marked if available
+		if (window.marked) {
+			// Configure marked if not already done
+			if (!window._markedConfigured) {
+				window.marked.setOptions({
+					breaks: true,
+					gfm: true
+				});
+				window._markedConfigured = true;
+			}
+			return window.marked.parse(safeText);
+		}
+		
+		// Fallback if marked is missing
+		const escapedText = escapeMessageHtml(safeText);
+		return escapedText.replace(/\n/g, "<br>");
 	} catch (e) {
-		console.error("Render error:", e, safeText);
+		console.error("Render error:", e);
+		const escapedText = escapeMessageHtml(safeText);
 		return `<pre class="render-error">${escapedText}</pre>`;
 	}
 }
@@ -144,6 +158,9 @@ export function formatTimestamp(timestamp) {
 
 	try {
 		const dbDate = new Date(timestamp);
+		if (isNaN(dbDate.getTime())) {
+			return timestamp;
+		}
 		let hours = dbDate.getHours();
 		let minutes = dbDate.getMinutes();
 
