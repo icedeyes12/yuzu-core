@@ -1,4 +1,3 @@
-// Frontend state ownership: ConversationStore owns rendering, history.js only triggers loads.
 import { chatStore } from "./store.js";
 import { eventRouter } from "./event-router.js";
 import { showChatSkeleton, hideChatSkeleton } from "./skeleton.js";
@@ -19,6 +18,8 @@ export async function loadChatHistory(sessionId = null) {
 	chatContainer.classList.add("session-switching");
 	showChatSkeleton();
 	
+	let historyLoaded = false;
+
 	try {
 		const url = sessionId
 			? `/api/chat_history?session_id=${sessionId}`
@@ -39,12 +40,17 @@ export async function loadChatHistory(sessionId = null) {
 		const data = await res.json();
 		const history = data.chat_history || [];
 		
+		historyLoaded = true;
+
 		hideChatSkeleton();
 		chatContainer.classList.remove("session-switching");
 
 		// Inform EventRouter which session is currently active visually
-		eventRouter.setActiveView(sessionId || data.active_session_id);
-		currentHistorySessionId = sessionId || data.active_session_id;
+		// Only call if sessionId differs from already active view (handleSessionSwitch already called setActiveView)
+		if (eventRouter.activeViewSessionId !== sessionId) {
+			eventRouter.setActiveView(sessionId);
+		}
+		currentHistorySessionId = sessionId;
 		
 		// Reset pagination
 		olderMessagesLoaded = 0;
@@ -59,8 +65,10 @@ export async function loadChatHistory(sessionId = null) {
 		
 		chatStore.loadHistory(currentHistorySessionId, normalizedHistory);
 	} catch (error) {
-		hideChatSkeleton();
-		chatContainer.classList.remove("session-switching");
+		if (!historyLoaded) {
+			hideChatSkeleton();
+			chatContainer.classList.remove("session-switching");
+		}
 		console.error("Error loading chat history:", error);
 		// DEBT: A formal Store.dispatchError was postponed during Phase 9 to minimize store API surface. Handled gracefully by skeleton UI timeout for now.
 	}

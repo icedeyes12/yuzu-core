@@ -468,7 +468,7 @@ function createNewSession() {
 
 function switchSession(sessionId) {
 	if (_sessionSwitchCooldown || _isSessionSwitching) return;
-	
+
 	// Dynamic import to avoid module issues outside module scripts
 	if (window.eventRouter && window.router) {
 		const currentSession = window.router.currentSessionId;
@@ -497,13 +497,23 @@ function switchSession(sessionId) {
 	_isSessionSwitching = true;
 	_setSessionSwitchingVisual(sessionId, true);
 
+	// Cancel any active stream for current session before switching
+	if (window.eventRouter && window.router && window.router.currentSessionId) {
+		window.eventRouter.cancelStream(window.router.currentSessionId);
+	}
+
 	if (window.handleSessionSwitch) {
-		window.handleSessionSwitch(sessionId);
-		toggleSidebar();
-		setTimeout(() => {
-			_isSessionSwitching = false;
-			_setSessionSwitchingVisual(sessionId, false);
-		}, 1000);
+		window.handleSessionSwitch(sessionId)
+			.then(() => {
+				toggleSidebar();
+			})
+			.catch((err) => {
+				console.error("[Sidebar] Session switch failed:", err);
+			})
+			.finally(() => {
+				_isSessionSwitching = false;
+				_setSessionSwitchingVisual(sessionId, false);
+			});
 		return;
 	}
 
