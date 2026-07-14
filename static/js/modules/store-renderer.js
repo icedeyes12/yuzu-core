@@ -104,6 +104,25 @@ export class DOMRenderer {
 			// Syntax highlighting
 			if (window.hljs) {
 				contentContainer.querySelectorAll("pre code").forEach((block) => {
+					// Handle Mermaid diagrams specially
+					if (block.classList.contains("language-mermaid")) {
+						if (window.mermaid) {
+							// Move it to a div for mermaid to render
+							const pre = block.parentElement;
+							const div = document.createElement("div");
+							div.className = "mermaid";
+							div.textContent = block.textContent;
+							pre.parentNode.replaceChild(div, pre);
+							
+							try {
+								mermaid.init(undefined, div);
+							} catch(e) {
+								console.error("Mermaid error:", e);
+							}
+						}
+						return;
+					}
+					
 					if (!block.classList.contains("hljs")) hljs.highlightElement(block);
 				});
 			}
