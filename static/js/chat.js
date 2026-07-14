@@ -76,7 +76,7 @@ async function handleSessionSwitch(sessionId, updateURL = true) {
 
 	// Update URL if needed
 	if (updateURL) {
-		router.updateURL(sessionId);
+		router.updateUrl(sessionId);
 	}
 
 	// Sync sidebar active highlight immediately (no reload needed)
