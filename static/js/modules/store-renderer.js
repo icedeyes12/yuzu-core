@@ -6,6 +6,8 @@ import { scrollToBottom } from "./scroll.js";
  * The DOMRenderer acts strictly as a subscriber to ConversationStore.
  * It linearly renders the array of messages to the DOM and does not read from it.
  */
+import { ToolRenderers } from "./tool-renderers.js";
+
 export class DOMRenderer {
 	constructor(containerId) {
 		this.container = document.getElementById(containerId);
@@ -68,15 +70,39 @@ export class DOMRenderer {
 		const contentContainer = el.querySelector(".message-content");
 		if (!contentContainer) return;
 
-		// 1. Base Content 
-		let html = window.renderMessageContent ? window.renderMessageContent(msg.content, msg.role === "user") : msg.content;
+		let html;
+		
+		// 1. Base Content rendering based on role
+		if (msg.role === "tool") {
+			try {
+				const toolData = typeof msg.content === "string" ? JSON.parse(msg.content) : msg.content;
+				const toolName = msg.name || "default";
+				const rendererFn = ToolRenderers[toolName] || ToolRenderers.default;
+				html = rendererFn(toolData);
+			} catch (e) {
+				console.error(`Failed to parse tool content for ${msg.name}:`, e);
+				const rendererFn = ToolRenderers.error || ToolRenderers.default;
+				html = rendererFn(`Error parsing tool data: ${e.message}`);
+			}
+		} else {
+			html = window.renderMessageContent ? window.renderMessageContent(msg.content, msg.role === "user") : msg.content;
+		}
 		
 		// 2. Attachments
 		if (msg.attachments && msg.attachments.length > 0) {
 			const attachmentsHtml = msg.attachments.map(att => {
-				if (att.url) return `<img src="${att.url}" class="attachment-img" />`;
-				if (att.path) return `<img src="/api/media?path=${encodeURIComponent(att.path)}" class="attachment-img" />`;
-				return "";
+				let url = att.url || att.path;
+				if (!url) return "";
+				// Fix relative pathing issue (/chat/static/... 404 error)
+				if (url.startsWith("static/")) {
+					url = "/" + url;
+				} else if (url.startsWith("generated_images/")) {
+					url = "/static/" + url;
+				}
+				if (att.path && !url.startsWith("/api/media") && !url.startsWith("/static/")) {
+					url = `/api/media?path=${encodeURIComponent(att.path)}`;
+				}
+				return `<img src="${url}" class="attachment-img" />`;
 			}).join("");
 			html += `<div class="attachments">${attachmentsHtml}</div>`;
 		}
@@ -85,13 +111,14 @@ export class DOMRenderer {
 		if (msg.tool_calls && msg.tool_calls.length > 0) {
 			const toolsHtml = msg.tool_calls.map(tc => {
 				const statusIcon = tc.status === "completed" ? "✓" : (tc.status === "error" ? "❌" : "⚙️");
+				const name = tc.name || tc?.function?.name || "tool";
 				const args = tc.arguments ? `<pre><code>${tc.arguments}</code></pre>` : "Waiting for result...";
-				// We do NOT use <details> here intentionally to prevent state issues,
-				// or if we do, we force them open/closed purely based on state, not DOM mutation.
-				return `<div class="tool-call-block">
-					<div class="tool-header">${statusIcon} Calling ${tc.name}</div>
+				
+				// Hide internal or completed tool calls in a details block so they don't leak into the main reading flow
+				return `<details class="tool-call-block" ${tc.status !== "completed" ? "open" : ""}>
+					<summary class="tool-header">${statusIcon} Calling ${name}</summary>
 					<div class="tool-body">${args}</div>
-				</div>`;
+				</details>`;
 			}).join("");
 			html += `<div class="tools-container">${toolsHtml}</div>`;
 		}
@@ -125,6 +152,23 @@ export class DOMRenderer {
 					
 					if (!block.classList.contains("hljs")) hljs.highlightElement(block);
 				});
+			}
+
+			// LaTeX Math rendering
+			if (window.renderMathInElement) {
+				try {
+					window.renderMathInElement(contentContainer, {
+						delimiters: [
+							{ left: "$$", right: "$$", display: true },
+							{ left: "\\[", right: "\\]", display: true },
+							{ left: "$", right: "$", display: false },
+							{ left: "\\(", right: "\\)", display: false }
+						],
+						throwOnError: false
+					});
+				} catch (e) {
+					console.error("KaTeX render error:", e);
+				}
 			}
 		}
 	}
