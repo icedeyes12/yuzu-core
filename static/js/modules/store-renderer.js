@@ -21,16 +21,12 @@ export class DOMRenderer {
 	render(messages, isGenerating) {
 		if (!this.container) return;
 
-		// If the store is empty, clear the DOM
-		if (messages.length === 0) {
-			this.container.innerHTML = "";
-			this.renderedIds.clear();
-			this.activeTypingIndicator = null;
-			return;
-		}
-
 		// Fast path: map over messages and ensure they exist
+		const newRenderedIds = new Set();
+		
 		for (const msg of messages) {
+			newRenderedIds.add(msg.id);
+			
 			let el = this.container.querySelector(`[data-message-id="${msg.id}"]`);
 			
 			if (!el) {
@@ -47,6 +43,17 @@ export class DOMRenderer {
 					// We only scroll on updates if we are the active generating element
 					scrollToBottom();
 				}
+			}
+		}
+
+		// Remove orphaned DOM elements (messages no longer in store)
+		for (const oldId of this.renderedIds) {
+			if (!newRenderedIds.has(oldId)) {
+				const orphanEl = this.container.querySelector(`[data-message-id="${oldId}"]`);
+				if (orphanEl) {
+					orphanEl.remove();
+				}
+				this.renderedIds.delete(oldId);
 			}
 		}
 
