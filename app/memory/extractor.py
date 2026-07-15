@@ -183,8 +183,8 @@ def upsert_semantic_memory(
                 meta["source_episodic_ids"] = ids
                 meta["category"] = category
                 pg_execute(
-                    "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
-                    (datetime.now(), Json(meta), e["id"]),
+                    "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s AND user_id=%s",
+                    (datetime.now(), Json(meta), e["id"], user_id),
                 )
                 return  # done — no insert needed
 
@@ -213,8 +213,8 @@ def upsert_semantic_memory(
             meta["source_episodic_ids"] = ids
             meta["category"] = category
             pg_execute(
-                "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
-                (datetime.now(), Json(meta), existing_exact["id"]),
+                "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s AND user_id=%s",
+                (datetime.now(), Json(meta), existing_exact["id"], user_id),
             )
             return  # exact content dupe — reinforce, don't insert
 
@@ -260,6 +260,7 @@ async def upsert_semantic_memory_async(
 
     if vector is not None:
         from app.memory.db_memory_facade import MemoryDB
+
         existing = await MemoryDB.search_similar_async(
             embedding=vector,
             session_id=session_id,
@@ -282,9 +283,10 @@ async def upsert_semantic_memory_async(
                 meta["category"] = category
                 from app.db import pg_execute_async
                 from psycopg.types.json import Json
+
                 await pg_execute_async(
-                    "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
-                    (datetime.now(), Json(meta), e["id"]),
+                    "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s AND user_id=%s",
+                    (datetime.now(), Json(meta), e["id"], user_id),
                 )
                 return  # done — no insert needed
 
@@ -303,9 +305,10 @@ async def upsert_semantic_memory_async(
             meta["category"] = category
             from app.db import pg_execute_async
             from psycopg.types.json import Json
+
             await pg_execute_async(
-                "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
-                (datetime.now(), Json(meta), existing_exact["id"]),
+                "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s AND user_id=%s",
+                (datetime.now(), Json(meta), existing_exact["id"], user_id),
             )
             return  # exact content dupe — reinforce, don't insert
 
@@ -324,6 +327,7 @@ async def upsert_semantic_memory_async(
         metadata["source_episodic_ids"] = [episode_id]
 
     from app.memory.db_memory_facade import MemoryDB
+
     await MemoryDB.save_fact_async(
         session_id=session_id,
         content=f"{entity} {relation} {target}",

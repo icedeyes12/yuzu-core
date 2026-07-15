@@ -156,6 +156,12 @@ async def _retrieve_memories_async(
         static_text = _format_static_context(static)
         dynamic_text = _format_dynamic_context(dynamic)
 
+        log.info(
+            "memory prompt injection static_ids=%s dynamic_chars=%s static_chars=%s",
+            ids,
+            len(dynamic_text),
+            len(static_text),
+        )
         return ids, static_text, dynamic_text
     except Exception as e:  # noqa: BLE001
         log.warning("combined memory retrieval async failed: %s", e)
@@ -654,9 +660,7 @@ def _encode_image_safe(path: str) -> dict[str, Any] | None:
 # ── Phase 1: Structured-payload message builder (helpers) ────────────────
 
 
-async def _build_sections_async(
-    profile, session_id, interface, user_message, user_id
-):
+async def _build_sections_async(profile, session_id, interface, user_message, user_id):
     """Gather prompt sections as plain strings for structured composition."""
     from datetime import datetime as _dt
 

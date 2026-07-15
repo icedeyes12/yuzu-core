@@ -75,10 +75,8 @@ class MemoryService:
 
         # 2. Throttle and trigger background memory pipeline (segmentation, PCL, review)
         msg_count = await Database.get_session_messages_count(session_id)
-        if msg_count % MemoryService._PIPELINE_CHECK_INTERVAL == 0:
-            # Check if fence is already active BEFORE spawning task
-            if not await _is_fence_active_async(session_id):
-                # Fire-and-forget: don't block main conversation
+        if msg_count >= MemoryService._PIPELINE_CHECK_INTERVAL:
+            if not await _is_fence_active_async(session_id, user_id=user_id):
                 asyncio.create_task(
                     MemoryService.trigger_pipeline_async(session_id, user_id)
                 )
@@ -134,7 +132,9 @@ class MemoryService:
         return await asyncio.to_thread(summarize_global_player_profile, user_id)
 
     @staticmethod
-    async def rebuild_structured_memory_async(session_id: str, user_id: str) -> dict[str, Any]:
+    async def rebuild_structured_memory_async(
+        session_id: str, user_id: str
+    ) -> dict[str, Any]:
         """Run the full memory pipeline for a session.
 
         Returns a summary dict with segments, episodes, and pcl_runs counts.
