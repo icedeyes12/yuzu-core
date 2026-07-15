@@ -5,7 +5,7 @@ details.tool-call-indicator,
 details.weather-card,
 details.image-card,
 details.terminal-card {
-	width: 100%;
+	width: min(100%, 900px);
 	max-width: 100%;
 	display: block;
 	box-sizing: border-box;

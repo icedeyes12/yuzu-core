@@ -11,8 +11,10 @@
 	display: flex;
 	align-items: flex-end;
 	gap: 0.5rem;
-	padding: 0.8rem 1rem;
-	background: var(--header-bg);
+	padding: 0.75rem max(1rem, calc((100vw - 900px) / 2));
+	padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+	background: color-mix(in srgb, var(--header-bg) 92%, transparent);
+	box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.12);
 	border-top: 1px solid var(--border-color);
 	backdrop-filter: blur(10px);
 }

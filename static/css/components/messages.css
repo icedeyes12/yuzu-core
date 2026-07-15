@@ -25,9 +25,9 @@
 	animation: fadeIn 0.3s ease;
 	display: flex;
 	flex-direction: column;
-	gap: 0.2rem;
-	margin-bottom: 0.5rem;
-	max-width: 95%;
+	gap: 0.35rem;
+	width: min(100%, 900px);
+	margin: 0 auto 0.9rem;
 }
 
 @keyframes fadeIn {
@@ -44,6 +44,7 @@
 /* === USER MESSAGES === */
 .message.user-message {
 	align-self: flex-end;
+	width: min(100%, 760px);
 	margin-left: auto;
 	background: transparent;
 	border: none;
@@ -70,6 +71,7 @@
 /* === ASSISTANT MESSAGES === */
 .message.assistant-message {
 	align-self: flex-start;
+	width: min(100%, 900px);
 	background: transparent;
 	border: none;
 	padding: 0;

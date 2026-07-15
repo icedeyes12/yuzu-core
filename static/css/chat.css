@@ -21,6 +21,7 @@ body {
 	margin: 0;
 	padding: 0;
 	overflow: hidden;
+	background: var(--bg-color);
 }
 
 body {
@@ -37,8 +38,8 @@ body {
 }
 
 .chat-container {
-	padding-top: 64px;
-	padding-bottom: 7rem;
+	padding-top: 76px;
+	padding-bottom: 8rem;
 	flex: 1 1 auto;
 	min-height: 0;
 }
@@ -46,12 +47,13 @@ body {
 .input-area {
 	left: 0;
 	right: 0;
+	padding-bottom: max(0.8rem, env(safe-area-inset-bottom));
 }
 
 .scroll-to-bottom-btn {
 	position: fixed;
-	right: 1rem;
-	bottom: 6.5rem;
+	right: max(1rem, env(safe-area-inset-right));
+	bottom: 7.5rem;
 	z-index: 40;
 }
 
