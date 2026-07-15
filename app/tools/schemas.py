@@ -153,12 +153,11 @@ class StreamToolEvent:
     data: dict[str, Any] | str = ""
 
     def to_sse(self) -> dict[str, Any]:
-        """Shape ready for json.dumps() in an SSE frame."""
+        """(｡•̀ᴗ-)✧"""
         if self.type == "token":
             return {"type": "token", "content": self.data}
         if self.type == "done":
             return {"type": "done"}
-        # tool_call / tool_result
         return {"type": self.type, "data": self.data}
 
 

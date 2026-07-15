@@ -9,6 +9,7 @@ export class EventRouter {
 		this.activeViewSessionId = null;
 		this.controllers = new Map();
 		this.activeTurnIds = new Map();
+		this.pendingToolCalls = new Map();
 	}
 
 	/**
@@ -73,6 +74,7 @@ export class EventRouter {
 					return;
 				}
 				if (data.turn_id) this.activeTurnIds.set(sessionId, data.turn_id);
+				this.pendingToolCalls.set(data.id, { sessionId, name: data.name });
 				chatStore.updateToolCall({
 					id: data.id,
 					name: data.name,
@@ -89,8 +91,14 @@ export class EventRouter {
 					chatStore.setError("The server sent an invalid tool-result event.");
 					return;
 				}
-				if (data.turn_id && this.activeTurnIds.get(sessionId) !== data.turn_id)
+				const pendingCall = this.pendingToolCalls.get(data.call_id);
+				if (
+					data.turn_id &&
+					this.activeTurnIds.get(sessionId) !== data.turn_id &&
+					!pendingCall
+				)
 					return;
+				if (pendingCall) this.pendingToolCalls.delete(data.call_id);
 				chatStore.updateToolCall({
 					id: data.call_id,
 					status: data.ok === false ? "error" : "completed",
@@ -116,13 +124,13 @@ export class EventRouter {
 			}
 
 			if (type === "done") {
-				if (
-					!event.turn_id ||
-					event.turn_id !== this.activeTurnIds.get(sessionId)
-				)
-					return;
+				if (event.turn_id) this.activeTurnIds.set(sessionId, event.turn_id);
 				this.controllers.delete(sessionId);
 				this.activeTurnIds.delete(sessionId);
+				for (const [callId, pendingCall] of this.pendingToolCalls) {
+					if (pendingCall.sessionId === sessionId)
+						this.pendingToolCalls.delete(callId);
+				}
 				chatStore.finishGeneration();
 				return;
 			}

@@ -18,23 +18,22 @@ export function escapeHtml(value) {
 }
 
 export function safeImagePath(value) {
-	if (typeof value !== "string" || !value) return null;
+	if (typeof value !== "string" || !value.trim()) return null;
 	const cleaned = value.trim().replace(/\\/g, "/");
+	const match = cleaned.match(
+		/^(?:\/?static\/)?(generated_images|uploads)\/([^/?#]+)$/,
+	);
+	if (!match) return null;
+	const [, directory, filename] = match;
 	if (
-		cleaned.startsWith("/") ||
-		cleaned.startsWith("../") ||
-		cleaned.includes("/../") ||
-		cleaned.includes("/./")
+		filename === "." ||
+		filename === ".." ||
+		filename.includes("..") ||
+		!/^[-A-Za-z0-9_.]+\.(?:png|jpe?g|webp|gif)$/i.test(filename)
 	) {
 		return null;
 	}
-	if (cleaned.startsWith("static/")) {
-		return `/${cleaned}`;
-	}
-	if (cleaned.startsWith("/static/")) {
-		return cleaned;
-	}
-	return cleaned;
+	return `/api/static/${directory}/${encodeURIComponent(filename)}`;
 }
 
 export function safeHttpUrl(value) {
