@@ -1,6 +1,5 @@
 from __future__ import annotations
 import logging
-import os
 import httpx
 import asyncio
 from pathlib import Path
@@ -89,7 +88,11 @@ async def execute(arguments, **kwargs):
                 partner_name,
             )
 
-        images_dir = Path("static/generated_images").resolve()
+        images_dir = (
+            Path(__file__).resolve().parent.parent.parent
+            / "static"
+            / "generated_images"
+        ).resolve()
         images_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -108,8 +111,7 @@ async def execute(arguments, **kwargs):
         filename = f"{timestamp}_{safe_prompt}.{ext}"
 
         filepath = (images_dir / filename).resolve()
-        if not str(filepath).startswith(str(images_dir) + os.sep):
-            raise ValueError("Unsafe output path")
+        filepath.relative_to(images_dir)
 
         await asyncio.to_thread(filepath.write_bytes, response.content)
 

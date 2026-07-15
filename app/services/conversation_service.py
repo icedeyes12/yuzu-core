@@ -89,8 +89,9 @@ class ConversationService:
                     break
                 if chunk:
                     if isinstance(chunk, StreamToolEvent):
-                        payload = json.dumps(chunk.to_sse())
-                        yield f"data: {payload}\n\n"
+                        payload = chunk.to_sse()
+                        payload["turn_id"] = buffer.turn_id
+                        yield f"data: {json.dumps(payload)}\n\n"
                     else:
                         token_event = json.dumps(
                             {

@@ -117,6 +117,10 @@ export class ConversationStore {
 		this._notify();
 	}
 
+	beginAssistantMessage() {
+		this.appendMessage({ role: "assistant", content: "" });
+	}
+
 	/**
 	 * Update an active tool call's state on the active assistant message.
 	 * @param {Object} toolPayload - { id, name, arguments_chunk, status }
@@ -182,10 +186,17 @@ export class ConversationStore {
 			role: raw.role || "unknown",
 			content,
 			attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
-			tool_calls: Array.isArray(raw.tool_calls) ? [...raw.tool_calls] : [],
+			tool_calls: Array.isArray(raw.tool_calls)
+				? raw.tool_calls.map((toolCall) => ({
+						...toolCall,
+						name: toolCall.name || toolCall.function?.name || "tool",
+						arguments: toolCall.arguments ?? toolCall.function?.arguments ?? "",
+						status: toolCall.status || "completed",
+					}))
+				: [],
 			tool_call_id: raw.tool_call_id || null,
 			name: raw.name || null,
-			isFrozen: raw.isFrozen || false, // Once true, Renderer assumes immutable
+			isFrozen: raw.isFrozen || false,
 			timestamp: raw.timestamp || new Date().toISOString(),
 		};
 	}

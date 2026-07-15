@@ -705,7 +705,10 @@ async def handle_user_message_streaming(
                                 chunk.data.get("name", "?"),
                                 turn_id,
                             )
-                            yield chunk
+                            yield StreamToolEvent(
+                                type="tool_call",
+                                data={**chunk.data, "turn_id": turn_id},
+                            )
                         continue
 
                     response_chunks.append(chunk)
@@ -789,6 +792,7 @@ async def handle_user_message_streaming(
                         "name": result_event.name,
                         "ok": result_event.ok,
                         "data": result_event.data,
+                        "error": result_event.error,
                         "turn_id": turn_id,
                     },
                 )

@@ -181,7 +181,11 @@ async def execute(arguments, **kwargs) -> dict:
                 partner_name,
             )
 
-        images_dir = Path("static/generated_images").resolve()
+        images_dir = (
+            Path(__file__).resolve().parent.parent.parent
+            / "static"
+            / "generated_images"
+        ).resolve()
         images_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -199,8 +203,7 @@ async def execute(arguments, **kwargs) -> dict:
         filename = f"{timestamp}_{safe_prompt}.jpg"
 
         filepath = (images_dir / filename).resolve()
-        if not str(filepath).startswith(str(images_dir) + os.sep):
-            raise ValueError("Unsafe output path")
+        filepath.relative_to(images_dir)
 
         await asyncio.to_thread(filepath.write_bytes, response.content)
 

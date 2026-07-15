@@ -201,13 +201,9 @@ export class MultimodalManager {
 			}
 
 			eventRouter.setActiveView(sessionId);
-			chatStore.appendMessage({ role: "assistant", content: "" });
+			chatStore.beginAssistantMessage();
 			abortController = new AbortController();
-			eventRouter.registerStream(
-				sessionId,
-				abortController,
-				`pending_${requestId}`,
-			);
+			eventRouter.registerStream(sessionId, abortController);
 
 			const formData = new FormData();
 			formData.append("message", message);

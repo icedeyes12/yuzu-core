@@ -61,35 +61,71 @@ details.tool-call-indicator > summary {
 
 /* Weather card */
 .weather-card {
-	display: flex;
-	gap: 1em;
-	align-items: center;
-	padding: 0.6em 0.8em;
+	padding: 0.9em;
 	background: rgba(255, 255, 255, 0.04);
 	border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
-	border-radius: 8px;
+	border-radius: 10px;
 	margin: 0.5em 0;
 }
-.weather-card .weather-icon {
-	font-size: 2em;
+.weather-card__header,
+.weather-card__hero,
+.weather-card__metrics,
+.weather-card__forecast {
+	display: flex;
+	align-items: center;
+}
+.weather-card__header,
+.weather-card__hero {
+	justify-content: space-between;
+	gap: 1em;
+}
+.weather-card__title {
+	font-weight: 650;
+}
+.weather-card__condition,
+.weather-card__metric-label,
+.weather-card__day-rain {
+	font-size: 0.8em;
+	color: var(--text-muted, rgba(255, 255, 255, 0.65));
+}
+.weather-card__icon {
+	font-size: 2.2em;
 	line-height: 1;
 }
-.weather-card .weather-temp {
-	font-size: 1.6em;
-	font-weight: 600;
+.weather-card__temp {
+	font-size: 1.8em;
+	font-weight: 650;
 }
-.weather-card .weather-condition {
-	font-size: 0.95em;
-	color: var(--text-muted, rgba(255, 255, 255, 0.7));
+.weather-card__metrics {
+	gap: 1em;
 }
-.weather-card .weather-humidity {
-	font-size: 0.85em;
-	color: var(--text-muted, rgba(255, 255, 255, 0.6));
+.weather-card__metric {
+	display: grid;
+	gap: 0.15em;
 }
-.weather-card .weather-location {
-	font-size: 0.75em;
-	color: var(--text-muted, rgba(255, 255, 255, 0.6));
-	margin-left: auto;
+.weather-card__metric-value {
+	font-size: 0.9em;
+}
+.weather-card__forecast {
+	gap: 0.5em;
+	margin-top: 0.9em;
+	overflow-x: auto;
+	align-items: stretch;
+}
+.weather-card__day {
+	min-width: 6.5em;
+	padding: 0.55em;
+	border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+	border-radius: 7px;
+	text-align: center;
+}
+.weather-card__day-name,
+.weather-card__day-temp {
+	font-size: 0.8em;
+}
+.weather-card__day-icon {
+	font-size: 1.5em;
+	margin: 0.25em 0;
 }
 
 /* Image card */

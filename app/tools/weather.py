@@ -1,87 +1,237 @@
+from __future__ import annotations
+
+from datetime import date, timedelta
 import logging
+
 import httpx
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
 from app.db import Database
-from app.tools.schemas import ToolDefinition, ok_result, error_result
+from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
 
 logger = logging.getLogger(__name__)
 
 
 class WeatherRequest(BaseModel):
-    # Ignore extra inputs like injected session_id/user_id from registry
     model_config = ConfigDict(extra="ignore")
+
+    location: str | None = Field(default=None, description="City or place name")
+    date: str | None = Field(
+        default=None,
+        description="today, tomorrow, day_after_tomorrow, or YYYY-MM-DD",
+    )
+    days: int = Field(default=1, ge=1, le=7, description="Forecast length in days")
 
 
 TOOL_NAME = "weather"
 TOOL_WEATHER = ToolDefinition(
     name=TOOL_NAME,
-    description="Fetch current weather. Uses user's configured location by default.",
+    description=(
+        "Get current weather and a forecast for up to 7 days. "
+        "Use location for a city/place instead of the user's configured location. "
+        "Use date for today, tomorrow, day_after_tomorrow, or YYYY-MM-DD."
+    ),
     role="info_tools",
-    parameters=[],  # No parameters required
-    needs_session=True,  # Need session to infer user_id for location
+    parameters=[
+        ToolParam(
+            name="location",
+            description="Optional city or place name, for example Melbourne",
+            type="string",
+            required=False,
+        ),
+        ToolParam(
+            name="date",
+            description="Optional today, tomorrow, day_after_tomorrow, or YYYY-MM-DD",
+            type="string",
+            required=False,
+        ),
+        ToolParam(
+            name="days",
+            description="Optional forecast length from 1 to 7 days",
+            type="integer",
+            required=False,
+            default=1,
+        ),
+    ],
+    needs_session=True,
 )
 
-TOOL_DEFINITION = {"weather": TOOL_WEATHER}
+TOOL_DEFINITION = {TOOL_NAME: TOOL_WEATHER}
+
+_WMO_CONDITIONS = {
+    0: "Clear sky",
+    1: "Mainly clear",
+    2: "Partly cloudy",
+    3: "Overcast",
+    45: "Fog",
+    48: "Rime fog",
+    51: "Light drizzle",
+    53: "Moderate drizzle",
+    55: "Dense drizzle",
+    56: "Light freezing drizzle",
+    57: "Dense freezing drizzle",
+    61: "Slight rain",
+    63: "Moderate rain",
+    65: "Heavy rain",
+    66: "Light freezing rain",
+    67: "Heavy freezing rain",
+    71: "Slight snow",
+    73: "Moderate snow",
+    75: "Heavy snow",
+    77: "Snow grains",
+    80: "Slight rain showers",
+    81: "Moderate rain showers",
+    82: "Violent rain showers",
+    85: "Slight snow showers",
+    86: "Heavy snow showers",
+    95: "Thunderstorm",
+    96: "Thunderstorm with slight hail",
+    99: "Thunderstorm with heavy hail",
+}
+
+
+def _parse_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    normalized = value.strip().lower().replace("-", "_")
+    today = date.today()
+    if normalized == "today":
+        return today
+    if normalized == "tomorrow":
+        return today + timedelta(days=1)
+    if normalized in {"day_after_tomorrow", "after_tomorrow"}:
+        return today + timedelta(days=2)
+    try:
+        return date.fromisoformat(value.strip())
+    except ValueError:
+        return None
+
+
+def _condition(code: object) -> str:
+    try:
+        return _WMO_CONDITIONS.get(int(code), "Unknown")
+    except (TypeError, ValueError):
+        return "Unknown"
+
+
+async def _resolve_coordinates(
+    client: httpx.AsyncClient, location: str
+) -> tuple[float, float, str] | None:
+    response = await client.get(
+        "https://geocoding-api.open-meteo.com/v1/search",
+        params={"name": location, "count": 1, "language": "en", "format": "json"},
+    )
+    response.raise_for_status()
+    results = response.json().get("results") or []
+    if not results:
+        return None
+    result = results[0]
+    label = ", ".join(
+        part for part in (result.get("name"), result.get("country")) if part
+    )
+    return float(result["latitude"]), float(result["longitude"]), label or location
+
+
+def _daily_rows(data: dict) -> list[dict]:
+    daily = data.get("daily") or {}
+    keys = (
+        "time",
+        "weather_code",
+        "temperature_2m_max",
+        "temperature_2m_min",
+        "precipitation_probability_max",
+        "wind_speed_10m_max",
+    )
+    rows = []
+    for index, day in enumerate(daily.get("time") or []):
+        row = {"date": day}
+        for key in keys[1:]:
+            values = daily.get(key) or []
+            row[key] = values[index] if index < len(values) else None
+        row["condition"] = _condition(row.get("weather_code"))
+        rows.append(row)
+    return rows
 
 
 async def execute(
     arguments: dict,
     session_id: str | None = None,
-    tool_name: str = "weather",
+    tool_name: str = TOOL_NAME,
     user_id: str | None = None,
 ) -> dict:
-    partner_name = "Yuzu"
-
-    # 1. Validation (Pydantic)
     try:
-        WeatherRequest(**{k: v for k, v in arguments.items() if k not in {"session_id", "user_id", "tool_name"}})
-    except Exception as e:
+        request = WeatherRequest(**arguments)
+    except Exception as exc:
+        return error_result(f"Invalid parameters: {exc}", TOOL_WEATHER)
+
+    if request.date and _parse_date(request.date) is None:
         return error_result(
-            f"Invalid parameters: {e}", TOOL_WEATHER, "weather_fetch", partner_name
+            "Invalid date. Use today, tomorrow, day_after_tomorrow, or YYYY-MM-DD."
         )
 
-    # 2. Extract Location
     if not user_id:
-        return error_result(
-            "Missing user authentication. Cannot determine location.",
-            TOOL_WEATHER,
-            "weather_fetch",
-            partner_name,
-        )
+        return error_result("Missing user authentication. Cannot determine location.")
 
     profile = await Database.get_profile(user_id)
     if not profile:
-        return error_result(
-            "User profile not found.", TOOL_WEATHER, "weather_fetch", partner_name
+        return error_result("User profile not found.")
+
+    location_label = "Configured location"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        if request.location:
+            resolved = await _resolve_coordinates(client, request.location)
+            if not resolved:
+                return error_result(
+                    f"Could not find weather location: {request.location}"
+                )
+            latitude, longitude, location_label = resolved
+        else:
+            latitude = profile.get("location_lat")
+            longitude = profile.get("location_lon")
+            if latitude is None or longitude is None:
+                return error_result(
+                    "Location missing. Set a location in settings or provide a city."
+                )
+
+        selected_date = _parse_date(request.date)
+        days = max(request.days, 1)
+        if selected_date:
+            offset = (selected_date - date.today()).days
+            if offset < 0 or offset > 6:
+                return error_result(
+                    "Weather date must be within today and the next 6 days."
+                )
+            days = max(days, offset + 1)
+
+        response = await client.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": latitude,
+                "longitude": longitude,
+                "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
+                "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max",
+                "forecast_days": days,
+                "timezone": "auto",
+            },
         )
+        response.raise_for_status()
+        data = response.json()
 
-    latitude = profile.get("location_lat")
-    longitude = profile.get("location_lon")
+    current = data.get("current") or {}
+    current["condition"] = _condition(current.get("weather_code"))
+    daily = _daily_rows(data)
+    if selected_date:
+        daily = [row for row in daily if row["date"] == selected_date.isoformat()]
 
-    if latitude is None or longitude is None:
-        return error_result(
-            "Location missing. User has not enabled location in settings.",
-            TOOL_WEATHER,
-            "weather",
-            partner_name,
-        )
-
-    # 3. Execution
-    url = f"https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&current=temperature_2m,relative_humidity_2m,weather_code&timezone=auto"
-
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, timeout=10.0)
-            response.raise_for_status()
-            data = response.json()
-            # Return pure structure
-            return ok_result(
-                {"source": "open-meteo", "current": data.get("current", {})},
-                TOOL_WEATHER,
-                "weather",
-                partner_name,
-            )
-
-    except Exception as e:
-        logger.error(f"[weather] Failed to fetch data: {e}")
-        return error_result(f"Failed to fetch weather data: {e}")
+    return ok_result(
+        {
+            "schema_kind": "weather",
+            "source": "open-meteo",
+            "location_label": location_label,
+            "timezone": data.get("timezone"),
+            "requested_date": selected_date.isoformat() if selected_date else None,
+            "current": current,
+            "daily": daily,
+        },
+        TOOL_WEATHER,
+    )

@@ -21,7 +21,6 @@ export class DOMRenderer {
 	render(messages, isGenerating, error = null) {
 		if (!this.container) return;
 
-		// Fast path: map over messages and ensure they exist
 		const newRenderedIds = new Set();
 
 		for (const msg of messages) {
@@ -30,16 +29,13 @@ export class DOMRenderer {
 			let el = this.container.querySelector(`[data-message-id="${msg.id}"]`);
 
 			if (!el) {
-				// Create new
 				el = this._createMessageDOM(msg);
 				this.container.appendChild(el);
 				this.renderedIds.add(msg.id);
 				scrollToBottom();
 			} else {
-				// Update existing IF NOT FROZEN
-				if (msg.isFrozen) continue;
 				this._updateMessageDOM(el, msg);
-				if (msg.role === "assistant") scrollToBottom();
+				if (msg.role === "assistant" && !msg.isFrozen) scrollToBottom();
 			}
 		}
 
@@ -78,18 +74,11 @@ export class DOMRenderer {
 		if (msg.role === "tool") {
 			try {
 				const toolEvent = JSON.parse(msg.content);
-				if (toolEvent.name === "weather" && toolEvent.data?.current) {
-					html = renderToolResultEvent({
-						...toolEvent,
-						name: "weather",
-					});
-				} else {
-					html = renderToolResultEvent({
-						...toolEvent,
-						name: msg.name || toolEvent.name,
-						call_id: msg.tool_call_id || toolEvent.call_id,
-					});
-				}
+				html = renderToolResultEvent({
+					...toolEvent,
+					name: msg.name || toolEvent.name,
+					call_id: msg.tool_call_id || toolEvent.call_id,
+				});
 			} catch (_error) {
 				html = renderToolResultEvent({
 					name: msg.name || "unknown",
@@ -109,17 +98,17 @@ export class DOMRenderer {
 				.map((att) => {
 					let url = att.url || att.path;
 					if (!url) return "";
-					if (url.startsWith("static/")) url = `/${url}`;
-					else if (url.startsWith("generated_images/")) url = `/static/${url}`;
-					if (url.startsWith("/static/generated_images/")) {
-						return "";
-					}
-					if (
-						att.path &&
-						!url.startsWith("/api/media") &&
-						!url.startsWith("/static/")
-					) {
-						url = `/api/media?path=${encodeURIComponent(att.path)}`;
+					if (att.path && !att.url) {
+						const normalizedPath = att.path.replace(/\\\\/g, "/");
+						const filename = normalizedPath.split("/").pop();
+						if (!filename || filename.includes("..")) return "";
+						const directory = normalizedPath.includes("generated_images")
+							? "generated_images"
+							: normalizedPath.includes("uploads")
+								? "uploads"
+								: null;
+						if (!directory) return "";
+						url = `/api/static/${directory}/${encodeURIComponent(filename)}`;
 					}
 					return `<img src="${escapeHtml(url)}" class="attachment-img" alt="Attachment" />`;
 				})
@@ -149,13 +138,14 @@ export class DOMRenderer {
 			html += `<div class="tools-container">${toolsHtml}</div>`;
 		}
 
-		// Only touch innerHTML if it has actually changed to avoid thrashing
 		if (contentContainer.getAttribute("data-last-hash") !== html) {
 			contentContainer.innerHTML = html;
 			contentContainer.setAttribute("data-last-hash", html);
-
-			// Syntax highlighting
 			this._enhanceContent(contentContainer);
+		}
+		const copyButton = el.querySelector(".copy-message-btn");
+		if (copyButton) {
+			copyButton.setAttribute("data-message-content", msg.content || "");
 		}
 	}
 
