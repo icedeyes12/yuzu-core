@@ -1,20 +1,10 @@
 // FILE: static/js/modules/multimodal.js
 // DESCRIPTION: Multimodal manager for image upload, generation, and streaming
 
-import { router } from "./router.js";
-import {
-	currentAbortController,
-	currentStreamMessage,
-	isProcessingMessage,
-	setCurrentAbortController,
-	setCurrentStreamMessage,
-	setIsProcessingMessage,
-} from "./state.js";
 import { eventRouter } from "./event-router.js";
+import { router } from "./router.js";
+import { isProcessingMessage, setIsProcessingMessage } from "./state.js";
 import { chatStore } from "./store.js";
-import {
-	showTypingIndicator,
-} from "./typing-indicator.js";
 
 /**
  * MultimodalManager handles chat modes, image upload, and streaming.
@@ -26,6 +16,7 @@ export class MultimodalManager {
 		this.selectedImages = [];
 		this.isDropdownOpen = false;
 		this.isSending = false;
+		this.activeRequestId = 0;
 		this.toggleBtn = null;
 		this.modeIndicator = null;
 		this.imageCountBadge = null;
@@ -113,20 +104,15 @@ export class MultimodalManager {
 
 		sendBtn.onclick = (e) => {
 			e.preventDefault();
-			this.handleSend();
+			void this.handleSend();
 		};
 	}
 
 	handleSend() {
-		// If processing, abort the current stream
-		if (isProcessingMessage && currentAbortController) {
-			console.log("Aborting current stream...");
-			currentAbortController.abort();
-			return;
-		}
-
 		if (isProcessingMessage) {
-			console.log("Message already being processed, please wait...");
+			eventRouter.cancelStream(router.currentSessionId);
+			this.setSendButtonState("ready");
+			setIsProcessingMessage(false);
 			return;
 		}
 
@@ -142,14 +128,23 @@ export class MultimodalManager {
 		this.setSendButtonState("sending");
 
 		if (this.currentMode === "generate") {
-			this.handleImageGeneration(text);
+			void this.handleImageGeneration(text);
 		} else {
-			// [UNIFIED] All normal chat and image messages now use sendMessageStreaming
-			this.handleUnifiedMessage(text);
+			void this.handleUnifiedMessage(text);
 		}
 	}
 
 	async handleUnifiedMessage(text) {
+		const sessionId = router.currentSessionId;
+		if (!sessionId) {
+			chatStore.setError(
+				"Cannot send a message without an active conversation.",
+			);
+			setIsProcessingMessage(false);
+			this.setSendButtonState("ready");
+			return;
+		}
+
 		if (!text && this.selectedImages.length === 0) {
 			setIsProcessingMessage(false);
 			this.setSendButtonState("ready");
@@ -182,23 +177,23 @@ export class MultimodalManager {
 	}
 
 	async sendMessageStreaming(message, images = []) {
+		let sessionId = null;
+		let abortController = null;
+		const requestId = ++this.activeRequestId;
 		try {
 			const chatContainer = document.getElementById("chatContainer");
 			if (!chatContainer) {
-				console.error("Chat container not found");
+				chatStore.setError("Chat container is unavailable.");
 				setIsProcessingMessage(false);
 				this.setSendButtonState("ready");
 				return;
 			}
 
 			// [CRITICAL] Get session ID and validate it
-			const sessionId = router.currentSessionId;
-
-			// GUARD: Prevent streaming without valid session
+			sessionId = router.currentSessionId;
 			if (!sessionId || sessionId === "null" || sessionId === "undefined") {
-				console.error(
-					"[Multimodal] Cannot send message: Invalid session ID",
-					sessionId,
+				chatStore.setError(
+					"Cannot send a message without an active conversation.",
 				);
 				setIsProcessingMessage(false);
 				this.setSendButtonState("ready");
@@ -207,9 +202,12 @@ export class MultimodalManager {
 
 			eventRouter.setActiveView(sessionId);
 			chatStore.appendMessage({ role: "assistant", content: "" });
-			const abortController = new AbortController();
-			setCurrentAbortController(abortController);
-			eventRouter.registerStream(sessionId, abortController);
+			abortController = new AbortController();
+			eventRouter.registerStream(
+				sessionId,
+				abortController,
+				`pending_${requestId}`,
+			);
 
 			const formData = new FormData();
 			formData.append("message", message);
@@ -219,6 +217,7 @@ export class MultimodalManager {
 
 			const response = await fetch("/api/send_message_stream", {
 				method: "POST",
+				headers: { Accept: "text/event-stream" },
 				body: formData,
 				signal: abortController.signal,
 			});
@@ -226,6 +225,7 @@ export class MultimodalManager {
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 			}
+			if (!response.body) throw new Error("Streaming response has no body.");
 
 			const reader = response.body.getReader();
 			const decoder = new TextDecoder();
@@ -235,6 +235,10 @@ export class MultimodalManager {
 				const { done, value } = await reader.read();
 
 				if (done) {
+					sseBuffer += decoder.decode();
+					if (sseBuffer.startsWith("data: ")) {
+						eventRouter.handleEvent(sessionId, sseBuffer.substring(6));
+					}
 					break;
 				}
 
@@ -249,23 +253,32 @@ export class MultimodalManager {
 					}
 				}
 			}
+			if (sseBuffer.startsWith("data: ")) {
+				eventRouter.handleEvent(sessionId, sseBuffer.substring(6));
+			}
 
 			this.clearInput();
 		} catch (error) {
 			if (error.name === "AbortError") {
-				console.log("Stream aborted by user");
+				if (requestId === this.activeRequestId) chatStore.finishGeneration();
 			} else {
-				console.error("Fetch error:", error);
-				// DEBT: Implement error pushing state to Store (post-Phase 11)
+				chatStore.setError(error.message || "The message stream failed.");
 			}
 		} finally {
-			const sessionId = router?.currentSessionId;
-			if (sessionId) {
+			if (
+				requestId === this.activeRequestId &&
+				sessionId &&
+				eventRouter.controllers.get(sessionId) === abortController
+			) {
 				eventRouter.cancelStream(sessionId);
+				this.cleanupStreamState();
+				this.setSendButtonState("ready");
+				setIsProcessingMessage(false);
+			} else if (requestId === this.activeRequestId) {
+				this.cleanupStreamState();
+				this.setSendButtonState("ready");
+				setIsProcessingMessage(false);
 			}
-			this.cleanupStreamState();
-			this.setSendButtonState("ready");
-			setIsProcessingMessage(false);
 		}
 	}
 
@@ -291,76 +304,18 @@ export class MultimodalManager {
 	}
 
 	cleanupStreamState() {
-		setCurrentStreamMessage(null);
-		// Note: Session tracking is handled by BackgroundStreamManager.activeViewSessionId
-		// Don't clear currentAbortController - it's tracked by BackgroundStreamManager
+		// Store and EventRouter own active stream state.
 	}
 
 	async handleImageGeneration(prompt) {
 		if (!prompt.trim()) {
-			alert("Please enter a prompt for image generation");
+			chatStore.setError("Please enter a prompt for image generation.");
 			setIsProcessingMessage(false);
+			this.setSendButtonState("ready");
 			return;
 		}
-
-		this.isSending = true;
-		this.setSendButtonState("sending");
-
-		try {
-			console.log("Generating image with prompt:", prompt);
-
-
-			// Use dynamic typing indicator
-			showTypingIndicator();
-
-			// Use streaming endpoint for proper agentic loop support
-			const response = await fetch("/api/send_message_stream", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ message: `/imagine ${prompt}` }),
-			});
-
-			if (!response.ok) {
-				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-			}
-
-			// Create streaming message element
-			const chatContainer = document.getElementById("chatContainer");
-			setCurrentStreamMessage(this.createStreamingMessageElement("ai"));
-			currentStreamMessage.style.display = "none";
-			chatContainer.appendChild(currentStreamMessage);
-
-			const reader = response.body.getReader();
-			const decoder = new TextDecoder();
-			let sseBuffer = ""; // [FIX] Tail-buffer nahan chunk yang kepotong
-
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
-
-				const chunk = decoder.decode(value, { stream: true });
-				sseBuffer += chunk; // Masuk buffer
-				const lines = sseBuffer.split("\n");
-				sseBuffer = lines.pop(); // Tahan string yg belum komplit
-
-				for (const line of lines) {
-					if (line.startsWith("data: ")) {
-						const currentSessionId = document.querySelector(".chat-container")?.dataset?.sessionId || "default";
-						eventRouter.handleEvent(currentSessionId, line.substring(6));
-					}
-				}
-			}
-
-			this.clearInput();
-		} catch (error) {
-			console.error("Image generation failed:", error);
-			// TODO: Add error message to store
-		} finally {
-			this.cleanupStreamState();
-			this.isSending = false;
-			this.setSendButtonState("ready");
-			setIsProcessingMessage(false);
-		}
+		chatStore.appendMessage({ role: "user", content: prompt.trim() });
+		await this.sendMessageStreaming(`/imagine ${prompt.trim()}`);
 	}
 
 	displayGeneratedImage(imageUrl, _prompt) {

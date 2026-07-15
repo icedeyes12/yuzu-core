@@ -2,9 +2,10 @@
 // DESCRIPTION: Chat interface entry point - imports and initializes all modules
 // ==================== MODULE IMPORTS ====================
 import {
+	chatStore,
 	copyFullMessage,
 	createScrollButton,
-	setupScrollListener,
+	eventRouter,
 	findMessageById,
 	generateMessageId,
 	hideChatSkeleton,
@@ -16,9 +17,8 @@ import {
 	renderMessageContent,
 	router,
 	scrollToBottom,
-	eventRouter,
+	setupScrollListener,
 	showChatSkeleton,
-	chatStore,
 } from "./modules/index.js";
 
 // ==================== GLOBAL EXPORTS FOR MODULES ====================
@@ -30,7 +30,11 @@ window.eventRouter = eventRouter;
 // ==================== SESSION NAME LOADING ====================
 async function loadCurrentSessionName() {
 	try {
-		const response = await fetch("/api/profile");
+		const response = await fetch("/api/profile", {
+			headers: { Accept: "application/json" },
+		});
+		if (!response.ok)
+			throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 		const data = await response.json();
 
 		const sessionNameElement = document.getElementById("sessionName");
@@ -45,7 +49,7 @@ async function loadCurrentSessionName() {
 			partnerEl.textContent = data.partner_name;
 		}
 	} catch (error) {
-		console.error("Failed to load session name:", error);
+		chatStore.setError(error.message || "Failed to load profile.");
 	}
 }
 
@@ -68,84 +72,85 @@ function _focusChatInput() {
  * @param {boolean} updateURL - Whether to update browser URL (default: true)
  */
 async function handleSessionSwitch(sessionId, updateURL = true) {
-	// 1. Update currentSessionId
-	router.currentSessionId = sessionId;
-
-	// [CRITICAL] Set active view BEFORE any DOM operations
-	eventRouter.setActiveView(sessionId);
-
-	// Update URL if needed
+	if (!sessionId) return false;
+	if (
+		sessionId === router.currentSessionId &&
+		chatStore.sessionId === sessionId &&
+		chatStore.messages.length > 0 &&
+		!chatStore.error
+	) {
+		return true;
+	}
 	if (updateURL) {
 		router.updateUrl(sessionId);
+	} else {
+		router.currentSessionId = sessionId;
 	}
-
-	// Sync sidebar active highlight immediately (no reload needed)
-	if (typeof window.syncActiveSidebarItem === "function") {
-		window.syncActiveSidebarItem(sessionId);
-	}
-
-	// 2. Hide previous session completely (we don't wait for the network request)
-	const chatContainer = document.getElementById("chatContainer");
-	if (chatContainer) {
-		chatContainer.innerHTML = ""; // Handled by Store clearing now, but keeping for intermediate visual clear before fetch
-	}
-
-	// 4. Disable the chat input during this transition
-	const userInput = document.getElementById("userInput");
+	eventRouter.setActiveView(sessionId);
+	const userInput = document.getElementById("messageInput");
 	if (userInput) userInput.disabled = true;
-
-	// 3. Fire loadChatHistory(newSessionId) to render the new messages
-	// [DOM REBIND FIX] Always load history, let loadChatHistory handle stream rebinding
-	// This ensures previous messages are shown even when there's an active stream
-	await loadChatHistory(sessionId);
-
-	if (userInput) userInput.disabled = false;
-
-	// Auto-focus input after session content loads
-	_focusChatInput();
+	try {
+		return await loadChatHistory(sessionId);
+	} finally {
+		if (userInput) userInput.disabled = false;
+		_focusChatInput();
+	}
 }
 
 // ==================== INITIALIZATION ====================
 async function initializeChat() {
+	if (window.__yuzuChatInitialized) return;
+	window.__yuzuChatInitialized = true;
 
-	// Initialize scroll button
-	createScrollButton();
+	try {
+		// Initialize scroll button
+		createScrollButton();
 
-	// Initialize input behavior
-	initializeInputBehavior();
+		// Initialize input behavior
+		initializeInputBehavior();
 
-	// Initialize URL router
-	const urlSessionId = router.initFromURL();
+		// Initialize URL router
+		const urlSessionId = router.initFromURL();
 
-	// Load session name
-	loadCurrentSessionName();
-	
-	// Initialize Scroll Listener
-	setupScrollListener();
+		// Load session name
+		await loadCurrentSessionName();
 
-	// Stream state is now fully managed by ConversationStore + EventRouter
+		// Initialize Scroll Listener
+		setupScrollListener();
 
-	// Normal initialization - load history
-	if (urlSessionId) {
-		await loadChatHistory(urlSessionId);
-	} else {
-		const input = document.getElementById("messageInput");
-		const btn = document.getElementById("sendButton");
-		if (input) {
-			input.disabled = true;
-			input.placeholder = "No active session selected...";
+		// Stream state is now fully managed by ConversationStore + EventRouter
+
+		let sessionId = urlSessionId;
+		if (!sessionId) {
+			const profileResponse = await fetch("/api/profile", {
+				headers: { Accept: "application/json" },
+			});
+			if (!profileResponse.ok)
+				throw new Error(
+					`HTTP ${profileResponse.status}: ${profileResponse.statusText}`,
+				);
+			const profileData = await profileResponse.json();
+			sessionId = profileData.active_session?.id;
 		}
-		if (btn) btn.disabled = true;
-		console.error("No session ID in URL path. Chat disabled.");
-		await loadChatHistory();
+		if (sessionId) {
+			router.currentSessionId = sessionId;
+			eventRouter.setActiveView(sessionId);
+			await loadChatHistory(sessionId);
+			if (typeof window.syncActiveSidebarItem === "function")
+				window.syncActiveSidebarItem(sessionId);
+		} else {
+			chatStore.setError("No active conversation is available.");
+		}
+
+		// Initialize multimodal
+		window.multimodal = new MultimodalManager();
+		window.multimodal.init();
+
+		// Auto-focus input on initial load
+		_focusChatInput();
+	} catch (error) {
+		chatStore.setError(error.message || "Chat initialization failed.");
 	}
-
-	// Initialize multimodal
-	window.multimodal = new MultimodalManager();
-	window.multimodal.init();
-
-	// Auto-focus input on initial load
-	_focusChatInput();
 }
 
 // ==================== GLOBAL EXPORTS ====================
@@ -162,7 +167,12 @@ window.findMessageById = findMessageById;
 window.showChatSkeleton = showChatSkeleton;
 window.hideChatSkeleton = hideChatSkeleton;
 
-// Start when page loads
-window.onload = () => {
-	initializeChat();
-};
+// Start when the module is evaluated, regardless of whether window.onload
+// has already fired while external assets were loading.
+if (document.readyState === "loading") {
+	document.addEventListener("DOMContentLoaded", () => void initializeChat(), {
+		once: true,
+	});
+} else {
+	void initializeChat();
+}

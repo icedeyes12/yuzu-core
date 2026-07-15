@@ -84,9 +84,7 @@ class ConversationService:
             while True:
                 chunk = await q.get()
                 if chunk is None:
-                    done_event = json.dumps(
-                        {"type": "done", "turn_id": buffer.turn_id}
-                    )
+                    done_event = json.dumps({"type": "done", "turn_id": buffer.turn_id})
                     yield f"data: {done_event}\n\n"
                     break
                 if chunk:
@@ -97,7 +95,7 @@ class ConversationService:
                         token_event = json.dumps(
                             {
                                 "type": "token",
-                                "chunk": chunk,
+                                "content": chunk,
                                 "turn_id": buffer.turn_id,
                             }
                         )

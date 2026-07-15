@@ -34,8 +34,8 @@
 				if (raw) {
 					init.headers.set("X-BYOK-Config", btoa(encodeURIComponent(raw)));
 				}
-			} catch (e) {
-				console.warn("BYOK config parse failed:", e);
+			} catch (_e) {
+				// BYOK settings are optional; continue without them.
 			}
 		}
 
@@ -267,9 +267,6 @@ function switchTheme(theme) {
 		}
 	}
 	localStorage.setItem("yuzu-theme", theme);
-	if (window.renderer?.reinitializeMermaid) {
-		window.renderer.reinitializeMermaid();
-	}
 }
 
 function showSessionsSkeleton() {
@@ -288,7 +285,9 @@ function loadSidebarSessions() {
 	sessionSection.style.display = "block";
 	showSessionsSkeleton();
 
-	fetch("/api/sessions/list")
+	fetch("/api/sessions/list", {
+		headers: { Accept: "application/json" },
+	})
 		.then((response) => {
 			if (!response.ok) throw new Error(`HTTP ${response.status}`);
 			return response.json();
@@ -358,8 +357,7 @@ function loadSidebarSessions() {
 				sessionsList.appendChild(sessionItem);
 			}
 		})
-		.catch((error) => {
-			console.error("Error loading sidebar sessions:", error);
+		.catch((_error) => {
 			sessionsList.innerHTML = '<li class="error">Failed to load sessions</li>';
 		});
 }
@@ -374,17 +372,23 @@ function renameSessionPrompt(sessionId, currentName) {
 function renameSession(sessionId, newName) {
 	fetch("/api/sessions/rename", {
 		method: "POST",
-		headers: { "Content-Type": "application/json" },
+		headers: { "Content-Type": "application/json", Accept: "application/json" },
 		body: JSON.stringify({ session_id: sessionId, name: newName }),
 	})
-		.then((response) => response.json())
+		.then((response) => {
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+			return response.json();
+		})
 		.then((data) => {
 			if (data.status === "success") {
 				loadSidebarSessions();
 				const sessionNameElement = document.getElementById("sessionName");
 				if (sessionNameElement) {
-					fetch("/api/profile")
-						.then((response) => response.json())
+					fetch("/api/profile", { headers: { Accept: "application/json" } })
+						.then((response) => {
+							if (!response.ok) throw new Error(`HTTP ${response.status}`);
+							return response.json();
+						})
 						.then((profileData) => {
 							if (
 								profileData.active_session &&
@@ -399,8 +403,7 @@ function renameSession(sessionId, newName) {
 				showNotification("Failed to rename session", "error");
 			}
 		})
-		.catch((error) => {
-			console.error("Error renaming session:", error);
+		.catch(() => {
 			showNotification("Error renaming session", "error");
 		});
 }
@@ -418,10 +421,13 @@ function deleteSessionPrompt(sessionId) {
 function deleteSession(sessionId) {
 	fetch("/api/sessions/delete", {
 		method: "POST",
-		headers: { "Content-Type": "application/json" },
+		headers: { "Content-Type": "application/json", Accept: "application/json" },
 		body: JSON.stringify({ session_id: sessionId }),
 	})
-		.then((response) => response.json())
+		.then((response) => {
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+			return response.json();
+		})
 		.then((data) => {
 			if (data.status === "success") {
 				loadSidebarSessions();
@@ -430,8 +436,7 @@ function deleteSession(sessionId) {
 				showNotification("Failed to delete session", "error");
 			}
 		})
-		.catch((error) => {
-			console.error("Error deleting session:", error);
+		.catch(() => {
 			showNotification("Error deleting session", "error");
 		});
 }
@@ -439,30 +444,32 @@ function deleteSession(sessionId) {
 function createNewSession() {
 	fetch("/api/sessions/create", {
 		method: "POST",
-		headers: { "Content-Type": "application/json" },
+		headers: { "Content-Type": "application/json", Accept: "application/json" },
 		body: JSON.stringify({ name: "New Chat" }),
 	})
-		.then((response) => response.json())
+		.then((response) => {
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+			return response.json();
+		})
 		.then((data) => {
 			if (data.status === "success") {
 				loadSidebarSessions();
 				toggleSidebar();
 				if (window.router) {
-					window.router.updateURL(data.session_id);
+					window.router.updateUrl(data.session_id);
 				}
 				if (
 					window.location.pathname === "/chat" &&
 					window.handleSessionSwitch
 				) {
-					window.handleSessionSwitch(data.session_id);
+					void window.handleSessionSwitch(data.session_id);
 				} else {
 					window.location.href = "/chat";
 				}
 			}
 		})
-		.catch((error) => {
-			console.error("Error creating session:", error);
-			alert("Failed to create new session");
+		.catch(() => {
+			showNotification("Failed to create new session", "error");
 		});
 }
 
@@ -474,7 +481,8 @@ function switchSession(sessionId) {
 		const currentSession = window.router.currentSessionId;
 		if (
 			currentSession &&
-			window.chatStore && window.chatStore.isGenerating && window.chatStore.sessionId === currentSession
+			window.chatStore?.isGenerating &&
+			window.chatStore.sessionId === currentSession
 		) {
 			console.log(
 				`[Sidebar] Active stream in session ${currentSession}, pausing`,
@@ -498,18 +506,17 @@ function switchSession(sessionId) {
 	_setSessionSwitchingVisual(sessionId, true);
 
 	// Cancel any active stream for current session before switching
-	if (window.eventRouter && window.router && window.router.currentSessionId) {
+	if (window.eventRouter && window.router?.currentSessionId) {
 		window.eventRouter.cancelStream(window.router.currentSessionId);
 	}
 
 	if (window.handleSessionSwitch) {
-		window.handleSessionSwitch(sessionId)
+		window
+			.handleSessionSwitch(sessionId)
 			.then(() => {
 				toggleSidebar();
 			})
-			.catch((err) => {
-				console.error("[Sidebar] Session switch failed:", err);
-			})
+			.catch(() => showNotification("Failed to switch session", "error"))
 			.finally(() => {
 				_isSessionSwitching = false;
 				_setSessionSwitchingVisual(sessionId, false);
@@ -519,7 +526,6 @@ function switchSession(sessionId) {
 
 	_isSessionSwitching = false;
 	_setSessionSwitchingVisual(sessionId, false);
-	console.warn("[Sidebar] handleSessionSwitch not available on chat page");
 }
 
 function _setSessionSwitchingVisual(_sessionId, isLoading) {

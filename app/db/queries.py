@@ -340,6 +340,8 @@ def parse_profile_row(row: dict | None) -> dict:
         "context": ctx,
         "image_model": row.get("image_model", "qwen_image"),
         "vision_model": row.get("vision_model", "moonshotai/kimi-k2.5"),
+        "location_lat": row.get("location_lat"),
+        "location_lon": row.get("location_lon"),
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
         "persona_preset": ctx.get("persona_preset"),
@@ -487,7 +489,9 @@ LIMIT %s
 
 SQL_MESSAGE_UPDATE = "UPDATE messages SET content = %s, attachments = %s WHERE id = %s"
 
-SQL_MESSAGE_DELETE_FOR_SESSION = "DELETE FROM messages WHERE session_id = %s AND user_id = %s"
+SQL_MESSAGE_DELETE_FOR_SESSION = (
+    "DELETE FROM messages WHERE session_id = %s AND user_id = %s"
+)
 
 SQL_MESSAGE_COUNT_CONVERSATIONAL = (
     "SELECT COUNT(*) as cnt FROM messages "

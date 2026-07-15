@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import json
-import logging
 import re
 import asyncio
 import os
-import time
 from pathlib import Path
 from typing import Any, AsyncIterator
 
@@ -124,6 +122,7 @@ def _validate_image_path_safely(user_path: str) -> Path | None:
 
     return None
 
+
 def _parse_image_path(tool_json_str: str) -> str | None:
     """Extract image path from tool result JSON."""
     try:
@@ -133,6 +132,7 @@ def _parse_image_path(tool_json_str: str) -> str | None:
     except Exception:
         pass
     return None
+
 
 def _cache_uploaded_images(message: str) -> list[str]:
     """Find [local_image] shortcuts in message, return valid absolute paths."""
@@ -238,7 +238,6 @@ async def _execute_tool_calls_async(
     return results
 
 
-
 def _clean(text: str) -> str:
     return _TIMESTAMP_SUFFIX.sub("", text).strip()
 
@@ -320,13 +319,20 @@ async def _persist_streaming_tool_results_async(
     generated_paths: list[str] = []
 
     for i, result_event in enumerate(tool_results):
-        tool_json_str = json.dumps(
-            {"ok": result_event.ok, "data": result_event.data}, ensure_ascii=False
-        )
-        tool_jsons.append(tool_json_str)
         tool_call_id: str | None = (
             tool_calls_data[i].get("id") if i < len(tool_calls_data) else None
         )
+        tool_json_str = json.dumps(
+            {
+                "ok": result_event.ok,
+                "name": result_event.name,
+                "call_id": tool_call_id or "",
+                "data": result_event.data,
+                "error": result_event.error,
+            },
+            ensure_ascii=False,
+        )
+        tool_jsons.append(tool_json_str)
         await _persist_tool_result_async(
             result_event.name,
             tool_json_str,
@@ -437,7 +443,7 @@ async def handle_user_message(
     while loop_count < _MAX_ORCHESTRATION_LOOPS:
         loop_count += 1
         msg_for_pass = user_message if loop_count == 1 else ""
-        
+
         text_response, raw_api_response = await generate_ai_response(
             profile, msg_for_pass, interface, session_id, user_id=user_id
         )
@@ -451,13 +457,13 @@ async def handle_user_message(
         tool_calls = await _parse_raw_tool_calls_async(
             provider_name, raw_api_response, turn_id=turn_id
         )
-        
+
         if not tool_calls:
             await _persist_assistant_async(
                 text_response, session_id, user_id=user_id, turn_id=turn_id
             )
             break
-            
+
         # Build OpenAI-format tool_calls JSON for persistence
         tool_calls_json = [
             {
@@ -483,7 +489,7 @@ async def handle_user_message(
         tool_results = await _execute_tool_calls_async(
             tool_calls, session_id, user_id=user_id, turn_id=turn_id
         )
-        
+
         await _persist_streaming_tool_results_async(
             tool_results, tool_calls, session_id, user_id=user_id, turn_id=turn_id
         )
@@ -668,11 +674,11 @@ async def handle_user_message_streaming(
         loop_count += 1
         response_chunks: list[str] = []
         tool_calls_data: list[dict] = []
-        
+
         # Clear user message text after the first iteration so we just rebuild
         # the history and prompt for the next assistant turn.
         msg_for_pass = user_message if loop_count == 1 else ""
-        
+
         try:
             async for chunk in generate_ai_response_streaming(
                 profile,
@@ -685,7 +691,9 @@ async def handle_user_message_streaming(
             ):
                 if chunk:
                     if abort_check and abort_check():
-                        log.info(f"[stream] abort detected, fence {fence_id} not completed")
+                        log.info(
+                            f"[stream] abort detected, fence {fence_id} not completed"
+                        )
                         return
 
                     # FC9: Handle StreamToolEvent from provider streaming
@@ -703,7 +711,9 @@ async def handle_user_message_streaming(
                     response_chunks.append(chunk)
                     yield chunk
         except asyncio.CancelledError:
-            log.info("[stream] cancelled in generation loop - propagating to StreamBuffer")
+            log.info(
+                "[stream] cancelled in generation loop - propagating to StreamBuffer"
+            )
             log.warning(f"[stream] fence {fence_id} incomplete due to cancellation")
             raise
         except Exception as e:
@@ -759,7 +769,10 @@ async def handle_user_message_streaming(
             tool_results = await _execute_tool_calls_async(
                 tool_calls_data, session_id, user_id=user_id, turn_id=turn_id
             )
-            tool_jsons, all_generated_paths = await _persist_streaming_tool_results_async(
+            (
+                tool_jsons,
+                all_generated_paths,
+            ) = await _persist_streaming_tool_results_async(
                 tool_results,
                 tool_calls_data,
                 session_id,
@@ -779,8 +792,8 @@ async def handle_user_message_streaming(
                         "turn_id": turn_id,
                     },
                 )
-                
-            # Tools were executed and persisted. The loop will now continue to the next 
+
+            # Tools were executed and persisted. The loop will now continue to the next
             # iteration which will fetch the updated history including these tools.
             continue
 
@@ -796,7 +809,7 @@ async def handle_user_message_streaming(
             turn_id=turn_id,
         )
         return
-        
+
     # Hit max loops fallback
     await _finalize_and_persist_async(
         session_id,

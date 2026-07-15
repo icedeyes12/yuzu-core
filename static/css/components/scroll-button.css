@@ -14,7 +14,10 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+	transition:
+		opacity 0.3s ease,
+		visibility 0.3s ease,
+		transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 	/* Dynamic positioning - calculated by JavaScript based on input area height */
 	bottom: 100px;
 }

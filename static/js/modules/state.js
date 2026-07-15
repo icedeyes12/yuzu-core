@@ -6,20 +6,12 @@ export let isProcessingMessage = false;
 export const MESSAGES_PER_PAGE = 30;
 
 // ==================== STREAMING STATE ====================
-export let currentStreamMessage = null;
-export let currentAbortController = null;
+// Streaming ownership lives in EventRouter; this module only retains the
+// UI processing flag for the input control.
 
 // ==================== STATE SETTERS ====================
 export function setIsProcessingMessage(value) {
 	isProcessingMessage = value;
-}
-
-export function setCurrentStreamMessage(element) {
-	currentStreamMessage = element;
-}
-
-export function setCurrentAbortController(controller) {
-	currentAbortController = controller;
 }
 
 // ==================== MESSAGE ID TRACKING ====================
