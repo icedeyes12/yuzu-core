@@ -39,9 +39,13 @@ export function createMessageElement(role, content, timestamp = null) {
 			contentContainer.innerHTML = window.renderMessageContent(content, false);
 		}
 	} else if (window.renderMessageContent) {
-		contentContainer.innerHTML = window.renderMessageContent(content, role === "user");
+		contentContainer.innerHTML = window.renderMessageContent(
+			content,
+			role === "user",
+		);
 	} else {
-		contentContainer.textContent = content === null || content === undefined ? "" : String(content);
+		contentContainer.textContent =
+			content === null || content === undefined ? "" : String(content);
 	}
 
 	bubble.appendChild(contentContainer);
@@ -53,7 +57,9 @@ export function createMessageElement(role, content, timestamp = null) {
 
 	const timeDiv = document.createElement("div");
 	timeDiv.className = "timestamp";
-	timeDiv.textContent = timestamp ? formatTimestamp(timestamp) : getCurrentTime24h();
+	timeDiv.textContent = timestamp
+		? formatTimestamp(timestamp)
+		: getCurrentTime24h();
 	footer.appendChild(timeDiv);
 
 	const copyBtn = document.createElement("button");
@@ -89,8 +95,8 @@ export function copyFullMessage(content) {
 			.then(() => {
 				console.log("Message copied to clipboard");
 			})
-			.catch((err) => {
-				console.error("Failed to copy message:", err);
+			.catch(() => {
+				// Clipboard failure is non-fatal and has no state impact.
 			});
 	}
 }
@@ -117,7 +123,7 @@ export function isRenderableHistoryRole(role) {
  */
 export function renderMessageContent(rawText, _isUser = false) {
 	const safeText = String(rawText ?? "");
-	
+
 	try {
 		// Use marked if available
 		if (window.marked) {
@@ -125,18 +131,23 @@ export function renderMessageContent(rawText, _isUser = false) {
 			if (!window._markedConfigured) {
 				window.marked.setOptions({
 					breaks: true,
-					gfm: true
+					gfm: true,
+					sanitize: false,
 				});
 				window._markedConfigured = true;
 			}
-			return window.marked.parse(safeText);
+			const rendered = window.marked.parse(safeText);
+			return rendered.replace(
+				/(<img[^>]+(?:src|data-src)=["'])(?:(?:https?:\/\/[^/]+)?(?:\/chat\/|\/))?(?:(?:\.\.\/)+)?static\/(generated_images|uploads)\/([^"']+)(["'])/g,
+				(_match, prefix, kind, filename, suffix) =>
+					`${prefix}/api/static/${kind}/${encodeURIComponent(filename)}${suffix}`,
+			);
 		}
-		
+
 		// Fallback if marked is missing
 		const escapedText = escapeMessageHtml(safeText);
 		return escapedText.replace(/\n/g, "<br>");
-	} catch (e) {
-		console.error("Render error:", e);
+	} catch (_error) {
 		const escapedText = escapeMessageHtml(safeText);
 		return `<pre class="render-error">${escapedText}</pre>`;
 	}
@@ -167,7 +178,7 @@ export function formatTimestamp(timestamp) {
 
 	try {
 		const dbDate = new Date(timestamp);
-		if (isNaN(dbDate.getTime())) {
+		if (Number.isNaN(dbDate.getTime())) {
 			return timestamp;
 		}
 		let hours = dbDate.getHours();
@@ -177,8 +188,7 @@ export function formatTimestamp(timestamp) {
 		minutes = minutes < 10 ? `0${minutes}` : minutes;
 
 		return `${hours}:${minutes}`;
-	} catch (e) {
-		console.error("Error formatting timestamp:", e, timestamp);
+	} catch (_error) {
 		return timestamp;
 	}
 }

@@ -1,5 +1,4 @@
 from __future__ import annotations
-import os
 import pytest
 from app.tools.python_exec import execute as python_execute, TOOL_DEFINITION
 

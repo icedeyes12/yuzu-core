@@ -46,6 +46,8 @@ async def lifespan(app: FastAPI):
 
     # Run schema bootstrap before health check so missing columns are repaired
     # during startup instead of failing later on first query.
+    # Schema verification is performed by init_pg_tables_async; deploy-time DDL
+    # is intentionally not run under the application role.
     await init_pg_tables_async()
 
     # Health check
@@ -144,7 +146,9 @@ async def not_found_handler(request: Request, exc: Exception):
 
 # Mount static directories
 app.mount(
-    "/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static"
+    "/static",
+    StaticFiles(directory=os.path.join(BASE_DIR, "static")),
+    name="static",
 )
 app.mount(
     "/uploads",

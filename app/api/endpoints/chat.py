@@ -125,7 +125,7 @@ async def api_send_message_stream(
         if not user_message and not images:
 
             async def empty_generator():
-                yield 'data: {"chunk": "Please provide a message or images!"}\n\n'
+                yield 'data: {"type":"error","message":"Please provide a message or images!"}\n\n'
 
             return StreamingResponse(empty_generator(), media_type="text/event-stream")
 
@@ -150,6 +150,7 @@ async def api_send_message_stream(
                 log.warning("Missing provider key in stream: %s", e)
                 payload = json.dumps(
                     {
+                        "type": "error",
                         "error": "missing_key",
                         "provider": e.provider,
                         "message": f"No API key for {e.provider}. Set your key in Settings → Provider Keys.",
@@ -169,7 +170,7 @@ async def api_send_message_stream(
         log.error("Error in unified streaming: %s - %s", type(e).__name__, e)
 
         async def generate_error():
-            yield 'data: {"chunk": "Sorry, I encountered an error processing your message."}\n\n'
+            yield 'data: {"type":"error","message":"Sorry, I encountered an error processing your message."}\n\n'
 
         return StreamingResponse(generate_error(), media_type="text/event-stream")
 

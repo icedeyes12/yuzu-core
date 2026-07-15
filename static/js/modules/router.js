@@ -44,21 +44,16 @@ export class RouterManager {
 	 */
 	updateUrl(sessionId) {
 		if (!sessionId || sessionId === this.currentSessionId) return;
-
 		this.currentSessionId = sessionId;
 		const url = new URL(window.location.href);
-
-		// If we're already on a RESTful route, update the path
 		if (url.pathname.startsWith("/chat/")) {
 			url.pathname = `/chat/${sessionId}`;
 			url.searchParams.delete("session");
 		} else {
-			// Fallback to query param if not on RESTful route
-			url.searchParams.set("session", sessionId);
+			url.pathname = `/chat/${sessionId}`;
+			url.searchParams.delete("session");
 		}
-
 		window.history.pushState({ sessionId }, "", url);
-		console.log(`[Router] URL updated to session ${sessionId}`);
 	}
 
 	/**
@@ -92,12 +87,10 @@ export class RouterManager {
 				if (fallbackSessionId) sessionId = fallbackSessionId;
 			}
 
-			if (sessionId && sessionId !== this.currentSessionId) {
-				console.log(`[Router] PopState: switching to session ${sessionId}`);
+			if (sessionId !== this.currentSessionId) {
 				this.currentSessionId = sessionId;
-				// Trigger session switch without pushState
 				if (typeof window.handleSessionSwitch === "function") {
-					window.handleSessionSwitch(this.currentSessionId, false);
+					void window.handleSessionSwitch(sessionId, false);
 				}
 			}
 		});

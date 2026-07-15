@@ -17,7 +17,7 @@ from app.memory.db_memory_facade import (
     FACT_TYPE_STATIC,
     FACT_TYPE_DYNAMIC,
 )
-from app.db import pg_fetchone_async, pg_execute_async
+from app.db import pg_fetchone_async
 
 logger = logging.getLogger(__name__)
 

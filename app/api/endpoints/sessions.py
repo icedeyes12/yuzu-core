@@ -53,19 +53,30 @@ async def api_get_chat_history(
     """
     try:
         effective_limit = limit if limit and limit > 0 else None
+        active_session = None
         if session_id:
             chat_history = await get_chat_history_async(
-                session_id=session_id, limit=effective_limit, recent=True, user_id=user_id
+                session_id=session_id,
+                limit=effective_limit,
+                recent=True,
+                user_id=user_id,
             )
         else:
             active_session = await get_active_session_async(user_id)
             if active_session:
                 chat_history = await get_chat_history_async(
-                    active_session["id"], limit=effective_limit, recent=True, user_id=user_id
+                    active_session["id"],
+                    limit=effective_limit,
+                    recent=True,
+                    user_id=user_id,
                 )
             else:
                 chat_history = []
-        return {"status": "success", "chat_history": chat_history}
+        return {
+            "status": "success",
+            "active_session_id": active_session["id"] if active_session else None,
+            "chat_history": chat_history,
+        }
     except Exception as e:
         log.error("Error getting chat history: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -126,6 +137,7 @@ async def api_switch_session(
 
         return {
             "status": "success",
+            "active_session_id": request.session_id,
             "session_id": request.session_id,
             "chat_history": chat_history,
             "session_memory": session_memory,

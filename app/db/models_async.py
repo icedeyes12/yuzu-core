@@ -12,7 +12,6 @@ from app.db.connection import (
 from app.db.queries import TOOL_ROLES, ALL_TOOL_ROLES
 from app.db.queries import (
     DEFAULT_PROFILE_PARAMS,
-    SCHEMA_DDL,
     SQL_ENC_ENCRYPTED_MESSAGES,
     SQL_ENC_TOTAL_MESSAGES,
     SQL_MESSAGE_CONVERSATION_SUMMARY,
@@ -69,11 +68,13 @@ __re_exports__ = (TOOL_ROLES, ALL_TOOL_ROLES)
 
 
 async def init_pg_tables_async() -> None:
-    """Create PostgreSQL tables and indexes if missing."""
+    """(｡•̀ᴗ-)✧"""
     async with AsyncPgSession() as s:
-        for ddl in SCHEMA_DDL:
-            await s.execute(ddl)
-    log.info("PostgreSQL tables initialized (async)")
+        await s.fetchone("SELECT 1 FROM profiles LIMIT 1")
+        await s.fetchone("SELECT 1 FROM chat_sessions LIMIT 1")
+        await s.fetchone("SELECT 1 FROM messages LIMIT 1")
+        await s.fetchone("SELECT 1 FROM semantic_facts LIMIT 1")
+    log.info("PostgreSQL tables verified (async)")
 
 
 # ---------------------------------------------------------------------------
@@ -368,7 +369,9 @@ async def get_chat_history_async(
             SQL_MESSAGE_SELECT_ASC_LIMIT, (session_id, user_id, limit)
         )
     else:
-        rows = await pg_fetchall_async(SQL_MESSAGE_SELECT_ASC_ALL, (session_id, user_id))
+        rows = await pg_fetchall_async(
+            SQL_MESSAGE_SELECT_ASC_ALL, (session_id, user_id)
+        )
     return [parse_message_row(r) for r in rows]
 
 

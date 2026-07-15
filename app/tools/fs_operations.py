@@ -8,7 +8,6 @@ from app.tools.schemas import (
     ToolDefinition,
     ToolParam,
     error_result,
-    error_result,
     ok_result,
 )
 

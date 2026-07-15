@@ -10,6 +10,7 @@ export class ConversationStore {
 		this.messages = []; // Array of message objects (ConversationEvent)
 		this.subscribers = new Set();
 		this.isGenerating = false;
+		this.error = null;
 	}
 
 	/**
@@ -26,7 +27,9 @@ export class ConversationStore {
 	 * Notify all subscribers of a state change.
 	 */
 	_notify() {
-		this.subscribers.forEach((cb) => cb(this.messages, this.isGenerating));
+		this.subscribers.forEach((cb) => {
+			cb(this.messages, this.isGenerating, this.error);
+		});
 	}
 
 	/**
@@ -39,6 +42,7 @@ export class ConversationStore {
 		this.sessionId = sessionId;
 		this.messages = history.map((msg) => this._normalizeMessage(msg));
 		this.isGenerating = false;
+		this.error = null;
 		this._notify();
 	}
 
@@ -47,6 +51,7 @@ export class ConversationStore {
 	 */
 	startGeneration() {
 		this.isGenerating = true;
+		this.error = null;
 		this._notify();
 	}
 
@@ -55,7 +60,7 @@ export class ConversationStore {
 	 */
 	finishGeneration() {
 		this.isGenerating = false;
-		
+
 		// Freeze the last message if it belongs to the assistant
 		if (this.messages.length > 0) {
 			const lastMsg = this.messages[this.messages.length - 1];
@@ -63,7 +68,13 @@ export class ConversationStore {
 				lastMsg.isFrozen = true;
 			}
 		}
-		
+
+		this._notify();
+	}
+
+	setError(error) {
+		this.error = error ? String(error) : null;
+		this.isGenerating = false;
 		this._notify();
 	}
 
@@ -84,11 +95,9 @@ export class ConversationStore {
 	_getActiveAssistant() {
 		for (let i = this.messages.length - 1; i >= 0; i--) {
 			const msg = this.messages[i];
-			if (msg.role === "assistant" && !msg.isFrozen) {
-				return msg;
-			}
+			if (msg.role === "assistant" && !msg.isFrozen) return msg;
 		}
-		return this.messages.length > 0 ? this.messages[this.messages.length - 1] : null;
+		return null;
 	}
 
 	/**
@@ -96,11 +105,11 @@ export class ConversationStore {
 	 * @param {string} textChunk
 	 */
 	appendAssistantToken(textChunk) {
+		if (typeof textChunk !== "string" || !textChunk) return;
 		const activeMsg = this._getActiveAssistant();
 		if (!activeMsg) return;
 
 		if (activeMsg.role !== "assistant" || activeMsg.isFrozen) {
-			console.warn("[Store] Cannot append token to frozen or non-assistant message.", activeMsg);
 			return;
 		}
 
@@ -117,7 +126,6 @@ export class ConversationStore {
 		if (!activeMsg) return;
 
 		if (activeMsg.role !== "assistant" || activeMsg.isFrozen) {
-			console.warn("[Store] Cannot update tool call on frozen or non-assistant message.", activeMsg);
 			return;
 		}
 
@@ -126,7 +134,9 @@ export class ConversationStore {
 			activeMsg.tool_calls = [];
 		}
 
-		const existingTool = activeMsg.tool_calls.find(t => t.id === toolPayload.id);
+		const existingTool = activeMsg.tool_calls.find(
+			(t) => t.id === toolPayload.id,
+		);
 		if (existingTool) {
 			// Update existing
 			if (toolPayload.arguments_chunk) {
@@ -141,7 +151,7 @@ export class ConversationStore {
 				id: toolPayload.id,
 				name: toolPayload.name,
 				arguments: toolPayload.arguments_chunk || "",
-				status: toolPayload.status || "started"
+				status: toolPayload.status || "started",
 			});
 		}
 
@@ -153,24 +163,30 @@ export class ConversationStore {
 	 * @param {string} id
 	 */
 	getMessageById(id) {
-		return this.messages.find(m => m.id === id) || null;
+		return this.messages.find((m) => m.id === id) || null;
 	}
 
 	/**
 	 * Internal: Normalize an incoming raw dict into a consistent internal model.
 	 */
 	_normalizeMessage(raw) {
+		const content =
+			raw.content === null || raw.content === undefined
+				? ""
+				: String(raw.content);
 		return {
-			id: raw.id || `local_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+			id:
+				raw.id ||
+				`local_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
 			turn_id: raw.turn_id || null,
 			role: raw.role || "unknown",
-			content: raw.content || "",
+			content,
 			attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
 			tool_calls: Array.isArray(raw.tool_calls) ? [...raw.tool_calls] : [],
 			tool_call_id: raw.tool_call_id || null,
 			name: raw.name || null,
 			isFrozen: raw.isFrozen || false, // Once true, Renderer assumes immutable
-			timestamp: raw.timestamp || new Date().toISOString()
+			timestamp: raw.timestamp || new Date().toISOString(),
 		};
 	}
 }

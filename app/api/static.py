@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 router = APIRouter(prefix="/static", tags=["static"])
 
@@ -37,7 +37,11 @@ async def serve_generated_image(filename: str):
             raise HTTPException(status_code=404, detail="Image not found")
         if file_path.exists() and file_path.is_file():
             return FileResponse(file_path)
-        raise HTTPException(status_code=404, detail="Image not found")
+        return Response(
+            content='<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1"><title>Image unavailable</title><rect width="1" height="1" fill="transparent"/></svg>',
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "no-store"},
+        )
     except HTTPException:
         raise
     except Exception:

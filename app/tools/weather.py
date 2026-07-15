@@ -2,7 +2,7 @@ import logging
 import httpx
 from pydantic import BaseModel, ConfigDict
 from app.db import Database
-from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
+from app.tools.schemas import ToolDefinition, ok_result, error_result
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ async def execute(
 
     # 1. Validation (Pydantic)
     try:
-        WeatherRequest(**arguments)
+        WeatherRequest(**{k: v for k, v in arguments.items() if k not in {"session_id", "user_id", "tool_name"}})
     except Exception as e:
         return error_result(
             f"Invalid parameters: {e}", TOOL_WEATHER, "weather_fetch", partner_name
@@ -62,7 +62,7 @@ async def execute(
         return error_result(
             "Location missing. User has not enabled location in settings.",
             TOOL_WEATHER,
-            "weather_fetch",
+            "weather",
             partner_name,
         )
 
@@ -75,11 +75,13 @@ async def execute(
             response.raise_for_status()
             data = response.json()
             # Return pure structure
-            return ok_result({
-                "source": "open-meteo",
-                "current": data.get("current", {})
-            })
-            
+            return ok_result(
+                {"source": "open-meteo", "current": data.get("current", {})},
+                TOOL_WEATHER,
+                "weather",
+                partner_name,
+            )
+
     except Exception as e:
         logger.error(f"[weather] Failed to fetch data: {e}")
         return error_result(f"Failed to fetch weather data: {e}")
