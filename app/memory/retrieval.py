@@ -4,6 +4,7 @@
 import logging
 import math
 import threading
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from app.memory.db_memory_facade import (
@@ -380,10 +381,12 @@ def _hybrid_rrf_merge(
             item_id = item.get("id")
             if item_id is None:
                 continue
-            # Keep the richer item dict
             if item_id not in item_map:
-                item_map[item_id] = item
-            # Accumulate RRF score from this channel
+                item_map[item_id] = dict(item)
+            else:
+                item_map[item_id].update(
+                    {key: value for key, value in item.items() if value is not None}
+                )
             rrf_scores[item_id] = rrf_scores.get(item_id, 0.0) + 1.0 / (k + rank)
 
     # Tie-break: higher score first, then lower id
@@ -397,13 +400,48 @@ def _hybrid_rrf_merge(
 
 
 def _score_fact(r: dict) -> float:
-    """Hybrid score: similarity * 0.6 + importance * 0.2 + confidence * 0.2"""
-    meta = r.get("metadata", {})
-    distance = r.get("distance", 0.0)
-    similarity = 1.0 - distance
-    importance = meta.get("importance", 0.5)
-    confidence = meta.get("confidence", 0.5)
-    return similarity * 0.6 + importance * 0.2 + confidence * 0.2
+    """Score a candidate using relevance first, then bounded quality signals."""
+    meta = r.get("metadata", {}) or {}
+    distance = r.get("distance")
+    similarity = 1.0 - float(distance) if distance is not None else 0.0
+    trgm = float(r.get("similarity", r.get("trgm_score", 0.0)) or 0.0)
+    tsv = float(r.get("ts_rank", 0.0) or 0.0)
+    lexical = max(trgm, min(tsv, 1.0))
+    importance = min(max(float(meta.get("importance", 0.5) or 0.5), 0.0), 1.0)
+    confidence = min(max(float(meta.get("confidence", 0.5) or 0.5), 0.0), 1.0)
+    return (
+        max(similarity, 0.0) * 0.55
+        + lexical * 0.2
+        + importance * 0.15
+        + confidence * 0.1
+    )
+
+
+def _rerank_diverse(candidates: list[dict], limit: int) -> list[dict]:
+    """Rank candidates by query evidence and suppress exact duplicate content."""
+    ranked = []
+    seen_content: set[str] = set()
+    for candidate in candidates:
+        item = _parse_fact_content(candidate)
+        key = " ".join(item["content"].casefold().split())
+        if not key or key in seen_content:
+            continue
+        seen_content.add(key)
+        candidate["final_score"] = _score_fact(candidate)
+        ranked.append(candidate)
+    ranked.sort(
+        key=lambda item: (
+            -float(item.get("final_score", 0.0)),
+            -float((item.get("metadata") or {}).get("importance", 0.5) or 0.5),
+            -(
+                item.get("created_at").timestamp()
+                if hasattr(item.get("created_at"), "timestamp")
+                else 0
+            ),
+            item.get("id", 0),
+        )
+    )
+    return ranked[:limit]
 
 
 def _parse_fact_content(r: dict) -> dict:
@@ -454,8 +492,8 @@ def retrieve_static_memories(query=None, limit=15, user_id=None):
         results = MemoryDB.get_facts_by_session(
             session_id=None, fact_type=FACT_TYPE_STATIC, limit=limit, user_id=user_id
         )
+        results = _rerank_diverse(results, limit)
         parsed = [_parse_fact_content(r) for r in results]
-        parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
         if parsed:
             MemoryDB.update_last_accessed([m["id"] for m in parsed], user_id=user_id)
         return parsed
@@ -503,14 +541,8 @@ def retrieve_static_memories(query=None, limit=15, user_id=None):
         return []
 
     # Deduplicate: keep first occurrence by id
-    seen, parsed = set(), []
-    for r in merged:
-        if r["id"] in seen:
-            continue
-        seen.add(r["id"])
-        parsed.append(_parse_fact_content(r))
-
-    parsed = parsed[:limit]
+    merged = _rerank_diverse(merged, limit)
+    parsed = [_parse_fact_content(r) for r in merged]
 
     if parsed:
         MemoryDB.update_last_accessed([m["id"] for m in parsed], user_id=user_id)
@@ -536,9 +568,9 @@ def retrieve_dynamic_memories(session_id: str, query=None, limit=10, user_id=Non
             r
             for r in all_dynamic
             if r.get("metadata", {}).get("source_table") == "episodic_memories"
-        ][:limit]
+        ]
+        results = _rerank_diverse(results, limit)
         parsed = [_parse_fact_content(r) for r in results]
-        parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
         if parsed:
             MemoryDB.update_last_accessed([m["id"] for m in parsed], user_id=user_id)
         return parsed
@@ -565,6 +597,7 @@ def retrieve_dynamic_memories(session_id: str, query=None, limit=10, user_id=Non
         query=keyword,
         session_id=session_id,
         fact_type=FACT_TYPE_DYNAMIC,
+        metadata_filter={"source_table": "episodic_memories"},
         limit=limit,
         user_id=user_id,
     )
@@ -574,6 +607,7 @@ def retrieve_dynamic_memories(session_id: str, query=None, limit=10, user_id=Non
         query=keyword,
         session_id=session_id,
         fact_type=FACT_TYPE_DYNAMIC,
+        metadata_filter={"source_table": "episodic_memories"},
         limit=limit,
         user_id=user_id,
     )
@@ -590,14 +624,8 @@ def retrieve_dynamic_memories(session_id: str, query=None, limit=10, user_id=Non
         return []
 
     # Deduplicate: keep first occurrence by id
-    seen, parsed = set(), []
-    for r in merged:
-        if r["id"] in seen:
-            continue
-        seen.add(r["id"])
-        parsed.append(_parse_fact_content(r))
-
-    parsed = parsed[:limit]
+    merged = _rerank_diverse(merged, limit)
+    parsed = [_parse_fact_content(r) for r in merged]
 
     if parsed:
         MemoryDB.update_last_accessed([m["id"] for m in parsed], user_id=user_id)
@@ -690,6 +718,7 @@ def retrieve_memories_combined(
         query=keyword,
         session_id=session_id,
         fact_type=FACT_TYPE_DYNAMIC,
+        metadata_filter={"source_table": "episodic_memories"},
         limit=dynamic_limit,
         user_id=user_id,
     )
@@ -701,7 +730,7 @@ def retrieve_memories_combined(
         user_id=user_id,
     )
 
-    # Merge via RRF
+    # Merge via RRF, then apply relevance-aware ranking and duplicate suppression.
     static_merged = _hybrid_rrf_merge(
         {
             "vector": vec_results_static,
@@ -719,22 +748,10 @@ def retrieve_memories_combined(
         k=60,
     )
 
-    # Parse and deduplicate
-    seen_static, static_parsed = set(), []
-    for r in static_merged:
-        if r["id"] in seen_static:
-            continue
-        seen_static.add(r["id"])
-        static_parsed.append(_parse_fact_content(r))
-    static_parsed = static_parsed[:static_limit]
-
-    seen_dynamic, dynamic_parsed = set(), []
-    for r in dynamic_merged:
-        if r["id"] in seen_dynamic:
-            continue
-        seen_dynamic.add(r["id"])
-        dynamic_parsed.append(_parse_fact_content(r))
-    dynamic_parsed = dynamic_parsed[:dynamic_limit]
+    static_merged = _rerank_diverse(static_merged, static_limit)
+    dynamic_merged = _rerank_diverse(dynamic_merged, dynamic_limit)
+    static_parsed = [_parse_fact_content(r) for r in static_merged]
+    dynamic_parsed = [_parse_fact_content(r) for r in dynamic_merged]
 
     # Update last accessed
     if static_parsed:
@@ -744,6 +761,15 @@ def retrieve_memories_combined(
             [m["id"] for m in dynamic_parsed], user_id=user_id
         )
 
+    trace_id = uuid.uuid4().hex[:12]
+    logger.info(
+        "memory retrieval trace=%s session=%s query_len=%s static_ids=%s dynamic_ids=%s",
+        trace_id,
+        session_id,
+        len(query or ""),
+        [m["id"] for m in static_parsed],
+        [m["id"] for m in dynamic_parsed],
+    )
     return static_parsed, dynamic_parsed
 
 
@@ -867,8 +893,12 @@ def _format_static_context(static: list[dict]) -> str:
         relation = mem.get("relation", "unknown")
         target = mem.get("target", mem.get("content", ""))
         category = mem.get("category", "unknown")
-        # Format: "- [category] entity relation target"
-        parts.append(f"- [{category}] {entity} {relation} {target}")
+        score = float(mem.get("score", 0.0) or 0.0)
+        memory_id = mem.get("id", "?")
+        parts.append(
+            f"- [memory:{memory_id} score:{score:.3f} category:{category}] "
+            f"{entity} {relation} {target}"
+        )
     return "\n".join(parts)
 
 
@@ -905,7 +935,9 @@ def _format_dynamic_context(dynamic: list[dict]) -> str:
         content = mem.get("content") or mem.get("target") or ""
         if len(content) > 150:
             content = content[:150] + "..."
-        parts.append(f"- {content}")
+        memory_id = mem.get("id", "?")
+        score = float(mem.get("score", 0.0) or 0.0)
+        parts.append(f"- [memory:{memory_id} score:{score:.3f}] {content}")
     return "\n\nRecent episodes:\n" + "\n".join(parts) if parts else ""
 
 
@@ -982,10 +1014,13 @@ async def retrieve_static_memories_async(
     """
     if not query:
         results = await MemoryDB.get_facts_by_session_async(
-            session_id=None, fact_type=FACT_TYPE_STATIC, limit=limit, user_id=user_id
+            session_id=None,
+            fact_type=FACT_TYPE_STATIC,
+            limit=limit * 3,
+            user_id=user_id,
         )
+        results = _rerank_diverse(results, limit)
         parsed = [_parse_fact_content(r) for r in results]
-        parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
         if parsed:
             await MemoryDB.update_last_accessed_async(
                 [m["id"] for m in parsed], user_id=user_id
@@ -1034,14 +1069,8 @@ async def retrieve_static_memories_async(
     if not merged:
         return []
 
-    seen, parsed = set(), []
-    for r in merged:
-        if r["id"] in seen:
-            continue
-        seen.add(r["id"])
-        parsed.append(_parse_fact_content(r))
-
-    parsed = parsed[:limit]
+    merged = _rerank_diverse(merged, limit)
+    parsed = [_parse_fact_content(r) for r in merged]
 
     if parsed:
         await MemoryDB.update_last_accessed_async(
@@ -1069,9 +1098,9 @@ async def retrieve_dynamic_memories_async(
             r
             for r in all_dynamic
             if r.get("metadata", {}).get("source_table") == "episodic_memories"
-        ][:limit]
+        ]
+        results = _rerank_diverse(results, limit)
         parsed = [_parse_fact_content(r) for r in results]
-        parsed = sorted(parsed, key=lambda x: x["score"], reverse=True)[:limit]
         if parsed:
             await MemoryDB.update_last_accessed_async(
                 [m["id"] for m in parsed], user_id=user_id
@@ -1102,6 +1131,7 @@ async def retrieve_dynamic_memories_async(
         query=keyword,
         session_id=session_id,
         fact_type=FACT_TYPE_DYNAMIC,
+        metadata_filter={"source_table": "episodic_memories"},
         limit=limit,
         user_id=user_id,
     )
@@ -1111,6 +1141,7 @@ async def retrieve_dynamic_memories_async(
         query=keyword,
         session_id=session_id,
         fact_type=FACT_TYPE_DYNAMIC,
+        metadata_filter={"source_table": "episodic_memories"},
         limit=limit,
         user_id=user_id,
     )
@@ -1126,14 +1157,8 @@ async def retrieve_dynamic_memories_async(
     if not merged:
         return []
 
-    seen, parsed = set(), []
-    for r in merged:
-        if r["id"] in seen:
-            continue
-        seen.add(r["id"])
-        parsed.append(_parse_fact_content(r))
-
-    parsed = parsed[:limit]
+    merged = _rerank_diverse(merged, limit)
+    parsed = [_parse_fact_content(r) for r in merged]
 
     if parsed:
         await MemoryDB.update_last_accessed_async(

@@ -133,110 +133,88 @@ _pending_sessions: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
 _worker_task: Optional[asyncio.Task] = None
 
 
-async def _get_cached_memory_state_async(session_id: str) -> dict:
-    """Get memory state (async)."""
-    # Request-scoped cache might still be useful, but for now just proxy
-    return await get_memory_state_async(session_id)
+async def _get_cached_memory_state_async(
+    session_id: str, user_id: str | None = None
+) -> dict:
+    """Get memory state scoped to the owning user."""
+    return await get_memory_state_async(session_id, user_id=user_id)
 
 
-async def _try_set_fence_async(session_id: str, fence_count: int) -> bool:
-    """Atomically set fence for a session (async).
-
-    CRITICAL: Uses database-level locking to prevent race conditions.
-    Only one pipeline can be active per session at a time.
-    """
+async def _try_set_fence_async(
+    session_id: str, fence_count: int, user_id: str | None = None
+) -> bool:
+    """Atomically set a fence for a user-owned session."""
+    if not user_id:
+        return False
     now = datetime.now()
-
-    # Get current state with FOR UPDATE lock
     state = await pg_fetchone_async(
-        "SELECT memory_state FROM chat_sessions WHERE id = %s FOR UPDATE", (session_id,)
+        "SELECT memory_state FROM chat_sessions WHERE id = %s AND user_id = %s FOR UPDATE",
+        (session_id, user_id),
     )
-
     if not state:
         return False
-
     ms = state.get("memory_state") or {}
-
     existing_count = ms.get("in_progress_fence_count")
     existing_since = ms.get("in_progress_fence_since")
-
     if existing_count is not None and existing_since is not None:
         try:
             existing_dt = datetime.fromisoformat(existing_since)
             age = now - existing_dt
             if age <= timedelta(minutes=FENCE_TTL_MINUTES):
-                # Active fence exists - reject
-                logger.debug(
-                    f"Fence active for session {session_id}, age={age.seconds}s"
-                )
                 return False
-            # Fence is stale - clear it BEFORE setting new one
-            logger.info(
-                f"Clearing stale fence for session {session_id}, age={age.seconds}s"
-            )
-            # CRITICAL FIX: Actually clear the stale fence
-            ms["in_progress_fence_count"] = None
-            ms["in_progress_fence_since"] = None
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Failed to parse fence timestamp: {e}")
-
-    # Set new fence atomically
+        except (ValueError, TypeError):
+            logger.warning("Invalid fence timestamp for session %s", session_id)
     ms["in_progress_fence_count"] = fence_count
     ms["in_progress_fence_since"] = now.isoformat()
-
     await pg_execute_async(
-        "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s",
-        (json.dumps(ms), datetime.now(), session_id),
+        "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s AND user_id = %s",
+        (json.dumps(ms), datetime.now(), session_id, user_id),
     )
-
-    logger.debug(f"Fence acquired for session {session_id}, count={fence_count}")
     return True
 
 
-async def _clear_fence_async(session_id: str) -> None:
-    """Clear fence atomically (async)."""
-    # Get current state with FOR UPDATE lock
+async def _clear_fence_async(session_id: str, user_id: str | None = None) -> None:
+    """Clear a fence only on the owning session."""
+    if not user_id:
+        return
     state = await pg_fetchone_async(
-        "SELECT memory_state FROM chat_sessions WHERE id = %s FOR UPDATE", (session_id,)
+        "SELECT memory_state FROM chat_sessions WHERE id = %s AND user_id = %s FOR UPDATE",
+        (session_id, user_id),
     )
-
     if not state:
         return
-
     ms = state.get("memory_state") or {}
     ms["in_progress_fence_count"] = None
     ms["in_progress_fence_since"] = None
-
     await pg_execute_async(
-        "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s",
-        (json.dumps(ms), datetime.now(), session_id),
+        "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s AND user_id = %s",
+        (json.dumps(ms), datetime.now(), session_id, user_id),
     )
 
-    logger.debug(f"Fence cleared for session {session_id}")
 
-
-async def _is_fence_active_async(session_id: str) -> bool:
-    """Check if fence is active (async)."""
-    state = await _get_cached_memory_state_async(session_id)
+async def _is_fence_active_async(session_id: str, user_id: str | None = None) -> bool:
+    """Check a fence only on the owning session."""
+    state = await _get_cached_memory_state_async(session_id, user_id=user_id)
     existing_count = state.get("in_progress_fence_count")
     existing_since = state.get("in_progress_fence_since")
-
     if existing_count is None or existing_since is None:
         return False
-
     try:
         existing_dt = datetime.fromisoformat(existing_since)
-        age = datetime.now() - existing_dt
-        return age <= timedelta(minutes=FENCE_TTL_MINUTES)
+        return datetime.now() - existing_dt <= timedelta(minutes=FENCE_TTL_MINUTES)
     except (ValueError, TypeError):
         return False
 
 
-async def _get_session_idle_hours_async(session_id: str, user_id: str | None = None) -> float | None:
+async def _get_session_idle_hours_async(
+    session_id: str, user_id: str | None = None
+) -> float | None:
     """Get idle hours (async)."""
     if not user_id:
         return None
-    messages = await get_session_messages_async(session_id, limit=1, order="DESC", user_id=user_id)
+    messages = await get_session_messages_async(
+        session_id, limit=1, order="DESC", user_id=user_id
+    )
     if not messages:
         return None
     last_ts = messages[0].get("timestamp")
@@ -270,10 +248,10 @@ async def should_trigger_segmentation_async(
         - Blocks if fence is active
         - Detects historical backlogs (>1000 messages) and logs warning
     """
-    if await _is_fence_active_async(session_id):
+    if await _is_fence_active_async(session_id, user_id=user_id):
         return False, 0
 
-    state = await _get_cached_memory_state_async(session_id)
+    state = await _get_cached_memory_state_async(session_id, user_id=user_id)
 
     # ID-based delta calculation (preferred)
     last_message_id = state.get("last_segmented_message_id", 0) or 0
@@ -282,8 +260,7 @@ async def should_trigger_segmentation_async(
     if last_message_id > 0:
         try:
             messages_after = await get_session_messages_after_id_async(
-                session_id, last_message_id, limit=10000,
-                user_id=user_id or ""
+                session_id, last_message_id, limit=10000, user_id=user_id or ""
             )
             # Filter to conversation messages only
             delta = len(
@@ -321,7 +298,10 @@ async def should_trigger_segmentation_async(
 
 
 async def mark_segmentation_done_async(
-    session_id: str, last_message_id: int = 0, processed_count: int = 0
+    session_id: str,
+    last_message_id: int = 0,
+    processed_count: int = 0,
+    user_id: str | None = None,
 ) -> None:
     """Mark segmentation done (async).
 
@@ -332,7 +312,7 @@ async def mark_segmentation_done_async(
         last_message_id: ID of the last processed message (preferred)
         processed_count: Number of messages processed in this run
     """
-    actual_total = await get_message_count_async(session_id)
+    actual_total = await get_message_count_async(session_id, user_id=user_id)
 
     state_update = {
         "last_segmented_count": actual_total,  # Keep for compatibility
@@ -343,7 +323,7 @@ async def mark_segmentation_done_async(
     if last_message_id > 0:
         state_update["last_segmented_message_id"] = last_message_id
 
-    await update_memory_state_async(session_id, state_update)
+    await update_memory_state_async(session_id, state_update, user_id=user_id)
 
 
 # ── Batch segmentation (single LLM call) ───────────────────────────────────────
@@ -594,6 +574,15 @@ async def _llm_batch_segment_async(messages: list[dict]) -> list[dict]:
             end = s.get("end_idx", 0)
             if end <= start:
                 continue
+            try:
+                start = int(start)
+                end = int(end)
+            except (TypeError, ValueError):
+                continue
+            start = max(0, min(start, len(messages)))
+            end = max(0, min(end, len(messages)))
+            if end <= start:
+                continue
             surprise = s.get("surprise_level", "low")
             if surprise not in ("low", "high", "extremely_high"):
                 surprise = "low"
@@ -603,7 +592,7 @@ async def _llm_batch_segment_async(messages: list[dict]) -> list[dict]:
                     "start_idx": start,
                     "end_idx": end,
                     "title": str(s.get("title", "Untitled"))[:50],
-                    "summary": str(s.get("summary", "")),
+                    "summary": str(s.get("summary", ""))[:500],
                     "surprise_level": surprise_map[surprise],
                 }
             )
@@ -872,7 +861,9 @@ async def run_memory_review_async(session_id: str, user_id: str | None = None) -
             return {"reviewed": 0}
 
         # Get conversation context
-        messages = await get_session_messages_async(session_id, limit=20, user_id=user_id)
+        messages = await get_session_messages_async(
+            session_id, limit=20, user_id=user_id
+        )
         context = (
             "\n".join(
                 f"{m.get('role', 'unknown')}: {m.get('content', '')[:200]}"
@@ -914,7 +905,7 @@ async def run_memory_pipeline_async(
     logger.info(f"Starting for session {session_id}, count={message_count}")
 
     # Get current state for tracking
-    state = await get_memory_state_async(session_id)
+    state = await get_memory_state_async(session_id, user_id=user_id)
     last_message_id = state.get("last_segmented_message_id", 0) or 0
     last_count = state.get("last_segmented_count", 0) or 0
 
@@ -923,26 +914,37 @@ async def run_memory_pipeline_async(
         if last_message_id > 0:
             try:
                 from app.db import get_session_messages_after_id_async
-                all_messages = await get_session_messages_after_id_async(session_id, last_message_id, limit=10000, user_id=user_id)
+
+                all_messages = await get_session_messages_after_id_async(
+                    session_id, last_message_id, limit=10000, user_id=user_id
+                )
+                unsegmented = [
+                    m for m in all_messages if m.get("role") in ("user", "assistant")
+                ]
             except Exception as e:
                 logger.warning(
                     f"ID-based query failed, falling back to count-based: {e}"
                 )
                 # Fallback
-                all_messages = await get_session_messages_async(session_id, limit=10000, user_id=user_id)
+                all_messages = await get_session_messages_async(
+                    session_id, limit=10000, user_id=user_id
+                )
                 conversation_messages = [
                     m for m in all_messages if m.get("role") in ("user", "assistant")
                 ]
                 unsegmented = conversation_messages[last_count:]
         else:
             # Initial state: use count-based
-            all_messages = await get_session_messages_async(session_id, limit=10000, user_id=user_id)
+            all_messages = await get_session_messages_async(
+                session_id, limit=10000, user_id=user_id
+            )
             conversation_messages = [
                 m for m in all_messages if m.get("role") in ("user", "assistant")
             ]
             unsegmented = conversation_messages[last_count:]
 
-        # Filter to conversation messages only
+        # Filter to conversation messages only. The ID path is already scoped
+        # to the cursor; never reapply the old global count as an offset.
         if not isinstance(unsegmented, list):
             unsegmented = [
                 m for m in all_messages if m.get("role") in ("user", "assistant")
@@ -975,7 +977,7 @@ async def run_memory_pipeline_async(
             if unsegmented:
                 last_msg = unsegmented[-1]
                 await mark_segmentation_done_async(
-                    session_id, last_msg.get("id", 0), processed_count
+                    session_id, last_msg.get("id", 0), processed_count, user_id=user_id
                 )
             return {"segments": 0, "episodes": 0, "pcl_runs": 0}
 
@@ -987,7 +989,7 @@ async def run_memory_pipeline_async(
             if unsegmented:
                 last_msg = unsegmented[-1]
                 await mark_segmentation_done_async(
-                    session_id, last_msg.get("id", 0), processed_count
+                    session_id, last_msg.get("id", 0), processed_count, user_id=user_id
                 )
             return {"segments": 0, "episodes": 0, "pcl_runs": 0}
 
@@ -1019,7 +1021,7 @@ async def run_memory_pipeline_async(
         last_processed_id = last_processed_msg.get("id", 0) if last_processed_msg else 0
 
         await mark_segmentation_done_async(
-            session_id, last_processed_id, processed_count
+            session_id, last_processed_id, processed_count, user_id=user_id
         )
 
         # Log if there are remaining messages to process
@@ -1038,7 +1040,7 @@ async def run_memory_pipeline_async(
     finally:
         # Always clear fence when done (even on error)
         # This mirrors plast-mem's finalize_job() behavior
-        await _clear_fence_async(session_id)
+        await _clear_fence_async(session_id, user_id=user_id)
         logger.debug(f"Fence cleared for session {session_id}")
 
 
@@ -1056,7 +1058,7 @@ async def _background_worker_async():
             # Retrieve count from DB-persisted fence
             from app.db import get_memory_state_async
 
-            state = await get_memory_state_async(session_to_process)
+            state = await get_memory_state_async(session_to_process, user_id=user_id)
             count = state.get("in_progress_fence_count", 0) or 0
 
             await run_memory_pipeline_async(session_to_process, count, user_id=user_id)
@@ -1066,9 +1068,7 @@ async def _background_worker_async():
             _pending_sessions.task_done()
 
 
-async def enqueue_memory_pipeline_async(
-    session_id: str, user_id: str
-):
+async def enqueue_memory_pipeline_async(session_id: str, user_id: str):
     """Enqueue a session for background memory pipeline processing.
 
     Non-blocking — returns immediately.
@@ -1097,8 +1097,8 @@ async def trigger_memory_pipeline_async(
         return False
 
     # Try to set fence with current_count (total messages at trigger time)
-    if not await _try_set_fence_async(session_id, current_count):
-        logger.debug(f"Could not set fence for session {session_id}")
+    if not await _try_set_fence_async(session_id, current_count, user_id=user_id):
+        logger.debug("Could not set fence for session %s", session_id)
         return False
 
     await enqueue_memory_pipeline_async(session_id, user_id)

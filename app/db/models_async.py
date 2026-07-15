@@ -223,42 +223,37 @@ async def increment_message_count_async(session_id: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-async def get_memory_state_async(session_id: str) -> dict:
-    """Get pipeline state from session's memory_state.
-
-    Returns dict with:
-        - last_segmented_count: int
-        - last_segmented_at: ISO timestamp
-    """
-    row = await pg_fetchone_async(
-        "SELECT memory_state FROM chat_sessions WHERE id = %s", (session_id,)
-    )
+async def get_memory_state_async(session_id: str, user_id: str | None = None) -> dict:
+    """Get pipeline state scoped to a session owner when user_id is provided."""
+    if user_id:
+        row = await pg_fetchone_async(
+            "SELECT memory_state FROM chat_sessions WHERE id = %s AND user_id = %s",
+            (session_id, user_id),
+        )
+    else:
+        row = await pg_fetchone_async(
+            "SELECT memory_state FROM chat_sessions WHERE id = %s", (session_id,)
+        )
     if not row:
         return {"last_segmented_count": 0}
-
     ms = row.get("memory_state")
-    if not ms:
-        return {"last_segmented_count": 0}
-
-    # JSONB column - already dict from psycopg v3
-    if isinstance(ms, dict):
-        return ms
-    else:
-        return {"last_segmented_count": 0}
+    return ms if isinstance(ms, dict) else {"last_segmented_count": 0}
 
 
-async def update_memory_state_async(session_id: str, state: dict) -> bool:
-    """Update pipeline state in session's memory_state.
-
-    Merges with existing state.
-    """
+async def update_memory_state_async(
+    session_id: str, state: dict, user_id: str | None = None
+) -> bool:
+    """Merge pipeline state and update only the owning session when scoped."""
     try:
-        existing = await get_memory_state_async(session_id)
+        existing = await get_memory_state_async(session_id, user_id=user_id)
         existing.update(state)
-        await pg_execute_async(
-            "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s",
-            (json.dumps(existing), datetime.now(), session_id),
-        )
+        if user_id:
+            query = "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s AND user_id = %s"
+            params = (json.dumps(existing), datetime.now(), session_id, user_id)
+        else:
+            query = "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s"
+            params = (json.dumps(existing), datetime.now(), session_id)
+        await pg_execute_async(query, params)
         return True
     except Exception as e:
         log.error("update_memory_state_async failed: %s", e)
@@ -388,8 +383,15 @@ async def clear_session_messages_async(session_id: str, *, user_id: str) -> bool
         return False
 
 
-async def get_message_count_async(session_id: str) -> int:
-    row = await pg_fetchone_async(SQL_MESSAGE_COUNT_CONVERSATIONAL, (session_id,))
+async def get_message_count_async(session_id: str, user_id: str | None = None) -> int:
+    """Count conversational messages, optionally scoped to their owner."""
+    if user_id:
+        row = await pg_fetchone_async(
+            "SELECT COUNT(*) AS cnt FROM messages WHERE session_id = %s AND user_id = %s AND role IN ('user', 'assistant')",
+            (session_id, user_id),
+        )
+    else:
+        row = await pg_fetchone_async(SQL_MESSAGE_COUNT_CONVERSATIONAL, (session_id,))
     return row.get("cnt", 0) if row else 0
 
 

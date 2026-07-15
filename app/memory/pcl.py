@@ -495,8 +495,8 @@ async def consolidate_facts_async(
                     meta["source_episodic_ids"] = ids
                     meta["confidence"] = min((meta.get("confidence", 0.7) + 0.1), 1.0)
                     await pg_execute_async(
-                        "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s",
-                        (datetime.now(), Json(meta), source_id),
+                        "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s AND user_id=%s",
+                        (datetime.now(), Json(meta), source_id, user_id),
                     )
                     counts["reinforced"] += 1
             except Exception as e:
@@ -583,8 +583,8 @@ async def run_predict_calibrate_async(
                     meta = ep.get("metadata") or {}
                     meta["consolidated_at"] = datetime.now().isoformat()
                     await pg_execute_async(
-                        "UPDATE semantic_facts SET metadata=%s, last_accessed=%s WHERE id=%s",
-                        (Json(meta), datetime.now(), episode_id),
+                        "UPDATE semantic_facts SET metadata=%s, last_accessed=%s WHERE id=%s AND user_id=%s",
+                        (Json(meta), datetime.now(), episode_id, user_id),
                     )
             except Exception:
                 pass

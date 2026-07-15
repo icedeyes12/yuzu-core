@@ -176,3 +176,14 @@ class TestConstants:
 
     def test_embedding_dim(self):
         assert EMBEDDING_DIM == 4096
+
+
+class TestRetrievalRanking:
+    def test_inactive_facts_are_excluded_from_vector_query(self):
+        query = build_search_similar_query("[0.1,0.2,0.3]", [])
+        assert "invalid_at IS NULL" in query
+
+    def test_session_fact_listing_is_active_and_newest_first(self):
+        query = build_facts_by_session_query(["user_id = %s"])
+        assert "invalid_at IS NULL" in query
+        assert "ORDER BY created_at DESC, id DESC" in query

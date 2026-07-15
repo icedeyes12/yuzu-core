@@ -72,11 +72,14 @@ SQL_FACT_SELECT_BY_ID = "SELECT * FROM semantic_facts WHERE id=%s AND user_id=%s
 
 # Batch query for multiple fact IDs (N+1 fix)
 SQL_FACT_SELECT_BY_IDS = (
-    "SELECT * FROM semantic_facts WHERE id = ANY(%s) AND user_id=%s"
+    "SELECT * FROM semantic_facts "
+    "WHERE id = ANY(%s) AND user_id=%s AND invalid_at IS NULL"
 )
 
 SQL_FACT_SELECT_STATIC_LIMIT = (
-    "SELECT * FROM semantic_facts WHERE fact_type=%s AND user_id=%s LIMIT %s"
+    "SELECT * FROM semantic_facts "
+    "WHERE fact_type=%s AND user_id=%s AND invalid_at IS NULL "
+    "ORDER BY created_at DESC, id DESC LIMIT %s"
 )
 
 SQL_FACT_UPDATE_METADATA = (
@@ -169,7 +172,10 @@ def build_search_similar_query(
     Python lists to vector columns. It is always produced by
     vector_literal() from list[float], so injection is impossible.
     """
-    base_conditions = ["embedding IS NOT NULL"] + extra_conditions
+    base_conditions = [
+        "embedding IS NOT NULL",
+        "invalid_at IS NULL",
+    ] + extra_conditions
     cond_sql = " AND ".join(base_conditions)
     return f"""
         WITH searched AS (
@@ -232,13 +238,16 @@ def build_facts_by_session_query(
     to filtering by `fact_type = 'dynamic'` to preserve the previous
     behavior of get_facts_by_session().
     """
-    if extra_conditions:
-        where = "WHERE " + " AND ".join(extra_conditions)
-    elif default_dynamic:
-        where = "WHERE fact_type = 'dynamic'"
+    conditions = list(extra_conditions)
+    if not conditions and default_dynamic:
+        conditions.append("fact_type = 'dynamic'")
+    where = "WHERE " + " AND ".join(conditions) if conditions else ""
+    active = "invalid_at IS NULL"
+    if where:
+        where = f"{where} AND {active}"
     else:
-        where = ""
-    return f"SELECT * FROM semantic_facts {where} LIMIT %s"
+        where = f"WHERE {active}"
+    return f"SELECT * FROM semantic_facts {where} ORDER BY created_at DESC, id DESC LIMIT %s"
 
 
 def build_count_query(extra_conditions: list[str]) -> str:

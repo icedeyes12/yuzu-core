@@ -530,15 +530,16 @@ async def get_facts_by_session_async(
     return await pg_fetchall_async(query, params)
 
 
-async def update_last_accessed_async(ids: list[int]) -> int:
-
+async def update_last_accessed_async(ids: list[int], user_id: str | None = None) -> int:
+    if not user_id:
+        raise ValueError("update_last_accessed_async: user_id is required")
     if not ids:
         return 0
     now = datetime.now()
     query = build_update_last_accessed_query(len(ids))
     try:
         async with AsyncPgSession() as s:
-            await s.execute(query, (now,) + tuple(ids))
+            await s.execute(query, (now,) + tuple(ids) + (user_id,))
         return len(ids)
     except Exception as e:
         logger.error(f"update_last_accessed_async failed: {e}")
