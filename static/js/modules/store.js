@@ -142,9 +142,8 @@ export class ConversationStore {
 			(t) => t.id === toolPayload.id,
 		);
 		if (existingTool) {
-			// Update existing
 			if (toolPayload.arguments_chunk) {
-				existingTool.arguments += toolPayload.arguments_chunk;
+				existingTool.arguments = toolPayload.arguments_chunk;
 			}
 			if (toolPayload.status) {
 				existingTool.status = toolPayload.status;
