@@ -70,9 +70,9 @@
 	left: 0;
 	min-width: 280px;
 	background: var(--bg-secondary);
+	box-shadow: 0 18px 38px rgba(0, 0, 0, 0.2);
 	border: 1px solid var(--border-color);
 	border-radius: 12px;
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 	padding: 0.5rem;
 	z-index: 1000;
 }

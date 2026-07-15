@@ -12,12 +12,14 @@
 /* ==================== MOBILE RESPONSIVE ==================== */
 @media (max-width: 768px) {
 	.chat-container {
-		padding-left: 0.5rem;
-		padding-right: 0.5rem;
+		padding-left: 0.75rem;
+		padding-right: 0.75rem;
 	}
 
-	.message {
-		max-width: 95%;
+	.message,
+	.message.user-message,
+	.message.assistant-message {
+		width: 100%;
 	}
 
 	.message.ai {
@@ -25,7 +27,8 @@
 	}
 
 	.input-area {
-		padding: 0.6rem;
+		padding-left: 0.75rem;
+		padding-right: 0.75rem;
 	}
 
 	.scroll-to-bottom-btn {

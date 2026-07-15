@@ -3,12 +3,11 @@
   "version": "1.0.0",
   "description": "Yuzu Companion Frontend",
   "scripts": {
-    "lint": "eslint static/"
+    "lint": "biome check static/",
+    "lint:fix": "biome check --write static/"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "eslint": "^10.7.0",
-    "globals": "^17.7.0"
+    "@biomejs/biome": "^2.2.0"
   },
   "type": "module"
 }
