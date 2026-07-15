@@ -185,6 +185,28 @@ def _cache_images_from_message(message: str) -> list[str]:
     return cached
 
 
+def _normalise_tool_calls(tool_calls: list[dict]) -> list[dict]:
+    """Ensure every native tool call has a stable ID and object arguments."""
+    for tool_call in tool_calls:
+        name = str(tool_call.get("name") or "tool")
+        arguments = tool_call.get("arguments", {})
+        if isinstance(arguments, str):
+            try:
+                arguments = json.loads(arguments) if arguments.strip() else {}
+            except json.JSONDecodeError:
+                arguments = {}
+        if not isinstance(arguments, dict):
+            arguments = {}
+        tool_call["name"] = name
+        tool_call["arguments"] = arguments
+        if not tool_call.get("id"):
+            tool_call["id"] = make_tool_call_event(
+                name=name,
+                arguments=arguments,
+            ).id
+    return tool_calls
+
+
 async def _parse_raw_tool_calls_async(
     provider_name: str, raw_response: dict | None, turn_id: str = ""
 ) -> list[dict]:
@@ -199,11 +221,17 @@ async def _parse_raw_tool_calls_async(
     try:
         manager = await get_ai_manager()
         calls = manager.parse_tool_calls(provider_name, raw_response)
-        return [
-            {"id": c.get("id", ""), "name": c["name"], "arguments": c["arguments"]}
-            for c in calls
-            if c.get("name")
-        ]
+        return _normalise_tool_calls(
+            [
+                {
+                    "id": c.get("id", ""),
+                    "name": c["name"],
+                    "arguments": c.get("arguments", {}),
+                }
+                for c in calls
+                if c.get("name")
+            ]
+        )
     except Exception:
         return []
 
@@ -219,6 +247,7 @@ async def _execute_tool_calls_async(
     Uses the canonical execute_tool_event() path.
     """
     results: list[ToolResultEvent] = []
+    _normalise_tool_calls(tool_calls)
     for tc in tool_calls:
         raw_name: str = tc["name"]
         tool_name: str = raw_name
@@ -226,7 +255,7 @@ async def _execute_tool_calls_async(
         log.info("native tool_call: %s %s [turn=%s]", tool_name, arguments, turn_id)
 
         call_event = make_tool_call_event(
-            id=tc.get("id", ""),
+            id=tc["id"],
             name=tool_name,
             arguments=arguments,
             turn_id=turn_id,
@@ -699,15 +728,16 @@ async def handle_user_message_streaming(
                     # FC9: Handle StreamToolEvent from provider streaming
                     if isinstance(chunk, StreamToolEvent):
                         if chunk.type == "tool_call" and isinstance(chunk.data, dict):
-                            tool_calls_data.append(chunk.data)
+                            tool_call = _normalise_tool_calls([dict(chunk.data)])[0]
+                            tool_calls_data.append(tool_call)
                             log.info(
                                 "[stream] received tool_call: %s [turn=%s]",
-                                chunk.data.get("name", "?"),
+                                tool_call.get("name", "?"),
                                 turn_id,
                             )
                             yield StreamToolEvent(
                                 type="tool_call",
-                                data={**chunk.data, "turn_id": turn_id},
+                                data={**tool_call, "turn_id": turn_id},
                             )
                         continue
 
@@ -784,7 +814,7 @@ async def handle_user_message_streaming(
             )
 
             for i, result_event in enumerate(tool_results):
-                tc_id = tool_calls_data[i].get("id", f"call_{i}")
+                tc_id = result_event.call_id
                 yield StreamToolEvent(
                     type="tool_result",
                     data={
