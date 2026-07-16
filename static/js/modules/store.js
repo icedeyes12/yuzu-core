@@ -83,7 +83,18 @@ export class ConversationStore {
 	 * @param {Object} message - Raw message object
 	 */
 	appendMessage(message) {
-		this.messages.push(this._normalizeMessage(message));
+		const normalized = this._normalizeMessage(message);
+		const existingIndex = this.messages.findIndex(
+			(existing) => existing.id === normalized.id,
+		);
+		if (existingIndex >= 0) {
+			this.messages[existingIndex] = {
+				...this.messages[existingIndex],
+				...normalized,
+			};
+		} else {
+			this.messages.push(normalized);
+		}
 		this._notify();
 	}
 

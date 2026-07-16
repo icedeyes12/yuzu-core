@@ -98,7 +98,8 @@ export class EventRouter {
 					!pendingCall
 				)
 					return;
-				if (pendingCall) this.pendingToolCalls.delete(data.call_id);
+				if (!pendingCall) return;
+				this.pendingToolCalls.delete(data.call_id);
 				chatStore.updateToolCall({
 					id: data.call_id,
 					status: data.ok === false ? "error" : "completed",
