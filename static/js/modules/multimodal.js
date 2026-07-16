@@ -124,6 +124,7 @@ export class MultimodalManager {
 			return;
 		}
 
+		this.isSending = true;
 		setIsProcessingMessage(true);
 		this.setSendButtonState("sending");
 
@@ -232,9 +233,6 @@ export class MultimodalManager {
 
 				if (done) {
 					sseBuffer += decoder.decode();
-					if (sseBuffer.startsWith("data: ")) {
-						eventRouter.handleEvent(sessionId, sseBuffer.substring(6));
-					}
 					break;
 				}
 
@@ -249,8 +247,11 @@ export class MultimodalManager {
 					}
 				}
 			}
-			if (sseBuffer.startsWith("data: ")) {
-				eventRouter.handleEvent(sessionId, sseBuffer.substring(6));
+			if (sseBuffer.trim()) {
+				const finalLine = sseBuffer.trim();
+				if (finalLine.startsWith("data: ")) {
+					eventRouter.handleEvent(sessionId, finalLine.substring(6));
+				}
 			}
 
 			this.clearInput();
@@ -267,10 +268,9 @@ export class MultimodalManager {
 				eventRouter.controllers.get(sessionId) === abortController
 			) {
 				eventRouter.cancelStream(sessionId);
-				this.cleanupStreamState();
-				this.setSendButtonState("ready");
-				setIsProcessingMessage(false);
-			} else if (requestId === this.activeRequestId) {
+			}
+			if (requestId === this.activeRequestId) {
+				this.isSending = false;
 				this.cleanupStreamState();
 				this.setSendButtonState("ready");
 				setIsProcessingMessage(false);
