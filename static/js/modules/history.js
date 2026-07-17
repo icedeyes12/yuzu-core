@@ -19,6 +19,7 @@ export async function loadChatHistory(sessionId = null) {
 	showChatSkeleton();
 
 	try {
+		let data;
 		if (requestedSessionId) {
 			const switchRes = await fetch("/api/sessions/switch", {
 				method: "POST",
@@ -31,17 +32,15 @@ export async function loadChatHistory(sessionId = null) {
 			});
 			if (!switchRes.ok)
 				throw new Error(`HTTP ${switchRes.status}: session switch failed`);
+			data = await switchRes.json();
+		} else {
+			const res = await fetch("/api/chat_history?limit=50", {
+				headers: { Accept: "application/json" },
+				signal: historyRequest.signal,
+			});
+			if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+			data = await res.json();
 		}
-
-		const url = requestedSessionId
-			? `/api/chat_history?session_id=${encodeURIComponent(requestedSessionId)}&limit=0`
-			: "/api/chat_history?limit=0";
-		const res = await fetch(url, {
-			headers: { Accept: "application/json" },
-			signal: historyRequest.signal,
-		});
-		if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-		const data = await res.json();
 		const responseSessionId =
 			requestedSessionId ||
 			data.active_session_id ||
