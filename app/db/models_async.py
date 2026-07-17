@@ -164,10 +164,12 @@ async def switch_session_async(session_id: str, user_id: str) -> bool:
     try:
         async with AsyncPgSession() as s:
             await s.execute(SQL_SESSION_DEACTIVATE_FOR_USER, (user_id,))
-            await s.execute(
+            activated = await s.execute_returning(
                 SQL_SESSION_ACTIVATE_ONE_SCOPED,
                 (datetime.now(), session_id, user_id),
             )
+            if not activated:
+                raise ValueError("session not found for current user")
         return True
     except Exception as e:  # noqa: BLE001
         log.error("switch_session_async failed: %s", e)

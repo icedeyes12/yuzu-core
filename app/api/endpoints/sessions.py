@@ -121,7 +121,9 @@ async def api_switch_session(
         if not request.session_id:
             raise HTTPException(status_code=400, detail="session_id required")
 
-        await switch_session_async(request.session_id, user_id)
+        switched = await switch_session_async(request.session_id, user_id)
+        if not switched:
+            raise HTTPException(status_code=404, detail="Session not found")
 
         client_id = get_client_id(http_request)
         SessionService.clear_client_session(client_id)
@@ -133,7 +135,9 @@ async def api_switch_session(
         chat_history = await get_chat_history_async(
             session_id=request.session_id, limit=50, recent=True, user_id=user_id
         )
-        session_memory = await get_memory_state_async(request.session_id)
+        session_memory = await get_memory_state_async(
+            request.session_id, user_id=user_id
+        )
 
         return {
             "status": "success",
@@ -142,6 +146,8 @@ async def api_switch_session(
             "chat_history": chat_history,
             "session_memory": session_memory,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         log.error("Error switching session: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
