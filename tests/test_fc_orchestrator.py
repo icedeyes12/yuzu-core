@@ -140,6 +140,7 @@ class TestExecuteToolCallsAsync:
                 tool_calls, session_id="test_session"
             )
         assert len(results) == 2
+
     @pytest.mark.asyncio
     async def test_empty_list(self):
         results = await _execute_tool_calls_async([], session_id="test_session")
@@ -160,6 +161,7 @@ class TestPersistToolResultAsync:
                 turn_id="turn_2",
             )
         assert add_message.await_args.args[0] == "tool"
+
     @pytest.mark.asyncio
     async def test_streaming_tool_results_preserve_tool_call_ids(self):
         add_message = AsyncMock(return_value=123)

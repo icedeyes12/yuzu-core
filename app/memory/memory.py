@@ -786,8 +786,8 @@ async def create_episode_and_pcl_async(
         stability *= 1.5
         importance = min(importance + 0.1, 1.0)
 
-    start_id = segment_msgs[0].get("id")
-    end_id = segment_msgs[-1].get("id")
+    start_id = str(segment_msgs[0].get("id") or "")
+    end_id = str(segment_msgs[-1].get("id") or "")
 
     # Create episode
     episode_id = await MemoryDB.save_fact_async(

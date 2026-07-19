@@ -62,7 +62,18 @@ export class EventRouter {
 					chatStore.setError("The server sent an invalid token event.");
 					return;
 				}
-				if (content) chatStore.appendAssistantToken(content);
+				if (content) {
+					// If the last assistant message has completed tool_calls,
+					// the model is now on a new pass — start a fresh bubble
+					// so the post-tool response renders below the tool results
+					// (matching the DB structure after reload).
+					const active = chatStore._getActiveAssistant();
+					if (active?.tool_calls?.length > 0) {
+						active.isFrozen = true;
+						chatStore.beginAssistantMessage();
+					}
+					chatStore.appendAssistantToken(content);
+				}
 				return;
 			}
 

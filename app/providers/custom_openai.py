@@ -22,6 +22,13 @@ class CustomOpenAIProvider(AIProvider):
             supports_tool_call_parsing=True,
         )
 
+    def _resolve_url(self, ctx: LLMContext) -> str:
+        """Ensure the URL ends with /chat/completions."""
+        url = (ctx.base_url or self.base_url).rstrip("/")
+        if not url.endswith("/chat/completions"):
+            url += "/chat/completions"
+        return url
+
     async def get_models(self) -> list[str]:
         # For custom providers, we don't have a static list.
         # But we must return something to pass the "models > 0" test_connection check,
@@ -62,7 +69,7 @@ class CustomOpenAIProvider(AIProvider):
     ) -> str | None:
         try:
             headers, payload = self._prepare_payload(ctx, messages, False, **kwargs)
-            base = ctx.base_url or self.base_url
+            base = self._resolve_url(ctx)
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     base,
@@ -88,7 +95,7 @@ class CustomOpenAIProvider(AIProvider):
     ) -> dict | None:
         try:
             headers, payload = self._prepare_payload(ctx, messages, False, **kwargs)
-            base = ctx.base_url or self.base_url
+            base = self._resolve_url(ctx)
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     base,
@@ -123,7 +130,7 @@ class CustomOpenAIProvider(AIProvider):
                 payload.pop("tool_choice", None)
 
             has_tools = bool(payload.get("tools"))
-            base = ctx.base_url or self.base_url
+            base = self._resolve_url(ctx)
 
             async with httpx.AsyncClient() as client:
                 async with client.stream(

@@ -130,7 +130,9 @@ class SessionService:
         profile = await Database.get_profile(user_id)
         ctx = LLMContext.from_profile(profile, override_provider="chutes")
         api_key = ctx.api_key
-        summary = await Database.get_session_conversation_summary(session_id, limit=15, user_id=user_id)
+        summary = await Database.get_session_conversation_summary(
+            session_id, limit=15, user_id=user_id
+        )
 
         name: str | None = None
         if api_key and summary:
