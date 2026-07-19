@@ -79,6 +79,8 @@ def save_fact(
         meta["session_id"] = session_id
     if category:
         meta["category"] = category
+    # Ensure all values are JSON-serializable (UUID → str)
+    meta = {k: str(v) if hasattr(v, "hex") else v for k, v in meta.items()}
 
     norm_vec = normalize_vector(embedding) if embedding else None
 
@@ -426,6 +428,8 @@ async def save_fact_async(
         meta["session_id"] = session_id
     if category:
         meta["category"] = category
+    # Ensure all values are JSON-serializable (UUID → str)
+    meta = {k: str(v) if hasattr(v, "hex") else v for k, v in meta.items()}
 
     norm_vec = normalize_vector(embedding) if embedding else None
 
