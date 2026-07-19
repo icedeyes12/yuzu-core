@@ -1,6 +1,6 @@
+import os
 import httpx
 import asyncio
-from app.providers import get_ai_manager
 from app.providers.base import _rate_limit_provider
 
 
@@ -12,10 +12,8 @@ EMBEDDING_DIM = 4096  # Qwen3-Embedding-8B output dimension
 
 
 async def _get_client():
-    """Get an async client with API key."""
-    manager = await get_ai_manager()
-    chutes = manager.providers.get("chutes")
-    api_key = chutes.api_key if chutes else None
+    """Get an async client with API key from env (application-scoped)."""
+    api_key = os.environ.get("CHUTES_API_KEY")
 
     if not api_key:
         return None

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 import asyncio
 from typing import AsyncGenerator
@@ -516,6 +517,13 @@ class AIProviderManager:
         MAIN_MODEL = "google/gemma-4-31B-turbo-TEE"
         FALLBACK_MODEL = "Qwen/Qwen3.6-27B-TEE"
 
+        # Resolve API key from env (application-scoped, not BYOK)
+        api_key = os.environ.get("CHUTES_API_KEY")
+        if not api_key:
+            from app.core.context import MissingProviderKeyError
+
+            raise MissingProviderKeyError("chutes")
+
         logger.debug(f"[INT] Starting with {MAIN_MODEL}, {len(messages)} messages")
 
         def _is_connection_error(error: str | None) -> bool:
@@ -535,7 +543,7 @@ class AIProviderManager:
 
         for attempt in range(3):
             result = await provider.send_message(
-                ctx=LLMContext(provider="chutes", model=MAIN_MODEL),
+                ctx=LLMContext(provider="chutes", model=MAIN_MODEL, api_key=api_key),
                 messages=messages,
                 source=source,
                 skip_vision=True,
@@ -562,7 +570,7 @@ class AIProviderManager:
         await asyncio.sleep(1.0)
         logger.warning(f"[INT] Falling back to {FALLBACK_MODEL}")
         result = await provider.send_message(
-            ctx=LLMContext(provider="chutes", model=FALLBACK_MODEL),
+            ctx=LLMContext(provider="chutes", model=FALLBACK_MODEL, api_key=api_key),
             messages=messages,
             source=source,
             skip_vision=True,

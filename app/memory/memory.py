@@ -121,6 +121,11 @@ async def _memory_llm_call(ai_manager, messages: list[dict], **kwargs) -> str | 
         logger.warning(f"[MEMORY_LLM] Timeout after {kwargs.get('timeout', 30)}s: {e}")
         return None
     except Exception as e:
+        from app.core.context import MissingProviderKeyError
+
+        if isinstance(e, MissingProviderKeyError):
+            # Config error — re-raise so callers abort instead of retrying
+            raise
         # Log the actual error reason instead of silently returning None
         error_type = type(e).__name__
         logger.warning(f"[MEMORY_LLM] Call failed ({error_type}): {e}")
@@ -688,6 +693,11 @@ Conversation:
                 continue
 
         except Exception as e:
+            from app.core.context import MissingProviderKeyError
+
+            if isinstance(e, MissingProviderKeyError):
+                logger.warning("[MEMORY] No API key for memory provider — aborting segment enhancement")
+                break
             logger.debug(f"Enhance temporal segment failed: {e}")
 
         # Fallback

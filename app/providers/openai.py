@@ -178,7 +178,7 @@ class OpenAIProvider(AIProvider):
                                 delta = choices[0].get("delta", {})
                                 if delta.get("content"):
                                     yield delta["content"]
-                                for tc_delta in delta.get("tool_calls", []):
+                                for tc_delta in delta.get("tool_calls") or []:
                                     idx = tc_delta.get("index", 0)
                                     if idx not in tool_call_fragments:
                                         tool_call_fragments[idx] = {
