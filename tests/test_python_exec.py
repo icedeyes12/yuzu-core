@@ -29,5 +29,7 @@ async def test_syntax_error():
 
 @pytest.mark.asyncio
 async def test_timeout():
-    result = await python_execute({"code": "import time; time.sleep(999)", "timeout": 0.5})
+    result = await python_execute(
+        {"code": "import time; time.sleep(999)", "timeout": 0.5}
+    )
     assert result["ok"] is False

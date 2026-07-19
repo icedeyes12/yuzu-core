@@ -191,7 +191,9 @@ async def api_proxy_models(
                     resp = await client.get(url, headers=headers, timeout=10.0)
                     if resp.status_code == 200:
                         data = resp.json()
-                        models = [m.get("id") for m in data.get("data", []) if m.get("id")]
+                        models = [
+                            m.get("id") for m in data.get("data", []) if m.get("id")
+                        ]
                         if models:
                             return {"status": "success", "models": models}
             except Exception as e:
@@ -292,10 +294,7 @@ async def api_update_location(
         if not profile:
             raise HTTPException(status_code=404, detail="Profile not found")
 
-        updates = {
-            "location_lat": request.lat,
-            "location_lon": request.lon
-        }
+        updates = {"location_lat": request.lat, "location_lon": request.lon}
         await Database.update_profile(updates, user_id)
         return {"status": "success", "message": "Location updated"}
     except Exception as e:

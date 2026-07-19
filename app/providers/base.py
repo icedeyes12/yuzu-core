@@ -338,6 +338,7 @@ class AIProviderManager:
             load_fn = getattr(self, "load_providers", None)
             if load_fn:
                 import inspect
+
                 if inspect.iscoroutinefunction(load_fn):
                     await load_fn()
                 else:
@@ -534,7 +535,11 @@ class AIProviderManager:
 
         for attempt in range(3):
             result = await provider.send_message(
-                ctx=LLMContext(provider="chutes", model=MAIN_MODEL), messages=messages, source=source, skip_vision=True, **kwargs
+                ctx=LLMContext(provider="chutes", model=MAIN_MODEL),
+                messages=messages,
+                source=source,
+                skip_vision=True,
+                **kwargs,
             )
             if result:
                 logger.debug(f"[INT] Success with {MAIN_MODEL}: {len(result)} chars")
@@ -557,7 +562,11 @@ class AIProviderManager:
         await asyncio.sleep(1.0)
         logger.warning(f"[INT] Falling back to {FALLBACK_MODEL}")
         result = await provider.send_message(
-            ctx=LLMContext(provider="chutes", model=FALLBACK_MODEL), messages=messages, source=source, skip_vision=True, **kwargs
+            ctx=LLMContext(provider="chutes", model=FALLBACK_MODEL),
+            messages=messages,
+            source=source,
+            skip_vision=True,
+            **kwargs,
         )
         if result:
             logger.debug(f"[INT] Success with {FALLBACK_MODEL}: {len(result)} chars")
