@@ -44,7 +44,8 @@
 /* === USER MESSAGES === */
 .message.user-message {
 	align-self: flex-end;
-	width: min(100%, 760px);
+	width: min(100%, 70%);
+	max-width: 520px;
 	margin-left: auto;
 	background: transparent;
 	border: none;

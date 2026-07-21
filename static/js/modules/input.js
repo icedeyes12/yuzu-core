@@ -34,6 +34,19 @@ export function initializeInputBehavior() {
 		}
 	}
 
+	// Desktop Enter-to-send (mobile keeps Enter as newline)
+	const isMobile =
+		"ontouchstart" in window || navigator.maxTouchPoints > 0;
+	if (!isMobile) {
+		input.addEventListener("keydown", (e) => {
+			if (e.key === "Enter" && !e.shiftKey) {
+				e.preventDefault();
+				const sendBtn = document.getElementById("sendButton");
+				if (sendBtn) sendBtn.click();
+			}
+		});
+	}
+
 	// Auto-resize textarea
 	input.oninput = () => {
 		input.style.height = "auto";
