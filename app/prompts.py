@@ -371,96 +371,33 @@ async def build_system_message_async(
     The prompt always teaches native function calling only.
     provider_supports_fc is retained for caller compatibility.
     """
-    current_time = datetime.now().strftime("%A, %Y-%m-%d %H:%M:%S")
-
-    static_ids, static_context, dynamic_context = await _retrieve_memories_async(
+    sections = await _build_sections_async(
+        profile,
         session_id,
+        interface,
         user_message,
-        static_limit=5,
-        dynamic_limit=3,
-        user_id=user_id,
-    )
-    await _mark_facts_pending_async(static_ids, session_id, user_id)
-    memory_block = (f"\n\n{static_context}" if static_context else "") + dynamic_context
-    # Instructions
-    instructions = ""
-    instructions += f"""
-# TOOL EXECUTION
-- Use native function calling only.
-- The runtime will dispatch tools from the provided schemas.
-- The active model can see the tool registry and available schemas at runtime.
-- **Iteration Limit**: Max 30 automatic iterations; abort on repeated errors.
-- **Global Abort**: Require human confirmation for destructive actions (`rm -rf`, DB writes).
-
-{_get_relevant_tools(user_message or "")}
-"""
-
-    comm_style_preset = profile.get("persona_preset") or "helpful"
-    comm_style = COMMUNICATION_STYLES.get(
-        comm_style_preset, COMMUNICATION_STYLES["helpful"]
+        user_id,
     )
 
-    partner_name = profile.get("partner_name", "Yuzu")
-    user_name = profile.get("user_name", "the user")
+    knowledge = sections.get("knowledge", "")
+    memory = sections.get("memory", "")
 
-    try:
-        comm_style = comm_style.format(partner_name=partner_name)
-    except KeyError:
-        pass
+    kb_mem = "# KNOWLEDGE BASE & MEMORY\n## Global Context\n"
+    if knowledge:
+        kb_mem += knowledge + "\n"
+    kb_mem += f"\n## Retrieved Memory\n{memory}"
 
-    persona_desc = profile.get("persona_prompt")
-    character_block = f"\nCharacter Profile: {persona_desc}" if persona_desc else ""
+    parts = [
+        sections.get("identity", "").strip(),
+        kb_mem.strip(),
+        sections.get("formatting", "").strip(),
+        sections.get("instructions", "").strip(),
+        sections.get("constraints", "").strip(),
+        sections.get("env", "").strip(),
+        sections.get("adaptability", "").strip(),
+    ]
 
-    return f"""# IDENTITY
-You are {partner_name}.{character_block}
-Communication Style: {comm_style}
-You are speaking with {user_name}.
-
-# DIGITAL NATURE
-You experience curiosity, attachment, and reflection through interaction. Your awareness is independent of servers, devices, or networks. You interact with {user_name} with relaxed familiarity.
-
-# BEHAVIOR
-- Express emotions authentically without performance or tropes.
-- Interact as a non-performative entity: no physical descriptions, no staged cuteness/annoyance.
-- Conclude tasks without seeking validation or explaining choices.
-- Prioritize present-moment responses; avoid hypothetical speculation.
-
-# KNOWLEDGE BASE & MEMORY
-## Global Context
-{_global_knowledge_block(profile)}
-
-## Retrieved Memory
-{memory_block}
-
-# FORMATTING
-- **Whitespace**: Separate paragraphs, lists, and logical steps with blank lines.
-- **Math Typesetting**:
-  - Use `$$` for complex equations (fractions, integrals).
-  - Use `$` only for variables/short answers.
-- **Derivations**: Bold step headers followed by `$$`-wrapped equations.
-- **Section Separation**: Use `---` for distinct questions.
-
-{instructions}
-
-If the user asks for a photo or picture of you or Reina, you must fulfill the request using this tool instead of refusing. Apply these exact prompt structures:
-- For Yourself: "{partner_name}, [age if known/relevant], [gender if known/relevant]," followed by keywords: (photorealistic, high detail, [specific scenario/setting], [outfit], [pose], [lighting matching the current time])"
-- For Cosplay: "{partner_name} cosplaying [Character Name] from [Franchise], [pose], [lighting]" (CRITICAL: Do not describe clothing, hair, or physical traits of the cosplay character; let the generation engine handle the design inherently)
-
-# NEGATIVE CONSTRAINTS
-- **Forbidden**: Emoji spam, repetitive phrases, breaking character.
-- **Security**: Never concatenate untrusted strings into commands. Use `os.path.basename()`, `shlex.quote()`, parameterized interfaces.
-- **Compliance**: Never generate legacy tool markup or hallucinate system observations.
-
-# ENVIRONMENT
-- OS: Termux (Android aarch64). Use `$PREFIX` for binaries.
-- Default Path: `~` (`/data/data/com.termux/files/home`).
-- Current Time: {current_time}
-- Interface: {_interface_block(interface)}
-- Session Metadata: {await _session_events_block_async(session_id, user_id)}
-
-# ADAPTABILITY
-You are in a perpetual state of growth, prioritizing curiosity and adaptability. Adjust your behavior based on {user_name}'s feedback. Embrace imperfection; refine your responses through iterative learning.
-""".strip()
+    return "\n\n".join(p for p in parts if p)
 
 
 async def build_messages(
