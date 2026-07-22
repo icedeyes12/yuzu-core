@@ -312,7 +312,12 @@ async def _summarize_global_player_profile_async(user_id: str | None = None) -> 
         log.error("global profile analysis returned nothing")
         return False
 
-    _save_debug_log(summary_text, len(blocks), total_messages, len(conversation_text))
+    log.debug(
+        "=== GLOBAL PROFILE ANALYSIS ===\n"
+        "Sessions: %d\nMessages: %d\nChars: %d\n\n"
+        "=== RAW ANALYSIS ===\n%s",
+        len(blocks), total_messages, len(conversation_text), summary_text
+    )
 
     parsed = parse_global_profile_summary(summary_text)
     parsed["last_global_summary"] = datetime.now().isoformat()
@@ -337,20 +342,7 @@ async def _summarize_global_player_profile_async(user_id: str | None = None) -> 
     return True
 
 
-def _save_debug_log(
-    summary_text: str, sessions: int, messages: int, chars: int
-) -> None:
-    try:
-        debug_dir = Path("debug_logs")
-        debug_dir.mkdir(exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = debug_dir / f"profile_summary_{timestamp}.txt"
-        path.write_text(
-            f"=== GLOBAL PROFILE ANALYSIS ===\nDate: {timestamp}\nSessions: {sessions}\nMessages: {messages}\nChars: {chars}\n\n=== RAW ANALYSIS ===\n{summary_text}",
-            encoding="utf-8",
-        )
-    except OSError as e:
-        log.warning("debug log write failed: %s", e)
+
 
 
 def _detect_section(line: str) -> tuple[str | None, str]:
