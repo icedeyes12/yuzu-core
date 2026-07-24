@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from app.db import (
-    get_all_sessions_async,
-    get_active_session_async,
-    get_chat_history_async,
-    create_session_async,
-    switch_session_async,
-    rename_session_async,
-    delete_session_async,
-    clear_session_messages_async,
-    Database,
-)
-from app.services.session_service import SessionService
+
 from app.api.utils import get_client_id, get_current_user
-from fastapi import Depends
+from app.db import (
+    Database,
+    clear_session_messages_async,
+    create_session_async,
+    delete_session_async,
+    get_active_session_async,
+    get_all_sessions_async,
+    get_chat_history_async,
+    rename_session_async,
+    switch_session_async,
+)
 from app.logging_config import get_logger
+from app.services.session_service import SessionService
 
 log = get_logger(__name__)
 

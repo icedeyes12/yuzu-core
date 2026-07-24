@@ -22,9 +22,11 @@ def test_encode_image_safe_missing_file():
 
 def test_encode_image_safe_valid(tmp_path=None):
     """_encode_image_safe returns a valid image_url block for a real image."""
-    from app.prompts import _encode_image_safe
-    from PIL import Image
     import tempfile
+
+    from PIL import Image
+
+    from app.prompts import _encode_image_safe
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
         img = Image.new("RGB", (10, 10), color="blue")

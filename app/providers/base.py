@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
-import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from app.core.context import (

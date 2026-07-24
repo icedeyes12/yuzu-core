@@ -7,16 +7,16 @@ HNSW notes:
 - Alternative: use pgvector with lower dim (1536) for full HNSW support
 """
 
+import json
 import os
 import sys
 import time
-import json
 
 sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 
-from app.db import pg_fetchone, pg_fetchall, pg_execute
+from app.db import pg_execute, pg_fetchall, pg_fetchone
 from app.memory.embedder import embed_texts
 
 BATCH_SIZE = 32

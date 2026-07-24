@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Path
 
 from app.api.utils import get_current_user
-from app.stream_manager import StreamManager
 from app.logging_config import get_logger
+from app.stream_manager import StreamManager
 
 log = get_logger(__name__)
 

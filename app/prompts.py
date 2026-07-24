@@ -6,8 +6,8 @@ import base64
 import io
 import json as _json
 import os
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from PIL import Image
 
@@ -87,9 +87,9 @@ def _format_relative_time(timestamp_str: str | None) -> str:
             past = datetime.fromisoformat(iso_str)
 
         if past.tzinfo is None:
-            past = past.replace(tzinfo=timezone.utc)
+            past = past.replace(tzinfo=UTC)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         seconds = int((now - past).total_seconds())
 
         if seconds < 60:
@@ -122,7 +122,7 @@ def _read_file_content(filepath: str, max_size: int = 50000) -> str:
     try:
         if not os.path.exists(filepath):
             return ""
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             content = f.read(max_size)
             return content
     except Exception:  # noqa: BLE001
@@ -139,9 +139,9 @@ async def _retrieve_memories_async(
     """Combined retrieval with single embedding call (async)."""
     try:
         from app.memory.retrieval import (
-            retrieve_memories_combined_async,
-            _format_static_context,
             _format_dynamic_context,
+            _format_static_context,
+            retrieve_memories_combined_async,
         )
 
         static, dynamic = await retrieve_memories_combined_async(
@@ -168,7 +168,7 @@ async def _retrieve_memories_async(
         return [], "", ""
 
 
-async def _location_block_async(profile: Optional[dict] = None) -> str:
+async def _location_block_async(profile: dict | None = None) -> str:
     if profile:
         lat = profile.get("location_lat")
         lon = profile.get("location_lon")

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
-import httpx
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
-from app.providers.base import AIProvider, ProviderCapabilities
+import httpx
+
 from app.core.llm_context import LLMContext
+from app.providers.base import AIProvider, ProviderCapabilities
 from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)

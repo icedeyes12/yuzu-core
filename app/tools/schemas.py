@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # Tool parameter & definition
@@ -205,7 +204,7 @@ def make_tool_result_event(
 
 def new_turn_id() -> str:
     """Generate a correlation ID for one orchestrator turn."""
-    return f"turn_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    return f"turn_{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
 
 
 # ---------------------------------------------------------------------------

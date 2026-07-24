@@ -2,49 +2,128 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from app.db.models_async import (
     add_message_async as _pg_add_message_async,
-    update_message_async as _pg_update_message_async,
+)
+from app.db.models_async import (
     add_session_event_async as _pg_add_session_event_async,
+)
+from app.db.models_async import (
     add_system_note_async as _pg_add_system_note_async,
+)
+from app.db.models_async import (
     batch_decrypt_messages_async as _pg_batch_decrypt_messages_async,
+)
+from app.db.models_async import (
     clear_session_messages_async as _pg_clear_session_messages_async,
-    create_session_async as _pg_create_session_async,
-    delete_session_async as _pg_delete_session_async,
-    get_active_session_async as _pg_get_active_session_async,
-    get_all_encrypted_messages_async as _pg_get_all_encrypted_messages_async,
-    get_all_sessions_async as _pg_get_all_sessions_async,
-    get_chat_history_async as _pg_get_chat_history_async,
-    get_chat_history_for_ai_async as _pg_get_chat_history_for_ai_async,
-    get_context_async as _pg_get_context_async,
-    list_global_knowledge_async as _pg_list_global_knowledge_async,
-    get_global_knowledge_async as _pg_get_global_knowledge_async,
+)
+from app.db.models_async import (
     create_global_knowledge_async as _pg_create_global_knowledge_async,
-    update_global_knowledge_async as _pg_update_global_knowledge_async,
-    delete_global_knowledge_async as _pg_delete_global_knowledge_async,
-    get_encryption_status_async as _pg_get_encryption_status_async,
-    get_message_count_async as _pg_get_message_count_async,
-    get_profile_async as _pg_get_profile_async,
-    get_recent_active_sessions_async as _pg_get_recent_active_sessions_async,
-    get_session_conversation_summary_async as _pg_get_session_conversation_summary_async,
-    get_session_messages_async as _pg_get_session_messages_async,
-    increment_message_count_async as _pg_increment_message_count_async,
-    rename_session_async as _pg_rename_session_async,
-    switch_session_async as _pg_switch_session_async,
-    update_context_async as _pg_update_context_async,
-    update_profile_async as _pg_update_profile_async,
+)
+from app.db.models_async import (
+    create_session_async as _pg_create_session_async,
+)
+from app.db.models_async import (
     create_session_token_async as _pg_create_session_token_async,
-    validate_session_token_async as _pg_validate_session_token_async,
-    revoke_session_token_async as _pg_revoke_session_token_async,
-    lookup_identity_async as _pg_lookup_identity_async,
-    lookup_unclaimed_profile_async as _pg_lookup_unclaimed_profile_async,
+)
+from app.db.models_async import (
+    delete_global_knowledge_async as _pg_delete_global_knowledge_async,
+)
+from app.db.models_async import (
+    delete_session_async as _pg_delete_session_async,
+)
+from app.db.models_async import (
+    get_active_session_async as _pg_get_active_session_async,
+)
+from app.db.models_async import (
+    get_all_encrypted_messages_async as _pg_get_all_encrypted_messages_async,
+)
+from app.db.models_async import (
+    get_all_sessions_async as _pg_get_all_sessions_async,
+)
+from app.db.models_async import (
+    get_chat_history_async as _pg_get_chat_history_async,
+)
+from app.db.models_async import (
+    get_chat_history_for_ai_async as _pg_get_chat_history_for_ai_async,
+)
+from app.db.models_async import (
+    get_context_async as _pg_get_context_async,
+)
+from app.db.models_async import (
+    get_encryption_status_async as _pg_get_encryption_status_async,
+)
+from app.db.models_async import (
+    get_global_knowledge_async as _pg_get_global_knowledge_async,
+)
+from app.db.models_async import (
+    get_message_count_async as _pg_get_message_count_async,
+)
+from app.db.models_async import (
+    get_profile_async as _pg_get_profile_async,
+)
+from app.db.models_async import (
+    get_recent_active_sessions_async as _pg_get_recent_active_sessions_async,
+)
+from app.db.models_async import (
+    get_session_conversation_summary_async as _pg_get_session_conversation_summary_async,
+)
+from app.db.models_async import (
+    get_session_messages_async as _pg_get_session_messages_async,
+)
+from app.db.models_async import (
+    increment_message_count_async as _pg_increment_message_count_async,
+)
+from app.db.models_async import (
     insert_default_profile_returning_async as _pg_insert_default_profile_returning_async,
-    update_profile_avatar_async as _pg_update_profile_avatar_async,
-    update_profile_user_name_async as _pg_update_profile_user_name_async,
+)
+from app.db.models_async import (
     insert_identity_async as _pg_insert_identity_async,
+)
+from app.db.models_async import (
+    list_global_knowledge_async as _pg_list_global_knowledge_async,
+)
+from app.db.models_async import (
     lookup_auth_me_async as _pg_lookup_auth_me_async,
+)
+from app.db.models_async import (
+    lookup_identity_async as _pg_lookup_identity_async,
+)
+from app.db.models_async import (
+    lookup_unclaimed_profile_async as _pg_lookup_unclaimed_profile_async,
+)
+from app.db.models_async import (
+    rename_session_async as _pg_rename_session_async,
+)
+from app.db.models_async import (
+    revoke_session_token_async as _pg_revoke_session_token_async,
+)
+from app.db.models_async import (
+    switch_session_async as _pg_switch_session_async,
+)
+from app.db.models_async import (
+    update_context_async as _pg_update_context_async,
+)
+from app.db.models_async import (
+    update_global_knowledge_async as _pg_update_global_knowledge_async,
+)
+from app.db.models_async import (
+    update_message_async as _pg_update_message_async,
+)
+from app.db.models_async import (
+    update_profile_async as _pg_update_profile_async,
+)
+from app.db.models_async import (
+    update_profile_avatar_async as _pg_update_profile_avatar_async,
+)
+from app.db.models_async import (
+    update_profile_user_name_async as _pg_update_profile_user_name_async,
+)
+from app.db.models_async import (
+    validate_session_token_async as _pg_validate_session_token_async,
 )
 from app.logging_config import get_logger
 

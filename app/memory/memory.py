@@ -15,7 +15,6 @@ import json
 import logging
 import time
 from datetime import datetime, timedelta
-from typing import Optional
 
 from app.db import (
     get_message_count_async,
@@ -27,7 +26,6 @@ from app.db import (
     update_pipeline_state_async,
 )
 from app.db.queries import SQL_PIPELINE_STATE_LOCK, SQL_PIPELINE_STATE_UPDATE
-
 
 __all__ = [
     "trigger_memory_pipeline_async",
@@ -123,7 +121,7 @@ async def _memory_llm_call(ai_manager, messages: list[dict], **kwargs) -> str | 
 # ── Background state ─────────────────────────────────────────────────────────
 
 _pending_sessions: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
-_worker_task: Optional[asyncio.Task] = None
+_worker_task: asyncio.Task | None = None
 
 
 async def _get_cached_pipeline_state_async(

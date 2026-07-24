@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import pytest
 
+from app.tools.registry import (
+    execute_tool_event,
+    get_tool_capabilities,
+    get_tool_schemas,
+)
 from app.tools.schemas import (
     StreamToolEvent,
     ToolCallEvent,
@@ -13,11 +18,6 @@ from app.tools.schemas import (
     make_tool_call_event,
     make_tool_result_event,
     new_turn_id,
-)
-from app.tools.registry import (
-    execute_tool_event,
-    get_tool_capabilities,
-    get_tool_schemas,
 )
 
 

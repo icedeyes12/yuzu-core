@@ -4,15 +4,15 @@ Rebuild semantic_facts from message history.
 Reads messages from PostgreSQL, extracts facts via LLM, embeds, and stores in semantic_facts.
 """
 
+import json
 import os
 import sys
-import json
 import time
 
 # Add app to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app.db import PgSession, pg_fetchall, pg_execute
+from app.db import PgSession, pg_execute, pg_fetchall
 
 
 def get_all_sessions():

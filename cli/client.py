@@ -1,8 +1,8 @@
 from __future__ import annotations
-import os
 
-from collections.abc import AsyncIterator
 import json
+import os
+from collections.abc import AsyncIterator
 
 import httpx
 

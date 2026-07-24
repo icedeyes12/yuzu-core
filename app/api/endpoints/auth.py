@@ -17,8 +17,8 @@ from app.auth.oauth import (
     verify_state,
 )
 from app.auth.session import (
-    SESSION_COOKIE_NAME,
     _COOKIE_SECURE,
+    SESSION_COOKIE_NAME,
     clear_session_cookie,
     create_session,
     revoke_session,

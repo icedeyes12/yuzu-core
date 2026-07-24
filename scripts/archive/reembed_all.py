@@ -16,8 +16,8 @@ This script:
 4. Reports progress and final count
 """
 
-import sys
 import os
+import sys
 
 # Add parent dir to path so we can import app modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -37,8 +37,8 @@ if env_file.exists():
 else:
     print(f"⚠ No .env file found at {env_file}")
 
-from app.memory.embedder import embed_texts  # noqa: E402
 from app.db import PgSession  # noqa: E402
+from app.memory.embedder import embed_texts  # noqa: E402
 
 # New embedding dimension (Qwen3-Embedding-8B)
 NEW_EMBEDDING_DIM = 4096

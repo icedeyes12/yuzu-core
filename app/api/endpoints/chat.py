@@ -2,22 +2,20 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Request, Form, File, UploadFile, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.api.utils import get_client_id, get_current_user
 from app.core.context import (
-    RequestKeyring,
-    set_request_keyrings,
-    clear_request_keyring,
     MissingProviderKeyError,
+    RequestKeyring,
+    clear_request_keyring,
+    set_request_keyrings,
 )
+from app.logging_config import get_logger
 from app.services.conversation_service import ConversationService
 from app.services.session_service import SessionService
-from app.api.utils import get_client_id, get_current_user
-from fastapi import Depends
-
-from app.logging_config import get_logger
 
 log = get_logger(__name__)
 
@@ -26,8 +24,8 @@ router = APIRouter(tags=["chat"])
 
 def _extract_keyrings(request: Request) -> dict[str, RequestKeyring] | None:
     """Read BYOK headers from the request and build a map of RequestKeyring."""
-    import json
     import base64
+    import json
     import urllib.parse
 
     byok_header = request.headers.get("X-BYOK-Config")

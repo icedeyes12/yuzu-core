@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.tools.db_query import execute as sql_execute, TOOL_DEFINITION
+from app.tools.db_query import TOOL_DEFINITION
+from app.tools.db_query import execute as sql_execute
 
 
 def test_tool_definition_exists():

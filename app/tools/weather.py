@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
 import logging
+from datetime import date, timedelta
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field

@@ -3,12 +3,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 import httpx
 
-from app.providers.base import AIProvider, ProviderCapabilities, _rate_limit_provider
 from app.core.llm_context import LLMContext
+from app.providers.base import AIProvider, ProviderCapabilities, _rate_limit_provider
 from app.tools import multimodal_tools
 from app.tools.schemas import StreamToolEvent
 
@@ -157,6 +158,7 @@ class ChutesProvider(AIProvider):
 
     async def fetch_live_models(self, api_key: str | None = None) -> list[str]:
         import time as _t
+
         import httpx
 
         now = _t.time()

@@ -1,14 +1,16 @@
 from __future__ import annotations
-import os
 
 import asyncio
-import httpx
+import os
 import time
+
+import httpx
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
-from textual.widgets import Header, Footer, Static
+from textual.widgets import Footer, Header, Static
 
+from app.logging_config import get_logger
 from cli.client import YuzuClient
 from cli.widgets import (
     ChatLog,
@@ -16,7 +18,6 @@ from cli.widgets import (
     SessionList,
     SessionSelected,
 )
-from app.logging_config import get_logger
 
 log = get_logger(__name__)
 

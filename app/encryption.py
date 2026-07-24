@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import base64
+import logging
+import os
+import sys
 
 from Crypto.Cipher import ChaCha20_Poly1305
 from Crypto.Random import get_random_bytes
-import base64
-import os
-import sys
-import logging
 
 logger = logging.getLogger(__name__)
 
