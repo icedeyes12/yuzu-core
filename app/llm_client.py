@@ -263,7 +263,8 @@ async def generate_ai_response(
     user_message: str,
     interface: str = "terminal",
     session_id: str | None = None,
-    user_id: str | None = None,
+    *,
+    user_id: str,
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single (text, raw_response) AI generation pass.
 
@@ -357,7 +358,8 @@ async def generate_ai_response_streaming(
     session_id: str | None = None,
     provider: str | None = None,
     model: str | None = None,
-    user_id: str | None = None,
+    *,
+    user_id: str,
 ) -> AsyncGenerator[str | StreamToolEvent, None]:
     """Stream a response from the configured provider chunk by chunk.
 

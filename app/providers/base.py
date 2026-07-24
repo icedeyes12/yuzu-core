@@ -374,7 +374,7 @@ class AIProviderManager:
             if asyncio.iscoroutinefunction(provider.get_models):
                 static = list(await provider.get_models())
             else:
-                static = list(provider.get_models())
+                static = list(provider.get_models())  # type: ignore[call-overload]
             live: list[str] = []
             fetcher = getattr(provider, "fetch_live_models", None)
             if callable(fetcher):

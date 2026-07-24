@@ -37,11 +37,11 @@ class ToolDefinition:
 
     def to_llm_schema(self) -> dict:
         """Serialize to OpenAI function-calling schema format."""
-        properties = {}
-        required = []
+        properties: dict[str, dict[str, Any]] = {}
+        required: list[str] = []
 
         for p in self.parameters:
-            prop = {"type": p.type, "description": p.description}
+            prop: dict[str, Any] = {"type": p.type, "description": p.description}
             if p.enum:
                 prop["enum"] = p.enum
             if not p.required and p.default is not None:

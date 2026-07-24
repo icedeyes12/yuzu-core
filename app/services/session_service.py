@@ -68,7 +68,7 @@ class SessionService:
         interface: str = "terminal",
         unexpected_exit: bool = False,
         *,
-        user_id: str | None = None,
+        user_id: str,
     ) -> str:
         """Persist a disconnect note and update aggregate session history (async)."""
         active_session = await Database.get_active_session(user_id)
@@ -140,7 +140,7 @@ class SessionService:
             if not name:
                 log.warning("auto_name: LLM returned None for session %d", session_id)
         if not name:
-            name = await SessionService._auto_name_from_history(session_id)
+            name = await SessionService._auto_name_from_history(session_id, user_id)
             if not name:
                 log.warning(
                     "auto_name: history fallback failed for session %d", session_id
@@ -200,8 +200,10 @@ class SessionService:
         return (cleaned[:50] + "...") if len(cleaned) > 50 else cleaned
 
     @staticmethod
-    async def _auto_name_from_history(session_id: str) -> str | None:
-        history = await Database.get_chat_history(session_id, limit=5) or []
+    async def _auto_name_from_history(session_id: str, user_id: str) -> str | None:
+        history = (
+            await Database.get_chat_history(session_id, limit=5, user_id=user_id) or []
+        )
         for msg in history:
             if msg["role"] == "user" and len(msg["content"].strip()) > 10:
                 text = msg["content"].strip()

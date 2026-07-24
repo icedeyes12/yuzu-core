@@ -37,7 +37,7 @@ class OllamaProvider(AIProvider):
         return self.available_models
 
     async def send_message(
-        self, ctx: LLMContext, messages: list[dict], **kwargs
+        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
     ) -> str | None:
 
         try:

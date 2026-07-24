@@ -6,7 +6,6 @@ from app.db import (
     get_all_sessions_async,
     get_active_session_async,
     get_chat_history_async,
-    get_memory_state_async,
     create_session_async,
     switch_session_async,
     rename_session_async,
@@ -100,7 +99,9 @@ async def api_create_session(
 ):
     try:
         session_id = await create_session_async(request.name, user_id=user_id)
-        await switch_session_async(session_id, user_id)
+        if session_id is None:
+            raise HTTPException(status_code=500, detail="Failed to create session")
+        await switch_session_async(session_id, user_id=user_id)
 
         client_id = get_client_id(http_request)
         SessionService.clear_client_session(client_id)
@@ -135,16 +136,12 @@ async def api_switch_session(
         chat_history = await get_chat_history_async(
             session_id=request.session_id, limit=50, recent=True, user_id=user_id
         )
-        session_memory = await get_memory_state_async(
-            request.session_id, user_id=user_id
-        )
 
         return {
             "status": "success",
             "active_session_id": request.session_id,
             "session_id": request.session_id,
             "chat_history": chat_history,
-            "session_memory": session_memory,
         }
     except HTTPException:
         raise
@@ -190,16 +187,13 @@ async def api_delete_session(
                 chat_history = await get_chat_history_async(
                     active_session["id"], limit=50, recent=True, user_id=user_id
                 )
-                session_memory = await get_memory_state_async(active_session["id"])
             else:
                 chat_history = []
-                session_memory = {}
 
             return {
                 "status": "success",
                 "active_session": active_session,
                 "chat_history": chat_history,
-                "session_memory": session_memory,
             }
         else:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -243,21 +237,4 @@ async def api_end_session(request: Request, user_id: str = Depends(get_current_u
         )
         return {"status": "session ended"}
     except Exception:
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/sessions/{session_id}/memory")
-async def api_get_session_memory(
-    session_id: str, user_id: str = Depends(get_current_user)
-):
-    try:
-        session_memory = await get_memory_state_async(session_id)
-        return {
-            "status": "success",
-            "session_id": session_id,
-            "session_context": session_memory.get("session_context", ""),
-            "last_summarized": session_memory.get("last_summarized", "Never"),
-        }
-    except Exception as e:
-        log.error("Error getting session memory: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

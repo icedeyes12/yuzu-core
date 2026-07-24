@@ -1,17 +1,26 @@
 from __future__ import annotations
+
 import logging
-from app.tools.schemas import ToolDefinition, ToolParam, ok_result, error_result
-from app.memory.db_memory_facade import MemoryDB, FACT_TYPE_STATIC
+
 from app.db import Database
+from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
 
 logger = logging.getLogger(__name__)
 
+_CATEGORIES = (
+    "Identity",
+    "Preference",
+    "Interest",
+    "Personality",
+    "Relationship",
+    "Experience",
+    "Goal",
+    "Guideline",
+)
 
 TOOL_DEFINITION = ToolDefinition(
     name="memory_store",
-    description="Store a new fact or piece of information about the user into long-term memory. "
-    "The system auto-classifies into categories: Identity, Preference, Interest, "
-    "Personality, Relationship, Experience, Goal, or Guideline.",
+    description="Store an inferred, durable fact about the user in graph memory.",
     role="memory_store_tools",
     parameters=[
         ToolParam(
@@ -22,19 +31,10 @@ TOOL_DEFINITION = ToolDefinition(
         ),
         ToolParam(
             name="category",
-            description="Optional memory category. If omitted, auto-detected by LLM.",
+            description="Memory category.",
             type="string",
             required=False,
-            enum=[
-                "Identity",
-                "Preference",
-                "Interest",
-                "Personality",
-                "Relationship",
-                "Experience",
-                "Goal",
-                "Guideline",
-            ],
+            enum=list(_CATEGORIES),
         ),
     ],
     needs_session=True,
@@ -42,76 +42,43 @@ TOOL_DEFINITION = ToolDefinition(
 
 
 async def _classify_category_llm_async(fact: str) -> str:
-    """Classify a fact into a memory category using LLM (async)."""
+    """Classify a fact into one graph node category."""
     try:
-        # WORKAROUND: Lazy import to prevent circular dependency with app.providers
         from app.providers import get_ai_manager
 
-        ai_manager = await get_ai_manager()
-    except Exception as e:
-        logger.warning(f"[memory_store] AI manager unavailable: {e}")
-        return "Identity"
-
-    system_prompt = """You are a memory categorizer. Classify the following fact into exactly ONE category.
-
-Categories:
-- Identity: name, profession, location, company, education, demographics
-- Preference: likes, dislikes, favorites, stylistic choices, habits
-- Interest: topics, hobbies, domains they engage with
-- Personality: communication style, emotional tendencies, character traits
-- Relationship: how they treat you, shared routines, inside jokes, social bonds
-- Experience: skills, past events, professional background, completed projects
-- Goal: plans, aspirations, things they're working toward
-- Guideline: how you (assistant) should behave around them
-
-Respond with ONLY the category name, nothing else."""
-
-    try:
-        response = await ai_manager._internal_llm_call(
+        manager = await get_ai_manager()
+        response = await manager._internal_llm_call(
             messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Fact: {fact}"},
+                {
+                    "role": "system",
+                    "content": "Return exactly one category: " + ", ".join(_CATEGORIES),
+                },
+                {"role": "user", "content": fact},
             ],
             timeout=15,
-            max_tokens=30,
+            max_tokens=20,
         )
-        if response:
-            category = response.strip().title()
-            valid = {
-                "Identity",
-                "Preference",
-                "Interest",
-                "Personality",
-                "Relationship",
-                "Experience",
-                "Goal",
-                "Guideline",
-            }
-            if category in valid:
-                return category
-    except Exception as e:
-        logger.warning(f"[memory_store] LLM classification failed: {e}")
-
-    return "Identity"
+        category = str(response or "").strip().title()
+        return category if category in _CATEGORIES else "Experience"
+    except Exception as exc:
+        logger.warning("memory category classification failed: %s", exc)
+        return "Experience"
 
 
 async def execute(arguments, **kwargs):
     session_id = kwargs.get("session_id")
     user_id = kwargs.get("user_id")
-    from app.memory.embedder import embed_texts_async
-
     profile = await Database.get_profile(user_id) or {}
     partner_name = profile.get("partner_name", "Yuzu")
+    fact = str(arguments.get("fact", "")).strip()
 
-    fact = arguments.get("fact", "").strip()
-    if not fact:
+    if not session_id or not user_id:
         return error_result(
-            "'fact' is required",
+            "session_id and user_id required",
             TOOL_DEFINITION,
             "/memory_store",
             partner_name,
         )
-
     if len(fact) < 5:
         return error_result(
             "Fact too short (min 5 chars)",
@@ -119,7 +86,6 @@ async def execute(arguments, **kwargs):
             "/memory_store",
             partner_name,
         )
-
     if len(fact) > 500:
         return error_result(
             "Fact too long (max 500 chars)",
@@ -128,99 +94,38 @@ async def execute(arguments, **kwargs):
             partner_name,
         )
 
-    category = arguments.get("category")
-    if not category:
+    category = str(arguments.get("category") or "").strip().title()
+    if category not in _CATEGORIES:
         category = await _classify_category_llm_async(fact)
-    full_command = f'/memory_store fact="{fact[:60]}" category={category}'
-
-    # Embed the fact text
-    fact_embed_text = f"[{category}] {fact}"
+    content = f"[{category}] {fact}"
     try:
-        vecs = await embed_texts_async([fact_embed_text])
-        if not vecs:
-            return error_result(
-                "Embedding service unavailable",
-                TOOL_DEFINITION,
-                full_command,
-                partner_name,
-            )
-        vector = vecs[0]
-    except Exception as e:
-        logger.warning(f"[memory_store] Embed failed: {e}")
+        from app.memory.embedder import embed_text_async
+        from app.memory.graph import GraphMemoryRepository
+
+        embedding = await embed_text_async(content, timeout=30)
+        node = await GraphMemoryRepository.get_or_create_node(
+            user_id=user_id,
+            node_type=category.lower(),
+            content=fact,
+            embedding=embedding,
+            confidence=0.7,
+            importance=0.6,
+            embedding_model="qwen3-embedding-8b",
+            embedding_dimensions=len(embedding) if embedding else None,
+        )
+    except Exception as exc:
+        logger.warning("graph memory store failed: %s", exc)
         return error_result(
-            "Embedding service unavailable",
-            TOOL_DEFINITION,
-            full_command,
-            partner_name,
+            "Failed to store memory", TOOL_DEFINITION, "/memory_store", partner_name
         )
 
-    # Check for duplicate using vector distance
-    existing = await MemoryDB.search_similar_async(
-        embedding=vector,
-        session_id=session_id,
-        fact_type=FACT_TYPE_STATIC,
-        limit=1,
-        max_distance=0.05,
-    )
-
-    if existing:
-        e = existing[0]
-        if e:
-            # Duplicate found — reinforce existing fact
-            from app.db import pg_execute_async
-            from app.memory.db_memory_queries import SQL_FACT_UPDATE_METADATA
-            from datetime import datetime
-            from psycopg.types.json import Json
-
-            meta = e.get("metadata") or {}
-            current = meta.get("importance") or 0.5
-            meta["importance"] = min(current + 0.1, 1.0)
-            meta["access_count"] = (meta.get("access_count") or 0) + 1
-
-            await pg_execute_async(
-                SQL_FACT_UPDATE_METADATA,
-                (datetime.now(), Json(meta), e["id"], user_id),
-            )
-
-            new_confidence = e.get("metadata", {}).get("confidence", 0.7)
-            return ok_result(
-                {"status": "duplicate", "confidence": new_confidence},
-                TOOL_DEFINITION,
-                full_command,
-                partner_name,
-            )
-
-    # Insert new fact into semantic_facts
-    fact_id = await MemoryDB.save_fact_async(
-        session_id=session_id,
-        content=fact,
-        embedding=vector,
-        fact_type=FACT_TYPE_STATIC,
-        metadata={
-            "category": category,
-            "entity": "User",
-            "relation": category,
-            "target": fact,
-            "confidence": 0.7,
-            "importance": 0.6,
-            "source_table": "semantic_facts",
-            "session_id": session_id,
-            "access_count": 0,
-        },
-        user_id=user_id,
-    )
-
-    if fact_id:
-        return ok_result(
-            {"status": "stored", "category": category, "fact": fact, "id": fact_id},
-            TOOL_DEFINITION,
-            full_command,
-            partner_name,
-        )
-    else:
+    if not node:
         return error_result(
-            "Failed to store memory",
-            TOOL_DEFINITION,
-            full_command,
-            partner_name,
+            "Failed to store memory", TOOL_DEFINITION, "/memory_store", partner_name
         )
+    return ok_result(
+        {"status": "stored", "category": category, "fact": fact, "id": str(node["id"])},
+        TOOL_DEFINITION,
+        f'/memory_store fact="{fact[:60]}" category={category}',
+        partner_name,
+    )

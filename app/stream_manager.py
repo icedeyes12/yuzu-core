@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from app.orchestrator import handle_user_message_streaming
 from app.tools.schemas import StreamToolEvent
@@ -40,7 +40,7 @@ class StreamBuffer:
         self.user_id = user_id
 
         self.full_content = ""
-        self.queues: List[asyncio.Queue] = []
+        self.queues: List[asyncio.Queue[Any]] = []
         self.lock = asyncio.Lock()
         self.is_finished = False
         self.start_time = time.time()
@@ -151,7 +151,7 @@ class StreamBuffer:
             from app.orchestrator import StreamFence
 
             async with StreamFence._lock:
-                fence = StreamFence._fences.get(self.session_id)
+                fence = StreamFence._fences.get(str(self.session_id))
                 if fence and not fence.get("completed"):
                     fence["completed"] = True
                     log.info(
@@ -166,9 +166,9 @@ class StreamBuffer:
                 e,
             )
 
-    def subscribe(self) -> asyncio.Queue:
+    def subscribe(self) -> asyncio.Queue[Any]:
         """Create a new async queue for a client to consume chunks."""
-        q = asyncio.Queue()
+        q: asyncio.Queue[Any] = asyncio.Queue()
         # If there's already content, push it to the new subscriber
         if self.full_content:
             q.put_nowait(self.full_content)
@@ -233,7 +233,7 @@ class StreamManager:
     Cleanup happens automatically after stream completes (via finally block).
     """
 
-    _streams: Dict[int, StreamBuffer] = {}
+    _streams: Dict[str, StreamBuffer] = {}
     _lock = asyncio.Lock()
     _cleanup_task: Optional[asyncio.Task] = None
 

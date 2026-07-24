@@ -37,7 +37,7 @@ Yuzu Companion is a multi-interface AI companion with:
 - **Native function calling** — `ToolEvent` / `ToolResultEvent` is the only production tool protocol; legacy XML-style markup is stripped as cleanup text
 - **Structured system content** — providers advertising `supports_structured_system_content=True` receive a content-array system message; others fall back to legacy single-string
 - **Tenant-isolated PostgreSQL** — UUIDv7 primary keys, `user_id` FK on every tenant-scoped table, pgvector + pg_trgm extensions
-- **Hybrid memory** — semantic facts, episodic memories, and conversation segments unified in a single `semantic_facts` table; FSRS-inspired retention
+- **Graph memory** — episodes, inferred nodes, relationships, and evidence stored in PostgreSQL with pgvector
 - **BYOK architecture** — API keys live only in browser `localStorage`; the `api_keys` table has been purged
 - **Three interfaces** — Terminal (`cli/app.py` via Rich + prompt_toolkit), Web (`main.py` FastAPI), and programmatic API
 
@@ -54,7 +54,7 @@ graph LR
     E --> F[(PostgreSQL<br/>pgvector + pg_trgm)]
     E --> G[AI Providers<br/>Chutes/OpenRouter/Anthropic/...]
     E --> H[Tools<br/>image_generate/http_request/...]
-    E --> I[Memory<br/>semantic + episodic]
+    E --> I[Memory<br/>graph-backed inferred knowledge]
 ```
 
 ---
@@ -72,7 +72,7 @@ app/
 ├── auth/                       # Cookie session + OAuth helpers
 ├── core/                       # LLMContext, presets, request keyring
 ├── db/                         # psycopg v3 connection + Database facade + queries.py (SSOT SQL)
-├── memory/                     # Embedder, retrieval, extraction, pipeline, FSRS review
+├── memory/                     # Embedder, graph retrieval, extraction, and pipeline
 ├── providers/                  # One file per provider; ProviderCapabilities declarations
 ├── services/                   # SessionService, MemoryService, ChatService, ConfigService
 ├── static/                     # Subdir for additional static assets bundled with the package
@@ -150,7 +150,7 @@ Composes the routers exported by each `app/api/endpoints/*` module into a single
 | --- | --- | --- |
 | `auth.py` | `/api/auth` | Login, logout, session cookie |
 | `chat.py` | `/api/chat` | Synchronous + streaming message handling |
-| `memory.py` | `/api/memory` | Memory stats, decay, rebuild |
+| `memory.py` | `/api/memory` | Graph memory stats and rebuild |
 | `presets_endpoint.py` | `/api/presets` | Preset CRUD + active switching |
 | `profile.py` | `/api/profile` | Profile read + update (settings, providers, advanced params) |
 | `sessions.py` | `/api/sessions` | Session CRUD + auto-rename |
@@ -173,7 +173,7 @@ Single source of truth for SQL strings, schema DDL, encryption helpers, and row 
 - `profiles` — UUIDv7 PK; tenant root
 - `chat_sessions` — UUIDv7 PK; `user_id` FK → `profiles(id)` ON DELETE CASCADE
 - `messages` — SERIAL int PK; `session_id` + `user_id` UUID FKs
-- `semantic_facts` — SERIAL int PK; `user_id` UUID FK; `vector(4096)` embedding (Qwen3-Embedding-8B)
+- `episodes`, `memory_nodes`, `memory_edges`, `memory_evidence` — tenant-scoped graph memory tables with pgvector embeddings
 - `user_identities` — OAuth provider linkage (Google sub / GitHub id)
 - `user_sessions` — session token storage
 
@@ -333,118 +333,56 @@ Each tool module exports a `TOOL_DEFINITION` dict alongside its `execute()` func
 | --- | --- |
 | `app/tools/image_generate.py` | Image generation via Chutes API |
 | `app/tools/http_request.py` | Fetch public HTTPS endpoints with size/type validation |
-| `app/tools/memory_store.py` | Persist semantic facts with LLM-guided categorization |
-| `app/tools/memory_search.py` | Hybrid retrieval across semantic + episodic memories |
+| `app/tools/memory_store.py` | Persist inferred graph nodes with category metadata |
+| `app/tools/memory_search.py` | Search graph nodes and bounded relationships |
 | `app/tools/multimodal.py` | Vision model routing and image caching (non-tool helpers) |
 
 ---
 
-## Memory Architecture (Phase 10 Certified)
+## Memory Architecture
 
-The memory architecture natively restricts all search structures and fact updates via the canonical `user_id`. No multi-tenant bleeds exist.
-
-1. **`file memory/db_memory.py` & `memory/db_memory_facade.py`**: Mandatory gateway for all reads/writes guaranteeing `user_id` encapsulation against pgvector storage.
-2. **`file memory/memory.py`**: Background async worker reading standard `models_async.get_session_messages_after_id_async`. Segments temporal gaps.
-3. **`file memory/embedder.py`**: Asynchronous model adapter (e.g. `Qwen3-Embedding-8B` via Chutes).
-4. **`file memory/extractor.py`**: Parses new segments to deduce structural facts. Overlapping exact matches are intercepted before DB writes.
-5. **`file memory/pcl.py`**: Reduces duplicate knowledge using predictive alignment to maintain finite importance limits.
-6. **`file memory/retrieval.py`**: Re-scoped retrieval using pure DB standard models avoiding legacy pipeline overrides. Single-call hybrid search injected straight into context.
-7. **`file memory/review.py`**: FSRS spaced repetition module processing active/inactive facts sequentially for stability decay calculations.
+Memory is graph-backed inferred knowledge. Raw conversation remains in `messages`; summarized interactions live in `episodes`; inferred claims live in `memory_nodes`; relationships live in `memory_edges`; and provenance lives in `memory_evidence`. Explicit user-managed facts remain separate in `global_knowledge_entries`.
 
 ```mermaid
 flowchart LR
-    A[User Message] --> B[messages table]
-    B --> C{Every 5th turn?}
-    C -->|Yes| D[Check pipeline gates]
-    C -->|No| E[Skip pipeline check]
-    D --> F{Delta >= 40?}
-    F -->|Yes + idle>=3h| G[Split by time/size]
-    F -->|Delta >= 50| H[Force trigger<br/>ignore idle]
-    F -->|No| E
-    H --> G
-    G --> I[semantic_facts<br/>fact_type=dynamic]
-    B --> J[extractor.py<br/>Semantic facts]
-    J --> K[semantic_facts<br/>fact_type=static]
-    J --> L[semantic_facts<br/>fact_type=dynamic<br/>source_table=episodic]
-    I --> M[retrieval.py<br/>pgvector + trgm]
-    K --> M
-    L --> M
-    M --> N[Request Cache<br/>thread-local]
-    N --> O[Context for LLM]
-    O --> P[LLM Response]
-    M --> Q[review.py<br/>FSRS decay]
-    Q -.-> K
-    Q -.-> L
-    E --> O
+    A[User Message] --> B[messages]
+    B --> C{Batch gate}
+    C -->|eligible batch| D[One structured extraction call]
+    D --> E[episodes]
+    D --> F[memory_nodes]
+    D --> G[memory_edges]
+    D --> H[memory_evidence]
+    F --> I[Graph retrieval: pgvector/text + bounded expansion]
+    G --> I
+    I --> J[PromptBuilder]
+    J --> K[LLM response]
 ```
 
-### Memory Layers
+The pipeline runs asynchronously in batches. Retrieval is tenant-scoped, uses exact pgvector search when embeddings are available, falls back to trigram text search, and returns bounded graph expansion. Each retrieved node has explicit confidence, importance, validity, status, and provenance. There is no `semantic_facts` compatibility path, PCL pass, FSRS decay, or LLM review stage.
 
-| Layer | `fact_type` | `metadata.source_table` | Purpose |
-| --- | --- | --- | --- |
-| **Semantic** | `static` | — | Stable facts as (entity, relation, target) triples |
-| **Episodic** | `dynamic` | `episodic_memories` | Summarized interaction events with emotional weight |
-| **Segments** | `dynamic` | `conversation_segments` | Chunked conversation windows for summarization |
+### Ownership
 
-### Pipeline Triggers
-
-| Condition | Threshold | Behavior |
-| --- | --- | --- |
-| **Throttle** | Every 5th turn | Skip pipeline check 80% of turns |
-| **Base trigger** | Delta >= 40 messages + idle >= 3 hours | Normal trigger |
-| **Force trigger** | Delta >= 50 messages | Trigger regardless of idle |
-| **Fence TTL** | 120 minutes | Stale job cleanup |
-
-### Request Caching
-
-Two thread-local caches reduce per-turn overhead:
-
-| Cache | Location | What it Caches |
-| --- | --- | --- |
-| **Memory state** | `app/memory/memory.py` | `get_memory_state()` results |
-| **Embedding** | `app/memory/retrieval.py` | Query embeddings for combined retrieval |
-
-Both cleared at end of each turn via `_clear_embedding_cache()` (and the memory-state equivalent).
-
-### Unified `semantic_facts` Table
-
-All memory types stored in a single PostgreSQL table with pgvector:
-
-```sql
-CREATE TABLE semantic_facts (
-    id SERIAL PRIMARY KEY,
-    session_id UUID,
-    user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-    fact_type VARCHAR(20),  -- 'static' | 'dynamic'
-    content TEXT,
-    embedding VECTOR(4096),   -- Qwen3-Embedding-8B
-    metadata JSONB,           -- confidence, importance, source_table, etc.
-    valid_at TIMESTAMP,       -- When fact became true
-    created_at TIMESTAMP,
-    last_accessed TIMESTAMP,
-    invalid_at TIMESTAMP      -- Soft delete (NULL = active)
-);
-```
-
-### FSRS-Inspired Retention
-
-- Memory **stability** increases with access count
-- **Importance** decays: `importance × exp(-hours/stability)`
-- Frequently retrieved memories become **long-term anchors**
-- Low-importance memories **naturally fade**
+| Component | Responsibility |
+| --- | --- |
+| `messages` | Raw conversation only |
+| `episodes` | Summarized interactions |
+| `memory_nodes` | Inferred persistent claims |
+| `memory_edges` | Relationships |
+| `memory_evidence` | Links to source messages and episodes |
+| `global_knowledge_entries` | Explicit user-managed facts |
+| `app/prompts.py` | Prompt presentation only |
 
 ### Key Modules
 
-| Module | Purpose | Key Exports |
-| --- | --- | --- |
-| `db_memory.py` | Unified CRUD over `semantic_facts` with pgvector search | `save_fact()`, `search_similar()`, `invalidate_fact()` |
-| `retrieval.py` | Hybrid scoring retrieval pipeline | `retrieve_memories_combined()`, `_clear_embedding_cache()` |
-| `extractor.py` | LLM-based semantic + episodic extraction | `upsert_semantic_memory()` |
-| `memory.py` | Background pipeline + batch segmentation | `trigger_memory_pipeline_async()` |
-| `review.py` | FSRS-style decay and reinforcement | `run_decay()`, `reinforce_memory()` |
-| `embedder.py` | Chutes API embedding client | `embed_text()`, `EMBEDDING_DIM=4096` |
-
----
+| Module | Purpose |
+| --- | --- |
+| `memory.py` | Batch gate and asynchronous extraction orchestration |
+| `extractor.py` | One structured extraction pass per eligible batch |
+| `graph.py` | PostgreSQL graph persistence, provenance, and bounded expansion |
+| `retrieval.py` | Graph retrieval and prompt-shaped formatting |
+| `embedder.py` | Chutes embedding client (`EMBEDDING_DIM=4096`) |
+| `tools/memory_store.py` | Explicit tool-driven inferred node creation |
+| `tools/memory_search.py` | Graph search tool |
 
 ## Multimodal System
 
@@ -541,9 +479,9 @@ Session lifecycle is coordinated by `app/services/session_service.py`:
 
 On session start:
 
-1. Run FSRS decay on existing memories
+1. Verify graph nodes, relationships, evidence, and prompt retrieval after migration
 2. Segment unsegmented messages
-3. Extract semantic + episodic memories
+3. Run the asynchronous graph extraction pipeline
 4. Initialize session context
 
 ---
@@ -666,7 +604,6 @@ sequenceDiagram
 # Core
 pycryptodome>=3.20.0    # ChaCha20-Poly1305 encryption
 python-dotenv>=1.0.0    # .env loading
-fsrs>=6.3.1             # Free Spaced Repetition Scheduler for memory decay
 
 # Database
 psycopg[binary,pool]>=3.1  # PostgreSQL adapter (psycopg v3) with pgvector support

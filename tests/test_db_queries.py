@@ -10,8 +10,8 @@ from app.db import (
     parse_json,
     parse_message_row,
     parse_profile_row,
-    parse_session_memory_rows,
     parse_session_row,
+    parse_global_knowledge_row,
 )
 
 
@@ -43,9 +43,7 @@ class TestProfileParsers:
             "partner_name": "Yuzu",
             "affection": 75,
             "theme": "dark",
-            "memory_state": {"x": 1},
             "session_history": {},
-            "global_knowledge": {},
             "providers_config": {"preferred_provider": "chutes"},
             "context": "{}",
             "image_model": "qwen_image",
@@ -56,7 +54,6 @@ class TestProfileParsers:
         out = parse_profile_row(row)
         assert out["user_name"] == "Bani"
         assert out["affection"] == 75
-        assert out["memory"] == {"x": 1}
         assert out["providers_config"] == {"preferred_provider": "chutes"}
 
     def test_parse_profile_row_uses_defaults_for_missing(self):
@@ -64,7 +61,6 @@ class TestProfileParsers:
         assert out["user_name"] == ""
         assert out["affection"] == 50
         assert out["theme"] == "default"
-        assert out["memory"] == {}
 
 
 class TestBuildProfileUpdate:
@@ -80,12 +76,8 @@ class TestBuildProfileUpdate:
         assert "updated_at = %s" in query
         assert params[0] == "new"
 
-    def test_json_field_serializes_dict(self):
-        result = build_profile_update({"memory": {"a": 1}})
-        assert result is not None
-        query, params = result
-        assert "memory_state = %s" in query
-        assert params[0] == '{"a": 1}'
+    def test_global_knowledge_is_not_a_profile_field(self):
+        assert build_profile_update({"global_knowledge": {"facts": []}}) is None
 
     def test_affection_coerced_to_int(self):
         result = build_profile_update({"affection": "99"})
@@ -94,8 +86,8 @@ class TestBuildProfileUpdate:
         assert params[0] == 99
 
     def test_default_profile_params_match_columns(self):
-        # 9 values before timestamp/updated_at (datetimes added by caller at insert time)
-        assert len(DEFAULT_PROFILE_PARAMS) == 9
+        # 7 values before timestamp/updated_at (datetimes added by caller at insert time)
+        assert len(DEFAULT_PROFILE_PARAMS) == 7
 
 
 class TestSessionParsers:
@@ -107,19 +99,6 @@ class TestSessionParsers:
         assert out["name"] == "New Chat"
         assert out["is_active"] is False
         assert out["message_count"] == 0
-        assert out["memory"] == {}
-
-    def test_parse_session_memory_rows_empty(self):
-        assert parse_session_memory_rows([]) == {}
-
-    def test_parse_session_memory_rows_populated(self):
-        rows = [
-            {"content": "hi", "role": "system", "timestamp": "2026-01-01"},
-            {"content": "note", "role": "memory", "timestamp": "2026-01-02"},
-        ]
-        out = parse_session_memory_rows(rows)
-        assert out["count"] == 2
-        assert out["notes"][0]["content"] == "hi"
 
 
 class TestMessageParsers:
@@ -247,3 +226,25 @@ class TestEncryptionStatus:
             "encrypted": 5,
             "policy": "NO_ENCRYPTION",
         }
+
+
+def test_parse_global_knowledge_row():
+    row = {
+        "id": "00000000-0000-7000-8000-000000000001",
+        "category": "Identity",
+        "content": "Bani",
+        "sort_order": 2,
+        "enabled": 1,
+        "created_at": None,
+        "updated_at": None,
+    }
+    out = parse_global_knowledge_row(row)
+    assert out == {
+        "id": "00000000-0000-7000-8000-000000000001",
+        "category": "Identity",
+        "content": "Bani",
+        "sort_order": 2,
+        "enabled": True,
+        "created_at": None,
+        "updated_at": None,
+    }

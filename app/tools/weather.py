@@ -109,7 +109,7 @@ def _parse_date(value: str | None) -> date | None:
 
 def _condition(code: object) -> str:
     try:
-        return _WMO_CONDITIONS.get(int(code), "Unknown")
+        return _WMO_CONDITIONS.get(int(str(code)), "Unknown")
     except (TypeError, ValueError):
         return "Unknown"
 
