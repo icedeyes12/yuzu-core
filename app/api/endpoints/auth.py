@@ -43,7 +43,7 @@ def _require_env(name: str) -> str:
 
 
 @router.get("/login")
-async def login(provider: str = "google"):
+async def login(request: Request, provider: str = "google"):
     config = get_provider(provider)
     if not config:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
@@ -52,11 +52,21 @@ async def login(provider: str = "google"):
     redirect_uri = _require_env(config.redirect_uri_env)
     session_secret = _require_env("SESSION_SECRET")
 
+    # Capture the origin (where the login request came from) to redirect back to it after callback
+    # We read the Referer header to know the origin (e.g., http://localhost:5000)
+    origin = request.headers.get("referer")
+    if not origin:
+        # Fallback to host header
+        origin = f"{request.url.scheme}://{request.url.netloc}"
+
     code_verifier, code_challenge = generate_pkce()
-    state = sign_state(provider, code_verifier, session_secret)
+    state = sign_state(provider, code_verifier, session_secret, origin)
     auth_url = build_auth_url(config, client_id, redirect_uri, code_challenge, state)
 
-    log.info("OAuth login: provider=%s redirect_uri='%s'", provider, redirect_uri)
+    # Determine secure cookie attribute based on connection type or configuration
+    is_secure = _COOKIE_SECURE or request.url.scheme == "https"
+
+    log.info("OAuth login: provider=%s redirect_uri='%s' origin='%s' is_secure=%s", provider, redirect_uri, origin, is_secure)
 
     response = RedirectResponse(url=auth_url, status_code=302)
     response.set_cookie(
@@ -64,7 +74,7 @@ async def login(provider: str = "google"):
         value=state,
         max_age=600,
         httponly=True,
-        secure=_COOKIE_SECURE,
+        secure=is_secure,
         samesite="lax",
         path="/",
     )
@@ -76,18 +86,33 @@ async def callback(request: Request):
     code = request.query_params.get("code")
     state = request.query_params.get("state")
     if not code or not state:
+        log.warning("OAuth Callback missing code or state")
         raise HTTPException(status_code=400, detail="Missing code or state")
 
     state_cookie = request.cookies.get(OAUTH_STATE_COOKIE_NAME)
     session_secret = _require_env("SESSION_SECRET")
-    if not state_cookie or state_cookie != state:
+    
+    log.info(
+        "OAuth Callback: query_state='%s', state_cookie='%s', request_cookies=%s",
+        state,
+        state_cookie,
+        list(request.cookies.keys()),
+    )
+
+    if not state_cookie:
+        log.error("OAuth State mismatch: state cookie is missing")
+        raise HTTPException(status_code=400, detail="State mismatch")
+
+    if state_cookie != state:
+        log.error("OAuth State mismatch: cookie '%s' does not match query '%s'", state_cookie, state)
         raise HTTPException(status_code=400, detail="State mismatch")
 
     verified = verify_state(state, session_secret)
     if not verified:
+        log.error("OAuth State invalid or expired: state='%s'", state)
         raise HTTPException(status_code=400, detail="Invalid or expired state")
 
-    provider_name, code_verifier = verified
+    provider_name, code_verifier, origin = verified
     config = get_provider(provider_name)
     if not config:
         raise HTTPException(status_code=400, detail="Unknown provider in state")
@@ -117,7 +142,16 @@ async def callback(request: Request):
     )
     token = await create_session(user_id)
 
+    # Determine redirection target: if login originated from somewhere else (e.g. localhost:5000), redirect back to it
     redirect_target = "/chat"
+    if origin:
+        try:
+            from urllib.parse import urljoin
+            redirect_target = urljoin(origin, "/chat")
+        except Exception:
+            pass
+
+    log.info("OAuth successful. Redirecting user to: %s", redirect_target)
     response = RedirectResponse(url=redirect_target, status_code=302)
     set_session_cookie(response, token)
     response.delete_cookie(key=OAUTH_STATE_COOKIE_NAME, path="/")

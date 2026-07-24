@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from psycopg import OperationalError
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 # Import psycopg errors for exception handling
 from psycopg_pool import PoolTimeout
@@ -22,10 +23,7 @@ from fastapi import HTTPException  # noqa: E402
 
 from app.api import api_router  # noqa: E402
 from app.auth.session import SESSION_COOKIE_NAME, validate_session  # noqa: E402
-from app.db import (
-    Database,  # noqa: E402
-    init_pg_tables_async,  # noqa: E402
-)
+from app.db import Database, init_pg_tables_async  # noqa: E402
 from app.db.connection import (  # noqa: E402
     close_async_pool,
     get_async_pool,
@@ -102,6 +100,9 @@ app = FastAPI(
         OperationalError: None,
     },
 )
+
+# Trust proxy headers (e.g. X-Forwarded-Proto, X-Forwarded-For) from reverse proxies like Cloudflare
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 
 # ---------------------------------------------------------------------------
