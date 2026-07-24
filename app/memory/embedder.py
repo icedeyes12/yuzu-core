@@ -1,8 +1,9 @@
-import os
-import httpx
 import asyncio
-from app.providers.base import _rate_limit_provider
+import os
 
+import httpx
+
+from app.providers.base import _rate_limit_provider
 
 CHUTES_EMBED_ENDPOINT = (
     "https://chutes-qwen-qwen3-embedding-8b-tee.chutes.ai/v1/embeddings"

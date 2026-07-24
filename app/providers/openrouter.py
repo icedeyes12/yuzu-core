@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import AsyncGenerator
+
 import httpx
-from typing import AsyncGenerator
-from app.providers.base import AIProvider, ProviderCapabilities
+
 from app.core.llm_context import LLMContext
+from app.providers.base import AIProvider, ProviderCapabilities
 from app.tools import multimodal_tools
 from app.tools.schemas import StreamToolEvent
 

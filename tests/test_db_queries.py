@@ -7,11 +7,11 @@ from app.db import (
     format_ai_history_rows,
     format_conversation_summary,
     parse_event_row,
+    parse_global_knowledge_row,
     parse_json,
     parse_message_row,
     parse_profile_row,
     parse_session_row,
-    parse_global_knowledge_row,
 )
 
 

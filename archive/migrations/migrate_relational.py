@@ -9,10 +9,11 @@ Set these before running:
 Run from yuzu-companion/ directory.
 """
 
-import sqlite3
-import psycopg2
 import json
 import os
+import sqlite3
+
+import psycopg2
 
 SQLITE_DB = "app/yuzu_core.db"
 

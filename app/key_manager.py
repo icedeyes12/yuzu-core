@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-
 import argparse
 import sys
+
 from app.encryption import encryptor
 from app.logging_config import get_logger
+
 # from app.backup import BackupManager  # backup module not present
 
 

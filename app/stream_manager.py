@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Dict, List, Optional, Any
+from typing import Any
 
 from app.orchestrator import handle_user_message_streaming
 from app.tools.schemas import StreamToolEvent
@@ -26,10 +26,10 @@ class StreamBuffer:
         session_id: str,
         user_message: str,
         interface: str = "web",
-        provider: Optional[str] = None,
-        model: Optional[str] = None,
-        attachments: Optional[List[str]] = None,
-        user_id: Optional[str] = None,
+        provider: str | None = None,
+        model: str | None = None,
+        attachments: list[str] | None = None,
+        user_id: str | None = None,
     ):
         self.session_id = session_id
         self.user_message = user_message
@@ -40,12 +40,12 @@ class StreamBuffer:
         self.user_id = user_id
 
         self.full_content = ""
-        self.queues: List[asyncio.Queue[Any]] = []
+        self.queues: list[asyncio.Queue[Any]] = []
         self.lock = asyncio.Lock()
         self.is_finished = False
         self.start_time = time.time()
         self.last_activity = self.start_time
-        self.error: Optional[str] = None
+        self.error: str | None = None
         self.turn_id: str = ""  # current turn correlation ID
         self.has_tools = False
 
@@ -233,9 +233,9 @@ class StreamManager:
     Cleanup happens automatically after stream completes (via finally block).
     """
 
-    _streams: Dict[str, StreamBuffer] = {}
+    _streams: dict[str, StreamBuffer] = {}
     _lock = asyncio.Lock()
-    _cleanup_task: Optional[asyncio.Task] = None
+    _cleanup_task: asyncio.Task | None = None
 
     @classmethod
     async def start_stream(
@@ -243,10 +243,10 @@ class StreamManager:
         session_id: str,
         user_message: str,
         interface: str = "web",
-        provider: Optional[str] = None,
-        model: Optional[str] = None,
-        attachments: Optional[List[str]] = None,
-        user_id: Optional[str] = None,
+        provider: str | None = None,
+        model: str | None = None,
+        attachments: list[str] | None = None,
+        user_id: str | None = None,
     ) -> StreamBuffer:
         """Start a new stream or return an existing one."""
         async with cls._lock:
@@ -276,7 +276,7 @@ class StreamManager:
             return stream
 
     @classmethod
-    async def get_stream(cls, session_id: str) -> Optional[StreamBuffer]:
+    async def get_stream(cls, session_id: str) -> StreamBuffer | None:
         """Get an active stream for a session."""
         async with cls._lock:
             return cls._streams.get(session_id)

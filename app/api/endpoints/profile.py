@@ -1,21 +1,22 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Depends, Request
-import httpx
-from pydantic import BaseModel, Field
 from uuid import UUID
 
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
+
+from app.api.utils import get_current_user
 from app.db import (
     Database,
-    get_profile_async,
     get_active_session_async,
     get_chat_history_async,
+    get_profile_async,
     update_profile_async,
 )
-from app.api.utils import get_current_user
-from app.services.config_service import ConfigService
-from app.providers import get_ai_manager
 from app.logging_config import get_logger
+from app.providers import get_ai_manager
+from app.services.config_service import ConfigService
 
 log = get_logger(__name__)
 
@@ -232,8 +233,8 @@ async def api_test_provider_connection(
     user_id: str = Depends(get_current_user),
 ):
     try:
-        from app.core.context import set_request_keyrings, clear_request_keyring
         from app.api.endpoints.chat import _extract_keyrings
+        from app.core.context import clear_request_keyring, set_request_keyrings
 
         keyrings = _extract_keyrings(request)
         if keyrings:

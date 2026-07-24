@@ -1,6 +1,9 @@
 from __future__ import annotations
+
 import pytest
-from app.tools.python_exec import execute as python_execute, TOOL_DEFINITION
+
+from app.tools.python_exec import TOOL_DEFINITION
+from app.tools.python_exec import execute as python_execute
 
 
 def test_tool_definition_exists():

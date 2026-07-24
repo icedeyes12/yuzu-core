@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import atexit
 import os
-from typing import Any, Self
 from pathlib import Path
+from typing import Any, Self
 
 from dotenv import load_dotenv
 from psycopg.rows import dict_row

@@ -1,7 +1,8 @@
-import aiohttp
 import asyncio
 import json
 import os
+
+import aiohttp
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,7 +15,7 @@ async def invoke_chute():
         return
 
     try:
-        with open("app/prompt.md", "r", encoding="utf-8") as f:
+        with open("app/prompt.md", encoding="utf-8") as f:
             system_message_content = f.read()
     except FileNotFoundError:
         print("Error: app/prompt.md not found in the current directory")

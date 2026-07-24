@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-
-from typing import Any, Optional
-import logging
 import asyncio
+import logging
 import time
+from typing import Any
 
 from app.tools.schemas import (
     ToolCallEvent,
@@ -214,8 +213,8 @@ def get_tool_definition(name: str):
 async def execute_tool(
     tool_name: str,
     arguments: dict,
-    session_id: Optional[str] = None,
-    user_id: Optional[str] = None,
+    session_id: str | None = None,
+    user_id: str | None = None,
 ) -> dict:
     """Dispatch a tool call and return a structured result dict (async).
 
@@ -348,8 +347,8 @@ def get_all_capabilities() -> dict[str, dict[str, bool]]:
 
 async def execute_tool_event(
     call_event: ToolCallEvent,
-    session_id: Optional[str] = None,
-    user_id: Optional[str] = None,
+    session_id: str | None = None,
+    user_id: str | None = None,
 ) -> ToolResultEvent:
     """Execute a ToolCallEvent and return a ToolResultEvent.
 

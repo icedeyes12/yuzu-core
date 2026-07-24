@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from app.core import presets as presets_mod
 
 

@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-
+import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, Request
-from fastapi.responses import HTMLResponse, FileResponse
+
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-import os
+from psycopg import OperationalError
 
 # Import psycopg errors for exception handling
 from psycopg_pool import PoolTimeout
-from psycopg import OperationalError
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -18,14 +18,21 @@ from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-from app.db import Database  # noqa: E402
-from app.db import init_pg_tables_async  # noqa: E402
-from app.db.connection import get_sync_pool, get_async_pool, close_async_pool  # noqa: E402
-from app.api import api_router  # noqa: E402
-from app.services.session_service import SessionService  # noqa: E402, F401
-from app.auth.session import SESSION_COOKIE_NAME, validate_session  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
+
+from app.api import api_router  # noqa: E402
+from app.auth.session import SESSION_COOKIE_NAME, validate_session  # noqa: E402
+from app.db import (
+    Database,  # noqa: E402
+    init_pg_tables_async,  # noqa: E402
+)
+from app.db.connection import (  # noqa: E402
+    close_async_pool,
+    get_async_pool,
+    get_sync_pool,
+)
 from app.logging_config import get_logger  # noqa: E402
+from app.services.session_service import SessionService  # noqa: E402, F401
 
 log = get_logger(__name__)
 
@@ -106,7 +113,7 @@ def _render_offline_page() -> str:
     """Read and return the offline.html template."""
     offline_path = os.path.join(BASE_DIR, "templates", "offline.html")
     if os.path.exists(offline_path):
-        with open(offline_path, "r") as f:
+        with open(offline_path) as f:
             return f.read()
     # Fallback inline HTML
     return """
@@ -136,7 +143,7 @@ async def operational_error_handler(request: Request, exc: OperationalError):
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc: Exception):
     """Handle 404 Not Found - redirect to home gracefully."""
-    from fastapi.responses import RedirectResponse, JSONResponse
+    from fastapi.responses import JSONResponse, RedirectResponse
 
     # Only redirect HTML requests
     if request.headers.get("accept", "").find("text/html") >= 0:
@@ -213,8 +220,9 @@ async def get_user_for_html(request: Request):
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    from app.auth.session import SESSION_COOKIE_NAME, validate_session
     from fastapi.responses import RedirectResponse
+
+    from app.auth.session import SESSION_COOKIE_NAME, validate_session
 
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if token:
@@ -286,7 +294,7 @@ async def about_page(request: Request, user_id: str = Depends(get_user_for_html)
 async def serve_sidebar():
     sidebar_path = os.path.join(BASE_DIR, "templates", "sidebar.html")
     if os.path.exists(sidebar_path):
-        with open(sidebar_path, "r") as f:
+        with open(sidebar_path) as f:
             return HTMLResponse(f.read())
 
     fallback = """<div class="sidebar" id="mainSidebar">

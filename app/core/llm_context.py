@@ -28,7 +28,7 @@ class LLMContext:
         profile: dict[str, Any],
         override_provider: str | None = None,
         override_model: str | None = None,
-    ) -> "LLMContext":
+    ) -> LLMContext:
         """
         Build the LLMContext by merging User Preferences (from DB profile)
         with User Credentials (from BYOK RequestKeyring) and App Config (env vars).

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Depends
-from app.db import Database
+from fastapi import APIRouter, Depends, HTTPException
+
 from app.api.utils import get_current_user
-from app.services.memory_service import MemoryService
+from app.db import Database
 from app.logging_config import get_logger
+from app.services.memory_service import MemoryService
 
 log = get_logger(__name__)
 

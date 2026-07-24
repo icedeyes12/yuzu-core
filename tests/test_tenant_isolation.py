@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from app.db import queries as queries_mod
 
 

@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Iterable
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator, Iterable
+from typing import Any
 
 import httpx
 
+from app.core.llm_context import LLMContext
 from app.db import Database
 from app.logging_config import get_logger
 from app.prompts import build_messages
 from app.providers import get_ai_manager
 from app.providers.base import _rate_limit_provider
-from app.tools.schemas import StreamToolEvent
 from app.tools.registry import get_tool_schemas
-from app.core.llm_context import LLMContext
+from app.tools.schemas import StreamToolEvent
 
 log = get_logger(__name__)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any
 
@@ -9,12 +10,17 @@ from app.db.connection import (
     pg_fetchall_async,
     pg_fetchone_async,
 )
-from app.db.queries import TOOL_ROLES, ALL_TOOL_ROLES
 from app.db.queries import (
+    ALL_TOOL_ROLES,
     DEFAULT_PROFILE_PARAMS,
     SCHEMA_DDL,
     SQL_ENC_ENCRYPTED_MESSAGES,
     SQL_ENC_TOTAL_MESSAGES,
+    SQL_GLOBAL_KNOWLEDGE_DELETE,
+    SQL_GLOBAL_KNOWLEDGE_GET,
+    SQL_GLOBAL_KNOWLEDGE_INSERT,
+    SQL_GLOBAL_KNOWLEDGE_LIST,
+    SQL_GLOBAL_KNOWLEDGE_UPDATE,
     SQL_MESSAGE_CONVERSATION_SUMMARY,
     SQL_MESSAGE_COUNT_CONVERSATIONAL,
     SQL_MESSAGE_DELETE_FOR_SESSION,
@@ -22,14 +28,16 @@ from app.db.queries import (
     SQL_MESSAGE_HISTORY_FOR_AI_ASC_LIMIT,
     SQL_MESSAGE_HISTORY_FOR_AI_DESC_LIMIT,
     SQL_MESSAGE_INSERT,
+    SQL_MESSAGE_SELECT_AFTER_ID,
     SQL_MESSAGE_SELECT_ASC_ALL,
     SQL_MESSAGE_SELECT_ASC_LIMIT,
-    SQL_MESSAGE_SELECT_AFTER_ID,
     SQL_MESSAGE_SELECT_CONTENT_BY_ID,
     SQL_MESSAGE_SELECT_DESC_LIMIT,
     SQL_MESSAGE_SELECT_ENCRYPTED,
     SQL_MESSAGE_UPDATE,
     SQL_MESSAGE_UPDATE_DECRYPTED,
+    SQL_PIPELINE_STATE_SELECT,
+    SQL_PIPELINE_STATE_UPDATE,
     SQL_PROFILE_INSERT_DEFAULT,
     SQL_PROFILE_SELECT_BY_ID,
     SQL_SESSION_ACTIVATE_ONE_SCOPED,
@@ -39,29 +47,21 @@ from app.db.queries import (
     SQL_SESSION_INSERT,
     SQL_SESSION_RENAME_SCOPED,
     SQL_SESSION_RESET_COUNT,
-    SQL_PIPELINE_STATE_SELECT,
-    SQL_PIPELINE_STATE_UPDATE,
-    SQL_GLOBAL_KNOWLEDGE_LIST,
-    SQL_GLOBAL_KNOWLEDGE_GET,
-    SQL_GLOBAL_KNOWLEDGE_INSERT,
-    SQL_GLOBAL_KNOWLEDGE_UPDATE,
-    SQL_GLOBAL_KNOWLEDGE_DELETE,
     SQL_SESSION_SELECT_ACTIVE_FOR_USER,
     SQL_SESSION_SELECT_ALL_FOR_USER,
     SQL_SESSIONS_RECENT_ACTIVE,
+    TOOL_ROLES,
     build_encryption_status,
     build_profile_update,
     format_ai_history_rows,
     format_conversation_summary,
     format_session_event,
+    parse_global_knowledge_row,
     parse_message_row,
     parse_profile_row,
-    parse_global_knowledge_row,
     parse_session_row,
 )
 from app.logging_config import get_logger
-
-import json
 
 log = get_logger(__name__)
 

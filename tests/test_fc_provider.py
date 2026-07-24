@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
+from app.core.llm_context import LLMContext
 from app.providers.base import ProviderCapabilities
 from app.tools.schemas import StreamToolEvent
-from app.core.llm_context import LLMContext
 
 
 class TestProviderCapabilities:

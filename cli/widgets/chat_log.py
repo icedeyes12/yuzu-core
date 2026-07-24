@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+
 from rich.markdown import Markdown
 from textual.containers import ScrollableContainer
 from textual.widgets import Static

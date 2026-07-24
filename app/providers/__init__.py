@@ -1,23 +1,23 @@
 from __future__ import annotations
 
+from app.providers.anthropic import AnthropicProvider
 from app.providers.base import (
     AIProviderManager,
+    ProviderCapabilities,
     get_ai_manager,
     reload_ai_manager,
-    ProviderCapabilities,
 )
-from app.providers.ollama import OllamaProvider
 from app.providers.cerebras import CerebrasProvider
-from app.providers.openrouter import OpenRouterProvider
 from app.providers.chutes import ChutesProvider
-from app.providers.openai import OpenAIProvider
-from app.providers.groq import GroqProvider
-from app.providers.deepseek import DeepSeekProvider
-from app.providers.grok import GrokProvider
-from app.providers.anthropic import AnthropicProvider
-from app.providers.custom_openai import CustomOpenAIProvider
 from app.providers.custom_anthropic import CustomAnthropicProvider
+from app.providers.custom_openai import CustomOpenAIProvider
+from app.providers.deepseek import DeepSeekProvider
 from app.providers.google import GoogleProvider
+from app.providers.grok import GrokProvider
+from app.providers.groq import GroqProvider
+from app.providers.ollama import OllamaProvider
+from app.providers.openai import OpenAIProvider
+from app.providers.openrouter import OpenRouterProvider
 
 
 # Override load_providers to register actual provider implementations

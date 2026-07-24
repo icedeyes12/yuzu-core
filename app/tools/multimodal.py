@@ -1,13 +1,16 @@
 from __future__ import annotations
-import logging
-import requests
+
 import base64
+import hashlib
+import logging
+import os
 import re
 import time
-import os
-import hashlib
 from pathlib import Path
-from typing import Any, List, Dict, Optional, Tuple
+from typing import Any
+
+import requests
+
 from app.core.llm_context import LLMContext
 
 logger = logging.getLogger(__name__)
@@ -45,11 +48,11 @@ class MultimodalTools:
         # Ensure cache directory exists
         self.IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    def get_available_vision_models(self, provider: str) -> List[str]:
+    def get_available_vision_models(self, provider: str) -> list[str]:
         """Get list of available vision models for a provider."""
         return self.vision_models.get(provider, [])
 
-    def get_provider_endpoint(self, provider: str) -> Optional[str]:
+    def get_provider_endpoint(self, provider: str) -> str | None:
         return self.provider_endpoints.get(provider)
 
     def is_vision_model(self, model_name: str, provider: str | None = None) -> bool:
@@ -87,7 +90,7 @@ class MultimodalTools:
         for key in expired_keys:
             del self.image_cache[key]
 
-    def download_image_to_cache(self, url: str) -> Optional[str]:
+    def download_image_to_cache(self, url: str) -> str | None:
         """Download an image from *url*, save it under ``IMAGE_CACHE_DIR`` and
         return the local file path.  The filename is derived from a SHA-1 hash
         of the URL so repeated downloads are avoided."""
@@ -135,7 +138,7 @@ class MultimodalTools:
             return None
 
     @staticmethod
-    def encode_image_to_base64(filepath: str) -> Optional[Dict]:
+    def encode_image_to_base64(filepath: str) -> dict | None:
         """Read a local image file and return an OpenAI-compatible
         ``image_url`` content block with a ``data:`` URI."""
         if not os.path.isfile(filepath):
@@ -156,7 +159,7 @@ class MultimodalTools:
 
         return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}}
 
-    def extract_image_urls(self, text: str) -> List[str]:
+    def extract_image_urls(self, text: str) -> list[str]:
         url_pattern = r'https?://[^\s<>"\'{}]{1,500}'
         urls = re.findall(url_pattern, text, re.IGNORECASE)
 
@@ -293,7 +296,7 @@ class MultimodalTools:
 
         return len(urls) > 0
 
-    def download_and_encode_image(self, image_url: str) -> Optional[Dict]:
+    def download_and_encode_image(self, image_url: str) -> dict | None:
         """Download and encode image with caching support"""
         # Clean expired cache entries
         self._clean_cache()
@@ -335,7 +338,7 @@ class MultimodalTools:
 
     def format_vision_message(
         self, user_message: str, provider: str | None = None
-    ) -> List[Dict]:
+    ) -> list[dict]:
         image_sources = self._extract_image_sources(user_message)
 
         if not image_sources:
@@ -375,7 +378,7 @@ class MultimodalTools:
 
         return [{"role": "user", "content": content}]
 
-    def _extract_image_sources(self, text: str) -> List[str]:
+    def _extract_image_sources(self, text: str) -> list[str]:
         """Extract image sources from text.  Returns local file paths for
         on-disk images and URLs for remote images."""
         import re
@@ -489,7 +492,7 @@ class MultimodalTools:
         provider: str = "chutes",
         model: str | None = None,
         size: str = "1024x1024",
-    ) -> Tuple[Optional[str], Optional[str]]:
+    ) -> tuple[str | None, str | None]:
         """Generate an image using the tool registry (single source of truth)."""
         from app.tools.registry import execute_tool
 
@@ -505,7 +508,7 @@ class MultimodalTools:
             return None, "No image path in result"
         return None, result.get("error", "Image generation failed")
 
-    def get_best_vision_provider(self) -> Tuple[Optional[str], Optional[str]]:
+    def get_best_vision_provider(self) -> tuple[str | None, str | None]:
         """Get the best available vision provider and model.
 
         Priority:
@@ -609,7 +612,7 @@ class MultimodalTools:
         vision_provider, vision_model = self.get_best_vision_provider()
         return vision_provider is not None
 
-    def detect_uploaded_images(self, text: str) -> List[str]:
+    def detect_uploaded_images(self, text: str) -> list[str]:
         upload_patterns = [
             r"static/uploads/\d{8}_\d{6}_\d+_[^\s\)]{0,200}",
             r"static/generated_images/\d{8}_\d{6}_[^\s\)]{0,200}",

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Remove near-duplicate facts keeping the newest (highest id)."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from app.db import pg_fetchall, pg_execute
+from app.db import pg_execute, pg_fetchall
 
 
 def dedupe(fact_type):

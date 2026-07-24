@@ -3,14 +3,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import AsyncIterator
-from pathlib import Path
+from collections.abc import AsyncIterator
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import UploadFile
 
-from app.orchestrator import handle_user_message
 from app.db import Database
+from app.orchestrator import handle_user_message
 from app.stream_manager import StreamManager
 
 log = logging.getLogger(__name__)

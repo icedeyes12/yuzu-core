@@ -10,11 +10,12 @@ Usage:
     yuzu --seal --sig "custom" "hai"  # both signature and seal
 """
 
-import os
 import argparse
-import requests
-import json
 import datetime
+import json
+import os
+
+import requests
 
 DEFAULT_URL = os.getenv("YUZU_BACKEND_URL", "http://localhost:5000")
 DEFAULT_SESSION = 37

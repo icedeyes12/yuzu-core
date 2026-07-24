@@ -15,7 +15,9 @@ of the form:
 from __future__ import annotations
 
 import pytest
-from app.tools.shell_exec import execute as bash_execute, TOOL_DEFINITION
+
+from app.tools.shell_exec import TOOL_DEFINITION
+from app.tools.shell_exec import execute as bash_execute
 
 
 def test_tool_definition_exists():

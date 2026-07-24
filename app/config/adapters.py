@@ -23,7 +23,7 @@ def runtime_context_from_request(
     provider: str,
     model: str,
     request: Any,
-    preferences: "UserPreferences | None" = None,
+    preferences: UserPreferences | None = None,
 ) -> RuntimeContext:
     return RuntimeContext.from_request(provider, model, request, preferences)
 
