@@ -77,14 +77,14 @@ def generate_pkce() -> tuple[str, str]:
     return verifier, challenge
 
 
-def sign_state(provider: str, verifier: str, secret: str) -> str:
-    payload = json.dumps({"p": provider, "v": verifier, "t": int(time.time())})
+def sign_state(provider: str, verifier: str, secret: str, origin: str | None = None) -> str:
+    payload = json.dumps({"p": provider, "v": verifier, "t": int(time.time()), "o": origin})
     token = base64.urlsafe_b64encode(payload.encode()).decode()
     sig = hmac.new(secret.encode(), token.encode(), hashlib.sha256).hexdigest()
     return f"{token}.{sig}"
 
 
-def verify_state(state: str, secret: str) -> tuple[str, str] | None:
+def verify_state(state: str, secret: str) -> tuple[str, str, str | None] | None:
     try:
         token_b64, sig = state.rsplit(".", 1)
         expected = hmac.new(
@@ -95,7 +95,7 @@ def verify_state(state: str, secret: str) -> tuple[str, str] | None:
         payload = json.loads(base64.urlsafe_b64decode(token_b64))
         if int(time.time()) - payload["t"] > _OAUTH_STATE_MAX_AGE:
             return None
-        return payload["p"], payload["v"]
+        return payload["p"], payload["v"], payload.get("o")
     except Exception:
         return None
 
