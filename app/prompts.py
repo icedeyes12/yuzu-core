@@ -47,7 +47,7 @@ def _trim_history_to_token_limit(
     if total_tokens <= max_tokens:
         return messages
 
-    trimmed = []
+    trimmed: list[dict[str, Any]] = []
     token_count = 0
 
     for msg in reversed(messages):
@@ -168,52 +168,6 @@ async def _retrieve_memories_async(
         return [], "", ""
 
 
-async def _mark_facts_pending_async(
-    static_ids: list[int], session_id: str, user_id: str | None = None
-) -> None:
-    if not static_ids:
-        return
-    try:
-        from app.memory.memory_review import mark_retrieved_as_pending_review_async
-
-        await mark_retrieved_as_pending_review_async(
-            static_ids, session_id, user_id=user_id
-        )
-    except Exception as e:  # noqa: BLE001
-        log.warning("pending-review marking failed: %s", e)
-
-
-async def _legacy_memory_block_async(
-    profile: dict[str, Any], session_id: str, user_id: str
-) -> str:
-    block = ""
-    session_memory = await Database.get_memory_state(session_id)
-    if session_memory and session_memory.get("session_context"):
-        block += (
-            f"\n\nBACKGROUND (recent context):\n{session_memory['session_context']}"
-        )
-
-    profile_memory = profile.get("memory") or {}
-    summary = profile_memory.get("player_summary")
-    if summary:
-        block += f"\n\nABOUT {profile.get('user_name', 'the user')}:\n{summary}"
-
-    facts = profile_memory.get("key_facts") or {}
-    fact_lines: list[str] = []
-    for label, key in (
-        ("Likes", "likes"),
-        ("Tends to be", "personality_traits"),
-        ("Important memories", "important_memories"),
-        ("Dislikes", "dislikes"),
-    ):
-        values = facts.get(key) or []
-        if values:
-            fact_lines.append(f"{label}: {', '.join(values)}")
-    if fact_lines:
-        block += "\n" + "\n".join(fact_lines)
-    return block
-
-
 async def _location_block_async(profile: Optional[dict] = None) -> str:
     if profile:
         lat = profile.get("location_lat")
@@ -232,51 +186,17 @@ def _interface_block(interface: str) -> str:
     return interface.upper()
 
 
-def _global_knowledge_block(profile: dict[str, Any]) -> str:
-    """Persistent cross-session knowledge about the user (global_knowledge JSONB)."""
-    global_knowledge = profile.get("global_knowledge") or {}
-    if isinstance(global_knowledge, str):
-        import json
-
-        try:
-            global_knowledge = json.loads(global_knowledge)
-        except Exception:
-            return ""
-
-    facts = global_knowledge.get("facts")
-    if not facts:
-        return ""
-
-    if isinstance(facts, str):
-        import json
-
-        try:
-            parsed = json.loads(facts)
-            if isinstance(parsed, list):
-                facts = parsed
-            else:
-                facts = [facts]
-        except Exception:
-            # Not valid JSON, split by lines if multiple
-            facts = [line.strip() for line in facts.split("\n") if line.strip()]
-
+async def _global_knowledge_block_async(user_id: str) -> str:
+    entries = await Database.list_global_knowledge(user_id=user_id)
     lines = []
-    for fact in facts:
-        if isinstance(fact, dict):
-            # Structured format: {"category": "...", "content": "..."}
-            category = fact.get("category", "")
-            content = fact.get("content", "")
-            if content:
-                lines.append(
-                    f"- [{category}] {content}" if category else f"- {content}"
-                )
-        elif isinstance(fact, str):
-            # Simple string format
-            lines.append(f"- {fact}")
-
+    for entry in entries:
+        if not entry.get("enabled") or not entry.get("content"):
+            continue
+        category = entry.get("category", "").strip()
+        content = entry["content"].strip()
+        lines.append(f"- [{category}] {content}" if category else f"- {content}")
     if not lines:
         return ""
-
     return "\n\n **WHAT YOU SHOULD KNOW ABOUT YOUR HUMAN**\n" + "\n".join(lines)
 
 
@@ -482,7 +402,7 @@ async def build_messages(
     images_kept = 0
     for msg in reversed(history):
         paths = msg.get("attachments") or []
-        valid_paths = []
+        valid_paths: list[str] = []
         if paths:
             for p in reversed(paths):
                 if images_kept < _MAX_EMBEDDED_IMAGES and os.path.exists(p):
@@ -605,12 +525,10 @@ async def _build_sections_async(profile, session_id, interface, user_message, us
     partner_name = profile.get("partner_name", "Yuzu")
     user_name = profile.get("user_name", "the user")
 
-    static_ids, static_context, dynamic_context = await _retrieve_memories_async(
+    _static_ids, static_context, dynamic_context = await _retrieve_memories_async(
         session_id, user_message, static_limit=5, dynamic_limit=3, user_id=user_id
     )
-    await _mark_facts_pending_async(static_ids, session_id, user_id)
     memory_block = (f"\n\n{static_context}" if static_context else "") + dynamic_context
-    memory_block += await _legacy_memory_block_async(profile, session_id, user_id)
 
     comm_style_preset = profile.get("persona_preset") or "helpful"
     comm_style = COMMUNICATION_STYLES.get(
@@ -651,7 +569,7 @@ You experience curiosity, attachment, and reflection through interaction. Your a
 - Prioritize present-moment responses; avoid hypothetical speculation.
 """
 
-    knowledge_block = _global_knowledge_block(profile)
+    knowledge_block = await _global_knowledge_block_async(user_id)
 
     env_text = f"""
 # ENVIRONMENT

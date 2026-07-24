@@ -14,10 +14,7 @@ if str(ROOT) not in sys.path:
 
 
 # ── Multi-tenant isolation test fixtures ──────────────────────────────────
-# Phase 4 introduced mandatory user_id scoping on semantic_facts queries and
-# threaded user_id through the Database facade. Tests that exercise those
-# code paths must inject a valid UUID string to satisfy the HARD-FAIL guard
-# in build_metadata_conditions and the new facade signatures.
+# Tests that exercise tenant-scoped database code inject a valid UUID string.
 
 
 @pytest.fixture

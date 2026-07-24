@@ -29,6 +29,7 @@ class MissingProviderKeyError(Exception):
 
     def __init__(self, provider_name: str):
         self.provider_name = provider_name
+        self.provider = provider_name
         super().__init__(
             f"No API key available for provider '{provider_name}'. "
             f"Set your key in the client (BYOK) or configure "
@@ -54,3 +55,17 @@ def get_request_keyring(provider_name: str) -> RequestKeyring | None:
 def clear_request_keyring() -> None:
     """Unbind the keyring — call in finally to prevent cross-request leakage."""
     _keyring_ctx.set({})
+
+
+def resolve_api_key(provider: str) -> str | None:
+    """Resolve a provider key from the process environment."""
+    import os
+
+    return os.environ.get(f"{provider.upper()}_API_KEY")
+
+
+def resolve_base_url(provider: str, fallback: str = "") -> str:
+    """Resolve a provider base URL from the process environment."""
+    import os
+
+    return os.environ.get(f"{provider.upper()}_BASE_URL", fallback)

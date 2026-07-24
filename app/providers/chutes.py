@@ -138,6 +138,10 @@ class ChutesProvider(AIProvider):
         if tools and not kwargs.pop("suppress_tools", False):
             payload["tools"] = tools
 
+        response_format = kwargs.get("response_format")
+        if response_format:
+            payload["response_format"] = response_format
+
         return self._build_headers(ctx), payload
 
     def _extract_message_content(self, response_json: dict[str, Any]) -> str:

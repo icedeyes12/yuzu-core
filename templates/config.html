@@ -118,6 +118,11 @@
           <button id="save-image-model" type="button" class="btn btn-primary">Save Image Model</button>
         </div>
 
+        <div class="form-group">
+          <label>Memory status</label>
+          <p class="form-hint">Background extraction runs asynchronously in message batches. Manual memory mutation is disabled during architecture recovery.</p>
+        </div>
+
         <div class="form-row" style="margin-top: 1rem;">
           <div class="form-group">
             <label for="vision-provider">Vision provider</label>
@@ -135,50 +140,34 @@
       </section>
 
       <section class="config-section" aria-labelledby="memory-heading">
-        <h2 id="memory-heading">Global Memory &amp; Knowledge</h2>
-        <p class="section-description">Review the remembered profile, notes, and memory stats.</p>
+        <h2 id="memory-heading">Memory &amp; Knowledge</h2>
+        <p class="section-description">Memory extraction runs asynchronously. Global Knowledge is explicit user-managed context injected into every prompt.</p>
 
-        <div class="memory-stats">
-          <p><strong>Summary:</strong> <span id="player-summary">Loading…</span></p>
-          <p><strong>Likes:</strong> <span id="player-likes">Loading…</span></p>
-          <p><strong>Dislikes:</strong> <span id="player-dislikes">Loading…</span></p>
-          <p><strong>Personality:</strong> <span id="player-personality">Loading…</span></p>
-          <p><strong>Important memories:</strong> <span id="player-memories">Loading…</span></p>
-          <p><strong>Relationship:</strong> <span id="player-relationship">Loading…</span></p>
-          <p><strong>Last updated:</strong> <span id="global-profile-last-updated">Loading…</span></p>
-        </div>
+        <div id="global-knowledge-list" class="knowledge-list" aria-live="polite"></div>
 
-        <div class="form-group">
-          <label for="global-knowledge">Global knowledge</label>
-          <textarea id="global-knowledge" rows="4" placeholder="Facts that should apply across sessions."></textarea>
-        </div>
-
-        <div class="config-actions">
-          <button id="save-global-knowledge" type="button" class="btn btn-primary">Save Global Knowledge</button>
-          <button id="update-global-profile" type="button" class="btn btn-success">Update Global Profile</button>
-          <button id="rebuild-memory" type="button" class="btn btn-warning">Rebuild Structured Memory</button>
-          <button id="run-decay" type="button" class="btn btn-danger">Run Memory Decay</button>
-        </div>
-
-        <div class="form-row" style="margin-top: 1rem;">
-          <div class="form-group">
-            <label>Semantic facts</label>
-            <div id="semantic-count">0</div>
+        <form id="global-knowledge-form" class="knowledge-form" novalidate>
+          <input type="hidden" id="knowledge-entry-id">
+          <input type="hidden" id="knowledge-entry-sort-order" value="0">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="knowledge-category">Category</label>
+              <input type="text" id="knowledge-category" maxlength="255" required placeholder="Identity, Preference, Project">
+            </div>
+            <div class="form-group knowledge-enabled-group">
+              <label for="knowledge-enabled">Enabled</label>
+              <input type="checkbox" id="knowledge-enabled" checked>
+            </div>
           </div>
           <div class="form-group">
-            <label>Episodic facts</label>
-            <div id="episodic-count">0</div>
+            <label for="knowledge-content">Content</label>
+            <textarea id="knowledge-content" rows="3" maxlength="10000" required placeholder="A fact you explicitly want Yuzu to remember"></textarea>
           </div>
-          <div class="form-group">
-            <label>Segments</label>
-            <div id="segment-count">0</div>
+          <div class="config-actions">
+            <button id="save-knowledge-entry" type="submit" class="btn btn-primary">Add entry</button>
+            <button id="cancel-knowledge-edit" type="button" class="btn btn-secondary" hidden>Cancel</button>
           </div>
-        </div>
-
-        <div class="form-group">
-          <label>Top facts</label>
-          <ul id="top-facts-list"></ul>
-        </div>
+        </form>
+        <p id="knowledge-status" class="form-hint" role="status"></p>
       </section>
 
       <section class="config-section" aria-labelledby="advanced-heading">

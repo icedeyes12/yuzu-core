@@ -7,7 +7,7 @@ import re
 import asyncio
 import os
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Callable, Any, AsyncIterator
 
 from app.db import Database
 from app.llm_client import (
@@ -473,9 +473,10 @@ async def handle_user_message(
         loop_count += 1
         msg_for_pass = user_message if loop_count == 1 else ""
 
-        text_response, raw_api_response = await generate_ai_response(
+        generated_text, raw_api_response = await generate_ai_response(
             profile, msg_for_pass, interface, session_id, user_id=user_id
         )
+        text_response = generated_text or ""
 
         if text_response is None:
             log.error("AI provider returned None")
@@ -541,7 +542,7 @@ class StreamFence:
     Abandoned fences expire after timeout to prevent deadlocks.
     """
 
-    _fences: dict[int, dict[str, Any]] = {}  # session_id -> fence_info
+    _fences: dict[str, dict[str, Any]] = {}  # session_id -> fence_info
     _lock = asyncio.Lock()
 
     @classmethod
@@ -652,7 +653,7 @@ async def handle_user_message_streaming(
     session_id: str | None = None,
     provider: str | None = None,
     model: str | None = None,
-    abort_check: callable[[], bool] | None = None,
+    abort_check: Callable[[], bool] | None = None,
     attachments: list[str] | None = None,
     *,
     user_id: str,

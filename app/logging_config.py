@@ -11,7 +11,7 @@ def configure(level: str | None = None) -> None:
     global _CONFIGURED
     if _CONFIGURED:
         return
-    resolved = (level or os.getenv("LOG_LEVEL", "INFO")).upper()
+    resolved = (level or os.getenv("LOG_LEVEL") or "INFO").upper()
     logging.basicConfig(
         level=getattr(logging, resolved, logging.INFO),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",

@@ -12,6 +12,7 @@ from app.db.connection import (
 from app.db.queries import TOOL_ROLES, ALL_TOOL_ROLES
 from app.db.queries import (
     DEFAULT_PROFILE_PARAMS,
+    SCHEMA_DDL,
     SQL_ENC_ENCRYPTED_MESSAGES,
     SQL_ENC_TOTAL_MESSAGES,
     SQL_MESSAGE_CONVERSATION_SUMMARY,
@@ -36,9 +37,15 @@ from app.db.queries import (
     SQL_SESSION_DELETE_SCOPED,
     SQL_SESSION_INCREMENT_COUNT,
     SQL_SESSION_INSERT,
-    SQL_SESSION_MEMORY_NOTES,
     SQL_SESSION_RENAME_SCOPED,
-    SQL_SESSION_RESET_COUNT_AND_MEMORY,
+    SQL_SESSION_RESET_COUNT,
+    SQL_PIPELINE_STATE_SELECT,
+    SQL_PIPELINE_STATE_UPDATE,
+    SQL_GLOBAL_KNOWLEDGE_LIST,
+    SQL_GLOBAL_KNOWLEDGE_GET,
+    SQL_GLOBAL_KNOWLEDGE_INSERT,
+    SQL_GLOBAL_KNOWLEDGE_UPDATE,
+    SQL_GLOBAL_KNOWLEDGE_DELETE,
     SQL_SESSION_SELECT_ACTIVE_FOR_USER,
     SQL_SESSION_SELECT_ALL_FOR_USER,
     SQL_SESSIONS_RECENT_ACTIVE,
@@ -49,7 +56,7 @@ from app.db.queries import (
     format_session_event,
     parse_message_row,
     parse_profile_row,
-    parse_session_memory_rows,
+    parse_global_knowledge_row,
     parse_session_row,
 )
 from app.logging_config import get_logger
@@ -70,11 +77,9 @@ __re_exports__ = (TOOL_ROLES, ALL_TOOL_ROLES)
 async def init_pg_tables_async() -> None:
     """(｡•̀ᴗ-)✧"""
     async with AsyncPgSession() as s:
-        await s.fetchone("SELECT 1 FROM profiles LIMIT 1")
-        await s.fetchone("SELECT 1 FROM chat_sessions LIMIT 1")
-        await s.fetchone("SELECT 1 FROM messages LIMIT 1")
-        await s.fetchone("SELECT 1 FROM semantic_facts LIMIT 1")
-    log.info("PostgreSQL tables verified (async)")
+        for statement in SCHEMA_DDL:
+            await s.execute(statement)
+    log.info("PostgreSQL tables initialized (async)")
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +108,7 @@ async def update_profile_async(updates: dict, user_id: str) -> bool:
     query += " WHERE id = %s"
     params.append(user_id)
     try:
-        await pg_execute_async(query, params)
+        await pg_execute_async(query, tuple(params))
         return True
     except Exception as e:  # noqa: BLE001
         log.error("update_profile_async failed: %s", e)
@@ -118,12 +123,46 @@ async def update_context_async(context_dict: dict, user_id: str) -> bool:
     return await update_profile_async({"context": context_dict}, user_id)
 
 
-async def get_memory_async(user_id: str) -> dict:
-    return (await get_profile_async(user_id)).get("memory", {})
+async def list_global_knowledge_async(user_id: str) -> list[dict]:
+    rows = await pg_fetchall_async(SQL_GLOBAL_KNOWLEDGE_LIST, (user_id,))
+    return [parse_global_knowledge_row(row) for row in rows]
 
 
-async def update_memory_async(memory_dict: dict, user_id: str) -> bool:
-    return await update_profile_async({"memory": memory_dict}, user_id)
+async def get_global_knowledge_async(entry_id: str, user_id: str) -> dict:
+    row = await pg_fetchone_async(SQL_GLOBAL_KNOWLEDGE_GET, (entry_id, user_id))
+    return parse_global_knowledge_row(row)
+
+
+async def create_global_knowledge_async(
+    category: str, content: str, sort_order: int, enabled: bool, user_id: str
+) -> dict:
+    async with AsyncPgSession() as s:
+        row = await s.execute_returning(
+            SQL_GLOBAL_KNOWLEDGE_INSERT,
+            (user_id, category, content, sort_order, enabled),
+        )
+    return parse_global_knowledge_row(row)
+
+
+async def update_global_knowledge_async(
+    entry_id: str,
+    category: str,
+    content: str,
+    sort_order: int,
+    enabled: bool,
+    user_id: str,
+) -> dict:
+    async with AsyncPgSession() as s:
+        row = await s.execute_returning(
+            SQL_GLOBAL_KNOWLEDGE_UPDATE,
+            (category, content, sort_order, enabled, entry_id, user_id),
+        )
+    return parse_global_knowledge_row(row)
+
+
+async def delete_global_knowledge_async(entry_id: str, user_id: str) -> bool:
+    row = await pg_fetchone_async(SQL_GLOBAL_KNOWLEDGE_DELETE, (entry_id, user_id))
+    return row is not None
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +175,7 @@ async def get_active_session_async(user_id: str) -> dict:
     if not row:
         now = datetime.now()
         await pg_execute_async(
-            SQL_SESSION_INSERT, (user_id, "New Chat", True, 0, "{}", now, now)
+            SQL_SESSION_INSERT, (user_id, "New Chat", True, 0, now, now)
         )
         row = await pg_fetchone_async(SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,))
     return parse_session_row(row)
@@ -152,7 +191,7 @@ async def create_session_async(name: str = "New Chat", *, user_id: str) -> str |
     try:
         async with AsyncPgSession() as s:
             row = await s.execute_returning(
-                SQL_SESSION_INSERT, (user_id, name, False, 0, "{}", now, now)
+                SQL_SESSION_INSERT, (user_id, name, False, 0, now, now)
             )
             return row.get("id") if row else None
     except Exception as e:  # noqa: BLE001
@@ -198,17 +237,6 @@ async def delete_session_async(session_id: str, user_id: str) -> bool:
         return False
 
 
-async def get_session_notes_async(session_id: str, user_id: str) -> dict:
-    """Fetch historical system/memory messages for a session.
-
-    This reads from the messages table (role = 'system'), NOT the
-    memory_state column on chat_sessions. Use get_memory_state_async
-    to read the current session memory state.
-    """
-    rows = await pg_fetchall_async(SQL_SESSION_MEMORY_NOTES, (session_id, user_id))
-    return parse_session_memory_rows(rows)
-
-
 async def increment_message_count_async(session_id: str) -> bool:
     try:
         await pg_execute_async(
@@ -220,45 +248,27 @@ async def increment_message_count_async(session_id: str) -> bool:
         return False
 
 
-# ---------------------------------------------------------------------------
-# Pipeline state (stored in memory_state)
-# ---------------------------------------------------------------------------
+async def get_pipeline_state_async(session_id: str, user_id: str) -> dict:
+    """(｡•̀ᴗ-)✧"""
+    row = await pg_fetchone_async(SQL_PIPELINE_STATE_SELECT, (session_id, user_id))
+    state = row.get("memory_pipeline_state") if row else None
+    return state if isinstance(state, dict) else {}
 
 
-async def get_memory_state_async(session_id: str, user_id: str | None = None) -> dict:
-    """Get pipeline state scoped to a session owner when user_id is provided."""
-    if user_id:
-        row = await pg_fetchone_async(
-            "SELECT memory_state FROM chat_sessions WHERE id = %s AND user_id = %s",
-            (session_id, user_id),
-        )
-    else:
-        row = await pg_fetchone_async(
-            "SELECT memory_state FROM chat_sessions WHERE id = %s", (session_id,)
-        )
-    if not row:
-        return {"last_segmented_count": 0}
-    ms = row.get("memory_state")
-    return ms if isinstance(ms, dict) else {"last_segmented_count": 0}
-
-
-async def update_memory_state_async(
-    session_id: str, state: dict, user_id: str | None = None
+async def update_pipeline_state_async(
+    session_id: str, state: dict, user_id: str
 ) -> bool:
-    """Merge pipeline state and update only the owning session when scoped."""
+    """(｡•̀ᴗ-)✧"""
     try:
-        existing = await get_memory_state_async(session_id, user_id=user_id)
+        existing = await get_pipeline_state_async(session_id, user_id)
         existing.update(state)
-        if user_id:
-            query = "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s AND user_id = %s"
-            params = (json.dumps(existing), datetime.now(), session_id, user_id)
-        else:
-            query = "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s"
-            params = (json.dumps(existing), datetime.now(), session_id)
-        await pg_execute_async(query, params)
+        await pg_execute_async(
+            SQL_PIPELINE_STATE_UPDATE,
+            (json.dumps(existing), datetime.now(), session_id, user_id),
+        )
         return True
     except Exception as e:
-        log.error("update_memory_state_async failed: %s", e)
+        log.error("update_pipeline_state_async failed: %s", e)
         return False
 
 
@@ -376,8 +386,8 @@ async def clear_session_messages_async(session_id: str, *, user_id: str) -> bool
     try:
         await pg_execute_async(SQL_MESSAGE_DELETE_FOR_SESSION, (session_id, user_id))
         await pg_execute_async(
-            SQL_SESSION_RESET_COUNT_AND_MEMORY,
-            (datetime.now(), session_id),
+            SQL_SESSION_RESET_COUNT,
+            (datetime.now(), session_id, user_id),
         )
         return True
     except Exception as e:  # noqa: BLE001
@@ -398,10 +408,10 @@ async def get_message_count_async(session_id: str, user_id: str | None = None) -
 
 
 async def add_session_event_async(
-    session_id: str, content: str, interface: str = "terminal"
+    session_id: str, content: str, interface: str = "terminal", *, user_id: str
 ) -> int | None:
     return await add_message_async(
-        session_id, "system", format_session_event(content, interface)
+        session_id, "system", format_session_event(content, interface), user_id=user_id
     )
 
 
@@ -437,8 +447,10 @@ async def get_session_conversation_summary_async(
     return format_conversation_summary(rows)
 
 
-async def add_system_note_async(session_id: str, content: str) -> int | None:
-    return await add_message_async(session_id, "system", content)
+async def add_system_note_async(
+    session_id: str, content: str, *, user_id: str
+) -> int | None:
+    return await add_message_async(session_id, "system", content, user_id=user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -520,8 +532,11 @@ __all__ = [
     "update_profile_async",
     "get_context_async",
     "update_context_async",
-    "get_memory_async",
-    "update_memory_async",
+    "list_global_knowledge_async",
+    "get_global_knowledge_async",
+    "create_global_knowledge_async",
+    "update_global_knowledge_async",
+    "delete_global_knowledge_async",
     # Sessions
     "get_active_session_async",
     "get_all_sessions_async",
@@ -529,10 +544,9 @@ __all__ = [
     "switch_session_async",
     "rename_session_async",
     "delete_session_async",
-    "get_session_notes_async",
     "increment_message_count_async",
-    "get_memory_state_async",
-    "update_memory_state_async",
+    "get_pipeline_state_async",
+    "update_pipeline_state_async",
     # Messages
     "add_message_async",
     "update_message_async",

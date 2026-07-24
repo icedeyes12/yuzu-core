@@ -1,416 +1,206 @@
 from __future__ import annotations
 
+import json
 import logging
-from datetime import datetime
-from psycopg.types.json import Json
+from typing import Any
 
 __all__ = [
-    "upsert_semantic_memory",
-    "upsert_semantic_memory_async",
-    "create_episodic_memory",
-    "create_episodic_memory_async",
-    "calculate_emotional_weight",
+    "extract_batch_async",
+    "normalize_extraction",
+    "build_extraction_prompt",
 ]
 
-from app.memory.db_memory_facade import (
-    MemoryDB,
-    FACT_TYPE_STATIC,
-    FACT_TYPE_DYNAMIC,
-)
-from app.db import pg_fetchone_async
 
 logger = logging.getLogger(__name__)
 
 
-# ── Emotional keywords for weight calculation ─────────────────────────────────
-_EMOTIONAL_KEYWORDS = [
-    "angry",
-    "frustrated",
-    "sad",
-    "happy",
-    "excited",
-    "love",
-    "hate",
-    "cry",
-    "laugh",
-    "upset",
-    "worried",
-    "scared",
-    "marah",
-    "kesal",
-    "sedih",
-    "senang",
-    "sayang",
-    "benci",
-    "takut",
-    "khawatir",
-    "kecewa",
-]
-
-
-# NOTE: No sync _get_ai_manager helper - use async functions throughout
-# All semantic memory operations should use async versions
-
-
-# ── Semantic extraction (LLM-only) ──────────────────────────────────────────────
-
-
-def calculate_emotional_weight(messages) -> float:
-    """Calculate emotional intensity. Returns 0.0–1.0."""
-    if not messages:
-        return 0.0
-    total_hits = sum(
-        1
-        for msg in messages
-        for kw in _EMOTIONAL_KEYWORDS
-        if kw in msg.get("content", "").lower()
-    )
-    return min(total_hits / max(len(messages), 1) * 0.3, 1.0)
-
-
-def _build_semantic_text(entity, relation, target) -> str:
-    """Build a searchable text from a semantic triple."""
-    return f"{entity} {relation} {target}"
-
-
-# ── Storage (using db_memory) ──────────────────────────────────────────────────
-
-_RELATION_TO_CATEGORY = {
-    # identity
-    "identity": "Identity",
-    "name": "Identity",
-    "profession": "Identity",
-    "location": "Identity",
-    "company": "Identity",
-    "education": "Identity",
-    "demographics": "Identity",
-    # preference
-    "preference": "Preference",
-    "likes": "Preference",
-    "dislikes": "Preference",
-    "favorites": "Preference",
-    "habit": "Preference",
-    # interest
-    "interest": "Interest",
-    "hobby": "Interest",
-    "topic": "Interest",
-    # personality
-    "personality": "Personality",
-    "communication_style": "Personality",
-    "emotional_tendency": "Personality",
-    "trait": "Personality",
-    # relationship
-    "relationship": "Relationship",
-    "shared_routine": "Relationship",
-    "inside_joke": "Relationship",
-    # experience
-    "experience": "Experience",
-    "skill": "Experience",
-    "past_event": "Experience",
-    "background": "Experience",
-    # goal
-    "goal": "Goal",
-    "aspiration": "Goal",
-    "plan": "Goal",
-    # guideline
-    "guideline": "Guideline",
-    "behavior": "Guideline",
-    "tone": "Guideline",
+_EXTRACTION_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "memory_batch_extraction",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "episodes": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "start_index": {"type": "integer"},
+                            "end_index": {"type": "integer"},
+                            "title": {"type": "string"},
+                            "summary": {"type": "string"},
+                            "importance": {"type": "number"},
+                        },
+                        "required": [
+                            "start_index",
+                            "end_index",
+                            "title",
+                            "summary",
+                            "importance",
+                        ],
+                    },
+                },
+                "claims": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "entity": {"type": "string"},
+                            "relation": {"type": "string"},
+                            "target": {"type": "string"},
+                            "confidence": {"type": "number"},
+                            "evidence_start_index": {"type": "integer"},
+                            "evidence_end_index": {"type": "integer"},
+                        },
+                        "required": [
+                            "entity",
+                            "relation",
+                            "target",
+                            "confidence",
+                            "evidence_start_index",
+                            "evidence_end_index",
+                        ],
+                    },
+                },
+            },
+            "required": ["episodes", "claims"],
+        },
+    },
 }
 
-# Stricter dedup: was 0.05, tightened to 0.03 to reduce noise
-_EXTRACTOR_DEDUP_THRESHOLD = 0.03
+_EXTRACTION_SYSTEM_PROMPT = """Extract durable inferred memory from one conversation batch.
+Return one JSON object only with keys episodes and claims. Episodes are concise summaries of meaningful interactions. Claims are objective, user-specific facts that may remain useful across sessions. Do not extract assistant behavior, temporary task state, instructions, roleplay, emotional performance, or facts about the assistant. Do not invent. Every claim needs a contiguous message-index evidence range directly supporting it. Global Knowledge and application configuration are never memory claims. Prefer no claim over a weak inference."""
 
 
-def _map_relation_to_category(relation: str) -> str:
-    """Map a relation keyword to one of the 8 categories."""
-    key = relation.lower().strip()
-    return _RELATION_TO_CATEGORY.get(key, "Experience")
+def _content_text(message: dict[str, Any]) -> str:
+    content = message.get("content", "")
+    if isinstance(content, list):
+        return " ".join(
+            str(part.get("text", ""))
+            for part in content
+            if isinstance(part, dict) and part.get("type") == "text"
+        )
+    return str(content)
 
 
-def upsert_semantic_memory(
-    session_id, entity, relation, target, episode_id=None, user_id=None
-):
-    """Insert or update a semantic memory with embedding and 8-category taxonomy.
-
-    Duplicate detection: vector search for top-5 similar records;
-    if any distance < 0.05, reinforce the existing record.
-    On reinforce: append to source_episodic_ids.
-    On new: initialize source_episodic_ids = [episode_id] if provided.
-    """
-    category = _map_relation_to_category(relation)
-    text = _build_semantic_text(entity, relation, target)
-
-    # Embed the text
+def _parse_extraction_response(response: str | None) -> dict[str, Any]:
+    if not response:
+        return {"episodes": [], "claims": []}
+    text = response.strip()
+    if text.startswith("```"):
+        text = (
+            text.removeprefix("```json")
+            .removeprefix("```")
+            .strip()
+            .removesuffix("```")
+            .strip()
+        )
     try:
-        from app.memory.embedder import embed_text
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        logger.warning("Single-pass memory extraction returned invalid JSON")
+        return {"episodes": [], "claims": []}
+    return payload if isinstance(payload, dict) else {"episodes": [], "claims": []}
 
-        vector = embed_text(text)
-    except Exception as e:
-        logger.warning(f"Embedding failed: {e}")
-        vector = None
 
-    if vector is not None:
-        # Check for duplicates using stricter threshold
-        existing = MemoryDB.search_similar(
-            embedding=vector,
-            session_id=session_id,
-            fact_type=FACT_TYPE_STATIC,
-            limit=5,
-            max_distance=_EXTRACTOR_DEDUP_THRESHOLD,
-            user_id=user_id,
+def _clamp_index(value: Any, upper: int) -> int:
+    try:
+        return max(0, min(int(value), upper))
+    except (TypeError, ValueError):
+        return 0
+
+
+def normalize_extraction(
+    payload: dict[str, Any] | None, message_count: int
+) -> dict[str, list[dict[str, Any]]]:
+    normalized: dict[str, list[dict[str, Any]]] = {"episodes": [], "claims": []}
+    if not isinstance(payload, dict):
+        return normalized
+    for raw in payload.get("episodes", []):
+        if not isinstance(raw, dict):
+            continue
+        start, end = (
+            _clamp_index(raw.get("start_index"), message_count),
+            _clamp_index(raw.get("end_index"), message_count),
         )
-
-        # FALLBACK: text-level dedupe (in case embedding failed)
-        if existing and len(existing) > 0:
-            e = existing[0]
-            if e.get("content") == text:
-                # Exact content match — reinforce existing
-                from app.memory.db_memory_facade import MemoryDB
-
-                from app.db import pg_execute
-                from datetime import datetime
-
-                MemoryDB.increment_importance(
-                    e["id"], delta=0.1, cap=1.0, user_id=user_id
-                )
-                meta = e.get("metadata") or {}
-                ids = meta.get("source_episodic_ids", [])
-                if episode_id and episode_id not in ids:
-                    ids.append(episode_id)
-                elif not ids:
-                    ids = [episode_id] if episode_id else []
-                meta["source_episodic_ids"] = ids
-                meta["category"] = category
-                pg_execute(
-                    "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s AND user_id=%s",
-                    (datetime.now(), Json(meta), e["id"], user_id),
-                )
-                return  # done — no insert needed
-
-        # Also check by exact content match directly in DB
-        from app.db import pg_fetchone
-
-        existing_exact = pg_fetchone(
-            "SELECT id, metadata FROM semantic_facts WHERE fact_type=%s AND content=%s AND invalid_at IS NULL AND user_id=%s LIMIT 1",
-            (FACT_TYPE_STATIC, text, user_id),
+        summary = str(raw.get("summary", "")).strip()
+        if end <= start or not summary:
+            continue
+        try:
+            importance = max(0.0, min(float(raw.get("importance", 0.5)), 1.0))
+        except (TypeError, ValueError):
+            importance = 0.5
+        normalized["episodes"].append(
+            {
+                "start_index": start,
+                "end_index": end,
+                "title": str(raw.get("title", "")).strip()[:120],
+                "summary": summary[:1000],
+                "importance": importance,
+            }
         )
-        if existing_exact:
-            from app.memory.db_memory_facade import MemoryDB
+    for raw in payload.get("claims", []):
+        if not isinstance(raw, dict):
+            continue
+        entity, relation, target = (
+            str(raw.get(key, "")).strip() for key in ("entity", "relation", "target")
+        )
+        start, end = (
+            _clamp_index(raw.get("evidence_start_index"), message_count),
+            _clamp_index(raw.get("evidence_end_index"), message_count),
+        )
+        if not entity or not relation or not target or end <= start:
+            continue
+        try:
+            confidence = max(0.0, min(float(raw.get("confidence", 0.0)), 1.0))
+        except (TypeError, ValueError):
+            confidence = 0.0
+        if confidence <= 0:
+            continue
+        normalized["claims"].append(
+            {
+                "entity": entity[:120],
+                "relation": relation[:120],
+                "target": target[:500],
+                "confidence": confidence,
+                "evidence_start_index": start,
+                "evidence_end_index": end,
+            }
+        )
+    return normalized
 
-            from app.db import pg_execute
-            from datetime import datetime
 
-            MemoryDB.increment_importance(
-                existing_exact["id"], delta=0.1, cap=1.0, user_id=user_id
-            )
-            meta = existing_exact.get("metadata") or {}
-            ids = meta.get("source_episodic_ids", [])
-            if episode_id and episode_id not in ids:
-                ids.append(episode_id)
-            elif not ids:
-                ids = [episode_id] if episode_id else []
-            meta["source_episodic_ids"] = ids
-            meta["category"] = category
-            pg_execute(
-                "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s AND user_id=%s",
-                (datetime.now(), Json(meta), existing_exact["id"], user_id),
-            )
-            return  # exact content dupe — reinforce, don't insert
-
-    # No duplicate — insert new fact
-    metadata = {
-        "entity": entity,
-        "relation": relation,
-        "target": target,
-        "confidence": 0.7,
-        "importance": 0.7,
-        "category": category,
-        "source_table": "semantic_memories",
-        "session_id": session_id,
-    }
-    if episode_id:
-        metadata["source_episodic_ids"] = [episode_id]
-
-    MemoryDB.save_fact(
-        session_id=session_id,
-        content=f"{entity} {relation} {target}",
-        embedding=vector,
-        fact_type=FACT_TYPE_STATIC,
-        metadata=metadata,
-        category=category,
-        user_id=user_id,
+def build_extraction_prompt(messages: list[dict[str, Any]]) -> tuple[str, str]:
+    conversation = "\n".join(
+        f"[{index}] {message.get('role', 'unknown')}: {_content_text(message)[:1200]}"
+        for index, message in enumerate(messages)
+    )
+    return (
+        _EXTRACTION_SYSTEM_PROMPT,
+        "Conversation batch:\n\n" + conversation + "\n\nReturn the JSON object now.",
     )
 
 
-async def upsert_semantic_memory_async(
-    session_id, entity, relation, target, episode_id=None, user_id=None
-):
-    """Async version of upsert_semantic_memory."""
-    category = _map_relation_to_category(relation)
-    text = _build_semantic_text(entity, relation, target)
+async def extract_batch_async(
+    messages: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    from app.memory.memory import _memory_llm_call
+    from app.providers import get_ai_manager
 
-    try:
-        from app.memory.embedder import embed_text_async
-
-        vector = await embed_text_async(text)
-    except Exception as e:
-        logger.warning(f"Embedding async failed: {e}")
-        vector = None
-
-    if vector is not None:
-        from app.memory.db_memory_facade import MemoryDB
-
-        existing = await MemoryDB.search_similar_async(
-            embedding=vector,
-            session_id=session_id,
-            fact_type=FACT_TYPE_STATIC,
-            limit=5,
-            max_distance=_EXTRACTOR_DEDUP_THRESHOLD,
-            user_id=user_id,
-        )
-
-        if existing and len(existing) > 0:
-            e = existing[0]
-            if e.get("content") == text:
-                meta = e.get("metadata") or {}
-                ids = meta.get("source_episodic_ids", [])
-                if episode_id and episode_id not in ids:
-                    ids.append(episode_id)
-                elif not ids:
-                    ids = [episode_id] if episode_id else []
-                meta["source_episodic_ids"] = ids
-                meta["category"] = category
-                from app.db import pg_execute_async
-                from psycopg.types.json import Json
-
-                await pg_execute_async(
-                    "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s AND user_id=%s",
-                    (datetime.now(), Json(meta), e["id"], user_id),
-                )
-                return  # done — no insert needed
-
-        existing_exact = await pg_fetchone_async(
-            "SELECT id, metadata FROM semantic_facts WHERE fact_type=%s AND content=%s AND invalid_at IS NULL AND user_id=%s LIMIT 1",
-            (FACT_TYPE_STATIC, text, user_id),
-        )
-        if existing_exact:
-            meta = existing_exact.get("metadata") or {}
-            ids = meta.get("source_episodic_ids", [])
-            if episode_id and episode_id not in ids:
-                ids.append(episode_id)
-            elif not ids:
-                ids = [episode_id] if episode_id else []
-            meta["source_episodic_ids"] = ids
-            meta["category"] = category
-            from app.db import pg_execute_async
-            from psycopg.types.json import Json
-
-            await pg_execute_async(
-                "UPDATE semantic_facts SET last_accessed=%s, metadata=%s WHERE id=%s AND user_id=%s",
-                (datetime.now(), Json(meta), existing_exact["id"], user_id),
-            )
-            return  # exact content dupe — reinforce, don't insert
-
-    # No duplicate — insert new fact
-    metadata = {
-        "entity": entity,
-        "relation": relation,
-        "target": target,
-        "confidence": 0.7,
-        "importance": 0.7,
-        "category": category,
-        "source_table": "semantic_memories",
-        "session_id": session_id,
-    }
-    if episode_id:
-        metadata["source_episodic_ids"] = [episode_id]
-
-    from app.memory.db_memory_facade import MemoryDB
-
-    await MemoryDB.save_fact_async(
-        session_id=session_id,
-        content=f"{entity} {relation} {target}",
-        embedding=vector,
-        fact_type=FACT_TYPE_STATIC,
-        metadata=metadata,
-        category=category,
-        user_id=user_id,
+    system_prompt, user_prompt = build_extraction_prompt(messages)
+    response = await _memory_llm_call(
+        await get_ai_manager(),
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        timeout=90,
+        max_tokens=5000,
+        response_format=_EXTRACTION_SCHEMA,
     )
-
-
-def create_episodic_memory(
-    session_id,
-    summary,
-    emotional_weight=0.0,
-    importance=0.5,
-    source_message_ids=None,
-    user_id=None,
-):
-    """Create a new episodic memory record with embedding.
-
-    Args:
-        session_id: session this episodic memory belongs to
-        summary: LLM-generated narrative summary
-        emotional_weight: 0.0-1.0 emotional intensity score
-        importance: 0.0-1.0 importance score
-        source_message_ids: list of message IDs (for cross-layer tracing)
-    """
-    # Embed the summary
-    try:
-        from app.memory.embedder import embed_text
-
-        vector = embed_text(summary)
-    except Exception as e:
-        logger.warning(f"Embedding failed: {e}")
-        vector = None
-
-    fact_id = MemoryDB.save_fact(
-        session_id=session_id,
-        content=summary,
-        embedding=vector,
-        fact_type=FACT_TYPE_DYNAMIC,
-        metadata={
-            "importance": importance,
-            "emotional_weight": emotional_weight,
-            "source_table": "episodic_memories",
-            "source_message_ids": source_message_ids,
-            "session_id": session_id,
-        },
-        user_id=user_id,
-    )
-    return fact_id
-
-
-async def create_episodic_memory_async(
-    session_id,
-    summary,
-    emotional_weight=0.0,
-    importance=0.5,
-    source_message_ids=None,
-    user_id=None,
-):
-    """Async version of create_episodic_memory."""
-    try:
-        from app.memory.embedder import embed_text_async
-
-        vector = await embed_text_async(summary)
-    except Exception as e:
-        logger.warning(f"Embedding async failed: {e}")
-        vector = None
-
-    fact_id = await MemoryDB.save_fact_async(
-        session_id=session_id,
-        content=summary,
-        embedding=vector,
-        fact_type=FACT_TYPE_DYNAMIC,
-        metadata={
-            "importance": importance,
-            "emotional_weight": emotional_weight,
-            "source_table": "episodic_memories",
-            "source_message_ids": source_message_ids,
-            "session_id": session_id,
-        },
-        user_id=user_id,
-    )
-    return fact_id
+    return normalize_extraction(_parse_extraction_response(response), len(messages))

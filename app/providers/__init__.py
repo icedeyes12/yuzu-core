@@ -73,7 +73,7 @@ async def load_all_providers(manager: AIProviderManager):
 
 # Patch the AIProviderManager to use our load function
 # Note: AIProviderManager.initialize calls load_providers()
-AIProviderManager.load_providers = load_all_providers
+setattr(AIProviderManager, "load_providers", load_all_providers)
 
 __all__ = [
     "get_ai_manager",

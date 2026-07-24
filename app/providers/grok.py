@@ -61,7 +61,7 @@ class GrokProvider(AIProvider):
         return headers, payload
 
     async def send_message(
-        self, ctx: LLMContext, messages: list[dict], **kwargs
+        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
     ) -> str | None:
         try:
             headers, payload = self._prepare_payload(ctx, messages, False, **kwargs)
@@ -85,7 +85,7 @@ class GrokProvider(AIProvider):
             return None
 
     async def send_message_raw(
-        self, ctx: LLMContext, messages: list[dict], **kwargs
+        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
     ) -> dict | None:
         try:
             headers, payload = self._prepare_payload(ctx, messages, False, **kwargs)

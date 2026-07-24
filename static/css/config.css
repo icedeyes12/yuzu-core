@@ -288,35 +288,6 @@ input[type="range"]::-moz-range-thumb {
 	font-weight: 600;
 }
 
-/* Memory & Global Knowledge */
-.memory-stats {
-	font-size: 0.9rem;
-	line-height: 1.4;
-}
-
-.memory-stats p {
-	margin: 0.3rem 0;
-}
-
-.memory-stats strong {
-	color: var(--accent-primary);
-}
-
-#global-knowledge {
-	font-size: 0.9rem;
-	padding: 0.6rem 0.8rem;
-	border-radius: 8px;
-	min-height: 80px;
-	max-height: 150px;
-	background: var(--input-bg);
-	border: 1.5px solid var(--border-lavender);
-}
-
-#global-knowledge:focus {
-	border-color: var(--accent-primary);
-	box-shadow: 0 0 0 3px var(--shadow-accent);
-}
-
 #keys-list {
 	list-style: none;
 	padding: 0;
@@ -351,6 +322,49 @@ input[type="range"]::-moz-range-thumb {
 #keys-list .btn:hover {
 	background: #dc2626;
 	transform: translateY(-1px);
+}
+
+/* Global Knowledge */
+.knowledge-list {
+	display: grid;
+	gap: 0.75rem;
+	margin-bottom: 1rem;
+}
+
+.knowledge-entry {
+	padding: 0.85rem;
+	border: 1px solid var(--border-lavender);
+	border-radius: 8px;
+	background: var(--input-bg);
+}
+
+.knowledge-entry-disabled {
+	opacity: 0.55;
+}
+
+.knowledge-entry-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+.knowledge-entry-header > div {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.knowledge-entry p {
+	margin: 0.65rem 0 0;
+	white-space: pre-wrap;
+}
+
+.knowledge-form {
+	margin-top: 1rem;
+}
+
+.knowledge-enabled-group {
+	max-width: 9rem;
 }
 
 /* Provider Cards Grid */
@@ -525,7 +539,6 @@ input[type="range"]::-moz-range-thumb {
 .form-group,
 .btn,
 .provider-status,
-.memory-stats,
 #keys-list li {
 	transition:
 		background-color 0.3s ease,

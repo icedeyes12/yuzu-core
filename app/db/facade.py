@@ -19,19 +19,21 @@ from app.db.models_async import (
     get_chat_history_async as _pg_get_chat_history_async,
     get_chat_history_for_ai_async as _pg_get_chat_history_for_ai_async,
     get_context_async as _pg_get_context_async,
+    list_global_knowledge_async as _pg_list_global_knowledge_async,
+    get_global_knowledge_async as _pg_get_global_knowledge_async,
+    create_global_knowledge_async as _pg_create_global_knowledge_async,
+    update_global_knowledge_async as _pg_update_global_knowledge_async,
+    delete_global_knowledge_async as _pg_delete_global_knowledge_async,
     get_encryption_status_async as _pg_get_encryption_status_async,
-    get_memory_state_async as _pg_get_memory_state_async,
     get_message_count_async as _pg_get_message_count_async,
     get_profile_async as _pg_get_profile_async,
     get_recent_active_sessions_async as _pg_get_recent_active_sessions_async,
     get_session_conversation_summary_async as _pg_get_session_conversation_summary_async,
-    get_session_notes_async as _pg_get_session_notes_async,
     get_session_messages_async as _pg_get_session_messages_async,
     increment_message_count_async as _pg_increment_message_count_async,
     rename_session_async as _pg_rename_session_async,
     switch_session_async as _pg_switch_session_async,
     update_context_async as _pg_update_context_async,
-    update_memory_state_async as _pg_update_memory_state_async,
     update_profile_async as _pg_update_profile_async,
     create_session_token_async as _pg_create_session_token_async,
     validate_session_token_async as _pg_validate_session_token_async,
@@ -108,6 +110,13 @@ class Database:
     get_context = _proxy_async(_pg_get_context_async)
     update_context = _proxy_async(_pg_update_context_async)
 
+    # Global Knowledge
+    list_global_knowledge = _proxy_async(_pg_list_global_knowledge_async)
+    get_global_knowledge = _proxy_async(_pg_get_global_knowledge_async)
+    create_global_knowledge = _proxy_async(_pg_create_global_knowledge_async)
+    update_global_knowledge = _proxy_async(_pg_update_global_knowledge_async)
+    delete_global_knowledge = _proxy_async(_pg_delete_global_knowledge_async)
+
     # Sessions
     create_session = _proxy_async(_pg_create_session_async)
     get_active_session = _proxy_async(_pg_get_active_session_async)
@@ -115,11 +124,8 @@ class Database:
     switch_session = _proxy_async(_pg_switch_session_async)
     rename_session = _proxy_async(_pg_rename_session_async)
     delete_session = _proxy_async(_pg_delete_session_async)
-    get_session_notes = _proxy_async(_pg_get_session_notes_async)
 
-    # Pipeline state (memory_state column)
-    get_memory_state = _proxy_async(_pg_get_memory_state_async)
-    update_memory_state = _proxy_async(_pg_update_memory_state_async)
+    # Pipeline bookkeeping
     increment_message_count = _proxy_async(_pg_increment_message_count_async)
     get_session_messages_count = _proxy_async(_pg_get_message_count_async)
     get_session_conversation_summary = _proxy_async(
@@ -264,7 +270,9 @@ class Database:
 
         async def _call() -> int | None:
             active = await _pg_get_active_session_async(user_id)
-            return await _pg_add_session_event_async(active["id"], content, interface)
+            return await _pg_add_session_event_async(
+                active["id"], content, interface, user_id=user_id
+            )
 
         return _call()
 
@@ -277,7 +285,9 @@ class Database:
 
         async def _call() -> int | None:
             return await _pg_add_system_note_async(
-                await _resolve_session_id_async(session_id, user_id), content
+                await _resolve_session_id_async(session_id, user_id),
+                content,
+                user_id=user_id,
             )
 
         return _call()

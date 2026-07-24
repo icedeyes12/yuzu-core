@@ -19,14 +19,7 @@ async def test_runtime_prompt_uses_native_fc_only(monkeypatch):
     async def _retrieve_memories_async(*args, **kwargs):
         return ([], "", "")
 
-    async def _legacy_memory_block_async(*args, **kwargs):
-        return ""
-
     monkeypatch.setattr(prompts, "_retrieve_memories_async", _retrieve_memories_async)
-    monkeypatch.setattr(prompts, "_mark_facts_pending_async", _noop)
-    monkeypatch.setattr(
-        prompts, "_legacy_memory_block_async", _legacy_memory_block_async
-    )
     monkeypatch.setattr(
         prompts,
         "_get_relevant_tools",
@@ -34,6 +27,7 @@ async def test_runtime_prompt_uses_native_fc_only(monkeypatch):
     )
     monkeypatch.setattr(prompts, "_location_block_async", _noop)
     monkeypatch.setattr(prompts, "_session_events_block_async", _noop)
+    monkeypatch.setattr(prompts, "_global_knowledge_block_async", _noop)
 
     prompt = await prompts.build_system_message_async(
         profile=profile,
@@ -111,16 +105,10 @@ async def test_persona_injection_and_missing_data_fallback(monkeypatch):
     async def _retrieve_memories_async(*args, **kwargs):
         return ([], "", "")
 
-    async def _legacy_memory_block_async(*args, **kwargs):
-        return ""
-
     monkeypatch.setattr(prompts, "_retrieve_memories_async", _retrieve_memories_async)
-    monkeypatch.setattr(prompts, "_mark_facts_pending_async", _noop)
-    monkeypatch.setattr(
-        prompts, "_legacy_memory_block_async", _legacy_memory_block_async
-    )
     monkeypatch.setattr(prompts, "_location_block_async", _noop)
     monkeypatch.setattr(prompts, "_session_events_block_async", _noop)
+    monkeypatch.setattr(prompts, "_global_knowledge_block_async", _noop)
 
     prompt = await prompts.build_system_message_async(
         profile=profile,

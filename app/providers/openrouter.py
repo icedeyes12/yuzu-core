@@ -100,9 +100,9 @@ class OpenRouterProvider(AIProvider):
                     return []
                 data = resp.json()
             return [
-                m.get("id")
+                model_id
                 for m in (data.get("data") or [])
-                if isinstance(m, dict) and m.get("id")
+                if isinstance(m, dict) and isinstance(model_id := m.get("id"), str)
             ]
         except Exception:
             return []
@@ -156,7 +156,7 @@ class OpenRouterProvider(AIProvider):
         return headers, payload
 
     async def send_message(
-        self, ctx: LLMContext, messages: list[dict], **kwargs
+        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
     ) -> str | None:
 
         try:
@@ -189,7 +189,7 @@ class OpenRouterProvider(AIProvider):
             return None
 
     async def send_message_raw(
-        self, ctx: LLMContext, messages: list[dict], **kwargs
+        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
     ) -> dict | None:
 
         try:

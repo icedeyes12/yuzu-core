@@ -3,13 +3,13 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Depends, Request
 import httpx
 from pydantic import BaseModel, Field
+from uuid import UUID
 
 from app.db import (
     Database,
     get_profile_async,
     get_active_session_async,
     get_chat_history_async,
-    get_memory_state_async,
     update_profile_async,
 )
 from app.api.utils import get_current_user
@@ -41,12 +41,15 @@ class LocationUpdateRequest(BaseModel):
     lon: float = Field(..., description="Longitude")
 
 
-class GlobalKnowledgeUpdateRequest(BaseModel):
-    facts: str = Field(..., description="Global knowledge facts")
-
-
 class ProfileUpdateRequest(BaseModel):
     updates: dict = Field(..., description="Key-value pairs for profile updates")
+
+
+class GlobalKnowledgeEntryCreateRequest(BaseModel):
+    category: str = Field("General", min_length=1, max_length=255)
+    content: str = Field(..., min_length=1, max_length=10000)
+    sort_order: int = Field(0, ge=0)
+    enabled: bool = True
 
 
 @router.get("/config")
@@ -73,7 +76,6 @@ async def api_get_profile(
         chat_history = await get_chat_history_async(
             session_id=session_id, limit=50, recent=True, user_id=user_id
         )
-        session_memory = await get_memory_state_async(active_session["id"])
 
         profile_dict = ConfigService.format_profile_dict(profile)
         ai_providers_payload = await ConfigService.get_ai_providers_payload(
@@ -85,7 +87,6 @@ async def api_get_profile(
             **profile_dict,
             "chat_history": chat_history,
             "active_session": active_session,
-            "session_memory": session_memory,
             "ai_providers": ai_providers_payload,
             "multimodal_capabilities": vision_capabilities,
         }
@@ -302,14 +303,49 @@ async def api_update_location(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/global_knowledge/update")
-async def api_update_global_knowledge(
-    request: GlobalKnowledgeUpdateRequest, user_id: str = Depends(get_current_user)
+@router.get("/global-knowledge")
+async def api_list_global_knowledge(user_id: str = Depends(get_current_user)):
+    return {"entries": await ConfigService.get_global_knowledge_async(user_id)}
+
+
+@router.post("/global-knowledge", status_code=201)
+async def api_create_global_knowledge(
+    request: GlobalKnowledgeEntryCreateRequest,
+    user_id: str = Depends(get_current_user),
 ):
-    try:
-        global_knowledge = {"facts": request.facts}
-        await Database.update_profile({"global_knowledge": global_knowledge}, user_id)
-        return {"status": "success", "message": "Global knowledge updated"}
-    except Exception as e:
-        log.error("Error updating global knowledge: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+    entry = await Database.create_global_knowledge(
+        category=request.category.strip(),
+        content=request.content.strip(),
+        sort_order=request.sort_order,
+        enabled=request.enabled,
+        user_id=user_id,
+    )
+    return {"entry": entry}
+
+
+@router.patch("/global-knowledge/{entry_id}")
+async def api_update_global_knowledge_entry(
+    entry_id: UUID,
+    request: GlobalKnowledgeEntryCreateRequest,
+    user_id: str = Depends(get_current_user),
+):
+    entry = await Database.update_global_knowledge(
+        entry_id=str(entry_id),
+        category=request.category.strip(),
+        content=request.content.strip(),
+        sort_order=request.sort_order,
+        enabled=request.enabled,
+        user_id=user_id,
+    )
+    if not entry:
+        raise HTTPException(status_code=404, detail="Global Knowledge entry not found")
+    return {"entry": entry}
+
+
+@router.delete("/global-knowledge/{entry_id}", status_code=204)
+async def api_delete_global_knowledge(
+    entry_id: UUID, user_id: str = Depends(get_current_user)
+):
+    deleted = await Database.delete_global_knowledge(str(entry_id), user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Global Knowledge entry not found")

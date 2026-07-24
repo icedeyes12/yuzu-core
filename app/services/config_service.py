@@ -58,11 +58,16 @@ class ConfigService:
         profile = await Database.get_profile(user_id)
         return {
             "status": "success",
+            "profile": ConfigService.format_profile_dict(profile),
             "ai_providers": await ConfigService.get_ai_providers_payload(
                 user_id, profile
             ),
             "vision": await ConfigService.get_vision_payload_async(user_id, profile),
         }
+
+    @staticmethod
+    async def get_global_knowledge_async(user_id: str) -> list[dict[str, Any]]:
+        return await Database.list_global_knowledge(user_id=user_id)
 
     @staticmethod
     async def get_vision_payload_async(
@@ -100,9 +105,7 @@ class ConfigService:
             "partner_name": profile["partner_name"],
             "affection": profile["affection"],
             "theme": profile["theme"],
-            "memory": profile["memory"],
             "session_history": profile["session_history"],
-            "global_knowledge": profile["global_knowledge"],
             "providers_config": profile["providers_config"],
             "context": ctx,
             "image_model": profile["image_model"],

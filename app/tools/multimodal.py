@@ -7,7 +7,7 @@ import time
 import os
 import hashlib
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import Any, List, Dict, Optional, Tuple
 from app.core.llm_context import LLMContext
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class MultimodalTools:
     def get_provider_endpoint(self, provider: str) -> Optional[str]:
         return self.provider_endpoints.get(provider)
 
-    def is_vision_model(self, model_name: str, provider: str = None) -> bool:
+    def is_vision_model(self, model_name: str, provider: str | None = None) -> bool:
         """Check if a model supports vision (multimodal).
 
         Args:
@@ -334,7 +334,7 @@ class MultimodalTools:
             return None
 
     def format_vision_message(
-        self, user_message: str, provider: str = None
+        self, user_message: str, provider: str | None = None
     ) -> List[Dict]:
         image_sources = self._extract_image_sources(user_message)
 
@@ -487,13 +487,17 @@ class MultimodalTools:
         self,
         prompt: str,
         provider: str = "chutes",
-        model: str = None,
+        model: str | None = None,
         size: str = "1024x1024",
     ) -> Tuple[Optional[str], Optional[str]]:
         """Generate an image using the tool registry (single source of truth)."""
         from app.tools.registry import execute_tool
 
         result = execute_tool("image_generate", {"prompt": prompt})
+        if hasattr(result, "__await__"):
+            return None, "Image generation requires async execution"
+        if not isinstance(result, dict):
+            return None, "Invalid image generation result"
         if result.get("ok"):
             image_path = result.get("data", {}).get("image_path")
             if image_path:
@@ -515,7 +519,7 @@ class MultimodalTools:
 
         # 1. Check user's saved preference first
         try:
-            providers_config = {}
+            providers_config: dict[str, Any] = {}
             prefs = providers_config.get("vision_model_preferences", {})
             saved_provider = prefs.get("provider")
             saved_model = prefs.get("model")

@@ -66,56 +66,11 @@ async function loadAppConfig() {
 	}
 }
 
-// Load profile data with proper global profile display
+// Load profile data for editable application settings
 async function loadProfileData() {
 	try {
 		const response = await fetch("/api/profile");
 		const data = await response.json();
-
-		console.log("Full profile data:", data);
-
-		const profileMemory = data.memory || {};
-		const keyFacts = profileMemory.key_facts || {};
-
-		setTextIfExists(
-			"player-summary",
-			profileMemory.player_summary ||
-				"No global profile yet. Start chatting or update it from the buttons below.",
-		);
-		setTextIfExists(
-			"player-likes",
-			Array.isArray(keyFacts.likes) && keyFacts.likes.length > 0
-				? keyFacts.likes.join(", ")
-				: "None yet",
-		);
-		setTextIfExists(
-			"player-dislikes",
-			Array.isArray(keyFacts.dislikes) && keyFacts.dislikes.length > 0
-				? keyFacts.dislikes.join(", ")
-				: "None yet",
-		);
-		setTextIfExists(
-			"player-personality",
-			Array.isArray(keyFacts.personality_traits) &&
-				keyFacts.personality_traits.length > 0
-				? keyFacts.personality_traits.join(", ")
-				: "None yet",
-		);
-		setTextIfExists(
-			"player-memories",
-			Array.isArray(keyFacts.important_memories) &&
-				keyFacts.important_memories.length > 0
-				? keyFacts.important_memories.join(", ")
-				: "None yet",
-		);
-		setTextIfExists(
-			"player-relationship",
-			profileMemory.relationship_dynamics || "No relationship dynamics yet",
-		);
-		setTextIfExists(
-			"global-profile-last-updated",
-			profileMemory.last_global_summary || "Never",
-		);
 
 		setTextIfExists("affection-value", data.affection);
 		setValueIfExists("affection-level", data.affection);
@@ -132,12 +87,9 @@ async function loadProfileData() {
 				: "Not set",
 		);
 
-		loadMemoryStats();
 		loadAdvancedSettingsFromData(data);
-		loadGlobalKnowledge();
 	} catch (error) {
 		console.error("Error loading profile data:", error);
-		setTextIfExists("player-summary", "Error loading global profile");
 		showError("Failed to load profile data");
 	}
 }
@@ -472,6 +424,13 @@ function setupEventListeners() {
 	if (saveVisionModelBtn)
 		saveVisionModelBtn.addEventListener("click", saveVisionModel);
 
+	const knowledgeForm = document.getElementById("global-knowledge-form");
+	if (knowledgeForm)
+		knowledgeForm.addEventListener("submit", saveKnowledgeEntry);
+	const cancelKnowledgeEdit = document.getElementById("cancel-knowledge-edit");
+	if (cancelKnowledgeEdit)
+		cancelKnowledgeEdit.addEventListener("click", resetKnowledgeForm);
+
 	document.addEventListener("keydown", (e) => {
 		if (
 			(e.ctrlKey || e.metaKey) &&
@@ -524,28 +483,9 @@ function setupEventListeners() {
 	if (saveImageModelBtn)
 		saveImageModelBtn.addEventListener("click", saveImageModel);
 
-	const saveGlobalKnowledgeBtn = document.getElementById(
-		"save-global-knowledge",
-	);
-	if (saveGlobalKnowledgeBtn)
-		saveGlobalKnowledgeBtn.addEventListener("click", saveGlobalKnowledge);
-
-	const updateGlobalProfileBtn = document.getElementById(
-		"update-global-profile",
-	);
-	if (updateGlobalProfileBtn)
-		updateGlobalProfileBtn.addEventListener("click", updateGlobalProfile);
-
 	const clearChatHistoryBtn = document.getElementById("clear-chat-history");
 	if (clearChatHistoryBtn)
 		clearChatHistoryBtn.addEventListener("click", clearChatHistory);
-
-	const rebuildMemoryBtn = document.getElementById("rebuild-memory");
-	if (rebuildMemoryBtn)
-		rebuildMemoryBtn.addEventListener("click", rebuildStructuredMemory);
-
-	const runDecayBtn = document.getElementById("run-decay");
-	if (runDecayBtn) runDecayBtn.addEventListener("click", runMemoryDecay);
 
 	const saveLocationBtn = document.getElementById("save-location");
 	if (saveLocationBtn) saveLocationBtn.addEventListener("click", saveLocation);
@@ -1006,192 +946,6 @@ function toggleBYOKFields() {
 
 window.saveBYOKConfig = saveBYOKConfig;
 
-// Load structured memory statistics
-async function loadMemoryStats() {
-	try {
-		const response = await fetch("/api/memory_stats");
-		const data = await response.json();
-
-		if (data.status === "success") {
-			const stats = data.stats;
-			setTextIfExists("semantic-count", stats.semantic || 0);
-			setTextIfExists("episodic-count", stats.episodic || 0);
-			setTextIfExists("segment-count", stats.segments || 0);
-
-			const factsList = document.getElementById("top-facts-list");
-			if (factsList) {
-				if (stats.top_facts && stats.top_facts.length > 0) {
-					factsList.innerHTML = stats.top_facts
-						.map((f) => `<li>${f}</li>`)
-						.join("");
-				} else {
-					factsList.innerHTML =
-						'<li>No facts extracted yet. Start chatting or click "Rebuild Structured Memory".</li>';
-				}
-			}
-		}
-	} catch (error) {
-		console.error("Error loading memory stats:", error);
-	}
-}
-
-async function rebuildStructuredMemory() {
-	if (
-		!confirm(
-			"Rebuild structured memory? This will re-extract facts and segments from the last 50 messages in the current session.",
-		)
-	) {
-		return;
-	}
-
-	const btn = document.getElementById("rebuild-memory");
-	if (!btn) return;
-	const originalText = btn.textContent;
-	btn.textContent = "Rebuilding...";
-	btn.disabled = true;
-
-	try {
-		const response = await fetch("/api/rebuild_structured_memory", {
-			method: "POST",
-		});
-		const result = await response.json();
-
-		if (result.status === "success") {
-			showSuccess(result.message);
-			loadMemoryStats();
-		} else {
-			showError(`Failed to rebuild memory: ${result.message || result.error}`);
-		}
-	} catch (error) {
-		console.error("Error rebuilding structured memory:", error);
-		showError("Error rebuilding structured memory");
-	} finally {
-		btn.textContent = originalText;
-		btn.disabled = false;
-	}
-}
-
-async function runMemoryDecay() {
-	if (
-		!confirm(
-			"Run memory decay? This applies FSRS-style forgetting: old unused memories will fade, frequently used ones will be preserved.",
-		)
-	) {
-		return;
-	}
-
-	const btn = document.getElementById("run-decay");
-	if (!btn) return;
-	const originalText = btn.textContent;
-	btn.textContent = "Running...";
-	btn.disabled = true;
-
-	try {
-		const response = await fetch("/api/run_memory_decay", { method: "POST" });
-		const result = await response.json();
-
-		if (result.status === "success") {
-			showSuccess(result.message);
-			loadMemoryStats();
-		} else {
-			showError(`Failed to run decay: ${result.message || result.error}`);
-		}
-	} catch (error) {
-		console.error("Error running memory decay:", error);
-		showError("Error running memory decay");
-	} finally {
-		btn.textContent = originalText;
-		btn.disabled = false;
-	}
-}
-
-async function updateGlobalProfile() {
-	if (
-		!confirm(
-			"Update global player profile? This will analyze ALL sessions to build a comprehensive profile. This may take a moment.",
-		)
-	) {
-		return;
-	}
-
-	const updateBtn = document.getElementById("update-global-profile");
-	if (!updateBtn) return;
-	const originalText = updateBtn.textContent;
-	updateBtn.textContent = "Analyzing...";
-	updateBtn.disabled = true;
-
-	try {
-		const response = await fetch("/api/update_global_profile", {
-			method: "POST",
-		});
-		const result = await response.json();
-
-		if (result.status === "success") {
-			showSuccess("Global player profile updated from ALL sessions!");
-			if (result.profile?.memory) {
-				updateGlobalProfileDisplay(result.profile.memory);
-			} else {
-				loadProfileData();
-			}
-		} else {
-			showError(`Failed to update global profile: ${result.message}`);
-		}
-	} catch (error) {
-		console.error("Error updating global profile:", error);
-		showError("Error updating global profile");
-	} finally {
-		updateBtn.textContent = originalText;
-		updateBtn.disabled = false;
-	}
-}
-
-// Direct update function for global profile display
-function updateGlobalProfileDisplay(profileMemory) {
-	console.log("Updating global profile display with:", profileMemory);
-
-	const keyFacts = profileMemory.key_facts || {};
-	setTextIfExists(
-		"player-summary",
-		profileMemory.player_summary ||
-			"Profile analysis completed but no summary generated.",
-	);
-	setTextIfExists(
-		"player-likes",
-		Array.isArray(keyFacts.likes) && keyFacts.likes.length > 0
-			? keyFacts.likes.join(", ")
-			: "None identified",
-	);
-	setTextIfExists(
-		"player-dislikes",
-		Array.isArray(keyFacts.dislikes) && keyFacts.dislikes.length > 0
-			? keyFacts.dislikes.join(", ")
-			: "None identified",
-	);
-	setTextIfExists(
-		"player-personality",
-		Array.isArray(keyFacts.personality_traits) &&
-			keyFacts.personality_traits.length > 0
-			? keyFacts.personality_traits.join(", ")
-			: "None identified",
-	);
-	setTextIfExists(
-		"player-memories",
-		Array.isArray(keyFacts.important_memories) &&
-			keyFacts.important_memories.length > 0
-			? keyFacts.important_memories.join(", ")
-			: "None identified",
-	);
-	setTextIfExists(
-		"player-relationship",
-		profileMemory.relationship_dynamics ||
-			"No specific relationship dynamics identified",
-	);
-	setTextIfExists(
-		"global-profile-last-updated",
-		profileMemory.last_global_summary || "Just now",
-	);
-}
-
 async function clearChatHistory() {
 	if (
 		!confirm(
@@ -1221,65 +975,6 @@ async function clearChatHistory() {
 	} finally {
 		clearBtn.textContent = originalText;
 		clearBtn.disabled = false;
-	}
-}
-
-// Global knowledge functions
-async function loadGlobalKnowledge() {
-	try {
-		const response = await fetch("/api/profile");
-		const data = await response.json();
-
-		const globalKnowledge = data.global_knowledge || {};
-		let gkText = "";
-		if (typeof globalKnowledge === "string") {
-			gkText = globalKnowledge;
-		} else if (globalKnowledge.facts) {
-			gkText =
-				typeof globalKnowledge.facts === "string"
-					? globalKnowledge.facts
-					: JSON.stringify(globalKnowledge.facts, null, 2);
-		} else if (Object.keys(globalKnowledge).length > 0) {
-			gkText = JSON.stringify(globalKnowledge, null, 2);
-		}
-		setValueIfExists("global-knowledge", gkText);
-
-		console.log("Global knowledge loaded");
-	} catch (error) {
-		console.error("Error loading global knowledge:", error);
-		showError("Failed to load global knowledge");
-	}
-}
-
-async function saveGlobalKnowledge() {
-	const facts = getValueIfExists("global-knowledge", "").trim();
-	const saveBtn = document.getElementById("save-global-knowledge");
-	if (!saveBtn) return;
-	const originalText = saveBtn.textContent;
-	saveBtn.textContent = "Saving...";
-	saveBtn.disabled = true;
-
-	try {
-		const response = await fetch("/api/global_knowledge/update", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({ facts }),
-		});
-
-		const result = await response.json();
-		if (result.status === "success") {
-			showSuccess("Global knowledge saved! This will be used in all sessions.");
-		} else {
-			showError("Error saving global knowledge");
-		}
-	} catch (error) {
-		console.error("Error saving global knowledge:", error);
-		showError("Error saving global knowledge");
-	} finally {
-		saveBtn.textContent = originalText;
-		saveBtn.disabled = false;
 	}
 }
 
@@ -1436,15 +1131,11 @@ document.addEventListener("DOMContentLoaded", loadVisionModel);
 
 // Export to window to fix unused variable warnings from HTML onclicks
 window.clearChatHistory = clearChatHistory;
-window.rebuildStructuredMemory = rebuildStructuredMemory;
-window.runMemoryDecay = runMemoryDecay;
-window.saveGlobalKnowledge = saveGlobalKnowledge;
 window.saveImageModel = saveImageModel;
 window.saveLocation = saveLocation;
 window.setProviderActive = setProviderActive;
 window.testProviderConnection = testProviderConnection;
 window.toggleBYOKFields = toggleBYOKFields;
-window.updateGlobalProfile = updateGlobalProfile;
 window.updateModelDropdown = updateModelDropdown;
 
 // ── Slider drag-guard ────────────────────────────────────────────────────
@@ -1541,4 +1232,147 @@ function attachSliderGuard(slider) {
 	slider.addEventListener("pointermove", onMove);
 	slider.addEventListener("pointerup", onUp);
 	slider.addEventListener("pointercancel", onUp);
+}
+
+async function loadGlobalKnowledge() {
+	const list = document.getElementById("global-knowledge-list");
+	if (!list) return;
+	try {
+		const response = await fetch("/api/global-knowledge", {
+			headers: { Accept: "application/json" },
+		});
+		if (!response.ok) throw new Error("Failed to load Global Knowledge");
+		const data = await response.json();
+		renderGlobalKnowledge(data.entries || []);
+	} catch (error) {
+		setKnowledgeStatus(error.message, true);
+	}
+}
+
+function renderGlobalKnowledge(entries) {
+	const list = document.getElementById("global-knowledge-list");
+	if (!list) return;
+	list.replaceChildren();
+	if (entries.length === 0) {
+		const empty = document.createElement("p");
+		empty.className = "form-hint";
+		empty.textContent = "No explicit knowledge entries yet.";
+		list.appendChild(empty);
+		return;
+	}
+	entries.forEach((entry) => {
+		const item = document.createElement("article");
+		item.className = `knowledge-entry ${entry.enabled ? "" : "knowledge-entry-disabled"}`;
+		item.dataset.entryId = entry.id;
+		const header = document.createElement("div");
+		header.className = "knowledge-entry-header";
+		const title = document.createElement("strong");
+		title.textContent = entry.category || "General";
+		header.appendChild(title);
+		const actions = document.createElement("div");
+		const edit = document.createElement("button");
+		edit.type = "button";
+		edit.className = "btn btn-secondary btn-sm";
+		edit.textContent = "Edit";
+		edit.addEventListener("click", () => editKnowledgeEntry(entry));
+		const remove = document.createElement("button");
+		remove.type = "button";
+		remove.className = "btn btn-danger btn-sm";
+		remove.textContent = "Delete";
+		remove.addEventListener("click", () => deleteKnowledgeEntry(entry.id));
+		actions.append(edit, remove);
+		header.appendChild(actions);
+		const content = document.createElement("p");
+		content.textContent = entry.content;
+		item.append(header, content);
+		list.appendChild(item);
+	});
+}
+
+function editKnowledgeEntry(entry) {
+	setValueIfExists("knowledge-entry-id", entry.id);
+	setValueIfExists("knowledge-entry-sort-order", entry.sort_order ?? 0);
+	setValueIfExists("knowledge-category", entry.category);
+	setValueIfExists("knowledge-content", entry.content);
+	const enabled = document.getElementById("knowledge-enabled");
+	if (enabled) enabled.checked = entry.enabled;
+	setTextIfExists("save-knowledge-entry", "Save entry");
+	const cancel = document.getElementById("cancel-knowledge-edit");
+	if (cancel) cancel.hidden = false;
+	document.getElementById("knowledge-category")?.focus();
+}
+
+function resetKnowledgeForm() {
+	document.getElementById("global-knowledge-form")?.reset();
+	const sortOrder = document.getElementById("knowledge-entry-sort-order");
+	if (sortOrder) sortOrder.value = "0";
+	const id = document.getElementById("knowledge-entry-id");
+	if (id) id.value = "";
+	setTextIfExists("save-knowledge-entry", "Add entry");
+	const cancel = document.getElementById("cancel-knowledge-edit");
+	if (cancel) cancel.hidden = true;
+}
+
+async function saveKnowledgeEntry(event) {
+	event.preventDefault();
+	const id = getValueIfExists("knowledge-entry-id");
+	const payload = {
+		category: getValueIfExists("knowledge-category").trim() || "General",
+		content: getValueIfExists("knowledge-content").trim(),
+		enabled: getCheckedIfExists("knowledge-enabled"),
+		sort_order:
+			Number.parseInt(
+				getValueIfExists("knowledge-entry-sort-order", "0"),
+				10,
+			) || 0,
+	};
+	if (!payload.content) {
+		setKnowledgeStatus("Content is required.", true);
+		return;
+	}
+	try {
+		const response = await fetch(
+			id
+				? `/api/global-knowledge/${encodeURIComponent(id)}`
+				: "/api/global-knowledge",
+			{
+				method: id ? "PATCH" : "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Accept: "application/json",
+				},
+				body: JSON.stringify(payload),
+			},
+		);
+		if (!response.ok) throw new Error("Failed to save Global Knowledge entry");
+		resetKnowledgeForm();
+		await loadGlobalKnowledge();
+		setKnowledgeStatus("Global Knowledge saved.");
+	} catch (error) {
+		setKnowledgeStatus(error.message, true);
+	}
+}
+
+async function deleteKnowledgeEntry(id) {
+	if (!window.confirm("Delete this Global Knowledge entry?")) return;
+	try {
+		const response = await fetch(
+			`/api/global-knowledge/${encodeURIComponent(id)}`,
+			{ method: "DELETE", headers: { Accept: "application/json" } },
+		);
+		if (!response.ok)
+			throw new Error("Failed to delete Global Knowledge entry");
+		await loadGlobalKnowledge();
+		setKnowledgeStatus("Global Knowledge entry deleted.");
+	} catch (error) {
+		setKnowledgeStatus(error.message, true);
+	}
+}
+
+function setKnowledgeStatus(message, isError = false) {
+	const status = document.getElementById("knowledge-status");
+	if (status) {
+		status.textContent = message;
+		status.classList.toggle("status-error", isError);
+	}
 }

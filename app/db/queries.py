@@ -70,9 +70,7 @@ SCHEMA_DDL: tuple[str, ...] = (
         partner_name VARCHAR(255) NOT NULL DEFAULT '',
         affection INTEGER NOT NULL DEFAULT 50,
         theme VARCHAR(255) NOT NULL DEFAULT 'default',
-        memory_state JSONB NOT NULL DEFAULT '{}',
         session_history JSONB NOT NULL DEFAULT '{}',
-        global_knowledge JSONB NOT NULL DEFAULT '{}',
         providers_config JSONB NOT NULL DEFAULT '{}',
         context JSONB NOT NULL DEFAULT '{}',
         image_model TEXT NOT NULL DEFAULT 'hunyuan',
@@ -84,6 +82,64 @@ SCHEMA_DDL: tuple[str, ...] = (
         timestamp TIMESTAMP DEFAULT NOW()
     )
     """,
+    # ── global_knowledge_entries (explicit user-managed facts) ──
+    """
+    CREATE TABLE IF NOT EXISTS global_knowledge_entries (
+        id UUID NOT NULL DEFAULT generate_uuidv7() PRIMARY KEY,
+        user_id UUID NOT NULL,
+        category VARCHAR(255) NOT NULL DEFAULT '',
+        content TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
+    )
+    """,
+    """
+    DO $migration$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'profiles' AND column_name = 'global_knowledge'
+      ) THEN
+        EXECUTE $sql$
+          INSERT INTO global_knowledge_entries
+            (user_id, category, content, sort_order, enabled)
+          SELECT p.id,
+                 COALESCE(NULLIF(item->>'category', ''), 'General'),
+                 item->>'content',
+                 (item_position - 1)::integer,
+                 TRUE
+          FROM profiles p
+          CROSS JOIN LATERAL (
+            SELECT item, item_position
+            FROM jsonb_array_elements(
+              CASE
+                WHEN jsonb_typeof(p.global_knowledge->'facts') = 'array'
+                THEN p.global_knowledge->'facts'
+                ELSE '[]'::jsonb
+              END
+            ) WITH ORDINALITY AS array_items(item, item_position)
+            UNION ALL
+            SELECT jsonb_build_object(
+                     'category', 'General',
+                     'content', p.global_knowledge->>'facts'
+                   ),
+                   1
+            WHERE jsonb_typeof(p.global_knowledge->'facts') = 'string'
+          ) legacy_items
+          WHERE NULLIF(BTRIM(item->>'content'), '') IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM global_knowledge_entries existing
+              WHERE existing.user_id = p.id
+            )
+        $sql$;
+        ALTER TABLE profiles DROP COLUMN global_knowledge;
+      END IF;
+    END
+    $migration$
+    """,
     # ── chat_sessions (PK UUID, tenant FK user_id → profiles) ──
     """
     CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -92,7 +148,6 @@ SCHEMA_DDL: tuple[str, ...] = (
         name VARCHAR(255) NOT NULL DEFAULT 'New Chat',
         is_active BOOLEAN NOT NULL DEFAULT FALSE,
         message_count INTEGER NOT NULL DEFAULT 0,
-        memory_state JSONB DEFAULT '{}',
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW(),
         deleted_at TIMESTAMP DEFAULT NULL,
@@ -118,22 +173,93 @@ SCHEMA_DDL: tuple[str, ...] = (
         FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
     )
     """,
-    # ── semantic_facts (id stays SERIAL int; user_id UUID FK; embedding vector(4096)) ──
+    # ── graph memory: episodes, inferred nodes, relationships, evidence ──
     """
-    CREATE TABLE IF NOT EXISTS semantic_facts (
-        id SERIAL PRIMARY KEY,
+    CREATE TABLE IF NOT EXISTS episodes (
+        id UUID NOT NULL DEFAULT generate_uuidv7() PRIMARY KEY,
         user_id UUID NOT NULL,
-        fact_type VARCHAR NOT NULL,
-        content TEXT NOT NULL,
-        metadata JSONB,
+        session_id UUID NOT NULL,
+        title TEXT NOT NULL,
+        summary TEXT NOT NULL,
         embedding vector(4096),
-        tsv tsvector,
-        pending_review BOOLEAN DEFAULT FALSE,
-        invalid_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_accessed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        importance REAL NOT NULL DEFAULT 0.5,
+        source_start_message_id INTEGER,
+        source_end_message_id INTEGER,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        archived_at TIMESTAMP NULL,
+        FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE,
+        FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS memory_nodes (
+        id UUID NOT NULL DEFAULT generate_uuidv7() PRIMARY KEY,
+        user_id UUID NOT NULL,
+        node_type TEXT NOT NULL,
+        content TEXT NOT NULL,
+        embedding vector(4096),
+        confidence REAL NOT NULL DEFAULT 0.0 CHECK (confidence >= 0 AND confidence <= 1),
+        importance REAL NOT NULL DEFAULT 0.5 CHECK (importance >= 0 AND importance <= 1),
+        status TEXT NOT NULL DEFAULT 'active',
+        valid_from TIMESTAMP NOT NULL DEFAULT NOW(),
+        valid_until TIMESTAMP NULL,
+        supersedes_node_id UUID NULL REFERENCES memory_nodes(id) ON DELETE SET NULL,
+        embedding_model TEXT NULL,
+        embedding_dimensions INTEGER NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        last_accessed_at TIMESTAMP NULL,
         FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
     )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS memory_edges (
+        id UUID NOT NULL DEFAULT generate_uuidv7() PRIMARY KEY,
+        user_id UUID NOT NULL,
+        from_node_id UUID NOT NULL REFERENCES memory_nodes(id) ON DELETE CASCADE,
+        to_node_id UUID NOT NULL REFERENCES memory_nodes(id) ON DELETE CASCADE,
+        edge_type TEXT NOT NULL,
+        confidence REAL NOT NULL DEFAULT 0.0 CHECK (confidence >= 0 AND confidence <= 1),
+        valid_from TIMESTAMP NOT NULL DEFAULT NOW(),
+        valid_until TIMESTAMP NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, from_node_id, to_node_id, edge_type),
+        CHECK (from_node_id <> to_node_id),
+        FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS memory_evidence (
+        id UUID NOT NULL DEFAULT generate_uuidv7() PRIMARY KEY,
+        user_id UUID NOT NULL,
+        node_id UUID NULL REFERENCES memory_nodes(id) ON DELETE CASCADE,
+        edge_id UUID NULL REFERENCES memory_edges(id) ON DELETE CASCADE,
+        episode_id UUID NULL REFERENCES episodes(id) ON DELETE CASCADE,
+        message_id INTEGER NULL REFERENCES messages(id) ON DELETE CASCADE,
+        evidence_kind TEXT NOT NULL,
+        excerpt_hash TEXT NULL,
+        observed_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        CHECK (node_id IS NOT NULL OR edge_id IS NOT NULL),
+        FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_episodes_user_session ON episodes(user_id, session_id, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_episodes_user_active ON episodes(user_id, archived_at, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_memory_nodes_active ON memory_nodes(user_id, status, node_type)",
+    "CREATE INDEX IF NOT EXISTS idx_memory_nodes_valid_until ON memory_nodes(user_id, valid_until)",
+    "CREATE INDEX IF NOT EXISTS idx_memory_nodes_created ON memory_nodes(user_id, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS memory_nodes_content_idx ON memory_nodes USING gin (content gin_trgm_ops)",
+    "CREATE INDEX IF NOT EXISTS idx_memory_nodes_embedding_dimensions ON memory_nodes(user_id, embedding_dimensions) WHERE embedding IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS idx_memory_edges_from ON memory_edges(user_id, from_node_id, edge_type)",
+    "CREATE INDEX IF NOT EXISTS idx_memory_edges_to ON memory_edges(user_id, to_node_id, edge_type)",
+    "CREATE INDEX IF NOT EXISTS idx_memory_evidence_node ON memory_evidence(user_id, node_id)",
+    "CREATE INDEX IF NOT EXISTS idx_memory_evidence_message ON memory_evidence(user_id, message_id)",
+    "CREATE INDEX IF NOT EXISTS idx_memory_evidence_episode ON memory_evidence(user_id, episode_id)",
+    """
+    CREATE OR REPLACE VIEW relationships AS
+    SELECT * FROM memory_edges
+    WHERE edge_type IN ('knows', 'works_with', 'related_to', 'belongs_to')
     """,
     # ── user_identities (OAuth provider linkage — Google sub / GitHub id) ──
     """
@@ -164,13 +290,12 @@ SCHEMA_DDL: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at)",
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_deleted ON chat_sessions(deleted_at)",
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON chat_sessions(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_global_knowledge_entries_user ON global_knowledge_entries(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_global_knowledge_entries_order ON global_knowledge_entries(user_id, sort_order, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_global_knowledge_entries_enabled ON global_knowledge_entries(user_id, enabled)",
     "CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id)",
     "CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_messages_session_user ON messages(session_id, user_id)",
-    "CREATE INDEX IF NOT EXISTS idx_semantic_facts_user_id ON semantic_facts(user_id)",
-    "CREATE INDEX IF NOT EXISTS semantic_facts_content_idx ON semantic_facts USING gin (content gin_trgm_ops)",
-    "CREATE INDEX IF NOT EXISTS semantic_facts_tsv_idx ON semantic_facts USING gin (tsv)",
-    "CREATE INDEX IF NOT EXISTS semantic_facts_pending_review_idx ON semantic_facts(pending_review) WHERE pending_review = TRUE",
     "CREATE INDEX IF NOT EXISTS idx_user_identities_user_id ON user_identities(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at)",
@@ -178,6 +303,32 @@ SCHEMA_DDL: tuple[str, ...] = (
     DO $$ BEGIN
       ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT NULL;
     EXCEPTION WHEN undefined_column THEN NULL;
+    END $$;
+    """,
+    """
+    DO $$ BEGIN
+      ALTER TABLE profiles DROP COLUMN IF EXISTS memory_state;
+      ALTER TABLE chat_sessions DROP COLUMN IF EXISTS memory_state;
+      ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS memory_pipeline_state JSONB NOT NULL DEFAULT '{}';
+    EXCEPTION WHEN undefined_table THEN NULL;
+    END $$;
+    """,
+    """
+    DO $$ BEGIN
+      ALTER TABLE episodes
+        ALTER COLUMN source_start_message_id TYPE INTEGER USING source_start_message_id::text::integer,
+        ALTER COLUMN source_end_message_id TYPE INTEGER USING source_end_message_id::text::integer;
+    EXCEPTION WHEN undefined_table OR undefined_column OR datatype_mismatch THEN NULL;
+    END $$;
+    """,
+    """
+    DO $$ BEGIN
+      DROP INDEX IF EXISTS idx_semantic_facts_user_id;
+      DROP INDEX IF EXISTS semantic_facts_content_idx;
+      DROP INDEX IF EXISTS semantic_facts_tsv_idx;
+      DROP INDEX IF EXISTS semantic_facts_pending_review_idx;
+      DROP TABLE IF EXISTS semantic_facts;
+    EXCEPTION WHEN undefined_table THEN NULL;
     END $$;
     """,
     # Phase 1.3: add user_id to tenant-scoped tables (already done via migration SQL)
@@ -226,6 +377,146 @@ LIMIT 1
 
 SQL_PROFILE_SELECT_BY_ID = "SELECT * FROM profiles WHERE id = %s"
 
+SQL_GLOBAL_KNOWLEDGE_LIST = """
+SELECT id, user_id, category, content, sort_order, enabled, created_at, updated_at
+FROM global_knowledge_entries
+WHERE user_id = %s
+ORDER BY sort_order ASC, created_at ASC, id ASC
+"""
+
+SQL_GLOBAL_KNOWLEDGE_GET = """
+SELECT id, user_id, category, content, sort_order, enabled, created_at, updated_at
+FROM global_knowledge_entries
+WHERE id = %s AND user_id = %s
+"""
+
+SQL_GLOBAL_KNOWLEDGE_INSERT = """
+INSERT INTO global_knowledge_entries (user_id, category, content, sort_order, enabled)
+VALUES (%s, %s, %s, %s, %s)
+RETURNING id, user_id, category, content, sort_order, enabled, created_at, updated_at
+"""
+
+SQL_GLOBAL_KNOWLEDGE_UPDATE = """
+UPDATE global_knowledge_entries
+SET category = %s, content = %s, sort_order = %s, enabled = %s, updated_at = NOW()
+WHERE id = %s AND user_id = %s
+RETURNING id, user_id, category, content, sort_order, enabled, created_at, updated_at
+"""
+
+SQL_GLOBAL_KNOWLEDGE_DELETE = """
+DELETE FROM global_knowledge_entries
+WHERE id = %s AND user_id = %s
+RETURNING id
+"""
+
+SQL_GRAPH_EPISODE_INSERT = """
+INSERT INTO episodes
+    (user_id, session_id, title, summary, embedding, importance,
+     source_start_message_id, source_end_message_id)
+VALUES (%s, %s, %s, %s, %s::vector, %s, %s, %s)
+RETURNING id, user_id, session_id, title, summary, embedding, importance,
+          source_start_message_id, source_end_message_id, created_at, archived_at
+"""
+
+SQL_GRAPH_NODE_INSERT = """
+INSERT INTO memory_nodes
+    (user_id, node_type, content, embedding, confidence, importance, status,
+     valid_from, valid_until, supersedes_node_id, embedding_model, embedding_dimensions)
+VALUES (%s, %s, %s, %s::vector, %s, %s, %s, %s, %s, %s, %s, %s)
+RETURNING id, user_id, node_type, content, embedding, confidence, importance, status,
+          valid_from, valid_until, supersedes_node_id, embedding_model,
+          embedding_dimensions, created_at, updated_at, last_accessed_at
+"""
+
+SQL_GRAPH_NODE_BY_CONTENT = """
+SELECT id, user_id, node_type, content, embedding, confidence, importance, status,
+       valid_from, valid_until, supersedes_node_id, embedding_model,
+       embedding_dimensions, created_at, updated_at, last_accessed_at
+FROM memory_nodes
+WHERE user_id = %s AND content = %s AND status = 'active' AND valid_until IS NULL
+LIMIT 1
+"""
+SQL_GRAPH_NODE_LIST = """
+SELECT id, user_id, node_type, content, confidence, importance, status, valid_from,
+       valid_until, supersedes_node_id, embedding_model, embedding_dimensions,
+       created_at, updated_at, last_accessed_at, 0.0 AS score
+FROM memory_nodes
+WHERE user_id = %s AND status = 'active' AND valid_until IS NULL
+ORDER BY importance DESC, created_at DESC
+LIMIT %s
+"""
+
+SQL_GRAPH_NODE_PROVENANCE = """
+SELECT e.id AS evidence_id, e.node_id, e.episode_id, e.message_id,
+       e.evidence_kind, e.observed_at, e.created_at,
+       ep.session_id, ep.title AS episode_title, ep.summary AS episode_summary,
+       ep.created_at AS episode_created_at
+FROM memory_evidence e
+LEFT JOIN episodes ep ON ep.id = e.episode_id AND ep.user_id = e.user_id
+WHERE e.user_id = %s AND e.node_id = %s
+ORDER BY e.created_at ASC, e.id ASC
+"""
+
+SQL_GRAPH_EDGE_UPSERT = """
+INSERT INTO memory_edges
+    (user_id, from_node_id, to_node_id, edge_type, confidence)
+VALUES (%s, %s, %s, %s, %s)
+ON CONFLICT (user_id, from_node_id, to_node_id, edge_type)
+DO UPDATE SET confidence = GREATEST(memory_edges.confidence, EXCLUDED.confidence),
+              valid_until = NULL
+RETURNING id, user_id, from_node_id, to_node_id, edge_type, confidence,
+          valid_from, valid_until, created_at
+"""
+
+SQL_GRAPH_EVIDENCE_INSERT = """
+INSERT INTO memory_evidence
+    (user_id, node_id, edge_id, episode_id, message_id, evidence_kind, excerpt_hash)
+VALUES (%s, %s, %s, %s, %s, %s, %s)
+RETURNING id, user_id, node_id, edge_id, episode_id, message_id, evidence_kind,
+          excerpt_hash, observed_at, created_at
+"""
+
+SQL_GRAPH_NODE_SEARCH_TEXT = """
+SELECT id, user_id, node_type, content, confidence, importance, status, valid_from,
+       valid_until, supersedes_node_id, embedding_model, embedding_dimensions,
+       created_at, updated_at, last_accessed_at,
+       similarity(content, %s) AS score
+FROM memory_nodes
+WHERE user_id = %s AND status = 'active' AND valid_until IS NULL
+  AND content %% %s
+ORDER BY score DESC, importance DESC, created_at DESC
+LIMIT %s
+"""
+
+SQL_GRAPH_NODE_EXPAND = """
+SELECT e.id, e.user_id, e.from_node_id, e.to_node_id, e.edge_type, e.confidence,
+       e.valid_from, e.valid_until, e.created_at,
+       n.id AS node_id, n.node_type, n.content, n.confidence AS node_confidence,
+       n.importance, n.status, n.valid_from AS node_valid_from,
+       n.valid_until AS node_valid_until
+FROM memory_edges e
+JOIN memory_nodes n ON n.id = CASE
+    WHEN e.from_node_id = %s THEN e.to_node_id ELSE e.from_node_id END
+WHERE e.user_id = %s
+  AND (%s = e.from_node_id OR %s = e.to_node_id)
+  AND e.valid_until IS NULL AND n.user_id = %s
+  AND n.status = 'active' AND n.valid_until IS NULL
+ORDER BY e.confidence DESC, n.importance DESC, n.created_at DESC
+LIMIT %s
+"""
+
+SQL_GRAPH_NODE_SEARCH_VECTOR = """
+SELECT n.id, n.user_id, n.node_type, n.content, n.confidence, n.importance,
+       n.status, n.valid_from, n.valid_until, n.supersedes_node_id,
+       n.embedding_model, n.embedding_dimensions, n.created_at, n.updated_at,
+       n.last_accessed_at, 1 - (n.embedding <=> %s::vector) AS score
+FROM memory_nodes n
+WHERE n.user_id = %s AND n.status = 'active' AND n.valid_until IS NULL
+  AND n.embedding IS NOT NULL AND n.embedding_dimensions = %s
+ORDER BY n.embedding <=> %s::vector, n.importance DESC, n.created_at DESC
+LIMIT %s
+"""
+
 SQL_AUTH_ME_LOOKUP = """
 SELECT p.user_name, p.avatar_url, ui.email
 FROM profiles p
@@ -248,9 +539,8 @@ SQL_PROFILE_UPDATE_DISPLAY_NAME = (
 
 SQL_PROFILE_INSERT_DEFAULT = """
 INSERT INTO profiles (user_name, partner_name, affection, theme,
-                      memory_state, session_history, global_knowledge,
-                      providers_config, context, timestamp, updated_at)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                      session_history, providers_config, context, timestamp, updated_at)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
 
 DEFAULT_PROFILE_PARAMS = (
@@ -261,14 +551,10 @@ DEFAULT_PROFILE_PARAMS = (
     "{}",
     "{}",
     "{}",
-    "{}",
-    "{}",
 )
 
 _PROFILE_JSON_FIELDS = (
-    "memory",
     "session_history",
-    "global_knowledge",
     "providers_config",
     "context",
 )
@@ -294,8 +580,7 @@ def build_profile_update(updates: dict[str, Any]) -> tuple[str, list[Any]] | Non
 
     for key, value in updates.items():
         if key in _PROFILE_JSON_FIELDS:
-            col_name = "memory_state" if key == "memory" else key
-            set_parts.append(f"{col_name} = %s")
+            set_parts.append(f"{key} = %s")
             params.append(json.dumps(value) if isinstance(value, dict) else value)
         elif key in _PROFILE_TEXT_FIELDS:
             set_parts.append(f"{key} = %s")
@@ -310,6 +595,20 @@ def build_profile_update(updates: dict[str, Any]) -> tuple[str, list[Any]] | Non
     set_parts.append("updated_at = %s")
     params.append(datetime.now())
     return f"UPDATE profiles SET {', '.join(set_parts)}", params
+
+
+def parse_global_knowledge_row(row: dict | None) -> dict:
+    if not row:
+        return {}
+    return {
+        "id": str(row["id"]),
+        "category": row.get("category", ""),
+        "content": row.get("content", ""),
+        "sort_order": int(row.get("sort_order", 0)),
+        "enabled": bool(row.get("enabled", True)),
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+    }
 
 
 def parse_profile_row(row: dict | None) -> dict:
@@ -333,9 +632,7 @@ def parse_profile_row(row: dict | None) -> dict:
         "partner_name": row.get("partner_name", ""),
         "affection": row.get("affection", 50),
         "theme": row.get("theme", "default"),
-        "memory": _parse_json(row.get("memory_state")),
         "session_history": _parse_json(row.get("session_history")),
-        "global_knowledge": _parse_json(row.get("global_knowledge")),
         "providers_config": _parse_json(row.get("providers_config")),
         "context": ctx,
         "image_model": row.get("image_model", "qwen_image"),
@@ -362,8 +659,8 @@ def parse_profile_row(row: dict | None) -> dict:
 SQL_SESSION_SELECT_ACTIVE_FOR_USER = "SELECT * FROM chat_sessions WHERE user_id = %s AND is_active = TRUE AND deleted_at IS NULL LIMIT 1"
 
 SQL_SESSION_INSERT = """
-INSERT INTO chat_sessions (user_id, name, is_active, message_count, memory_state, created_at, updated_at)
-VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+INSERT INTO chat_sessions (user_id, name, is_active, message_count, created_at, updated_at)
+VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
 """
 
 SQL_SESSION_SELECT_ALL_FOR_USER = "SELECT * FROM chat_sessions WHERE user_id = %s AND deleted_at IS NULL ORDER BY updated_at DESC"
@@ -386,26 +683,33 @@ ORDER BY updated_at DESC
 LIMIT %s
 """
 
-SQL_SESSION_UPDATE_MEMORY = (
-    "UPDATE chat_sessions SET memory_state = %s, updated_at = %s WHERE id = %s"
-)
-
 SQL_SESSION_INCREMENT_COUNT = (
     "UPDATE chat_sessions SET message_count = message_count + 1, "
     "updated_at = %s WHERE id = %s"
 )
 
-SQL_SESSION_RESET_COUNT_AND_MEMORY = (
-    "UPDATE chat_sessions SET message_count = 0, memory_state = '{}', "
+SQL_SESSION_RESET_COUNT = (
+    "UPDATE chat_sessions SET message_count = 0, memory_pipeline_state = '{}', "
     "updated_at = %s WHERE id = %s"
+)
+
+SQL_PIPELINE_STATE_SELECT = (
+    "SELECT memory_pipeline_state FROM chat_sessions WHERE id = %s AND user_id = %s"
+)
+
+SQL_PIPELINE_STATE_UPDATE = (
+    "UPDATE chat_sessions SET memory_pipeline_state = %s, updated_at = %s "
+    "WHERE id = %s AND user_id = %s"
+)
+
+SQL_PIPELINE_STATE_LOCK = (
+    "SELECT memory_pipeline_state FROM chat_sessions "
+    "WHERE id = %s AND user_id = %s FOR UPDATE"
 )
 
 
 def parse_session_row(row: dict | None) -> dict:
-    """Convert a raw chat_sessions row into the public dict shape.
-
-    memory_state is JSONB, so it's already dict - no parse_json needed.
-    """
+    """(｡•̀ᴗ-)✧"""
     if not row:
         return {}
     return {
@@ -413,36 +717,9 @@ def parse_session_row(row: dict | None) -> dict:
         "name": row.get("name", "New Chat"),
         "is_active": row.get("is_active", False),
         "message_count": row.get("message_count", 0),
-        "memory": row.get("memory_state") or {},  # JSONB - already dict
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
         "timestamp": row.get("timestamp"),
-    }
-
-
-SQL_SESSION_MEMORY_NOTES = """
-SELECT content, role, timestamp
-FROM messages
-WHERE session_id = %s AND user_id = %s AND role IN ('system', 'memory')
-ORDER BY timestamp DESC
-LIMIT 50
-"""
-
-
-def parse_session_memory_rows(rows: list[dict]) -> dict:
-    """Build the public session-memory shape from a list of note rows."""
-    if not rows:
-        return {}
-    return {
-        "notes": [
-            {
-                "content": r.get("content"),
-                "role": r.get("role"),
-                "timestamp": str(r.get("timestamp")),
-            }
-            for r in rows
-        ],
-        "count": len(rows),
     }
 
 
@@ -799,9 +1076,8 @@ VALUES (%s, %s, %s, %s)
 
 SQL_PROFILE_INSERT_DEFAULT_RETURNING = """
 INSERT INTO profiles (user_name, partner_name, affection, theme,
-                      memory_state, session_history, global_knowledge,
-                      providers_config, context, timestamp, updated_at)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                      session_history, providers_config, context, timestamp, updated_at)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
 RETURNING id
 """
 
@@ -862,15 +1138,21 @@ __all__ = [
     "DEFAULT_PROFILE_PARAMS",
     "build_profile_update",
     "parse_profile_row",
+    "SQL_GLOBAL_KNOWLEDGE_LIST",
+    "SQL_GLOBAL_KNOWLEDGE_GET",
+    "SQL_GLOBAL_KNOWLEDGE_INSERT",
+    "SQL_GLOBAL_KNOWLEDGE_UPDATE",
+    "SQL_GLOBAL_KNOWLEDGE_DELETE",
+    "parse_global_knowledge_row",
     # Sessions
     "SQL_SESSION_INSERT",
     "SQL_SESSIONS_RECENT_ACTIVE",
-    "SQL_SESSION_UPDATE_MEMORY",
     "SQL_SESSION_INCREMENT_COUNT",
-    "SQL_SESSION_RESET_COUNT_AND_MEMORY",
+    "SQL_SESSION_RESET_COUNT",
+    "SQL_PIPELINE_STATE_SELECT",
+    "SQL_PIPELINE_STATE_UPDATE",
+    "SQL_PIPELINE_STATE_LOCK",
     "parse_session_row",
-    "SQL_SESSION_MEMORY_NOTES",
-    "parse_session_memory_rows",
     # Messages
     "SQL_MESSAGE_INSERT",
     "SQL_MESSAGE_SELECT_ASC_LIMIT",
@@ -895,6 +1177,17 @@ __all__ = [
     "SQL_ENC_TOTAL_MESSAGES",
     "SQL_ENC_ENCRYPTED_MESSAGES",
     "build_encryption_status",
+    # Graph memory
+    "SQL_GRAPH_EPISODE_INSERT",
+    "SQL_GRAPH_NODE_INSERT",
+    "SQL_GRAPH_NODE_BY_CONTENT",
+    "SQL_GRAPH_NODE_LIST",
+    "SQL_GRAPH_NODE_PROVENANCE",
+    "SQL_GRAPH_EDGE_UPSERT",
+    "SQL_GRAPH_EVIDENCE_INSERT",
+    "SQL_GRAPH_NODE_SEARCH_TEXT",
+    "SQL_GRAPH_NODE_SEARCH_VECTOR",
+    "SQL_GRAPH_NODE_EXPAND",
     # Auth
     "SQL_IDENTITY_LOOKUP",
     "SQL_IDENTITY_INSERT",
