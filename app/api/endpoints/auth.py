@@ -66,7 +66,13 @@ async def login(request: Request, provider: str = "google"):
     # Determine secure cookie attribute based on connection type or configuration
     is_secure = _COOKIE_SECURE or request.url.scheme == "https"
 
-    log.info("OAuth login: provider=%s redirect_uri='%s' origin='%s' is_secure=%s", provider, redirect_uri, origin, is_secure)
+    log.info(
+        "OAuth login: provider=%s redirect_uri='%s' origin='%s' is_secure=%s",
+        provider,
+        redirect_uri,
+        origin,
+        is_secure,
+    )
 
     response = RedirectResponse(url=auth_url, status_code=302)
     response.set_cookie(
@@ -91,7 +97,7 @@ async def callback(request: Request):
 
     state_cookie = request.cookies.get(OAUTH_STATE_COOKIE_NAME)
     session_secret = _require_env("SESSION_SECRET")
-    
+
     log.info(
         "OAuth Callback: query_state='%s', state_cookie='%s', request_cookies=%s",
         state,
@@ -104,7 +110,11 @@ async def callback(request: Request):
         raise HTTPException(status_code=400, detail="State mismatch")
 
     if state_cookie != state:
-        log.error("OAuth State mismatch: cookie '%s' does not match query '%s'", state_cookie, state)
+        log.error(
+            "OAuth State mismatch: cookie '%s' does not match query '%s'",
+            state_cookie,
+            state,
+        )
         raise HTTPException(status_code=400, detail="State mismatch")
 
     verified = verify_state(state, session_secret)
@@ -147,6 +157,7 @@ async def callback(request: Request):
     if origin:
         try:
             from urllib.parse import urljoin
+
             redirect_target = urljoin(origin, "/chat")
         except Exception:
             pass
