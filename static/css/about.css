@@ -6,8 +6,8 @@
 	font-family: var(--font-sans);
 	margin: 0;
 	min-height: 100vh;
-	padding-top: 80px;
-	padding-bottom: 60px;
+	padding-top: 5rem;
+	padding-bottom: 3.75rem;
 }
 
 .about-header {
@@ -17,9 +17,9 @@
 	right: 0;
 	z-index: 90;
 	text-align: center;
-	padding: 1.2rem 1rem;
-	background: var(--surface-raised);
-	border-bottom: 2px solid var(--accent);
+	padding: var(--space-4);
+	background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+	border-bottom: 1px solid var(--border-normal);
 	backdrop-filter: var(--backdrop-blur);
 }
 
@@ -58,20 +58,20 @@
 }
 
 .about-main {
-	max-width: 900px;
+	max-width: 56.25rem;
 	margin: 0 auto;
-	padding: 1.5rem;
+	padding: var(--space-5);
 	position: relative;
 	z-index: 1;
 }
 
 .hero-section {
 	text-align: center;
-	margin-bottom: 2rem;
-	padding: 2rem 1.5rem;
+	margin-bottom: var(--space-6);
+	padding: var(--space-7) var(--space-6);
 	background: var(--surface-raised);
-	border-radius: 1.5rem;
-	border: 2px solid var(--border-normal);
+	border-radius: var(--radius-xl);
+	border: 1px solid var(--border-normal);
 	box-shadow: var(--shadow-md);
 }
 
@@ -92,15 +92,15 @@
 
 .content-section {
 	background: var(--surface-raised);
-	border-radius: 1.2rem;
-	padding: 1.8rem;
-	margin-bottom: 1.5rem;
-	border: 2px solid var(--border-normal);
+	border-radius: var(--radius-lg);
+	padding: var(--space-6);
+	margin-bottom: var(--space-5);
+	border: 1px solid var(--border-normal);
 	box-shadow: var(--shadow-md);
 }
 
 .content-section:hover {
-	transform: translateY(-3px);
+	transform: translateY(-1px);
 	border-color: var(--accent);
 	box-shadow: var(--shadow-lg);
 }
@@ -138,18 +138,18 @@
 
 .tech-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-	gap: 1.5rem;
-	margin: 2rem 0;
+	grid-template-columns: repeat(auto-fit, minmax(17.5rem, 1fr));
+	gap: var(--space-5);
+	margin: var(--space-6) 0;
 }
 
 .tech-card {
 	background: var(--surface-input);
-	padding: 1.5rem;
-	border-radius: 1rem;
+	padding: var(--space-5);
+	border-radius: var(--radius-lg);
 	display: flex;
 	align-items: center;
-	gap: 1rem;
+	gap: var(--space-4);
 	border: 1px solid var(--border-normal);
 }
 
@@ -250,9 +250,9 @@
 	right: 0;
 	z-index: 90;
 	text-align: center;
-	padding: 1rem;
+	padding: var(--space-4);
 	background: var(--surface-raised);
-	border-top: 2px solid var(--accent);
+	border-top: 1px solid var(--border-normal);
 	backdrop-filter: var(--backdrop-blur);
 }
 
@@ -316,7 +316,7 @@ html {
 	}
 
 	.about-main {
-		padding: 1rem;
+		padding: var(--space-4);
 	}
 
 	.hero-content h2 {
@@ -328,7 +328,7 @@ html {
 	}
 
 	.content-section {
-		padding: 1.2rem;
+		padding: var(--space-5);
 	}
 
 	.tech-grid {
