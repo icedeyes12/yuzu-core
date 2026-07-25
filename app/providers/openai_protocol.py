@@ -254,6 +254,7 @@ def validate_openai_messages(messages: Any) -> None:
 
     pending_ids: set[str] = set()
     seen_call_ids: set[str] = set()
+    previous_role: str | None = None
 
     for index, message in enumerate(messages):
         if not isinstance(message, dict):
@@ -276,6 +277,7 @@ def validate_openai_messages(messages: Any) -> None:
                 )
             else:
                 pending_ids.remove(tool_call_id)
+            previous_role = role
             continue
 
         if pending_ids:
@@ -290,6 +292,11 @@ def validate_openai_messages(messages: Any) -> None:
             if tool_calls == []:
                 tool_calls = None
             if tool_calls is not None:
+                if previous_role not in {"user", "tool"}:
+                    errors.append(
+                        f"messages[{index}] assistant tool_calls must immediately follow "
+                        f"a user or completed tool-response turn, got {previous_role!r}"
+                    )
                 if not isinstance(tool_calls, list):
                     errors.append(f"messages[{index}] tool_calls is not a list")
                 else:
@@ -340,6 +347,7 @@ def validate_openai_messages(messages: Any) -> None:
                 errors.append(f"messages[{index}] assistant content is missing or null")
         elif role in {"system", "user"} and "content" not in message:
             errors.append(f"messages[{index}] {role} content is missing")
+        previous_role = role
 
     if pending_ids:
         errors.append(f"missing tool responses for {sorted(pending_ids)!r}")
