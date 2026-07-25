@@ -35,7 +35,8 @@ export class DOMRenderer {
 				scrollToBottom();
 			} else {
 				this._updateMessageDOM(el, msg);
-				if (msg.role === "assistant" && !msg.isFrozen) scrollToBottom();
+				if (msg.role === "assistant" && !msg.metadata.isFrozen)
+					scrollToBottom();
 			}
 		}
 
@@ -76,12 +77,12 @@ export class DOMRenderer {
 				const toolEvent = JSON.parse(msg.content);
 				html = renderToolResultEvent({
 					...toolEvent,
-					name: msg.name || toolEvent.name,
-					call_id: msg.tool_call_id || toolEvent.call_id,
+					name: msg.toolResponse?.name || toolEvent.name,
+					call_id: msg.toolResponse?.callId || toolEvent.call_id,
 				});
 			} catch (_error) {
 				html = renderToolResultEvent({
-					name: msg.name || "unknown",
+					name: msg.toolResponse?.name || "unknown",
 					ok: false,
 					data: { raw: msg.content },
 				});
@@ -117,8 +118,8 @@ export class DOMRenderer {
 		}
 
 		// 3. Tool Calls (For Assistant messages)
-		if (msg.tool_calls?.length) {
-			const toolsHtml = msg.tool_calls
+		if (msg.toolCalls?.length) {
+			const toolsHtml = msg.toolCalls
 				.map((tc) => {
 					const statusIcon =
 						tc.status === "completed"
@@ -195,7 +196,7 @@ export class DOMRenderer {
 			isGenerating &&
 				lastMsg?.role === "assistant" &&
 				!lastMsg.content &&
-				!lastMsg.tool_calls.length,
+				!(lastMsg.toolCalls || []).length,
 		);
 
 		if (needsIndicator && !this.activeTypingIndicator) {
