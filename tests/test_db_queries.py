@@ -190,7 +190,7 @@ class TestFormatAiHistoryRows:
         assert len(out) == 1
         assert out[0]["role"] == "assistant"
         assert "tool_calls" in out[0]
-        assert out[0]["turn_id"] == "turn_abc"
+        assert "turn_id" not in out[0]
 
     def test_native_fc_tool_result_includes_turn_id(self):
         """FC4: Native FC tool results preserve tool_call_id + turn_id."""
@@ -211,7 +211,7 @@ class TestFormatAiHistoryRows:
         assert len(out) == 1
         assert out[0]["role"] == "tool"
         assert out[0]["tool_call_id"] == "call_1"
-        assert out[0]["turn_id"] == "turn_abc"
+        assert "turn_id" not in out[0]
 
 
 class TestEncryptionStatus:

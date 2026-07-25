@@ -7,6 +7,8 @@ import re
 from datetime import datetime
 from typing import Any
 
+from app.providers.openai_protocol import normalize_tool_calls
+
 
 def encrypt_api_key(api_key: str) -> str:
     """Encrypt an API key with the project-wide encryptor."""
@@ -980,7 +982,6 @@ def format_ai_history_rows(
         if isinstance(tool_calls_raw, str):
             tool_calls_raw = parse_json(tool_calls_raw)
         tool_call_id = msg.get("tool_call_id")
-        turn_id = msg.get("turn_id")
 
         if role == "event_log":
             continue
@@ -992,20 +993,19 @@ def format_ai_history_rows(
                 "tool_call_id": tool_call_id,
                 "content": content,
             }
-            if turn_id:
-                entry["turn_id"] = turn_id
             formatted.append(entry)
             continue
 
         # tool_calls present → this is an assistant message with tool calls
         if tool_calls_raw and role == "assistant":
+            normalized_tool_calls = normalize_tool_calls(tool_calls_raw)
+            if not normalized_tool_calls:
+                continue
             entry = {
                 "role": "assistant",
                 "content": content or None,
-                "tool_calls": tool_calls_raw,
+                "tool_calls": normalized_tool_calls,
             }
-            if turn_id:
-                entry["turn_id"] = turn_id
             if include_attachments and attachments:
                 entry["attachments"] = attachments
             formatted.append(entry)

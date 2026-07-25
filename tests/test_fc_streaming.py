@@ -78,7 +78,7 @@ class TestFormatAiHistoryRowsTurnId:
         assert len(out) == 1
         assert out[0]["role"] == "assistant"
         assert "tool_calls" in out[0]
-        assert out[0].get("turn_id") == "turn_abc"
+        assert "turn_id" not in out[0]
 
     def test_tool_result_message_includes_turn_id(self):
         from app.db.queries import format_ai_history_rows
@@ -100,7 +100,7 @@ class TestFormatAiHistoryRowsTurnId:
         assert len(out) == 1
         assert out[0]["role"] == "tool"
         assert out[0]["tool_call_id"] == "call_1"
-        assert out[0].get("turn_id") == "turn_abc"
+        assert "turn_id" not in out[0]
 
     def test_user_message_no_turn_id(self):
         from app.db.queries import format_ai_history_rows
