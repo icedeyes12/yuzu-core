@@ -8,10 +8,10 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from psycopg import OperationalError
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 # Import psycopg errors for exception handling
 from psycopg_pool import PoolTimeout
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 

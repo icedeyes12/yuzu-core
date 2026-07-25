@@ -395,15 +395,16 @@ async def _post_turn_async(
     *,
     user_id: str,
 ) -> None:
-    """Auto-rename session, summarize memory, trigger memory pipeline (async)."""
-    # Auto-rename via service
-    await SessionService.auto_name_session_if_needed_async(
-        session_id, active_session, user_id=user_id
+    """Schedule post-turn maintenance without delaying the response."""
+    asyncio.create_task(
+        SessionService.auto_name_session_if_needed_async(
+            session_id, active_session, user_id=user_id
+        )
     )
-
-    # Memory checks via service
-    await MemoryService.run_per_message_checks_async(
-        profile, user_message, final_response, session_id, active_session, user_id
+    asyncio.create_task(
+        MemoryService.run_per_message_checks_async(
+            profile, user_message, final_response, session_id, active_session, user_id
+        )
     )
 
     # Clear request-scoped caches
@@ -438,13 +439,15 @@ async def _finalize_and_persist_async(
 
     await StreamFence.complete(session_id or "", fence_id)
     log.info(f"[stream] fence {fence_id} completed")
-    await _post_turn_async(
-        profile,
-        user_message,
-        final_response,
-        session_id or "",
-        active_session,
-        user_id=user_id,
+    asyncio.create_task(
+        _post_turn_async(
+            profile,
+            user_message,
+            final_response,
+            session_id or "",
+            active_session,
+            user_id=user_id,
+        )
     )
 
 
@@ -525,13 +528,15 @@ async def handle_user_message(
             tool_results, tool_calls, session_id, user_id=user_id, turn_id=turn_id
         )
 
-    await _post_turn_async(
-        profile,
-        user_message,
-        text_response or _EMPTY_RESPONSE_FALLBACK,
-        session_id,
-        active_session,
-        user_id=user_id,
+    asyncio.create_task(
+        _post_turn_async(
+            profile,
+            user_message,
+            text_response or _EMPTY_RESPONSE_FALLBACK,
+            session_id,
+            active_session,
+            user_id=user_id,
+        )
     )
     return text_response or _EMPTY_RESPONSE_FALLBACK
 
