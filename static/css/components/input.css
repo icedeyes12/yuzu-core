@@ -10,22 +10,22 @@
 	z-index: 100;
 	display: flex;
 	align-items: flex-end;
-	gap: 0.5rem;
-	padding: 0.75rem max(1rem, calc((100vw - 900px) / 2));
-	padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
-	background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
+	gap: var(--space-2);
+	padding: var(--space-3) max(var(--space-4), calc((100vw - 900px) / 2));
+	padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+	background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
 	box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.12);
 	border-top: 1px solid var(--border-normal);
-	backdrop-filter: blur(10px);
+	backdrop-filter: var(--backdrop-blur);
 }
 
 #messageInput {
 	flex: 1;
 	min-height: 42px;
 	max-height: 400px;
-	padding: 0.7rem 1rem;
+	padding: var(--space-2) var(--space-4);
 	border: 2px solid var(--border-normal);
-	border-radius: 20px;
+	border-radius: var(--radius-xl);
 	background: var(--surface-subtle);
 	color: var(--text-primary);
 	font-size: 0.95rem;
@@ -42,7 +42,7 @@
 #sendButton {
 	min-width: 42px;
 	height: 42px;
-	border-radius: 50%;
+	border-radius: var(--radius-full);
 	background: linear-gradient(135deg, var(--accent), var(--accent-hover));
 	color: white;
 	border: none;

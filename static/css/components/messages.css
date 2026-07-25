@@ -7,13 +7,10 @@
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	scroll-behavior: smooth;
-	padding-top: 56px;
-	padding-bottom: 7rem;
-	padding-left: 0.8rem;
-	padding-right: 0.8rem;
+	padding: 4.75rem max(var(--space-4), calc((100vw - 900px) / 2)) 7rem;
 	display: flex;
 	flex-direction: column;
-	gap: 0.8rem;
+	gap: var(--space-4);
 	background: var(--surface);
 	-webkit-overflow-scrolling: touch;
 	box-sizing: border-box;
@@ -25,9 +22,9 @@
 	animation: fadeIn 0.3s ease;
 	display: flex;
 	flex-direction: column;
-	gap: 0.35rem;
+	gap: var(--space-2);
 	width: min(100%, 900px);
-	margin: 0 auto 0.9rem;
+	margin: 0 auto;
 }
 
 @keyframes fadeIn {
@@ -55,9 +52,9 @@
 .user-message .message-bubble {
 	background: var(--surface-message-user);
 	color: var(--text-primary);
-	border-radius: 1.2rem;
-	border-bottom-right-radius: 0.2rem;
-	padding: 0.8rem 1rem;
+	border-radius: var(--radius-lg);
+	border-bottom-right-radius: var(--radius-sm);
+	padding: var(--space-3) var(--space-4);
 	box-shadow: var(--shadow-sm);
 	word-wrap: break-word;
 	overflow-wrap: break-word;
@@ -82,9 +79,9 @@
 	background: transparent;
 	color: var(--text-primary);
 	border: none;
-	border-radius: 12px;
-	border-top-left-radius: 0.2rem;
-	padding: 0.8rem 1rem;
+	border-radius: var(--radius-lg);
+	border-top-left-radius: var(--radius-sm);
+	padding: var(--space-3) var(--space-4);
 	word-wrap: break-word;
 	overflow-wrap: break-word;
 }
@@ -104,8 +101,8 @@
 .event_log-message .message-bubble {
 	background: var(--surface-code);
 	border: 1px dashed var(--border-normal);
-	border-radius: 8px;
-	padding: 0.5rem;
+	border-radius: var(--radius-md);
+	padding: var(--space-2);
 	font-family: var(--font-mono);
 	font-size: 0.85rem;
 }
@@ -137,8 +134,8 @@
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	margin-top: 0.5rem;
-	gap: 0.5rem;
+	margin-top: var(--space-2);
+	gap: var(--space-2);
 }
 
 .message-footer--assistant {

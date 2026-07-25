@@ -38,8 +38,7 @@ body {
 }
 
 .chat-container {
-	padding-top: 76px;
-	padding-bottom: 8rem;
+	padding-bottom: 7rem;
 	flex: 1 1 auto;
 	min-height: 0;
 }
@@ -47,12 +46,12 @@ body {
 .input-area {
 	left: 0;
 	right: 0;
-	padding-bottom: max(0.8rem, env(safe-area-inset-bottom));
+	padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
 }
 
 .scroll-to-bottom-btn {
 	position: fixed;
-	right: max(1rem, env(safe-area-inset-right));
+	right: max(var(--space-4), env(safe-area-inset-right));
 	bottom: 7.5rem;
 	z-index: 40;
 }

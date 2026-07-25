@@ -3,14 +3,14 @@
 .home-body {
 	min-height: 100vh;
 	background: var(--surface);
-	padding-top: 80px;
-	padding-bottom: 60px;
+	padding-top: 5rem;
+	padding-bottom: 3.75rem;
 }
 
 .home-header {
 	text-align: center;
-	padding: 2rem 1rem;
-	margin-bottom: 2rem;
+	padding: var(--space-7) var(--space-4);
+	margin-bottom: var(--space-6);
 }
 
 .header-content {
@@ -48,18 +48,18 @@
 
 .menu {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-	gap: 1.5rem;
-	max-width: 800px;
+	grid-template-columns: repeat(auto-fit, minmax(18.75rem, 1fr));
+	gap: var(--space-5);
+	max-width: 50rem;
 	margin: 0 auto;
-	padding: 0 1.5rem;
+	padding: 0 var(--space-5);
 }
 
 .card {
 	background: var(--surface-raised);
-	border: 1.5px solid var(--border-normal);
-	border-radius: 16px;
-	padding: 2rem;
+	border: 1px solid var(--border-normal);
+	border-radius: var(--radius-lg);
+	padding: var(--space-6);
 	text-decoration: none;
 	color: var(--text-primary);
 	text-align: center;
@@ -68,7 +68,7 @@
 }
 
 .card:hover {
-	transform: translateY(-5px);
+	transform: translateY(-2px);
 	border-color: var(--accent);
 	box-shadow: var(--shadow-lg);
 	text-decoration: none;
@@ -77,7 +77,7 @@
 
 .card h2 {
 	font-size: 1.5rem;
-	margin-bottom: 0.5rem;
+	margin-bottom: var(--space-2);
 	color: var(--accent-subtle);
 }
 
@@ -92,9 +92,9 @@
 	left: 0;
 	right: 0;
 	text-align: center;
-	padding: 1rem;
+	padding: var(--space-4);
 	background: var(--surface-raised);
-	border-top: 1.5px solid var(--accent-subtle);
+	border-top: 1px solid var(--border-normal);
 	backdrop-filter: var(--backdrop-blur);
 	z-index: 90;
 }
@@ -132,12 +132,12 @@
 
 	.menu {
 		grid-template-columns: 1fr;
-		gap: 1rem;
-		padding: 0 1rem;
+		gap: var(--space-4);
+		padding: 0 var(--space-4);
 	}
 
 	.card {
-		padding: 1.5rem;
+		padding: var(--space-5);
 	}
 }
 

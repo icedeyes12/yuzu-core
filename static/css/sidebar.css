@@ -3,17 +3,17 @@
 .sidebar {
 	position: fixed;
 	top: 0;
-	left: -320px;
-	width: 320px;
+	left: -20rem;
+	width: 20rem;
 	height: 100vh;
 	background: var(--surface-raised);
-	border-right: 1.5px solid var(--accent-subtle);
+	border-right: 1px solid var(--border-normal);
 	z-index: 10001;
-	transition: left 0.3s ease;
+	transition: left var(--transition-slow);
 	display: flex;
 	flex-direction: column;
 	backdrop-filter: var(--backdrop-blur);
-	box-shadow: 18px 0 48px rgba(0, 0, 0, 0.22);
+	box-shadow: var(--shadow-xl);
 	overflow: hidden;
 }
 
@@ -41,8 +41,8 @@
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 1.1rem 1.15rem;
-	border-bottom: 1.5px solid var(--accent-subtle);
+	padding: var(--space-4);
+	border-bottom: 1px solid var(--border-normal);
 	background: var(--surface-raised);
 	flex-shrink: 0;
 }
@@ -76,13 +76,13 @@
 
 .sidebar-content {
 	flex: 1;
-	padding: 1rem;
+	padding: var(--space-4);
 	overflow-y: auto;
 	overflow-x: hidden;
 }
 
 .sidebar-section {
-	margin-bottom: 1.5rem;
+	margin-bottom: var(--space-6);
 }
 
 .sidebar-section h3 {
@@ -97,17 +97,16 @@
 .sidebar-link {
 	display: flex;
 	align-items: center;
-	padding: 0.8rem 1rem;
+	padding: var(--space-3) var(--space-4);
 	color: var(--text-primary);
 	text-decoration: none;
-	border-radius: 10px;
-	margin-bottom: 0.5rem;
+	border-radius: var(--radius-md);
+	margin-bottom: var(--space-2);
 	font-weight: 500;
 }
 
 .sidebar-link:hover {
-	background: rgba(255, 255, 255, 0.1);
-	transform: translateX(5px);
+	background: var(--surface-hover);
 }
 
 .sidebar-link.active {
@@ -272,7 +271,7 @@
 	margin: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 0.5rem;
+	gap: var(--space-2);
 	max-height: min(44vh, 26rem);
 	overflow-y: auto;
 	overflow-x: hidden;
@@ -283,17 +282,16 @@
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	background: rgba(255, 255, 255, 0.05);
-	border: 1px solid rgba(255, 255, 255, 0.1);
-	border-radius: 8px;
-	padding: 0.8rem;
+	background: var(--surface-subtle);
+	border: 1px solid var(--border-normal);
+	border-radius: var(--radius-md);
+	padding: var(--space-3);
 	cursor: pointer;
-	gap: 0.75rem;
+	gap: var(--space-3);
 }
 
 .sidebar-session-item:hover {
-	background: rgba(255, 255, 255, 0.1);
-	transform: translateX(3px);
+	background: var(--surface-hover);
 }
 
 .sidebar-session-item.active {
@@ -342,10 +340,10 @@
 /* Session action buttons */
 .session-actions {
 	display: flex;
-	gap: 4px;
+	gap: var(--space-1);
 	opacity: 0;
-	transition: opacity 0.2s ease;
-	margin-left: 8px;
+	transition: opacity var(--transition-fast);
+	margin-left: var(--space-2);
 	flex-shrink: 0;
 }
 
