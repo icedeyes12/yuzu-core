@@ -101,3 +101,46 @@ def test_request_parameter_whitelist_removes_internal_and_unknown_fields() -> No
         provider_extensions={"top_k"},
     )
     assert payload == {"temperature": 0.2, "top_k": 40}
+
+
+def test_validator_rejects_assistant_tool_call_after_assistant_text() -> None:
+    with pytest.raises(OpenAIProtocolError, match="must immediately follow"):
+        validate_openai_messages(
+            [
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "thinking"},
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {"name": "bash", "arguments": "{}"},
+                        }
+                    ],
+                },
+                {"role": "tool", "tool_call_id": "call_1", "content": "ok"},
+            ]
+        )
+
+
+def test_validator_accepts_next_tool_call_after_complete_tool_turn() -> None:
+    validate_openai_messages(
+        [
+            {"role": "user", "content": "hello"},
+            *assistant_tool_block(),
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_2",
+                        "type": "function",
+                        "function": {"name": "bash", "arguments": "{}"},
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "call_2", "content": "ok"},
+        ]
+    )
