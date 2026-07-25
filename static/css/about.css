@@ -1,8 +1,8 @@
 /* FILE: static/css/about.css */
 /* DESCRIPTION: About page styling with responsive layout */
 .about-body {
-	background: var(--bg-color);
-	color: var(--text-color);
+	background: var(--surface);
+	color: var(--text-primary);
 	font-family: var(--font-sans);
 	margin: 0;
 	min-height: 100vh;
@@ -18,8 +18,8 @@
 	z-index: 90;
 	text-align: center;
 	padding: 1.2rem 1rem;
-	background: var(--header-bg);
-	border-bottom: 2px solid var(--accent-color);
+	background: var(--surface-raised);
+	border-bottom: 2px solid var(--accent);
 	backdrop-filter: var(--backdrop-blur);
 }
 
@@ -44,11 +44,7 @@
 	margin: 0;
 	font-size: 1.8rem;
 	font-weight: 700;
-	background: linear-gradient(
-		135deg,
-		var(--accent-color),
-		var(--accent-primary)
-	);
+	background: linear-gradient(135deg, var(--accent), var(--accent-hover));
 	-webkit-background-clip: text;
 	-webkit-text-fill-color: transparent;
 	background-clip: text;
@@ -56,7 +52,7 @@
 
 .subtitle {
 	margin: 0.3rem 0 0 0;
-	color: var(--accent-primary);
+	color: var(--accent);
 	font-weight: 500;
 	font-size: 0.9rem;
 }
@@ -73,20 +69,16 @@
 	text-align: center;
 	margin-bottom: 2rem;
 	padding: 2rem 1.5rem;
-	background: var(--card-bg);
+	background: var(--surface-raised);
 	border-radius: 1.5rem;
-	border: 2px solid var(--border-lavender);
-	box-shadow: var(--shadow-soft);
+	border: 2px solid var(--border-normal);
+	box-shadow: var(--shadow-md);
 }
 
 .hero-content h2 {
 	font-size: 2.2rem;
 	margin: 0 0 0.8rem 0;
-	background: linear-gradient(
-		135deg,
-		var(--accent-color),
-		var(--accent-primary)
-	);
+	background: linear-gradient(135deg, var(--accent), var(--accent-hover));
 	-webkit-background-clip: text;
 	-webkit-text-fill-color: transparent;
 	background-clip: text;
@@ -99,18 +91,18 @@
 }
 
 .content-section {
-	background: var(--card-bg);
+	background: var(--surface-raised);
 	border-radius: 1.2rem;
 	padding: 1.8rem;
 	margin-bottom: 1.5rem;
-	border: 2px solid var(--border-lavender);
-	box-shadow: var(--shadow-soft);
+	border: 2px solid var(--border-normal);
+	box-shadow: var(--shadow-md);
 }
 
 .content-section:hover {
 	transform: translateY(-3px);
-	border-color: var(--accent-primary);
-	box-shadow: 0 10px 25px var(--shadow-accent);
+	border-color: var(--accent);
+	box-shadow: var(--shadow-lg);
 }
 
 .section-icon {
@@ -123,7 +115,7 @@
 	margin: 0 0 1.5rem 0;
 	font-size: 1.8rem;
 	font-weight: 600;
-	color: var(--accent-color);
+	color: var(--accent);
 }
 
 .content-section p {
@@ -135,12 +127,12 @@
 .highlight-text {
 	background: linear-gradient(
 		135deg,
-		color-mix(in srgb, var(--accent-secondary) 20%, transparent),
-		color-mix(in srgb, var(--accent-primary) 20%, transparent)
+		color-mix(in srgb, var(--accent-subtle) 20%, transparent),
+		color-mix(in srgb, var(--accent) 20%, transparent)
 	);
 	padding: 1rem 1.5rem;
 	border-radius: 1rem;
-	border-left: 4px solid var(--accent-color);
+	border-left: 4px solid var(--accent);
 	font-style: italic;
 }
 
@@ -152,19 +144,19 @@
 }
 
 .tech-card {
-	background: var(--input-bg);
+	background: var(--surface-input);
 	padding: 1.5rem;
 	border-radius: 1rem;
 	display: flex;
 	align-items: center;
 	gap: 1rem;
-	border: 1px solid var(--border-lavender);
+	border: 1px solid var(--border-normal);
 }
 
 .tech-card:hover {
-	background: color-mix(in srgb, var(--accent-secondary) 10%, transparent);
+	background: color-mix(in srgb, var(--accent-subtle) 10%, transparent);
 	transform: translateY(-3px);
-	border-color: var(--accent-primary);
+	border-color: var(--accent);
 }
 
 .tech-icon {
@@ -180,7 +172,7 @@
 .tech-info strong {
 	font-size: 1.1rem;
 	margin-bottom: 0.3rem;
-	color: var(--accent-color);
+	color: var(--accent);
 }
 
 .tech-info span {
@@ -214,24 +206,24 @@
 }
 
 .philosophy-item {
-	background: var(--input-bg);
+	background: var(--surface-input);
 	padding: 1.2rem;
 	border-radius: 0.8rem;
 	text-align: center;
-	border: 1px solid var(--border-lavender);
+	border: 1px solid var(--border-normal);
 }
 
 .philosophy-item:hover {
 	transform: translateY(-2px);
-	border-color: var(--accent-primary);
-	box-shadow: 0 5px 15px var(--shadow-accent);
+	border-color: var(--accent);
+	box-shadow: var(--shadow-md);
 }
 
 .philosophy-item strong {
 	display: block;
 	margin-bottom: 0.5rem;
 	font-size: 1rem;
-	color: var(--accent-color);
+	color: var(--accent);
 }
 
 .philosophy-item span {
@@ -248,7 +240,7 @@
 	opacity: 0.8;
 	margin: 2rem 0 0 0;
 	padding-top: 1rem;
-	border-top: 1px solid var(--border-lavender);
+	border-top: 1px solid var(--border-normal);
 }
 
 .about-footer {
@@ -259,8 +251,8 @@
 	z-index: 90;
 	text-align: center;
 	padding: 1rem;
-	background: var(--header-bg);
-	border-top: 2px solid var(--accent-color);
+	background: var(--surface-raised);
+	border-top: 2px solid var(--accent);
 	backdrop-filter: var(--backdrop-blur);
 }
 
@@ -276,8 +268,8 @@
 
 .footer-link:hover {
 	background: rgba(255, 255, 255, 0.1);
-	text-decoration-color: var(--accent-primary);
-	color: var(--accent-primary);
+	text-decoration-color: var(--accent);
+	color: var(--accent);
 }
 
 .content-section {

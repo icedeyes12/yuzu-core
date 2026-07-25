@@ -38,10 +38,10 @@ html {
 }
 
 body {
-	font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-	background: var(--surface-base, var(--bg-color, #0f0f23));
-	color: var(--text-primary, var(--text-color, #e8e8f0));
-	line-height: 1.6;
+	font-family: var(--font-sans);
+	background: var(--surface);
+	color: var(--text-primary);
+	line-height: var(--line-height-body);
 	overflow-x: hidden;
 	min-height: 100vh;
 }
@@ -54,9 +54,9 @@ h4,
 h5,
 h6 {
 	font-weight: 600;
-	line-height: 1.3;
-	margin-bottom: 0.5em;
-	color: var(--text-color);
+	line-height: var(--line-height-tight);
+	margin-bottom: var(--space-2);
+	color: var(--text-primary);
 }
 
 h1 {
@@ -80,19 +80,19 @@ h6 {
 
 p {
 	margin-bottom: 1rem;
-	line-height: 1.6;
+	line-height: var(--line-height-body);
 }
 
 a {
-	color: var(--accent-color, #8a6de9);
+	color: var(--accent);
 	text-decoration: none;
 	transition:
-		color 0.2s ease,
-		text-decoration-color 0.2s ease;
+		color var(--transition-fast),
+		text-decoration-color var(--transition-fast);
 }
 
 a:hover {
-	color: var(--accent-primary);
+	color: var(--accent);
 	text-decoration: underline;
 }
 
@@ -104,60 +104,56 @@ a:hover {
 	gap: 0.5rem;
 	padding: 0.75rem 1.5rem;
 	border: none;
-	border-radius: var(--radius-md, 12px);
+	border-radius: var(--radius-md);
 	font-size: 0.95rem;
 	font-weight: 600;
 	cursor: pointer;
 	transition:
-		background-color 0.2s ease,
+		background-color var(--transition-fast),
 		transform 0.15s ease,
-		box-shadow 0.2s ease;
+		box-shadow var(--transition-fast);
 	text-decoration: none;
 	position: relative;
 	overflow: hidden;
 }
 
 .btn:focus-visible {
-	outline: 2px solid var(--accent-primary);
+	outline: 2px solid var(--accent);
 	outline-offset: 2px;
 }
 
 .btn-primary {
-	background: linear-gradient(
-		135deg,
-		var(--accent-color),
-		var(--accent-primary)
-	);
+	background: linear-gradient(135deg, var(--accent), var(--accent-hover));
 	color: white;
-	box-shadow: 0 4px 15px var(--shadow-accent);
+	box-shadow: var(--shadow-lg);
 }
 
 .btn-primary:hover {
 	transform: translateY(-2px);
-	box-shadow: 0 6px 20px var(--shadow-accent);
+	box-shadow: var(--shadow-lg);
 }
 
 .btn-secondary {
-	background: var(--input-bg);
-	color: var(--text-color);
-	border: 1.5px solid var(--border-lavender);
+	background: var(--surface-input);
+	color: var(--text-primary);
+	border: 1.5px solid var(--border-normal);
 }
 
 .btn-secondary:hover {
 	background: rgba(255, 255, 255, 0.1);
-	border-color: var(--accent-primary);
+	border-color: var(--accent);
 	transform: translateY(-1px);
 }
 
 .btn-ghost {
 	background: transparent;
-	color: var(--text-color);
+	color: var(--text-primary);
 	border: 1.5px solid transparent;
 }
 
 .btn-ghost:hover {
 	background: rgba(255, 255, 255, 0.05);
-	border-color: var(--border-lavender);
+	border-color: var(--border-normal);
 }
 
 /* Form Elements */
@@ -169,7 +165,7 @@ a:hover {
 	display: block;
 	margin-bottom: 0.5rem;
 	font-weight: 600;
-	color: var(--text-color);
+	color: var(--text-primary);
 }
 
 .form-input,
@@ -177,10 +173,10 @@ a:hover {
 .form-select {
 	width: 100%;
 	padding: 0.75rem 1rem;
-	background: var(--input-bg);
-	border: 1.5px solid var(--border-lavender);
+	background: var(--surface-input);
+	border: 1.5px solid var(--border-normal);
 	border-radius: 12px;
-	color: var(--text-color);
+	color: var(--text-primary);
 	font-size: 0.95rem;
 	font-family: inherit;
 }
@@ -189,8 +185,8 @@ a:hover {
 .form-textarea:focus,
 .form-select:focus {
 	outline: none;
-	border-color: var(--accent-primary);
-	box-shadow: 0 0 0 3px var(--shadow-accent);
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--shadow-focus);
 }
 
 .form-textarea {
@@ -209,31 +205,31 @@ a:hover {
 
 /* Card Components */
 .card {
-	background: var(--card-bg);
-	border: 1px solid var(--border-lavender);
+	background: var(--surface-raised);
+	border: 1px solid var(--border-normal);
 	border-radius: 16px;
 	padding: 1.5rem;
 	backdrop-filter: blur(10px);
-	box-shadow: var(--shadow-soft);
+	box-shadow: var(--shadow-md);
 }
 
 .card:hover {
 	transform: translateY(-3px);
-	border-color: var(--accent-primary);
-	box-shadow: 0 10px 30px var(--shadow-accent);
+	border-color: var(--accent);
+	box-shadow: var(--shadow-lg);
 }
 
 .card-header {
 	margin-bottom: 1rem;
 	padding-bottom: 1rem;
-	border-bottom: 1px solid var(--border-lavender);
+	border-bottom: 1px solid var(--border-normal);
 }
 
 .card-title {
 	font-size: 1.3rem;
 	font-weight: 600;
 	margin: 0;
-	color: var(--text-color);
+	color: var(--text-primary);
 }
 
 .card-content {
@@ -331,7 +327,7 @@ a:hover {
 }
 
 .text-primary {
-	color: var(--accent-color);
+	color: var(--accent);
 }
 .text-secondary {
 	color: var(--text-secondary);
@@ -347,10 +343,10 @@ a:hover {
 }
 
 .bg-primary {
-	background: var(--accent-color);
+	background: var(--accent);
 }
 .bg-secondary {
-	background: var(--input-bg);
+	background: var(--surface-input);
 }
 .bg-success {
 	background: #6be5ff;
@@ -604,10 +600,10 @@ a:hover {
 }
 
 .shadow {
-	box-shadow: var(--shadow-soft);
+	box-shadow: var(--shadow-md);
 }
 .shadow-lg {
-	box-shadow: 0 10px 30px var(--shadow-base);
+	box-shadow: var(--shadow-lg);
 }
 .shadow-none {
 	box-shadow: none;
@@ -689,14 +685,14 @@ a:hover {
 	height: 20px;
 	margin: -10px 0 0 -10px;
 	border: 2px solid transparent;
-	border-top: 2px solid var(--accent-primary);
+	border-top: 2px solid var(--accent);
 	border-radius: 50%;
 	animation: spin 1s linear infinite;
 }
 
 /* Focus Management */
 .focus-trap {
-	outline: 2px solid var(--accent-primary);
+	outline: 2px solid var(--accent);
 	outline-offset: 2px;
 }
 
@@ -720,8 +716,8 @@ a:hover {
 /* High Contrast Mode Support */
 @media (prefers-contrast: high) {
 	:root {
-		--border-lavender: rgba(179, 157, 219, 0.8);
-		--shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.6);
+		--border-normal: rgba(179, 157, 219, 0.8);
+		--shadow-md: 0 2px 8px rgba(0, 0, 0, 0.6);
 	}
 }
 
@@ -760,12 +756,12 @@ a:hover {
 /* Selection Styles */
 ::selection {
 	background: rgba(138, 109, 233, 0.3);
-	color: var(--text-color);
+	color: var(--text-primary);
 }
 
 ::-moz-selection {
 	background: rgba(138, 109, 233, 0.3);
-	color: var(--text-color);
+	color: var(--text-primary);
 }
 
 /* Animation Keyframes */
@@ -940,7 +936,7 @@ a:hover {
 /* Two-column row for paired inputs */
 .form-row {
 	display: flex;
-	gap: var(--spacing-md, 1rem);
+	gap: var(--space-4);
 }
 
 .form-row .form-group {
@@ -950,16 +946,16 @@ a:hover {
 /* Toggle/checkbox row */
 .toggle-row {
 	display: flex;
-	gap: var(--spacing-lg, 1.5rem);
+	gap: var(--space-6);
 	flex-wrap: wrap;
 	align-items: center;
-	margin-top: var(--spacing-md, 1rem);
+	margin-top: var(--space-4);
 }
 
 .toggle-label {
 	display: flex;
 	align-items: center;
-	gap: var(--spacing-sm, 0.5rem);
+	gap: var(--space-2);
 	cursor: pointer;
 	user-select: none;
 }
@@ -968,42 +964,42 @@ a:hover {
 .form-hint {
 	display: block;
 	font-size: 0.78rem;
-	color: var(--text-secondary, rgba(240, 246, 252, 0.8));
-	margin-top: var(--spacing-xs, 0.25rem);
+	color: var(--text-secondary);
+	margin-top: var(--space-1);
 }
 
 /* Section lead paragraph */
 .section-description {
-	color: var(--text-secondary, rgba(240, 246, 252, 0.8));
+	color: var(--text-secondary);
 	font-size: 0.9rem;
-	margin-bottom: var(--spacing-md, 1rem);
+	margin-bottom: var(--space-4);
 }
 
 /* Button group at the bottom of a config section */
 .config-actions {
 	display: flex;
-	gap: var(--spacing-sm, 0.5rem);
+	gap: var(--space-2);
 	flex-wrap: wrap;
-	margin-top: var(--spacing-lg, 1.5rem);
+	margin-top: var(--space-6);
 }
 
 /* Success / green action button */
 .btn-success {
-	background: var(--color-success, #10b981);
+	background: var(--status-success);
 	color: #ffffff;
 }
 
 .btn-success:hover {
-	background: var(--color-success-hover, #059669);
+	background: var(--status-success-hover);
 	transform: translateY(-1px);
 }
 
 /* ── Universal focus ring ── */
 /* Applied to all keyboard-focusable elements for consistent a11y */
 :focus-visible {
-	outline: 2px solid var(--accent-primary);
+	outline: 2px solid var(--accent);
 	outline-offset: 3px;
-	border-radius: var(--radius-sm, 4px);
+	border-radius: var(--radius-sm);
 }
 
 /* Suppress the outline for mouse clicks (native behaviour) */
@@ -1013,6 +1009,6 @@ a:hover {
 
 /* ── Success/brand color tokens (used by login.css and btn-success) ── */
 :root {
-	--color-success: #10b981;
-	--color-success-hover: #059669;
+	--status-success: #10b981;
+	--status-success-hover: #059669;
 }

@@ -255,8 +255,8 @@ function createBackgroundPattern() {
         }
         
         .retry-btn {
-            background: var(--button-bg);
-            color: var(--button-text);
+            background: var(--action-primary);
+            color: var(--action-text);
             border: none;
             padding: 0.5rem 1rem;
             border-radius: 6px;

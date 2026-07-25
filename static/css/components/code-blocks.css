@@ -3,8 +3,8 @@
 	margin: 1rem 0;
 	border-radius: 8px;
 	overflow: hidden;
-	background: var(--bg-tertiary, rgba(0, 0, 0, 0.2));
-	border: 1px solid var(--border-color);
+	background: var(--surface-code);
+	border: 1px solid var(--border-normal);
 }
 
 .code-block-header {
@@ -12,8 +12,8 @@
 	justify-content: space-between;
 	align-items: center;
 	padding: 0.5rem 1rem;
-	background: rgba(0, 0, 0, 0.2);
-	border-bottom: 1px solid var(--border-color);
+	background: var(--surface-code);
+	border-bottom: 1px solid var(--border-normal);
 }
 
 .code-language {
@@ -28,24 +28,24 @@
 	align-items: center;
 	gap: 0.3rem;
 	background: transparent;
-	border: 1px solid var(--border-color);
+	border: 1px solid var(--border-normal);
 	border-radius: 4px;
 	padding: 0.3rem 0.6rem;
 	font-size: 0.75rem;
-	color: var(--text-color);
+	color: var(--text-primary);
 	cursor: pointer;
 }
 
 .copy-code-btn:hover {
-	background: var(--accent-primary);
+	background: var(--accent);
 	color: white;
-	border-color: var(--accent-primary);
+	border-color: var(--accent);
 }
 
 .copy-code-btn.copied {
-	background: var(--accent-tertiary);
+	background: var(--accent-support);
 	color: white;
-	border-color: var(--accent-tertiary);
+	border-color: var(--accent-support);
 }
 
 .code-block-container pre {
@@ -56,7 +56,7 @@
 }
 
 .code-block-container code {
-	font-family: "JetBrains Mono", "Fira Code", "Consolas", "Monaco", monospace;
+	font-family: var(--font-mono);
 	font-size: 0.9rem;
-	line-height: 1.5;
+	line-height: var(--line-height-copy);
 }

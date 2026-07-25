@@ -14,7 +14,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: 0.8rem;
-	background: var(--bg-color);
+	background: var(--surface);
 	-webkit-overflow-scrolling: touch;
 	box-sizing: border-box;
 }
@@ -53,7 +53,7 @@
 }
 
 .user-message .message-bubble {
-	background: var(--user-bubble);
+	background: var(--surface-message-user);
 	color: var(--text-primary);
 	border-radius: 1.2rem;
 	border-bottom-right-radius: 0.2rem;
@@ -80,7 +80,7 @@
 
 .assistant-message .message-bubble {
 	background: transparent;
-	color: var(--text-color);
+	color: var(--text-primary);
 	border: none;
 	border-radius: 12px;
 	border-top-left-radius: 0.2rem;
@@ -102,8 +102,8 @@
 
 .tool-message .message-bubble,
 .event_log-message .message-bubble {
-	background: var(--bg-tertiary);
-	border: 1px dashed var(--border-color);
+	background: var(--surface-code);
+	border: 1px dashed var(--border-normal);
 	border-radius: 8px;
 	padding: 0.5rem;
 	font-family: var(--font-mono);
@@ -117,12 +117,12 @@
 	margin-bottom: 0.5rem;
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
-	border-bottom: 1px dashed var(--border-color);
+	border-bottom: 1px dashed var(--border-normal);
 	padding-bottom: 0.25rem;
 }
 
 .message-content {
-	color: var(--text-color);
+	color: var(--text-primary);
 	line-height: 1.6;
 	font-size: 0.95rem;
 }
@@ -156,8 +156,8 @@
 
 /* Copy full message button */
 .copy-message-btn {
-	background: var(--bg-secondary);
-	border: 1px solid var(--border-color);
+	background: var(--surface-subtle);
+	border: 1px solid var(--border-normal);
 	border-radius: 6px;
 	padding: 6px;
 	cursor: pointer;
@@ -173,15 +173,15 @@
 }
 
 .copy-message-btn:hover {
-	background: var(--accent-primary);
+	background: var(--accent);
 	color: white;
-	border-color: var(--accent-primary);
+	border-color: var(--accent);
 }
 
 .copy-message-btn.copied {
-	background: var(--accent-tertiary);
+	background: var(--accent-support);
 	color: white;
-	border-color: var(--accent-tertiary);
+	border-color: var(--accent-support);
 }
 
 /* ==================== MARKDOWN CONTENT ==================== */
@@ -191,7 +191,7 @@
 .message-content h4,
 .message-content h5,
 .message-content h6 {
-	color: var(--text-color);
+	color: var(--text-primary);
 	margin: 1rem 0 0.5rem;
 	font-weight: 600;
 }
@@ -230,10 +230,10 @@
 }
 
 .message-content blockquote {
-	border-left: 4px solid var(--accent-primary);
+	border-left: 4px solid var(--accent);
 	margin: 0.8rem 0;
 	padding: 0.5rem 1rem;
-	background: var(--bg-secondary);
+	background: var(--surface-subtle);
 	border-radius: 4px;
 	font-style: italic;
 }
@@ -248,32 +248,32 @@
 }
 
 .message-content .callout-note {
-	border-color: var(--accent-primary);
+	border-color: var(--accent);
 	background: rgba(106, 169, 255, 0.08);
 }
 
 .message-content .callout-info {
-	border-color: var(--accent-primary);
+	border-color: var(--accent);
 	background: rgba(106, 169, 255, 0.08);
 }
 
 .message-content .callout-tip {
-	border-color: var(--accent-tertiary);
+	border-color: var(--accent-support);
 	background: rgba(76, 175, 80, 0.08);
 }
 
 .message-content .callout-warning {
-	border-color: var(--accent-secondary);
+	border-color: var(--accent-subtle);
 	background: rgba(255, 179, 71, 0.08);
 }
 
 .message-content .callout-caution {
-	border-color: var(--tool-error);
+	border-color: var(--status-danger);
 	background: rgba(255, 107, 107, 0.08);
 }
 
 .message-content .callout-important {
-	border-color: var(--accent-primary);
+	border-color: var(--accent);
 	background: rgba(155, 89, 182, 0.08);
 }
 
@@ -282,8 +282,8 @@
 	overflow-x: auto;
 	margin: 0.8rem 0;
 	border-radius: 6px;
-	border: 1px solid var(--border-color);
-	background: var(--bg-secondary);
+	border: 1px solid var(--border-normal);
+	background: var(--surface-subtle);
 }
 
 .table-header {
@@ -292,7 +292,7 @@
 	align-items: center;
 	padding: 0.5rem 1rem;
 	background: rgba(0, 0, 0, 0.2);
-	border-bottom: 1px solid var(--border-color);
+	border-bottom: 1px solid var(--border-normal);
 }
 
 .table-label {
@@ -307,24 +307,24 @@
 	align-items: center;
 	gap: 0.3rem;
 	background: transparent;
-	border: 1px solid var(--border-color);
+	border: 1px solid var(--border-normal);
 	border-radius: 4px;
 	padding: 0.3rem 0.6rem;
 	font-size: 0.75rem;
-	color: var(--text-color);
+	color: var(--text-primary);
 	cursor: pointer;
 }
 
 .copy-table-btn:hover {
-	background: var(--accent-primary);
+	background: var(--accent);
 	color: white;
-	border-color: var(--accent-primary);
+	border-color: var(--accent);
 }
 
 .copy-table-btn.copied {
-	background: var(--accent-tertiary);
+	background: var(--accent-support);
 	color: white;
-	border-color: var(--accent-tertiary);
+	border-color: var(--accent-support);
 }
 
 .message-content .table-container table {
@@ -337,22 +337,22 @@
 
 .message-content th,
 .message-content td {
-	border: 1px solid var(--border-color);
+	border: 1px solid var(--border-normal);
 	padding: 0.5rem;
 	text-align: left;
 }
 
 .message-content th {
-	background: var(--bg-secondary);
+	background: var(--surface-subtle);
 	font-weight: 600;
 }
 
 .message-content details {
 	margin: 0.8rem 0;
 	padding: 0.5rem;
-	border: 1px solid var(--border-color);
+	border: 1px solid var(--border-normal);
 	border-radius: 6px;
-	background: var(--bg-secondary);
+	background: var(--surface-subtle);
 }
 
 .message-content summary {
@@ -376,7 +376,7 @@
 	border-radius: 8px;
 	background: rgba(255, 69, 58, 0.1);
 	border: 1px solid rgba(255, 69, 58, 0.3);
-	color: var(--tool-error);
+	color: var(--status-danger);
 	font-size: 0.9rem;
 	display: flex;
 	align-items: center;
@@ -389,7 +389,7 @@
 	border-radius: 8px;
 	border: 1px solid rgba(255, 69, 58, 0.3);
 	background: rgba(255, 69, 58, 0.1);
-	color: var(--text-color);
+	color: var(--text-primary);
 	white-space: pre-wrap;
 	word-break: break-word;
 }
@@ -399,18 +399,18 @@
 
 .system-action-block {
 	background: rgba(255, 255, 255, 0.03);
-	border: 1px solid var(--border-ai, rgba(255, 255, 255, 0.1));
+	border: 1px solid var(--border-message-ai);
 	border-radius: 12px;
 	margin: 8px 0;
 	overflow: hidden;
 }
 
 .command-block {
-	border-left: 3px solid var(--accent-secondary, #8b5cf6);
+	border-left: 3px solid var(--accent-subtle);
 }
 
 .tool-result-block {
-	border-left: 3px solid var(--accent-primary, #3b82f6);
+	border-left: 3px solid var(--accent);
 	width: 100%;
 	display: block;
 }
@@ -421,7 +421,7 @@
 	padding: 8px 12px;
 	background: rgba(0, 0, 0, 0.2);
 	font-size: 0.8rem;
-	color: var(--text-muted, #a1a1aa);
+	color: var(--text-muted);
 	font-family: sans-serif;
 	font-weight: 600;
 	text-transform: uppercase;
@@ -435,7 +435,7 @@
 	font-size: 0.85rem;
 	overflow-wrap: anywhere;
 	word-break: break-word;
-	color: var(--text-color, #e2e8f0);
+	color: var(--text-primary);
 	line-height: 1.5;
 }
 
@@ -467,7 +467,7 @@
 
 /* Open state border */
 .system-action-block[open] summary {
-	border-bottom: 1px solid var(--border-ai, rgba(255, 255, 255, 0.1));
+	border-bottom: 1px solid var(--border-message-ai);
 }
 
 /* Native tool block styles rendered by store-renderer.js */
@@ -479,8 +479,8 @@
 }
 
 .tool-call-block {
-	background: var(--bg-tertiary);
-	border-left: 3px solid var(--accent-primary);
+	background: var(--surface-code);
+	border-left: 3px solid var(--accent);
 	border-radius: 4px;
 	padding: 0.5rem;
 	font-size: 0.85rem;
@@ -503,18 +503,18 @@
 /* FC6: Native tool event indicators */
 .tool-call-indicator {
 	margin: 0.5em 0;
-	border-left: 3px solid var(--accent, rgba(255, 255, 255, 0.3));
+	border-left: 3px solid var(--accent);
 	padding-left: 0.75em;
 	opacity: 0.85;
 }
 .tool-call-indicator summary {
 	cursor: pointer;
 	font-size: 0.85em;
-	color: var(--text-muted, rgba(255, 255, 255, 0.6));
+	color: var(--text-muted);
 }
 .tool-result {
 	margin: 0.5em 0;
-	border-left: 3px solid var(--accent, rgba(255, 255, 255, 0.3));
+	border-left: 3px solid var(--accent);
 	padding-left: 0.75em;
 }
 .tool-result summary {

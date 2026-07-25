@@ -9,12 +9,12 @@ document.addEventListener("DOMContentLoaded", () => {
 	techCards.forEach((card) => {
 		card.addEventListener("mouseenter", function () {
 			this.style.transform = "translateY(-5px) scale(1.02)";
-			this.style.boxShadow = "0 10px 25px var(--shadow-lavender)";
+			this.style.boxShadow = "var(--shadow-lg)";
 		});
 
 		card.addEventListener("mouseleave", function () {
 			this.style.transform = "translateY(0) scale(1)";
-			this.style.boxShadow = "var(--shadow-soft)";
+			this.style.boxShadow = "var(--shadow-md)";
 		});
 	});
 
@@ -24,7 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
 	philosophyItems.forEach((item) => {
 		item.addEventListener("mouseenter", function () {
 			this.style.transform = "translateY(-3px)";
-			this.style.boxShadow = "0 8px 20px var(--shadow-pink)";
+			this.style.boxShadow = "0 8px 20px var(--shadow-lg)";
 		});
 
 		item.addEventListener("mouseleave", function () {
@@ -176,12 +176,12 @@ function showSecretMessage() {
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        background: var(--card-bg);
-        border: 2px solid var(--accent-pink);
+        background: var(--surface-raised);
+        border: 2px solid var(--accent);
         border-radius: 15px;
         padding: 2rem;
         text-align: center;
-        box-shadow: 0 10px 30px var(--shadow-pink);
+        box-shadow: var(--shadow-lg);
         z-index: 10000;
         max-width: 300px;
         backdrop-filter: var(--backdrop-blur);
@@ -189,10 +189,10 @@ function showSecretMessage() {
 
 	alertDiv.innerHTML = `
         <div style="font-size: 3rem; margin-bottom: 1rem;">💌</div>
-        <div style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--text-color);">${randomMessage}</div>
+        <div style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--text-primary);">${randomMessage}</div>
         <button onclick="this.parentElement.remove()" style="
-            background: var(--button-bg);
-            color: var(--button-text);
+            background: var(--action-primary);
+            color: var(--action-text);
             border: none;
             padding: 0.5rem 1rem;
             border-radius: 8px;

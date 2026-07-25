@@ -18,7 +18,7 @@
 .message-content h4,
 .message-content h5,
 .message-content h6 {
-	color: var(--text-color);
+	color: var(--text-primary);
 	margin: 1rem 0 0.5rem;
 	font-weight: 600;
 }
@@ -46,7 +46,7 @@
 .message-content h2,
 .message-content h3 {
 	margin: 1rem 0 0.5rem;
-	color: var(--text-color);
+	color: var(--text-primary);
 }
 
 .message-content h1 {
@@ -127,10 +127,10 @@
    ======================================== */
 
 .message-content blockquote {
-	border-left: 4px solid var(--accent-primary);
+	border-left: 4px solid var(--accent);
 	margin: 0.8rem 0;
 	padding: 0.5rem 1rem;
-	background: var(--bg-secondary);
+	background: var(--surface-subtle);
 	border-radius: 4px;
 	font-style: italic;
 }
@@ -138,7 +138,7 @@
 /* Blockquote - dynamic from hljs theme */
 .message-content blockquote {
 	border-left: 4px solid #7285b7;
-	background: var(--hljs-bg, #002451);
+	background: var(--surface-code);
 	border-radius: 4px;
 	font-style: italic;
 	color: rgba(255, 255, 255, 0.85);
@@ -192,22 +192,22 @@
 
 /* Callout variants */
 .message-content .callout-note {
-	border-color: var(--accent-secondary);
+	border-color: var(--accent-subtle);
 	background: rgba(147, 165, 255, 0.1);
 }
 
 .message-content .callout-warning {
-	border-color: var(--accent-primary);
+	border-color: var(--accent);
 	background: rgba(255, 133, 161, 0.1);
 }
 
 .message-content .callout-tip {
-	border-color: var(--accent-tertiary);
+	border-color: var(--accent-support);
 	background: rgba(184, 225, 221, 0.1);
 }
 
 .message-content .callout-important {
-	border-color: var(--accent-color);
+	border-color: var(--accent);
 	background: rgba(138, 109, 233, 0.1);
 }
 
@@ -221,7 +221,7 @@
 	width: 100%;
 	margin: 1rem 0;
 	font-size: 0.9em;
-	background: var(--hljs-bg, #002451);
+	background: var(--surface-code);
 	border-radius: 6px;
 	overflow: hidden;
 }
@@ -249,7 +249,7 @@
 	margin: 0.8rem 0;
 	border-radius: 6px;
 	border: 1px solid rgba(114, 133, 183, 0.3);
-	background: var(--hljs-bg, #002451);
+	background: var(--surface-code);
 }
 
 .message-content .table-container table {
@@ -267,8 +267,8 @@
 .message-content details {
 	margin: 0.5rem 0;
 	border-radius: 8px;
-	background: var(--code-bg);
-	border: 1px solid var(--border-ai);
+	background: var(--surface-code);
+	border: 1px solid var(--border-message-ai);
 	overflow: hidden;
 }
 
@@ -284,7 +284,7 @@
 }
 
 .message-content details[open] summary {
-	border-bottom: 1px solid var(--border-ai);
+	border-bottom: 1px solid var(--border-message-ai);
 }
 
 .message-content details > *:not(summary) {
@@ -308,7 +308,7 @@
 	max-width: 100%;
 	border-radius: 8px;
 	margin: 0.5rem 0;
-	box-shadow: var(--shadow-soft);
+	box-shadow: var(--shadow-md);
 }
 
 .image-error {
@@ -408,7 +408,7 @@
 
 /* Inline code - use hljs-bg for ALL messages */
 .message-content code:not(pre code) {
-	background: var(--hljs-bg, #002451);
+	background: var(--surface-code);
 	color: #ffffff;
 	padding: 0.15em 0.4em;
 	border-radius: 4px;
@@ -424,7 +424,7 @@
 
 /* Bold - clearly different */
 .message-content strong {
-	color: var(--text-color);
+	color: var(--text-primary);
 	font-weight: 700;
 	letter-spacing: 0.02em;
 }
@@ -447,15 +447,15 @@
    ======================================== */
 
 .message-content a {
-	color: var(--accent-secondary);
+	color: var(--accent-subtle);
 	text-decoration: underline;
 	text-decoration-color: rgba(168, 200, 255, 0.4);
 	text-underline-offset: 2px;
 }
 
 .message-content a:hover {
-	color: var(--accent-primary);
-	text-decoration-color: var(--accent-primary);
+	color: var(--accent);
+	text-decoration-color: var(--accent);
 }
 
 /* ========================================
@@ -464,7 +464,7 @@
 
 .message-content hr {
 	border: none;
-	border-top: 2px solid var(--accent-color);
+	border-top: 2px solid var(--accent);
 	margin: 1.5rem 0;
 	opacity: 0.6;
 }
@@ -479,7 +479,7 @@
 	border-radius: 8px;
 	border: 1px solid rgba(255, 69, 58, 0.3);
 	background: rgba(255, 69, 58, 0.1);
-	color: var(--text-color);
+	color: var(--text-primary);
 	white-space: pre-wrap;
 	word-break: break-word;
 }
@@ -493,7 +493,7 @@
 	align-items: center;
 	gap: 0.3rem;
 	padding: 0.3rem 0.7rem;
-	background: var(--accent-primary);
+	background: var(--accent);
 	color: white;
 	border: none;
 	border-radius: 6px;
@@ -525,7 +525,7 @@
 	-moz-appearance: none;
 	width: 1em;
 	height: 1em;
-	border: 2px solid var(--text-secondary, rgba(240, 244, 255, 0.5));
+	border: 2px solid var(--text-secondary);
 	border-radius: 3px;
 	background: transparent;
 	cursor: pointer;
@@ -535,8 +535,8 @@
 }
 
 .message-content input[type="checkbox"]:checked {
-	background: var(--accent-primary, #ff69b4);
-	border-color: var(--accent-primary, #ff69b4);
+	background: var(--accent);
+	border-color: var(--accent);
 }
 
 .message-content input[type="checkbox"]:checked::after {
@@ -580,19 +580,19 @@
 	-moz-appearance: none;
 	width: 1em;
 	height: 1em;
-	border: 2px solid var(--border-color, rgba(168, 200, 255, 0.5));
+	border: 2px solid var(--border-normal);
 	border-radius: 3px;
 	margin-right: 0.5em;
 	margin-left: -1.5em;
 	vertical-align: middle;
 	cursor: pointer;
 	position: relative;
-	background: var(--bg-secondary, transparent);
+	background: var(--surface-subtle);
 }
 
 .message-content input[type="checkbox"]:checked {
-	background: var(--accent-primary, #ff69b4);
-	border-color: var(--accent-primary, #ff69b4);
+	background: var(--accent);
+	border-color: var(--accent);
 }
 
 .message-content input[type="checkbox"]:checked::after {
@@ -627,10 +627,10 @@
 /* Gemini noted: nested quote >> not rendered */
 
 .message-content blockquote {
-	border-left: 4px solid var(--accent-primary, #ff69b4);
+	border-left: 4px solid var(--accent);
 	margin: 0.8rem 0;
 	padding: 0.5rem 1rem;
-	background: var(--hljs-bg, #002451);
+	background: var(--surface-code);
 	border-radius: 4px;
 	color: rgba(255, 255, 255, 0.85);
 	font-style: italic;
@@ -638,31 +638,19 @@
 
 /* Nested blockquotes - progressively lighter */
 .message-content blockquote blockquote {
-	border-left-color: color-mix(
-		in srgb,
-		var(--accent-primary, #ff69b4) 70%,
-		transparent
-	);
+	border-left-color: color-mix(in srgb, var(--accent) 70%, transparent);
 	margin-left: 1rem;
-	background: color-mix(in srgb, var(--hljs-bg, #002451) 95%, white);
+	background: color-mix(in srgb, var(--surface-code) 95%, white);
 }
 
 .message-content blockquote blockquote blockquote {
-	border-left-color: color-mix(
-		in srgb,
-		var(--accent-primary, #ff69b4) 50%,
-		transparent
-	);
-	background: color-mix(in srgb, var(--hljs-bg, #002451) 90%, white);
+	border-left-color: color-mix(in srgb, var(--accent) 50%, transparent);
+	background: color-mix(in srgb, var(--surface-code) 90%, white);
 }
 
 .message-content blockquote blockquote blockquote blockquote {
-	border-left-color: color-mix(
-		in srgb,
-		var(--accent-primary, #ff69b4) 30%,
-		transparent
-	);
-	background: color-mix(in srgb, var(--hljs-bg, #002451) 85%, white);
+	border-left-color: color-mix(in srgb, var(--accent) 30%, transparent);
+	background: color-mix(in srgb, var(--surface-code) 85%, white);
 }
 
 /* ==================== STREAMING CURSOR ==================== */
@@ -670,7 +658,7 @@
 .streaming-cursor {
 	display: inline-block;
 	animation: blink 1s step-end infinite;
-	color: var(--accent-primary, #ff69b4);
+	color: var(--accent);
 	font-weight: bold;
 }
 
@@ -689,7 +677,7 @@
    MERMAID DIAGRAM STYLING
    ======================================== */
 .mermaid-diagram {
-	background: var(--hljs-bg, var(--card-bg, #24283d));
+	background: var(--surface-code);
 	border-radius: 8px;
 	padding: 1rem;
 	margin: 1rem 0;
@@ -712,7 +700,7 @@
 
 /* Mermaid container with header */
 .mermaid-container {
-	background: var(--hljs-bg, #002451);
+	background: var(--surface-code);
 	border-radius: 8px;
 	overflow: hidden;
 	margin: 1rem 0;
@@ -769,7 +757,7 @@
 
 /* Mermaid diagram wrapper with proper padding */
 .mermaid-diagram {
-	background: var(--hljs-bg, var(--card-bg, #24283d));
+	background: var(--surface-code);
 	border-radius: 8px;
 	padding: 1rem;
 	margin: 1rem 0;
@@ -779,7 +767,7 @@
 
 /* Mermaid container - consistent with code block styling */
 .mermaid-container {
-	background: var(--hljs-bg, #002451);
+	background: var(--surface-code);
 	border-radius: 8px;
 	overflow: hidden;
 	margin: 1rem 0;
@@ -807,7 +795,7 @@
 .mermaid-error {
 	background: rgba(255, 100, 100, 0.1);
 	border: 1px solid rgba(255, 100, 100, 0.3);
-	color: var(--tool-error, #ff6464);
+	color: var(--status-danger);
 	padding: 0.75rem;
 	border-radius: 8px;
 	font-family: "Hack", "Fira Code", monospace;
@@ -864,7 +852,7 @@
 
 .mermaid-placeholder .mermaid-status {
 	font-size: 0.75rem;
-	color: var(--accent-primary);
+	color: var(--accent);
 	opacity: 0.8;
 }
 
@@ -887,7 +875,7 @@
 .mermaid-loader-icon {
 	width: 32px;
 	height: 32px;
-	color: var(--accent-primary);
+	color: var(--accent);
 	animation: mermaidPulse 1.2s ease-in-out infinite;
 }
 
@@ -907,21 +895,21 @@
 
 .mermaid-placeholder-text {
 	font-size: 0.85rem;
-	color: var(--text-muted, #888);
+	color: var(--text-muted);
 	font-style: italic;
 }
 
 /* Light theme */
 [data-theme="light"] .mermaid-container.mermaid-placeholder {
-	background: var(--hljs-bg, #f5f5f5);
+	background: var(--surface-code);
 }
 
 [data-theme="light"] .mermaid-placeholder .mermaid-status {
-	color: var(--accent-primary);
+	color: var(--accent);
 }
 
 [data-theme="light"] .mermaid-placeholder-text {
-	color: var(--text-muted, #666);
+	color: var(--text-muted);
 }
 
 /* ==================== SYSTEM ACTION BLOCKS ==================== */
@@ -929,18 +917,18 @@
 
 .system-action-block {
 	background: rgba(255, 255, 255, 0.03);
-	border: 1px solid var(--border-ai, rgba(255, 255, 255, 0.1));
+	border: 1px solid var(--border-message-ai);
 	border-radius: 12px;
 	margin: 8px 0;
 	overflow: hidden;
 }
 
 .command-block {
-	border-left: 3px solid var(--accent-secondary, #8b5cf6);
+	border-left: 3px solid var(--accent-subtle);
 }
 
 .tool-result-block {
-	border-left: 3px solid var(--accent-primary, #3b82f6);
+	border-left: 3px solid var(--accent);
 }
 
 .action-header {
@@ -949,7 +937,7 @@
 	padding: 8px 12px;
 	background: rgba(0, 0, 0, 0.2);
 	font-size: 0.8rem;
-	color: var(--text-muted, #a1a1aa);
+	color: var(--text-muted);
 	font-family: sans-serif;
 	font-weight: 600;
 	text-transform: uppercase;
@@ -963,7 +951,7 @@
 	font-size: 0.85rem;
 	overflow-wrap: anywhere;
 	word-break: break-word;
-	color: var(--text-color, #e2e8f0);
+	color: var(--text-primary);
 	line-height: 1.5;
 }
 
@@ -981,7 +969,7 @@
 	padding: 0.8rem 0;
 	margin: 0.5rem 0;
 	scrollbar-width: thin;
-	scrollbar-color: var(--border-primary) transparent;
+	scrollbar-color: var(--border-focus) transparent;
 }
 
 /* Inherit theme colors for better visibility */
@@ -1000,12 +988,12 @@
 }
 
 .katex-display::-webkit-scrollbar-thumb {
-	background: var(--border-primary);
+	background: var(--border-focus);
 	border-radius: 10px;
 }
 
 .katex-display::-webkit-scrollbar-thumb:hover {
-	background: var(--accent-primary);
+	background: var(--accent);
 }
 
 /* ========================================
@@ -1017,14 +1005,14 @@
 	margin: 0.5rem 0;
 	border-radius: 6px;
 	background: rgba(255, 255, 255, 0.03);
-	border-left: 2px solid var(--border-primary, rgba(255, 255, 255, 0.1));
+	border-left: 2px solid var(--border-focus);
 	transition: background 0.2s ease;
 }
 
 .message-content .cognitive-block summary {
 	padding: 0.4rem 0.8rem;
 	font-size: 0.85rem;
-	color: var(--text-muted, rgba(255, 255, 255, 0.6));
+	color: var(--text-muted);
 	cursor: pointer;
 	user-select: none;
 	outline: none;
@@ -1053,20 +1041,20 @@
 }
 
 .message-content .cognitive-block[open] summary {
-	border-bottom: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
+	border-bottom: 1px solid var(--border-focus);
 }
 
 .message-content .cognitive-content {
 	padding: 0.6rem 0.8rem;
 	font-size: 0.85rem;
-	color: var(--text-muted, rgba(255, 255, 255, 0.65));
+	color: var(--text-muted);
 	line-height: 1.5;
 	white-space: pre-wrap;
 	font-family: inherit;
 	max-height: 300px;
 	overflow-y: auto;
 	scrollbar-width: thin;
-	scrollbar-color: var(--border-primary, rgba(255, 255, 255, 0.1)) transparent;
+	scrollbar-color: var(--border-focus) transparent;
 }
 
 .message-content .cognitive-content::-webkit-scrollbar {
@@ -1078,10 +1066,10 @@
 }
 
 .message-content .cognitive-content::-webkit-scrollbar-thumb {
-	background: var(--border-primary, rgba(255, 255, 255, 0.15));
+	background: var(--border-focus);
 	border-radius: 10px;
 }
 
 .message-content .cognitive-content::-webkit-scrollbar-thumb:hover {
-	background: var(--border-primary, rgba(255, 255, 255, 0.25));
+	background: var(--border-focus);
 }

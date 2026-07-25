@@ -24,10 +24,10 @@ details.tool-call-indicator > summary {
 
 /* Terminal card */
 .terminal-card {
-	font-family: var(--mono-font, "SFMono-Regular", "Menlo", monospace);
+	font-family: var(--font-mono);
 	font-size: 0.85em;
-	background: rgba(0, 0, 0, 0.18);
-	border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+	background: var(--surface-code);
+	border: 1px solid var(--border-normal);
 	border-radius: 6px;
 	margin: 0.5em 0;
 	padding: 0.6em 0.8em;
@@ -37,23 +37,23 @@ details.tool-call-indicator > summary {
 	font-size: 0.7em;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
-	color: var(--text-muted, rgba(255, 255, 255, 0.6));
+	color: var(--text-muted);
 	margin-bottom: 0.4em;
 }
 .terminal-card .terminal-body {
 	white-space: pre-wrap;
 	word-break: break-word;
-	color: var(--text-color);
+	color: var(--text-primary);
 }
 .terminal-card .terminal-body .stderr {
-	color: var(--error-color, #f87171);
+	color: var(--status-danger);
 }
 .terminal-card .terminal-footer {
 	margin-top: 0.5em;
 	padding-top: 0.4em;
-	border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+	border-top: 1px solid var(--border-normal);
 	font-size: 0.75em;
-	color: var(--text-muted, rgba(255, 255, 255, 0.6));
+	color: var(--text-muted);
 	display: flex;
 	gap: 1em;
 	flex-wrap: wrap;
@@ -62,8 +62,8 @@ details.tool-call-indicator > summary {
 /* Weather card */
 .weather-card {
 	padding: 0.9em;
-	background: rgba(255, 255, 255, 0.04);
-	border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+	background: var(--surface-subtle);
+	border: 1px solid var(--border-normal);
 	border-radius: 10px;
 	margin: 0.5em 0;
 }
@@ -86,7 +86,7 @@ details.tool-call-indicator > summary {
 .weather-card__metric-label,
 .weather-card__day-rain {
 	font-size: 0.8em;
-	color: var(--text-muted, rgba(255, 255, 255, 0.65));
+	color: var(--text-muted);
 }
 .weather-card__icon {
 	font-size: 2.2em;
@@ -115,7 +115,7 @@ details.tool-call-indicator > summary {
 .weather-card__day {
 	min-width: 6.5em;
 	padding: 0.55em;
-	border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+	border: 1px solid var(--border-normal);
 	border-radius: 7px;
 	text-align: center;
 }
@@ -140,7 +140,7 @@ details.tool-call-indicator > summary {
 }
 .image-card .image-meta {
 	font-size: 0.75em;
-	color: var(--text-muted, rgba(255, 255, 255, 0.6));
+	color: var(--text-muted);
 	margin-top: 0.25em;
 }
 
@@ -148,7 +148,7 @@ details.tool-call-indicator > summary {
 .generic-card {
 	padding: 0.5em 0.8em;
 	background: rgba(255, 255, 255, 0.03);
-	border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+	border: 1px solid var(--border-normal);
 	border-radius: 6px;
 	margin: 0.5em 0;
 }
@@ -160,13 +160,13 @@ details.tool-call-indicator > summary {
 }
 .generic-card dt {
 	font-weight: 600;
-	color: var(--text-muted, rgba(255, 255, 255, 0.7));
+	color: var(--text-muted);
 }
 .generic-card dd {
 	margin: 0;
 	word-break: break-word;
 }
 .generic-card .generic-error {
-	color: var(--error-color, #f87171);
+	color: var(--status-danger);
 	font-size: 0.85em;
 }

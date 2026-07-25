@@ -1,585 +1,391 @@
-/* FILE: static/css/theme.css */
-/* 
- * ========================================
- * ACCENT COLOR NAMING CONVENTION
- * ========================================
- * 
- * --accent-primary   → Main action color (buttons, links, focus)
- * --accent-secondary → Borders, headers, subtle accents
- * --accent-tertiary  → Code blocks, tertiary elements
- * --accent-color     → Alias for accent-primary (semantic)
- * 
- * --border-primary   → Primary border color
- * --border-secondary → Secondary border color
- * 
- * Each theme defines its own palette, so the actual colors
- * vary by theme. The names indicate role, not specific hue.
- * ========================================
- */
+/* 01 Foundations: shared typography, spacing, radius, motion, and blur primitives. */
+/* 02 Semantic Tokens: components consume roles; themes override role values only. */
 
-/* DESCRIPTION: Theme system with multiple color schemes
- * 
- * Default theme: suisei - Stellar Night (Suisei Edition) - (blue-gray with white accents)
- * 
- * Available themes:
- *   - Stellar Night (Suisei Edition) - Blue-gray with white accents
- *   - tokyonight - Dark purple-blue with neon accents
- *   - dark - Soft blue base
- *   - light - Soft white base
- *   - lavender - Pastel purple
- *   - mint - Pastel green
- *   - peach - Pastel orange
- *   - dark-lavender - Dark purple
- *   - vanilla-orange - Creamy vanilla
- */
+:root {
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.25rem;
+	--space-6: 1.5rem;
+	--space-7: 2rem;
+	--space-8: 2.5rem;
+	--space-9: 3rem;
+	--space-10: 4rem;
+	--radius-sm: 4px;
+	--radius-md: 8px;
+	--radius-lg: 12px;
+	--radius-xl: 20px;
+	--radius-full: 9999px;
+	--shadow-sm: 0 2px 8px rgba(13, 17, 23, 0.6);
+	--shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
+	--shadow-lg: 0 10px 30px rgba(31, 111, 235, 0.25);
+	--shadow-xl: 0 20px 60px rgba(13, 17, 23, 0.6);
+	--shadow-focus: 0 0 0 3px rgba(31, 111, 235, 0.25);
+	--transition-fast: 0.15s ease;
+	--transition-normal: 0.2s ease;
+	--transition-slow: 0.3s ease;
+	--backdrop-blur: blur(12px);
+	--font-sans: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+	--font-mono:
+		ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+		"Courier New", monospace;
+	--line-height-body: 1.6;
+	--line-height-tight: 1.3;
+	--line-height-copy: 1.5;
+}
 
-/* ========================================
-   SUISEI THEME (DEFAULT)
-   Inspired by Suisei Hoshimachi
-   Blue-gray palette with white accents
-   ======================================== */
+/* 03 Default semantic values */
 :root,
 [data-theme="stellar-night-suisei"],
 [data-theme=""] {
-	/* === SURFACE LAYERS === */
-	--surface-base: #0d1117;
-	--surface-elevated: #161b22;
+	--surface: #0d1117;
+	--surface-raised: #161b22;
 	--surface-overlay: rgba(22, 27, 34, 0.95);
-	--surface-user: #1f6feb;
-	--surface-ai: #21262d;
-
-	/* === TEXT HIERARCHY === */
+	--surface-input: #0d1117;
+	--surface-subtle: #161b22;
+	--surface-hover: rgba(56, 139, 253, 0.25);
+	--surface-message-user: #1f6feb;
+	--surface-message-ai: #21262d;
+	--surface-code: #0d1117;
+	--surface-status: #161b22;
 	--text-primary: #f0f6fc;
 	--text-secondary: rgba(240, 246, 252, 0.8);
 	--text-muted: rgba(240, 246, 252, 0.7);
-
-	/* === ACCENT COLORS === */
-	--accent-primary: #58a6ff;
-	--accent-secondary: #388bfd;
-	--accent-tertiary: #39d353;
-	--accent-color: #58a6ff;
-	--accent-highlight: #58a6ff;
-
-	/* === BORDER STATES === */
-	--border-primary: rgba(31, 111, 235, 0.6);
-	--border-secondary: rgba(56, 139, 253, 0.4);
-	--border-ai: rgba(56, 139, 253, 0.3);
-	--border-user: rgba(31, 111, 235, 0.6);
-	--border-color: rgba(56, 139, 253, 0.4);
-
-	/* === SPACING SCALE === */
-	--spacing-xs: 0.25rem;
-	--spacing-sm: 0.5rem;
-	--spacing-md: 1rem;
-	--spacing-lg: 1.5rem;
-	--spacing-xl: 2rem;
-
-	/* === RADIUS SCALE === */
-	--radius-sm: 4px;
-	--radius-md: 8px;
-	--radius-lg: 12px;
-	--radius-xl: 20px;
-	--radius-full: 9999px;
-
-	/* === SHADOW PRESETS === */
-	--shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.4);
-	--shadow-accent: rgba(31, 111, 235, 0.25);
-	--shadow-secondary: rgba(56, 139, 253, 0.25);
-	--shadow-base: rgba(13, 17, 23, 0.6);
-
-	/* === CODE STYLING === */
-	--code-bg: #0d1117;
-	--code-border: rgba(56, 139, 253, 0.2);
-	--copy-button-bg: rgba(56, 139, 253, 0.15);
-	--copy-button-hover: rgba(56, 139, 253, 0.25);
-
-	/* === COMPONENT STATES === */
-	--backdrop-blur: blur(12px);
-	--brain-box-bg: rgba(22, 27, 34, 0.95);
-	--brain-box-border: rgba(56, 139, 253, 0.4);
-	--brain-box-text: #58a6ff;
-	--tool-execution-bg: rgba(22, 27, 34, 0.9);
-	--tool-success: #39d353;
-	--tool-error: #f85149;
-	--status-bar-bg: #161b22;
-
-	/* === LEGACY ALIASES (backward compatibility) === */
-	--bg-color: var(--surface-base);
-	--header-bg: var(--surface-elevated);
-	--card-bg: var(--surface-elevated);
-	--input-bg: var(--surface-base);
-	--bg-secondary: var(--surface-elevated);
-	--user-bubble: var(--surface-user);
-	--ai-bubble: var(--surface-ai);
-	--message-user-bg: var(--surface-user);
-	--message-ai-bg: var(--surface-ai);
-	--button-bg: var(--accent-secondary);
-	--button-hover: var(--accent-primary);
-	--button-text: var(--text-primary);
-	--text-color: var(--text-primary);
-	--timestamp-color: var(--text-muted);
+	--text-inverse: #f0f6fc;
+	--accent: #58a6ff;
+	--accent-hover: #58a6ff;
+	--accent-active: #388bfd;
+	--accent-subtle: #388bfd;
+	--accent-support: #39d353;
+	--action-primary: #388bfd;
+	--action-hover: #58a6ff;
+	--action-text: #f0f6fc;
+	--border-subtle: rgba(56, 139, 253, 0.3);
+	--border-normal: rgba(56, 139, 253, 0.4);
+	--border-focus: rgba(31, 111, 235, 0.6);
+	--border-message-ai: rgba(56, 139, 253, 0.3);
+	--border-message-user: rgba(31, 111, 235, 0.6);
+	--status-success: #39d353;
+	--status-success-hover: #059669;
+	--status-warning: #f59e0b;
+	--status-warning-hover: #d97706;
+	--status-danger: #f85149;
+	--status-danger-hover: #dc2626;
+	--status-info: #388bfd;
+	--status-info-hover: #58a6ff;
 }
 
-/* ========================================
-   TOKYO NIGHT THEME
-   Dark purple-blue with neon accents
-   Inspired by Tokyo Night VSCode theme
-   ======================================== */
+/* 04 Theme: [data-theme="tokyonight"] */
 [data-theme="tokyonight"] {
-	/* === SURFACE LAYERS === */
-	--surface-base: #1a1b26;
-	--surface-elevated: #24283b;
+	--surface: #1a1b26;
+	--surface-raised: #24283b;
 	--surface-overlay: rgba(36, 40, 59, 0.95);
-	--surface-user: #7aa2f7;
-	--surface-ai: transparent;
-
-	/* === TEXT HIERARCHY === */
+	--surface-input: #1a1b26;
+	--surface-subtle: #16161e;
+	--surface-hover: rgba(122, 162, 247, 0.25);
+	--surface-message-user: #7aa2f7;
+	--surface-message-ai: transparent;
+	--surface-code: #16161e;
+	--surface-status: #24283b;
 	--text-primary: #c0caf5;
 	--text-secondary: rgba(192, 202, 245, 0.8);
 	--text-muted: rgba(192, 202, 245, 0.7);
-
-	/* === ACCENT COLORS === */
-	--accent-primary: #ff9e64;
-	--accent-secondary: #bb9af7;
-	--accent-tertiary: #9ece6a;
-	--accent-color: #7aa2f7;
-
-	/* === BORDER STATES === */
-	--border-primary: rgba(255, 158, 100, 0.4);
-	--border-secondary: rgba(187, 154, 247, 0.4);
-	--border-ai: rgba(122, 162, 247, 0.3);
-	--border-user: rgba(122, 162, 247, 0.5);
-	--border-color: rgba(187, 154, 247, 0.3);
-
-	/* === SPACING SCALE === */
-	--spacing-xs: 0.25rem;
-	--spacing-sm: 0.5rem;
-	--spacing-md: 1rem;
-	--spacing-lg: 1.5rem;
-	--spacing-xl: 2rem;
-
-	/* === RADIUS SCALE === */
-	--radius-sm: 4px;
-	--radius-md: 8px;
-	--radius-lg: 12px;
-	--radius-xl: 20px;
-	--radius-full: 9999px;
-
-	/* === SHADOW PRESETS === */
-	--shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.4);
-	--shadow-accent: rgba(255, 158, 100, 0.2);
-	--shadow-secondary: rgba(187, 154, 247, 0.2);
-	--shadow-base: rgba(26, 27, 38, 0.6);
-
-	/* === CODE STYLING === */
-	--code-bg: #16161e;
-	--code-border: rgba(122, 162, 247, 0.2);
-	--copy-button-bg: rgba(122, 162, 247, 0.15);
-	--copy-button-hover: rgba(122, 162, 247, 0.25);
-
-	/* === COMPONENT STATES === */
-	--backdrop-blur: blur(12px);
-	--brain-box-bg: rgba(36, 40, 59, 0.95);
-	--brain-box-border: rgba(122, 162, 247, 0.4);
-	--brain-box-text: #bb9af7;
-	--tool-execution-bg: rgba(36, 40, 59, 0.9);
-	--tool-success: #9ece6a;
-	--tool-error: #f7768e;
-	--status-bar-bg: #24283b;
-
-	/* === LEGACY ALIASES === */
-	--bg-color: var(--surface-base);
-	--header-bg: var(--surface-elevated);
-	--card-bg: var(--surface-elevated);
-	--input-bg: var(--surface-base);
-	--bg-secondary: #16161e;
-	--user-bubble: var(--surface-user);
-	--ai-bubble: var(--surface-ai);
-	--message-user-bg: var(--surface-user);
-	--message-ai-bg: var(--surface-ai);
-	--button-bg: var(--surface-user);
-	--button-hover: #9acdff;
-	--button-text: var(--surface-base);
-	--text-color: var(--text-primary);
-	--timestamp-color: var(--text-muted);
+	--text-inverse: #1a1b26;
+	--accent: #ff9e64;
+	--accent-hover: #ff9e64;
+	--accent-active: #bb9af7;
+	--accent-subtle: #bb9af7;
+	--accent-support: #9ece6a;
+	--action-primary: #7aa2f7;
+	--action-hover: #9acdff;
+	--action-text: #1a1b26;
+	--border-subtle: rgba(122, 162, 247, 0.3);
+	--border-normal: rgba(187, 154, 247, 0.3);
+	--border-focus: rgba(255, 158, 100, 0.4);
+	--border-message-ai: rgba(122, 162, 247, 0.3);
+	--border-message-user: rgba(122, 162, 247, 0.5);
+	--status-success: #9ece6a;
+	--status-success-hover: #059669;
+	--status-warning: #f59e0b;
+	--status-warning-hover: #d97706;
+	--status-danger: #f7768e;
+	--status-danger-hover: #dc2626;
+	--status-info: #bb9af7;
+	--status-info-hover: #ff9e64;
 }
 
-/* ========================================
-   DARK BLUE THEME (LEGACY)
-   ======================================== */
+/* 04 Theme: [data-theme="dark"] */
 [data-theme="dark"] {
-	/* Core Colors - Soft blue base */
-	--bg-color: #1a1f2e;
-	--header-bg: #24283d;
-	--card-bg: #24283d;
-	--input-bg: #24283d;
-	--bg-secondary: var(--card-bg);
-
-	/* Message Bubbles */
-	--user-bubble: #d46a7e;
-	--ai-bubble: transparent;
-	--message-user-bg: #d46a7e;
-	--message-ai-bg: transparent;
-
-	/* Buttons & UI */
-	--button-bg: #e8b4bc;
-	--button-hover: #f5c6ce;
-	--button-text: #2a2438;
-
-	/* Text Colors */
-	--text-color: #f0f4ff;
-	--timestamp-color: rgba(240, 244, 255, 0.8);
+	--surface: #1a1f2e;
+	--surface-raised: #24283d;
+	--surface-overlay: #24283d;
+	--surface-input: #24283d;
+	--surface-subtle: #24283d;
+	--surface-hover: rgba(168, 200, 255, 0.25);
+	--surface-message-user: #d46a7e;
+	--surface-message-ai: transparent;
+	--surface-code: #1e2235;
+	--surface-status: #24283d;
+	--text-primary: #f0f4ff;
 	--text-secondary: rgba(240, 244, 255, 0.7);
-
-	/* Accent Colors - Pink & Soft Blue */
-	--accent-primary: #ffb8c6;
-	--accent-tertiary: #b8e1dd;
-	--accent-secondary: #a8c8ff;
-	--accent-color: #a8c8ff;
-
-	/* Border Colors */
-	--border-secondary: rgba(168, 200, 255, 0.4);
-	--border-primary: rgba(212, 106, 126, 0.6);
-	--border-ai: rgba(168, 200, 255, 0.3);
-	--border-user: rgba(212, 106, 126, 0.6);
-	--border-color: var(--border-secondary);
-
-	/* Shadow Colors */
-	--shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.25);
-	--shadow-accent: rgba(212, 106, 126, 0.25);
-	--shadow-secondary: rgba(168, 200, 255, 0.25);
-	--shadow-base: rgba(36, 40, 61, 0.4);
-
-	/* Code Colors */
-	--backdrop-blur: blur(12px);
-	--code-bg: #1e2235;
-	--code-border: rgba(168, 200, 255, 0.15);
-	--copy-button-bg: rgba(168, 200, 255, 0.15);
-	--copy-button-hover: rgba(168, 200, 255, 0.25);
+	--text-muted: rgba(240, 244, 255, 0.8);
+	--text-inverse: #2a2438;
+	--accent: #ffb8c6;
+	--accent-hover: #ffb8c6;
+	--accent-active: #a8c8ff;
+	--accent-subtle: #a8c8ff;
+	--accent-support: #b8e1dd;
+	--action-primary: #e8b4bc;
+	--action-hover: #f5c6ce;
+	--action-text: #2a2438;
+	--border-subtle: rgba(168, 200, 255, 0.3);
+	--border-normal: rgba(168, 200, 255, 0.4);
+	--border-focus: rgba(212, 106, 126, 0.6);
+	--border-message-ai: rgba(168, 200, 255, 0.3);
+	--border-message-user: rgba(212, 106, 126, 0.6);
+	--status-success: #10b981;
+	--status-success-hover: #059669;
+	--status-warning: #f59e0b;
+	--status-warning-hover: #d97706;
+	--status-danger: #ef4444;
+	--status-danger-hover: #dc2626;
+	--status-info: #a8c8ff;
+	--status-info-hover: #ffb8c6;
 }
 
-/* ========================================
-   SOFT LIGHT THEME
-   ======================================== */
+/* 04 Theme: [data-theme="light"] */
 [data-theme="light"] {
-	/* Core Colors - Soft white base */
-	--bg-color: #f8f9fa;
-	--header-bg: #ffffff;
-	--card-bg: #ffffff;
-	--input-bg: #ffffff;
-	--bg-secondary: var(--card-bg);
-
-	/* Message Bubbles */
-	--user-bubble: #ff9eb5;
-	--ai-bubble: transparent;
-	--message-user-bg: #ff9eb5;
-	--message-ai-bg: transparent;
-
-	/* Buttons & UI */
-	--button-bg: #ffb3c8;
-	--button-hover: #ffc2d4;
-	--button-text: #2a2438;
-
-	/* Text Colors */
-	--text-color: #2a2438;
-	--timestamp-color: rgba(42, 36, 56, 0.7);
+	--surface: #f8f9fa;
+	--surface-raised: #ffffff;
+	--surface-overlay: #ffffff;
+	--surface-input: #ffffff;
+	--surface-subtle: #ffffff;
+	--surface-hover: rgba(147, 165, 255, 0.2);
+	--surface-message-user: #ff9eb5;
+	--surface-message-ai: transparent;
+	--surface-code: #f1f3f5;
+	--surface-status: #ffffff;
+	--text-primary: #2a2438;
 	--text-secondary: rgba(42, 36, 56, 0.8);
-
-	/* Accent Colors - Soft Blue & Pink */
-	--accent-primary: #ff85a1;
-	--accent-tertiary: #8ac6b8;
-	--accent-secondary: #93a5ff;
-	--accent-color: #93a5ff;
-
-	/* Border Colors */
-	--border-secondary: rgba(147, 165, 255, 0.3);
-	--border-primary: rgba(255, 133, 161, 0.4);
-	--border-ai: rgba(147, 165, 255, 0.2);
-	--border-user: rgba(255, 133, 161, 0.4);
-	--border-color: var(--border-secondary);
-
-	/* Shadow Colors */
-	--shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.1);
-	--shadow-accent: rgba(255, 133, 161, 0.2);
-	--shadow-secondary: rgba(147, 165, 255, 0.2);
-	--shadow-base: rgba(0, 0, 0, 0.1);
-
-	/* Code Colors */
-	--backdrop-blur: blur(12px);
-	--code-bg: #f1f3f5;
-	--code-border: rgba(147, 165, 255, 0.2);
-	--copy-button-bg: rgba(147, 165, 255, 0.1);
-	--copy-button-hover: rgba(147, 165, 255, 0.2);
+	--text-muted: rgba(42, 36, 56, 0.7);
+	--text-inverse: #2a2438;
+	--accent: #ff85a1;
+	--accent-hover: #ff85a1;
+	--accent-active: #93a5ff;
+	--accent-subtle: #93a5ff;
+	--accent-support: #8ac6b8;
+	--action-primary: #ffb3c8;
+	--action-hover: #ffc2d4;
+	--action-text: #2a2438;
+	--border-subtle: rgba(147, 165, 255, 0.2);
+	--border-normal: rgba(147, 165, 255, 0.3);
+	--border-focus: rgba(255, 133, 161, 0.4);
+	--border-message-ai: rgba(147, 165, 255, 0.2);
+	--border-message-user: rgba(255, 133, 161, 0.4);
+	--status-success: #10b981;
+	--status-success-hover: #059669;
+	--status-warning: #f59e0b;
+	--status-warning-hover: #d97706;
+	--status-danger: #ef4444;
+	--status-danger-hover: #dc2626;
+	--status-info: #93a5ff;
+	--status-info-hover: #ff85a1;
 }
 
-/* ========================================
-   PASTEL LAVENDER THEME
-   ======================================== */
+/* 04 Theme: [data-theme="lavender"] */
 [data-theme="lavender"] {
-	/* Core Colors - Soft purple base */
-	--bg-color: #f5f3ff;
-	--header-bg: #ffffff;
-	--card-bg: #ffffff;
-	--input-bg: #ffffff;
-	--bg-secondary: var(--card-bg);
-
-	/* Message Bubbles */
-	--user-bubble: #d8b4fe;
-	--ai-bubble: transparent;
-	--message-user-bg: #d8b4fe;
-	--message-ai-bg: transparent;
-
-	/* Buttons & UI */
-	--button-bg: #e9d5ff;
-	--button-hover: #f0e6ff;
-	--button-text: #4c1d95;
-
-	/* Text Colors */
-	--text-color: #4c1d95;
-	--timestamp-color: rgba(76, 29, 149, 0.7);
+	--surface: #f5f3ff;
+	--surface-raised: #ffffff;
+	--surface-overlay: #ffffff;
+	--surface-input: #ffffff;
+	--surface-subtle: #ffffff;
+	--surface-hover: rgba(167, 139, 250, 0.2);
+	--surface-message-user: #d8b4fe;
+	--surface-message-ai: transparent;
+	--surface-code: #faf5ff;
+	--surface-status: #ffffff;
+	--text-primary: #4c1d95;
 	--text-secondary: rgba(76, 29, 149, 0.8);
-
-	/* Accent Colors - Purple & Lavender */
-	--accent-primary: #c084fc;
-	--accent-tertiary: #a5b4fc;
-	--accent-secondary: #a78bfa;
-	--accent-color: #a78bfa;
-
-	/* Border Colors */
-	--border-secondary: rgba(167, 139, 250, 0.4);
-	--border-primary: rgba(192, 132, 252, 0.4);
-	--border-ai: rgba(167, 139, 250, 0.3);
-	--border-user: rgba(192, 132, 252, 0.4);
-	--border-color: var(--border-secondary);
-
-	/* Shadow Colors */
-	--shadow-soft: 0 4px 20px rgba(167, 139, 250, 0.15);
-	--shadow-accent: rgba(192, 132, 252, 0.2);
-	--shadow-secondary: rgba(167, 139, 250, 0.2);
-	--shadow-base: rgba(167, 139, 250, 0.1);
-
-	/* Code Colors */
-	--backdrop-blur: blur(12px);
-	--code-bg: #faf5ff;
-	--code-border: rgba(167, 139, 250, 0.2);
-	--copy-button-bg: rgba(167, 139, 250, 0.1);
-	--copy-button-hover: rgba(167, 139, 250, 0.2);
+	--text-muted: rgba(76, 29, 149, 0.7);
+	--text-inverse: #4c1d95;
+	--accent: #c084fc;
+	--accent-hover: #c084fc;
+	--accent-active: #a78bfa;
+	--accent-subtle: #a78bfa;
+	--accent-support: #a5b4fc;
+	--action-primary: #e9d5ff;
+	--action-hover: #f0e6ff;
+	--action-text: #4c1d95;
+	--border-subtle: rgba(167, 139, 250, 0.3);
+	--border-normal: rgba(167, 139, 250, 0.4);
+	--border-focus: rgba(192, 132, 252, 0.4);
+	--border-message-ai: rgba(167, 139, 250, 0.3);
+	--border-message-user: rgba(192, 132, 252, 0.4);
+	--status-success: #10b981;
+	--status-success-hover: #059669;
+	--status-warning: #f59e0b;
+	--status-warning-hover: #d97706;
+	--status-danger: #ef4444;
+	--status-danger-hover: #dc2626;
+	--status-info: #a78bfa;
+	--status-info-hover: #c084fc;
 }
 
-/* ========================================
-   PASTEL MINT THEME
-   ======================================== */
+/* 04 Theme: [data-theme="mint"] */
 [data-theme="mint"] {
-	/* Core Colors - Soft green base */
-	--bg-color: #f0fdf9;
-	--header-bg: #ffffff;
-	--card-bg: #ffffff;
-	--input-bg: #ffffff;
-	--bg-secondary: var(--card-bg);
-
-	/* Message Bubbles */
-	--user-bubble: #99f6e4;
-	--ai-bubble: transparent;
-	--message-user-bg: #99f6e4;
-	--message-ai-bg: transparent;
-
-	/* Buttons & UI */
-	--button-bg: #a7f3d0;
-	--button-hover: #bbf7d0;
-	--button-text: #065f46;
-
-	/* Text Colors */
-	--text-color: #065f46;
-	--timestamp-color: rgba(6, 95, 70, 0.7);
+	--surface: #f0fdf9;
+	--surface-raised: #ffffff;
+	--surface-overlay: #ffffff;
+	--surface-input: #ffffff;
+	--surface-subtle: #ffffff;
+	--surface-hover: rgba(52, 211, 153, 0.2);
+	--surface-message-user: #99f6e4;
+	--surface-message-ai: transparent;
+	--surface-code: #f0fdfa;
+	--surface-status: #ffffff;
+	--text-primary: #065f46;
 	--text-secondary: rgba(6, 95, 70, 0.8);
-
-	/* Accent Colors - Teal & Mint */
-	--accent-primary: #5eead4;
-	--accent-tertiary: #2dd4bf;
-	--accent-secondary: #34d399;
-	--accent-color: #34d399;
-
-	/* Border Colors */
-	--border-secondary: rgba(52, 211, 153, 0.4);
-	--border-primary: rgba(94, 234, 212, 0.4);
-	--border-ai: rgba(52, 211, 153, 0.3);
-	--border-user: rgba(94, 234, 212, 0.4);
-	--border-color: var(--border-secondary);
-
-	/* Shadow Colors */
-	--shadow-soft: 0 4px 20px rgba(52, 211, 153, 0.15);
-	--shadow-accent: rgba(94, 234, 212, 0.2);
-	--shadow-secondary: rgba(52, 211, 153, 0.2);
-	--shadow-base: rgba(52, 211, 153, 0.1);
-
-	/* Code Colors */
-	--backdrop-blur: blur(12px);
-	--code-bg: #f0fdfa;
-	--code-border: rgba(52, 211, 153, 0.2);
-	--copy-button-bg: rgba(52, 211, 153, 0.1);
-	--copy-button-hover: rgba(52, 211, 153, 0.2);
+	--text-muted: rgba(6, 95, 70, 0.7);
+	--text-inverse: #065f46;
+	--accent: #5eead4;
+	--accent-hover: #5eead4;
+	--accent-active: #34d399;
+	--accent-subtle: #34d399;
+	--accent-support: #2dd4bf;
+	--action-primary: #a7f3d0;
+	--action-hover: #bbf7d0;
+	--action-text: #065f46;
+	--border-subtle: rgba(52, 211, 153, 0.3);
+	--border-normal: rgba(52, 211, 153, 0.4);
+	--border-focus: rgba(94, 234, 212, 0.4);
+	--border-message-ai: rgba(52, 211, 153, 0.3);
+	--border-message-user: rgba(94, 234, 212, 0.4);
+	--status-success: #10b981;
+	--status-success-hover: #059669;
+	--status-warning: #f59e0b;
+	--status-warning-hover: #d97706;
+	--status-danger: #ef4444;
+	--status-danger-hover: #dc2626;
+	--status-info: #34d399;
+	--status-info-hover: #5eead4;
 }
 
-/* ========================================
-   PASTEL PEACH THEME
-   ======================================== */
+/* 04 Theme: [data-theme="peach"] */
 [data-theme="peach"] {
-	/* Core Colors - Soft orange base */
-	--bg-color: #fff7ed;
-	--header-bg: #ffffff;
-	--card-bg: #ffffff;
-	--input-bg: #ffffff;
-	--bg-secondary: var(--card-bg);
-
-	/* Message Bubbles */
-	--user-bubble: #fdba74;
-	--ai-bubble: transparent;
-	--message-user-bg: #fdba74;
-	--message-ai-bg: transparent;
-
-	/* Buttons & UI */
-	--button-bg: #fed7aa;
-	--button-hover: #ffedd5;
-	--button-text: #7c2d12;
-
-	/* Text Colors */
-	--text-color: #7c2d12;
-	--timestamp-color: rgba(124, 45, 18, 0.7);
+	--surface: #fff7ed;
+	--surface-raised: #ffffff;
+	--surface-overlay: #ffffff;
+	--surface-input: #ffffff;
+	--surface-subtle: #ffffff;
+	--surface-hover: rgba(249, 115, 22, 0.2);
+	--surface-message-user: #fdba74;
+	--surface-message-ai: transparent;
+	--surface-code: #fff7ed;
+	--surface-status: #ffffff;
+	--text-primary: #7c2d12;
 	--text-secondary: rgba(124, 45, 18, 0.8);
-
-	/* Accent Colors - Orange & Peach */
-	--accent-primary: #fb923c;
-	--accent-tertiary: #fbbf24;
-	--accent-secondary: #f97316;
-	--accent-color: #f97316;
-
-	/* Border Colors */
-	--border-secondary: rgba(249, 115, 22, 0.4);
-	--border-primary: rgba(251, 146, 60, 0.4);
-	--border-ai: rgba(249, 115, 22, 0.3);
-	--border-user: rgba(251, 146, 60, 0.4);
-	--border-color: var(--border-secondary);
-
-	/* Shadow Colors */
-	--shadow-soft: 0 4px 20px rgba(249, 115, 22, 0.15);
-	--shadow-accent: rgba(251, 146, 60, 0.2);
-	--shadow-secondary: rgba(249, 115, 22, 0.2);
-	--shadow-base: rgba(249, 115, 22, 0.1);
-
-	/* Code Colors */
-	--backdrop-blur: blur(12px);
-	--code-bg: #fff7ed;
-	--code-border: rgba(249, 115, 22, 0.2);
-	--copy-button-bg: rgba(249, 115, 22, 0.1);
-	--copy-button-hover: rgba(249, 115, 22, 0.2);
+	--text-muted: rgba(124, 45, 18, 0.7);
+	--text-inverse: #7c2d12;
+	--accent: #fb923c;
+	--accent-hover: #fb923c;
+	--accent-active: #f97316;
+	--accent-subtle: #f97316;
+	--accent-support: #fbbf24;
+	--action-primary: #fed7aa;
+	--action-hover: #ffedd5;
+	--action-text: #7c2d12;
+	--border-subtle: rgba(249, 115, 22, 0.3);
+	--border-normal: rgba(249, 115, 22, 0.4);
+	--border-focus: rgba(251, 146, 60, 0.4);
+	--border-message-ai: rgba(249, 115, 22, 0.3);
+	--border-message-user: rgba(251, 146, 60, 0.4);
+	--status-success: #10b981;
+	--status-success-hover: #059669;
+	--status-warning: #f59e0b;
+	--status-warning-hover: #d97706;
+	--status-danger: #ef4444;
+	--status-danger-hover: #dc2626;
+	--status-info: #f97316;
+	--status-info-hover: #fb923c;
 }
 
-/* ========================================
-   DARK LAVENDER THEME
-   ======================================== */
+/* 04 Theme: [data-theme="dark-lavender"] */
 [data-theme="dark-lavender"] {
-	/* Core Colors - Dark purple base */
-	--bg-color: #1e1b2e;
-	--header-bg: #2d2640;
-	--card-bg: #2d2640;
-	--input-bg: #2d2640;
-	--bg-secondary: var(--card-bg);
-
-	/* Message Bubbles */
-	--user-bubble: #c4b5fd;
-	--ai-bubble: transparent;
-	--message-user-bg: #c4b5fd;
-	--message-ai-bg: transparent;
-
-	/* Buttons & UI */
-	--button-bg: #ddd6fe;
-	--button-hover: #e5deff;
-	--button-text: #1e1b2e;
-
-	/* Text Colors */
-	--text-color: #f5f3ff;
-	--timestamp-color: rgba(245, 243, 255, 0.8);
+	--surface: #1e1b2e;
+	--surface-raised: #2d2640;
+	--surface-overlay: #2d2640;
+	--surface-input: #2d2640;
+	--surface-subtle: #2d2640;
+	--surface-hover: rgba(196, 181, 253, 0.25);
+	--surface-message-user: #c4b5fd;
+	--surface-message-ai: transparent;
+	--surface-code: #2a2342;
+	--surface-status: #2d2640;
+	--text-primary: #f5f3ff;
 	--text-secondary: rgba(245, 243, 255, 0.7);
-
-	/* Accent Colors - Soft Purple */
-	--accent-primary: #a78bfa;
-	--accent-tertiary: #8b5cf6;
-	--accent-secondary: #c4b5fd;
-	--accent-color: #c4b5fd;
-
-	/* Border Colors */
-	--border-secondary: rgba(196, 181, 253, 0.4);
-	--border-primary: rgba(167, 139, 250, 0.4);
-	--border-ai: rgba(196, 181, 253, 0.3);
-	--border-user: rgba(167, 139, 250, 0.4);
-	--border-color: var(--border-secondary);
-
-	/* Shadow Colors */
-	--shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.3);
-	--shadow-accent: rgba(167, 139, 250, 0.25);
-	--shadow-secondary: rgba(196, 181, 253, 0.25);
-	--shadow-base: rgba(45, 38, 64, 0.4);
-
-	/* Code Colors */
-	--backdrop-blur: blur(12px);
-	--code-bg: #2a2342;
-	--code-border: rgba(196, 181, 253, 0.15);
-	--copy-button-bg: rgba(196, 181, 253, 0.15);
-	--copy-button-hover: rgba(196, 181, 253, 0.25);
+	--text-muted: rgba(245, 243, 255, 0.8);
+	--text-inverse: #1e1b2e;
+	--accent: #a78bfa;
+	--accent-hover: #a78bfa;
+	--accent-active: #c4b5fd;
+	--accent-subtle: #c4b5fd;
+	--accent-support: #8b5cf6;
+	--action-primary: #ddd6fe;
+	--action-hover: #e5deff;
+	--action-text: #1e1b2e;
+	--border-subtle: rgba(196, 181, 253, 0.3);
+	--border-normal: rgba(196, 181, 253, 0.4);
+	--border-focus: rgba(167, 139, 250, 0.4);
+	--border-message-ai: rgba(196, 181, 253, 0.3);
+	--border-message-user: rgba(167, 139, 250, 0.4);
+	--status-success: #10b981;
+	--status-success-hover: #059669;
+	--status-warning: #f59e0b;
+	--status-warning-hover: #d97706;
+	--status-danger: #ef4444;
+	--status-danger-hover: #dc2626;
+	--status-info: #c4b5fd;
+	--status-info-hover: #a78bfa;
 }
 
-/* ========================================
-   VANILLA ORANGE THEME
-   ======================================== */
+/* 04 Theme: [data-theme="vanilla-orange"] */
 [data-theme="vanilla-orange"] {
-	/* Core Colors - Creamy vanilla base */
-	--bg-color: #fff9f0;
-	--header-bg: #fffdfa;
-	--card-bg: #fffdfa;
-	--input-bg: #fffdfa;
-	--bg-secondary: var(--card-bg);
-
-	/* Message Bubbles */
-	--user-bubble: #ffd8a8;
-	--ai-bubble: transparent;
-	--message-user-bg: #ffd8a8;
-	--message-ai-bg: transparent;
-
-	/* Buttons & UI */
-	--button-bg: #ffe0b5;
-	--button-hover: #ffe8cc;
-	--button-text: #5c3d0d;
-
-	/* Text Colors */
-	--text-color: #5c3d0d;
-	--timestamp-color: rgba(92, 61, 13, 0.7);
+	--surface: #fff9f0;
+	--surface-raised: #fffdfa;
+	--surface-overlay: #fffdfa;
+	--surface-input: #fffdfa;
+	--surface-subtle: #fffdfa;
+	--surface-hover: rgba(255, 179, 102, 0.2);
+	--surface-message-user: #ffd8a8;
+	--surface-message-ai: transparent;
+	--surface-code: #fffaf0;
+	--surface-status: #fffdfa;
+	--text-primary: #5c3d0d;
 	--text-secondary: rgba(92, 61, 13, 0.8);
-
-	/* Accent Colors - Vanilla & Orange */
-	--accent-primary: #ffc285;
-	--accent-tertiary: #ffd8a8;
-	--accent-secondary: #ffb366;
-	--accent-color: #ffb366;
-
-	/* Border Colors */
-	--border-secondary: rgba(255, 179, 102, 0.4);
-	--border-primary: rgba(255, 194, 133, 0.4);
-	--border-ai: rgba(255, 179, 102, 0.3);
-	--border-user: rgba(255, 194, 133, 0.4);
-	--border-color: var(--border-secondary);
-
-	/* Shadow Colors */
-	--shadow-soft: 0 4px 20px rgba(255, 179, 102, 0.15);
-	--shadow-accent: rgba(255, 194, 133, 0.2);
-	--shadow-secondary: rgba(255, 179, 102, 0.2);
-	--shadow-base: rgba(255, 179, 102, 0.1);
-
-	/* Code Colors */
-	--backdrop-blur: blur(12px);
-	--code-bg: #fffaf0;
-	--code-border: rgba(255, 179, 102, 0.2);
-	--copy-button-bg: rgba(255, 179, 102, 0.1);
-	--copy-button-hover: rgba(255, 179, 102, 0.2);
+	--text-muted: rgba(92, 61, 13, 0.7);
+	--text-inverse: #5c3d0d;
+	--accent: #ffc285;
+	--accent-hover: #ffc285;
+	--accent-active: #ffb366;
+	--accent-subtle: #ffb366;
+	--accent-support: #ffd8a8;
+	--action-primary: #ffe0b5;
+	--action-hover: #ffe8cc;
+	--action-text: #5c3d0d;
+	--border-subtle: rgba(255, 179, 102, 0.3);
+	--border-normal: rgba(255, 179, 102, 0.4);
+	--border-focus: rgba(255, 194, 133, 0.4);
+	--border-message-ai: rgba(255, 179, 102, 0.3);
+	--border-message-user: rgba(255, 194, 133, 0.4);
+	--status-success: #10b981;
+	--status-success-hover: #059669;
+	--status-warning: #f59e0b;
+	--status-warning-hover: #d97706;
+	--status-danger: #ef4444;
+	--status-danger-hover: #dc2626;
+	--status-info: #ffb366;
+	--status-info-hover: #ffc285;
 }
 
 /* ========================================
@@ -587,16 +393,16 @@
    ======================================== */
 body {
 	transition:
-		background-color 0.5s ease,
-		color 0.5s ease;
+		background-color var(--transition-slow),
+		color var(--transition-slow);
 }
 
 * {
 	transition:
-		background-color 0.3s ease,
-		border-color 0.3s ease,
-		box-shadow 0.3s ease,
-		color 0.3s ease;
+		background-color var(--transition-normal),
+		border-color var(--transition-normal),
+		box-shadow var(--transition-normal),
+		color var(--transition-normal);
 }
 
 /* ========================================

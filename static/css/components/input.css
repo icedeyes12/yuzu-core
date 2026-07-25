@@ -13,9 +13,9 @@
 	gap: 0.5rem;
 	padding: 0.75rem max(1rem, calc((100vw - 900px) / 2));
 	padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
-	background: color-mix(in srgb, var(--header-bg) 92%, transparent);
+	background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
 	box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.12);
-	border-top: 1px solid var(--border-color);
+	border-top: 1px solid var(--border-normal);
 	backdrop-filter: blur(10px);
 }
 
@@ -24,10 +24,10 @@
 	min-height: 42px;
 	max-height: 400px;
 	padding: 0.7rem 1rem;
-	border: 2px solid var(--border-color);
+	border: 2px solid var(--border-normal);
 	border-radius: 20px;
-	background: var(--bg-secondary);
-	color: var(--text-color);
+	background: var(--surface-subtle);
+	color: var(--text-primary);
 	font-size: 0.95rem;
 	font-family: inherit;
 	resize: none;
@@ -36,18 +36,14 @@
 
 #messageInput:focus {
 	outline: none;
-	border-color: var(--accent-primary);
+	border-color: var(--accent);
 }
 
 #sendButton {
 	min-width: 42px;
 	height: 42px;
 	border-radius: 50%;
-	background: linear-gradient(
-		135deg,
-		var(--accent-color),
-		var(--accent-primary)
-	);
+	background: linear-gradient(135deg, var(--accent), var(--accent-hover));
 	color: white;
 	border: none;
 	cursor: pointer;
@@ -55,7 +51,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	box-shadow: 0 4px 12px var(--shadow-accent);
+	box-shadow: var(--shadow-md);
 	transition:
 		transform 0.2s ease,
 		box-shadow 0.2s ease;
@@ -68,7 +64,7 @@
 
 #sendButton:hover {
 	transform: scale(1.1) translateY(-2px);
-	box-shadow: 0 6px 16px var(--shadow-accent);
+	box-shadow: var(--shadow-md);
 }
 
 #sendButton:disabled {
