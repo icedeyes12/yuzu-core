@@ -918,7 +918,7 @@ function saveBYOKConfig() {
 		if (btn) {
 			const original = btn.textContent;
 			btn.textContent = "Saved ✓";
-			btn.style.background = "var(--accent-tertiary)";
+			btn.style.background = "var(--accent-support)";
 			setTimeout(() => {
 				btn.textContent = original;
 				btn.style.background = "";
@@ -1015,11 +1015,11 @@ function showNotification(message, type = "info") {
 		position: fixed;
 		top: 100px;
 		right: 20px;
-		background: ${type === "success" ? "var(--accent-mint)" : type === "error" ? "var(--accent-pink)" : "var(--accent-lavender)"};
-		color: var(--button-text);
+		background: ${type === "success" ? "var(--status-success)" : type === "error" ? "var(--accent)" : "var(--accent)"};
+		color: var(--action-text);
 		padding: 1rem;
 		border-radius: 8px;
-		box-shadow: var(--shadow-soft);
+		box-shadow: var(--shadow-md);
 		z-index: 10000;
 		max-width: 300px;
 		animation: slideInRight 0.3s ease;

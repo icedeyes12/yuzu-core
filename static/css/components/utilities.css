@@ -94,14 +94,14 @@ body {
 	border-radius: 8px;
 	border: 1px solid rgba(255, 69, 58, 0.3);
 	background: rgba(255, 69, 58, 0.1);
-	color: var(--text-color);
+	color: var(--text-primary);
 	white-space: pre-wrap;
 	word-break: break-word;
 }
 
 /* ==================== ACCESSIBILITY ==================== */
 *:focus-visible {
-	outline: 2px solid var(--accent-primary);
+	outline: 2px solid var(--accent);
 	outline-offset: 2px;
 }
 
@@ -116,6 +116,6 @@ body {
 
 	.skeleton {
 		animation: none;
-		background: var(--surface-elevated, var(--card-bg));
+		background: var(--surface-raised);
 	}
 }

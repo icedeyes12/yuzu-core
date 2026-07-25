@@ -4,10 +4,10 @@
 /* ==================== HTML PREVIEW CONTAINER ==================== */
 .html-preview-container {
 	margin: 1rem 0;
-	border: 1px solid var(--border-color);
+	border: 1px solid var(--border-normal);
 	border-radius: 8px;
 	overflow: hidden;
-	background: var(--bg-secondary);
+	background: var(--surface-subtle);
 }
 
 .html-preview-header {
@@ -16,7 +16,7 @@
 	align-items: center;
 	padding: 0.5rem 1rem;
 	background: rgba(0, 0, 0, 0.2);
-	border-bottom: 1px solid var(--border-color);
+	border-bottom: 1px solid var(--border-normal);
 }
 
 .html-preview-label {
@@ -39,7 +39,7 @@
 	align-items: center;
 	gap: 0.3rem;
 	padding: 0.3rem 0.7rem;
-	background: var(--accent-primary);
+	background: var(--accent);
 	color: white;
 	border: none;
 	border-radius: 6px;
@@ -49,12 +49,12 @@
 }
 
 .preview-btn:hover {
-	background: var(--accent-primary);
+	background: var(--accent);
 	transform: scale(1.02);
 }
 
 .preview-btn.active {
-	background: var(--accent-tertiary);
+	background: var(--accent-support);
 }
 
 .preview-btn svg {
@@ -84,7 +84,7 @@
 
 .preview-error {
 	padding: 1rem;
-	color: var(--tool-error);
+	color: var(--status-danger);
 	font-size: 0.85rem;
 }
 
@@ -114,8 +114,8 @@
 	width: min(95vw, 900px);
 	height: 85vh;
 	max-height: 80vh;
-	background: var(--bg-color);
-	border: 1px solid var(--border-color, #333);
+	background: var(--surface);
+	border: 1px solid var(--border-normal);
 	border-radius: 12px;
 	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 	display: flex;
@@ -128,7 +128,7 @@
 	justify-content: space-between;
 	align-items: center;
 	padding: 12px 16px;
-	border-bottom: 1px solid var(--border-color, #333);
+	border-bottom: 1px solid var(--border-normal);
 	background: rgba(0, 0, 0, 0.2);
 	flex-shrink: 0;
 }
@@ -136,13 +136,13 @@
 .html-modal-title {
 	font-size: 0.85rem;
 	font-weight: 600;
-	color: var(--text-color);
+	color: var(--text-primary);
 }
 
 .html-modal-close {
 	background: transparent;
 	border: none;
-	color: var(--text-secondary, #888);
+	color: var(--text-secondary);
 	cursor: pointer;
 	padding: 4px;
 	border-radius: 4px;
@@ -151,7 +151,7 @@
 }
 
 .html-modal-close:hover {
-	color: var(--text-color, #fff);
+	color: var(--text-primary);
 	background: rgba(255, 255, 255, 0.1);
 }
 
@@ -178,9 +178,9 @@
 
 .html-modal-btn {
 	background: transparent;
-	border: 1px solid var(--border-color, #444);
+	border: 1px solid var(--border-normal);
 	border-radius: 6px;
-	color: var(--text-secondary, #888);
+	color: var(--text-secondary);
 	cursor: pointer;
 	padding: 5px 7px;
 	display: flex;
@@ -189,14 +189,14 @@
 
 .html-modal-btn:hover {
 	background: rgba(255, 255, 255, 0.1);
-	color: var(--text-color);
-	border-color: var(--text-secondary, #888);
+	color: var(--text-primary);
+	border-color: var(--text-secondary);
 }
 
 .html-modal-btn.active {
 	background: rgba(255, 105, 180, 0.2);
-	color: var(--accent-primary);
-	border-color: var(--accent-primary);
+	color: var(--accent);
+	border-color: var(--accent);
 }
 
 /* Fullscreen mode */
@@ -215,17 +215,17 @@
 }
 
 .preview-body-light {
-	background: var(--bg-color);
+	background: var(--surface);
 }
 
 .preview-body-dark iframe {
-	background: var(--bg-color);
+	background: var(--surface);
 }
 
 /* ==================== CONSOLE PANEL ==================== */
 .console-panel {
-	border-top: 1px solid var(--border-color);
-	background: var(--bg-color);
+	border-top: 1px solid var(--border-normal);
+	background: var(--surface);
 	max-height: 100px;
 	overflow-y: auto;
 	font-family: "Hack", "Fira Code", "Consolas", monospace;
@@ -244,8 +244,8 @@
 	justify-content: space-between;
 	align-items: center;
 	padding: 4px 8px;
-	background: var(--card-bg);
-	border-bottom: 1px solid var(--border-color);
+	background: var(--surface-raised);
+	border-bottom: 1px solid var(--border-normal);
 	position: sticky;
 	top: 0;
 }
@@ -269,8 +269,8 @@
 }
 
 .console-clear:hover {
-	background: var(--bg-secondary);
-	color: var(--text-color);
+	background: var(--surface-subtle);
+	color: var(--text-primary);
 }
 
 .console-line {
@@ -280,21 +280,21 @@
 }
 
 .console-line.log {
-	color: var(--text-color);
+	color: var(--text-primary);
 }
 
 .console-line.warn {
-	color: var(--accent-secondary);
+	color: var(--accent-subtle);
 	background: rgba(210, 153, 34, 0.1);
 }
 
 .console-line.error {
-	color: var(--tool-error);
+	color: var(--status-danger);
 	background: rgba(248, 81, 73, 0.1);
 }
 
 .console-line.info {
-	color: var(--accent-primary);
+	color: var(--accent);
 }
 
 .console-empty {

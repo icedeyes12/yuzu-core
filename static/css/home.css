@@ -2,7 +2,7 @@
 /* DESCRIPTION: Home page styling with responsive layout */
 .home-body {
 	min-height: 100vh;
-	background: var(--bg-color);
+	background: var(--surface);
 	padding-top: 80px;
 	padding-bottom: 60px;
 }
@@ -34,11 +34,7 @@
 	font-size: 2.5rem;
 	font-weight: 700;
 	margin-bottom: 0.5rem;
-	background: linear-gradient(
-		135deg,
-		var(--accent-color),
-		var(--accent-primary)
-	);
+	background: linear-gradient(135deg, var(--accent), var(--accent-hover));
 	-webkit-background-clip: text;
 	-webkit-text-fill-color: transparent;
 	background-clip: text;
@@ -60,29 +56,29 @@
 }
 
 .card {
-	background: var(--card-bg);
-	border: 1.5px solid var(--border-lavender);
+	background: var(--surface-raised);
+	border: 1.5px solid var(--border-normal);
 	border-radius: 16px;
 	padding: 2rem;
 	text-decoration: none;
-	color: var(--text-color);
+	color: var(--text-primary);
 	text-align: center;
 	backdrop-filter: var(--backdrop-blur);
-	box-shadow: var(--shadow-soft);
+	box-shadow: var(--shadow-md);
 }
 
 .card:hover {
 	transform: translateY(-5px);
-	border-color: var(--accent-primary);
-	box-shadow: 0 10px 30px var(--shadow-accent);
+	border-color: var(--accent);
+	box-shadow: var(--shadow-lg);
 	text-decoration: none;
-	color: var(--text-color);
+	color: var(--text-primary);
 }
 
 .card h2 {
 	font-size: 1.5rem;
 	margin-bottom: 0.5rem;
-	color: var(--accent-secondary);
+	color: var(--accent-subtle);
 }
 
 .card p {
@@ -97,8 +93,8 @@
 	right: 0;
 	text-align: center;
 	padding: 1rem;
-	background: var(--header-bg);
-	border-top: 1.5px solid var(--accent-secondary);
+	background: var(--surface-raised);
+	border-top: 1.5px solid var(--accent-subtle);
 	backdrop-filter: var(--backdrop-blur);
 	z-index: 90;
 }
@@ -115,8 +111,8 @@
 
 .footer-link:hover {
 	background: rgba(255, 255, 255, 0.1);
-	text-decoration-color: var(--accent-primary);
-	color: var(--accent-primary);
+	text-decoration-color: var(--accent);
+	color: var(--accent);
 }
 
 /* Mobile Responsive */
@@ -176,22 +172,22 @@
 	align-items: center;
 	gap: 0.4rem;
 	padding: 0.4rem 1rem;
-	background: var(--surface-elevated);
-	border: 1px solid var(--border-lavender, var(--border-secondary));
+	background: var(--surface-raised);
+	border: 1px solid var(--border-normal);
 	border-radius: 9999px;
 	font-size: 0.95rem;
 	color: var(--text-secondary);
 	backdrop-filter: blur(8px);
-	box-shadow: var(--shadow-soft);
+	box-shadow: var(--shadow-md);
 }
 
 .affection-chip {
-	color: var(--accent-primary);
-	border-color: var(--border-primary);
+	color: var(--accent);
+	border-color: var(--border-focus);
 }
 
 .card-icon {
-	color: var(--accent-primary);
+	color: var(--accent);
 	margin-bottom: 1rem;
 	opacity: 0.9;
 	transition:
@@ -201,5 +197,5 @@
 
 .card:hover .card-icon {
 	transform: scale(1.1) rotate(-5deg);
-	color: var(--accent-highlight);
+	color: var(--accent-hover);
 }
