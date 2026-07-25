@@ -3,6 +3,16 @@
 
 import "./store-renderer.js"; // Initialize renderer subscriber on load
 
+// Typing indicator
+// The DOMRenderer owns the sole typing indicator.
+export {
+	serializeConversationHistory,
+	serializeConversationMessage,
+	serializeToolCallEvent,
+	serializeToolCallMessage,
+	serializeToolResponse,
+	serializeToolResultEvent,
+} from "./conversation-serializer.js";
 // Stream manager
 export { eventRouter } from "./event-router.js";
 // History loading
@@ -40,5 +50,3 @@ export {
 	setIsProcessingMessage,
 } from "./state.js";
 export { chatStore } from "./store.js";
-// Typing indicator
-// The DOMRenderer owns the sole typing indicator.

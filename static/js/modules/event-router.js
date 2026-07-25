@@ -1,3 +1,7 @@
+import {
+	serializeToolCallEvent,
+	serializeToolResultEvent,
+} from "./conversation-serializer.js";
 import { chatStore } from "./store.js";
 
 /**
@@ -68,8 +72,8 @@ export class EventRouter {
 					// so the post-tool response renders below the tool results
 					// (matching the DB structure after reload).
 					const active = chatStore._getActiveAssistant();
-					if (active?.tool_calls?.length > 0) {
-						active.isFrozen = true;
+					if (active?.toolCalls?.length > 0) {
+						active.metadata.isFrozen = true;
 						chatStore.beginAssistantMessage();
 					}
 					chatStore.appendAssistantToken(content);
@@ -80,17 +84,19 @@ export class EventRouter {
 			if (type === "tool_call") {
 				const data =
 					event.data && typeof event.data === "object" ? event.data : event;
-				if (!data?.id || !data.name) {
+				const toolCall = serializeToolCallEvent(data);
+				if (!toolCall) {
 					chatStore.setError("The server sent an invalid tool-call event.");
 					return;
 				}
 				if (data.turn_id) this.activeTurnIds.set(sessionId, data.turn_id);
-				this.pendingToolCalls.set(data.id, { sessionId, name: data.name });
+				this.pendingToolCalls.set(toolCall.id, {
+					sessionId,
+					name: toolCall.name,
+				});
 				chatStore.updateToolCall({
-					id: data.id,
-					name: data.name,
-					arguments_chunk: JSON.stringify(data.arguments || {}),
-					status: "started",
+					...toolCall,
+					arguments_chunk: toolCall.arguments,
 				});
 				return;
 			}
@@ -98,11 +104,14 @@ export class EventRouter {
 			if (type === "tool_result") {
 				const data =
 					event.data && typeof event.data === "object" ? event.data : event;
-				if (!data?.call_id || !data.name) {
+				const toolResult = serializeToolResultEvent(data);
+				if (!toolResult) {
 					chatStore.setError("The server sent an invalid tool-result event.");
 					return;
 				}
-				const pendingCall = this.pendingToolCalls.get(data.call_id);
+				const pendingCall = this.pendingToolCalls.get(
+					toolResult.toolResponse.callId,
+				);
 				if (
 					data.turn_id &&
 					this.activeTurnIds.get(sessionId) !== data.turn_id &&
@@ -110,19 +119,12 @@ export class EventRouter {
 				)
 					return;
 				if (!pendingCall) return;
-				this.pendingToolCalls.delete(data.call_id);
+				this.pendingToolCalls.delete(toolResult.toolResponse.callId);
 				chatStore.updateToolCall({
-					id: data.call_id,
-					status: data.ok === false ? "error" : "completed",
+					id: toolResult.toolResponse.callId,
+					status: toolResult.toolResponse.status,
 				});
-				chatStore.appendMessage({
-					id: `tool_${data.call_id}`,
-					role: "tool",
-					tool_call_id: data.call_id,
-					name: data.name || "unknown",
-					content: JSON.stringify(data),
-					isFrozen: true,
-				});
+				chatStore.appendMessage(toolResult);
 				return;
 			}
 

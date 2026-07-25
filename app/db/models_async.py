@@ -55,6 +55,7 @@ from app.db.queries import (
     build_profile_update,
     format_ai_history_rows,
     format_conversation_summary,
+    format_public_history_rows,
     format_session_event,
     parse_global_knowledge_row,
     parse_message_row,
@@ -379,7 +380,40 @@ async def get_chat_history_async(
         rows = await pg_fetchall_async(
             SQL_MESSAGE_SELECT_ASC_ALL, (session_id, user_id)
         )
-    return [parse_message_row(r) for r in rows]
+    return _trim_public_history_blocks(format_public_history_rows(rows))
+
+
+def _trim_public_history_blocks(messages: list[dict]) -> list[dict]:
+    """(｡•̀ᴗ-)✧"""
+    result: list[dict] = []
+    index = 0
+    while index < len(messages):
+        message = messages[index]
+        if message.get("role") != "assistant" or not message.get("tool_calls"):
+            if message.get("role") != "tool":
+                result.append(message)
+            index += 1
+            continue
+        call_ids = {
+            call.get("id")
+            for call in message["tool_calls"]
+            if isinstance(call, dict) and isinstance(call.get("id"), str)
+        }
+        block = [message]
+        index += 1
+        while index < len(messages) and call_ids:
+            response = messages[index]
+            if (
+                response.get("role") != "tool"
+                or response.get("tool_call_id") not in call_ids
+            ):
+                break
+            block.append(response)
+            call_ids.remove(response["tool_call_id"])
+            index += 1
+        if not call_ids:
+            result.extend(block)
+    return result
 
 
 async def clear_session_messages_async(session_id: str, *, user_id: str) -> bool:
@@ -479,7 +513,41 @@ async def get_chat_history_for_ai_async(
         rows = await pg_fetchall_async(
             SQL_MESSAGE_HISTORY_FOR_AI_ASC_ALL, (session_id, user_id)
         )
-    return format_ai_history_rows(rows, include_attachments=include_attachments)
+    formatted = format_ai_history_rows(rows, include_attachments=include_attachments)
+    return _trim_tool_history_blocks(formatted)
+
+
+def _trim_tool_history_blocks(messages: list[dict]) -> list[dict]:
+    """(｡•̀ᴗ-)✧"""
+    result: list[dict] = []
+    index = 0
+    while index < len(messages):
+        message = messages[index]
+        if message.get("role") != "assistant" or not message.get("tool_calls"):
+            if message.get("role") != "tool":
+                result.append(message)
+            index += 1
+            continue
+        call_ids = {
+            call.get("id")
+            for call in message["tool_calls"]
+            if isinstance(call, dict) and isinstance(call.get("id"), str)
+        }
+        block = [message]
+        index += 1
+        while index < len(messages) and call_ids:
+            response = messages[index]
+            if (
+                response.get("role") != "tool"
+                or response.get("tool_call_id") not in call_ids
+            ):
+                break
+            block.append(response)
+            call_ids.remove(response["tool_call_id"])
+            index += 1
+        if not call_ids:
+            result.extend(block)
+    return result
 
 
 # ---------------------------------------------------------------------------

@@ -59,10 +59,7 @@ export async function loadChatHistory(sessionId = null) {
 		eventRouter.setActiveView(currentHistorySessionId);
 		olderMessagesLoaded = 0;
 		isLoadingOlder = false;
-		chatStore.loadHistory(
-			currentHistorySessionId,
-			history.map((msg) => ({ ...msg, isFrozen: true })),
-		);
+		chatStore.loadHistory(currentHistorySessionId, history);
 		return true;
 	} catch (error) {
 		if (error.name !== "AbortError" && requestId === historyRequestSequence) {

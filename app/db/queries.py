@@ -738,7 +738,7 @@ SQL_MESSAGE_SELECT_ASC_LIMIT = """
 SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s AND user_id = %s
-ORDER BY timestamp ASC
+ORDER BY timestamp ASC, id ASC
 LIMIT %s
 """
 
@@ -746,7 +746,7 @@ SQL_MESSAGE_SELECT_DESC_LIMIT = """
 SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s AND user_id = %s
-ORDER BY timestamp DESC
+ORDER BY timestamp DESC, id DESC
 LIMIT %s
 """
 
@@ -754,7 +754,7 @@ SQL_MESSAGE_SELECT_ASC_ALL = """
 SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s AND user_id = %s
-ORDER BY timestamp ASC
+ORDER BY timestamp ASC, id ASC
 """
 
 # Query messages after a specific ID (for memory pipeline ID-based tracking)
@@ -781,7 +781,7 @@ SQL_MESSAGE_RECENT_SYSTEM_GLOBAL = """
 SELECT content, timestamp
 FROM messages
 WHERE role = 'system'
-ORDER BY timestamp DESC
+ORDER BY timestamp DESC, id DESC
 LIMIT %s
 """
 
@@ -789,7 +789,7 @@ SQL_MESSAGE_RECENT_SYSTEM_FOR_SESSION = """
 SELECT content, timestamp
 FROM messages
 WHERE role = 'system' AND session_id = %s
-ORDER BY timestamp DESC
+ORDER BY timestamp DESC, id DESC
 LIMIT %s
 """
 
@@ -797,7 +797,7 @@ SQL_MESSAGE_CONVERSATION_SUMMARY = """
 SELECT role, content
 FROM messages
 WHERE session_id = %s AND user_id = %s AND role IN ('user', 'assistant')
-ORDER BY timestamp ASC
+ORDER BY timestamp ASC, id ASC
 LIMIT %s
 """
 
@@ -805,7 +805,7 @@ SQL_MESSAGE_HISTORY_FOR_AI_ASC_LIMIT = """
 SELECT id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s AND user_id = %s AND role IN ('user', 'assistant', 'tool')
-ORDER BY timestamp ASC
+ORDER BY timestamp ASC, id ASC
 LIMIT %s
 """
 
@@ -813,7 +813,7 @@ SQL_MESSAGE_HISTORY_FOR_AI_DESC_LIMIT = """
 SELECT id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s AND user_id = %s AND role IN ('user', 'assistant', 'tool')
-ORDER BY timestamp DESC
+ORDER BY timestamp DESC, id DESC
 LIMIT %s
 """
 
@@ -821,7 +821,7 @@ SQL_MESSAGE_HISTORY_FOR_AI_ASC_ALL = """
 SELECT id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s AND user_id = %s AND role IN ('user', 'assistant', 'tool')
-ORDER BY timestamp ASC
+ORDER BY timestamp ASC, id ASC
 """
 
 SQL_MESSAGE_SELECT_ENCRYPTED = """
@@ -1032,6 +1032,33 @@ def format_ai_history_rows(
     return formatted
 
 
+def format_public_history_rows(rows: list[dict]) -> list[dict]:
+    """(｡•̀ᴗ-)✧"""
+    formatted: list[dict[str, Any]] = []
+    for row in rows:
+        role = row.get("role")
+        if role not in {"user", "assistant", "tool", "system"}:
+            continue
+        entry: dict[str, Any] = {
+            "id": str(row.get("id")) if row.get("id") is not None else "",
+            "role": role,
+            "content": row.get("content") or "",
+            "attachments": parse_json(row.get("attachments", "[]")),
+            "timestamp": str(row.get("timestamp", "")),
+        }
+        tool_calls = row.get("tool_calls")
+        if isinstance(tool_calls, str):
+            tool_calls = parse_json(tool_calls)
+        if role == "assistant" and isinstance(tool_calls, list) and tool_calls:
+            normalized = normalize_tool_calls(tool_calls)
+            if normalized:
+                entry["tool_calls"] = normalized
+        if role == "tool" and row.get("tool_call_id"):
+            entry["tool_call_id"] = str(row["tool_call_id"])
+        formatted.append(entry)
+    return formatted
+
+
 # ---------------------------------------------------------------------------
 # Encryption status SQL
 # ---------------------------------------------------------------------------
@@ -1173,6 +1200,7 @@ __all__ = [
     "parse_event_row",
     "format_conversation_summary",
     "format_ai_history_rows",
+    "format_public_history_rows",
     # Encryption status
     "SQL_ENC_TOTAL_MESSAGES",
     "SQL_ENC_ENCRYPTED_MESSAGES",
