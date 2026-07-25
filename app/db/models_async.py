@@ -346,7 +346,7 @@ async def get_session_messages_async(
 
 
 async def get_session_messages_after_id_async(
-    session_id: str, after_message_id: int, limit: int = 1000, *, user_id: str
+    session_id: str, after_message_id: str, limit: int = 1000, *, user_id: str
 ) -> list[dict]:
     """Fetch messages for a session after a specific message ID.
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from typing import Any
 
 from app.db import Database
@@ -12,9 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryService:
-    _PIPELINE_CHECK_INTERVAL = 50
-    _MIN_TRIGGER_INTERVAL = 300
-    _LAST_PIPELINE_TRIGGER: dict[str, float] = {}
     _pipeline_semaphore: asyncio.Semaphore | None = None
 
     @staticmethod
@@ -37,9 +33,6 @@ class MemoryService:
         if not user_id:
             return
 
-        msg_count = await Database.get_session_messages_count(session_id)
-        if msg_count < MemoryService._PIPELINE_CHECK_INTERVAL:
-            return
         if await _is_fence_active_async(session_id, user_id=user_id):
             return
         asyncio.create_task(MemoryService.trigger_pipeline_async(session_id, user_id))
@@ -55,19 +48,12 @@ class MemoryService:
         semaphore = await MemoryService._get_pipeline_semaphore()
         async with semaphore:
             try:
-                now = time.time()
-                last_trigger = MemoryService._LAST_PIPELINE_TRIGGER.get(session_id, 0)
-                if now - last_trigger < MemoryService._MIN_TRIGGER_INTERVAL:
-                    return False
-
                 count = await Database.get_session_messages_count(
                     session_id, user_id=user_id
                 )
                 triggered = await trigger_memory_pipeline_async(
                     session_id, count, user_id
                 )
-                if triggered:
-                    MemoryService._LAST_PIPELINE_TRIGGER[session_id] = now
                 return triggered
             except Exception as e:
                 logger.warning("Memory pipeline trigger failed: %s", e)

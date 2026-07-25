@@ -1,8 +1,6 @@
 # Architecture: one asynchronous extraction pass per eligible message batch.
 #
-# Trigger gates (all must pass):
-#   - delta >= WINDOW_BASE (40) AND session idle >= IDLE_GATE_HOURS (3h), OR
-#   - delta >= WINDOW_MAX (50) — force trigger regardless of idle
+# Trigger gates: >=40 new messages, or >=20 after 3 hours idle.
 #
 # Fence mechanism (aligned with plast-mem):
 #   - in_progress_fence: prevents concurrent pipeline runs for same session
@@ -40,24 +38,17 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 # Batch trigger constants
-# WINDOW_BASE: trigger when delta >= this AND idle > 3 min
-# WINDOW_MAX: force trigger regardless of idle
 WINDOW_BASE = 40
-WINDOW_MAX = 50
-MIN_MESSAGES = 10
-IDLE_GATE_HOURS = (
-    3.0  # session must be idle this long before triggering (unless WINDOW_MAX)
-)
+IDLE_WINDOW_BASE = 20
+IDLE_GATE_HOURS = 3.0
+BATCH_SIZE = 100
+MAX_BATCHES_PER_WORKER = 5
+MAX_WORKER_RUNTIME_SECONDS = 300.0
 
-# Fence constants (aligned with plast-mem)
-FENCE_TTL_MINUTES = 120  # Stale job cleanup threshold
+# Fence constants
+FENCE_TTL_MINUTES = 120
 
-# ── Scope limits (safety net) ───────────────────────────────────────────────────
-# Prevent runaway processing by limiting messages processed per pipeline run
-MAX_MESSAGES_PER_RUN = 100  # Hard cap: process at most this many messages
-
-# Historical backlog detection threshold
-# If delta > this value, log warning and scope-limit instead of full process
+# Historical backlog logging threshold
 HISTORICAL_BACKLOG_THRESHOLD = 1000
 
 # ── Rate limiting for memory pipeline ─────────────────────────────────────────
@@ -121,6 +112,7 @@ async def _memory_llm_call(ai_manager, messages: list[dict], **kwargs) -> str | 
 # ── Background state ─────────────────────────────────────────────────────────
 
 _pending_sessions: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
+_queued_sessions: set[tuple[str, str]] = set()
 _worker_task: asyncio.Task | None = None
 
 
@@ -216,6 +208,17 @@ async def _get_session_idle_hours_async(
         return None
 
 
+async def _has_eligible_backlog_async(
+    session_id: str, remaining_count: int, user_id: str
+) -> bool:
+    if remaining_count >= WINDOW_BASE:
+        return True
+    if remaining_count < IDLE_WINDOW_BASE:
+        return False
+    idle_hours = await _get_session_idle_hours_async(session_id, user_id=user_id)
+    return idle_hours is not None and idle_hours >= IDLE_GATE_HOURS
+
+
 async def should_trigger_segmentation_async(
     session_id: str, current_count: int, user_id: str | None = None
 ) -> tuple[bool, int]:
@@ -240,48 +243,40 @@ async def should_trigger_segmentation_async(
 
     state = await _get_cached_pipeline_state_async(session_id, user_id=user_id)
 
-    # ID-based delta calculation (preferred)
-    last_message_id = state.get("last_segmented_message_id", 0) or 0
-
-    # Query actual message count after last_message_id
-    if last_message_id:
-        try:
-            messages_after = await get_session_messages_after_id_async(
-                session_id, last_message_id, limit=10000, user_id=user_id or ""
-            )
-            # Filter to conversation messages only
-            delta = len(
-                [m for m in messages_after if m.get("role") in ("user", "assistant")]
-            )
-        except Exception as e:
-            logger.warning(f"ID-based delta query failed, falling back to count: {e}")
-            # Fallback to count-based
-            last_count = state.get("last_segmented_count", 0) or 0
-            delta = current_count - last_count
-    else:
-        # Initial state: use count-based
+    last_message_id = state.get("last_segmented_message_id")
+    try:
+        messages_after = await get_session_messages_after_id_async(
+            session_id,
+            last_message_id or "00000000-00000000-0000-000000000000",
+            limit=10000,
+            user_id=user_id or "",
+        )
+        delta = sum(
+            1
+            for message in messages_after
+            if message.get("role") in ("user", "assistant")
+        )
+    except Exception as exc:
+        logger.warning("Cursor delta query failed; using count fallback: %s", exc)
         last_count = state.get("last_segmented_count", 0) or 0
-        delta = current_count - last_count
+        delta = max(0, current_count - last_count)
 
     # Historical backlog detection (safety net)
     if delta > HISTORICAL_BACKLOG_THRESHOLD:
         logger.warning(
             f"⚠️ HISTORICAL BACKLOG DETECTED: session={session_id} "
             f"delta={delta} > threshold={HISTORICAL_BACKLOG_THRESHOLD} "
-            f"— pipeline will scope-limit to {MAX_MESSAGES_PER_RUN} messages"
+            f"— worker will process bounded batches"
         )
 
-    if delta >= WINDOW_MAX:
+    if delta >= WINDOW_BASE:
         return True, delta
 
-    if delta < WINDOW_BASE:
+    if delta < IDLE_WINDOW_BASE:
         return False, delta
 
     idle_hours = await _get_session_idle_hours_async(session_id, user_id=user_id)
-    if idle_hours is not None and idle_hours < IDLE_GATE_HOURS:
-        return False, delta
-
-    return True, delta
+    return idle_hours is not None and idle_hours >= IDLE_GATE_HOURS, delta
 
 
 async def mark_segmentation_done_async(
@@ -393,31 +388,29 @@ async def run_memory_pipeline_async(
 
         unsegmented_count = len(unsegmented)
 
-        # ── SCOPE LIMIT (safety net) ─────────────────────────────────────────────
-        # Process at most MAX_MESSAGES_PER_RUN to prevent runaway LLM calls
         original_unsegmented_count = unsegmented_count
-        if unsegmented_count > MAX_MESSAGES_PER_RUN:
-            logger.warning(
-                f"⚠️ SCOPE LIMIT: session={session_id} "
-                f"unsegmented={unsegmented_count} > max={MAX_MESSAGES_PER_RUN} "
-                f"— processing first {MAX_MESSAGES_PER_RUN} messages only"
+        if unsegmented_count > BATCH_SIZE:
+            logger.info(
+                "Session %s has %s messages; processing one worker batch of %s",
+                session_id,
+                unsegmented_count,
+                BATCH_SIZE,
             )
-            unsegmented = unsegmented[:MAX_MESSAGES_PER_RUN]
-            unsegmented_count = MAX_MESSAGES_PER_RUN
+            unsegmented = unsegmented[:BATCH_SIZE]
+            unsegmented_count = BATCH_SIZE
 
         # Track how many we're actually processing
         processed_count = unsegmented_count
         # ───────────────────────────────────────────────────────────────────────
 
-        if unsegmented_count < MIN_MESSAGES:
-            logger.debug(f"Only {unsegmented_count} unsegmented msgs, skipping")
-            # Mark done with the last message ID if available
-            if unsegmented:
-                last_msg = unsegmented[-1]
-                await mark_segmentation_done_async(
-                    session_id, last_msg.get("id", 0), processed_count, user_id=user_id
-                )
-            return {"episodes": 0, "claims": 0, "llm_calls": 0}
+        if unsegmented_count < IDLE_WINDOW_BASE:
+            logger.debug("Only %s unsegmented messages; skipping", unsegmented_count)
+            return {
+                "episodes": 0,
+                "claims": 0,
+                "llm_calls": 0,
+                "processed_messages": 0,
+            }
 
         extracted = await extract_memory_batch_async(unsegmented)
         if not extracted["episodes"] and not extracted["claims"]:
@@ -562,6 +555,7 @@ async def run_memory_pipeline_async(
             "episodes": episode_count,
             "claims": claim_count,
             "llm_calls": 1,
+            "processed_messages": processed_count,
         }
     finally:
         # Always clear fence when done (even on error)
@@ -582,28 +576,63 @@ async def _background_worker_async():
             continue
         try:
             # Retrieve count from DB-persisted fence
-            state = await get_pipeline_state_async(session_to_process, user_id)
-            count = state.get("in_progress_fence_count", 0) or 0
-
-            await run_memory_pipeline_async(session_to_process, count, user_id=user_id)
+            started = time.monotonic()
+            for batch_number in range(MAX_BATCHES_PER_WORKER):
+                count = await get_message_count_async(
+                    session_to_process, user_id=user_id
+                )
+                result = await run_memory_pipeline_async(
+                    session_to_process, count, user_id=user_id
+                )
+                if (
+                    result.get("processed_messages", 0) < BATCH_SIZE
+                    or time.monotonic() - started >= MAX_WORKER_RUNTIME_SECONDS
+                ):
+                    break
+                state = await get_pipeline_state_async(session_to_process, user_id)
+                last_message_id = state.get("last_segmented_message_id")
+                remaining = await get_session_messages_after_id_async(
+                    session_to_process,
+                    last_message_id or "00000000-00000000-0000-000000000000",
+                    limit=BATCH_SIZE + 1,
+                    user_id=user_id,
+                )
+                remaining_count = sum(
+                    1
+                    for message in remaining
+                    if message.get("role") in ("user", "assistant")
+                )
+                if not await _has_eligible_backlog_async(
+                    session_to_process, remaining_count, user_id
+                ):
+                    break
         except Exception as e:
             logger.error(f"Background worker error: {e}")
         finally:
+            _queued_sessions.discard((session_to_process, user_id))
             _pending_sessions.task_done()
 
 
-async def enqueue_memory_pipeline_async(session_id: str, user_id: str):
+async def enqueue_memory_pipeline_async(session_id: str, user_id: str) -> bool:
     """Enqueue a session for background memory pipeline processing.
 
     Non-blocking — returns immediately.
     """
     global _worker_task
 
-    # Start worker thread if not running
-    if _worker_task is None or _worker_task.done():
-        _worker_task = asyncio.create_task(_background_worker_async())
+    queue_key = (session_id, user_id)
+    if queue_key in _queued_sessions:
+        return False
 
-    await _pending_sessions.put((session_id, user_id))
+    _queued_sessions.add(queue_key)
+    try:
+        if _worker_task is None or _worker_task.done():
+            _worker_task = asyncio.create_task(_background_worker_async())
+        await _pending_sessions.put((session_id, user_id))
+    except Exception:
+        _queued_sessions.discard(queue_key)
+        raise
+    return True
 
 
 async def trigger_memory_pipeline_async(
@@ -625,5 +654,8 @@ async def trigger_memory_pipeline_async(
         logger.debug("Could not set fence for session %s", session_id)
         return False
 
-    await enqueue_memory_pipeline_async(session_id, user_id)
+    queued = await enqueue_memory_pipeline_async(session_id, user_id)
+    if not queued:
+        await _clear_fence_async(session_id, user_id=user_id)
+        return False
     return True
