@@ -30,41 +30,85 @@ def _estimate_tokens(text: str) -> int:
     return len(text) // 3
 
 
+def _message_token_cost(message: dict[str, Any]) -> int:
+    content = message.get("content", "")
+    cost = _estimate_tokens(content if isinstance(content, str) else str(content))
+    tool_calls = message.get("tool_calls") or []
+    if tool_calls:
+        cost += _estimate_tokens(_json.dumps(tool_calls, ensure_ascii=False))
+    return cost
+
+
+def _history_blocks(messages: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    blocks: list[list[dict[str, Any]]] = []
+    index = 0
+    while index < len(messages):
+        message = messages[index]
+        if message.get("role") == "assistant" and message.get("tool_calls"):
+            block = [message]
+            index += 1
+            call_ids: set[str] = {
+                call["id"]
+                for call in message.get("tool_calls", [])
+                if isinstance(call, dict) and isinstance(call.get("id"), str)
+            }
+            while index < len(messages) and call_ids:
+                response = messages[index]
+                if (
+                    response.get("role") != "tool"
+                    or response.get("tool_call_id") not in call_ids
+                ):
+                    break
+                response_id = response.get("tool_call_id")
+                if not isinstance(response_id, str):
+                    break
+                block.append(response)
+                call_ids.remove(response_id)
+                index += 1
+            if call_ids:
+                log.warning(
+                    "[Prompt] Dropping incomplete tool-call history block: %s",
+                    sorted(call_ids),
+                )
+                continue
+            blocks.append(block)
+            continue
+        if message.get("role") == "tool":
+            log.warning("[Prompt] Dropping orphan tool history message")
+            index += 1
+            continue
+        blocks.append([message])
+        index += 1
+    return blocks
+
+
 def _trim_history_to_token_limit(
     messages: list[dict],
     max_tokens: int = MAX_HISTORY_TOKENS,
 ) -> list[dict]:
-    """Trim message history to fit within token budget.
-
-    Keeps most recent messages first, preserving at least last 2 for context.
-    """
+    """Trim history by atomic message and tool-call blocks."""
     if not messages:
         return messages
-
-    # Calculate total tokens
-    total_tokens = sum(_estimate_tokens(m.get("content", "")) for m in messages)
-
+    blocks = _history_blocks(messages)
+    block_messages = [message for block in blocks for message in block]
+    total_tokens = sum(_message_token_cost(message) for message in block_messages)
     if total_tokens <= max_tokens:
-        return messages
-
-    trimmed: list[dict[str, Any]] = []
+        return block_messages
+    selected: list[list[dict[str, Any]]] = []
     token_count = 0
-
-    for msg in reversed(messages):
-        msg_tokens = _estimate_tokens(msg.get("content", ""))
-
-        if len(trimmed) < 2:
-            trimmed.insert(0, msg)
-            token_count += msg_tokens
-        elif token_count + msg_tokens <= max_tokens:
-            trimmed.insert(0, msg)
-            token_count += msg_tokens
-        else:
-            break
-
+    for block in reversed(blocks):
+        block_tokens = sum(_message_token_cost(message) for message in block)
+        if token_count + block_tokens > max_tokens:
+            continue
+        selected.insert(0, block)
+        token_count += block_tokens
+    trimmed = [message for block in selected for message in block]
     log.info(
-        f"[Prompt] Trimmed: {len(messages)}->{len(trimmed)} msgs, "
-        f"{total_tokens}->{token_count} tok"
+        "[Prompt] Trimmed: %d->%d msgs, %d->%d tok",
+        len(messages),
+        len(trimmed),
+        total_tokens,
+        token_count,
     )
     return trimmed
 

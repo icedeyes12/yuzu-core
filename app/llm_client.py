@@ -15,6 +15,7 @@ from app.logging_config import get_logger
 from app.prompts import build_messages
 from app.providers import get_ai_manager
 from app.providers.base import _rate_limit_provider
+from app.providers.openai_protocol import validate_chat_completion_response
 from app.tools.registry import get_tool_schemas
 from app.tools.schemas import StreamToolEvent
 
@@ -238,11 +239,21 @@ async def _send_to_provider(
         )
         return None, None
 
+    response_errors, response_warnings = validate_chat_completion_response(raw_response)
+    for warning in response_warnings:
+        log.warning("[LLMClient] invalid tool response warning: %s", warning)
+    if response_errors:
+        log.error("[LLMClient] invalid Chat Completions response: %s", response_errors)
+        return None, None
+
     try:
         text = raw_response["choices"][0]["message"].get("content") or ""
         text = text.strip()
     except (KeyError, IndexError):
         text = ""
+
+    if response_warnings:
+        raw_response = None
 
     if text:
         log.info(

@@ -11,6 +11,10 @@ from app.core.context import (
     MissingProviderKeyError,
 )
 from app.core.llm_context import LLMContext
+from app.providers.openai_protocol import (
+    sanitize_and_validate_messages,
+    sanitize_openai_payload,
+)
 from app.tools import multimodal_tools
 from app.tools.schemas import StreamToolEvent
 
@@ -313,18 +317,7 @@ class AIProvider:
 
     def _normalize_messages(self, messages: list[dict]) -> list[dict]:
         """Common message normalization for OpenAI-compatible providers."""
-        if not messages:
-            return messages
-        standard_roles = {"system", "user", "assistant", "tool"}
-        normalized = []
-        for msg in messages:
-            role = msg.get("role", "")
-            if role not in standard_roles:
-                content = msg.get("content", "")
-                normalized_content = f"[{role}]\n{content}"
-                normalized.append({"role": "assistant", "content": normalized_content})
-            else:
-                normalized.append(msg)
+        normalized = sanitize_and_validate_messages(messages)
         return normalized
 
 
@@ -351,6 +344,34 @@ class AIProviderManager:
 
     def register_provider(self, name: str, provider: AIProvider):
         self.providers[name] = provider
+
+    @staticmethod
+    def _sanitize_outbound_messages(messages: list[dict]) -> list[dict]:
+        """(｡•̀ᴗ-)✧"""
+        try:
+            return sanitize_and_validate_messages(messages)
+        except ValueError as exc:
+            logger.error(
+                "[ProviderManager] invalid outbound Chat Completions messages: %s", exc
+            )
+            raise
+
+    @staticmethod
+    def _sanitize_provider_kwargs(provider: AIProvider, kwargs: dict) -> dict:
+        extensions_by_provider = {
+            "chutes": {"top_k", "typical_p"},
+            "openrouter": {"top_k", "typical_p"},
+            "cerebras": {"top_k", "typical_p"},
+            "ollama": {"top_k", "typical_p", "num_ctx"},
+        }
+        extensions = extensions_by_provider.get(provider.name, set())
+        payload = sanitize_openai_payload(kwargs, provider_extensions=extensions)
+        for key in ("messages", "model", "stream"):
+            payload.pop(key, None)
+        for key in ("timeout", "suppress_tools", "skip_vision", "log_prefix"):
+            if key in kwargs:
+                payload[key] = kwargs[key]
+        return payload
 
     def get_available_providers(self) -> list[str]:
         return list(self.providers.keys())
@@ -401,6 +422,8 @@ class AIProviderManager:
         if ctx.provider not in self.providers:
             return None
         provider = self.providers[ctx.provider]
+        messages = self._sanitize_outbound_messages(messages)
+        kwargs = self._sanitize_provider_kwargs(provider, kwargs)
         start_time = time.time()
         response = await provider.send_message(ctx, messages, **kwargs)
         response_time = time.time() - start_time
@@ -421,6 +444,8 @@ class AIProviderManager:
         if ctx.provider not in self.providers:
             return None
         provider = self.providers[ctx.provider]
+        messages = self._sanitize_outbound_messages(messages)
+        kwargs = self._sanitize_provider_kwargs(provider, kwargs)
         start_time = time.time()
         raw = await provider.send_message_raw(ctx, messages, source=source, **kwargs)
         response_time = time.time() - start_time
@@ -490,6 +515,8 @@ class AIProviderManager:
             yield ""
             return
         provider = self.providers[ctx.provider]
+        messages = self._sanitize_outbound_messages(messages)
+        kwargs = self._sanitize_provider_kwargs(provider, kwargs)
         try:
             async for chunk in provider.send_message_streaming(
                 ctx, messages, source=source, **kwargs

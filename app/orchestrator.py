@@ -18,6 +18,7 @@ from app.llm_client import (
 )
 from app.logging_config import get_logger
 from app.providers import get_ai_manager
+from app.providers.openai_protocol import normalize_tool_calls
 from app.services.memory_service import MemoryService
 from app.services.session_service import SessionService
 from app.tools import multimodal_tools
@@ -187,25 +188,23 @@ def _cache_images_from_message(message: str) -> list[str]:
 
 
 def _normalise_tool_calls(tool_calls: list[dict]) -> list[dict]:
-    """Ensure every native tool call has a stable ID and object arguments."""
-    for tool_call in tool_calls:
-        name = str(tool_call.get("name") or "tool")
-        arguments = tool_call.get("arguments", {})
-        if isinstance(arguments, str):
-            try:
-                arguments = json.loads(arguments) if arguments.strip() else {}
-            except json.JSONDecodeError:
-                arguments = {}
-        if not isinstance(arguments, dict):
-            arguments = {}
-        tool_call["name"] = name
-        tool_call["arguments"] = arguments
-        if not tool_call.get("id"):
-            tool_call["id"] = make_tool_call_event(
-                name=name,
-                arguments=arguments,
-            ).id
-    return tool_calls
+    """Ensure every native tool call has a valid canonical shape."""
+    canonical: list[dict] = []
+    for index, tool_call in enumerate(tool_calls):
+        if not isinstance(tool_call, dict):
+            continue
+        normalized = normalize_tool_calls([tool_call], message_index=index)
+        if not normalized:
+            continue
+        call = normalized[0]
+        canonical.append(
+            {
+                "id": call["id"],
+                "name": call["function"]["name"],
+                "arguments": json.loads(call["function"]["arguments"]),
+            }
+        )
+    return canonical
 
 
 async def _parse_raw_tool_calls_async(
@@ -735,7 +734,14 @@ async def handle_user_message_streaming(
                     # FC9: Handle StreamToolEvent from provider streaming
                     if isinstance(chunk, StreamToolEvent):
                         if chunk.type == "tool_call" and isinstance(chunk.data, dict):
-                            tool_call = _normalise_tool_calls([dict(chunk.data)])[0]
+                            normalized_calls = _normalise_tool_calls([dict(chunk.data)])
+                            if not normalized_calls:
+                                log.error(
+                                    "[stream] dropping invalid tool call event: %r",
+                                    chunk.data,
+                                )
+                                continue
+                            tool_call = normalized_calls[0]
                             tool_calls_data.append(tool_call)
                             log.info(
                                 "[stream] received tool_call: %s [turn=%s]",

@@ -90,11 +90,7 @@ async def test_build_messages_uses_attachments_without_role_filter(monkeypatch):
     )
 
     assert messages[0] == {"role": "system", "content": "system"}
-    assert messages[1]["role"] == "tool"
-    assert isinstance(messages[1]["content"], list)
-    assert messages[1]["content"][0]["type"] == "text"
-    assert messages[1]["content"][1]["type"] == "image_url"
-    assert messages[2] == {"role": "assistant", "content": "plain"}
+    assert messages[1] == {"role": "assistant", "content": "plain"}
 
 
 @pytest.mark.asyncio
@@ -146,4 +142,35 @@ async def test_persona_injection_and_missing_data_fallback(monkeypatch):
     assert (
         "Communication Style: You are TestAI, a helpful, friendly AI assistant."
         in prompt_custom
+    )
+
+
+def test_tool_call_history_is_trimmed_as_atomic_block() -> None:
+    from app.prompts import _trim_history_to_token_limit
+
+    assistant = {
+        "role": "assistant",
+        "content": None,
+        "tool_calls": [
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "bash", "arguments": "{}"},
+            }
+        ],
+    }
+    tool = {"role": "tool", "tool_call_id": "call_1", "content": "result"}
+    history = [
+        {"role": "user", "content": "old context " * 20},
+        assistant,
+        tool,
+        {"role": "user", "content": "latest"},
+    ]
+
+    trimmed = _trim_history_to_token_limit(history, max_tokens=100)
+    assert trimmed[-1] == history[-1]
+    assert not any(message is assistant for message in trimmed) or tool in trimmed
+    assert (
+        not any(message.get("role") == "tool" for message in trimmed)
+        or assistant in trimmed
     )
