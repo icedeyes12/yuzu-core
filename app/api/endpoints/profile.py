@@ -238,10 +238,16 @@ async def api_refresh_provider_models(
         )
 
     try:
-        if provider == "chutes":
-            models = await fetcher(request.headers.get("X-Provider-Key", ""))
-        else:
-            models = await fetcher()
+        import inspect
+
+        kwargs = {}
+        sig = inspect.signature(fetcher)
+        if "api_key" in sig.parameters:
+            kwargs["api_key"] = request.headers.get("X-Provider-Key", "")
+        if "base_url" in sig.parameters:
+            kwargs["base_url"] = request.headers.get("X-Provider-BaseUrl", "")
+
+        models = await fetcher(**kwargs)
         models = sorted({model for model in models if isinstance(model, str) and model})
         if not models:
             raise HTTPException(status_code=502, detail="Provider returned no models")

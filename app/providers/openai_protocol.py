@@ -292,10 +292,10 @@ def validate_openai_messages(messages: Any) -> None:
             if tool_calls == []:
                 tool_calls = None
             if tool_calls is not None:
-                if previous_role not in {"user", "tool"}:
+                if previous_role not in {"user", "tool", "system"}:
                     errors.append(
                         f"messages[{index}] assistant tool_calls must immediately follow "
-                        f"a user or completed tool-response turn, got {previous_role!r}"
+                        f"a user, tool, or system turn, got {previous_role!r}"
                     )
                 if not isinstance(tool_calls, list):
                     errors.append(f"messages[{index}] tool_calls is not a list")
