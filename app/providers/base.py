@@ -382,21 +382,15 @@ class AIProviderManager:
         return []
 
     async def get_all_models(self) -> dict[str, list[str]]:
-        """Return the merged model list per provider.
-
-        Each provider's static ``available_models`` list is the base. When
-        the provider has a live ``fetch_live_models`` coroutine (see
-        ``OpenRouterProvider``), the result is merged in so freshly
-        discovered models survive page reloads. Order is preserved
-        (static first, live appended) and duplicates are dropped.
-        """
+        """(｡•̀ᴗ-)✧"""
         all_models: dict[str, list[str]] = {}
         for provider_name, provider in self.providers.items():
             if asyncio.iscoroutinefunction(provider.get_models):
-                static = list(await provider.get_models())
+                static_models = list(await provider.get_models())
             else:
-                static = list(provider.get_models())  # type: ignore[call-overload]
-            live: list[str] = []
+                static_models = list(provider.get_models())  # type: ignore[call-overload]
+
+            live_models: list[str] = []
             fetcher = getattr(provider, "fetch_live_models", None)
             if callable(fetcher):
                 try:
@@ -404,15 +398,20 @@ class AIProviderManager:
                     if asyncio.iscoroutine(result):
                         result = await result
                     if isinstance(result, list):
-                        live = [m for m in result if isinstance(m, str)]
-                except Exception as e:  # noqa: BLE001
-                    logger.debug("[models] live fetch %s failed: %s", provider_name, e)
+                        live_models = [
+                            model for model in result if isinstance(model, str)
+                        ]
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug(
+                        "[models] live fetch %s failed: %s", provider_name, exc
+                    )
+
             merged: list[str] = []
             seen: set[str] = set()
-            for m in (*static, *live):
-                if m and m not in seen:
-                    seen.add(m)
-                    merged.append(m)
+            for model in (*static_models, *live_models):
+                if model and model not in seen:
+                    seen.add(model)
+                    merged.append(model)
             all_models[provider_name] = merged
         return all_models
 

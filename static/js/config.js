@@ -4,7 +4,6 @@
 // Global config state (populated from /api/config)
 let appConfig = null;
 const PROVIDER_MODELS_CACHE_KEY = "yuzu_provider_models";
-const PROVIDER_MODELS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 function setTextIfExists(id, value) {
 	const el = document.getElementById(id);
@@ -148,11 +147,11 @@ async function loadProviderSettings() {
 			const titleHtml = `${identityMark}<span class="provider-title__name">${provObj.displayName}</span> ${identityBadge} ${isActive ? "<span class='badge-active'>Active</span>" : ""}`;
 
 			let innerHtml = `
-				<div class="provider-header" role="button" tabindex="0" aria-expanded="${isActive ? "true" : "false"}">
+				<div class="provider-header" role="button" tabindex="0" aria-expanded="${isActive ? "true" : "false"}" aria-controls="provider-body-${provider}">
 					<h3 class="provider-title">${titleHtml}</h3>
 					<span class="provider-toggle-icon" aria-hidden="true">${isActive ? "▼" : "▲"}</span>
 				</div>
-				<div class="provider-body ${isActive ? "is-expanded" : ""}">
+				<div class="provider-body ${isActive ? "is-expanded" : ""}" id="provider-body-${provider}">
 					<div class="form-group">
 						<label for="key-${provider}">API Key (Saved in browser)</label>
 						<div class="provider-input-row">
@@ -218,16 +217,24 @@ async function loadProviderSettings() {
 			// Add accordion toggle
 			const header = card.querySelector(".provider-header");
 			const body = card.querySelector(".provider-body");
-			const icon = header.querySelector("span:last-child");
+			const icon = header.querySelector(".provider-toggle-icon");
 
 			// Set initial icon
 			if (icon) icon.textContent = isActive ? "▲" : "▼";
 
-			header.addEventListener("click", () => {
+			const toggleProvider = () => {
 				const isExpanded = body.classList.contains("is-expanded");
 				body.classList.toggle("is-expanded", !isExpanded);
 				header.setAttribute("aria-expanded", String(!isExpanded));
 				if (icon) icon.textContent = isExpanded ? "▼" : "▲";
+			};
+
+			header.addEventListener("click", toggleProvider);
+			header.addEventListener("keydown", (event) => {
+				if (event.key === "Enter" || event.key === " ") {
+					event.preventDefault();
+					toggleProvider();
+				}
 			});
 		});
 
@@ -294,11 +301,6 @@ function getCachedModels(catalog, provider) {
 	const entry = catalog[provider];
 	if (Array.isArray(entry)) return entry;
 	if (!entry || !Array.isArray(entry.models)) return [];
-	if (
-		entry.fetchedAt &&
-		Date.now() - entry.fetchedAt > PROVIDER_MODELS_CACHE_TTL_MS
-	)
-		return [];
 	return entry.models;
 }
 
@@ -1084,19 +1086,6 @@ window.showSuccess = showSuccess;
 window.showError = showError;
 window.toggleSidebar = window.toggleSidebar || (() => {});
 
-async function loadLocation() {
-	try {
-		const response = await fetch("/api/profile");
-		if (!response.ok) return;
-		const data = await response.json();
-		const profile = data.profile || data;
-		setValueIfExists("location-lat", profile.location_lat ?? "");
-		setValueIfExists("location-lon", profile.location_lon ?? "");
-	} catch (e) {
-		console.error("Failed to load location:", e);
-	}
-}
-
 async function saveLocation() {
 	const lat = Number.parseFloat(getValueIfExists("location-lat", ""));
 	const lon = Number.parseFloat(getValueIfExists("location-lon", ""));
@@ -1112,10 +1101,10 @@ async function saveLocation() {
 			body: JSON.stringify({ lat, lon }),
 		});
 		const data = await response.json();
-		if (data.status === "success") {
-			showSuccess("Location saved!");
+		if (response.ok && data.status === "success") {
+			showSuccess(data.message || "Location saved");
 		} else {
-			showError(data.message || "Failed to save location");
+			showError(data.message || data.detail || "Failed to save location");
 		}
 	} catch (e) {
 		console.error("Error saving location:", e);
@@ -1140,17 +1129,8 @@ function _useCurrentLocation() {
 	);
 }
 
-// Load location on page load
-document.addEventListener("DOMContentLoaded", loadLocation);
-
-// Load image model on page load
-document.addEventListener("DOMContentLoaded", loadImageModel);
-
 // Export to window for inline onclick handlers
 window.useCurrentLocation = _useCurrentLocation;
-
-// Load vision model on page load
-document.addEventListener("DOMContentLoaded", loadVisionModel);
 
 // Export to window to fix unused variable warnings from HTML onclicks
 window.clearChatHistory = clearChatHistory;
