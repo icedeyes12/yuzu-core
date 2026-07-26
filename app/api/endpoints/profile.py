@@ -308,6 +308,8 @@ async def api_update_location(
             "status": "success",
             "message": "Location cleared" if request.lat is None else "Location updated",
         }
+    except HTTPException:
+        raise
     except Exception as e:
         log.error("Error updating location: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

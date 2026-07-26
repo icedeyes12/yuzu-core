@@ -4,6 +4,7 @@
 // Global config state (populated from /api/config)
 let appConfig = null;
 const PROVIDER_MODELS_CACHE_KEY = "yuzu_provider_models";
+const PROVIDER_MODELS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 function setTextIfExists(id, value) {
 	const el = document.getElementById(id);
@@ -124,8 +125,12 @@ async function loadProviderSettings() {
 
 		const modelCatalog = readModelCatalog();
 		Object.entries(data.all_models || {}).forEach(([provider, models]) => {
-			if (Array.isArray(models) && models.length)
-				modelCatalog[provider] = models;
+			if (
+				Array.isArray(models) &&
+				models.length &&
+				!getCachedModels(modelCatalog, provider).length
+			)
+				setCachedModels(modelCatalog, provider, models);
 		});
 		saveModelCatalog(modelCatalog);
 
@@ -173,7 +178,7 @@ async function loadProviderSettings() {
 							<select id="model-${provider}" class="form-select provider-flex-input">
 `;
 
-			const modelsForThisProv = (modelCatalog[provider] || []).slice();
+			const modelsForThisProv = getCachedModels(modelCatalog, provider).slice();
 			if (modelsForThisProv.length > 0) {
 				if (
 					isActive &&
@@ -285,6 +290,22 @@ function saveModelCatalog(catalog) {
 	localStorage.setItem(PROVIDER_MODELS_CACHE_KEY, JSON.stringify(catalog));
 }
 
+function getCachedModels(catalog, provider) {
+	const entry = catalog[provider];
+	if (Array.isArray(entry)) return entry;
+	if (!entry || !Array.isArray(entry.models)) return [];
+	if (
+		entry.fetchedAt &&
+		Date.now() - entry.fetchedAt > PROVIDER_MODELS_CACHE_TTL_MS
+	)
+		return [];
+	return entry.models;
+}
+
+function setCachedModels(catalog, provider, models) {
+	catalog[provider] = { models, fetchedAt: Date.now() };
+}
+
 async function fetchModelsForProvider(provider) {
 	const btn = document.querySelector(
 		`.fetch-models-btn[data-provider="${provider}"]`,
@@ -312,11 +333,12 @@ async function fetchModelsForProvider(provider) {
 			const select = document.getElementById(`model-${provider}`);
 			const previous = select?.value || "";
 			const catalog = readModelCatalog();
-			catalog[provider] = [...new Set(data.models.filter(Boolean))];
+			const models = [...new Set(data.models.filter(Boolean))];
+			setCachedModels(catalog, provider, models);
 			saveModelCatalog(catalog);
 			if (select) {
 				select.innerHTML = "";
-				const list = catalog[provider].slice();
+				const list = models.slice();
 				if (previous && !list.includes(previous)) list.unshift(previous);
 				list.forEach((model) => {
 					const opt = document.createElement("option");
