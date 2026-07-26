@@ -480,8 +480,8 @@ async def run_memory_pipeline_async(
                 embedding=await embed_text_async(node_content),
                 confidence=claim["confidence"],
                 importance=0.7,
-                embedding_model="qwen3-embedding-8b",
-                embedding_dimensions=4096,
+                embedding_model="gemini-embedding-2-preview",
+                embedding_dimensions=1536,
             )
             if node_row:
                 node_id = str(node_row["id"])

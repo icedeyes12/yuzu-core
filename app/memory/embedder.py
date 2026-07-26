@@ -1,20 +1,16 @@
 import asyncio
 import os
-
 import httpx
-
 from app.providers.base import _rate_limit_provider
 
-CHUTES_EMBED_ENDPOINT = (
-    "https://chutes-qwen-qwen3-embedding-8b-tee.chutes.ai/v1/embeddings"
-)
-DEFAULT_MODEL = None  # Endpoint is model-specific, no model param needed
-EMBEDDING_DIM = 4096  # Qwen3-Embedding-8B output dimension
+CHUTES_EMBED_ENDPOINT = "http://localhost:20128/v1/embeddings"
+DEFAULT_MODEL = "gemini/gemini-embedding-2-preview"
+EMBEDDING_DIM = 1536
 
 
 async def _get_client():
     """Get an async client with API key from env (application-scoped)."""
-    api_key = os.environ.get("CHUTES_API_KEY")
+    api_key = os.environ.get("EMBED_KEY")
 
     if not api_key:
         return None
@@ -30,13 +26,13 @@ async def _get_client():
 async def embed_texts_async(
     texts, model=None, dimensions=None, encoding_format="float", timeout=30
 ):
-    """Embed a list of strings via Chutes API (async). Returns list of embedding lists.
+    """Embed a list of strings via embedding API (async). Returns list of embedding lists.
 
-    Rate-limited to prevent 429 errors from concurrent embedding + LLM requests.
+    Rate-limited to prevent errors from concurrent embedding + LLM requests.
     """
     client = await _get_client()
     if client is None:
-        raise RuntimeError("Chutes API key not configured")
+        raise RuntimeError("EMBED_KEY not configured")
 
     if isinstance(texts, str):
         texts = [texts]
@@ -45,19 +41,19 @@ async def embed_texts_async(
 
     payload = {
         "input": texts,
-        "model": None,  # Required by endpoint, but ignored
+        "model": model or DEFAULT_MODEL,
+        "dimensions": dimensions or EMBEDDING_DIM,
     }
-    payload["encoding_format"] = encoding_format
 
-    # Use rate limiter - embedding shares global Chutes rate limit
+    # Use rate limiter
     async with client:
         try:
-            async with _rate_limit_provider("chutes", "embedding", "embedding"):
+            async with _rate_limit_provider("embedding", "embedding", "embedding"):
                 resp = await client.post(
                     CHUTES_EMBED_ENDPOINT, json=payload, timeout=timeout
                 )
             resp.raise_for_status()
-            data = resp.json()["data"]
+            data = resp.json().get("data", [])
             results = [item["embedding"] for item in data]
 
             if results and len(results[0]) != EMBEDDING_DIM:
@@ -74,12 +70,7 @@ async def embed_texts_async(
 def embed_texts(
     texts, model=None, dimensions=None, encoding_format="float", timeout=30
 ):
-    """Legacy sync wrapper for embed_texts_async.
-
-    NOTE: This uses asyncio.run() which creates a new event loop.
-    This is acceptable for legacy sync callers but NOT recommended
-    when already inside an async context - use embed_texts_async instead.
-    """
+    """Legacy sync wrapper for embed_texts_async."""
     return asyncio.run(
         embed_texts_async(texts, model, dimensions, encoding_format, timeout)
     )
@@ -95,12 +86,7 @@ async def embed_text_async(text, timeout=30, **kwargs):
 
 
 def embed_text(text, timeout=30, **kwargs):
-    """Legacy sync wrapper for embed_text_async.
-
-    NOTE: This uses asyncio.run() which creates a new event loop.
-    This is acceptable for legacy sync callers but NOT recommended
-    when already inside an async context - use embed_text_async instead.
-    """
+    """Legacy sync wrapper for embed_text_async."""
     return asyncio.run(embed_text_async(text, timeout, **kwargs))
 
 

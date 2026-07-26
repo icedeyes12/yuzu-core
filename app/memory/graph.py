@@ -24,7 +24,7 @@ def vector_literal(vector: list[float] | None) -> str | None:
     return "[" + ",".join(str(float(value)) for value in vector) + "]"
 
 
-_GRAPH_EMBEDDING_DIMENSIONS = 4096
+_GRAPH_EMBEDDING_DIMENSIONS = 1536
 
 
 class GraphMemoryRepository:
