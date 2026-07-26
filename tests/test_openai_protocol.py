@@ -7,6 +7,7 @@ from app.providers.openai_protocol import (
     OpenAIProtocolError,
     sanitize_openai_messages,
     sanitize_openai_payload,
+    validate_chat_completion_response,
     validate_openai_messages,
 )
 
@@ -101,6 +102,30 @@ def test_request_parameter_whitelist_removes_internal_and_unknown_fields() -> No
         provider_extensions={"top_k"},
     )
     assert payload == {"temperature": 0.2, "top_k": 40}
+
+
+def test_tool_calls_with_non_tool_finish_reason_are_warning_only() -> None:
+    errors, warnings = validate_chat_completion_response(
+        {
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {
+                        "content": "done",
+                        "tool_calls": [
+                            {
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {"name": "bash", "arguments": "{}"},
+                            }
+                        ],
+                    },
+                }
+            ]
+        }
+    )
+    assert errors == []
+    assert warnings
 
 
 def test_validator_rejects_assistant_tool_call_after_assistant_text() -> None:
