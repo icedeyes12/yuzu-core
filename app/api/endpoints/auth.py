@@ -60,7 +60,7 @@ async def login(request: Request, provider: str = "google"):
         origin = f"{request.url.scheme}://{request.url.netloc}"
 
     code_verifier, code_challenge = generate_pkce()
-    state = sign_state(provider, code_verifier, session_secret, origin)
+    state = sign_state(config.name, code_verifier, session_secret, origin)
     auth_url = build_auth_url(config, client_id, redirect_uri, code_challenge, state)
 
     # Determine secure cookie attribute based on connection type or configuration
