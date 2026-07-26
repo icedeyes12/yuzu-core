@@ -37,7 +37,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def _require_env(name: str) -> str:
     val = os.environ.get(name)
     if not val:
-        log.error("Missing required env var: %s", name)
+        log.error("Missing required environment variable")
         raise HTTPException(status_code=500, detail="Server configuration error")
     return val.strip()
 
