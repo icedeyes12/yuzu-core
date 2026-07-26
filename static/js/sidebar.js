@@ -204,6 +204,10 @@ function toggleSidebar() {
 		hamburger.classList.add("active");
 		loadSidebarSessions();
 	}
+	hamburger.setAttribute(
+		"aria-expanded",
+		String(sidebar.classList.contains("open")),
+	);
 }
 
 function initCustomDropdown() {

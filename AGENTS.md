@@ -20,7 +20,6 @@ the repository at HEAD of `dev`.
   `EMBEDDING_DIM = 4096`
 - **Memory decay:** `fsrs` package
 - **Encryption:** ChaCha20-Poly1305 (`pycryptodome`) for API keys
-- **Frontend linting:** Biome (run via `npx --yes @biomejs/biome check static/`)
 - **Python linting:** `ruff check .` and `ruff format --check .`
 - **Templates:** Jinja2 + vanilla JS / CSS in `templates/` and `static/`
 
@@ -124,10 +123,6 @@ the repository at HEAD of `dev`.
    `app/tools/multimodal.py` is the home of vision model detection and
    image cache; the orchestrator delegates through the base provider.
 9. **Frontend Architecture.** `ConversationStore` owns the state. `DOMRenderer` owns the DOM. Do not bypass the store with direct `innerHTML` appends.
-10. **Frontend lint/format.** Run `npx --yes eslint static/js/` before 
-    committing JS changes. Do not add new
-    frontend packages without coordinating with the existing
-    per-page stylesheet layout.
 11. **Slider drag-threshold is required.** All `<input type="range">`
     elements must be wrapped with `attachSliderGuard(slider)` so vertical
     scroll does not move the slider. The guard activates on horizontal
@@ -137,7 +132,3 @@ the repository at HEAD of `dev`.
     only in browser `localStorage` (`yuzu_byok_config`) and arrive via
     `X-Provider-Key` / `X-Provider-BaseUrl` headers. The `api_keys` table
     was destructively purged; do not recreate it.
-13. **Validation before commit.** After touching Python: `ruff check .` and
-    `ruff format --check .`. After touching JS/CSS: `npx --yes
-    eslint static/js/`. Run `python -m py_compile` on changed
-    `.py` files.
