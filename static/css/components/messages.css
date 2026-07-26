@@ -19,7 +19,7 @@
 /* ==================== MESSAGES ==================== */
 .message {
 	position: relative;
-	animation: fadeIn 0.3s ease;
+	animation: fadeIn var(--transition-slow);
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-2);

@@ -10,7 +10,7 @@
 
 /* Chat container fades out while new history is loading */
 #chatContainer {
-	transition: opacity 0.18s ease;
+	transition: opacity var(--motion-fast) var(--motion-easing-standard);
 }
 
 #chatContainer.session-switching {
@@ -650,23 +650,25 @@ a:hover {
 
 /* Animation Classes */
 .fade-in {
-	animation: fadeIn 0.5s ease-in-out;
+	animation: fadeIn var(--motion-slow) var(--motion-easing-standard);
 }
 
 .slide-in-left {
-	animation: slideInLeft 0.3s ease-out;
+	animation: slideInLeft var(--motion-slow) var(--motion-easing-standard)
+		forwards;
 }
 
 .slide-in-right {
-	animation: slideInRight 0.3s ease-out;
+	animation: slideInRight var(--motion-slow) var(--motion-easing-standard)
+		forwards;
 }
 
 .scale-in {
-	animation: scaleIn 0.3s ease-out;
+	animation: scaleIn var(--motion-slow) var(--motion-easing-standard) forwards;
 }
 
 .bounce-in {
-	animation: bounceIn 0.6s ease-out;
+	animation: bounceIn var(--motion-slow) var(--motion-easing-standard);
 }
 
 /* Loading States */
@@ -687,7 +689,7 @@ a:hover {
 	border: 2px solid transparent;
 	border-top: 2px solid var(--accent);
 	border-radius: 50%;
-	animation: spin 1s linear infinite;
+	animation: spin 1s linear var(--motion-repeat-loop);
 }
 
 /* Focus Management */
