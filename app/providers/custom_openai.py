@@ -30,11 +30,14 @@ class CustomOpenAIProvider(AIProvider):
             url += "/chat/completions"
         return url
 
-    async def get_models(self) -> list[str]:
+    async def fetch_live_models(self) -> list[str]:
         # For custom providers, we don't have a static list.
         # But we must return something to pass the "models > 0" test_connection check,
         # or we could implement a real fetch. We will just return a placeholder.
         return ["custom-model-1", "custom-model-2"]
+
+    async def get_models(self) -> list[str]:
+        return await self.fetch_live_models()
 
     def _prepare_payload(
         self, ctx: LLMContext, messages: list[dict], stream: bool, **kwargs
