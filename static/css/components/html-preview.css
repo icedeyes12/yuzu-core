@@ -3,9 +3,9 @@
 
 /* ==================== HTML PREVIEW CONTAINER ==================== */
 .html-preview-container {
-	margin: 1rem 0;
+	margin: var(--space-4) 0;
 	border: 1px solid var(--border-normal);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	overflow: hidden;
 	background: var(--surface-subtle);
 }
@@ -116,8 +116,8 @@
 	max-height: 80vh;
 	background: var(--surface);
 	border: 1px solid var(--border-normal);
-	border-radius: 12px;
-	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-xl);
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
@@ -127,7 +127,7 @@
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	padding: 12px 16px;
+	padding: var(--space-3) var(--space-4);
 	border-bottom: 1px solid var(--border-normal);
 	background: rgba(0, 0, 0, 0.2);
 	flex-shrink: 0;
@@ -173,16 +173,16 @@
 .html-modal-actions {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: var(--space-1);
 }
 
 .html-modal-btn {
 	background: transparent;
 	border: 1px solid var(--border-normal);
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	color: var(--text-secondary);
 	cursor: pointer;
-	padding: 5px 7px;
+	padding: var(--space-2);
 	display: flex;
 	align-items: center;
 }

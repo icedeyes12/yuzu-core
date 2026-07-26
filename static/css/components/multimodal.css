@@ -9,7 +9,7 @@
 .multimodal-toggle-btn {
 	width: 42px;
 	height: 42px;
-	border-radius: 50%;
+	border-radius: var(--radius-full);
 	background: var(--surface-subtle);
 	border: 1px solid var(--border-normal);
 	cursor: pointer;
@@ -70,19 +70,19 @@
 	left: 0;
 	min-width: 280px;
 	background: var(--surface-subtle);
-	box-shadow: 0 18px 38px rgba(0, 0, 0, 0.2);
+	box-shadow: var(--shadow-lg);
 	border: 1px solid var(--border-normal);
-	border-radius: 12px;
-	padding: 0.5rem;
+	border-radius: var(--radius-lg);
+	padding: var(--space-2);
 	z-index: 1000;
 }
 
 .multimodal-option {
 	display: flex;
 	align-items: center;
-	gap: 1rem;
-	padding: 0.8rem;
-	border-radius: 8px;
+	gap: var(--space-4);
+	padding: var(--space-3);
+	border-radius: var(--radius-md);
 	cursor: pointer;
 }
 
@@ -121,8 +121,8 @@
 
 /* ==================== IMAGE UPLOAD ==================== */
 .image-upload-area {
-	margin-top: 0.5rem;
-	padding: 0.8rem;
+	margin-top: var(--space-2);
+	padding: var(--space-3);
 	border-top: 1px solid var(--border-normal);
 }
 
@@ -221,8 +221,8 @@
 
 .image-actions {
 	display: flex;
-	gap: 0.5rem;
-	margin-top: 0.5rem;
+	gap: var(--space-2);
+	margin-top: var(--space-2);
 }
 
 .image-action-btn {

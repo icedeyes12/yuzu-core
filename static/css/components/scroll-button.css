@@ -1,16 +1,16 @@
 /* ==================== SCROLL TO BOTTOM BUTTON ==================== */
 .scroll-to-bottom-btn {
 	position: fixed;
-	right: 20px;
+	right: var(--space-4);
 	z-index: 1000;
-	width: 48px;
-	height: 48px;
-	border-radius: 50%;
+	width: 2.75rem;
+	height: 2.75rem;
+	border-radius: var(--radius-full);
 	background: var(--accent);
 	color: white;
 	border: none;
 	cursor: pointer;
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+	box-shadow: var(--shadow-md);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -23,8 +23,8 @@
 }
 
 .scroll-to-bottom-btn:hover {
-	transform: scale(1.1);
-	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+	transform: scale(1.05);
+	box-shadow: var(--shadow-lg);
 }
 
 .scroll-to-bottom-btn.hidden {
