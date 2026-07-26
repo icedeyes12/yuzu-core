@@ -657,7 +657,7 @@
 
 .streaming-cursor {
 	display: inline-block;
-	animation: blink 1s step-end infinite;
+	animation: blink 1s steps(1, end) var(--motion-repeat-loop);
 	color: var(--accent);
 	font-weight: bold;
 }
@@ -876,7 +876,8 @@
 	width: 32px;
 	height: 32px;
 	color: var(--accent);
-	animation: mermaidPulse 1.2s ease-in-out infinite;
+	animation: mermaidPulse 1.2s var(--motion-easing-standard)
+		var(--motion-repeat-loop);
 }
 
 @keyframes mermaidPulse {
@@ -1006,7 +1007,7 @@
 	border-radius: 6px;
 	background: rgba(255, 255, 255, 0.03);
 	border-left: 2px solid var(--border-focus);
-	transition: background 0.2s ease;
+	transition: background var(--transition-normal);
 }
 
 .message-content .cognitive-block summary {
@@ -1029,7 +1030,7 @@
 .message-content .cognitive-block summary::before {
 	content: "▶";
 	font-size: 0.7rem;
-	transition: transform 0.2s ease;
+	transition: transform var(--transition-normal);
 }
 
 .message-content .cognitive-block[open] summary::before {

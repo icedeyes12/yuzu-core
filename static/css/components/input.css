@@ -75,7 +75,8 @@
 
 #sendButton.stop-mode {
 	background: #dc3545;
-	animation: pulse-stop 1.5s infinite;
+	animation: pulse-stop 1.5s var(--motion-easing-standard)
+		var(--motion-repeat-loop);
 }
 
 #sendButton.stop-mode:hover {

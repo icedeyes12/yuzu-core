@@ -22,9 +22,16 @@
 	--shadow-lg: 0 10px 30px rgba(31, 111, 235, 0.25);
 	--shadow-xl: 0 20px 60px rgba(13, 17, 23, 0.6);
 	--shadow-focus: 0 0 0 3px rgba(31, 111, 235, 0.25);
-	--transition-fast: 0.15s ease;
-	--transition-normal: 0.2s ease;
-	--transition-slow: 0.3s ease;
+	--motion-instant: 0ms;
+	--motion-fast: 0.15s;
+	--motion-normal: 0.2s;
+	--motion-slow: 0.3s;
+	--motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+	--motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+	--motion-repeat-loop: infinite;
+	--transition-fast: var(--motion-fast) var(--motion-easing-standard);
+	--transition-normal: var(--motion-normal) var(--motion-easing-standard);
+	--transition-slow: var(--motion-slow) var(--motion-easing-standard);
 	--backdrop-blur: blur(12px);
 	--font-sans: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
 	--font-mono:

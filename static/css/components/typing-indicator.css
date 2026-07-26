@@ -4,7 +4,7 @@
 	gap: 0.4rem;
 	align-items: center;
 	padding: 0.5rem 1rem;
-	animation: fadeIn 0.3s ease;
+	animation: fadeIn var(--motion-slow) var(--motion-easing-standard);
 	opacity: 0.7;
 	background: transparent;
 	max-width: fit-content;
@@ -20,7 +20,8 @@
 	height: 8px;
 	background: var(--text-secondary);
 	border-radius: 50%;
-	animation: typing-bounce 1.4s infinite ease-in-out both;
+	animation: typing-bounce 1.4s var(--motion-easing-standard)
+		var(--motion-repeat-loop) both;
 }
 
 .typing-indicator span:nth-child(1) {

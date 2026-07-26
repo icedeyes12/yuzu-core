@@ -10,7 +10,8 @@
 		var(--surface-raised) 75%
 	);
 	background-size: 200% 100%;
-	animation: skeleton-shimmer 1.5s ease-in-out infinite;
+	animation: skeleton-shimmer 1.5s var(--motion-easing-standard)
+		var(--motion-repeat-loop);
 	border-radius: var(--radius-md);
 }
 
@@ -32,7 +33,7 @@
 	border-radius: 12px;
 	background: var(--surface-message-ai);
 	border: 1px solid var(--border-message-ai);
-	animation: fadeIn 0.3s ease;
+	animation: fadeIn var(--motion-slow) var(--motion-easing-standard);
 }
 
 .skeleton-message.user {

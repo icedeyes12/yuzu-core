@@ -82,7 +82,7 @@
 	top: -50px;
 	left: -50px;
 	z-index: 0;
-	animation: float 10s ease-in-out infinite;
+	animation: float 10s var(--motion-easing-standard) var(--motion-repeat-loop);
 }
 
 .decorative-blob.blob-2 {
@@ -121,9 +121,9 @@
 	font-weight: 600;
 	text-decoration: none;
 	transition:
-		transform 0.2s,
-		box-shadow 0.2s,
-		background-color 0.2s;
+		transform var(--transition-normal),
+		box-shadow var(--transition-normal),
+		background-color var(--transition-normal);
 	background: rgba(255, 255, 255, 0.05);
 	color: #fff;
 	border: 1px solid rgba(255, 255, 255, 0.1);

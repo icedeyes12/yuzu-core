@@ -67,7 +67,7 @@
 	align-items: center;
 	justify-content: center;
 	opacity: 0.7;
-	transition: opacity 0.2s;
+	transition: opacity var(--transition-normal);
 }
 
 .close-sidebar:hover {
@@ -162,7 +162,7 @@
 
 .dropdown-arrow {
 	font-size: 0.8rem;
-	transition: transform 0.3s ease;
+	transition: transform var(--transition-slow);
 	color: var(--text-secondary);
 }
 
@@ -395,7 +395,7 @@
 	font-size: 14px;
 	font-weight: 500;
 	z-index: 10000;
-	animation: slideInRight 0.3s ease;
+	animation: slideInRight var(--motion-slow) var(--motion-easing-standard);
 	max-width: 300px;
 	backdrop-filter: blur(10px);
 	border: 1px solid rgba(255, 255, 255, 0.1);
@@ -743,8 +743,8 @@
 	font-weight: 600;
 	cursor: pointer;
 	transition:
-		background 0.2s ease,
-		border-color 0.2s ease;
+		background var(--transition-normal),
+		border-color var(--transition-normal);
 }
 
 .auth-btn svg {

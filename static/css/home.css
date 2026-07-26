@@ -191,8 +191,8 @@
 	margin-bottom: 1rem;
 	opacity: 0.9;
 	transition:
-		transform 0.3s ease,
-		color 0.3s ease;
+		transform var(--transition-slow),
+		color var(--transition-slow);
 }
 
 .card:hover .card-icon {
@@ -209,15 +209,17 @@
 .home-header.animate-on-load {
 	transform: translateY(-20px);
 	transition:
-		opacity 0.8s ease,
-		transform 0.8s ease;
+		opacity var(--motion-slow) var(--motion-easing-standard),
+		transform var(--motion-slow) var(--motion-easing-standard);
 }
 
 .card.animate-on-scroll {
 	transform: translateY(30px);
 	transition:
-		opacity 0.6s ease var(--animation-delay, 0s),
-		transform 0.6s ease var(--animation-delay, 0s);
+		opacity var(--motion-slow) var(--motion-easing-standard)
+		var(--animation-delay, 0s),
+		transform var(--motion-slow) var(--motion-easing-standard)
+		var(--animation-delay, 0s);
 }
 
 .home-header.animate-on-load.is-visible,
@@ -240,7 +242,7 @@
 	border-radius: 50%;
 	background: rgba(255, 255, 255, 0.3);
 	transform: scale(0);
-	animation: ripple-animation 0.6s linear;
+	animation: ripple-animation var(--motion-slow) linear;
 	pointer-events: none;
 }
 
@@ -252,7 +254,8 @@
 }
 
 .fade-in-up {
-	animation: fade-in-up 0.6s ease forwards;
+	animation: fade-in-up var(--motion-slow) var(--motion-easing-standard)
+		forwards;
 	animation-delay: var(--animation-delay, 0s);
 }
 
@@ -296,7 +299,7 @@
 }
 
 .footer-link.footer-click {
-	animation: footer-click 0.15s ease;
+	animation: footer-click var(--motion-fast) var(--motion-easing-standard);
 }
 
 @keyframes footer-click {
