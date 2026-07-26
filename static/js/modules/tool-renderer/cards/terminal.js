@@ -32,7 +32,7 @@ function renderTerminalCard(normalised) {
 	return [
 		`<details class="tool-card tool-card--exec" open>`,
 		`<summary class="tool-card__header">`,
-		`<span class="tool-card__icon" aria-hidden="true">▶</span>`,
+		`<span class="tool-card__icon" aria-hidden="true"><span class="visual-icon visual-icon--terminal">›_</span></span>`,
 		`<span class="tool-card__title">${escapeHtml(headerLabel)}</span>`,
 		`<span class="tool-card__meta ${exitClass}">Exit ${exit_code}</span>`,
 		`</summary>`,

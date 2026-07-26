@@ -1,0 +1,87 @@
+/* Visual language: identity placeholders remain separate from UI icons and status visuals. */
+
+.provider-identity-placeholder,
+.provider-identity-placeholder--small {
+	display: inline-grid;
+	place-items: center;
+	flex: 0 0 auto;
+	border: 1px solid var(--border-normal);
+	border-radius: var(--radius-md);
+	background: var(--surface-subtle);
+	color: var(--text-secondary);
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	line-height: 1;
+	text-transform: uppercase;
+}
+
+.provider-identity-placeholder {
+	width: 2rem;
+	height: 2rem;
+}
+
+.provider-identity-placeholder--small {
+	width: 1.25rem;
+	height: 1.25rem;
+	border-radius: var(--radius-sm);
+	font-size: 0.55rem;
+}
+
+.visual-status {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.visual-status__mark {
+	display: inline-grid;
+	place-items: center;
+	width: 1.1em;
+	height: 1.1em;
+	border-radius: 50%;
+	font-size: 0.7em;
+	font-weight: 800;
+	line-height: 1;
+}
+
+.visual-status--success .visual-status__mark {
+	background: var(--status-success);
+	color: var(--text-inverse);
+}
+
+.visual-status--danger .visual-status__mark {
+	background: var(--status-danger);
+	color: var(--text-inverse);
+}
+
+.visual-status--info .visual-status__mark {
+	background: var(--accent);
+	color: var(--text-inverse);
+}
+
+.visual-icon {
+	display: inline-grid;
+	place-items: center;
+	min-width: 1.1em;
+	height: 1.1em;
+	font-family: var(--font-mono);
+	font-size: 0.85em;
+	font-weight: 800;
+	line-height: 1;
+}
+
+.visual-icon--tool {
+	color: var(--accent);
+}
+
+.visual-icon--terminal {
+	color: var(--text-secondary);
+}
+
+.tool-card__icon,
+.generic-card__icon,
+.weather-card__icon,
+.weather-card__day-icon {
+	font-family: var(--font-sans);
+}

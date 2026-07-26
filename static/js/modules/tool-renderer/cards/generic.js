@@ -34,7 +34,7 @@ function renderGenericCard(toolName, normalised, normalisedData) {
 		`<div class="tool-card tool-card--generic">`,
 		`<div class="generic-card">`,
 		`<div class="generic-card__header">`,
-		`<span class="generic-card__icon" aria-hidden="true">🔧</span>`,
+		`<span class="generic-card__icon" aria-hidden="true"><span class="visual-icon visual-icon--tool">◆</span></span>`,
 		`<span class="generic-card__title">${escapeHtml(toolName)}</span>`,
 		`</div>`,
 		status,
