@@ -121,19 +121,19 @@ export class DOMRenderer {
 		if (msg.toolCalls?.length) {
 			const toolsHtml = msg.toolCalls
 				.map((tc) => {
-					const statusIcon =
-						tc.status === "completed"
-							? "✓"
-							: tc.status === "error"
-								? "❌"
-								: "⚙️";
+					const completed = tc.status === "completed";
+					const failed = tc.status === "error";
+					const statusIcon = completed ? "✓" : failed ? "!" : "…";
 					const name = tc.name || tc?.function?.name || "tool";
+					const state = completed ? "done" : failed ? "failed" : "working";
 					const args = tc.arguments
 						? `<pre><code>${escapeHtml(tc.arguments)}</code></pre>`
 						: "Waiting for result...";
 
-					// Hide internal or completed tool calls in a details block so they don't leak into the main reading flow
-					return `<details class="tool-call-block" ${tc.status !== "completed" ? "open" : ""}><summary class="tool-header">${statusIcon} Calling ${name}</summary><div class="tool-body">${args}</div></details>`;
+					if (completed) {
+						return `<span class="tool-call-summary tool-call-summary--done"><span aria-hidden="true">${statusIcon}</span><span>${escapeHtml(name)}</span></span>`;
+					}
+					return `<details class="tool-call-block tool-call-block--${state}" open><summary class="tool-header"><span aria-hidden="true">${statusIcon}</span><span>Calling ${escapeHtml(name)}</span></summary><div class="tool-body">${args}</div></details>`;
 				})
 				.join("");
 			html += `<div class="tools-container">${toolsHtml}</div>`;
