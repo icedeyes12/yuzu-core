@@ -56,13 +56,15 @@ class ConfigService:
     async def get_frontend_config(user_id: str) -> dict[str, Any]:
         """Unified frontend configuration for web and CLI."""
         profile = await Database.get_profile(user_id)
+        ai_providers = await ConfigService.get_ai_providers_payload(user_id, profile)
         return {
             "status": "success",
             "profile": ConfigService.format_profile_dict(profile),
-            "ai_providers": await ConfigService.get_ai_providers_payload(
-                user_id, profile
-            ),
+            "ai_providers": ai_providers,
             "vision": await ConfigService.get_vision_payload_async(user_id, profile),
+            "all_models": ai_providers["all_models"],
+            "current_provider": ai_providers["current_provider"],
+            "current_model": ai_providers["current_model"],
         }
 
     @staticmethod
@@ -140,11 +142,29 @@ class ConfigService:
         user_id: str, provider_name: str, model_name: str | None = None
     ) -> str:
         """Async version for web API endpoints."""
+        provider_name = provider_name.strip()
+        model_name = model_name.strip() if model_name else None
+        if not provider_name:
+            raise ValueError("Provider name is required")
+
+        ai_manager = await get_ai_manager()
+        if provider_name not in ai_manager.get_available_providers():
+            raise ValueError(f"Unknown provider: {provider_name}")
+
+        if model_name:
+            models = await ai_manager.get_provider_models(provider_name)
+            if model_name not in models:
+                raise ValueError(
+                    f"Model '{model_name}' is not available for provider '{provider_name}'"
+                )
+
         profile = await Database.get_profile(user_id)
-        config = profile.get("providers_config") or {}
+        config = dict(profile.get("providers_config") or {})
         config["preferred_provider"] = provider_name
         if model_name:
             config["preferred_model"] = model_name
+        else:
+            config.pop("preferred_model", None)
         await Database.update_profile({"providers_config": config}, user_id)
         await reload_ai_manager()
 

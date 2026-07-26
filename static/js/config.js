@@ -37,14 +37,11 @@ function getProfileAdvancedSource(data) {
 
 document.addEventListener("DOMContentLoaded", async () => {
 	console.log("Config page loaded - initializing...");
-	await loadAppConfig();
-	await Promise.all([
-		loadProfileData(),
-		loadGlobalKnowledge(),
-		loadImageModel(),
-	]);
-	await loadProviderSettings();
-	await loadVisionModel();
+	const loaded = await loadAppConfig();
+	if (!loaded) return;
+	await Promise.all([loadGlobalKnowledge(), loadProviderSettings()]);
+	loadImageModelFromConfig();
+	loadVisionModel();
 	setupEventListeners();
 	loadBYOKConfig();
 	initializeConfigAnimations();
@@ -53,61 +50,81 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Load application configuration from backend (SSOT)
 async function loadAppConfig() {
 	try {
-		const response = await fetch("/api/config");
-		const data = await response.json();
-
-		if (data.status === "success") {
-			appConfig = data;
-			console.log("App config loaded:", appConfig);
-			loadAdvancedSettingsFromData(appConfig.profile || appConfig);
-		} else {
-			console.error("Failed to load app config:", data);
+		const response = await fetch("/api/config", {
+			headers: { Accept: "application/json" },
+		});
+		const data = await readJsonResponse(response);
+		if (!response.ok || data.status !== "success") {
+			throw new Error(getApiError(data, response.status));
 		}
+		appConfig = data;
+		const profile = appConfig.profile || {};
+		loadProfileDataFromConfig(profile);
+		loadAdvancedSettingsFromData(profile);
+		return true;
 	} catch (error) {
 		console.error("Error loading app config:", error);
+		showError(`Could not load settings: ${error.message}`);
+		return false;
 	}
 }
 
-// Load profile data for editable application settings
-async function loadProfileData() {
+async function readJsonResponse(response) {
+	const text = await response.text();
 	try {
-		const response = await fetch("/api/profile");
-		const data = await response.json();
-
-		setTextIfExists("affection-value", data.affection);
-		setValueIfExists("affection-level", data.affection);
-		setValueIfExists("display-name", data.user_name || "");
-		setValueIfExists("partner-name", data.partner_name || "");
-		setValueIfExists("persona-preset", data.persona_preset || "helpful");
-		setValueIfExists("persona-prompt", data.persona_prompt || "");
-		setValueIfExists("location-lat", data.location_lat ?? "");
-		setValueIfExists("location-lon", data.location_lon ?? "");
-
-		const visPrefs = data.providers_config?.vision_model_preferences || {};
-		setTextIfExists(
-			"current-vision-model",
-			visPrefs.provider && visPrefs.model
-				? `${visPrefs.provider}/${visPrefs.model}`
-				: "Not set",
-		);
-
-		loadAdvancedSettingsFromData(data);
-	} catch (error) {
-		console.error("Error loading profile data:", error);
-		showError("Failed to load profile data");
+		return text ? JSON.parse(text) : {};
+	} catch {
+		throw new Error(`Server returned an invalid response (${response.status})`);
 	}
+}
+
+function getApiError(data, status) {
+	return data?.detail || data?.message || `Request failed (${status})`;
+}
+
+// Load profile data for editable application settings
+function loadProfileDataFromConfig(data) {
+	setTextIfExists("affection-value", data.affection);
+	setValueIfExists("affection-level", data.affection);
+	setValueIfExists("display-name", data.user_name || "");
+	setValueIfExists("partner-name", data.partner_name || "");
+	setValueIfExists("persona-preset", data.persona_preset || "helpful");
+	setValueIfExists("persona-prompt", data.persona_prompt || "");
+	setValueIfExists("location-lat", data.location_lat ?? "");
+	setValueIfExists("location-lon", data.location_lon ?? "");
+	const visPrefs = data.providers_config?.vision_model_preferences || {};
+	setTextIfExists(
+		"current-vision-model",
+		visPrefs.provider && visPrefs.model
+			? `${visPrefs.provider}/${visPrefs.model}`
+			: "Not set",
+	);
+}
+
+async function loadProfileData() {
+	if (appConfig?.profile) {
+		loadProfileDataFromConfig(appConfig.profile);
+		return appConfig.profile;
+	}
+	await loadAppConfig();
+	return appConfig?.profile || null;
 }
 
 // Load provider settings
 async function loadProviderSettings() {
 	try {
-		const response = await fetch("/api/providers/list");
-		const data = await response.json();
-
-		if (data.status !== "success") {
-			showError(data.message || "Failed to load providers");
-			return;
+		if (!appConfig?.ai_providers) {
+			throw new Error("Provider configuration is missing");
 		}
+		const data = {
+			...appConfig.ai_providers,
+			all_models: appConfig.all_models || appConfig.ai_providers.all_models,
+			current_provider:
+				appConfig.current_provider || appConfig.ai_providers.current_provider,
+			current_model:
+				appConfig.current_model || appConfig.ai_providers.current_model,
+			status: "success",
+		};
 
 		const grid = document.getElementById("providers-grid");
 		if (!grid) return;
@@ -126,12 +143,9 @@ async function loadProviderSettings() {
 
 		const modelCatalog = readModelCatalog();
 		Object.entries(data.all_models || {}).forEach(([provider, models]) => {
-			if (
-				Array.isArray(models) &&
-				models.length &&
-				!getCachedModels(modelCatalog, provider).length
-			)
-				setCachedModels(modelCatalog, provider, models);
+			if (!Array.isArray(models) || !models.length) return;
+			const cached = getCachedModels(modelCatalog, provider);
+			if (!cached.length) setCachedModels(modelCatalog, provider, models);
 		});
 		saveModelCatalog(modelCatalog);
 
@@ -303,11 +317,22 @@ function getCachedModels(catalog, provider) {
 	const entry = catalog[provider];
 	if (Array.isArray(entry)) return entry;
 	if (!entry || !Array.isArray(entry.models)) return [];
-	return entry.models;
+	return entry.models.filter((model) => typeof model === "string" && model);
 }
 
 function setCachedModels(catalog, provider, models) {
-	catalog[provider] = { models, fetchedAt: Date.now() };
+	catalog[provider] = {
+		models: [
+			...new Set(models.filter((model) => typeof model === "string" && model)),
+		],
+		fetchedAt: Date.now(),
+	};
+}
+
+function invalidateModelCache(provider) {
+	const catalog = readModelCatalog();
+	delete catalog[provider];
+	saveModelCatalog(catalog);
 }
 
 async function fetchModelsForProvider(provider) {
@@ -330,10 +355,17 @@ async function fetchModelsForProvider(provider) {
 		if (provConfig.base_url)
 			headers["X-Provider-BaseUrl"] = provConfig.base_url;
 
-		const response = await fetch(`/api/proxy/models/${provider}`, { headers });
-		const data = await response.json();
+		const response = await fetch(`/api/proxy/models/${provider}`, {
+			headers: { ...headers, Accept: "application/json" },
+		});
+		const data = await readJsonResponse(response);
 
-		if (data.status === "success" && data.models) {
+		if (!response.ok || data.status !== "success") {
+			invalidateModelCache(provider);
+			throw new Error(getApiError(data, response.status));
+		}
+
+		if (data.models) {
 			const select = document.getElementById(`model-${provider}`);
 			const previous = select?.value || "";
 			const catalog = readModelCatalog();
@@ -358,7 +390,7 @@ async function fetchModelsForProvider(provider) {
 		}
 	} catch (err) {
 		console.error(err);
-		showError("Network error while fetching models");
+		showError(`Could not refresh ${provider} models: ${err.message}`);
 	} finally {
 		if (btn) {
 			btn.disabled = false;
@@ -416,32 +448,30 @@ async function testProviderConnection(providerName) {
 			body: JSON.stringify({ provider_name: providerName }),
 		});
 
-		const result = await response.json();
+		const result = await readJsonResponse(response);
 		statusElement.classList.remove("pulse");
 
-		if (result.status === "success") {
-			statusElement.textContent = result.connected
-				? "Connected"
-				: "Connection failed";
-			statusElement.className = result.connected
-				? "status-connected"
-				: "status-disconnected";
-			if (result.connected) {
-				showSuccess(`${providerName} connection successful!`);
-			} else {
-				showError(`${providerName} connection failed`);
-			}
+		if (!response.ok || result.status !== "success") {
+			throw new Error(getApiError(result, response.status));
+		}
+
+		statusElement.textContent = result.connected
+			? "Connected"
+			: "Connection failed";
+		statusElement.className = result.connected
+			? "status-connected"
+			: "status-disconnected";
+		if (result.connected) {
+			showSuccess(`${providerName} connection successful!`);
 		} else {
-			statusElement.textContent = "Test failed";
-			statusElement.className = "status-disconnected";
-			showError("Provider test failed");
+			showError(`${providerName} connection failed`);
 		}
 	} catch (error) {
 		console.error("Error testing provider connection:", error);
 		statusElement.classList.remove("pulse");
 		statusElement.textContent = "Test error";
 		statusElement.className = "status-disconnected";
-		showError("Error testing provider connection");
+		showError(`Could not test ${providerName}: ${error.message}`);
 	}
 }
 
@@ -534,33 +564,23 @@ function setupEventListeners() {
 }
 
 // Load image model on page load
-async function loadImageModel() {
-	try {
-		const response = await fetch("/api/profile");
-		const data = await response.json();
-
-		const imageModel = data.image_model || "qwen_image";
-		const select = document.getElementById("image-model");
-		if (!select) return;
-
-		const availableModels = [
-			{ value: "qwen_image", label: "Qwen Image" },
-			{ value: "z_turbo", label: "Z Image Turbo" },
-		];
-		select.innerHTML = "";
-		availableModels.forEach((m) => {
-			const option = document.createElement("option");
-			option.value = m.value;
-			option.textContent = m.label;
-			if (m.value === imageModel) option.selected = true;
-			select.appendChild(option);
-		});
-
-		setTextIfExists("current-image-model", imageModel);
-		console.log("Image model loaded:", imageModel);
-	} catch (error) {
-		console.error("Error loading image model:", error);
-	}
+function loadImageModelFromConfig() {
+	const imageModel = appConfig?.profile?.image_model || "qwen_image";
+	const select = document.getElementById("image-model");
+	if (!select) return;
+	const availableModels = [
+		{ value: "qwen_image", label: "Qwen Image" },
+		{ value: "z_turbo", label: "Z Image Turbo" },
+	];
+	select.replaceChildren();
+	availableModels.forEach((model) => {
+		const option = document.createElement("option");
+		option.value = model.value;
+		option.textContent = model.label;
+		option.selected = model.value === imageModel;
+		select.appendChild(option);
+	});
+	setTextIfExists("current-image-model", imageModel);
 }
 
 // Load vision model on page load
@@ -645,24 +665,28 @@ async function testVisionModel() {
 	try {
 		const response = await fetch("/api/providers/test_vision", {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
+			headers: {
+				"Content-Type": "application/json",
+				Accept: "application/json",
+			},
 			body: JSON.stringify({ provider, model }),
 		});
 
-		const result = await response.json();
+		const result = await readJsonResponse(response);
 
-		if (result.success) {
-			if (statusElement) statusElement.textContent = `${provider}/${model}`;
-			showSuccess("Vision model is available!");
-		} else {
+		if (!response.ok || !result.success) {
 			if (statusElement)
-				statusElement.textContent = `${provider}/${model} (may not support vision)`;
-			showError(result.message || "Vision model test failed");
+				statusElement.textContent = `${provider}/${model} (unavailable)`;
+			throw new Error(
+				getApiError(result, response.status) || "Vision model test failed",
+			);
 		}
+		if (statusElement) statusElement.textContent = `${provider}/${model}`;
+		showSuccess("Vision model is available!");
 	} catch (error) {
 		console.error("Error testing vision model:", error);
 		if (statusElement) statusElement.textContent = `${provider}/${model}`;
-		showError("Vision model test error");
+		showError(`Vision model test error: ${error.message}`);
 	}
 }
 
@@ -689,17 +713,22 @@ async function saveVisionModel() {
 	try {
 		const response = await fetch("/api/providers/set_vision_model", {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
+			headers: {
+				"Content-Type": "application/json",
+				Accept: "application/json",
+			},
 			body: JSON.stringify({ provider, model }),
 		});
 
-		const result = await response.json();
+		const result = await readJsonResponse(response);
 
-		if (result.status === "success") {
+		if (response.ok && result.status === "success") {
 			setTextIfExists("current-vision-model", `${provider}/${model}`);
 			showSuccess("Vision model saved!");
 		} else {
-			showError(`Failed to save vision model: ${result.message}`);
+			showError(
+				`Failed to save vision model: ${getApiError(result, response.status)}`,
+			);
 		}
 	} catch (error) {
 		console.error("Error saving vision model:", error);
@@ -729,12 +758,13 @@ async function saveImageModel() {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ updates: { image_model: imageModel } }),
 		});
-		if (response.ok) {
-			setTextIfExists("current-image-model", imageModel);
-			showSuccess("Image model saved successfully!");
-		} else {
-			showError("Error saving image model");
+		const result = await readJsonResponse(response);
+		if (!response.ok || result.status !== "success") {
+			throw new Error(getApiError(result, response.status));
 		}
+		appConfig.profile.image_model = imageModel;
+		setTextIfExists("current-image-model", imageModel);
+		showSuccess("Image model saved successfully!");
 	} catch (error) {
 		console.error("Error saving image model:", error);
 		showError("Error saving image model");
@@ -771,6 +801,7 @@ async function setProviderActive(providerName) {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
+				Accept: "application/json",
 			},
 			body: JSON.stringify({
 				provider_name: providerName,
@@ -778,9 +809,9 @@ async function setProviderActive(providerName) {
 			}),
 		});
 
-		const result = await response.json();
+		const result = await readJsonResponse(response);
 
-		if (result.status === "success") {
+		if (response.ok && result.status === "success") {
 			showSuccess(`${providerName} set as active!`);
 			setTextIfExists("current-provider", `${providerName}/${modelName}`);
 
@@ -800,11 +831,13 @@ async function setProviderActive(providerName) {
 				}
 			}
 		} else {
-			showError(`Failed to set active provider: ${result.message}`);
+			showError(
+				`Could not set active provider: ${getApiError(result, response.status)}`,
+			);
 		}
 	} catch (error) {
 		console.error("Error setting active provider:", error);
-		showError("Error setting active provider");
+		showError(`Could not set active provider: ${error.message}`);
 	} finally {
 		if (saveBtn) {
 			saveBtn.textContent = "Set as Active";
@@ -839,9 +872,7 @@ async function saveProfileSettings() {
 	try {
 		const response = await fetch("/api/update_profile", {
 			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
+			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
 				updates: {
 					user_name: displayName,
@@ -852,13 +883,18 @@ async function saveProfileSettings() {
 				},
 			}),
 		});
-
-		if (response.ok) {
-			showSuccess("Profile settings saved successfully!");
-			loadProfileData();
-		} else {
-			showError("Error saving profile settings");
+		const result = await readJsonResponse(response);
+		if (!response.ok || result.status !== "success") {
+			throw new Error(getApiError(result, response.status));
 		}
+		Object.assign(appConfig.profile, {
+			user_name: displayName,
+			partner_name: partnerName,
+			affection: parseInt(affection, 10),
+			persona_preset: personaPreset,
+			persona_prompt: personaPrompt,
+		});
+		showSuccess("Profile settings saved successfully!");
 	} catch (error) {
 		console.error("Error saving profile:", error);
 		showError("Error saving profile settings");
@@ -920,12 +956,13 @@ async function saveAdvancedSettings() {
 			body: JSON.stringify({ updates }),
 		});
 
-		if (response.ok) {
-			showSuccess("Advanced settings saved");
-			loadAdvancedSettingsFromData(updates);
-		} else {
-			showError("Error saving advanced settings");
+		const result = await readJsonResponse(response);
+		if (!response.ok || result.status !== "success") {
+			throw new Error(getApiError(result, response.status));
 		}
+		Object.assign(appConfig.profile, updates);
+		showSuccess("Advanced settings saved");
+		loadAdvancedSettingsFromData(updates);
 	} catch (error) {
 		console.error("Error saving advanced settings:", error);
 		showError("Error saving advanced settings");
@@ -1002,16 +1039,19 @@ async function clearChatHistory() {
 	clearBtn.disabled = true;
 
 	try {
-		const response = await fetch("/api/clear_chat", { method: "POST" });
-		if (response.ok) {
-			showSuccess("Chat history cleared successfully!");
-			loadProfileData();
-		} else {
-			showError("Error clearing chat history");
+		const response = await fetch("/api/clear_chat", {
+			method: "POST",
+			headers: { Accept: "application/json" },
+		});
+		const result = await readJsonResponse(response);
+		if (!response.ok || result.status !== "success") {
+			throw new Error(getApiError(result, response.status));
 		}
+		showSuccess("Chat history cleared successfully!");
+		await loadProfileData();
 	} catch (error) {
 		console.error("Error clearing chat:", error);
-		showError("Error clearing chat history");
+		showError(`Could not clear chat history: ${error.message}`);
 	} finally {
 		clearBtn.textContent = originalText;
 		clearBtn.disabled = false;
@@ -1099,15 +1139,19 @@ async function saveLocation() {
 	try {
 		const response = await fetch("/api/update_location", {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
+			headers: {
+				"Content-Type": "application/json",
+				Accept: "application/json",
+			},
 			body: JSON.stringify({ lat, lon }),
 		});
-		const data = await response.json();
-		if (response.ok && data.status === "success") {
-			showSuccess(data.message || "Location saved");
-		} else {
-			showError(data.message || data.detail || "Failed to save location");
+		const data = await readJsonResponse(response);
+		if (!response.ok || data.status !== "success") {
+			throw new Error(getApiError(data, response.status));
 		}
+		appConfig.profile.location_lat = lat;
+		appConfig.profile.location_lon = lon;
+		showSuccess(data.message || "Location saved");
 	} catch (e) {
 		console.error("Error saving location:", e);
 		showError("Failed to save location");
@@ -1246,9 +1290,11 @@ async function loadGlobalKnowledge() {
 		const response = await fetch("/api/global-knowledge", {
 			headers: { Accept: "application/json" },
 		});
-		if (!response.ok) throw new Error("Failed to load Global Knowledge");
-		const data = await response.json();
-		renderGlobalKnowledge(data.entries || []);
+		const data = await readJsonResponse(response);
+		if (!response.ok || data.status === "error") {
+			throw new Error(getApiError(data, response.status));
+		}
+		renderGlobalKnowledge(data.entries || data || []);
 	} catch (error) {
 		setKnowledgeStatus(error.message, true);
 	}
@@ -1349,7 +1395,10 @@ async function saveKnowledgeEntry(event) {
 				body: JSON.stringify(payload),
 			},
 		);
-		if (!response.ok) throw new Error("Failed to save Global Knowledge entry");
+		const data = await readJsonResponse(response);
+		if (!response.ok || data.status !== "success") {
+			throw new Error(getApiError(data, response.status));
+		}
 		resetKnowledgeForm();
 		await loadGlobalKnowledge();
 		setKnowledgeStatus("Global Knowledge saved.");
@@ -1365,8 +1414,10 @@ async function deleteKnowledgeEntry(id) {
 			`/api/global-knowledge/${encodeURIComponent(id)}`,
 			{ method: "DELETE", headers: { Accept: "application/json" } },
 		);
-		if (!response.ok)
-			throw new Error("Failed to delete Global Knowledge entry");
+		const data = await readJsonResponse(response);
+		if (!response.ok || data.status !== "success") {
+			throw new Error(getApiError(data, response.status));
+		}
 		await loadGlobalKnowledge();
 		setKnowledgeStatus("Global Knowledge entry deleted.");
 	} catch (error) {

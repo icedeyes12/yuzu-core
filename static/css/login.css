@@ -61,54 +61,6 @@
 	gap: var(--space-4);
 }
 
-.glass-panel {
-	background: rgba(22, 27, 34, 0.6);
-	backdrop-filter: blur(20px);
-	-webkit-backdrop-filter: blur(20px);
-	border: 1px solid rgba(255, 255, 255, 0.1);
-	box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-	position: relative;
-	z-index: 10;
-}
-
-.decorative-blob {
-	position: absolute;
-	width: 300px;
-	height: 300px;
-	background: linear-gradient(135deg, var(--accent), var(--accent-support));
-	border-radius: 50%;
-	filter: blur(80px);
-	opacity: 0.5;
-	top: -50px;
-	left: -50px;
-	z-index: 0;
-	animation: float 10s var(--motion-easing-standard) var(--motion-repeat-loop);
-}
-
-.decorative-blob.blob-2 {
-	top: auto;
-	left: auto;
-	bottom: -50px;
-	right: -50px;
-	background: linear-gradient(135deg, var(--accent-subtle), var(--accent));
-	animation-delay: -5s;
-}
-
-@keyframes float {
-	0% {
-		transform: translate(0, 0) scale(1);
-	}
-	33% {
-		transform: translate(30px, -50px) scale(1.1);
-	}
-	66% {
-		transform: translate(-20px, 20px) scale(0.9);
-	}
-	100% {
-		transform: translate(0, 0) scale(1);
-	}
-}
-
 .login-btn {
 	display: flex;
 	align-items: center;
