@@ -164,6 +164,10 @@ async def api_proxy_models(
     provider: str, request: Request, user_id: str = Depends(get_current_user)
 ):
     try:
+        ai_manager = await get_ai_manager()
+        if provider not in ai_manager.get_available_providers():
+            raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
+
         api_key = request.headers.get("X-Provider-Key", "")
         base_url = request.headers.get("X-Provider-BaseUrl", "")
 
@@ -201,15 +205,13 @@ async def api_proxy_models(
             except Exception as e:
                 log.warning("Failed to fetch models from %s: %s", url, e)
 
-        # Fallback: custom providers get dummy models so the UI is not stuck
-        if provider.startswith("custom"):
-            return {"status": "success", "models": ["custom-model-1", "custom-model-2"]}
-
         return {"status": "error", "message": "Could not fetch models"}
 
+    except HTTPException:
+        raise
     except Exception as e:
         log.error("Error in proxy models: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/providers/set_preferred")
@@ -221,9 +223,11 @@ async def api_set_preferred_provider(
             user_id, request.provider_name, request.model_name
         )
         return {"status": "success", "message": result}
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
         log.error("Error setting preferred provider: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/providers/test_connection")
