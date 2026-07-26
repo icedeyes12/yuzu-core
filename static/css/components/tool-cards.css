@@ -18,8 +18,8 @@ details.tool-call-indicator > summary {
 }
 
 .tool-result-content {
-	margin-top: 0.5em;
-	padding: 0.5em;
+	margin-top: var(--space-2);
+	padding: var(--space-2);
 }
 
 /* Terminal card */
@@ -28,9 +28,9 @@ details.tool-call-indicator > summary {
 	font-size: 0.85em;
 	background: var(--surface-code);
 	border: 1px solid var(--border-normal);
-	border-radius: 6px;
-	margin: 0.5em 0;
-	padding: 0.6em 0.8em;
+	border-radius: var(--radius-md);
+	margin: var(--space-2) 0;
+	padding: var(--space-2) var(--space-3);
 	overflow-x: auto;
 }
 .terminal-card .terminal-header {
@@ -61,11 +61,11 @@ details.tool-call-indicator > summary {
 
 /* Weather card */
 .weather-card {
-	padding: 0.9em;
+	padding: var(--space-3);
 	background: var(--surface-subtle);
 	border: 1px solid var(--border-normal);
-	border-radius: 10px;
-	margin: 0.5em 0;
+	border-radius: var(--radius-md);
+	margin: var(--space-2) 0;
 }
 .weather-card__header,
 .weather-card__hero,
@@ -107,16 +107,16 @@ details.tool-call-indicator > summary {
 	font-size: 0.9em;
 }
 .weather-card__forecast {
-	gap: 0.5em;
-	margin-top: 0.9em;
+	gap: var(--space-2);
+	margin-top: var(--space-3);
 	overflow-x: auto;
 	align-items: stretch;
 }
 .weather-card__day {
 	min-width: 6.5em;
-	padding: 0.55em;
+	padding: var(--space-2);
 	border: 1px solid var(--border-normal);
-	border-radius: 7px;
+	border-radius: var(--radius-sm);
 	text-align: center;
 }
 .weather-card__day-name,
@@ -131,7 +131,7 @@ details.tool-call-indicator > summary {
 /* Image card */
 .image-card {
 	display: block;
-	margin: 0.5em 0;
+	margin: var(--space-2) 0;
 }
 .image-card img {
 	max-width: 100%;
@@ -146,16 +146,16 @@ details.tool-call-indicator > summary {
 
 /* Generic card */
 .generic-card {
-	padding: 0.5em 0.8em;
+	padding: var(--space-2) var(--space-3);
 	background: rgba(255, 255, 255, 0.03);
 	border: 1px solid var(--border-normal);
-	border-radius: 6px;
-	margin: 0.5em 0;
+	border-radius: var(--radius-md);
+	margin: var(--space-2) 0;
 }
 .generic-card dl {
 	display: grid;
 	grid-template-columns: max-content 1fr;
-	gap: 0.2em 0.8em;
+	gap: var(--space-1) var(--space-3);
 	margin: 0;
 }
 .generic-card dt {
