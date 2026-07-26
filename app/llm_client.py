@@ -252,9 +252,6 @@ async def _send_to_provider(
     except (KeyError, IndexError):
         text = ""
 
-    if response_warnings:
-        raw_response = None
-
     if text:
         log.info(
             "chat %s/%s | tools=%d | %.1fs ok",
