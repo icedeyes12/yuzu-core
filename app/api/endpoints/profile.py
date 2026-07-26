@@ -243,7 +243,9 @@ async def api_refresh_provider_models(
         raise
     except Exception as e:
         log.error("Error refreshing models for %s: %s", provider, e)
-        raise HTTPException(status_code=502, detail="Could not refresh provider models") from e
+        raise HTTPException(
+            status_code=502, detail="Could not refresh provider models"
+        ) from e
 
 
 @router.post("/providers/set_preferred")
@@ -342,7 +344,9 @@ async def api_update_location(
         await Database.update_profile(updates, user_id)
         return {
             "status": "success",
-            "message": "Location cleared" if request.lat is None else "Location updated",
+            "message": "Location cleared"
+            if request.lat is None
+            else "Location updated",
         }
     except HTTPException:
         raise

@@ -130,10 +130,6 @@ async function loadProviderSettings() {
 		if (!grid) return;
 		grid.innerHTML = "";
 
-		const byok = JSON.parse(
-			localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}",
-		);
-
 		setTextIfExists(
 			"current-provider",
 			data.current_provider && data.current_model
@@ -171,7 +167,7 @@ async function loadProviderSettings() {
 					<div class="form-group">
 						<label for="key-${provider}">API Key (Saved in browser)</label>
 						<div class="provider-input-row">
-							<input type="password" id="key-${provider}" class="provider-flex-input" placeholder="sk-..." value="${byok[provider]?.api_key || ""}">
+							<input type="password" id="key-${provider}" class="provider-flex-input" placeholder="sk-..." autocomplete="off">
 							<button class="btn btn-secondary btn-sm save-byok-btn" type="button" data-provider="${provider}">Save Key</button>
 						</div>
 					</div>
@@ -181,7 +177,7 @@ async function loadProviderSettings() {
 				innerHtml += `
 					<div class="form-group">
 						<label for="url-${provider}">Base URL</label>
-						<input type="text" id="url-${provider}" placeholder="https://api.openai.com/v1" value="${byok[provider]?.base_url || ""}">
+						<input type="text" id="url-${provider}" placeholder="https://api.openai.com/v1" autocomplete="url">
 					</div>
 				`;
 			}
@@ -192,28 +188,6 @@ async function loadProviderSettings() {
 						<div class="provider-input-row">
 							<select id="model-${provider}" class="form-select provider-flex-input">
 `;
-
-			const modelsForThisProv = getCachedModels(modelCatalog, provider).slice();
-			if (modelsForThisProv.length > 0) {
-				if (
-					isActive &&
-					data.current_model &&
-					!modelsForThisProv.includes(data.current_model)
-				) {
-					modelsForThisProv.unshift(data.current_model);
-				}
-				modelsForThisProv.forEach((m) => {
-					const selected =
-						isActive && m === data.current_model ? "selected" : "";
-					innerHtml += `<option value="${m}" ${selected}>${m}</option>`;
-				});
-			} else {
-				if (isActive && data.current_model) {
-					innerHtml += `<option value="${data.current_model}" selected>${data.current_model}</option>`;
-				} else {
-					innerHtml += `<option value="">Fetch models first...</option>`;
-				}
-			}
 
 			innerHtml += `
 							</select>
@@ -228,6 +202,11 @@ async function loadProviderSettings() {
 			`;
 
 			card.innerHTML = innerHtml;
+			populateModelSelect(
+				card.querySelector(`#model-${provider}`),
+				getCachedModels(modelCatalog, provider),
+				isActive ? data.current_model || "" : "",
+			);
 			grid.appendChild(card);
 
 			// Add accordion toggle
@@ -328,6 +307,29 @@ function setCachedModels(catalog, provider, models) {
 		fetchedAt: Date.now(),
 	};
 }
+function populateModelSelect(select, models, currentModel = "") {
+	if (!select) return;
+	select.replaceChildren();
+	const options = [
+		...new Set(models.filter((model) => typeof model === "string" && model)),
+	];
+	if (currentModel && !options.includes(currentModel))
+		options.unshift(currentModel);
+	if (options.length === 0) {
+		const empty = document.createElement("option");
+		empty.value = "";
+		empty.textContent = "Refresh models to choose one";
+		select.appendChild(empty);
+		return;
+	}
+	options.forEach((model) => {
+		const option = document.createElement("option");
+		option.value = model;
+		option.textContent = model;
+		option.selected = model === currentModel;
+		select.appendChild(option);
+	});
+}
 
 function invalidateModelCache(provider) {
 	const catalog = readModelCatalog();
@@ -373,18 +375,7 @@ async function fetchModelsForProvider(provider) {
 			const models = [...new Set(data.models.filter(Boolean))];
 			setCachedModels(catalog, provider, models);
 			saveModelCatalog(catalog);
-			if (select) {
-				select.innerHTML = "";
-				const list = models.slice();
-				if (previous && !list.includes(previous)) list.unshift(previous);
-				list.forEach((model) => {
-					const opt = document.createElement("option");
-					opt.value = model;
-					opt.textContent = model;
-					if (model === previous) opt.selected = true;
-					select.appendChild(opt);
-				});
-			}
+			if (select) populateModelSelect(select, models, previous);
 			showSuccess(`Models loaded for ${provider}.`);
 		} else {
 			showError(`Failed to fetch models: ${data.message || "Unknown error"}`);
