@@ -15,7 +15,7 @@ from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
 
 logger = logging.getLogger(__name__)
 
-QWEN_IMAGE_EDIT_ENDPOINT = "https://vonkaiser-qwen-image-edit-2511.chutes.ai/generate"
+
 
 
 TOOL_DEFINITION = ToolDefinition(
@@ -142,15 +142,27 @@ async def execute(arguments, **kwargs) -> dict:
         )
 
     try:
-        ctx = LLMContext.from_profile(profile, override_provider="chutes")
+        image_provider = profile.get("image_edit_provider") or profile.get("image_provider")
+        image_profile = {
+            **profile,
+            "providers_config": {
+                **(profile.get("providers_config") or {}),
+                "preferred_provider": image_provider,
+                "preferred_model": profile.get("image_model"),
+            },
+        }
+        ctx = LLMContext.from_profile(image_profile)
         api_key = ctx.api_key
-        if not api_key:
+        endpoint = profile.get("image_edit_endpoint")
+        image_model = profile.get("image_model")
+        if not api_key or not image_provider or not endpoint or not image_model:
             return error_result(
-                "No Chutes API key available",
+                "NOT CONFIGURED",
                 TOOL_DEFINITION,
-                f"/image_edit {prompt}",
+                f"/edit {prompt}",
                 partner_name,
             )
+
 
         logger.debug(f"[IMAGE EDIT] Editing: {image_path}")
         logger.debug(f"[IMAGE EDIT] Prompt: {prompt}")
@@ -167,7 +179,7 @@ async def execute(arguments, **kwargs) -> dict:
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                QWEN_IMAGE_EDIT_ENDPOINT,
+                endpoint,
                 headers=headers,
                 json=payload,
                 timeout=300,

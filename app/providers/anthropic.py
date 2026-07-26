@@ -91,7 +91,7 @@ class AnthropicProvider(AIProvider):
         payload: dict = {
             "model": ctx.model,
             "messages": anthropic_messages,
-            "max_tokens": kwargs.get("max_tokens", 4096),
+            "max_tokens": kwargs.get("max_tokens"),
             "stream": stream,
         }
         if system_text:

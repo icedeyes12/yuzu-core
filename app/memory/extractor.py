@@ -188,6 +188,7 @@ def build_extraction_prompt(messages: list[dict[str, Any]]) -> tuple[str, str]:
 
 async def extract_batch_async(
     messages: list[dict[str, Any]],
+    profile: dict[str, Any] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     from app.memory.memory import _memory_llm_call
     from app.providers import get_ai_manager
@@ -200,7 +201,7 @@ async def extract_batch_async(
             {"role": "user", "content": user_prompt},
         ],
         timeout=90,
-        max_tokens=5000,
         response_format=_EXTRACTION_SCHEMA,
+        profile=profile,
     )
     return normalize_extraction(_parse_extraction_response(response), len(messages))

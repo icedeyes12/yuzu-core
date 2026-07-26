@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.core.llm_context import LLMContext
 from app.db import Database
 from app.providers import get_ai_manager, reload_ai_manager
 
@@ -11,30 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 class ConfigService:
-    @staticmethod
-    def get_vision_capabilities() -> dict[str, Any]:
-        from app.tools import multimodal_tools
-
-        capabilities: dict[str, Any] = {
-            "has_vision": False,
-            "vision_provider": None,
-            "vision_model": None,
-            "has_image_generation": False,
-            "image_generation_provider": None,
-        }
-
-        vision_provider, vision_model = multimodal_tools.get_best_vision_provider()
-        if vision_provider:
-            capabilities["has_vision"] = True
-            capabilities["vision_provider"] = vision_provider
-            capabilities["vision_model"] = vision_model
-
-        if LLMContext.from_profile({}, override_provider="openrouter").api_key:
-            capabilities["has_image_generation"] = True
-            capabilities["image_generation_provider"] = "openrouter"
-
-        return capabilities
-
     @staticmethod
     async def get_ai_providers_payload(
         user_id: str, profile: dict | None = None
@@ -48,8 +23,8 @@ class ConfigService:
         return {
             "available_providers": ai_manager.get_available_providers(),
             "all_models": await ai_manager.get_all_models(),
-            "current_provider": providers_config.get("preferred_provider", "ollama"),
-            "current_model": providers_config.get("preferred_model", "glm-4.6:cloud"),
+            "current_provider": providers_config.get("preferred_provider"),
+            "current_model": providers_config.get("preferred_model"),
         }
 
     @staticmethod
@@ -78,21 +53,22 @@ class ConfigService:
         if profile is None:
             profile = await Database.get_profile(user_id)
 
-        from app.tools.multimodal import multimodal_tools
-
-        vision_capabilities = ConfigService.get_vision_capabilities()
+        ai_manager = await get_ai_manager()
+        capabilities = ai_manager.get_all_provider_capabilities()
+        models = await ai_manager.get_all_models()
+        vision_capabilities = {
+            provider: metadata
+            for provider, metadata in capabilities.items()
+            if metadata.get("supports_vision")
+        }
         providers_config = profile.get("providers_config", {})
-        vision_prefs = providers_config.get("vision_model_preferences", {})
-
-        vision_models_by_provider = {}
-        for provider in ["chutes", "openrouter"]:
-            vision_models_by_provider[provider] = (
-                multimodal_tools.get_available_vision_models(provider)
-            )
+        vision_prefs = providers_config.get("vision_model_preferences") or {}
 
         return {
             "capabilities": vision_capabilities,
-            "models_by_provider": vision_models_by_provider,
+            "models_by_provider": {
+                provider: models.get(provider, []) for provider in vision_capabilities
+            },
             "current_provider": vision_prefs.get("provider"),
             "current_model": vision_prefs.get("model"),
         }
@@ -111,7 +87,11 @@ class ConfigService:
             "providers_config": profile["providers_config"],
             "context": ctx,
             "image_model": profile["image_model"],
+            "image_provider": profile.get("image_provider"),
             "vision_model": profile["vision_model"],
+            "image_edit_provider": profile.get("image_edit_provider"),
+            "image_endpoint": profile.get("image_endpoint"),
+            "image_edit_endpoint": profile.get("image_edit_endpoint"),
             "vision_model_preferences": profile.get("providers_config", {}).get(
                 "vision_model_preferences", {}
             ),

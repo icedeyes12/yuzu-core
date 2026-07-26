@@ -23,6 +23,7 @@ class OpenRouterProvider(AIProvider):
             supports_streaming_fc=True,  # FC9: streaming tool-call parsing implemented
             supports_tool_call_parsing=True,
             supports_structured_system_content=True,
+            supports_vision=True,
         )
         self.available_models = [
             "deepseek/deepseek-chat-v3-0324:free",
@@ -122,15 +123,11 @@ class OpenRouterProvider(AIProvider):
                     messages, last_user_message, vision_messages
                 )
 
-        temperature = kwargs.get("temperature", 0.73)
+        temperature = kwargs.get("temperature")
         max_tokens = kwargs.get("max_tokens")
-        top_p = kwargs.get("top_p", 0.9)
-        top_k = kwargs.get("top_k", 40)
-        typical_p = kwargs.get("typical_p", 0.8)
-
-        if ctx.model.endswith(":free"):
-            max_tokens = min(max_tokens or 2048, 2048)
-            temperature = min(temperature, 0.8)
+        top_p = kwargs.get("top_p")
+        top_k = kwargs.get("top_k")
+        typical_p = kwargs.get("typical_p")
 
         headers = {
             "Authorization": f"Bearer {self._require_api_key(ctx)}",

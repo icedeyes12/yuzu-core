@@ -75,8 +75,12 @@ SCHEMA_DDL: tuple[str, ...] = (
         session_history JSONB NOT NULL DEFAULT '{}',
         providers_config JSONB NOT NULL DEFAULT '{}',
         context JSONB NOT NULL DEFAULT '{}',
-        image_model TEXT NOT NULL DEFAULT 'hunyuan',
-        vision_model TEXT NOT NULL DEFAULT 'moonshotai/kimi-k2.5',
+        image_model TEXT,
+        image_provider TEXT,
+        image_endpoint TEXT,
+        image_edit_provider TEXT,
+        image_edit_endpoint TEXT,
+        vision_model TEXT,
         location_lat REAL,
         location_lon REAL,
         created_at TIMESTAMP DEFAULT NOW(),
@@ -84,6 +88,12 @@ SCHEMA_DDL: tuple[str, ...] = (
         timestamp TIMESTAMP DEFAULT NOW()
     )
     """,
+    "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_endpoint TEXT",
+    "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_edit_endpoint TEXT",
+    "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_provider TEXT",
+    "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_edit_provider TEXT",
+    "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_model TEXT",
+    "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS vision_model TEXT",
     # ── global_knowledge_entries (explicit user-managed facts) ──
     """
     CREATE TABLE IF NOT EXISTS global_knowledge_entries (
@@ -565,7 +575,11 @@ _PROFILE_TEXT_FIELDS = (
     "partner_name",
     "theme",
     "image_model",
+    "image_provider",
     "vision_model",
+    "image_edit_provider",
+    "image_endpoint",
+    "image_edit_endpoint",
 )
 _PROFILE_LOCATION_FIELDS = {
     "location_lat": ("REAL", float),
@@ -645,8 +659,12 @@ def parse_profile_row(row: dict | None) -> dict:
         "session_history": _parse_json(row.get("session_history")),
         "providers_config": _parse_json(row.get("providers_config")),
         "context": ctx,
-        "image_model": row.get("image_model", "qwen_image"),
-        "vision_model": row.get("vision_model", "moonshotai/kimi-k2.5"),
+        "image_model": row.get("image_model"),
+        "image_provider": row.get("image_provider"),
+        "image_endpoint": row.get("image_endpoint"),
+        "image_edit_provider": row.get("image_edit_provider"),
+        "image_edit_endpoint": row.get("image_edit_endpoint"),
+        "vision_model": row.get("vision_model"),
         "location_lat": row.get("location_lat"),
         "location_lon": row.get("location_lon"),
         "created_at": row.get("created_at"),

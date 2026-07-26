@@ -41,11 +41,11 @@ class CerebrasProvider(AIProvider):
 
         try:
             messages = self._normalize_messages(messages)
-            temperature = kwargs.get("temperature", 0.69)
+            temperature = kwargs.get("temperature")
             max_tokens = kwargs.get("max_tokens")
-            top_p = kwargs.get("top_p", 0.7)
-            top_k = kwargs.get("top_k", 40)
-            typical_p = kwargs.get("typical_p", 0.8)
+            top_p = kwargs.get("top_p")
+            top_k = kwargs.get("top_k")
+            typical_p = kwargs.get("typical_p")
 
             headers = {
                 "Authorization": f"Bearer {self._require_api_key(ctx)}",
@@ -88,11 +88,11 @@ class CerebrasProvider(AIProvider):
 
         try:
             messages = self._normalize_messages(messages)
-            temperature = kwargs.get("temperature", 0.69)
+            temperature = kwargs.get("temperature")
             max_tokens = kwargs.get("max_tokens")
-            top_p = kwargs.get("top_p", 0.7)
-            top_k = kwargs.get("top_k", 40)
-            typical_p = kwargs.get("typical_p", 0.8)
+            top_p = kwargs.get("top_p")
+            top_k = kwargs.get("top_k")
+            typical_p = kwargs.get("typical_p")
 
             headers = {
                 "Authorization": f"Bearer {self._require_api_key(ctx)}",

@@ -87,7 +87,6 @@ class TestBuildProfileUpdate:
         assert "location_lon = %s::REAL" in query
         assert params[:2] == [-6.2, 106.8]
 
-
     def test_affection_coerced_to_int(self):
         result = build_profile_update({"affection": "99"})
         assert result is not None

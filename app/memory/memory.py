@@ -98,14 +98,8 @@ async def _memory_llm_call(ai_manager, messages: list[dict], **kwargs) -> str | 
         logger.warning(f"[MEMORY_LLM] Timeout after {kwargs.get('timeout', 30)}s: {e}")
         return None
     except Exception as e:
-        from app.core.context import MissingProviderKeyError
-
-        if isinstance(e, MissingProviderKeyError):
-            # Config error — re-raise so callers abort instead of retrying
-            raise
-        # Log the actual error reason instead of silently returning None
         error_type = type(e).__name__
-        logger.warning(f"[MEMORY_LLM] Call failed ({error_type}): {e}")
+        logger.info("[MEMORY_LLM] skipped (%s)", error_type)
         return None
 
 
@@ -312,11 +306,13 @@ async def mark_segmentation_done_async(
 # ── Single-pass extraction ────────────────────────────────────────────────────
 
 
-async def extract_memory_batch_async(messages: list[dict]) -> dict:
+async def extract_memory_batch_async(
+    messages: list[dict], profile: dict | None = None
+) -> dict:
     """Extract episodes and claims with one structured LLM call."""
     from app.memory.extractor import extract_batch_async
 
-    return await extract_batch_async(messages)
+    return await extract_batch_async(messages, profile=profile)
 
 
 # ── Main pipeline runner ───────────────────────────────────────────────────────
@@ -336,6 +332,9 @@ async def run_memory_pipeline_async(
     Returns summary: {episodes: n, claims: n, llm_calls: n}
     """
     logger.info(f"Starting for session {session_id}, count={message_count}")
+    from app.db import Database
+
+    profile = await Database.get_profile(user_id)
 
     # Get current state for tracking
     state = await get_pipeline_state_async(session_id, user_id)
@@ -412,7 +411,7 @@ async def run_memory_pipeline_async(
                 "processed_messages": 0,
             }
 
-        extracted = await extract_memory_batch_async(unsegmented)
+        extracted = await extract_memory_batch_async(unsegmented, profile=profile)
         if not extracted["episodes"] and not extracted["claims"]:
             logger.debug("No durable memory extracted")
             if unsegmented:

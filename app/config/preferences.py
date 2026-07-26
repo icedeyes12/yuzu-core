@@ -11,7 +11,7 @@ class UserPreferences:
     persona: str = ""
     theme: str = "default"
     affection: int = 50
-    preferred_provider: str = "ollama"
+    preferred_provider: str = ""
     preferred_model: str = ""
     vision_model_preferences: dict[str, Any] = field(default_factory=dict)
     display_name: str = ""
@@ -34,7 +34,7 @@ class UserPreferences:
             persona="",
             theme=row.get("theme") or "default",
             affection=int(row.get("affection") or 50),
-            preferred_provider=providers_config.get("preferred_provider") or "ollama",
+            preferred_provider=providers_config.get("preferred_provider") or "",
             preferred_model=providers_config.get("preferred_model") or "",
             vision_model_preferences=vision_prefs,
             display_name=row.get("display_name") or "",

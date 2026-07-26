@@ -13,8 +13,7 @@ from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
 
 logger = logging.getLogger(__name__)
 
-Z_TURBO_ENDPOINT = "https://vonkaiser-z-image-turbo.chutes.ai/generate"
-QWEN_IMAGE_ENDPOINT = "https://vonkaiser-qwen-image-2512.chutes.ai/generate"
+
 
 
 TOOL_DEFINITION = ToolDefinition(
@@ -47,25 +46,29 @@ async def execute(arguments, **kwargs):
     partner_name = profile.get("partner_name", "Yuzu")
 
     try:
-        ctx = LLMContext.from_profile(profile, override_provider="chutes")
+        image_provider = profile.get("image_provider")
+        image_profile = {
+            **profile,
+            "providers_config": {
+                **(profile.get("providers_config") or {}),
+                "preferred_provider": image_provider,
+                "preferred_model": profile.get("image_model"),
+            },
+        }
+        ctx = LLMContext.from_profile(image_profile)
         api_key = ctx.api_key
-        if not api_key:
+        endpoint = profile.get("image_endpoint")
+        image_model = profile.get("image_model")
+        if not api_key or not image_provider or not image_model or not endpoint:
             return error_result(
-                "No Chutes API key available",
+                "NOT CONFIGURED",
                 TOOL_DEFINITION,
                 f"/imagine {prompt}",
                 partner_name,
             )
 
-        image_model = profile.get("image_model", "qwen_image")
         logger.debug(f"[IMAGE TOOL] Model: {image_model}")
-
-        if image_model == "z_turbo":
-            endpoint = Z_TURBO_ENDPOINT
-            payload = {"prompt": prompt}
-        else:
-            endpoint = QWEN_IMAGE_ENDPOINT
-            payload = {"prompt": prompt}
+        payload = {"prompt": prompt, "model": image_model}
 
         logger.debug(f"[IMAGE TOOL] Endpoint: {endpoint}")
         logger.debug(
@@ -110,7 +113,7 @@ async def execute(arguments, **kwargs):
         )
         if not safe_prompt:
             safe_prompt = "image"
-        ext = "jpg" if image_model == "qwen_image" else "png"
+        ext = "png"
         filename = f"{timestamp}_{safe_prompt}.{ext}"
 
         filepath = (images_dir / filename).resolve()
