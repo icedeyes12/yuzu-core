@@ -54,10 +54,7 @@ function initializeHomePage() {
 	if (footerLink) {
 		footerLink.addEventListener("click", function () {
 			// Add click animation
-			this.style.transform = "scale(0.95)";
-			setTimeout(() => {
-				this.style.transform = "scale(1)";
-			}, 150);
+			this.classList.add("footer-click");
 		});
 	}
 
@@ -101,7 +98,7 @@ async function loadRecentSessions() {
 		// Add animations to session items
 		setTimeout(() => {
 			document.querySelectorAll(".session-item").forEach((item, index) => {
-				item.style.animationDelay = `${index * 0.1}s`;
+				item.style.setProperty("--animation-delay", `${index * 0.1}s`);
 				item.classList.add("fade-in-up");
 			});
 		}, 100);
@@ -133,30 +130,24 @@ function initializeHomeAnimations() {
 	const observer = new IntersectionObserver((entries) => {
 		entries.forEach((entry) => {
 			if (entry.isIntersecting) {
-				entry.target.style.opacity = "1";
-				entry.target.style.transform = "translateY(0)";
+				entry.target.classList.add("is-visible");
 			}
 		});
 	}, observerOptions);
 
 	// Observe all cards
 	document.querySelectorAll(".card").forEach((card, index) => {
-		card.style.opacity = "0";
-		card.style.transform = "translateY(30px)";
-		card.style.transition = `opacity 0.6s ease ${index * 0.1}s, transform 0.6s ease ${index * 0.1}s`;
+		card.classList.add("animate-on-scroll");
+		card.style.setProperty("--animation-delay", `${index * 0.1}s`);
 		observer.observe(card);
 	});
 
 	// Add header animation
 	const header = document.querySelector(".home-header");
 	if (header) {
-		header.style.opacity = "0";
-		header.style.transform = "translateY(-20px)";
-		header.style.transition = "opacity 0.8s ease, transform 0.8s ease";
-
+		header.classList.add("animate-on-load");
 		setTimeout(() => {
-			header.style.opacity = "1";
-			header.style.transform = "translateY(0)";
+			header.classList.add("is-visible");
 		}, 300);
 	}
 
@@ -173,21 +164,11 @@ function createRippleEffect(event, element) {
 	const x = event.clientX - rect.left - size / 2;
 	const y = event.clientY - rect.top - size / 2;
 
-	ripple.style.cssText = `
-        position: absolute;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.3);
-        transform: scale(0);
-        animation: ripple-animation 0.6s linear;
-        width: ${size}px;
-        height: ${size}px;
-        left: ${x}px;
-        top: ${y}px;
-        pointer-events: none;
-    `;
-
-	element.style.position = "relative";
-	element.style.overflow = "hidden";
+	ripple.className = "card-ripple";
+	ripple.style.setProperty("--ripple-size", `${size}px`);
+	ripple.style.setProperty("--ripple-x", `${x}px`);
+	ripple.style.setProperty("--ripple-y", `${y}px`);
+	element.classList.add("ripple-container");
 	element.appendChild(ripple);
 
 	setTimeout(() => {
@@ -196,81 +177,7 @@ function createRippleEffect(event, element) {
 }
 
 function createBackgroundPattern() {
-	// Create a subtle animated background
-	const style = document.createElement("style");
-	style.textContent = `
-        @keyframes float {
-            0%, 100% { transform: translateY(0px) rotate(0deg); }
-            50% { transform: translateY(-20px) rotate(180deg); }
-        }
-        
-        .home-body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: 
-                radial-gradient(circle at 20% 80%, rgba(168, 200, 255, 0.1) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(255, 184, 198, 0.1) 0%, transparent 50%),
-                radial-gradient(circle at 40% 40%, rgba(184, 225, 221, 0.05) 0%, transparent 50%);
-            animation: float 20s ease-in-out infinite;
-            pointer-events: none;
-            z-index: -1;
-        }
-        
-        @keyframes ripple-animation {
-            to {
-                transform: scale(4);
-                opacity: 0;
-            }
-        }
-        
-        .fade-in-up {
-            animation: fadeInUp 0.6s ease forwards;
-        }
-        
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .no-sessions, .error-state {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-secondary);
-        }
-        
-        .hint {
-            font-size: 0.9rem;
-            opacity: 0.7;
-            margin-top: 0.5rem;
-        }
-        
-        .retry-btn {
-            background: var(--action-primary);
-            color: var(--action-text);
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            margin-top: 1rem;
-            font-weight: 600;
-        }
-        
-        .retry-btn:hover {
-            transform: translateY(-1px);
-        }
-    `;
-
-	document.head.appendChild(style);
+	document.body.classList.add("home-body");
 }
 
 // Performance optimization: Debounce resize events

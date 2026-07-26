@@ -85,6 +85,10 @@
 	margin-bottom: var(--space-6);
 }
 
+.sidebar-section.is-visible {
+	display: block;
+}
+
 .sidebar-section h3 {
 	margin: 0 0 0.8rem 0;
 	font-size: 0.95rem;
