@@ -355,7 +355,8 @@ async function fetchModelsForProvider(provider) {
 		if (provConfig.base_url)
 			headers["X-Provider-BaseUrl"] = provConfig.base_url;
 
-		const response = await fetch(`/api/proxy/models/${provider}`, {
+		const response = await fetch(`/api/proxy/models/${provider}/refresh`, {
+			method: "POST",
 			headers: { ...headers, Accept: "application/json" },
 		});
 		const data = await readJsonResponse(response);
