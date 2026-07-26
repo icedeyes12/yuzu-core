@@ -7,11 +7,8 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Any
 
 import requests
-
-from app.core.llm_context import LLMContext
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +24,6 @@ class MultimodalTools:
 
         # Ensure cache directory exists
         self.IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
 
     def _clean_cache(self):
         """Remove expired cache entries"""
@@ -457,7 +453,6 @@ class MultimodalTools:
                 return image_path, None
             return None, "No image path in result"
         return None, result.get("error", "Image generation failed")
-
 
     def should_use_vision(
         self, user_message: str, current_provider: str, current_model: str
