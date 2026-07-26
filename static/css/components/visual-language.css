@@ -1,4 +1,4 @@
-/* Visual language: identity placeholders remain separate from UI icons and status visuals. */
+/* Visual language: identity placeholders, badges, and status visuals stay separate from UI icons. */
 
 .provider-identity-placeholder,
 .provider-identity-placeholder--small {
@@ -8,7 +8,7 @@
 	border: 1px solid var(--border-normal);
 	border-radius: var(--radius-md);
 	background: var(--surface-subtle);
-	color: var(--text-secondary);
+	color: var(--provider-accent, var(--text-secondary));
 	font-size: 0.7rem;
 	font-weight: 700;
 	letter-spacing: 0.04em;
@@ -26,6 +26,75 @@
 	height: 1.25rem;
 	border-radius: var(--radius-sm);
 	font-size: 0.55rem;
+}
+
+.provider-identity {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.provider-identity__name {
+	color: var(--text-primary);
+}
+
+.provider-title {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	flex-wrap: wrap;
+}
+
+.provider-badge,
+.provider-identity-badge {
+	display: inline-flex;
+	align-items: center;
+	min-height: 1.25rem;
+	border: 1px solid currentColor;
+	border-radius: var(--radius-sm);
+	padding: 0 var(--space-2);
+	background: var(--surface-subtle);
+	color: var(--text-secondary);
+	font-size: 0.65rem;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	line-height: 1;
+	text-transform: uppercase;
+}
+
+.provider-identity-badge--official,
+.provider-badge--official {
+	color: var(--status-success);
+}
+
+.provider-identity-badge--community,
+.provider-identity-badge--preview,
+.provider-badge--community,
+.provider-badge--experimental {
+	color: var(--status-info);
+}
+
+.provider-identity-badge--custom,
+.provider-identity-badge--local,
+.provider-badge--custom {
+	color: var(--accent);
+}
+
+.provider-identity-badge--deprecated,
+.provider-badge--deprecated {
+	color: var(--status-danger);
+}
+
+.provider-identity-badge--unknown {
+	color: var(--text-muted);
+}
+
+.provider-family {
+	display: block;
+	margin-top: var(--space-1);
+	color: var(--text-muted);
+	font-size: 0.75rem;
+	font-weight: 500;
 }
 
 .visual-status {
