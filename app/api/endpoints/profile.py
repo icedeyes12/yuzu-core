@@ -214,6 +214,38 @@ async def api_proxy_models(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
+@router.post("/proxy/models/{provider}/refresh")
+async def api_refresh_provider_models(
+    provider: str, request: Request, user_id: str = Depends(get_current_user)
+):
+    ai_manager = await get_ai_manager()
+    provider_instance = ai_manager.providers.get(provider)
+    if provider_instance is None:
+        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
+
+    fetcher = getattr(provider_instance, "fetch_live_models", None)
+    if not callable(fetcher):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Provider '{provider}' does not support live model refresh",
+        )
+
+    try:
+        if provider == "chutes":
+            models = await fetcher(request.headers.get("X-Provider-Key", ""))
+        else:
+            models = await fetcher()
+        models = sorted({model for model in models if isinstance(model, str) and model})
+        if not models:
+            raise HTTPException(status_code=502, detail="Provider returned no models")
+        return {"status": "success", "models": models}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("Error refreshing models for %s: %s", provider, e)
+        raise HTTPException(status_code=502, detail="Could not refresh provider models") from e
+
+
 @router.post("/providers/set_preferred")
 async def api_set_preferred_provider(
     request: ProviderSetRequest, user_id: str = Depends(get_current_user)
