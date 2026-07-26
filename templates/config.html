@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="{{ url_for('static', path='css/config.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', path='css/sidebar.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', path='css/theme.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/components/visual-language.css') }}">
 </head>
 <body class="config-body">
   {% include 'sidebar.html' %}
@@ -282,6 +283,7 @@
     {% include "partials/footer.html" %}
   </div>
 
+  <script src="{{ url_for('static', path='js/visual-registry.js') }}"></script>
   <script src="{{ url_for('static', path='js/sidebar.js') }}"></script>
   <script src="{{ url_for('static', path='js/config.js') }}"></script>
 </body>

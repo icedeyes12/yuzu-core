@@ -120,20 +120,7 @@ async function loadProviderSettings() {
 				: data.current_provider || "Not set",
 		);
 
-		const providersList = [
-			{ id: "openrouter", name: "OpenRouter", custom: false },
-			{ id: "openai", name: "OpenAI", custom: false },
-			{ id: "anthropic", name: "Anthropic", custom: false },
-			{ id: "google", name: "Google (Gemini)", custom: false },
-			{ id: "grok", name: "xAI (Grok)", custom: false },
-			{ id: "groq", name: "Groq", custom: false },
-			{ id: "deepseek", name: "DeepSeek", custom: false },
-			{ id: "cerebras", name: "Cerebras", custom: false },
-			{ id: "chutes", name: "Chutes", custom: false },
-			{ id: "ollama", name: "Ollama (Local)", custom: true },
-			{ id: "custom_openai", name: "Custom OpenAI", custom: true },
-			{ id: "custom_anthropic", name: "Custom Anthropic", custom: true },
-		];
+		const providersList = window.VisualRegistry.listProviders();
 
 		providersList.forEach((provObj) => {
 			const provider = provObj.id;
@@ -142,7 +129,7 @@ async function loadProviderSettings() {
 
 			const card = document.createElement("div");
 			card.className = `provider-card ${isActive ? "active-provider" : ""}`;
-			const titleHtml = `${provObj.name} ${isActive ? "<span class='badge-active'>Active</span>" : ""}`;
+			const titleHtml = `${provObj.displayName} ${isActive ? "<span class='badge-active'>Active</span>" : ""}`;
 
 			let innerHtml = `
 				<div class="provider-header" role="button" tabindex="0" aria-expanded="${isActive ? "true" : "false"}">

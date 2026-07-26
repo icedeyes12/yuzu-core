@@ -37,7 +37,7 @@ export function renderToolEvent(eventType, data) {
 	if (eventType === "tool_call") {
 		const name = data?.name || "unknown";
 		const callId = data?.id || "";
-		return `<details class="tool-call-indicator" data-call-id="${escapeAttr(callId)}"><summary>⚙️ Calling ${escapeHtml(name)}…</summary><pre>Waiting for result…</pre></details>`;
+		return `<details class="tool-call-indicator" data-call-id="${escapeAttr(callId)}"><summary><span class="visual-status visual-status--info"><span class="visual-status__mark" aria-hidden="true">i</span><span>Calling ${escapeHtml(name)}…</span></span></summary><pre>Waiting for result…</pre></details>`;
 	}
 	return eventType === "tool_result" ? renderToolResultEvent(data) : "";
 }
@@ -52,8 +52,11 @@ export function renderToolResultEvent(data) {
 		error: data.error || "",
 	};
 	const card = renderToolResult(payload);
-	const statusIcon = payload.ok ? "✅" : "❌";
-	return `<details class="tool-result" data-tool-name="${escapeAttr(payload.name)}" open><summary>${statusIcon} ${escapeHtml(payload.name)}</summary><div class="tool-result-content">${card}</div></details>`;
+	const statusIcon = payload.ok ? "✓" : "!";
+	const statusClass = payload.ok
+		? "visual-status--success"
+		: "visual-status--danger";
+	return `<details class="tool-result" data-tool-name="${escapeAttr(payload.name)}" open><summary><span class="visual-status ${statusClass}"><span class="visual-status__mark" aria-hidden="true">${statusIcon}</span><span>${escapeHtml(payload.name)}</span></span></summary><div class="tool-result-content">${card}</div></details>`;
 }
 
 function escapeHtml(value) {
