@@ -567,6 +567,10 @@ _PROFILE_TEXT_FIELDS = (
     "image_model",
     "vision_model",
 )
+_PROFILE_LOCATION_FIELDS = {
+    "location_lat": ("REAL", float),
+    "location_lon": ("REAL", float),
+}
 
 
 def build_profile_update(updates: dict[str, Any]) -> tuple[str, list[Any]] | None:
@@ -587,6 +591,10 @@ def build_profile_update(updates: dict[str, Any]) -> tuple[str, list[Any]] | Non
         elif key in _PROFILE_TEXT_FIELDS:
             set_parts.append(f"{key} = %s")
             params.append(str(value))
+        elif key in _PROFILE_LOCATION_FIELDS:
+            sql_type, value_type = _PROFILE_LOCATION_FIELDS[key]
+            set_parts.append(f"{key} = %s::{sql_type}")
+            params.append(None if value is None else value_type(value))
         elif key == "affection":
             set_parts.append("affection = %s")
             params.append(int(value))

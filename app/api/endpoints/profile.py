@@ -38,8 +38,8 @@ class VisionModelSetRequest(BaseModel):
 
 
 class LocationUpdateRequest(BaseModel):
-    lat: float = Field(..., description="Latitude")
-    lon: float = Field(..., description="Longitude")
+    lat: float | None = Field(None, ge=-90, le=90, description="Latitude")
+    lon: float | None = Field(None, ge=-180, le=180, description="Longitude")
 
 
 class ProfileUpdateRequest(BaseModel):
@@ -296,9 +296,18 @@ async def api_update_location(
         if not profile:
             raise HTTPException(status_code=404, detail="Profile not found")
 
+        if (request.lat is None) != (request.lon is None):
+            raise HTTPException(
+                status_code=422,
+                detail="Latitude and longitude must be provided together",
+            )
+
         updates = {"location_lat": request.lat, "location_lon": request.lon}
         await Database.update_profile(updates, user_id)
-        return {"status": "success", "message": "Location updated"}
+        return {
+            "status": "success",
+            "message": "Location cleared" if request.lat is None else "Location updated",
+        }
     except Exception as e:
         log.error("Error updating location: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

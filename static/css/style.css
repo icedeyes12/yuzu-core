@@ -939,3 +939,136 @@ a:hover {
 	--status-success: #10b981;
 	--status-success-hover: #059669;
 }
+
+/* Shared application frame primitives */
+.page-frame {
+	min-height: 100vh;
+	background: var(--surface);
+	color: var(--text-primary);
+}
+
+.page-header {
+	position: sticky;
+	top: 0;
+	z-index: 80;
+	min-height: 4.5rem;
+	padding: var(--space-4) var(--space-5);
+	background: color-mix(in srgb, var(--surface-raised) 96%, transparent);
+	border-bottom: 1px solid var(--border-subtle);
+	backdrop-filter: var(--backdrop-blur);
+}
+
+.page-header__inner {
+	display: flex;
+	align-items: center;
+	gap: var(--space-4);
+	width: min(100%, 72rem);
+	min-height: 2.5rem;
+	margin: 0 auto;
+}
+
+.page-title-block {
+	min-width: 0;
+	flex: 1;
+}
+
+.page-title {
+	margin: 0;
+	font-size: clamp(1.15rem, 2vw, 1.5rem);
+	line-height: var(--line-height-tight);
+}
+
+.page-description {
+	margin: var(--space-1) 0 0;
+	color: var(--text-secondary);
+	font-size: 0.875rem;
+	line-height: var(--line-height-copy);
+}
+
+.page-content {
+	width: min(100% - (var(--space-5) * 2), 68rem);
+	margin: 0 auto;
+	padding: var(--space-7) 0 var(--space-10);
+}
+
+.page-section {
+	padding: var(--space-6) 0;
+	border-top: 1px solid var(--border-subtle);
+}
+
+.page-section:first-child {
+	padding-top: 0;
+	border-top: 0;
+}
+
+.page-section__heading {
+	margin: 0 0 var(--space-2);
+	font-size: 1.2rem;
+}
+
+.page-section__description {
+	max-width: 48rem;
+	margin: 0 0 var(--space-5);
+	color: var(--text-secondary);
+}
+
+.surface-inset {
+	padding: var(--space-4);
+	background: var(--surface-subtle);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-md);
+}
+
+.grouped-list {
+	display: grid;
+	gap: 1px;
+	background: var(--border-subtle);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-md);
+	overflow: hidden;
+}
+
+.action-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	flex-wrap: wrap;
+	margin-top: var(--space-5);
+}
+
+.action-row > .btn {
+	min-height: 2.75rem;
+}
+
+.app-footer {
+	padding: var(--space-4) var(--space-5);
+	color: var(--text-muted);
+	font-size: 0.8rem;
+	text-align: center;
+}
+
+@media (max-width: 768px) {
+	.page-header {
+		padding-inline: var(--space-4);
+	}
+
+	.page-header__inner {
+		gap: var(--space-3);
+	}
+
+	.page-content {
+		width: min(100% - (var(--space-4) * 2), 68rem);
+		padding-top: var(--space-6);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.page-frame *,
+	.page-frame *::before,
+	.page-frame *::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		scroll-behavior: auto !important;
+		transition-duration: 0.01ms !important;
+	}
+}
