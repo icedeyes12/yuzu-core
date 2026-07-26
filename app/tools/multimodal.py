@@ -20,26 +20,6 @@ class MultimodalTools:
     IMAGE_CACHE_DIR = Path(__file__).resolve().parent.parent / "static" / "image_cache"
 
     def __init__(self):
-        # Vision models by provider
-        # Chutes: native multimodal models (Qwen VL series, Kimi K2.5 TEE)
-        # OpenRouter: moonshotai/kimi-k2.5
-        self.vision_models = {
-            "chutes": [
-                "google/gemma-4-31B-turbo-TEE",
-                "moonshotai/Kimi-K2.5-TEE",
-                "moonshotai/Kimi-K2.6-TEE",
-                "Qwen/Qwen3.5-397B-A17B-TEE",
-                "zai-org/GLM-5-TEE",
-                "zai-org/GLM-5.1-TEE",
-            ],
-            "openrouter": ["moonshotai/kimi-k2.6"],
-        }
-
-        self.provider_endpoints = {
-            "chutes": "https://llm.chutes.ai/v1/chat/completions",
-            "openrouter": "https://openrouter.ai/api/v1/chat/completions",
-            "chutes_image": "https://image.chutes.ai/generate",
-        }
 
         # Image cache for base64 encoded images
         self.image_cache = {}
@@ -48,36 +28,6 @@ class MultimodalTools:
         # Ensure cache directory exists
         self.IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    def get_available_vision_models(self, provider: str) -> list[str]:
-        """Get list of available vision models for a provider."""
-        return self.vision_models.get(provider, [])
-
-    def get_provider_endpoint(self, provider: str) -> str | None:
-        return self.provider_endpoints.get(provider)
-
-    def is_vision_model(self, model_name: str, provider: str | None = None) -> bool:
-        """Check if a model supports vision (multimodal).
-
-        Args:
-            model_name: Full model name (e.g., "Qwen/Qwen3.5-397B-A17B-TEE")
-            provider: Optional provider to narrow the search
-
-        Returns:
-            True if the model supports vision/image input
-        """
-        if provider:
-            # Check specific provider's vision models
-            for vision_model in self.vision_models.get(provider, []):
-                if vision_model.lower() in model_name.lower():
-                    return True
-            return False
-        else:
-            # Check ALL providers
-            for provider_models in self.vision_models.values():
-                for vision_model in provider_models:
-                    if vision_model.lower() in model_name.lower():
-                        return True
-            return False
 
     def _clean_cache(self):
         """Remove expired cache entries"""
@@ -508,67 +458,6 @@ class MultimodalTools:
             return None, "No image path in result"
         return None, result.get("error", "Image generation failed")
 
-    def get_best_vision_provider(self) -> tuple[str | None, str | None]:
-        """Get the best available vision provider and model.
-
-        Priority:
-        1. User's saved preference (from profile.vision_model_preferences) - if available and valid
-        2. Chutes first available vision model (default - Qwen3.5-TEE)
-        3. OpenRouter fallback
-
-        Returns:
-            Tuple of (provider_name, model_name) or (None, None) if none available
-        """
-
-        # 1. Check user's saved preference first
-        try:
-            providers_config: dict[str, Any] = {}
-            prefs = providers_config.get("vision_model_preferences", {})
-            saved_provider = prefs.get("provider")
-            saved_model = prefs.get("model")
-
-            logger.debug(
-                f"[Vision] Checking saved preference: provider={saved_provider}, model={saved_model}"
-            )
-
-            if saved_provider and saved_model:
-                available = self.get_available_vision_models(saved_provider)
-                logger.debug(
-                    f"[Vision] Available models for {saved_provider}: {available}"
-                )
-                logger.debug(
-                    f"[Vision] Exact match check: '{saved_model}' in {available} = {saved_model in available}"
-                )
-
-                if saved_model in available:
-                    logger.debug(
-                        f"[Vision] Using saved preference: {saved_provider}/{saved_model}"
-                    )
-                    return saved_provider, saved_model
-                else:
-                    logger.warning(
-                        f"[Vision] Saved model '{saved_model}' not in available list, using default"
-                    )
-        except Exception as e:
-            logger.warning(f"[Vision] Could not load saved preference: {e}")
-
-        # 2. Try Chutes first (preferred)
-        if LLMContext.from_profile({}, override_provider="chutes").api_key:
-            chutes_models = self.get_available_vision_models("chutes")
-            if chutes_models:
-                default_model = chutes_models[0]
-                logger.debug(
-                    f"[Vision] Using default Chutes vision model: {default_model}"
-                )
-                return "chutes", default_model
-
-        # 3. Fallback to OpenRouter
-        if LLMContext.from_profile({}, override_provider="openrouter").api_key:
-            openrouter_models = self.get_available_vision_models("openrouter")
-            if openrouter_models:
-                return "openrouter", openrouter_models[0]
-
-        return None, None
 
     def should_use_vision(
         self, user_message: str, current_provider: str, current_model: str
@@ -602,15 +491,7 @@ class MultimodalTools:
         if self._looks_like_code(user_message):
             return False
 
-        # Check if current model already supports vision
-        if self.is_vision_model(current_model, current_provider):
-            # Current model already vision-capable, no switch needed
-            return False
-
-        # Current model doesn't support vision, but we have images
-        # Check if any vision provider is available
-        vision_provider, vision_model = self.get_best_vision_provider()
-        return vision_provider is not None
+        return False
 
     def detect_uploaded_images(self, text: str) -> list[str]:
         upload_patterns = [

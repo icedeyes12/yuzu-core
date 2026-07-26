@@ -27,6 +27,7 @@ function getCheckedIfExists(id) {
 
 function getNumberIfExists(id, fallback = 0) {
 	const raw = getValueIfExists(id, "");
+	if (raw.trim() === "") return fallback;
 	const num = Number(raw);
 	return Number.isFinite(num) ? num : fallback;
 }
@@ -557,22 +558,13 @@ function setupEventListeners() {
 
 // Load image model on page load
 function loadImageModelFromConfig() {
-	const imageModel = appConfig?.profile?.image_model || "qwen_image";
-	const select = document.getElementById("image-model");
-	if (!select) return;
-	const availableModels = [
-		{ value: "qwen_image", label: "Qwen Image" },
-		{ value: "z_turbo", label: "Z Image Turbo" },
-	];
-	select.replaceChildren();
-	availableModels.forEach((model) => {
-		const option = document.createElement("option");
-		option.value = model.value;
-		option.textContent = model.label;
-		option.selected = model.value === imageModel;
-		select.appendChild(option);
-	});
-	setTextIfExists("current-image-model", imageModel);
+	const imageModel = appConfig?.profile?.image_model || "";
+	setValueIfExists("image-model", imageModel);
+	setTextIfExists("current-image-model", imageModel || "Not configured");
+	setValueIfExists("image-endpoint", appConfig?.profile?.image_endpoint);
+	setValueIfExists("image-edit-endpoint", appConfig?.profile?.image_edit_endpoint);
+	setValueIfExists("image-provider", appConfig?.profile?.image_provider);
+	setValueIfExists("image-edit-provider", appConfig?.profile?.image_edit_provider);
 }
 
 // Load vision model on page load
@@ -591,9 +583,6 @@ async function loadVisionModel() {
 
 	visionProviderSelect.innerHTML = "";
 	const visionProviders = Object.keys(visionConfig.models_by_provider || {});
-	if (visionProviders.length === 0) {
-		visionProviders.push("chutes", "openrouter");
-	}
 
 	visionProviders.forEach((provider) => {
 		const option = document.createElement("option");
@@ -733,8 +722,7 @@ async function saveVisionModel() {
 
 // Save image model setting
 async function saveImageModel() {
-	const select = document.getElementById("image-model");
-	if (!select) return;
+	if (!document.getElementById("image-model")) return;
 
 	const btn = document.getElementById("save-image-model");
 	if (!btn) return;
@@ -743,19 +731,25 @@ async function saveImageModel() {
 	btn.disabled = true;
 
 	try {
-		const imageModel =
-			select.value === "qwen_image" ? "qwen_image" : select.value;
+		const imageModel = getValueIfExists("image-model", "").trim() || null;
+		const updates = {
+			image_model: imageModel,
+			image_provider: getValueIfExists("image-provider", "") || null,
+			image_endpoint: getValueIfExists("image-endpoint", "") || null,
+			image_edit_provider: getValueIfExists("image-edit-provider", "") || null,
+			image_edit_endpoint: getValueIfExists("image-edit-endpoint", "") || null,
+		};
 		const response = await fetch("/api/update_profile", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ updates: { image_model: imageModel } }),
+			body: JSON.stringify({ updates }),
 		});
 		const result = await readJsonResponse(response);
 		if (!response.ok || result.status !== "success") {
 			throw new Error(getApiError(result, response.status));
 		}
-		appConfig.profile.image_model = imageModel;
-		setTextIfExists("current-image-model", imageModel);
+		Object.assign(appConfig.profile, updates);
+		setTextIfExists("current-image-model", imageModel || "Not configured");
 		showSuccess("Image model saved successfully!");
 	} catch (error) {
 		console.error("Error saving image model:", error);
@@ -898,11 +892,11 @@ async function saveProfileSettings() {
 
 function loadAdvancedSettingsFromData(data) {
 	const source = getProfileAdvancedSource(data);
-	setValueIfExists("adv-temperature", source.temperature ?? 1.0);
-	setValueIfExists("adv-top-p", source.top_p ?? 1.0);
-	setValueIfExists("adv-top-k", source.top_k ?? 40);
-	setValueIfExists("adv-max-tokens", source.max_tokens ?? 4096);
-	setValueIfExists("adv-history-limit", source.history_limit ?? 20);
+	setValueIfExists("adv-temperature", source.temperature);
+	setValueIfExists("adv-top-p", source.top_p);
+	setValueIfExists("adv-top-k", source.top_k);
+	setValueIfExists("adv-max-tokens", source.max_tokens);
+	setValueIfExists("adv-history-limit", source.history_limit);
 	setValueIfExists(
 		"adv-additional-instructions",
 		source.additional_instructions ?? "",
@@ -913,11 +907,11 @@ function loadAdvancedSettingsFromData(data) {
 	if (vision) vision.checked = Boolean(source.enable_vision);
 	const tempOut = document.getElementById("val-temperature");
 	if (tempOut)
-		tempOut.textContent = Number(source.temperature ?? 1.0).toFixed(1);
+		tempOut.textContent = source.temperature == null ? "Not configured" : Number(source.temperature).toFixed(1);
 	const topPOut = document.getElementById("val-top-p");
-	if (topPOut) topPOut.textContent = Number(source.top_p ?? 1.0).toFixed(2);
+	if (topPOut) topPOut.textContent = source.top_p == null ? "Not configured" : Number(source.top_p).toFixed(2);
 	const topKOut = document.getElementById("val-top-k");
-	if (topKOut) topKOut.textContent = String(source.top_k ?? 40);
+	if (topKOut) topKOut.textContent = source.top_k == null ? "Not configured" : String(source.top_k);
 }
 
 async function saveAdvancedSettings() {

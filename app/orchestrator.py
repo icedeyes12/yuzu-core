@@ -463,6 +463,8 @@ async def handle_user_message(
     cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
 
     ctx = LLMContext.from_profile(profile)
+    if not ctx.provider or not ctx.model:
+        return "NOT CONFIGURED"
     provider_name = ctx.provider
     turn_id = new_turn_id()
 

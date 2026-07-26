@@ -213,11 +213,13 @@ class ProviderCapabilities:
         supports_streaming_fc: bool = False,
         supports_tool_call_parsing: bool = False,
         supports_structured_system_content: bool = False,
+        supports_vision: bool = False,
     ):
         self.supports_native_fc = supports_native_fc
         self.supports_streaming_fc = supports_streaming_fc
         self.supports_tool_call_parsing = supports_tool_call_parsing
         self.supports_structured_system_content = supports_structured_system_content
+        self.supports_vision = supports_vision
 
     def to_dict(self) -> dict[str, bool]:
         return {
@@ -225,6 +227,7 @@ class ProviderCapabilities:
             "supports_streaming_fc": self.supports_streaming_fc,
             "supports_tool_call_parsing": self.supports_tool_call_parsing,
             "supports_structured_system_content": self.supports_structured_system_content,
+            **({"supports_vision": True} if self.supports_vision else {}),
         }
 
 
@@ -291,7 +294,7 @@ class AIProvider:
             return False
 
     def supports_vision(self, model: str) -> bool:
-        return multimodal_tools.is_vision_model(model, self.name)
+        return self.capabilities.supports_vision
 
     def format_vision_message(self, user_message: str) -> list[dict]:
         return multimodal_tools.format_vision_message(user_message, self.name)
@@ -507,88 +510,36 @@ class AIProviderManager:
         except Exception as e:
             yield f"Streaming error: {str(e)}"
 
-    _PREFERRED_MODELS = [
-        "Qwen/Qwen3.6-27B-TEE",
-        "Qwen/Qwen3-235B-A22B-Thinking-2507",
-    ]
-
     async def _internal_llm_call(
-        self, messages: list[dict], source: str = "internal", **kwargs
+        self,
+        messages: list[dict],
+        source: str = "internal",
+        profile: dict | None = None,
+        **kwargs,
     ) -> str | None:
-        if "chutes" not in self.providers:
-            logger.warning("[INT] chutes provider not available")
+        from app.core.llm_context import LLMContext
+
+        ctx = LLMContext.from_profile(profile or {})
+        if not ctx.provider or not ctx.model or ctx.provider not in self.providers:
+            logger.info("[INT] memory/background LLM is not configured")
             return None
-        provider = self.providers["chutes"]
-        MAIN_MODEL = "google/gemma-4-31B-turbo-TEE"
-        FALLBACK_MODEL = "Qwen/Qwen3.6-27B-TEE"
-
-        # Resolve API key from env (application-scoped, not BYOK)
-        api_key = os.environ.get("CHUTES_API_KEY")
-        if not api_key:
-            from app.core.context import MissingProviderKeyError
-
-            raise MissingProviderKeyError("chutes")
-
-        logger.debug(f"[INT] Starting with {MAIN_MODEL}, {len(messages)} messages")
-
-        def _is_connection_error(error: str | None) -> bool:
-            if not error:
-                return True
-            error_lower = error.lower()
-            retryable = [
-                "timeout",
-                "connection",
-                "network",
-                "refused",
-                "reset",
-                "socket",
-                "timed out",
-            ]
-            return any(r in error_lower for r in retryable)
-
-        for attempt in range(3):
-            result = await provider.send_message(
-                ctx=LLMContext(provider="chutes", model=MAIN_MODEL, api_key=api_key),
+        runtime_parameters = {
+            key: value
+            for key, value in ctx.parameters.items()
+            if not key.startswith("_") and key != "additional_instructions"
+        }
+        try:
+            return await self.providers[ctx.provider].send_message(
+                ctx=ctx,
                 messages=messages,
                 source=source,
                 skip_vision=True,
+                **runtime_parameters,
                 **kwargs,
             )
-            if result:
-                logger.debug(f"[INT] Success with {MAIN_MODEL}: {len(result)} chars")
-                return result
-
-            last_error = getattr(provider, "_last_error", None)
-
-            # Calculate backoff: 1s, 2s, 4s (using 2 ** attempt since attempt starts at 0)
-            backoff = 2**attempt
-            logger.warning(
-                f"[INT] {MAIN_MODEL} failed (attempt {attempt + 1}): {last_error}. Retrying in {backoff}s..."
-            )
-
-            if not _is_connection_error(last_error):
-                break
-
-            await asyncio.sleep(backoff)
-
-        # Mandatory cooldown before trying fallback model
-        await asyncio.sleep(1.0)
-        logger.warning(f"[INT] Falling back to {FALLBACK_MODEL}")
-        result = await provider.send_message(
-            ctx=LLMContext(provider="chutes", model=FALLBACK_MODEL, api_key=api_key),
-            messages=messages,
-            source=source,
-            skip_vision=True,
-            **kwargs,
-        )
-        if result:
-            logger.debug(f"[INT] Success with {FALLBACK_MODEL}: {len(result)} chars")
-            return result
-        last_error = getattr(provider, "_last_error", None)
-        logger.warning(f"[INT] {FALLBACK_MODEL} failed: {last_error}")
-
-        logger.error("[INT] All models failed, returning None")
-        return None
+        except Exception as exc:
+            logger.info("[INT] background LLM skipped: %s", type(exc).__name__)
+            return None
 
     async def auto_send_message(self, messages: list[dict], **kwargs) -> str | None:
         return await self._internal_llm_call(messages, **kwargs)

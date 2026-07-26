@@ -3,9 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from app.core.llm_context import LLMContext
 from app.db import Database
-from app.llm_client import chutes_chat
 from app.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -14,7 +12,7 @@ log = get_logger(__name__)
 class SessionService:
     _AUTO_NAME_TRIGGER_COUNT = 10
     _AUTO_NAME_TRUNCATE = 40
-    _AUTO_NAME_MODEL = "google/gemma-4-31B-turbo-TEE"
+
 
     # Global session tracker for web clients to prevent duplicate connection messages
     _web_session_tracker: dict[str, bool] = {}
@@ -127,18 +125,7 @@ class SessionService:
             )
             return
 
-        profile = await Database.get_profile(user_id)
-        ctx = LLMContext.from_profile(profile, override_provider="chutes")
-        api_key = ctx.api_key
-        summary = await Database.get_session_conversation_summary(
-            session_id, limit=15, user_id=user_id
-        )
-
         name: str | None = None
-        if api_key and summary:
-            name = await SessionService._auto_name_via_llm(summary, api_key)
-            if not name:
-                log.warning("auto_name: LLM returned None for session %d", session_id)
         if not name:
             name = await SessionService._auto_name_from_history(session_id, user_id)
             if not name:
@@ -180,24 +167,6 @@ class SessionService:
     def _format_now() -> str:
         return datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    @staticmethod
-    async def _auto_name_via_llm(conversation_summary: str, api_key: str) -> str | None:
-        prompt = (
-            "Based on this conversation, create a SHORT session title (max 6 words):\n\n"
-            f"{conversation_summary}\n\n"
-            "Reply with ONLY the title, nothing else."
-        )
-        name = await chutes_chat(
-            prompt,
-            api_key=api_key,
-            model=SessionService._AUTO_NAME_MODEL,
-            title="Yuzu-Session-Naming",
-            max_tokens=64,
-        )
-        if not name:
-            return None
-        cleaned = name.replace('"', "").replace("'", "").strip()
-        return (cleaned[:50] + "...") if len(cleaned) > 50 else cleaned
 
     @staticmethod
     async def _auto_name_from_history(session_id: str, user_id: str) -> str | None:

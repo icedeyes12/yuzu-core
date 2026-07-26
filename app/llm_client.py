@@ -21,8 +21,6 @@ from app.tools.schemas import StreamToolEvent
 
 log = get_logger(__name__)
 
-CHUTES_URL = "https://llm.chutes.ai/v1/chat/completions"
-CHUTES_MODEL = "google/gemma-4-31B-turbo-TEE"  # Default model for chutes_chat
 _DEFAULT_HEADERS = {
     "Content-Type": "application/json",
     "HTTP-Referer": "https://github.com/icedeyes12/yuzu-companion",
@@ -65,13 +63,14 @@ def _resolve_additional_instructions(profile: dict[str, Any]) -> str:
 
 async def chutes_chat(
     prompt: str,
-    model: str = CHUTES_MODEL,
+    model: str,
     *,
+    endpoint: str,
     system: str | None = None,
     title: str = "chutes_chat",
     api_key: str | None = None,
-    temperature: float = 0.7,
-    max_tokens: int = 2048,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     timeout: float = 90.0,
     fallback_models: Iterable[str] = (),
     max_429_retries: int = 3,
@@ -104,7 +103,7 @@ async def chutes_chat(
                 try:
                     async with _rate_limit_provider("chutes", candidate, source):
                         response = await client.post(
-                            CHUTES_URL,
+                            endpoint,
                             headers=headers,
                             json={
                                 "model": candidate,
@@ -189,16 +188,6 @@ def _unique_tool_schemas(**kwargs) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_provider(
-    profile: dict[str, Any], provider: str | None, model: str | None
-) -> tuple[str, str]:
-    config = profile.get("providers_config") or {}
-    return (
-        provider or config.get("preferred_provider", "ollama"),
-        model or config.get("preferred_model", "glm-4.6:cloud"),
-    )
-
-
 async def _send_to_provider(
     ctx: LLMContext,
     messages: list[dict[str, Any]],
@@ -206,6 +195,8 @@ async def _send_to_provider(
     source: str = "chat",
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single LLM dispatch with timing log. Returns (text, raw_response)."""
+    if not ctx.provider or not ctx.model:
+        return "NOT CONFIGURED", None
     ai_manager = await get_ai_manager()
     schemas = _unique_tool_schemas()
 
@@ -318,6 +309,9 @@ async def _stream_from_provider(
     source: str = "chat",
 ) -> AsyncGenerator[str | StreamToolEvent, None]:
     """Yield raw chunks from the provider's streaming API."""
+    if not ctx.provider or not ctx.model:
+        yield "NOT CONFIGURED"
+        return
     ai_manager = await get_ai_manager()
 
     # Generate tool schemas
@@ -377,9 +371,7 @@ async def generate_ai_response_streaming(
     if session_id is None:
         session_id = (await Database.get_active_session(user_id))["id"]
 
-    ctx = LLMContext.from_profile(
-        profile, override_provider=provider, override_model=model
-    )
+    ctx = LLMContext.from_profile(profile)
 
     # FC9-C: Check if provider supports native FC for prompt construction
     ai_manager = await get_ai_manager()

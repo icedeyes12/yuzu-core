@@ -82,14 +82,16 @@ async def api_get_profile(
         ai_providers_payload = await ConfigService.get_ai_providers_payload(
             user_id, profile
         )
-        vision_capabilities = ConfigService.get_vision_capabilities()
+        vision_capabilities = await ConfigService.get_vision_payload_async(
+            user_id, profile
+        )
 
         return {
             **profile_dict,
             "chat_history": chat_history,
             "active_session": active_session,
             "ai_providers": ai_providers_payload,
-            "multimodal_capabilities": vision_capabilities,
+            "multimodal_capabilities": vision_capabilities["capabilities"],
         }
     except Exception as e:
         log.error("Error in api_get_profile: %s", e)
@@ -115,6 +117,11 @@ async def api_update_profile(
             "history_limit",
             "enable_reasoning",
             "enable_vision",
+            "image_model",
+            "image_provider",
+            "image_endpoint",
+            "image_edit_provider",
+            "image_edit_endpoint",
         ]
 
         context_updates = {}
@@ -144,8 +151,8 @@ async def api_list_providers(user_id: str = Depends(get_current_user)):
 
         profile = await Database.get_profile(user_id)
         providers_config = profile.get("providers_config", {})
-        current_provider = providers_config.get("preferred_provider", "ollama")
-        current_model = providers_config.get("preferred_model", "glm-4.6:cloud")
+        current_provider = providers_config.get("preferred_provider")
+        current_model = providers_config.get("preferred_model")
 
         return {
             "status": "success",
@@ -304,7 +311,7 @@ async def api_test_provider_connection(
 @router.get("/get_vision_capabilities")
 async def api_get_vision_capabilities(user_id: str = Depends(get_current_user)):
     try:
-        capabilities = ConfigService.get_vision_capabilities()
+        capabilities = await ConfigService.get_vision_payload_async(user_id)
         return {"status": "success", "capabilities": capabilities}
     except Exception as e:
         log.error("Error getting vision capabilities: %s - %s", type(e).__name__, e)

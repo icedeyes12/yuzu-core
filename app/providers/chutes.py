@@ -25,6 +25,7 @@ class ChutesProvider(AIProvider):
             supports_streaming_fc=True,
             supports_tool_call_parsing=True,
             supports_structured_system_content=True,
+            supports_vision=True,
         )
         self.api_models_url = "https://llm.chutes.ai/v1/models"
         self._models_cache_ttl = 600
@@ -118,11 +119,11 @@ class ChutesProvider(AIProvider):
                         messages, last_user_message, vision_messages
                     )
 
-        temperature = kwargs.get("temperature", 0.73)
+        temperature = kwargs.get("temperature")
         max_tokens = kwargs.get("max_tokens")
-        top_p = kwargs.get("top_p", 0.9)
-        top_k = kwargs.get("top_k", 45)
-        typical_p = kwargs.get("typical_p", 0.85)
+        top_p = kwargs.get("top_p")
+        top_k = kwargs.get("top_k")
+        typical_p = kwargs.get("typical_p")
 
         payload: dict[str, Any] = {
             "model": model,

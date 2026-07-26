@@ -41,7 +41,7 @@ TOOL_DEFINITION = ToolDefinition(
 )
 
 
-async def _classify_category_llm_async(fact: str) -> str:
+async def _classify_category_llm_async(fact: str, profile: dict) -> str:
     """Classify a fact into one graph node category."""
     try:
         from app.providers import get_ai_manager
@@ -56,7 +56,7 @@ async def _classify_category_llm_async(fact: str) -> str:
                 {"role": "user", "content": fact},
             ],
             timeout=15,
-            max_tokens=20,
+            profile=profile,
         )
         category = str(response or "").strip().title()
         return category if category in _CATEGORIES else "Experience"
@@ -96,7 +96,7 @@ async def execute(arguments, **kwargs):
 
     category = str(arguments.get("category") or "").strip().title()
     if category not in _CATEGORIES:
-        category = await _classify_category_llm_async(fact)
+        category = await _classify_category_llm_async(fact, profile)
     content = f"[{category}] {fact}"
     try:
         from app.memory.embedder import embed_text_async

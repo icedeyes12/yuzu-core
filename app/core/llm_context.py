@@ -14,8 +14,8 @@ class LLMContext:
     Contains the fully resolved provider, model, credentials, and parameters.
     """
 
-    provider: str
-    model: str
+    provider: str | None
+    model: str | None
     vision_provider: str | None = None
     vision_model: str | None = None
     api_key: str | None = None
@@ -36,8 +36,8 @@ class LLMContext:
         config = profile.get("providers_config") or {}
 
         # 1. Base provider/model from profile or overrides
-        provider = override_provider or config.get("preferred_provider", "ollama")
-        model = override_model or config.get("preferred_model", "glm-4.6:cloud")
+        provider = override_provider or config.get("preferred_provider")
+        model = override_model or config.get("preferred_model")
 
         # 2. Vision preferences
         vision_prefs = config.get("vision_model_preferences") or {}
@@ -45,19 +45,19 @@ class LLMContext:
         vision_model = vision_prefs.get("model")
 
         # 3. Credential and Runtime Resolution (BYOK -> Env)
-        keyring = get_request_keyring(provider)
+        keyring = get_request_keyring(provider) if provider else None
         api_key = None
         base_url = None
 
         if keyring and keyring.key:
             api_key = keyring.key
         else:
-            api_key = os.environ.get(f"{provider.upper()}_API_KEY")
+            api_key = os.environ.get(f"{provider.upper()}_API_KEY") if provider else None
 
         if keyring and keyring.base_url:
             base_url = keyring.base_url
         else:
-            base_url = os.environ.get(f"{provider.upper()}_BASE_URL")
+            base_url = os.environ.get(f"{provider.upper()}_BASE_URL") if provider else None
 
         if keyring and keyring.model_id:
             model = keyring.model_id
@@ -79,13 +79,13 @@ class LLMContext:
         effective_ctx = active_payload if active_payload is not None else ctx_data
 
         parameters: dict[str, Any] = {}
-        if "temperature" in effective_ctx:
+        if effective_ctx.get("temperature") is not None:
             parameters["temperature"] = float(effective_ctx["temperature"])
-        if "top_p" in effective_ctx:
+        if effective_ctx.get("top_p") is not None:
             parameters["top_p"] = float(effective_ctx["top_p"])
-        if "max_tokens" in effective_ctx:
+        if effective_ctx.get("max_tokens") is not None:
             parameters["max_tokens"] = int(effective_ctx["max_tokens"])
-        if "top_k" in effective_ctx:
+        if effective_ctx.get("top_k") is not None:
             parameters["top_k"] = int(effective_ctx["top_k"])
         if "additional_instructions" in effective_ctx:
             parameters["additional_instructions"] = str(

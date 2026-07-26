@@ -43,11 +43,11 @@ class OllamaProvider(AIProvider):
     ) -> str | None:
 
         try:
-            temperature = kwargs.get("temperature", 0.69)
-            top_p = kwargs.get("top_p", 0.7)
-            top_k = kwargs.get("top_k", 40)
-            typical_p = kwargs.get("typical_p", 0.8)
-            num_ctx = kwargs.get("num_ctx", 8192)
+            temperature = kwargs.get("temperature")
+            top_p = kwargs.get("top_p")
+            top_k = kwargs.get("top_k")
+            typical_p = kwargs.get("typical_p")
+            num_ctx = kwargs.get("num_ctx")
 
             payload = {
                 "model": ctx.model,
@@ -83,11 +83,11 @@ class OllamaProvider(AIProvider):
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
 
         try:
-            temperature = kwargs.get("temperature", 0.69)
-            top_p = kwargs.get("top_p", 0.7)
-            top_k = kwargs.get("top_k", 40)
-            typical_p = kwargs.get("typical_p", 0.8)
-            num_ctx = kwargs.get("num_ctx", 8192)
+            temperature = kwargs.get("temperature")
+            top_p = kwargs.get("top_p")
+            top_k = kwargs.get("top_k")
+            typical_p = kwargs.get("typical_p")
+            num_ctx = kwargs.get("num_ctx")
 
             payload = {
                 "model": ctx.model,
