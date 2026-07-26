@@ -129,18 +129,14 @@ async function loadProviderSettings() {
 
 			const card = document.createElement("div");
 			card.className = `provider-card ${isActive ? "active-provider" : ""}`;
-			const identityBadge = provObj.badge
-				? `<span class="provider-identity-badge provider-identity-badge--${provObj.badge.toLowerCase()}">${provObj.badge}</span>`
-				: "";
-			const identityMark =
-				provObj.logo ||
-				`<span class="provider-identity-placeholder--small" aria-hidden="true">${provObj.fallbackLogo}</span>`;
-			const titleHtml = `${identityMark}<span>${provObj.displayName}</span> ${identityBadge} ${isActive ? "<span class='badge-active'>Active</span>" : ""}`;
+			const identityBadge = window.VisualRegistry.renderBadge(provObj);
+			const identityMark = window.VisualRegistry.renderLogo(provObj, "small");
+			const titleHtml = `${identityMark}<span class="provider-title__name">${provObj.displayName}</span> ${identityBadge} ${isActive ? "<span class='badge-active'>Active</span>" : ""}`;
 
 			let innerHtml = `
 				<div class="provider-header" role="button" tabindex="0" aria-expanded="${isActive ? "true" : "false"}">
 					<h3 class="provider-title">${titleHtml}</h3>
-					<span class="provider-toggle-icon">${isActive ? "▼" : "▲"}</span>
+					<span class="provider-toggle-icon" aria-hidden="true">${isActive ? "▼" : "▲"}</span>
 				</div>
 				<div class="provider-body ${isActive ? "is-expanded" : ""}">
 					<div class="form-group">

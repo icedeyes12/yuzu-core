@@ -180,6 +180,17 @@
 		),
 	);
 
+	const badgeLabels = Object.freeze({
+		official: "Official",
+		community: "Community",
+		custom: "Custom",
+		experimental: "Experimental",
+		deprecated: "Deprecated",
+		preview: "Preview",
+		local: "Local",
+		unknown: "Unknown",
+	});
+
 	const fallbackProvider = Object.freeze({
 		id: "unknown",
 		displayName: "Unknown provider",
@@ -195,6 +206,33 @@
 		deprecated: false,
 	});
 
+	function escapeHtml(value) {
+		const node = document.createElement("span");
+		node.textContent = String(value ?? "");
+		return node.innerHTML;
+	}
+
+	function renderLogo(provider, size = "default") {
+		const identity = provider || fallbackProvider;
+		const className =
+			size === "small"
+				? "provider-identity-placeholder provider-identity-placeholder--small"
+				: "provider-identity-placeholder";
+		const accent = identity.accentColor
+			? ` style="--provider-accent: ${escapeHtml(identity.accentColor)}"`
+			: "";
+		if (identity.logo) {
+			return `<img class="provider-identity-logo" src="${escapeHtml(identity.logo)}" alt="${escapeHtml(identity.displayName)} logo"${accent}>`;
+		}
+		return `<span class="${className}" aria-hidden="true"${accent}>${escapeHtml(identity.fallbackLogo)}</span>`;
+	}
+
+	function renderBadge(provider) {
+		const identity = provider || fallbackProvider;
+		const label = badgeLabels[identity.badge] || badgeLabels.unknown;
+		return `<span class="provider-identity-badge provider-identity-badge--${escapeHtml(identity.badge)}">${label}</span>`;
+	}
+
 	global.VisualRegistry = Object.freeze({
 		providers,
 		getProvider(id) {
@@ -203,5 +241,7 @@
 		listProviders() {
 			return Object.values(providers);
 		},
+		renderLogo,
+		renderBadge,
 	});
 })(window);

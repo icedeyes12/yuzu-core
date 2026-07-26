@@ -45,6 +45,17 @@
 	flex-wrap: wrap;
 }
 
+.provider-title__name {
+	color: var(--text-primary);
+}
+
+.provider-identity-logo {
+	width: 1.25rem;
+	height: 1.25rem;
+	flex: 0 0 auto;
+	object-fit: contain;
+}
+
 .provider-badge,
 .provider-identity-badge {
 	display: inline-flex;
@@ -77,6 +88,10 @@
 .provider-identity-badge--custom,
 .provider-identity-badge--local,
 .provider-badge--custom {
+	color: var(--accent);
+}
+
+.provider-identity-badge--local {
 	color: var(--accent);
 }
 
