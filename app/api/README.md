@@ -81,6 +81,7 @@ Web session tracking is shared between `web.py` and `routes.py` via:
 # In routes.py
 _web_session_tracker: Dict[str, bool] = {}
 
+
 def set_session_tracker(tracker: Dict[str, bool]):
     global _web_session_tracker
     _web_session_tracker = tracker

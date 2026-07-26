@@ -229,11 +229,11 @@ Every semantic fact is assigned exactly one category:
 ### Module: `file pcl.py`
 
 ```python
-run_predict_calibrate(episode_id, messages, session_id)   # Main entry
-load_relevant_semantic_facts(session_id, limit=10)       # Fetch top facts
-predict_episode_content(existing_facts, episode_title)   # PREDICT phase
-calibrate_and_extract(predicted_content, actual_messages) # CALIBRATE phase
-consolidate_facts(extracted, session_id)                 # CONSOLIDATE phase
+run_predict_calibrate(episode_id, messages, session_id)  # Main entry
+load_relevant_semantic_facts(session_id, limit=10)  # Fetch top facts
+predict_episode_content(existing_facts, episode_title)  # PREDICT phase
+calibrate_and_extract(predicted_content, actual_messages)  # CALIBRATE phase
+consolidate_facts(extracted, session_id)  # CONSOLIDATE phase
 ```
 
 ---
@@ -431,8 +431,9 @@ Caches `get_memory_state()` results within a single request:
 ```python
 _request_cache = threading.local()
 
+
 def _get_cached_memory_state(session_id: int) -> dict:
-    if not hasattr(_request_cache, 'state'):
+    if not hasattr(_request_cache, "state"):
         _request_cache.state = {}
     if session_id not in _request_cache.state:
         _request_cache.state[session_id] = get_memory_state(session_id)
@@ -447,8 +448,9 @@ Caches query embeddings within a single request:
 _embedding_cache = threading.local()
 _MIN_QUERY_LEN_FOR_EMBEDDING = 4  # Skip embedding for short queries
 
+
 def _get_cached_embedding(query: str) -> list[float] | None:
-    if not hasattr(_embedding_cache, 'vec'):
+    if not hasattr(_embedding_cache, "vec"):
         return None
     if _embedding_cache.query == query:
         return _embedding_cache.vec
@@ -463,11 +465,13 @@ Both caches are cleared at the end of each turn in `file orchestrator.py`:
 def _clear_request_cache() -> None:
     try:
         from app.memory.memory import _clear_request_cache as clear_memory
+
         clear_memory()
     except Exception:
         pass
     try:
         from app.memory.retrieval import _clear_embedding_cache
+
         _clear_embedding_cache()
     except Exception:
         pass
@@ -501,6 +505,7 @@ static_ids, static_context, dynamic_context = retrieve_memories_combined(
 # Mark retrieved facts as pending review for later LLM-based review
 if static_ids:
     from app.memory.memory_review import mark_retrieved_as_pending_review
+
     mark_retrieved_as_pending_review(static_ids, session_id)
 
 # End of turn — clear request caches
