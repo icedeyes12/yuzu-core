@@ -282,7 +282,7 @@ function loadSidebarSessions() {
 	const sessionsList = document.getElementById("sidebarSessionsList");
 	if (!sessionSection || !sessionsList) return;
 
-	sessionSection.style.display = "block";
+	sessionSection.classList.add("is-visible");
 	showSessionsSkeleton();
 
 	fetch("/api/sessions/list", {

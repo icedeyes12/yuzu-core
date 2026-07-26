@@ -295,7 +295,7 @@ export class MultimodalManager {
 		// DELETED: Store and DOMRenderer handle all message element creation now.
 		// Returns a dummy element to prevent crashes in un-migrated legacy callers.
 		const dummy = document.createElement("div");
-		dummy.style.display = "none";
+		dummy.className = "streaming-message-placeholder";
 		return dummy;
 	}
 
@@ -338,12 +338,10 @@ export class MultimodalManager {
 			sendBtn.disabled = false; // Keep clickable for abort
 			sendBtn.textContent = "Stop";
 			sendBtn.classList.add("stop-mode");
-			sendBtn.style.opacity = "1";
 		} else {
 			sendBtn.disabled = false;
 			sendBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
 			sendBtn.classList.remove("stop-mode");
-			sendBtn.style.opacity = "1";
 		}
 	}
 
@@ -411,7 +409,7 @@ export class MultimodalManager {
                     <div class="upload-placeholder">
                         ${this.selectedImages.length > 0 ? `${this.selectedImages.length} image(s) ready!` : "Upload images for analysis"}
                     </div>
-                    <input type="file" id="imageUpload" accept="image/*" multiple style="display: none;">
+                    <input type="file" id="imageUpload" class="visually-hidden-input" accept="image/*" multiple>
                     <button class="upload-btn" onclick="multimodal.openFilePicker()">
                         ${this.getSVGIcon("upload")}
                         <span>${this.selectedImages.length > 0 ? "Add More Images" : "Choose Images"}</span>

@@ -248,3 +248,15 @@
 	font-size: 0.9rem;
 	color: var(--text-secondary);
 }
+
+.visually-hidden-input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.streaming-message-placeholder {
+	display: none;
+}

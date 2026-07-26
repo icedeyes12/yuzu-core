@@ -358,3 +358,81 @@ html {
 		grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
 	}
 }
+
+/* Dynamic presentation states */
+.hero-section {
+	transform: translateY(var(--hero-scroll-offset, 0px));
+}
+
+.animate-on-scroll {
+	opacity: 0;
+	transform: translateY(30px);
+	transition:
+		opacity 0.6s ease,
+		transform 0.6s ease;
+}
+
+.animate-on-scroll.is-visible {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+.image-loading {
+	opacity: 0;
+	transform: scale(0.9);
+	transition:
+		opacity 0.5s ease,
+		transform 0.5s ease;
+}
+
+.image-loading.is-loaded {
+	opacity: 1;
+	transform: scale(1);
+}
+
+.tech-icon.is-active {
+	animation: tech-icon-pulse 0.3s ease;
+}
+
+@keyframes tech-icon-pulse {
+	50% {
+		transform: scale(1.2) rotate(10deg);
+	}
+}
+
+.secret-message {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	background: var(--surface-raised);
+	border: 2px solid var(--accent);
+	border-radius: 15px;
+	padding: 2rem;
+	text-align: center;
+	box-shadow: var(--shadow-lg);
+	z-index: 10000;
+	max-width: 300px;
+	backdrop-filter: var(--backdrop-blur);
+}
+
+.secret-message-icon {
+	font-size: 3rem;
+	margin-bottom: 1rem;
+}
+
+.secret-message-text {
+	font-size: 1.1rem;
+	margin-bottom: 1rem;
+	color: var(--text-primary);
+}
+
+.secret-message-close {
+	background: var(--action-primary);
+	color: var(--action-text);
+	border: none;
+	padding: 0.5rem 1rem;
+	border-radius: 8px;
+	cursor: pointer;
+	font-weight: 600;
+}

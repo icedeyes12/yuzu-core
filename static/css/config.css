@@ -598,3 +598,98 @@ input[type="range"]::-moz-range-thumb {
 	text-decoration-color: var(--accent);
 	color: var(--accent);
 }
+
+/* Dynamic presentation states */
+.provider-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	cursor: pointer;
+}
+
+.provider-toggle-icon {
+	font-size: 1.2rem;
+}
+
+.provider-body {
+	display: none;
+	padding-top: var(--space-4);
+}
+
+.provider-body.is-expanded {
+	display: block;
+}
+
+.provider-input-row {
+	display: flex;
+	gap: var(--space-2);
+}
+
+.provider-flex-input {
+	flex: 1;
+}
+
+.provider-actions {
+	margin-top: var(--space-6);
+	gap: var(--space-2);
+}
+
+.save-byok-btn.is-saved,
+#save-byok.is-saved {
+	background: var(--accent-support);
+}
+
+.config-notification {
+	position: fixed;
+	top: 100px;
+	right: 20px;
+	color: var(--action-text);
+	padding: var(--space-4);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-md);
+	z-index: 10000;
+	max-width: 300px;
+	animation: slideInRight 0.3s ease;
+}
+
+.config-notification.success {
+	background: var(--status-success);
+}
+
+.config-notification.error,
+.config-notification.info {
+	background: var(--accent);
+}
+
+.animate-on-scroll {
+	opacity: 0;
+	transform: translateY(20px);
+	transition:
+		opacity 0.6s ease,
+		transform 0.6s ease;
+}
+
+.animate-on-scroll.is-visible {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+.is-visible {
+	display: block;
+}
+
+.visually-hidden-input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.vision-model-row {
+	margin-top: var(--space-4);
+}
+
+.config-form-row {
+	margin-top: var(--space-4);
+}

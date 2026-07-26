@@ -3,36 +3,6 @@
 document.addEventListener("DOMContentLoaded", () => {
 	console.log("Yuzu Companion About Page Loaded");
 
-	// Add hover effects to tech cards
-	const techCards = document.querySelectorAll(".tech-card");
-
-	techCards.forEach((card) => {
-		card.addEventListener("mouseenter", function () {
-			this.style.transform = "translateY(-5px) scale(1.02)";
-			this.style.boxShadow = "var(--shadow-lg)";
-		});
-
-		card.addEventListener("mouseleave", function () {
-			this.style.transform = "translateY(0) scale(1)";
-			this.style.boxShadow = "var(--shadow-md)";
-		});
-	});
-
-	// Add hover effects to philosophy items
-	const philosophyItems = document.querySelectorAll(".philosophy-item");
-
-	philosophyItems.forEach((item) => {
-		item.addEventListener("mouseenter", function () {
-			this.style.transform = "translateY(-3px)";
-			this.style.boxShadow = "0 8px 20px var(--shadow-lg)";
-		});
-
-		item.addEventListener("mouseleave", function () {
-			this.style.transform = "translateY(0)";
-			this.style.boxShadow = "none";
-		});
-	});
-
 	// Smooth scrolling for anchor links
 	document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
 		anchor.addEventListener("click", function (e) {
@@ -47,14 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
 		});
 	});
 
-	// Add parallax effect to hero section
-	window.addEventListener("scroll", () => {
-		const scrolled = window.pageYOffset;
-		const hero = document.querySelector(".hero-section");
-		if (hero) {
-			hero.style.transform = `translateY(${scrolled * 0.1}px)`;
-		}
-	});
+	// Hero composition is defined by CSS; scrolling does not mutate presentation.
 
 	// Add intersection observer for fade-in animations
 	const observerOptions = {
@@ -65,17 +28,14 @@ document.addEventListener("DOMContentLoaded", () => {
 	const observer = new IntersectionObserver((entries) => {
 		entries.forEach((entry) => {
 			if (entry.isIntersecting) {
-				entry.target.style.opacity = "1";
-				entry.target.style.transform = "translateY(0)";
+				entry.target.classList.add("is-visible");
 			}
 		});
 	}, observerOptions);
 
 	// Observe all content sections
 	document.querySelectorAll(".content-section").forEach((section) => {
-		section.style.opacity = "0";
-		section.style.transform = "translateY(30px)";
-		section.style.transition = "opacity 0.6s ease, transform 0.6s ease";
+		section.classList.add("animate-on-scroll");
 		observer.observe(section);
 	});
 
@@ -83,11 +43,10 @@ document.addEventListener("DOMContentLoaded", () => {
 	const techIcons = document.querySelectorAll(".tech-icon");
 
 	techIcons.forEach((icon) => {
-		icon.addEventListener("click", function () {
-			this.style.transform = "scale(1.2) rotate(10deg)";
-			setTimeout(() => {
-				this.style.transform = "scale(1) rotate(0deg)";
-			}, 300);
+		icon.addEventListener("click", () => {
+			icon.classList.remove("is-active");
+			void icon.offsetWidth;
+			icon.classList.add("is-active");
 		});
 	});
 
@@ -121,23 +80,14 @@ document.addEventListener("DOMContentLoaded", () => {
 	// Add loading animation for images
 	const images = document.querySelectorAll("img");
 	images.forEach((img) => {
-		img.addEventListener("load", function () {
-			this.style.opacity = "1";
-			this.style.transform = "scale(1)";
-		});
-
-		img.style.opacity = "0";
-		img.style.transform = "scale(0.9)";
-		img.style.transition = "opacity 0.5s ease, transform 0.5s ease";
+		img.addEventListener("load", () => img.classList.add("is-loaded"));
+		img.classList.add("image-loading");
 	});
 
 	// Add signature animation
 	const signature = document.querySelector(".signature");
 	if (signature) {
-		setTimeout(() => {
-			signature.style.opacity = "1";
-			signature.style.transform = "translateY(0)";
-		}, 2000);
+		setTimeout(() => signature.classList.add("is-visible"), 2000);
 	}
 
 	// Performance optimization: Debounce scroll events
@@ -171,35 +121,15 @@ function showSecretMessage() {
 
 	// Create a custom alert style
 	const alertDiv = document.createElement("div");
-	alertDiv.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: var(--surface-raised);
-        border: 2px solid var(--accent);
-        border-radius: 15px;
-        padding: 2rem;
-        text-align: center;
-        box-shadow: var(--shadow-lg);
-        z-index: 10000;
-        max-width: 300px;
-        backdrop-filter: var(--backdrop-blur);
-    `;
-
+	alertDiv.className = "secret-message";
 	alertDiv.innerHTML = `
-        <div style="font-size: 3rem; margin-bottom: 1rem;">💌</div>
-        <div style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--text-primary);">${randomMessage}</div>
-        <button onclick="this.parentElement.remove()" style="
-            background: var(--action-primary);
-            color: var(--action-text);
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-        ">OK</button>
+        <div class="secret-message-icon">💌</div>
+        <div class="secret-message-text">${randomMessage}</div>
+        <button class="secret-message-close" type="button">OK</button>
     `;
+	alertDiv
+		.querySelector(".secret-message-close")
+		.addEventListener("click", () => alertDiv.remove());
 
 	document.body.appendChild(alertDiv);
 

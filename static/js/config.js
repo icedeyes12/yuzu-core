@@ -145,19 +145,19 @@ async function loadProviderSettings() {
 			const titleHtml = `${provObj.name} ${isActive ? "<span class='badge-active'>Active</span>" : ""}`;
 
 			let innerHtml = `
-				<div class="provider-header" role="button" tabindex="0" aria-expanded="${isActive ? "true" : "false"}" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
-					<h3 style="margin: 0;">${titleHtml}</h3>
-					<span style="font-size: 1.2rem;">${isActive ? "▼" : "▲"}</span>
+				<div class="provider-header" role="button" tabindex="0" aria-expanded="${isActive ? "true" : "false"}">
+					<h3>${titleHtml}</h3>
+					<span class="provider-toggle-icon">${isActive ? "▼" : "▲"}</span>
 				</div>
-				<div class="provider-body" style="display: ${isActive ? "block" : "none"}; padding-top: 1rem;">
+				<div class="provider-body ${isActive ? "is-expanded" : ""}">
 					<div class="form-group">
 						<label for="key-${provider}">API Key (Saved in browser)</label>
-						<div style="display: flex; gap: 10px;">
-							<input type="password" id="key-${provider}" style="flex: 1;" placeholder="sk-..." value="${byok[provider]?.api_key || ""}">
+						<div class="provider-input-row">
+							<input type="password" id="key-${provider}" class="provider-flex-input" placeholder="sk-..." value="${byok[provider]?.api_key || ""}">
 							<button class="btn btn-secondary btn-sm save-byok-btn" type="button" data-provider="${provider}">Save Key</button>
 						</div>
 					</div>
-			`;
+`;
 
 			if (isCustom) {
 				innerHtml += `
@@ -171,9 +171,9 @@ async function loadProviderSettings() {
 			innerHtml += `
 					<div class="form-group">
 						<label for="model-${provider}">Model</label>
-						<div style="display: flex; gap: 10px;">
-							<select id="model-${provider}" class="form-select" style="flex: 1;">
-			`;
+						<div class="provider-input-row">
+							<select id="model-${provider}" class="form-select provider-flex-input">
+`;
 
 			const modelsForThisProv = data.all_models?.[provider] || [];
 			if (modelsForThisProv.length > 0) {
@@ -202,7 +202,7 @@ async function loadProviderSettings() {
 							<button class="btn btn-info btn-sm fetch-models-btn" type="button" data-provider="${provider}">Refresh Models</button>
 						</div>
 					</div>
-					<div class="config-actions" style="margin-top: 1.5rem; display: flex; gap: 10px;">
+					<div class="config-actions provider-actions">
 						<button class="btn btn-primary set-active-btn" type="button" data-provider="${provider}">Set as Active</button>
 						<button class="btn btn-success test-conn-btn" type="button" data-provider="${provider}">Test Connection</button>
 					</div>
@@ -221,9 +221,9 @@ async function loadProviderSettings() {
 			if (icon) icon.textContent = isActive ? "▲" : "▼";
 
 			header.addEventListener("click", () => {
-				const isExpanded = body.style.display === "block";
-				body.style.display = isExpanded ? "none" : "block";
-				header.setAttribute("aria-expanded", !isExpanded);
+				const isExpanded = body.classList.contains("is-expanded");
+				body.classList.toggle("is-expanded", !isExpanded);
+				header.setAttribute("aria-expanded", String(!isExpanded));
 				if (icon) icon.textContent = isExpanded ? "▼" : "▲";
 			});
 		});
@@ -918,10 +918,10 @@ function saveBYOKConfig() {
 		if (btn) {
 			const original = btn.textContent;
 			btn.textContent = "Saved ✓";
-			btn.style.background = "var(--accent-support)";
+			btn.classList.add("is-saved");
 			setTimeout(() => {
 				btn.textContent = original;
-				btn.style.background = "";
+				btn.classList.remove("is-saved");
 			}, 1800);
 		}
 		showSuccess("Provider configuration saved locally");
@@ -940,8 +940,8 @@ function toggleBYOKFields() {
 	const showConditional = provider === "ollama" || provider === "custom";
 	const baseGroup = document.getElementById("byok-baseurl-group");
 	const modelGroup = document.getElementById("byok-modelid-group");
-	if (baseGroup) baseGroup.style.display = showConditional ? "block" : "none";
-	if (modelGroup) modelGroup.style.display = showConditional ? "block" : "none";
+	if (baseGroup) baseGroup.classList.toggle("is-visible", showConditional);
+	if (modelGroup) modelGroup.classList.toggle("is-visible", showConditional);
 }
 
 window.saveBYOKConfig = saveBYOKConfig;
@@ -1011,20 +1011,6 @@ function showNotification(message, type = "info") {
 		</div>
 	`;
 
-	notification.style.cssText = `
-		position: fixed;
-		top: 100px;
-		right: 20px;
-		background: ${type === "success" ? "var(--status-success)" : type === "error" ? "var(--accent)" : "var(--accent)"};
-		color: var(--action-text);
-		padding: 1rem;
-		border-radius: 8px;
-		box-shadow: var(--shadow-md);
-		z-index: 10000;
-		max-width: 300px;
-		animation: slideInRight 0.3s ease;
-	`;
-
 	document.body.appendChild(notification);
 
 	setTimeout(() => {
@@ -1044,16 +1030,13 @@ function initializeConfigAnimations() {
 	const observer = new IntersectionObserver((entries) => {
 		entries.forEach((entry) => {
 			if (entry.isIntersecting) {
-				entry.target.style.opacity = "1";
-				entry.target.style.transform = "translateY(0)";
+				entry.target.classList.add("is-visible");
 			}
 		});
 	}, observerOptions);
 
 	document.querySelectorAll(".config-section").forEach((section) => {
-		section.style.opacity = "0";
-		section.style.transform = "translateY(20px)";
-		section.style.transition = "opacity 0.6s ease, transform 0.6s ease";
+		section.classList.add("animate-on-scroll");
 		observer.observe(section);
 	});
 
