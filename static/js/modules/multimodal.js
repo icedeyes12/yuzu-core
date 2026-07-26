@@ -52,35 +52,18 @@ export class MultimodalManager {
 	}
 
 	getSVGIcon(mode) {
-		const icons = {
-			chat: `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/>
-                   </svg>`,
-			image: `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM5 19l3.5-4.5 2.5 3.01L14.5 11l4.5 6H5z"/>
-                   </svg>`,
-			generate: `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM5 19l3.5-4.5 2.5 3.01L14.5 11l4.5 6H5z"/>
-                      <path d="M14.5 11l1.5-2 1.5 2 2-1-2-1.5 2-1.5-2-1-1.5 2-1.5-2-1 1.5L13 8l-1.5 2z" opacity="0.7"/>
-                     </svg>`,
-			download: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-                     </svg>`,
-			regenerate: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-                       </svg>`,
-			close: `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                   <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                  </svg>`,
-			upload: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
-                   </svg>`,
-			copy: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                 </svg>`,
-		};
-		return icons[mode] || icons.chat;
+		const iconName = mode === "regenerate" ? "refresh" : mode;
+		return (
+			window.VisualRegistry?.renderIcon?.(iconName, {
+				size:
+					mode === "close"
+						? 14
+						: mode === "download" || mode === "upload" || mode === "copy"
+							? 16
+							: 20,
+				strokeWidth: mode === "copy" ? 2 : 0,
+			}) || ""
+		);
 	}
 
 	setupEventListeners() {
@@ -340,7 +323,11 @@ export class MultimodalManager {
 			sendBtn.classList.add("stop-mode");
 		} else {
 			sendBtn.disabled = false;
-			sendBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
+			sendBtn.innerHTML =
+				window.VisualRegistry?.renderIcon?.("send", {
+					size: 20,
+					strokeWidth: 2.5,
+				}) || "";
 			sendBtn.classList.remove("stop-mode");
 		}
 	}

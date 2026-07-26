@@ -1,26 +1,32 @@
 import { escapeHtml } from "../dom-utils.js";
 
-const WEATHER_ICONS = {
-	"Clear sky": "☀️",
-	"Mainly clear": "🌤️",
-	"Partly cloudy": "⛅",
-	Overcast: "☁️",
-	Fog: "🌫️",
-	"Light drizzle": "🌦️",
-	"Moderate drizzle": "🌦️",
-	"Dense drizzle": "🌧️",
-	"Slight rain": "🌦️",
-	"Moderate rain": "🌧️",
-	"Heavy rain": "🌧️",
-	"Rain showers": "🌧️",
-	Thunderstorm: "⛈️",
-	"Slight snow": "🌨️",
-	"Moderate snow": "❄️",
-	"Heavy snow": "❄️",
-};
+const WEATHER_ICONS = Object.freeze({
+	"Clear sky": "weather-sunny",
+	"Mainly clear": "weather-partly-cloudy",
+	"Partly cloudy": "weather-partly-cloudy",
+	Overcast: "weather-cloudy",
+	Fog: "weather-fog",
+	"Light drizzle": "weather-rain",
+	"Moderate drizzle": "weather-rain",
+	"Dense drizzle": "weather-rain",
+	"Slight rain": "weather-rain",
+	"Moderate rain": "weather-rain",
+	"Heavy rain": "weather-rain",
+	"Rain showers": "weather-rain",
+	Thunderstorm: "weather-storm",
+	"Slight snow": "weather-snow",
+	"Moderate snow": "weather-snow",
+	"Heavy snow": "weather-snow",
+});
 
 function pickIcon(condition) {
-	return WEATHER_ICONS[condition] || "🌤️";
+	const iconName = WEATHER_ICONS[condition] || "weather-partly-cloudy";
+	return (
+		window.VisualRegistry?.renderIcon?.(iconName, {
+			size: 32,
+			className: "weather-icon",
+		}) || ""
+	);
 }
 
 function displayValue(value, suffix = "") {
