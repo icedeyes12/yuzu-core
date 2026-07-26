@@ -56,7 +56,12 @@ export function renderToolResultEvent(data) {
 	const statusClass = payload.ok
 		? "visual-status--success"
 		: "visual-status--danger";
-	return `<details class="tool-result" data-tool-name="${escapeAttr(payload.name)}" open><summary><span class="visual-status ${statusClass}"><span class="visual-status__mark" aria-hidden="true">${statusIcon}</span><span>${escapeHtml(payload.name)}</span></span></summary><div class="tool-result-content">${card}</div></details>`;
+	const canonicalName = canonicalToolName(payload.name);
+	const status =
+		canonicalName === "exec"
+			? ""
+			: `<div class="tool-result__status ${statusClass}"><span class="visual-status__mark" aria-hidden="true">${statusIcon}</span><span>${escapeHtml(payload.name)}</span></div>`;
+	return `<div class="tool-result" data-tool-name="${escapeAttr(payload.name)}">${status}<div class="tool-result-content">${card}</div></div>`;
 }
 
 function escapeHtml(value) {

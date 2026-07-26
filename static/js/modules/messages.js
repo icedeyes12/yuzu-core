@@ -17,11 +17,11 @@ export function createMessageElement(role, content, timestamp = null) {
 	const bubble = document.createElement("div");
 	bubble.className = "message-bubble";
 
-	// Header INSIDE the bubble for tool messages, else hidden/omitted
-	if (role === "tool" || role === "event_log") {
+	// System events get a small label; tool results provide their own context.
+	if (role === "event_log") {
 		const header = document.createElement("div");
 		header.className = "message-header";
-		header.textContent = role === "tool" ? "Tool Output" : "System Event";
+		header.textContent = "System Event";
 		bubble.appendChild(header);
 	}
 
@@ -98,6 +98,24 @@ export function copyFullMessage(content) {
 				// Clipboard failure is non-fatal and has no state impact.
 			});
 	}
+}
+
+function handleCopyMessageClick(event) {
+	const button = event.target.closest('[data-action="copy-message"]');
+	if (!button) return;
+	event.preventDefault();
+	copyFullMessage(button.getAttribute("data-message-content") || "");
+	button.classList.add("copied");
+	button.setAttribute("aria-label", "Message copied");
+	window.setTimeout(() => {
+		button.classList.remove("copied");
+		button.setAttribute("aria-label", "Copy message");
+	}, 1200);
+}
+
+if (!window.__yuzuCopyBinding) {
+	document.addEventListener("click", handleCopyMessageClick);
+	window.__yuzuCopyBinding = true;
 }
 
 /**
