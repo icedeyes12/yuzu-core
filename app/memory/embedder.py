@@ -1,6 +1,8 @@
 import asyncio
 import os
+
 import httpx
+
 from app.providers.base import _rate_limit_provider
 
 CHUTES_EMBED_ENDPOINT = "http://localhost:20128/v1/embeddings"
