@@ -45,3 +45,17 @@ Motion is distributed across page styles, shared utilities, markdown, and compon
 3. Add a neutral provider-card placeholder hook only if the existing provider contract can consume it without changing behavior.
 
 No public icon-library migration or broad asset rewrite should proceed without approval.
+
+## Phase 3.6 hygiene findings
+
+- No standalone SVG, PNG, WebP, JPG, or GIF is checked into the frontend. The only checked-in binary asset is `static/favicon.ico`, served by `main.py` and therefore live.
+- The empty asset directories under `static/assets/` are intentional ownership boundaries for future assets; they contain only `.gitkeep` files and no orphaned visual files.
+- Runtime image directories (`static/uploads/`, `static/generated_images/`, and `static/image_cache/`) are application data, not bundled frontend assets, and were not modified.
+- Provider, badge, and UI icon definitions have dedicated owners in `static/js/provider-registry.js`, `static/js/badge-registry.js`, and `static/js/icon-registry.js`. No separate provider logo files or duplicate asset paths exist.
+- CSS animation references were checked against their keyframes. No unreferenced keyframe was removed speculatively. The only safe cleanup was removing unused generic animation helpers from `static/css/style.css`; live `fadeIn` and `spin` keyframes remain because chat, skeleton, typing, and loading components reference them.
+
+## Bundle hygiene recommendations
+
+- Keep the favicon as the only static binary until owned provider or brand artwork is available; there is no image bundle to optimize currently.
+- Keep provider/icon/badge registry scripts loaded once per page before their consumers. They are small synchronous compatibility registries and are not candidates for lazy loading while the pages use them during initial render.
+- If standalone provider logos are added later, store them under `static/assets/logos/providers/`, reference them only from `provider-registry.js`, and measure them before adding them to every page.
