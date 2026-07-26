@@ -14,11 +14,12 @@
   <link rel="stylesheet" href="{{ url_for('static', path='css/theme.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', path='css/components/visual-language.css') }}">
 </head>
-<body class="about-body">
+<body class="about-body page-frame">
   {% include 'sidebar.html' %}
 
   <div class="page-layout">
-    <header class="about-header header-content" role="banner">
+    <header class="about-header page-header" role="banner">
+      <div class="page-header__inner">
       <button
         class="hamburger-menu hamburger"
         id="hamburgerMenu"
@@ -34,9 +35,10 @@
         <h1>About Yuzu Companion</h1>
         <p class="subtitle">A personal AI partner built with simplicity in mind</p>
       </div>
+      </div>
     </header>
 
-    <main class="about-main" aria-label="About the project">
+    <main class="about-main page-content" aria-label="About the project">
       <!-- Hero Section -->
       <section class="hero-section" aria-labelledby="hero-heading">
         <div class="hero-content">

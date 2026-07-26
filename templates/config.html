@@ -14,11 +14,12 @@
   <link rel="stylesheet" href="{{ url_for('static', path='css/theme.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', path='css/components/visual-language.css') }}">
 </head>
-<body class="config-body">
+<body class="config-body page-frame">
   {% include 'sidebar.html' %}
 
   <div class="page-layout">
-    <header class="config-header header-content" role="banner">
+    <header class="config-header page-header" role="banner">
+      <div class="page-header__inner">
       <button
         class="hamburger-menu hamburger"
         id="hamburgerMenu"
@@ -34,9 +35,10 @@
         <h1>Configuration</h1>
         <p>Customize your Yuzu Companion experience</p>
       </div>
+      </div>
     </header>
 
-    <main class="config-content" aria-label="Configuration settings">
+    <main class="config-content page-content" aria-label="Configuration settings">
       <section class="config-section" aria-labelledby="identity-heading">
         <h2 id="identity-heading">Identity Settings</h2>
         <form id="identity-form" novalidate>

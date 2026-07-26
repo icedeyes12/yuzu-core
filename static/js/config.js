@@ -3,6 +3,7 @@
 
 // Global config state (populated from /api/config)
 let appConfig = null;
+const PROVIDER_MODELS_CACHE_KEY = "yuzu_provider_models";
 
 function setTextIfExists(id, value) {
 	const el = document.getElementById(id);
@@ -34,18 +35,19 @@ function getProfileAdvancedSource(data) {
 	return data?.advanced || data?.profile || data || {};
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
 	console.log("Config page loaded - initializing...");
-	loadAppConfig().then(() => {
-		loadProfileData();
-		loadGlobalKnowledge();
-		loadProviderSettings();
-		loadImageModel();
-		loadVisionModel();
-		setupEventListeners();
-		loadBYOKConfig();
-		initializeConfigAnimations();
-	});
+	await loadAppConfig();
+	await Promise.all([
+		loadProfileData(),
+		loadGlobalKnowledge(),
+		loadImageModel(),
+	]);
+	await loadProviderSettings();
+	await loadVisionModel();
+	setupEventListeners();
+	loadBYOKConfig();
+	initializeConfigAnimations();
 });
 
 // Load application configuration from backend (SSOT)
@@ -120,6 +122,13 @@ async function loadProviderSettings() {
 				: data.current_provider || "Not set",
 		);
 
+		const modelCatalog = readModelCatalog();
+		Object.entries(data.all_models || {}).forEach(([provider, models]) => {
+			if (Array.isArray(models) && models.length)
+				modelCatalog[provider] = models;
+		});
+		saveModelCatalog(modelCatalog);
+
 		const providersList = window.VisualRegistry.listProviders();
 
 		providersList.forEach((provObj) => {
@@ -164,7 +173,7 @@ async function loadProviderSettings() {
 							<select id="model-${provider}" class="form-select provider-flex-input">
 `;
 
-			const modelsForThisProv = data.all_models?.[provider] || [];
+			const modelsForThisProv = (modelCatalog[provider] || []).slice();
 			if (modelsForThisProv.length > 0) {
 				if (
 					isActive &&
@@ -262,6 +271,20 @@ function saveBYOKForProvider(provider) {
 	showSuccess(`${provider} key saved in browser.`);
 }
 
+function readModelCatalog() {
+	try {
+		const raw = localStorage.getItem(PROVIDER_MODELS_CACHE_KEY);
+		const parsed = raw ? JSON.parse(raw) : {};
+		return parsed && typeof parsed === "object" ? parsed : {};
+	} catch {
+		return {};
+	}
+}
+
+function saveModelCatalog(catalog) {
+	localStorage.setItem(PROVIDER_MODELS_CACHE_KEY, JSON.stringify(catalog));
+}
+
 async function fetchModelsForProvider(provider) {
 	const btn = document.querySelector(
 		`.fetch-models-btn[data-provider="${provider}"]`,
@@ -287,17 +310,19 @@ async function fetchModelsForProvider(provider) {
 
 		if (data.status === "success" && data.models) {
 			const select = document.getElementById(`model-${provider}`);
+			const previous = select?.value || "";
+			const catalog = readModelCatalog();
+			catalog[provider] = [...new Set(data.models.filter(Boolean))];
+			saveModelCatalog(catalog);
 			if (select) {
-				const currentSelect = document.getElementById("ai-model");
-				const prev = currentSelect?.value || null;
 				select.innerHTML = "";
-				const list = data.models.slice();
-				if (prev && !list.includes(prev)) list.unshift(prev);
+				const list = catalog[provider].slice();
+				if (previous && !list.includes(previous)) list.unshift(previous);
 				list.forEach((model) => {
 					const opt = document.createElement("option");
 					opt.value = model;
 					opt.textContent = model;
-					if (model === prev) opt.selected = true;
+					if (model === previous) opt.selected = true;
 					select.appendChild(opt);
 				});
 			}
@@ -1042,17 +1067,21 @@ async function loadLocation() {
 		const response = await fetch("/api/profile");
 		if (!response.ok) return;
 		const data = await response.json();
-		const profile = data.profile || {};
-		setValueIfExists("location-lat", profile.location_lat || "");
-		setValueIfExists("location-lon", profile.location_lon || "");
+		const profile = data.profile || data;
+		setValueIfExists("location-lat", profile.location_lat ?? "");
+		setValueIfExists("location-lon", profile.location_lon ?? "");
 	} catch (e) {
 		console.error("Failed to load location:", e);
 	}
 }
 
 async function saveLocation() {
-	const lat = parseFloat(getValueIfExists("location-lat", "0")) || 0.0;
-	const lon = parseFloat(getValueIfExists("location-lon", "0")) || 0.0;
+	const lat = Number.parseFloat(getValueIfExists("location-lat", ""));
+	const lon = Number.parseFloat(getValueIfExists("location-lon", ""));
+	if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+		showError("Enter both latitude and longitude before saving.");
+		return;
+	}
 
 	try {
 		const response = await fetch("/api/update_location", {

@@ -14,11 +14,12 @@
   <link rel="stylesheet" href="{{ url_for('static', path='css/components/visual-language.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', path='css/home.css') }}">
 </head>
-<body class="home-body">
+<body class="home-body page-frame">
   {% include 'sidebar.html' %}
 
   <div class="page-layout">
-    <header class="home-header header-content">
+    <header class="home-header page-header">
+      <div class="page-header__inner">
       <button
         class="hamburger-menu hamburger"
         id="hamburgerMenu"
@@ -35,9 +36,10 @@
         <span class="home-wordmark">Yuzu</span>
         <span class="home-presence">private companion</span>
       </div>
+      </div>
     </header>
 
-    <main class="home-content" aria-label="Yuzu entry point">
+    <main class="home-content page-content" aria-label="Yuzu entry point">
       <section class="home-intro" aria-labelledby="home-intro-heading">
         <p class="eyebrow">Welcome back, {{ profile.user_name|capitalize }}</p>
         <h1 id="home-intro-heading">Your conversation is waiting.</h1>

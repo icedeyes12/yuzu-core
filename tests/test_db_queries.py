@@ -79,6 +79,15 @@ class TestBuildProfileUpdate:
     def test_global_knowledge_is_not_a_profile_field(self):
         assert build_profile_update({"global_knowledge": {"facts": []}}) is None
 
+    def test_location_fields_are_persisted(self):
+        result = build_profile_update({"location_lat": -6.2, "location_lon": 106.8})
+        assert result is not None
+        query, params = result
+        assert "location_lat = %s::REAL" in query
+        assert "location_lon = %s::REAL" in query
+        assert params[:2] == [-6.2, 106.8]
+
+
     def test_affection_coerced_to_int(self):
         result = build_profile_update({"affection": "99"})
         assert result is not None
