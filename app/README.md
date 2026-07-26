@@ -272,6 +272,7 @@ class ToolParam:
     required: bool = True
     default: Optional[str] = None
 
+
 @dataclass
 class ToolDefinition:
     name: str
@@ -492,23 +493,19 @@ On session start:
 
 ```python
 {
-    "user_name": str,             # User's display name
-    "partner_name": str,          # AI companion name
-    "affection": int,             # 0-100 affection level
-    "theme": str,                 # UI theme
-    "memory": {                   # Player profile memory
+    "user_name": str,  # User's display name
+    "partner_name": str,  # AI companion name
+    "affection": int,  # 0-100 affection level
+    "theme": str,  # UI theme
+    "memory": {  # Player profile memory
         "player_summary": str,
-        "key_facts": {
-            "likes": [],
-            "dislikes": [],
-            "personality_traits": []
-        }
+        "key_facts": {"likes": [], "dislikes": [], "personality_traits": []},
     },
     "providers_config": {
         "preferred_provider": str,
         "preferred_model": str,
         "vision_model_preferences": {"provider": str, "model": str},
-        "streaming_enabled": bool
+        "streaming_enabled": bool,
     },
     "context": {
         # Loose top-level context (legacy)
@@ -519,12 +516,9 @@ On session start:
         "additional_instructions": str,
         "history_limit": int,
         # Preset storage (current SSOT for runtime params)
-        "presets": [
-            {"name": str, "payload": {...}, "is_active": bool},
-            ...
-        ],
-        "active_preset": str
-    }
+        "presets": [{"name": str, "payload": {...}, "is_active": bool}, ...],
+        "active_preset": str,
+    },
 }
 ```
 
