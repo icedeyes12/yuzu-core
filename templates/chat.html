@@ -35,9 +35,10 @@
         class="hamburger-menu hamburger"
         id="hamburgerMenu"
         onclick="toggleSidebar()"
-        aria-label="Open navigation sidebar"
         aria-expanded="false"
-        aria-controls="mainSidebar">
+        aria-controls="mainSidebar"
+        type="button"
+        aria-label="Open conversations and settings">
         <span aria-hidden="true"></span>
         <span aria-hidden="true"></span>
         <span aria-hidden="true"></span>
@@ -48,11 +49,9 @@
         <div class="session-name" id="sessionName" aria-live="polite"></div>
       </div>
 
-      <div class="affection-display" aria-label="Affection level: {{ profile.affection }}%">
+      <div class="affection-display" data-affection-level="{{ profile.affection }}" aria-label="Affection level: {{ profile.affection }}%">
         <span class="affection-icon" aria-hidden="true"></span>
-        <div class="affection-bar" role="progressbar" aria-valuenow="{{ profile.affection }}" aria-valuemin="0" aria-valuemax="100">
-          <div class="affection-fill" style="width: {{ profile.affection }}%;"></div>
-        </div>
+        <span class="affection-value" aria-hidden="true">{{ profile.affection }}%</span>
       </div>
     </header>
 
