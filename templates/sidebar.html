@@ -13,17 +13,8 @@
     <!-- Navigation -->
     <nav class="sidebar-section" aria-label="Main navigation">
       <h3>Navigation</h3>
-      <a href="/" class="sidebar-link {% if current_page == 'home' %}active{% endif %}" onclick="toggleSidebar()" aria-current="{% if current_page == 'home' %}page{% else %}false{% endif %}">
-        <span class="sidebar-icon home-icon" aria-hidden="true"></span> Home
-      </a>
       <a href="/chat" class="sidebar-link {% if current_page == 'chat' %}active{% endif %}" onclick="toggleSidebar()" aria-current="{% if current_page == 'chat' %}page{% else %}false{% endif %}">
         <span class="sidebar-icon chat-icon" aria-hidden="true"></span> Chat
-      </a>
-      <a href="/config" class="sidebar-link {% if current_page == 'config' %}active{% endif %}" onclick="toggleSidebar()" aria-current="{% if current_page == 'config' %}page{% else %}false{% endif %}">
-        <span class="sidebar-icon config-icon" aria-hidden="true"></span> Config
-      </a>
-      <a href="/about" class="sidebar-link {% if current_page == 'about' %}active{% endif %}" onclick="toggleSidebar()" aria-current="{% if current_page == 'about' %}page{% else %}false{% endif %}">
-        <span class="sidebar-icon about-icon" aria-hidden="true"></span> About
       </a>
     </nav>
 
@@ -77,15 +68,29 @@
     </section>
 
     <!-- Session Management -->
-    <section class="sidebar-section" id="sessionSection" aria-label="Chat sessions">
-      <h3>Sessions</h3>
-      <button class="sidebar-btn" type="button" onclick="createNewSession()" aria-label="Create new chat session">
-        <span class="sidebar-icon add-icon" aria-hidden="true"></span> New Chat
+    <section class="sidebar-section sidebar-section--sessions" id="sessionSection" aria-label="Chat sessions">
+      <h3>Conversations</h3>
+      <button class="sidebar-btn" type="button" onclick="createNewSession()" aria-label="Start a new conversation">
+        <span class="sidebar-icon add-icon" aria-hidden="true"></span> New conversation
       </button>
       <ul class="sessions-list" id="sidebarSessionsList" aria-label="Session list">
         <li class="loading" role="status" aria-live="polite">Loading sessions...</li>
       </ul>
     </section>
+
+    <!-- Navigation -->
+    <nav class="sidebar-section sidebar-section--secondary" aria-label="Application navigation">
+      <h3>More</h3>
+      <a href="/" class="sidebar-link {% if current_page == 'home' %}active{% endif %}" onclick="toggleSidebar()" aria-current="{% if current_page == 'home' %}page{% else %}false{% endif %}">
+        <span class="sidebar-icon home-icon" aria-hidden="true"></span> Home
+      </a>
+      <a href="/config" class="sidebar-link {% if current_page == 'config' %}active{% endif %}" onclick="toggleSidebar()" aria-current="{% if current_page == 'config' %}page{% else %}false{% endif %}">
+        <span class="sidebar-icon config-icon" aria-hidden="true"></span> Config
+      </a>
+      <a href="/about" class="sidebar-link {% if current_page == 'about' %}active{% endif %}" onclick="toggleSidebar()" aria-current="{% if current_page == 'about' %}page{% else %}false{% endif %}">
+        <span class="sidebar-icon about-icon" aria-hidden="true"></span> About
+      </a>
+    </nav>
   </div>
 </aside>
 

@@ -927,3 +927,22 @@
 	border-color: rgba(239, 68, 68, 0.4);
 	color: #fca5a5;
 }
+
+.sidebar-section--sessions {
+	order: -1;
+}
+
+.sidebar-section--sessions h3 {
+	color: var(--text-primary);
+}
+
+.sidebar-section--secondary {
+	margin-top: auto;
+	opacity: 0.78;
+}
+
+.sidebar-section--secondary h3 {
+	font-size: 0.7rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
