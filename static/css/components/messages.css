@@ -27,17 +27,6 @@
 	margin: 0 auto;
 }
 
-@keyframes fadeIn {
-	from {
-		opacity: 0;
-		transform: translateY(10px);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
-}
-
 /* === USER MESSAGES === */
 .message.user-message {
 	align-self: flex-end;
