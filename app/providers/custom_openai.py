@@ -30,10 +30,33 @@ class CustomOpenAIProvider(AIProvider):
             url += "/chat/completions"
         return url
 
-    async def fetch_live_models(self) -> list[str]:
-        # For custom providers, we don't have a static list.
-        # But we must return something to pass the "models > 0" test_connection check,
-        # or we could implement a real fetch. We will just return a placeholder.
+    async def fetch_live_models(self, api_key: str | None = None, base_url: str | None = None) -> list[str]:
+        if not base_url:
+            return ["custom-model-1", "custom-model-2"]
+            
+        import httpx
+        url = base_url.rstrip("/")
+        if "/chat/completions" in url:
+            url = url.split("/chat/completions")[0]
+        elif "/v1/messages" in url:
+            url = url.split("/v1/messages")[0]
+        url += "/models"
+        
+        headers = {}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+            
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(url, headers=headers, timeout=10.0)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    models = [m.get("id") for m in data.get("data", []) if m.get("id")]
+                    if models:
+                        return models
+        except Exception as e:
+            logger.warning("Failed to fetch custom models from %s: %s", url, e)
+            
         return ["custom-model-1", "custom-model-2"]
 
     async def get_models(self) -> list[str]:

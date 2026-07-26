@@ -132,11 +132,12 @@ class ConfigService:
             raise ValueError(f"Unknown provider: {provider_name}")
 
         if model_name:
-            models = await ai_manager.get_provider_models(provider_name)
-            if model_name not in models:
-                raise ValueError(
-                    f"Model '{model_name}' is not available for provider '{provider_name}'"
-                )
+            if not provider_name.startswith("custom_"):
+                models = await ai_manager.get_provider_models(provider_name)
+                if model_name not in models:
+                    raise ValueError(
+                        f"Model '{model_name}' is not available for provider '{provider_name}'"
+                    )
 
         profile = await Database.get_profile(user_id)
         config = dict(profile.get("providers_config") or {})

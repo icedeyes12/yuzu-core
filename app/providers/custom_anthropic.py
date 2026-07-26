@@ -31,7 +31,7 @@ class CustomAnthropicProvider(AIProvider):
             url += "/messages"
         return url
 
-    async def fetch_live_models(self) -> list[str]:
+    async def fetch_live_models(self, api_key: str | None = None, base_url: str | None = None) -> list[str]:
         # For custom providers, we don't have a static list.
         # But we must return something to pass the "models > 0" check,
         # or we could implement a real fetch. We will just return a placeholder.
