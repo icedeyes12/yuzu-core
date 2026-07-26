@@ -80,6 +80,8 @@ async function loadProfileData() {
 		setValueIfExists("partner-name", data.partner_name || "");
 		setValueIfExists("persona-preset", data.persona_preset || "helpful");
 		setValueIfExists("persona-prompt", data.persona_prompt || "");
+		setValueIfExists("location-lat", data.location_lat ?? "");
+		setValueIfExists("location-lon", data.location_lon ?? "");
 
 		const visPrefs = data.providers_config?.vision_model_preferences || {};
 		setTextIfExists(
