@@ -386,33 +386,12 @@ class AIProviderManager:
         all_models: dict[str, list[str]] = {}
         for provider_name, provider in self.providers.items():
             if asyncio.iscoroutinefunction(provider.get_models):
-                static_models = list(await provider.get_models())
+                models = await provider.get_models()
             else:
-                static_models = list(provider.get_models())  # type: ignore[call-overload]
-
-            live_models: list[str] = []
-            fetcher = getattr(provider, "fetch_live_models", None)
-            if callable(fetcher):
-                try:
-                    result = fetcher()
-                    if asyncio.iscoroutine(result):
-                        result = await result
-                    if isinstance(result, list):
-                        live_models = [
-                            model for model in result if isinstance(model, str)
-                        ]
-                except Exception as exc:  # noqa: BLE001
-                    logger.debug(
-                        "[models] live fetch %s failed: %s", provider_name, exc
-                    )
-
-            merged: list[str] = []
-            seen: set[str] = set()
-            for model in (*static_models, *live_models):
-                if model and model not in seen:
-                    seen.add(model)
-                    merged.append(model)
-            all_models[provider_name] = merged
+                models = provider.get_models()  # type: ignore[call-overload]
+            all_models[provider_name] = [
+                model for model in models if isinstance(model, str) and model
+            ]
         return all_models
 
     async def send_message(
