@@ -1,13 +1,13 @@
 <!-- FILE: templates/index.html -->
-<!-- DESCRIPTION: Home page for AI companion system -->
+<!-- DESCRIPTION: Quiet entry point for the Yuzu conversation -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="user-id" content="{{ profile.user_name }}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Yuzu Companion — your personal AI companion dashboard.">
-  <title>Home | Yuzu Companion</title>
+  <meta name="description" content="Yuzu Companion — a private, persistent digital entity.">
+  <title>Yuzu | Companion</title>
   <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', path='css/sidebar.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', path='css/theme.css') }}">
@@ -18,42 +18,48 @@
   {% include 'sidebar.html' %}
 
   <div class="page-layout">
-    <header class="home-header header-content" role="banner">
+    <header class="home-header header-content">
       <button
         class="hamburger-menu hamburger"
         id="hamburgerMenu"
         onclick="toggleSidebar()"
         aria-label="Open navigation sidebar"
         aria-expanded="false"
-        aria-controls="mainSidebar">
+        aria-controls="mainSidebar"
+        type="button">
         <span aria-hidden="true"></span>
         <span aria-hidden="true"></span>
         <span aria-hidden="true"></span>
       </button>
       <div class="header-title">
-        <h1>Welcome, {{ profile.user_name|capitalize }}</h1>
-        <div class="header-subtitle">
-          <span class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> {{ profile.partner_name|capitalize }}</span>
-          <span class="chip affection-chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="var(--accent)" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg> {{ profile.affection }}</span>
-        </div>
+        <span class="home-wordmark">Yuzu</span>
+        <span class="home-presence">private companion</span>
       </div>
     </header>
 
-    <main class="home-content" aria-label="Home dashboard">
-      <nav class="menu" aria-label="Quick navigation">
-        <a href="/chat" class="card" aria-label="Go to Chat — Talk with your partner">
-          <div class="card-icon" aria-hidden="true">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-          </div>
-          <h2>Chat</h2>
-          <p>Talk with your partner</p>
+    <main class="home-content" aria-label="Yuzu entry point">
+      <section class="home-intro" aria-labelledby="home-intro-heading">
+        <p class="eyebrow">Welcome back, {{ profile.user_name|capitalize }}</p>
+        <h1 id="home-intro-heading">Your conversation is waiting.</h1>
+        <p class="home-intro-copy">Continue with {{ profile.partner_name|capitalize }} whenever you are ready. No setup required.</p>
+        <a href="/chat" class="home-primary-action">
+          <span>Open conversation</span>
+          <span aria-hidden="true">→</span>
         </a>
-        <a href="/config" class="card" aria-label="Go to Config — Adjust settings">
-          <div class="card-icon" aria-hidden="true">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-          </div>
-          <h2>Config</h2>
-          <p>Adjust settings</p>
+      </section>
+
+      <nav class="home-secondary-nav" aria-label="Secondary navigation">
+        <a href="/config" class="home-secondary-link">
+          <span class="home-secondary-link__icon" aria-hidden="true">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0-.33-1.82 1.65 1.65 0 0 1-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a2 2 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 0 2.83 0 2 2 0 0 0 0-2.83l-.06-.06a1.65 1.65 0 0 0-.33-1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          </span>
+          <span><strong>Configuration</strong><small>Adjust how Yuzu behaves</small></span>
+          <span class="home-secondary-link__arrow" aria-hidden="true">→</span>
+        </a>
+        <a href="/about" class="home-secondary-link">
+          <span class="home-secondary-link__icon" aria-hidden="true">?</span>
+          <span><strong>About Yuzu</strong><small>The reason this exists</small></span>
+          <span class="home-secondary-link__arrow" aria-hidden="true">→</span>
         </a>
       </nav>
     </main>
@@ -62,9 +68,9 @@
   </div>
 
   <script src="{{ url_for('static', path='js/provider-registry.js') }}"></script>
-<script src="{{ url_for('static', path='js/badge-registry.js') }}"></script>
-<script src="{{ url_for('static', path='js/icon-registry.js') }}"></script>
-<script src="{{ url_for('static', path='js/visual-registry.js') }}"></script>
+  <script src="{{ url_for('static', path='js/badge-registry.js') }}"></script>
+  <script src="{{ url_for('static', path='js/icon-registry.js') }}"></script>
+  <script src="{{ url_for('static', path='js/visual-registry.js') }}"></script>
   <script src="{{ url_for('static', path='js/sidebar.js') }}"></script>
   <script src="{{ url_for('static', path='js/home.js') }}"></script>
 </body>
