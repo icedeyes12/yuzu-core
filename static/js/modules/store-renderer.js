@@ -1,4 +1,4 @@
-import { createMessageElement } from "./messages.js";
+import { createMessageElement, renderMessageContent } from "./messages.js";
 import { scrollToBottom } from "./scroll.js";
 import { chatStore } from "./store.js";
 import { renderToolResultEvent } from "./tool-renderer/index.js";
@@ -88,9 +88,7 @@ export class DOMRenderer {
 				});
 			}
 		} else {
-			html = window.renderMessageContent
-				? window.renderMessageContent(msg.content, msg.role === "user")
-				: msg.content;
+			html = renderMessageContent(msg.content, msg.role === "user");
 		}
 
 		// 2. Attachments

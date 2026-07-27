@@ -77,9 +77,3 @@ export async function loadChatHistory(sessionId = null) {
 		}
 	}
 }
-
-export function setupScrollListener() {
-	const chatContainer = document.getElementById("chatContainer");
-	if (!chatContainer) return;
-	chatContainer.addEventListener("scroll", () => {});
-}

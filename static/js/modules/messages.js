@@ -34,18 +34,12 @@ export function createMessageElement(role, content, timestamp = null) {
 		try {
 			// Find the actual tool name from a passed message object (handled by store-renderer later)
 			// But since createMessageElement doesn't get the full object, store-renderer handles tool rendering
-			contentContainer.innerHTML = window.renderMessageContent(content, false);
+			contentContainer.innerHTML = renderMessageContent(content, false);
 		} catch (_e) {
-			contentContainer.innerHTML = window.renderMessageContent(content, false);
+			contentContainer.innerHTML = renderMessageContent(content, false);
 		}
-	} else if (window.renderMessageContent) {
-		contentContainer.innerHTML = window.renderMessageContent(
-			content,
-			role === "user",
-		);
 	} else {
-		contentContainer.textContent =
-			content === null || content === undefined ? "" : String(content);
+		contentContainer.innerHTML = renderMessageContent(content, role === "user");
 	}
 
 	bubble.appendChild(contentContainer);
@@ -84,19 +78,8 @@ export function createMessageElement(role, content, timestamp = null) {
  * @param {string} content - Content to copy
  */
 export function copyFullMessage(content) {
-	// Uses global ClipboardUtils
-	if (typeof window.ClipboardUtils !== "undefined") {
-		window.ClipboardUtils.copyText(content);
-	} else {
-		// Fallback for cases where utility hasn't loaded
-		navigator.clipboard
-			.writeText(content)
-			.then(() => {
-				console.log("Message copied to clipboard");
-			})
-			.catch(() => {
-				// Clipboard failure is non-fatal and has no state impact.
-			});
+	if (navigator.clipboard?.writeText) {
+		void navigator.clipboard.writeText(content).catch(() => {});
 	}
 }
 

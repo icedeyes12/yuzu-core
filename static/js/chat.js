@@ -14,10 +14,8 @@ import {
 	loadChatHistory,
 	MESSAGES_PER_PAGE,
 	MultimodalManager,
-	renderMessageContent,
 	router,
 	scrollToBottom,
-	setupScrollListener,
 	showChatSkeleton,
 } from "./modules/index.js";
 
@@ -110,13 +108,10 @@ async function initializeChat() {
 		initializeInputBehavior();
 
 		// Initialize URL router
-		const urlSessionId = router.initFromURL();
+		const urlSessionId = router.initFromURL(handleSessionSwitch);
 
 		// Load session name
 		await loadCurrentSessionName();
-
-		// Initialize Scroll Listener
-		setupScrollListener();
 
 		// Stream state is now fully managed by ConversationStore + EventRouter
 
@@ -159,7 +154,6 @@ window.scrollToBottom = scrollToBottom;
 window.copyFullMessage = copyFullMessage;
 window.loadChatHistory = loadChatHistory;
 window.handleSessionSwitch = handleSessionSwitch;
-window.renderMessageContent = renderMessageContent;
 window.isRenderableHistoryRole = isRenderableHistoryRole;
 window.MESSAGES_PER_PAGE = MESSAGES_PER_PAGE;
 window.generateMessageId = generateMessageId;

@@ -16,7 +16,7 @@ export {
 // Stream manager
 export { eventRouter } from "./event-router.js";
 // History loading
-export { loadChatHistory, setupScrollListener } from "./history.js";
+export { loadChatHistory } from "./history.js";
 // Input behavior
 export { initializeInputBehavior } from "./input.js";
 // Messages
