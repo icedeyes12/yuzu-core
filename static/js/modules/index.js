@@ -27,6 +27,7 @@ export {
 	findMessageById,
 	formatTimestamp,
 	getCurrentTime24h,
+	initializeMessageActions,
 	isRenderableHistoryRole,
 	renderMessageContent,
 } from "./messages.js";

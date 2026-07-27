@@ -6,6 +6,7 @@ import {
 	chatStore,
 	createScrollButton,
 	initializeInputBehavior,
+	initializeMessageActions,
 	MultimodalManager,
 } from "./modules/index.js";
 import { router } from "./modules/router.js";
@@ -52,6 +53,7 @@ async function initializeChat() {
 
 		// Initialize input behavior
 		initializeInputBehavior();
+		initializeMessageActions();
 
 		// Initialize URL router
 		const urlSessionId = router.initFromURL(handleSessionSwitch);
