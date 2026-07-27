@@ -5,7 +5,6 @@
 		node.textContent = String(value ?? "");
 		return node.innerHTML;
 	}
-
 	function renderLogo(provider, size = "default") {
 		const identity = provider || global.ProviderRegistry?.fallback;
 		if (!identity) return "";
@@ -35,9 +34,6 @@
 		renderLogo,
 		renderBadge(...args) {
 			return global.BadgeRegistry?.render(...args) || "";
-		},
-		renderIcon(...args) {
-			return global.IconRegistry?.render(...args) || "";
 		},
 	});
 })(window);

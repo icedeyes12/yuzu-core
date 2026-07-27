@@ -360,7 +360,7 @@ function loadSidebarSessions() {
 				renameBtn.className = "session-action-btn rename-btn";
 				renameBtn.title = "Rename session";
 				renameBtn.innerHTML =
-					window.VisualRegistry?.renderIcon?.("edit", { size: 14 }) || "";
+					window.RuntimeIconRenderer?.render("edit", { size: 14 }) || "";
 				renameBtn.onclick = (e) => {
 					e.stopPropagation();
 					renameSessionPrompt(session.id, session.name);
@@ -373,7 +373,7 @@ function loadSidebarSessions() {
 					deleteBtn.className = "session-action-btn delete-btn";
 					deleteBtn.title = "Delete session";
 					deleteBtn.innerHTML =
-						window.VisualRegistry?.renderIcon?.("trash", { size: 14 }) || "";
+						window.RuntimeIconRenderer?.render("trash", { size: 14 }) || "";
 					deleteBtn.onclick = (e) => {
 						e.stopPropagation();
 						deleteSessionPrompt(session.id);

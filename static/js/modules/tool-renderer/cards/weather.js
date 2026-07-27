@@ -22,7 +22,7 @@ const WEATHER_ICONS = Object.freeze({
 function pickIcon(condition) {
 	const iconName = WEATHER_ICONS[condition] || "weather-partly-cloudy";
 	return (
-		window.VisualRegistry?.renderIcon?.(iconName, {
+		window.RuntimeIconRenderer?.render(iconName, {
 			size: 32,
 			className: "weather-icon",
 		}) || ""

@@ -54,7 +54,7 @@ export class MultimodalManager {
 	getSVGIcon(mode) {
 		const iconName = mode === "regenerate" ? "refresh" : mode;
 		return (
-			window.VisualRegistry?.renderIcon?.(iconName, {
+			window.RuntimeIconRenderer?.render(iconName, {
 				size:
 					mode === "close"
 						? 14
@@ -324,7 +324,7 @@ export class MultimodalManager {
 		} else {
 			sendBtn.disabled = false;
 			sendBtn.innerHTML =
-				window.VisualRegistry?.renderIcon?.("send", {
+				window.RuntimeIconRenderer?.render("send", {
 					size: 20,
 					strokeWidth: 2.5,
 				}) || "";

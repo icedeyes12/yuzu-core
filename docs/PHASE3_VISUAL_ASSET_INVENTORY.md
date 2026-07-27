@@ -51,7 +51,7 @@ No public icon-library migration or broad asset rewrite should proceed without a
 - No standalone SVG, PNG, WebP, JPG, or GIF is checked into the frontend. The only checked-in binary asset is `static/favicon.ico`, served by `main.py` and therefore live.
 - The empty asset directories under `static/assets/` are intentional ownership boundaries for future assets; they contain only `.gitkeep` files and no orphaned visual files.
 - Runtime image directories (`static/uploads/`, `static/generated_images/`, and `static/image_cache/`) are application data, not bundled frontend assets, and were not modified.
-- Provider, badge, and UI icon definitions have dedicated owners in `static/js/provider-registry.js`, `static/js/badge-registry.js`, and `static/js/icon-registry.js`. No separate provider logo files or duplicate asset paths exist.
+- Provider, badge, and UI icon definitions have dedicated owners in `static/js/provider-registry.js`, `static/js/badge-registry.js`, and `static/js/runtime-icon-renderer.js`. No separate provider logo files or duplicate asset paths exist.
 - CSS animation references were checked against their keyframes. No unreferenced keyframe was removed speculatively. The only safe cleanup was removing unused generic animation helpers from `static/css/style.css`; live `fadeIn` and `spin` keyframes remain because chat, skeleton, typing, and loading components reference them.
 
 ## Bundle hygiene recommendations

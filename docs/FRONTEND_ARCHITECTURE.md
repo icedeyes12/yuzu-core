@@ -14,7 +14,7 @@ Status: current contract for the vanilla JS/CSS frontend.
 | Tool rendering | `static/js/modules/tool-renderer/` | Validate normalized tool payloads and render tool cards only. |
 | Reusable DOM helpers | `static/js/modules/dom-utils.js` and tool-renderer `dom-utils.js` | Escaping, safe URLs, and state-preserving DOM helpers only. |
 | Visual tokens and CSS | `static/css/theme.css` and per-page/component stylesheets | CSS owns visual values, states, layout, and motion. |
-| Visual identity data | `static/js/provider-registry.js`, `icon-registry.js`, `badge-registry.js` | Return definitions and compatibility helpers; do not own application state or network calls. |
+| Visual identity data | `static/js/provider-registry.js`, `runtime-icon-renderer.js`, `badge-registry.js` | Return definitions and compatibility helpers; do not own application state or network calls. |
 
 ## Data Flow
 
@@ -36,15 +36,15 @@ Visual identity: registry definitions -> UI renderer -> DOM
 - `theme.css` owns core and semantic design tokens.
 - Component styles consume semantic tokens; they do not encode theme-specific values.
 - `provider-registry.js` owns provider identity only: names, family, logo metadata, accent, and lifecycle flags.
-- `icon-registry.js` owns UI icon definitions and compatibility rendering. It does not know providers or application state.
+- `runtime-icon-renderer.js` owns runtime-generated SVG definitions and rendering. It does not know providers or application state.
 - `badge-registry.js` owns badge labels and classes. It does not render provider logos.
-- `visual-registry.js` is a compatibility facade for existing callers. New code should import the narrow registry contract where module imports are available.
+- `visual-registry.js` is a compatibility facade for existing provider and badge callers; runtime icons are consumed directly from `RuntimeIconRenderer`. New code should import the narrow registry contract where module imports are available.
 - Renderers convert definitions into DOM/HTML. Registries must not make network requests or mutate application state.
 
 Allowed dependency direction:
 
 ```text
-provider-registry   icon-registry   badge-registry
+provider-registry   runtime-icon-renderer   badge-registry
          \              |              /
                  visual facade
                        |
@@ -64,7 +64,7 @@ Provider identity may select a provider logo or fallback icon by data, but icon 
 
 ### Icon
 
-1. Add one definition to `static/js/icon-registry.js` with a stable name and `viewBox`.
+1. Add one definition to `static/js/runtime-icon-renderer.js` with a stable name and `viewBox`.
 2. Use `currentColor` so CSS controls the semantic color.
 3. Keep accessible naming at the consuming button/control; decorative icons must be hidden from assistive technology.
 4. Do not add a second ad-hoc inline SVG for an existing icon.

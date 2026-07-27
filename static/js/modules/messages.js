@@ -68,7 +68,7 @@ export function createMessageElement(role, content, timestamp = null) {
 	copyBtn.setAttribute("data-message-content", content);
 	copyBtn.title = "Copy full message";
 	copyBtn.innerHTML =
-		window.VisualRegistry?.renderIcon?.("copy", {
+		window.RuntimeIconRenderer?.render("copy", {
 			size: 16,
 			strokeWidth: 2,
 		}) || "";
