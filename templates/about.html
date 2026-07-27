@@ -23,7 +23,7 @@
       <button
         class="hamburger-menu hamburger"
         id="hamburgerMenu"
-        onclick="toggleSidebar()"
+        data-action="toggle-sidebar"
         aria-label="Open navigation sidebar"
         aria-expanded="false"
         aria-controls="mainSidebar">
@@ -166,11 +166,7 @@
     {% include "partials/footer.html" %}
   </div>
 
-  <script src="{{ url_for('static', path='js/provider-registry.js') }}"></script>
-<script src="{{ url_for('static', path='js/badge-registry.js') }}"></script>
-<script src="{{ url_for('static', path='js/runtime-icon-renderer.js') }}"></script>
-<script src="{{ url_for('static', path='js/visual-registry.js') }}"></script>
-  <script src="{{ url_for('static', path='js/sidebar.js') }}"></script>
-  <script src="{{ url_for('static', path='js/about.js') }}"></script>
+  <script type="module" src="{{ url_for('static', path='js/sidebar.js') }}"></script>
+  <script type="module" src="{{ url_for('static', path='js/about.js') }}"></script>
 </body>
 </html>

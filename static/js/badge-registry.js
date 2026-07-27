@@ -1,31 +1,30 @@
-/* Badge labels and compatibility rendering for provider identity. */
-(function registerBadgeRegistry(global) {
-	const badgeLabels = Object.freeze({
-		official: "Official",
-		community: "Community",
-		custom: "Custom",
-		experimental: "Experimental",
-		deprecated: "Deprecated",
-		preview: "Preview",
-		local: "Local",
-		unknown: "Unknown",
-	});
+/* Badge labels and presentation data. */
 
-	function escapeHtml(value) {
-		const node = document.createElement("span");
-		node.textContent = String(value ?? "");
-		return node.innerHTML;
-	}
+const badgeLabels = Object.freeze({
+	official: "Official",
+	community: "Community",
+	custom: "Custom",
+	experimental: "Experimental",
+	deprecated: "Deprecated",
+	preview: "Preview",
+	local: "Local",
+	unknown: "Unknown",
+});
 
-	function getLabel(badge) {
-		return badgeLabels[badge] || badgeLabels.unknown;
-	}
+function escapeHtml(value) {
+	const node = document.createElement("span");
+	node.textContent = String(value ?? "");
+	return node.innerHTML;
+}
 
-	function render(provider) {
-		const identity = provider || global.ProviderRegistry?.fallback;
-		if (!identity) return "";
-		return `<span class="provider-identity-badge provider-identity-badge--${escapeHtml(identity.badge)}">${getLabel(identity.badge)}</span>`;
-	}
+export function getLabel(badge) {
+	return badgeLabels[badge] || badgeLabels.unknown;
+}
 
-	global.BadgeRegistry = Object.freeze({ badgeLabels, getLabel, render });
-})(window);
+export function render(provider) {
+	const identity = provider;
+	if (!identity) return "";
+	return `<span class="provider-identity-badge provider-identity-badge--${escapeHtml(identity.badge)}">${getLabel(identity.badge)}</span>`;
+}
+
+export const BadgeRegistry = Object.freeze({ badgeLabels, getLabel, render });

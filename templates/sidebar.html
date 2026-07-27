@@ -6,14 +6,14 @@
 <aside class="sidebar" id="mainSidebar" aria-label="Application sidebar">
   <div class="sidebar-header">
     <h2>Yuzu Companion</h2>
-    <button class="close-sidebar" onclick="toggleSidebar()" aria-label="Close sidebar" type="button">×</button>
+    <button class="close-sidebar" data-action="toggle-sidebar" aria-label="Close sidebar" type="button">×</button>
   </div>
 
   <div class="sidebar-content">
     <!-- Navigation -->
     <nav class="sidebar-section" aria-label="Main navigation">
       <h3>Navigation</h3>
-      <a href="/chat" class="sidebar-link {% if current_page == 'chat' %}active{% endif %}" onclick="toggleSidebar()" aria-current="{% if current_page == 'chat' %}page{% else %}false{% endif %}">
+      <a href="/chat" class="sidebar-link {% if current_page == 'chat' %}active{% endif %}" data-action="toggle-sidebar" aria-current="{% if current_page == 'chat' %}page{% else %}false{% endif %}">
         <span class="sidebar-icon chat-icon" aria-hidden="true"></span> Chat
       </a>
     </nav>
@@ -70,7 +70,7 @@
     <!-- Session Management -->
     <section class="sidebar-section sidebar-section--sessions" id="sessionSection" aria-label="Chat sessions">
       <h3>Conversations</h3>
-      <button class="sidebar-btn" type="button" onclick="createNewSession()" aria-label="Start a new conversation">
+      <button class="sidebar-btn" type="button" data-action="create-session" aria-label="Start a new conversation">
         <span class="sidebar-icon add-icon" aria-hidden="true"></span> New conversation
       </button>
       <ul class="sessions-list" id="sidebarSessionsList" aria-label="Session list">
@@ -81,13 +81,13 @@
     <!-- Navigation -->
     <nav class="sidebar-section sidebar-section--secondary" aria-label="Application navigation">
       <h3>More</h3>
-      <a href="/" class="sidebar-link {% if current_page == 'home' %}active{% endif %}" onclick="toggleSidebar()" aria-current="{% if current_page == 'home' %}page{% else %}false{% endif %}">
+      <a href="/" class="sidebar-link {% if current_page == 'home' %}active{% endif %}" data-action="toggle-sidebar" aria-current="{% if current_page == 'home' %}page{% else %}false{% endif %}">
         <span class="sidebar-icon home-icon" aria-hidden="true"></span> Home
       </a>
-      <a href="/config" class="sidebar-link {% if current_page == 'config' %}active{% endif %}" onclick="toggleSidebar()" aria-current="{% if current_page == 'config' %}page{% else %}false{% endif %}">
+      <a href="/config" class="sidebar-link {% if current_page == 'config' %}active{% endif %}" data-action="toggle-sidebar" aria-current="{% if current_page == 'config' %}page{% else %}false{% endif %}">
         <span class="sidebar-icon config-icon" aria-hidden="true"></span> Config
       </a>
-      <a href="/about" class="sidebar-link {% if current_page == 'about' %}active{% endif %}" onclick="toggleSidebar()" aria-current="{% if current_page == 'about' %}page{% else %}false{% endif %}">
+      <a href="/about" class="sidebar-link {% if current_page == 'about' %}active{% endif %}" data-action="toggle-sidebar" aria-current="{% if current_page == 'about' %}page{% else %}false{% endif %}">
         <span class="sidebar-icon about-icon" aria-hidden="true"></span> About
       </a>
     </nav>
@@ -95,4 +95,4 @@
 </aside>
 
 <!-- Overlay -->
-<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()" aria-hidden="true"></div>
+<div class="sidebar-overlay" id="sidebarOverlay" data-action="toggle-sidebar" aria-hidden="true"></div>

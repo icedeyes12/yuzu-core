@@ -78,7 +78,4 @@ export function initializeInputBehavior() {
 		// Also observe the input itself for height changes
 		resizeObserver.observe(input);
 	}
-
-	// Expose globally for post-history and post-message updates
-	window.updateDynamicLayout = updateDynamicLayout;
 }

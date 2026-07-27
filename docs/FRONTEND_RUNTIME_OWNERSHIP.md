@@ -41,7 +41,7 @@ Status: current ownership contract for the vanilla frontend.
 
 ## Global API rules
 
-Globals are limited to browser callbacks and cross-script boundaries that still exist in the non-module templates: sidebar actions, chat session switching, the `ConversationStore`/router bridge, and runtime icon access. Module-internal rendering uses imports rather than a `window.renderMessageContent` compatibility hop.
+Application globals are not used for module communication. Page entrypoints and shared UI modules are ES modules and communicate through imports. Remaining `window` usage is limited to browser APIs (`fetch`, `location`, `history`, `confirm`, `setTimeout`), third-party globals loaded by templates (`marked`, `hljs`, `mermaid`, `renderMathInElement`), and narrow one-time guards for delegated browser behavior. Runtime icons, provider identity, storage keys, session routing, and chat state are imported directly.
 
 ## Registry rules
 
