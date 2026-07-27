@@ -99,6 +99,9 @@ from app.db.models_async import (
     rename_session_async as _pg_rename_session_async,
 )
 from app.db.models_async import (
+    rename_session_if_placeholder_async as _pg_rename_session_if_placeholder_async,
+)
+from app.db.models_async import (
     revoke_session_token_async as _pg_revoke_session_token_async,
 )
 from app.db.models_async import (
@@ -202,6 +205,9 @@ class Database:
     get_all_sessions = _proxy_async(_pg_get_all_sessions_async)
     switch_session = _proxy_async(_pg_switch_session_async)
     rename_session = _proxy_async(_pg_rename_session_async)
+    rename_session_if_placeholder = _proxy_async(
+        _pg_rename_session_if_placeholder_async
+    )
     delete_session = _proxy_async(_pg_delete_session_async)
 
     # Pipeline bookkeeping

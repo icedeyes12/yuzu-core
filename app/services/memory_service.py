@@ -35,7 +35,10 @@ class MemoryService:
 
         if await _is_fence_active_async(session_id, user_id=user_id):
             return
-        asyncio.create_task(MemoryService.trigger_pipeline_async(session_id, user_id))
+        try:
+            await MemoryService.trigger_pipeline_async(session_id, user_id)
+        except Exception as exc:
+            logger.info("Memory pipeline skipped: %s", type(exc).__name__)
 
     @staticmethod
     async def trigger_pipeline_async(

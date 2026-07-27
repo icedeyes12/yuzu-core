@@ -712,6 +712,16 @@ SQL_SESSION_ACTIVATE_ONE_SCOPED = "UPDATE chat_sessions SET is_active = TRUE, up
 
 SQL_SESSION_RENAME_SCOPED = "UPDATE chat_sessions SET name = %s, updated_at = %s WHERE id = %s AND user_id = %s AND deleted_at IS NULL"
 
+SQL_SESSION_RENAME_PLACEHOLDER_SCOPED = """
+UPDATE chat_sessions
+SET name = %s, updated_at = %s
+WHERE id = %s
+  AND user_id = %s
+  AND deleted_at IS NULL
+  AND (name IS NULL OR BTRIM(name) = '' OR name = 'New Chat')
+RETURNING id
+"""
+
 SQL_SESSION_DELETE_SCOPED = (
     "UPDATE chat_sessions SET deleted_at = NOW() WHERE id = %s AND user_id = %s"
 )
@@ -1199,6 +1209,7 @@ __all__ = [
     "SQL_SESSION_DEACTIVATE_FOR_USER",
     "SQL_SESSION_ACTIVATE_ONE_SCOPED",
     "SQL_SESSION_RENAME_SCOPED",
+    "SQL_SESSION_RENAME_PLACEHOLDER_SCOPED",
     "SQL_SESSION_DELETE_SCOPED",
     "SQL_PROFILE_INSERT_DEFAULT",
     "DEFAULT_PROFILE_PARAMS",

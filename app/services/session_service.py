@@ -111,7 +111,8 @@ class SessionService:
         session_id: str, active_session: dict[str, Any], *, user_id: str
     ) -> None:
         """Rename a 'New Chat' session once it has reached the trigger count (async)."""
-        if active_session.get("name") != "New Chat":
+        session_name = active_session.get("name")
+        if session_name not in (None, "", "New Chat"):
             return
 
         msg_count = await Database.get_session_messages_count(session_id)
@@ -137,8 +138,11 @@ class SessionService:
             )
             return
 
-        await Database.rename_session(session_id, name, user_id)
-        log.info("auto_name: renamed session %d to '%s'", session_id, name)
+        renamed = await Database.rename_session_if_placeholder(
+            session_id, name, user_id
+        )
+        if renamed:
+            log.info("auto_name: renamed session %d to '%s'", session_id, name)
 
     @staticmethod
     def generate_connection_msg(

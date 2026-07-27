@@ -45,6 +45,7 @@ from app.db.queries import (
     SQL_SESSION_DELETE_SCOPED,
     SQL_SESSION_INCREMENT_COUNT,
     SQL_SESSION_INSERT,
+    SQL_SESSION_RENAME_PLACEHOLDER_SCOPED,
     SQL_SESSION_RENAME_SCOPED,
     SQL_SESSION_RESET_COUNT,
     SQL_SESSION_SELECT_ACTIVE_FOR_USER,
@@ -225,6 +226,21 @@ async def rename_session_async(session_id: str, new_name: str, user_id: str) -> 
         return True
     except Exception as e:  # noqa: BLE001
         log.error("rename_session_async failed: %s", e)
+        return False
+
+
+async def rename_session_if_placeholder_async(
+    session_id: str, new_name: str, user_id: str
+) -> bool:
+    """(｡•̀ᴗ-)✧"""
+    try:
+        row = await pg_fetchone_async(
+            SQL_SESSION_RENAME_PLACEHOLDER_SCOPED,
+            (new_name, datetime.now(), session_id, user_id),
+        )
+        return row is not None
+    except Exception as e:  # noqa: BLE001
+        log.error("rename_session_if_placeholder_async failed: %s", e)
         return False
 
 
@@ -611,6 +627,7 @@ __all__ = [
     "create_session_async",
     "switch_session_async",
     "rename_session_async",
+    "rename_session_if_placeholder_async",
     "delete_session_async",
     "increment_message_count_async",
     "get_pipeline_state_async",

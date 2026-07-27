@@ -1,6 +1,7 @@
 # Architecture: one asynchronous extraction pass per eligible message batch.
 #
 # Trigger gates: >=40 new messages, or >=20 after 3 hours idle.
+# A completed chat turn is not itself a trigger; the backlog gates below are.
 #
 # Fence mechanism (aligned with plast-mem):
 #   - in_progress_fence: prevents concurrent pipeline runs for same session
