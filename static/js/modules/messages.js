@@ -97,9 +97,12 @@ function handleCopyMessageClick(event) {
 	}, 1200);
 }
 
-if (!window.__yuzuCopyBinding) {
+let copyBindingInitialized = false;
+
+export function initializeMessageActions() {
+	if (copyBindingInitialized) return;
 	document.addEventListener("click", handleCopyMessageClick);
-	window.__yuzuCopyBinding = true;
+	copyBindingInitialized = true;
 }
 
 /**
