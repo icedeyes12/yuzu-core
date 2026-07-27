@@ -4,7 +4,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="user-id" content="{{ profile.user_name }}">
+  <meta name="user-id" content="{{ user_id }}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Configure your Yuzu Companion — providers, identity, and advanced settings.">
   <title>Configuration | Yuzu Companion</title>
@@ -127,7 +127,7 @@
             <input id="image-edit-provider" type="text" autocomplete="off" placeholder="Not configured">
           </div>
         </div>
-        <div class="form-row">
+                <div class="form-row">
           <div class="form-group">
             <label for="image-endpoint">Image generation endpoint</label>
             <input id="image-endpoint" type="url" autocomplete="url">
@@ -135,6 +135,16 @@
           <div class="form-group">
             <label for="image-edit-endpoint">Image edit endpoint</label>
             <input id="image-edit-endpoint" type="url" autocomplete="url">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="image-extra-body">Image generation extra params (JSON)</label>
+            <textarea id="image-extra-body" rows="3" class="form-input" spellcheck="false" placeholder="{ &quot;size&quot;: &quot;1024x1024&quot; }"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="image-edit-extra-body">Image edit extra params (JSON)</label>
+            <textarea id="image-edit-extra-body" rows="3" class="form-input" spellcheck="false" placeholder="{ &quot;steps&quot;: 20 }"></textarea>
           </div>
         </div>
         <div class="config-actions">

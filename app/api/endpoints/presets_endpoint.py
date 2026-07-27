@@ -7,7 +7,6 @@ from app.api.utils import get_current_user
 from app.core.presets import (
     active_preset,
     list_presets,
-    make_default_preset,
     sync_top_level_with_active,
 )
 from app.core.presets import (
@@ -120,25 +119,4 @@ async def api_delete_preset(
         raise
     except Exception as exc:
         log.error("delete_preset failed: %s", exc)
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.post("/presets/ensure_default")
-async def api_ensure_default_preset(user_id: str = Depends(get_current_user)):
-    """Bootstrap a default preset if the user has none yet."""
-    try:
-        context = await _load_context(user_id)
-        presets = list_presets(context)
-        if not presets:
-            presets = [make_default_preset()]
-            context["presets"] = presets
-            context = sync_top_level_with_active(context)
-            await _save_context(context, user_id)
-        return {
-            "status": "success",
-            "presets": presets,
-            "active": active_preset(context),
-        }
-    except Exception as exc:
-        log.error("ensure_default_preset failed: %s", exc)
         raise HTTPException(status_code=500, detail="Internal server error")

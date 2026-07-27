@@ -36,8 +36,6 @@ class ConversationService:
     async def get_stream_generator(
         user_message: str,
         interface: str = "web",
-        provider: str | None = None,
-        model: str | None = None,
         images: list[UploadFile] | None = None,
         user_id: str | None = None,
     ) -> AsyncIterator[str]:
@@ -71,8 +69,6 @@ class ConversationService:
             session_id,
             user_message,
             interface=interface,
-            provider=provider,
-            model=model,
             attachments=attachments,  # Pass paths for vision context
             user_id=user_id,
         )

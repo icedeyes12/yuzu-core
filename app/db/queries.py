@@ -80,6 +80,8 @@ SCHEMA_DDL: tuple[str, ...] = (
         image_endpoint TEXT,
         image_edit_provider TEXT,
         image_edit_endpoint TEXT,
+        image_extra_body JSONB,
+        image_edit_extra_body JSONB,
         vision_model TEXT,
         location_lat REAL,
         location_lon REAL,
@@ -90,6 +92,8 @@ SCHEMA_DDL: tuple[str, ...] = (
     """,
     "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_endpoint TEXT",
     "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_edit_endpoint TEXT",
+    "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_extra_body JSONB",
+    "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_edit_extra_body JSONB",
     "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_provider TEXT",
     "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_edit_provider TEXT",
     "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_model TEXT",
@@ -581,6 +585,13 @@ _PROFILE_TEXT_FIELDS = (
     "image_endpoint",
     "image_edit_endpoint",
 )
+_PROFILE_JSON_FIELDS = (
+    "session_history",
+    "providers_config",
+    "context",
+    "image_extra_body",
+    "image_edit_extra_body",
+)
 _PROFILE_LOCATION_FIELDS = {
     "location_lat": ("REAL", float),
     "location_lon": ("REAL", float),
@@ -664,6 +675,8 @@ def parse_profile_row(row: dict | None) -> dict:
         "image_endpoint": row.get("image_endpoint"),
         "image_edit_provider": row.get("image_edit_provider"),
         "image_edit_endpoint": row.get("image_edit_endpoint"),
+        "image_extra_body": _parse_json(row.get("image_extra_body")),
+        "image_edit_extra_body": _parse_json(row.get("image_edit_extra_body")),
         "vision_model": row.get("vision_model"),
         "location_lat": row.get("location_lat"),
         "location_lon": row.get("location_lon"),

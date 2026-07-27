@@ -4,16 +4,14 @@
 // === GLOBAL FETCH INTERCEPTOR (auth gate + Phase 3 BYOK) ===
 (() => {
 	const metaUserId =
-		document.querySelector('meta[name="user-id"]')?.content || "default";
-	window.BYOK_STORAGE_KEY = `yuzu_byok_config_${metaUserId}`;
-
-	const legacyConfig = localStorage.getItem("yuzu_byok_config");
-	if (legacyConfig) {
-		if (!localStorage.getItem(window.BYOK_STORAGE_KEY)) {
-			localStorage.setItem(window.BYOK_STORAGE_KEY, legacyConfig);
-		}
-		localStorage.removeItem("yuzu_byok_config");
-	}
+		document.querySelector('meta[name="user-id"]')?.content || "";
+	const storageNamespace = metaUserId ? `user_${metaUserId}` : "";
+	window.BYOK_STORAGE_KEY = storageNamespace
+		? `${storageNamespace}_api_keys`
+		: "";
+	window.USER_THEME_STORAGE_KEY = storageNamespace
+		? `${storageNamespace}_theme`
+		: "";
 
 	const _origFetch = window.fetch;
 	const _LLM_ENDPOINTS = [
@@ -30,7 +28,9 @@
 
 		if (_LLM_ENDPOINTS.some((ep) => url.includes(ep))) {
 			try {
-				const raw = localStorage.getItem(window.BYOK_STORAGE_KEY);
+				const raw = window.BYOK_STORAGE_KEY
+					? localStorage.getItem(window.BYOK_STORAGE_KEY)
+					: null;
 				if (raw) {
 					init.headers.set("X-BYOK-Config", btoa(encodeURIComponent(raw)));
 				}
@@ -168,7 +168,26 @@ function loginWith(provider) {
 	window.location.href = `/api/auth/login?provider=${provider}`;
 }
 
+function clearUserScopedClientState() {
+	const prefix = window.BYOK_STORAGE_KEY
+		? window.BYOK_STORAGE_KEY.replace(/_api_keys$/, "")
+		: "";
+	for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+		const key = localStorage.key(index);
+		if (prefix && key?.startsWith(`${prefix}_`)) {
+			localStorage.removeItem(key);
+		}
+	}
+	if (window.BYOK_STORAGE_KEY) localStorage.removeItem(window.BYOK_STORAGE_KEY);
+	if (window.USER_THEME_STORAGE_KEY) {
+		localStorage.removeItem(window.USER_THEME_STORAGE_KEY);
+	}
+	window.BYOK_STORAGE_KEY = "";
+	window.USER_THEME_STORAGE_KEY = "";
+}
+
 async function handleLogout() {
+	clearUserScopedClientState();
 	try {
 		await fetch("/api/auth/logout", { method: "POST" });
 	} catch (_e) {
@@ -270,7 +289,9 @@ function switchTheme(theme) {
 			option.classList.add("active");
 		}
 	}
-	localStorage.setItem("yuzu-theme", theme);
+	if (window.USER_THEME_STORAGE_KEY) {
+		localStorage.setItem(window.USER_THEME_STORAGE_KEY, theme);
+	}
 }
 
 function showSessionsSkeleton() {
@@ -584,7 +605,9 @@ function showNotification(message, type = "info") {
 
 document.addEventListener("DOMContentLoaded", () => {
 	const savedTheme =
-		localStorage.getItem("yuzu-theme") || "stellar-night-suisei";
+		(window.USER_THEME_STORAGE_KEY
+			? localStorage.getItem(window.USER_THEME_STORAGE_KEY)
+			: null) || "stellar-night-suisei";
 	document.body.setAttribute("data-theme", savedTheme);
 	_currentTheme = savedTheme;
 	initCustomDropdown();

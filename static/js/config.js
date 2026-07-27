@@ -3,7 +3,27 @@
 
 // Global config state (populated from /api/config)
 let appConfig = null;
-const PROVIDER_MODELS_CACHE_KEY = "yuzu_provider_models";
+function getUserStorageKey(suffix) {
+	const userId = document.querySelector('meta[name="user-id"]')?.content || "";
+	return userId ? `user_${userId}_${suffix}` : "";
+}
+
+const PROVIDER_MODELS_CACHE_KEY = getUserStorageKey("provider_models");
+
+function parseOptionalJson(elementId) {
+	const raw = getValueIfExists(elementId, "").trim();
+	if (!raw) return null;
+	try {
+		const parsed = JSON.parse(raw);
+		if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+			throw new Error("Expected a JSON object");
+		}
+		return parsed;
+	} catch (_error) {
+		showError(`${elementId} must contain a valid JSON object.`);
+		throw new Error(`Invalid JSON in ${elementId}`);
+	}
+}
 
 function setTextIfExists(id, value) {
 	const el = document.getElementById(id);
@@ -262,7 +282,9 @@ async function loadProviderSettings() {
 
 function saveBYOKForProvider(provider) {
 	const byok = JSON.parse(
-		localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}",
+		(window.BYOK_STORAGE_KEY &&
+			localStorage.getItem(window.BYOK_STORAGE_KEY)) ||
+			"{}",
 	);
 	const keyInput = document.getElementById(`key-${provider}`);
 	if (!keyInput) return;
@@ -275,6 +297,10 @@ function saveBYOKForProvider(provider) {
 		byok[provider].base_url = baseInput?.value || "";
 	}
 
+	if (!window.BYOK_STORAGE_KEY) {
+		showError("User scope is unavailable; provider key was not saved.");
+		return;
+	}
 	localStorage.setItem(window.BYOK_STORAGE_KEY, JSON.stringify(byok));
 	showSuccess(`${provider} key saved in browser.`);
 }
@@ -290,7 +316,9 @@ function readModelCatalog() {
 }
 
 function saveModelCatalog(catalog) {
-	localStorage.setItem(PROVIDER_MODELS_CACHE_KEY, JSON.stringify(catalog));
+	if (PROVIDER_MODELS_CACHE_KEY) {
+		localStorage.setItem(PROVIDER_MODELS_CACHE_KEY, JSON.stringify(catalog));
+	}
 }
 
 function getCachedModels(catalog, provider) {
@@ -349,7 +377,9 @@ async function fetchModelsForProvider(provider) {
 
 	try {
 		const byok = JSON.parse(
-			localStorage.getItem(window.BYOK_STORAGE_KEY) || "{}",
+			(window.BYOK_STORAGE_KEY &&
+				localStorage.getItem(window.BYOK_STORAGE_KEY)) ||
+				"{}",
 		);
 		const provConfig = byok[provider] || {};
 
@@ -562,9 +592,23 @@ function loadImageModelFromConfig() {
 	setValueIfExists("image-model", imageModel);
 	setTextIfExists("current-image-model", imageModel || "Not configured");
 	setValueIfExists("image-endpoint", appConfig?.profile?.image_endpoint);
-	setValueIfExists("image-edit-endpoint", appConfig?.profile?.image_edit_endpoint);
+	setValueIfExists(
+		"image-edit-endpoint",
+		appConfig?.profile?.image_edit_endpoint,
+	);
 	setValueIfExists("image-provider", appConfig?.profile?.image_provider);
-	setValueIfExists("image-edit-provider", appConfig?.profile?.image_edit_provider);
+	setValueIfExists(
+		"image-edit-provider",
+		appConfig?.profile?.image_edit_provider,
+	);
+	setValueIfExists(
+		"image-extra-body",
+		JSON.stringify(appConfig?.profile?.image_extra_body || {}, null, 2),
+	);
+	setValueIfExists(
+		"image-edit-extra-body",
+		JSON.stringify(appConfig?.profile?.image_edit_extra_body || {}, null, 2),
+	);
 }
 
 // Load vision model on page load
@@ -738,6 +782,8 @@ async function saveImageModel() {
 			image_endpoint: getValueIfExists("image-endpoint", "") || null,
 			image_edit_provider: getValueIfExists("image-edit-provider", "") || null,
 			image_edit_endpoint: getValueIfExists("image-edit-endpoint", "") || null,
+			image_extra_body: parseOptionalJson("image-extra-body"),
+			image_edit_extra_body: parseOptionalJson("image-edit-extra-body"),
 		};
 		const response = await fetch("/api/update_profile", {
 			method: "POST",
@@ -907,11 +953,18 @@ function loadAdvancedSettingsFromData(data) {
 	if (vision) vision.checked = Boolean(source.enable_vision);
 	const tempOut = document.getElementById("val-temperature");
 	if (tempOut)
-		tempOut.textContent = source.temperature == null ? "Not configured" : Number(source.temperature).toFixed(1);
+		tempOut.textContent =
+			source.temperature == null
+				? "Not configured"
+				: Number(source.temperature).toFixed(1);
 	const topPOut = document.getElementById("val-top-p");
-	if (topPOut) topPOut.textContent = source.top_p == null ? "Not configured" : Number(source.top_p).toFixed(2);
+	if (topPOut)
+		topPOut.textContent =
+			source.top_p == null ? "Not configured" : Number(source.top_p).toFixed(2);
 	const topKOut = document.getElementById("val-top-k");
-	if (topKOut) topKOut.textContent = source.top_k == null ? "Not configured" : String(source.top_k);
+	if (topKOut)
+		topKOut.textContent =
+			source.top_k == null ? "Not configured" : String(source.top_k);
 }
 
 async function saveAdvancedSettings() {
@@ -959,7 +1012,7 @@ async function saveAdvancedSettings() {
 }
 
 // === BYOK (Bring Your Own Key) — localStorage only, zero server storage ===
-const BYOK_STORAGE_KEY = window.BYOK_STORAGE_KEY || "yuzu_byok_config";
+const BYOK_STORAGE_KEY = window.BYOK_STORAGE_KEY || "";
 
 function saveBYOKConfig() {
 	const provider = document.getElementById("byok-provider")?.value || "";
@@ -973,6 +1026,13 @@ function saveBYOKConfig() {
 	}
 
 	const config = { provider, apiKey, baseUrl, modelId };
+
+	if (!BYOK_STORAGE_KEY) {
+		showError(
+			"User scope is unavailable; provider configuration was not saved.",
+		);
+		return;
+	}
 
 	try {
 		localStorage.setItem(BYOK_STORAGE_KEY, JSON.stringify(config));

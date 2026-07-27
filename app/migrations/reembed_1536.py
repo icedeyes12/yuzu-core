@@ -23,8 +23,7 @@ async def _reembed_table(
     """Add embedding_new column, re-embed all rows, return (total, processed)."""
     async with AsyncPgSession() as s:
         await s.execute(
-            f"ALTER TABLE {table} "
-            f"ADD COLUMN IF NOT EXISTS embedding_new vector(1536)"
+            f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS embedding_new vector(1536)"
         )
 
     total = 0
@@ -79,9 +78,7 @@ async def _swap_columns(table: str) -> None:
     async with AsyncPgSession() as s:
         await s.execute(f"DROP INDEX IF EXISTS idx_{table}_embedding")
         await s.execute(f"ALTER TABLE {table} DROP COLUMN IF EXISTS embedding")
-        await s.execute(
-            f"ALTER TABLE {table} RENAME COLUMN embedding_new TO embedding"
-        )
+        await s.execute(f"ALTER TABLE {table} RENAME COLUMN embedding_new TO embedding")
 
 
 async def _try_hnsw_index(table: str) -> None:
@@ -105,9 +102,7 @@ async def _validate(table: str, total: int) -> None:
         )
         null_count = row["cnt"] if row else -1
     if null_count > 0:
-        raise RuntimeError(
-            f"[{table}] validation failed: {null_count} rows still NULL"
-        )
+        raise RuntimeError(f"[{table}] validation failed: {null_count} rows still NULL")
     log.info("[%s] validation passed: %d rows, zero loss", table, total)
 
 

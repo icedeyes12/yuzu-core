@@ -519,7 +519,12 @@ class AIProviderManager:
         from app.core.llm_context import LLMContext
 
         ctx = LLMContext.from_profile(profile or {})
-        if not ctx.provider or not ctx.model or ctx.provider not in self.providers:
+        if (
+            not ctx.provider
+            or not ctx.model
+            or ctx.provider not in self.providers
+            or not ctx.api_key
+        ):
             logger.info("[INT] memory/background LLM is not configured")
             return None
         runtime_parameters = {
@@ -539,9 +544,6 @@ class AIProviderManager:
         except Exception as exc:
             logger.info("[INT] background LLM skipped: %s", type(exc).__name__)
             return None
-
-    async def auto_send_message(self, messages: list[dict], **kwargs) -> str | None:
-        return await self._internal_llm_call(messages, **kwargs)
 
 
 _ai_manager_instance = None

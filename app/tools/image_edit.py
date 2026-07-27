@@ -9,13 +9,11 @@ from pathlib import Path
 
 import httpx
 
-from app.core.llm_context import LLMContext
+from app.core.context import get_request_keyring
 from app.db import Database
 from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
 
 logger = logging.getLogger(__name__)
-
-
 
 
 TOOL_DEFINITION = ToolDefinition(
@@ -121,7 +119,7 @@ async def execute(arguments, **kwargs) -> dict:
         )
 
     profile = await Database.get_profile(kwargs.get("user_id")) or {}
-    partner_name = profile.get("partner_name", "Yuzu")
+    partner_name = profile.get("partner_name") or ""
 
     validated_path = _validate_image_path(image_path)
     if not validated_path:
@@ -142,19 +140,13 @@ async def execute(arguments, **kwargs) -> dict:
         )
 
     try:
-        image_provider = profile.get("image_edit_provider") or profile.get("image_provider")
-        image_profile = {
-            **profile,
-            "providers_config": {
-                **(profile.get("providers_config") or {}),
-                "preferred_provider": image_provider,
-                "preferred_model": profile.get("image_model"),
-            },
-        }
-        ctx = LLMContext.from_profile(image_profile)
-        api_key = ctx.api_key
+        image_provider = profile.get("image_edit_provider") or profile.get(
+            "image_provider"
+        )
         endpoint = profile.get("image_edit_endpoint")
         image_model = profile.get("image_model")
+        keyring = get_request_keyring(image_provider) if image_provider else None
+        api_key = keyring.key if keyring else None
         if not api_key or not image_provider or not endpoint or not image_model:
             return error_result(
                 "NOT CONFIGURED",
@@ -163,13 +155,13 @@ async def execute(arguments, **kwargs) -> dict:
                 partner_name,
             )
 
-
         logger.debug(f"[IMAGE EDIT] Editing: {image_path}")
         logger.debug(f"[IMAGE EDIT] Prompt: {prompt}")
 
         payload = {
             "prompt": prompt,
             "image_b64s": [image_base64],
+            **(profile.get("image_edit_extra_body") or {}),
         }
 
         headers = {
@@ -230,7 +222,7 @@ async def execute(arguments, **kwargs) -> dict:
                 "image_path": f"/static/generated_images/{filename}",
                 "original_path": image_path,
                 "image_html": f'<img src="/static/generated_images/{filename}" alt="Edited Image">',
-                "model": "qwen-image-edit",
+                "model": image_model,
             },
             TOOL_DEFINITION,
             full_command,
@@ -239,7 +231,7 @@ async def execute(arguments, **kwargs) -> dict:
 
     except Exception as e:
         logger.debug(f"[IMAGE EDIT] Exception: {str(e)}")
-        partner_name = profile.get("partner_name", "Yuzu")
+        partner_name = profile.get("partner_name") or ""
         return error_result(
             "Image edit failed. Please try again later.",
             TOOL_DEFINITION,

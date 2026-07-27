@@ -122,6 +122,8 @@ async def api_update_profile(
             "image_endpoint",
             "image_edit_provider",
             "image_edit_endpoint",
+            "image_extra_body",
+            "image_edit_extra_body",
         ]
 
         context_updates = {}
@@ -175,8 +177,8 @@ async def api_proxy_models(
         if provider not in ai_manager.get_available_providers():
             raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
 
-        api_key = request.headers.get("X-Provider-Key", "")
-        base_url = request.headers.get("X-Provider-BaseUrl", "")
+        api_key = request.headers.get("X-Provider-Key")
+        base_url = request.headers.get("X-Provider-BaseUrl")
 
         url = ""
         if provider == "openrouter":
@@ -243,9 +245,9 @@ async def api_refresh_provider_models(
         kwargs = {}
         sig = inspect.signature(fetcher)
         if "api_key" in sig.parameters:
-            kwargs["api_key"] = request.headers.get("X-Provider-Key", "")
+            kwargs["api_key"] = request.headers.get("X-Provider-Key")
         if "base_url" in sig.parameters:
-            kwargs["base_url"] = request.headers.get("X-Provider-BaseUrl", "")
+            kwargs["base_url"] = request.headers.get("X-Provider-BaseUrl")
 
         models = await fetcher(**kwargs)
         models = sorted({model for model in models if isinstance(model, str) and model})

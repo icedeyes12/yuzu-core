@@ -12,11 +12,6 @@ from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODELS = [
-    "deepseek-chat",
-    "deepseek-reasoner",
-]
-
 
 class DeepSeekProvider(AIProvider):
     def __init__(self, config: dict | None = None):
@@ -27,7 +22,7 @@ class DeepSeekProvider(AIProvider):
             supports_streaming_fc=True,
             supports_tool_call_parsing=True,
         )
-        self.available_models = list(_DEFAULT_MODELS)
+        self.available_models: list[str] = []
 
     async def get_models(self) -> list[str]:
         return self.available_models

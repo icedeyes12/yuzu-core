@@ -13,7 +13,6 @@ class SessionService:
     _AUTO_NAME_TRIGGER_COUNT = 10
     _AUTO_NAME_TRUNCATE = 40
 
-
     # Global session tracker for web clients to prevent duplicate connection messages
     _web_session_tracker: dict[str, bool] = {}
 
@@ -133,10 +132,10 @@ class SessionService:
                     "auto_name: history fallback failed for session %d", session_id
                 )
         if not name:
-            # Fallback: use timestamp-based name
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-            name = f"Chat {timestamp}"
-            log.info("auto_name: using timestamp fallback for session %d", session_id)
+            log.info(
+                "auto_name: no user-derived name available for session %s", session_id
+            )
+            return
 
         await Database.rename_session(session_id, name, user_id)
         log.info("auto_name: renamed session %d to '%s'", session_id, name)
@@ -166,7 +165,6 @@ class SessionService:
     @staticmethod
     def _format_now() -> str:
         return datetime.now().strftime("%Y-%m-%d %H:%M")
-
 
     @staticmethod
     async def _auto_name_from_history(session_id: str, user_id: str) -> str | None:

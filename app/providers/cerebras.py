@@ -21,16 +21,7 @@ class CerebrasProvider(AIProvider):
             supports_streaming_fc=False,
             supports_tool_call_parsing=False,
         )
-        self.available_models = [
-            "qwen-3-235b-a22b-instruct-2507",
-            "qwen-3-235b-a22b-thinking-2507",
-            "qwen-3-coder-480b",
-            "qwen-3-32b",
-            "gpt-oss-120b",
-            "llama-3.3-70b",
-            "llama-4-scout-17b-16e-instruct",
-            "llama3.1-8b",
-        ]
+        self.available_models: list[str] = []
 
     async def get_models(self) -> list[str]:
         return self.available_models

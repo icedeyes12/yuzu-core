@@ -211,6 +211,7 @@ async def logout(request: Request):
     if token:
         await revoke_session(token)
     response = JSONResponse({"status": "logged out"})
+    response.headers["Cache-Control"] = "no-store"
     clear_session_cookie(response)
     return response
 

@@ -30,22 +30,25 @@ class CustomOpenAIProvider(AIProvider):
             url += "/chat/completions"
         return url
 
-    async def fetch_live_models(self, api_key: str | None = None, base_url: str | None = None) -> list[str]:
+    async def fetch_live_models(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> list[str]:
         if not base_url:
-            return ["custom-model-1", "custom-model-2"]
-            
+            return []
+
         import httpx
+
         url = base_url.rstrip("/")
         if "/chat/completions" in url:
             url = url.split("/chat/completions")[0]
         elif "/v1/messages" in url:
             url = url.split("/v1/messages")[0]
         url += "/models"
-        
+
         headers = {}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
-            
+
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(url, headers=headers, timeout=10.0)
@@ -56,8 +59,8 @@ class CustomOpenAIProvider(AIProvider):
                         return models
         except Exception as e:
             logger.warning("Failed to fetch custom models from %s: %s", url, e)
-            
-        return ["custom-model-1", "custom-model-2"]
+
+        return []
 
     async def get_models(self) -> list[str]:
         return await self.fetch_live_models()
