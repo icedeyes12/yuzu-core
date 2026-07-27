@@ -394,26 +394,50 @@ async def _post_turn_async(
     *,
     user_id: str,
 ) -> None:
-    """Schedule post-turn maintenance without delaying the response."""
-    asyncio.create_task(
-        SessionService.auto_name_session_if_needed_async(
+    """Run post-turn maintenance sequentially after the response completes."""
+    try:
+        await SessionService.auto_name_session_if_needed_async(
             session_id, active_session, user_id=user_id
         )
-    )
-    asyncio.create_task(
-        MemoryService.run_per_message_checks_async(
+    except Exception as exc:
+        log.info("[post-turn] session naming skipped: %s", type(exc).__name__)
+
+    try:
+        await MemoryService.run_per_message_checks_async(
             profile, user_message, final_response, session_id, active_session, user_id
         )
-    )
+    except Exception as exc:
+        log.info("[post-turn] memory maintenance skipped: %s", type(exc).__name__)
 
-    # Clear request-scoped caches
-    # _clear_request_cache was removed
     try:
         from app.memory.retrieval import _clear_embedding_cache
 
         _clear_embedding_cache()
     except Exception:
         pass
+
+
+async def run_post_turn_after_stream_async(
+    user_message: str,
+    final_response: str,
+    session_id: str,
+    *,
+    user_id: str,
+) -> None:
+    """Run post-stream maintenance without affecting the completed response."""
+    try:
+        profile = await Database.get_profile(user_id)
+        active_session = await Database.get_active_session(user_id)
+        await _post_turn_async(
+            profile,
+            user_message,
+            final_response,
+            session_id,
+            active_session,
+            user_id=user_id,
+        )
+    except Exception as exc:
+        log.info("[post-stream] maintenance skipped: %s", type(exc).__name__)
 
 
 async def _finalize_and_persist_async(
@@ -438,16 +462,6 @@ async def _finalize_and_persist_async(
 
     await StreamFence.complete(session_id or "", fence_id)
     log.info(f"[stream] fence {fence_id} completed")
-    asyncio.create_task(
-        _post_turn_async(
-            profile,
-            user_message,
-            final_response,
-            session_id or "",
-            active_session,
-            user_id=user_id,
-        )
-    )
 
 
 async def handle_user_message(

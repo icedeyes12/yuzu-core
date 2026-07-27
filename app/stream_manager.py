@@ -7,7 +7,10 @@ import logging
 import time
 from typing import Any
 
-from app.orchestrator import handle_user_message_streaming
+from app.orchestrator import (
+    handle_user_message_streaming,
+    run_post_turn_after_stream_async,
+)
 from app.tools.schemas import StreamToolEvent
 
 log = logging.getLogger(__name__)
@@ -95,8 +98,9 @@ class StreamBuffer:
                 for q in self.queues:
                     await q.put(None)
 
-            # Persist successful completion
+            # Persist the completed response before detaching maintenance work.
             await self._persist_to_db(self.full_content, is_error=False)
+            self._schedule_post_stream_tasks()
 
         except asyncio.CancelledError:
             # Stream was cancelled (user switched session, etc.)
@@ -138,6 +142,30 @@ class StreamBuffer:
             # crashed stream does not pin the session for _STREAM_FENCE_TIMEOUT.
             await StreamManager._cleanup_stream(self.session_id)
             await self._force_complete_fence()
+
+    def _schedule_post_stream_tasks(self) -> None:
+        """Detach post-stream maintenance after the response is complete."""
+        if not self.user_id:
+            return
+
+        task = asyncio.create_task(
+            run_post_turn_after_stream_async(
+                self.user_message,
+                self.full_content,
+                self.session_id,
+                user_id=self.user_id,
+            )
+        )
+        task.add_done_callback(self._log_post_stream_task_result)
+
+    @staticmethod
+    def _log_post_stream_task_result(task: asyncio.Task[None]) -> None:
+        if task.cancelled():
+            return
+        try:
+            task.result()
+        except Exception:
+            log.exception("[Stream] Detached post-stream maintenance failed")
 
     async def _force_complete_fence(self) -> None:
         """Best-effort fence release so a crashed stream doesn't lock the session."""
