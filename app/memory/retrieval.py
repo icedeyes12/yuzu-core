@@ -4,6 +4,7 @@ import logging
 import threading
 from typing import Any
 
+from app.memory.embedder import embed_text, embed_text_async
 from app.memory.graph import GraphMemoryRepository
 
 logger = logging.getLogger(__name__)
@@ -19,8 +20,6 @@ def _get_cached_embedding(query: str) -> list[float] | None:
     if hasattr(_embedding_cache, cache_key):
         return getattr(_embedding_cache, cache_key)
     try:
-        from app.memory.embedder import embed_text
-
         vector = embed_text(query, timeout=30)
     except Exception as exc:
         logger.warning("Query embedding failed: %s", exc)
@@ -36,8 +35,6 @@ async def _get_cached_embedding_async(query: str) -> list[float] | None:
     if hasattr(_embedding_cache, cache_key):
         return getattr(_embedding_cache, cache_key)
     try:
-        from app.memory.embedder import embed_text_async
-
         vector = await embed_text_async(query, timeout=30)
     except Exception as exc:
         logger.warning("Query embedding failed: %s", exc)

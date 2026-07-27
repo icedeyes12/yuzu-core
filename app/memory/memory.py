@@ -16,6 +16,7 @@ import time
 from datetime import datetime, timedelta
 
 from app.db import (
+    Database,
     get_message_count_async,
     get_pipeline_state_async,
     get_session_messages_after_id_async,
@@ -25,6 +26,9 @@ from app.db import (
     update_pipeline_state_async,
 )
 from app.db.queries import SQL_PIPELINE_STATE_LOCK, SQL_PIPELINE_STATE_UPDATE
+from app.memory.embedder import embed_text_async
+from app.memory.extractor import extract_batch_async
+from app.memory.graph import GraphMemoryRepository
 
 __all__ = [
     "trigger_memory_pipeline_async",
@@ -33,7 +37,6 @@ __all__ = [
     "extract_memory_batch_async",
     "should_trigger_segmentation_async",
     "mark_segmentation_done_async",
-    "_memory_llm_call",
 ]
 
 logger = logging.getLogger(__name__)
@@ -51,58 +54,6 @@ FENCE_TTL_MINUTES = 120
 
 # Historical backlog logging threshold
 HISTORICAL_BACKLOG_THRESHOLD = 1000
-
-# ── Rate limiting for memory pipeline ─────────────────────────────────────────
-# Removed semaphore to avoid event-loop binding issues
-# Rate limiting is handled by _last_memory_llm_call delay below
-_MEMORY_LLM_DELAY = 3.0  # Seconds between memory LLM calls
-_last_memory_llm_call = 0.0  # Timestamp of last call
-
-
-async def _memory_llm_call(ai_manager, messages: list[dict], **kwargs) -> str | None:
-    """Rate-limited LLM call for memory pipeline.
-
-    Ensures memory calls don't overwhelm the API:
-    - Min delay between calls
-    - Explicit error logging for failures
-    """
-    global _last_memory_llm_call
-
-    # Log context size before making the call
-    total_chars = sum(
-        len(m.get("content", "")) if isinstance(m.get("content"), str) else 0
-        for m in messages
-    )
-    logger.debug(f"[MEMORY_LLM] Sending {total_chars} chars to LLM...")
-
-    # Enforce minimum delay between calls
-    now = time.time()
-    elapsed = now - _last_memory_llm_call
-    if elapsed < _MEMORY_LLM_DELAY:
-        await asyncio.sleep(_MEMORY_LLM_DELAY - elapsed)
-
-    try:
-        result = await ai_manager._internal_llm_call(
-            messages, source="memory_pipeline", **kwargs
-        )
-        _last_memory_llm_call = time.time()
-        if result:
-            logger.debug(f"[MEMORY_LLM] Response received: {len(result)} chars")
-        else:
-            # Explicit log when LLM returns None without throwing
-            logger.warning(
-                "[MEMORY_LLM] LLM returned None - possible context overflow, "
-                "rate limit, or empty response"
-            )
-        return result
-    except TimeoutError as e:
-        logger.warning(f"[MEMORY_LLM] Timeout after {kwargs.get('timeout', 30)}s: {e}")
-        return None
-    except Exception as e:
-        error_type = type(e).__name__
-        logger.info("[MEMORY_LLM] skipped (%s)", error_type)
-        return None
-
 
 # ── Background state ─────────────────────────────────────────────────────────
 
@@ -311,8 +262,6 @@ async def extract_memory_batch_async(
     messages: list[dict], profile: dict | None = None
 ) -> dict:
     """Extract episodes and claims with one structured LLM call."""
-    from app.memory.extractor import extract_batch_async
-
     return await extract_batch_async(messages, profile=profile)
 
 
@@ -333,8 +282,6 @@ async def run_memory_pipeline_async(
     Returns summary: {episodes: n, claims: n, llm_calls: n}
     """
     logger.info(f"Starting for session {session_id}, count={message_count}")
-    from app.db import Database
-
     profile = await Database.get_profile(user_id)
 
     # Get current state for tracking
@@ -346,8 +293,6 @@ async def run_memory_pipeline_async(
         # ID-based query: fetch messages AFTER the last processed message ID
         if last_message_id:
             try:
-                from app.db import get_session_messages_after_id_async
-
                 all_messages = await get_session_messages_after_id_async(
                     session_id, last_message_id, limit=10000, user_id=user_id
                 )
@@ -424,9 +369,6 @@ async def run_memory_pipeline_async(
 
         episode_count = 0
         claim_count = 0
-        from app.memory.embedder import embed_text_async
-        from app.memory.graph import GraphMemoryRepository
-
         episode_ids: list[str] = []
         for episode in extracted["episodes"]:
             segment_messages = unsegmented[
