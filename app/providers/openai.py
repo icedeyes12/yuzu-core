@@ -12,20 +12,6 @@ from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODELS = [
-    "gpt-4o",
-    "gpt-4o-mini",
-    "gpt-4-turbo",
-    "gpt-4",
-    "gpt-3.5-turbo",
-    "o1",
-    "o1-mini",
-    "o1-preview",
-    "o3",
-    "o3-mini",
-    "o4-mini",
-]
-
 
 class OpenAIProvider(AIProvider):
     def __init__(self, config: dict | None = None):
@@ -37,7 +23,7 @@ class OpenAIProvider(AIProvider):
             supports_streaming_fc=True,
             supports_tool_call_parsing=True,
         )
-        self.available_models = list(_DEFAULT_MODELS)
+        self.available_models: list[str] = []
 
     async def get_models(self) -> list[str]:
         return self.available_models

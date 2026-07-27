@@ -25,48 +25,7 @@ class OpenRouterProvider(AIProvider):
             supports_structured_system_content=True,
             supports_vision=True,
         )
-        self.available_models = [
-            "deepseek/deepseek-chat-v3-0324:free",
-            "deepseek/deepseek-v4-flash:free",
-            "openai/gpt-4o",
-            "openai/gpt-4o-mini",
-            "anthropic/claude-sonnet-4",
-            "google/gemini-2.5-flash",
-            "qwen/qwen3-235b-a22b",
-            "deepseek/deepseek-chat-v3.1:free",
-            "deepseek/deepseek-r1:free",
-            "google/gemini-flash-1.5-8b:free",
-            "google/gemini-flash-1.5:free",
-            "meituan/longcat-flash-chat:free",
-            "openai/gpt-4o-mini:free",
-            "openai/gpt-4o-mini-2024-07-18:free",
-            "qwen/qwen3-235b-a22b:free",
-            "qwen/qwen3-vl-235b-a22b-instruct:free",
-            "tngtech/deepseek-r1-chimera:free",
-            "tngtech/deepseek-r1t2-chimera:free",
-            "z-ai/glm-4.5-air:free",
-            "z-ai/glm-4.5-air-2507:free",
-            "x-ai/grok-4.1-fast:free",
-            "deepseek/deepseek-chat-v3-0324",
-            "deepseek/deepseek-chat-v3.1",
-            "deepseek/deepseek-v3.2",
-            "deepseek/deepseek-v3.2-exp",
-            "deepseek/deepseek-v3.2-speciale",
-            "google/gemma-3-12b",
-            "xiaomi/mimo-v2-flash",
-            "minimax/minimax-m2",
-            "moonshotai/kimi-k2.5",
-            "moonshotai/kimi-k2-0905",
-            "openai/gpt-oss-120b",
-            "qwen/qwen3-235b-a22b-2507",
-            "qwen/qwen3-coder",
-            "qwen/qwen3.5-397b-a17b",
-            "qwen/qwen3.5-plus-02-15",
-            "tngtech/deepseek-r1t2-chimera",
-            "z-ai/glm-4.6",
-            "z-ai/glm-4.7",
-            "openrouter/owl-alpha",
-        ]
+        self.available_models: list[str] = []
 
     async def get_models(self) -> list[str]:
         return self.available_models
@@ -74,10 +33,7 @@ class OpenRouterProvider(AIProvider):
     async def fetch_live_models(self) -> list[str]:
         """Fetch the canonical model list from OpenRouter's /models endpoint.
 
-        Used by ``AIProviderManager.get_all_models`` to merge freshly
-        discovered models into the static ``available_models`` so the
-        Settings UI keeps them after a page reload (otherwise only the
-        hardcoded list would be returned by ``/api/providers/list``).
+        Fetch models only when the caller provides a request-scoped key.
         """
         try:
             import httpx
@@ -92,10 +48,6 @@ class OpenRouterProvider(AIProvider):
                     key = keyring.key
             except Exception:  # noqa: BLE001
                 pass
-            if not key:
-                import os
-
-                key = os.environ.get("OPENROUTER_API_KEY")
             headers = {"Authorization": f"Bearer {key}"} if key else {}
             async with httpx.AsyncClient() as client:
                 resp = await client.get(url, headers=headers, timeout=8.0)

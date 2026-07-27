@@ -12,21 +12,6 @@ from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODELS = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    "llama3-8b-8192",
-    "llama3-70b-8192",
-    "gemma2-9b-it",
-    "mixtral-8x7b-32768",
-    "qwen-qwq-32b",
-    "deepseek-r1-distill-llama-70b",
-    "llama-4-scout-17b-16e-instruct",
-    "llama-4-maverick-17b-128e-instruct",
-    "compound-beta",
-    "compound-beta-mini",
-]
-
 
 class GroqProvider(AIProvider):
     def __init__(self, config: dict | None = None):
@@ -37,7 +22,7 @@ class GroqProvider(AIProvider):
             supports_streaming_fc=True,
             supports_tool_call_parsing=True,
         )
-        self.available_models = list(_DEFAULT_MODELS)
+        self.available_models: list[str] = []
 
     async def get_models(self) -> list[str]:
         return self.available_models

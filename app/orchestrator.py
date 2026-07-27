@@ -462,9 +462,7 @@ async def handle_user_message(
     session_id = active_session["id"]
     cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
 
-    ctx = LLMContext.from_profile(profile)
-    if not ctx.provider or not ctx.model:
-        return "NOT CONFIGURED"
+    ctx = LLMContext.from_profile(profile).require_configured()
     provider_name = ctx.provider
     turn_id = new_turn_id()
 
@@ -658,8 +656,6 @@ async def handle_user_message_streaming(
     user_message: str,
     interface: str = "terminal",
     session_id: str | None = None,
-    provider: str | None = None,
-    model: str | None = None,
     abort_check: Callable[[], bool] | None = None,
     attachments: list[str] | None = None,
     *,
@@ -722,8 +718,6 @@ async def handle_user_message_streaming(
                 msg_for_pass,
                 interface,
                 session_id,
-                provider,
-                model,
                 user_id=user_id,
             ):
                 if chunk:

@@ -243,7 +243,7 @@ async def home(request: Request, user_id: str = Depends(get_user_for_html)):
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={"profile": profile, "current_page": "home"},
+        context={"profile": profile, "user_id": user_id, "current_page": "home"},
     )
 
 
@@ -267,7 +267,7 @@ async def chat_page(
     return templates.TemplateResponse(
         request=request,
         name="chat.html",
-        context={"profile": profile, "current_page": "chat"},
+        context={"profile": profile, "user_id": user_id, "current_page": "chat"},
     )
 
 
@@ -277,7 +277,7 @@ async def config_page(request: Request, user_id: str = Depends(get_user_for_html
     return templates.TemplateResponse(
         request=request,
         name="config.html",
-        context={"profile": profile, "current_page": "config"},
+        context={"profile": profile, "user_id": user_id, "current_page": "config"},
     )
 
 
@@ -287,7 +287,7 @@ async def about_page(request: Request, user_id: str = Depends(get_user_for_html)
     return templates.TemplateResponse(
         request=request,
         name="about.html",
-        context={"profile": profile, "current_page": "about"},
+        context={"profile": profile, "user_id": user_id, "current_page": "about"},
     )
 
 

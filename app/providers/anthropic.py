@@ -12,13 +12,6 @@ from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODELS = [
-    "claude-3-7-sonnet-20250219",
-    "claude-3-5-sonnet-20241022",
-    "claude-3-5-haiku-20241022",
-    "claude-3-opus-20240229",
-]
-
 
 class AnthropicProvider(AIProvider):
     def __init__(self, config: dict | None = None):
@@ -33,7 +26,7 @@ class AnthropicProvider(AIProvider):
             # text-only path until we wire a dedicated translator.
             supports_structured_system_content=False,
         )
-        self.available_models = list(_DEFAULT_MODELS)
+        self.available_models: list[str] = []
 
     async def get_models(self) -> list[str]:
         return self.available_models

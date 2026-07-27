@@ -26,16 +26,12 @@ class StreamBuffer:
         session_id: str,
         user_message: str,
         interface: str = "web",
-        provider: str | None = None,
-        model: str | None = None,
         attachments: list[str] | None = None,
         user_id: str | None = None,
     ):
         self.session_id = session_id
         self.user_message = user_message
         self.interface = interface
-        self.provider = provider
-        self.model = model
         self.attachments = attachments or []
         self.user_id = user_id
 
@@ -67,8 +63,6 @@ class StreamBuffer:
                 self.user_message,
                 interface=self.interface,
                 session_id=self.session_id,
-                provider=self.provider,
-                model=self.model,
                 attachments=self.attachments,
                 user_id=self.user_id,
             )
@@ -243,8 +237,6 @@ class StreamManager:
         session_id: str,
         user_message: str,
         interface: str = "web",
-        provider: str | None = None,
-        model: str | None = None,
         attachments: list[str] | None = None,
         user_id: str | None = None,
     ) -> StreamBuffer:
@@ -262,8 +254,6 @@ class StreamManager:
                 session_id,
                 user_message,
                 interface,
-                provider,
-                model,
                 attachments,
                 user_id,
             )

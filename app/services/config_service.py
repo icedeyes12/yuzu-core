@@ -92,6 +92,8 @@ class ConfigService:
             "image_edit_provider": profile.get("image_edit_provider"),
             "image_endpoint": profile.get("image_endpoint"),
             "image_edit_endpoint": profile.get("image_edit_endpoint"),
+            "image_extra_body": profile.get("image_extra_body") or {},
+            "image_edit_extra_body": profile.get("image_edit_extra_body") or {},
             "vision_model_preferences": profile.get("providers_config", {}).get(
                 "vision_model_preferences", {}
             ),

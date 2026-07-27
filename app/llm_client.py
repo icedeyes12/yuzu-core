@@ -1,30 +1,22 @@
-"""AI response generation + shared Chutes HTTP helper."""
+"""(｡•̀ᴗ-)✧"""
 
 from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import AsyncGenerator, Iterable
+from collections.abc import AsyncGenerator
 from typing import Any
-
-import httpx
 
 from app.core.llm_context import LLMContext
 from app.db import Database
 from app.logging_config import get_logger
 from app.prompts import build_messages
 from app.providers import get_ai_manager
-from app.providers.base import _rate_limit_provider
 from app.providers.openai_protocol import validate_chat_completion_response
 from app.tools.registry import get_tool_schemas
 from app.tools.schemas import StreamToolEvent
 
 log = get_logger(__name__)
-
-_DEFAULT_HEADERS = {
-    "Content-Type": "application/json",
-    "HTTP-Referer": "https://github.com/icedeyes12/yuzu-companion",
-}
 
 
 # Allowed keys for additional_instructions (post-history system message)
@@ -56,99 +48,6 @@ def _resolve_additional_instructions(profile: dict[str, Any]) -> str:
     if len(raw) > _MAX_ADDITIONAL_INSTRUCTIONS_LEN:
         raw = raw[:_MAX_ADDITIONAL_INSTRUCTIONS_LEN]
     return raw
-
-
-# Shared Chutes HTTP helper
-
-
-async def chutes_chat(
-    prompt: str,
-    model: str,
-    *,
-    endpoint: str,
-    system: str | None = None,
-    title: str = "chutes_chat",
-    api_key: str | None = None,
-    temperature: float | None = None,
-    max_tokens: int | None = None,
-    timeout: float = 90.0,
-    fallback_models: Iterable[str] = (),
-    max_429_retries: int = 3,
-    backoff_base: float = 2.0,
-    source: str = "helper",
-) -> str | None:
-    """POST a single-turn prompt to the Chutes API. Try *fallback_models* on failure.
-
-    Returns the assistant text or None.
-    """
-    if not api_key:
-        log.warning("chutes_chat: No API key provided - call will return None")
-        return None
-
-    messages: list[dict[str, str]] = []
-    if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": prompt})
-
-    headers = {
-        **_DEFAULT_HEADERS,
-        "X-Title": title,
-        "Authorization": f"Bearer {api_key}",
-    }
-
-    last_error: str | None = None
-    async with httpx.AsyncClient() as client:
-        for candidate in (model, *fallback_models):
-            for retry in range(max_429_retries):
-                try:
-                    async with _rate_limit_provider("chutes", candidate, source):
-                        response = await client.post(
-                            endpoint,
-                            headers=headers,
-                            json={
-                                "model": candidate,
-                                "messages": messages,
-                                "temperature": temperature,
-                                "max_tokens": max_tokens,
-                                "stream": False,
-                            },
-                            timeout=timeout,
-                        )
-                except httpx.RequestError as e:
-                    last_error = f"RequestError: {e}"
-                    log.warning("chutes call failed for %s: %s", candidate, e)
-                    continue
-
-                if response.status_code == 200:
-                    try:
-                        return response.json()["choices"][0]["message"][
-                            "content"
-                        ].strip()
-                    except (KeyError, IndexError, ValueError) as e:
-                        last_error = f"ParseError: {e}"
-                        log.warning(
-                            "chutes response parse failed for %s: %s", candidate, e
-                        )
-                        continue
-
-                if response.status_code == 429 and retry < max_429_retries - 1:
-                    last_error = "HTTP 429 (rate limited)"
-                    log.warning("chutes %s -> HTTP 429, retrying...", candidate)
-                    await asyncio.sleep(backoff_base**retry)
-                    continue
-
-                last_error = f"HTTP {response.status_code}"
-                log.warning(
-                    "chutes %s -> HTTP %s: %s",
-                    candidate,
-                    response.status_code,
-                    response.text[:200],
-                )
-
-    # Log final failure reason when all retries exhausted
-    if last_error:
-        log.warning("chutes_chat: All retries failed. Last error: %s", last_error)
-    return None
 
 
 # Vision context injection
@@ -195,8 +94,7 @@ async def _send_to_provider(
     source: str = "chat",
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single LLM dispatch with timing log. Returns (text, raw_response)."""
-    if not ctx.provider or not ctx.model:
-        return "NOT CONFIGURED", None
+    ctx.require_configured()
     ai_manager = await get_ai_manager()
     schemas = _unique_tool_schemas()
 
@@ -272,7 +170,7 @@ async def generate_ai_response(
     if session_id is None:
         session_id = (await Database.get_active_session(user_id))["id"]
 
-    ctx = LLMContext.from_profile(profile)
+    ctx = LLMContext.from_profile(profile).require_configured()
 
     # FC9-C: Check if provider supports native FC for prompt construction
     ai_manager = await get_ai_manager()
@@ -309,9 +207,7 @@ async def _stream_from_provider(
     source: str = "chat",
 ) -> AsyncGenerator[str | StreamToolEvent, None]:
     """Yield raw chunks from the provider's streaming API."""
-    if not ctx.provider or not ctx.model:
-        yield "NOT CONFIGURED"
-        return
+    ctx.require_configured()
     ai_manager = await get_ai_manager()
 
     # Generate tool schemas
@@ -358,8 +254,6 @@ async def generate_ai_response_streaming(
     user_message: str,
     interface: str = "terminal",
     session_id: str | None = None,
-    provider: str | None = None,
-    model: str | None = None,
     *,
     user_id: str,
 ) -> AsyncGenerator[str | StreamToolEvent, None]:

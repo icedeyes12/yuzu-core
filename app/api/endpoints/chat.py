@@ -100,8 +100,6 @@ async def api_send_message_stream(
     request: Request,
     message: str | None = Form(None),
     interface: str = Form("web"),
-    provider: str | None = Form(None),
-    model: str | None = Form(None),
     images: list[UploadFile] = File(default=[]),
     user_id: str = Depends(get_current_user),
 ):
@@ -113,8 +111,6 @@ async def api_send_message_stream(
                 data = await request.json()
                 user_message = data.get("message", "").strip()
                 interface = data.get("interface", "web")
-                provider = data.get("provider")
-                model = data.get("model")
             except Exception:
                 user_message = ""
         else:
@@ -138,8 +134,6 @@ async def api_send_message_stream(
                 async for chunk in ConversationService.get_stream_generator(
                     user_message,
                     interface=interface,
-                    provider=provider,
-                    model=model,
                     images=images,
                     user_id=user_id,
                 ):

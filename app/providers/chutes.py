@@ -33,22 +33,7 @@ class ChutesProvider(AIProvider):
         self._models_cache_data: list[str] | None = None
 
         self._last_error: str | None = None
-        self.available_models = [
-            "google/gemma-4-31B-turbo-TEE",
-            "Qwen/Qwen3.6-27B-TEE",
-            "Qwen/Qwen3.5-397B-A17B-TEE",
-            "Qwen/Qwen3-32B-TEE",
-            "Qwen/Qwen3-235B-A22B-Thinking-2507",
-            "deepseek-ai/DeepSeek-V3.2-TEE",
-            "MiniMaxAI/MiniMax-M2.5-TEE",
-            "moonshotai/Kimi-K2.5-TEE",
-            "moonshotai/Kimi-K2.6-TEE",
-            "Nemotron-3-Nano-Omni-30B-TEE",
-            "Qwen/Qwen2.5-Coder-32B-Instruct-TEE",
-            "unsloth/Mistral-Nemo-Instruct-2407-TEE",
-            "zai-org/GLM-5-TEE",
-            "zai-org/GLM-5.1-TEE",
-        ]
+        self.available_models: list[str] = []
 
     def _build_headers(self, ctx: LLMContext) -> dict[str, str]:
         return {
@@ -190,125 +175,48 @@ class ChutesProvider(AIProvider):
     async def send_message(
         self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
     ) -> str | None:
-
         log_prefix = kwargs.pop("log_prefix", "[CHAT]")
         kwargs.pop("model", None)
         kwargs.pop("model_name", None)
+        if not ctx.model:
+            return None
 
-        model_hint = ctx.model
-        explicit_model = model_hint and model_hint in self.available_models
-        retryable_codes = {0, 400, 429, 500, 502, 503, 504}
-
-        attempt = 0
-        last_error: str | None = None
-        max_model_attempts = 3
         max_429_retries = 3
         backoff_base = 2.0
+        last_error: str | None = None
 
-        tried_models: set[str] = set()
-
-        while attempt < max_model_attempts:
-            attempt += 1
-            current_model = ctx.model if attempt == 1 else None
-
-            if current_model is None:
-                priority = [m for m in self.available_models if m not in tried_models]
-                qwen_first = sorted(priority, key=lambda m: 0 if "Qwen" in m else 1)
-                for candidate in qwen_first:
-                    if explicit_model and candidate == model_hint:
-                        continue
-                    current_model = candidate
-                    break
-
-            if not current_model:
-                break
-
-            tried_models.add(current_model)
-
-            for retry in range(max_429_retries):
-                status = None
-                data = None
-                error_msg = None
-
-                async with _rate_limit_provider("chutes", current_model, source):
-                    result = await self._chutes_raw(
-                        ctx, current_model, messages, kwargs
-                    )
-                    status = result[0]
-                    data = result[1] if len(result) > 1 else None
-                    error_msg = result[2] if len(result) > 2 else str(status)
-
-                if status == 200:
-                    self._last_error = None
-                    return self._extract_message_content(
-                        data if isinstance(data, dict) else {}
-                    )
-
-                last_error = error_msg
-                self._last_error = last_error
-
-                if status == 429:
-                    if retry < max_429_retries - 1:
-                        backoff = backoff_base * (2**retry)
-                        logger.warning(
-                            "%s 429 on %s, retry %d/%d in %ss...",
-                            log_prefix,
-                            current_model,
-                            retry + 1,
-                            max_429_retries,
-                            backoff,
-                        )
-                        await asyncio.sleep(backoff)
-                        continue
-                    logger.warning(
-                        "%s Max 429 retries for %s, trying another model...",
-                        log_prefix,
-                        current_model,
-                    )
-                    break
-
-                if status not in retryable_codes:
-                    return None
-
-                break
-
-            if attempt < max_model_attempts:
-                await asyncio.sleep(0.5)
-                logger.debug(
-                    "%s %s failed (%s), trying another model...",
-                    log_prefix,
-                    current_model,
-                    status,
+        for retry in range(max_429_retries):
+            async with _rate_limit_provider("chutes", ctx.model, source):
+                status, data, error_msg = await self._chutes_raw(
+                    ctx, ctx.model, messages, kwargs
                 )
 
-        logger.debug("%s All models exhausted, last error: %s", log_prefix, last_error)
-        return None
+            if status == 200:
+                self._last_error = None
+                return self._extract_message_content(
+                    data if isinstance(data, dict) else {}
+                )
 
-    async def send_message_raw(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
-    ) -> dict[str, Any] | None:
-        headers, payload = self._prepare_payload(
-            ctx, ctx.model, messages, False, **kwargs
+            last_error = error_msg
+            self._last_error = last_error
+            if status == 429 and retry < max_429_retries - 1:
+                backoff = backoff_base * (2**retry)
+                logger.warning(
+                    "%s 429 on configured model %s, retry %d/%d in %ss...",
+                    log_prefix,
+                    ctx.model,
+                    retry + 1,
+                    max_429_retries,
+                    backoff,
+                )
+                await asyncio.sleep(backoff)
+                continue
+            break
+
+        logger.error(
+            "%s failed for configured model %s: %s", log_prefix, ctx.model, last_error
         )
-
-        async with _rate_limit_provider("chutes", ctx.model, source):
-            async with httpx.AsyncClient() as client:
-                try:
-                    response = await client.post(
-                        ctx.base_url or self.base_url,
-                        headers=headers,
-                        json=payload,
-                        timeout=kwargs.get("timeout", 120),
-                    )
-                    if response.status_code == 200:
-                        result = response.json()
-                        self._last_raw_response = result
-                        return result
-                    self._last_raw_response = None
-                    return None
-                except Exception:
-                    self._last_raw_response = None
-                    return None
+        return None
 
     async def _chutes_raw(
         self, ctx: LLMContext, model: str, messages: list[dict], kwargs

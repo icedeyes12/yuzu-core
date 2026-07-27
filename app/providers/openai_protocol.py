@@ -243,7 +243,11 @@ def sanitize_openai_payload(
     if not isinstance(payload, dict):
         raise OpenAIProtocolError(["request payload must be an object"])
     allowed = OPENAI_REQUEST_FIELDS | set(provider_extensions)
-    return {key: value for key, value in payload.items() if key in allowed}
+    return {
+        key: value
+        for key, value in payload.items()
+        if key in allowed and value is not None
+    }
 
 
 def validate_openai_messages(messages: Any) -> None:

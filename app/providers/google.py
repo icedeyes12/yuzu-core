@@ -12,15 +12,6 @@ from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODELS = [
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.0-pro-exp-02-05",
-    "gemini-2.0-flash",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
-]
-
 
 class GoogleProvider(AIProvider):
     def __init__(self, config: dict | None = None):
@@ -33,7 +24,7 @@ class GoogleProvider(AIProvider):
             supports_streaming_fc=True,
             supports_tool_call_parsing=True,
         )
-        self.available_models = list(_DEFAULT_MODELS)
+        self.available_models: list[str] = []
 
     async def get_models(self) -> list[str]:
         return self.available_models

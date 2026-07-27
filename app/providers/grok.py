@@ -12,11 +12,6 @@ from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODELS = [
-    "grok-2-1212",
-    "grok-2-vision-1212",
-]
-
 
 class GrokProvider(AIProvider):
     def __init__(self, config: dict | None = None):
@@ -27,7 +22,7 @@ class GrokProvider(AIProvider):
             supports_streaming_fc=True,
             supports_tool_call_parsing=True,
         )
-        self.available_models = list(_DEFAULT_MODELS)
+        self.available_models: list[str] = []
 
     async def get_models(self) -> list[str]:
         return self.available_models

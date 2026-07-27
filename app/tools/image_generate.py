@@ -7,13 +7,11 @@ from pathlib import Path
 
 import httpx
 
-from app.core.llm_context import LLMContext
+from app.core.context import get_request_keyring
 from app.db import Database
 from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
 
 logger = logging.getLogger(__name__)
-
-
 
 
 TOOL_DEFINITION = ToolDefinition(
@@ -43,22 +41,14 @@ async def execute(arguments, **kwargs):
         )
 
     profile = await Database.get_profile(kwargs.get("user_id")) or {}
-    partner_name = profile.get("partner_name", "Yuzu")
+    partner_name = profile.get("partner_name") or ""
 
     try:
         image_provider = profile.get("image_provider")
-        image_profile = {
-            **profile,
-            "providers_config": {
-                **(profile.get("providers_config") or {}),
-                "preferred_provider": image_provider,
-                "preferred_model": profile.get("image_model"),
-            },
-        }
-        ctx = LLMContext.from_profile(image_profile)
-        api_key = ctx.api_key
-        endpoint = profile.get("image_endpoint")
         image_model = profile.get("image_model")
+        endpoint = profile.get("image_endpoint")
+        keyring = get_request_keyring(image_provider) if image_provider else None
+        api_key = keyring.key if keyring else None
         if not api_key or not image_provider or not image_model or not endpoint:
             return error_result(
                 "NOT CONFIGURED",
@@ -68,7 +58,11 @@ async def execute(arguments, **kwargs):
             )
 
         logger.debug(f"[IMAGE TOOL] Model: {image_model}")
-        payload = {"prompt": prompt, "model": image_model}
+        payload = {
+            "prompt": prompt,
+            "model": image_model,
+            **(profile.get("image_extra_body") or {}),
+        }
 
         logger.debug(f"[IMAGE TOOL] Endpoint: {endpoint}")
         logger.debug(
@@ -137,7 +131,7 @@ async def execute(arguments, **kwargs):
     except Exception as e:
         logger.debug(f"[IMAGE TOOL] Exception: {str(e)}")
         profile = await Database.get_profile(kwargs.get("user_id")) or {}
-        partner_name = profile.get("partner_name", "Yuzu")
+        partner_name = profile.get("partner_name") or ""
         return error_result(
             "Image generation failed. Please try again later.",
             TOOL_DEFINITION,

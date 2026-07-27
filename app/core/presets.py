@@ -30,30 +30,12 @@ PRESET_PAYLOAD_KEYS: frozenset[str] = frozenset(
     }
 )
 
-_DEFAULT_PRESET: dict[str, Any] = {
-    "name": "default",
-    "payload": {
-        "temperature": 1.0,
-        "top_p": 1.0,
-        "max_tokens": 4096,
-        "top_k": 40,
-    },
-    "is_active": True,
-}
-
-
-def make_default_preset() -> dict[str, Any]:
-    """Return a fresh, mutable copy of the default preset."""
-    import copy
-
-    return copy.deepcopy(_DEFAULT_PRESET)
-
 
 def normalize_presets(raw: Any) -> list[dict[str, Any]]:
     """Coerce a stored ``context.presets`` value to a clean list of dicts.
 
     Drops entries that are not dicts or that lack a ``name`` / ``payload`` shape.
-    Preserves ``is_active`` flag, defaulting to False if missing.
+    Preserves the stored ``is_active`` flag when present.
     The function is idempotent: feeding the result back yields the same value.
     """
     if not raw:
@@ -209,7 +191,6 @@ def sync_top_level_with_active(ctx: dict[str, Any]) -> dict[str, Any]:
 
 __all__ = [
     "PRESET_PAYLOAD_KEYS",
-    "make_default_preset",
     "normalize_presets",
     "list_presets",
     "find_active_preset",

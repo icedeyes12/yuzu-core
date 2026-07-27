@@ -4,14 +4,18 @@
 # chain. That ordering is what breaks the providers ↔ api
 # circular import.
 #
-# Precedence (Dual-Plane):
-#   1. Request plane  — ContextVar keyring (X-Provider-Key header)
-#   2. System plane   — os.getenv(f"{PROVIDER}_API_KEY")
-#   3. Legacy         — caller-provided fallback (DB-loaded self.api_key)
 from __future__ import annotations
 
 from contextvars import ContextVar
 from dataclasses import dataclass
+
+
+class ConfigurationRequiredError(Exception):
+    """(｡•̀ᴗ-)✧"""
+
+    def __init__(self, field: str):
+        self.field = field
+        super().__init__(f"Configuration required: {field}")
 
 
 @dataclass(frozen=True)
@@ -25,16 +29,12 @@ class RequestKeyring:
 
 
 class MissingProviderKeyError(Exception):
-    """Raised when a provider requires an API key but none is available."""
+    """(｡•̀ᴗ-)✧"""
 
     def __init__(self, provider_name: str):
         self.provider_name = provider_name
         self.provider = provider_name
-        super().__init__(
-            f"No API key available for provider '{provider_name}'. "
-            f"Set your key in the client (BYOK) or configure "
-            f"{provider_name.upper()}_API_KEY environment variable."
-        )
+        super().__init__(f"No API key available for provider '{provider_name}'.")
 
 
 _keyring_ctx: ContextVar[dict[str, RequestKeyring]] = ContextVar(
@@ -52,20 +52,11 @@ def get_request_keyring(provider_name: str) -> RequestKeyring | None:
     return _keyring_ctx.get().get(provider_name)
 
 
+def get_request_keyrings() -> dict[str, RequestKeyring]:
+    """(｡•̀ᴗ-)✧"""
+    return dict(_keyring_ctx.get())
+
+
 def clear_request_keyring() -> None:
     """Unbind the keyring — call in finally to prevent cross-request leakage."""
     _keyring_ctx.set({})
-
-
-def resolve_api_key(provider: str) -> str | None:
-    """Resolve a provider key from the process environment."""
-    import os
-
-    return os.environ.get(f"{provider.upper()}_API_KEY")
-
-
-def resolve_base_url(provider: str, fallback: str = "") -> str:
-    """Resolve a provider base URL from the process environment."""
-    import os
-
-    return os.environ.get(f"{provider.upper()}_BASE_URL", fallback)
