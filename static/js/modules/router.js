@@ -72,7 +72,7 @@ export class RouterManager {
 	/**
 	 * Setup browser back/forward navigation handler.
 	 */
-	setupPopStateHandler() {
+	setupPopStateHandler(handleSessionSwitch) {
 		window.addEventListener("popstate", (_event) => {
 			// Extract from path first
 			const pathParts = window.location.pathname.split("/").filter((p) => p);
@@ -89,8 +89,8 @@ export class RouterManager {
 
 			if (sessionId !== this.currentSessionId) {
 				this.currentSessionId = sessionId;
-				if (typeof window.handleSessionSwitch === "function") {
-					void window.handleSessionSwitch(sessionId, false);
+				if (typeof handleSessionSwitch === "function") {
+					void handleSessionSwitch(sessionId, false);
 				}
 			}
 		});
