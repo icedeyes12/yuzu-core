@@ -1,12 +1,14 @@
+import { render as renderBadge } from "./badge-registry.js";
+import { BYOK_STORAGE_KEY, getUserStorageKey } from "./client-storage.js";
+import { listProviders } from "./provider-registry.js";
+import { renderLogo } from "./visual-registry.js";
 // FILE: static/js/config.js
 // DESCRIPTION: Configuration page functionality
 
+import { toggleSidebar } from "./sidebar.js";
+
 // Global config state (populated from /api/config)
 let appConfig = null;
-function getUserStorageKey(suffix) {
-	const userId = document.querySelector('meta[name="user-id"]')?.content || "";
-	return userId ? `user_${userId}_${suffix}` : "";
-}
 
 const PROVIDER_MODELS_CACHE_KEY = getUserStorageKey("provider_models");
 
@@ -64,7 +66,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 	loadImageModelFromConfig();
 	loadVisionModel();
 	setupEventListeners();
-	loadBYOKConfig();
 	initializeConfigAnimations();
 });
 
@@ -166,7 +167,7 @@ async function loadProviderSettings() {
 		});
 		saveModelCatalog(modelCatalog);
 
-		const providersList = window.VisualRegistry.listProviders();
+		const providersList = listProviders();
 
 		providersList.forEach((provObj) => {
 			const provider = provObj.id;
@@ -175,8 +176,8 @@ async function loadProviderSettings() {
 
 			const card = document.createElement("div");
 			card.className = `provider-card ${isActive ? "active-provider" : ""}`;
-			const identityBadge = window.VisualRegistry.renderBadge(provObj);
-			const identityMark = window.VisualRegistry.renderLogo(provObj, "small");
+			const identityBadge = renderBadge(provObj);
+			const identityMark = renderLogo(provObj, "small");
 			const titleHtml = `${identityMark}<span class="provider-title__name">${provObj.displayName}</span> ${identityBadge} ${isActive ? "<span class='badge-active'>Active</span>" : ""}`;
 
 			let innerHtml = `
@@ -282,9 +283,7 @@ async function loadProviderSettings() {
 
 function saveBYOKForProvider(provider) {
 	const byok = JSON.parse(
-		(window.BYOK_STORAGE_KEY &&
-			localStorage.getItem(window.BYOK_STORAGE_KEY)) ||
-			"{}",
+		(BYOK_STORAGE_KEY && localStorage.getItem(BYOK_STORAGE_KEY)) || "{}",
 	);
 	const keyInput = document.getElementById(`key-${provider}`);
 	if (!keyInput) return;
@@ -297,11 +296,11 @@ function saveBYOKForProvider(provider) {
 		byok[provider].base_url = baseInput?.value || "";
 	}
 
-	if (!window.BYOK_STORAGE_KEY) {
+	if (!BYOK_STORAGE_KEY) {
 		showError("User scope is unavailable; provider key was not saved.");
 		return;
 	}
-	localStorage.setItem(window.BYOK_STORAGE_KEY, JSON.stringify(byok));
+	localStorage.setItem(BYOK_STORAGE_KEY, JSON.stringify(byok));
 	showSuccess(`${provider} key saved in browser.`);
 }
 
@@ -377,9 +376,7 @@ async function fetchModelsForProvider(provider) {
 
 	try {
 		const byok = JSON.parse(
-			(window.BYOK_STORAGE_KEY &&
-				localStorage.getItem(window.BYOK_STORAGE_KEY)) ||
-				"{}",
+			(BYOK_STORAGE_KEY && localStorage.getItem(BYOK_STORAGE_KEY)) || "{}",
 		);
 		const provConfig = byok[provider] || {};
 
@@ -422,32 +419,6 @@ async function fetchModelsForProvider(provider) {
 	}
 }
 
-// Update model dropdown based on selected provider
-function updateModelDropdown(provider, allModels, currentModel = "") {
-	const modelSelect = document.getElementById("ai-model");
-	if (!modelSelect) return;
-	modelSelect.innerHTML = "";
-
-	const models = allModels[provider] || [];
-	if (models.length === 0) {
-		const option = document.createElement("option");
-		option.value = "";
-		option.textContent = "No models available";
-		modelSelect.appendChild(option);
-		return;
-	}
-
-	models.forEach((model) => {
-		const option = document.createElement("option");
-		option.value = model;
-		option.textContent = model;
-		if (model === currentModel) option.selected = true;
-		modelSelect.appendChild(option);
-	});
-
-	console.log(`Updated model dropdown for ${provider}`);
-}
-
 // Test provider connection
 async function testProviderConnection(providerName) {
 	const statusElement = document.getElementById("connection-status");
@@ -459,7 +430,7 @@ async function testProviderConnection(providerName) {
 	try {
 		const headers = { "Content-Type": "application/json" };
 		try {
-			const raw = localStorage.getItem(window.BYOK_STORAGE_KEY);
+			const raw = localStorage.getItem(BYOK_STORAGE_KEY);
 			if (raw) headers["X-BYOK-Config"] = btoa(encodeURIComponent(raw));
 		} catch (e) {
 			console.warn("Error attaching BYOK config for test:", e);
@@ -536,7 +507,7 @@ function setupEventListeners() {
 		if (e.key === "Escape") {
 			const sidebar = document.getElementById("mainSidebar");
 			if (sidebar?.classList.contains("open")) {
-				window.toggleSidebar();
+				toggleSidebar();
 			}
 		}
 	});
@@ -582,6 +553,17 @@ function setupEventListeners() {
 
 	const saveLocationBtn = document.getElementById("save-location");
 	if (saveLocationBtn) saveLocationBtn.addEventListener("click", saveLocation);
+
+	const useCurrentLocationBtn = document.getElementById("use-current-location");
+	if (useCurrentLocationBtn)
+		useCurrentLocationBtn.addEventListener("click", _useCurrentLocation);
+
+	document.addEventListener("click", (event) => {
+		const dismiss = event.target.closest(
+			'[data-action="dismiss-notification"]',
+		);
+		if (dismiss) dismiss.closest(".config-notification")?.remove();
+	});
 
 	console.log("Event listeners setup complete");
 }
@@ -1011,64 +993,6 @@ async function saveAdvancedSettings() {
 	}
 }
 
-// === BYOK (Bring Your Own Key) — localStorage only, zero server storage ===
-const BYOK_STORAGE_KEY = window.BYOK_STORAGE_KEY || "";
-
-function saveBYOKConfig() {
-	const provider = document.getElementById("byok-provider")?.value || "";
-	const apiKey = document.getElementById("byok-api-key")?.value?.trim() || "";
-	const baseUrl = document.getElementById("byok-base-url")?.value?.trim() || "";
-	const modelId = document.getElementById("byok-model-id")?.value?.trim() || "";
-
-	if (!provider) {
-		showError("Please select a provider");
-		return;
-	}
-
-	const config = { provider, apiKey, baseUrl, modelId };
-
-	if (!BYOK_STORAGE_KEY) {
-		showError(
-			"User scope is unavailable; provider configuration was not saved.",
-		);
-		return;
-	}
-
-	try {
-		localStorage.setItem(BYOK_STORAGE_KEY, JSON.stringify(config));
-
-		const btn = document.getElementById("save-byok");
-		if (btn) {
-			const original = btn.textContent;
-			btn.textContent = "Saved ✓";
-			btn.classList.add("is-saved");
-			setTimeout(() => {
-				btn.textContent = original;
-				btn.classList.remove("is-saved");
-			}, 1800);
-		}
-		showSuccess("Provider configuration saved locally");
-	} catch (e) {
-		console.error("saveBYOKConfig failed:", e);
-		showError("Failed to save provider configuration locally");
-	}
-}
-
-function loadBYOKConfig() {
-	console.log("BYOK config handled via card UI now.");
-}
-
-function toggleBYOKFields() {
-	const provider = document.getElementById("byok-provider")?.value || "";
-	const showConditional = provider === "ollama" || provider === "custom";
-	const baseGroup = document.getElementById("byok-baseurl-group");
-	const modelGroup = document.getElementById("byok-modelid-group");
-	if (baseGroup) baseGroup.classList.toggle("is-visible", showConditional);
-	if (modelGroup) modelGroup.classList.toggle("is-visible", showConditional);
-}
-
-window.saveBYOKConfig = saveBYOKConfig;
-
 async function clearChatHistory() {
 	if (
 		!confirm(
@@ -1133,7 +1057,7 @@ function showNotification(message, type = "info") {
 		<div class="notification-content">
 			<span class="notification-icon">${type === "success" ? "✓" : type === "error" ? "✗" : "ℹ"}</span>
 			<span class="notification-message">${escapeHtml(message)}</span>
-			<button class="notification-close" type="button" onclick="this.parentElement.parentElement.remove()">×</button>
+			<button class="notification-close" type="button" data-action="dismiss-notification">×</button>
 		</div>
 	`;
 
@@ -1168,11 +1092,6 @@ function initializeConfigAnimations() {
 
 	console.log("Config animations initialized");
 }
-
-// Make functions globally available
-window.showSuccess = showSuccess;
-window.showError = showError;
-window.toggleSidebar = window.toggleSidebar || (() => {});
 
 async function saveLocation() {
 	const lat = Number.parseFloat(getValueIfExists("location-lat", ""));
@@ -1220,18 +1139,6 @@ function _useCurrentLocation() {
 		},
 	);
 }
-
-// Export to window for inline onclick handlers
-window.useCurrentLocation = _useCurrentLocation;
-
-// Export to window to fix unused variable warnings from HTML onclicks
-window.clearChatHistory = clearChatHistory;
-window.saveImageModel = saveImageModel;
-window.saveLocation = saveLocation;
-window.setProviderActive = setProviderActive;
-window.testProviderConnection = testProviderConnection;
-window.toggleBYOKFields = toggleBYOKFields;
-window.updateModelDropdown = updateModelDropdown;
 
 // ── Slider drag-guard ────────────────────────────────────────────────────
 // Range inputs in this UI were firing during vertical page scroll

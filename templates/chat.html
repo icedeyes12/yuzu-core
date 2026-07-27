@@ -34,7 +34,7 @@
       <button
         class="hamburger-menu hamburger"
         id="hamburgerMenu"
-        onclick="toggleSidebar()"
+        data-action="toggle-sidebar"
         aria-expanded="false"
         aria-controls="mainSidebar"
         type="button"
@@ -63,7 +63,7 @@
       <img src="{{ url_for('static', path='assets/icons/arrow-down.svg') }}" width="24" height="24" alt="" aria-hidden="true">
     </button>
 
-    <form class="input-area" id="chatForm" onsubmit="return false;" aria-label="Send a message">
+    <form class="input-area" id="chatForm" aria-label="Send a message">
       <label for="messageInput" class="sr-only">Message input</label>
       <textarea
         id="messageInput"
@@ -78,36 +78,6 @@
     </form>
   </div>
 
-  <dialog id="html-preview-modal" aria-labelledby="preview-modal-title" aria-modal="true">
-    <div class="html-modal-backdrop" onclick="window.closeHtmlModal?.()" aria-hidden="true"></div>
-    <article class="html-modal-content" role="document">
-      <header class="html-modal-header">
-        <span class="html-modal-title" id="preview-modal-title">HTML Preview</span>
-        <div class="html-modal-actions" role="toolbar" aria-label="Preview controls">
-          <button class="html-modal-btn" onclick="window.togglePreviewTheme?.()" title="Toggle theme" id="theme-toggle-btn" aria-label="Toggle preview theme">
-            <img src="{{ url_for('static', path='assets/icons/sun.svg') }}" width="16" height="16" alt="" aria-hidden="true">
-          </button>
-          <button class="html-modal-btn" onclick="window.togglePreviewFullscreen?.()" title="Toggle fullscreen" id="fullscreen-toggle-btn" aria-label="Toggle preview fullscreen">
-            <img src="{{ url_for('static', path='assets/icons/maximize.svg') }}" width="16" height="16" alt="" aria-hidden="true">
-          </button>
-          <button class="html-modal-close" onclick="window.closeHtmlModal?.()" aria-label="Close preview">
-            <img src="{{ url_for('static', path='assets/icons/x.svg') }}" width="18" height="18" alt="" aria-hidden="true">
-          </button>
-        </div>
-      </header>
-      <div class="html-modal-body" id="preview-body">
-        <iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin" title="HTML preview"></iframe>
-        <aside id="console-panel" class="console-panel" aria-label="JavaScript console">
-          <div class="console-header">
-            <span>&#9881; Console</span>
-            <button class="console-clear" onclick="window._clearConsole()" aria-label="Clear console output">Clear</button>
-          </div>
-          <div id="console-output" role="log" aria-live="polite"></div>
-        </aside>
-      </div>
-    </article>
-  </dialog>
-
   <!-- Load marked.js v18.0.2 for markdown rendering -->
   <script src="https://cdn.jsdelivr.net/npm/marked@18.0.2/lib/marked.umd.js"></script>
   
@@ -121,11 +91,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/bash.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/json.min.js"></script>
 
-  <script src="{{ url_for('static', path='js/provider-registry.js') }}"></script>
-<script src="{{ url_for('static', path='js/badge-registry.js') }}"></script>
-<script src="{{ url_for('static', path='js/runtime-icon-renderer.js') }}"></script>
-<script src="{{ url_for('static', path='js/visual-registry.js') }}"></script>
-  <script src="{{ url_for('static', path='js/sidebar.js') }}"></script>
   <script type="module" src="{{ url_for('static', path='js/chat.js') }}"></script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 // FILE: static/js/modules/messages.js
 // DESCRIPTION: Message creation, rendering, and formatting utilities
 
+import { renderRuntimeIcon } from "../runtime-icon-renderer.js";
 import { findMessageById } from "./state.js";
 
 /**
@@ -62,7 +63,7 @@ export function createMessageElement(role, content, timestamp = null) {
 	copyBtn.setAttribute("data-message-content", content);
 	copyBtn.title = "Copy full message";
 	copyBtn.innerHTML =
-		window.RuntimeIconRenderer?.render("copy", {
+		renderRuntimeIcon("copy", {
 			size: 16,
 			strokeWidth: 2,
 		}) || "";

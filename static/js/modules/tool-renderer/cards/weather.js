@@ -1,3 +1,4 @@
+import { renderRuntimeIcon } from "../../runtime-icon-renderer.js";
 import { escapeHtml } from "../dom-utils.js";
 
 const WEATHER_ICONS = Object.freeze({
@@ -22,7 +23,7 @@ const WEATHER_ICONS = Object.freeze({
 function pickIcon(condition) {
 	const iconName = WEATHER_ICONS[condition] || "weather-partly-cloudy";
 	return (
-		window.RuntimeIconRenderer?.render(iconName, {
+		renderRuntimeIcon(iconName, {
 			size: 32,
 			className: "weather-icon",
 		}) || ""

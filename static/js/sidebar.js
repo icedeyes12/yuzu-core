@@ -1,18 +1,19 @@
 // FILE: static/js/sidebar.js
 // DESCRIPTION: Unified sidebar management with session actions
 
+import {
+	BYOK_STORAGE_KEY,
+	clearUserScopedStorage,
+	USER_THEME_STORAGE_KEY,
+} from "./client-storage.js";
+import { eventRouter } from "./modules/event-router.js";
+import { router } from "./modules/router.js";
+import { chatStore } from "./modules/store.js";
+import { renderRuntimeIcon } from "./runtime-icon-renderer.js";
+import { handleSessionSwitch } from "./session-controller.js";
+
 // === GLOBAL FETCH INTERCEPTOR (auth gate + Phase 3 BYOK) ===
 (() => {
-	const metaUserId =
-		document.querySelector('meta[name="user-id"]')?.content || "";
-	const storageNamespace = metaUserId ? `user_${metaUserId}` : "";
-	window.BYOK_STORAGE_KEY = storageNamespace
-		? `${storageNamespace}_api_keys`
-		: "";
-	window.USER_THEME_STORAGE_KEY = storageNamespace
-		? `${storageNamespace}_theme`
-		: "";
-
 	const _origFetch = window.fetch;
 	const _LLM_ENDPOINTS = [
 		"/api/send_message",
@@ -28,8 +29,8 @@
 
 		if (_LLM_ENDPOINTS.some((ep) => url.includes(ep))) {
 			try {
-				const raw = window.BYOK_STORAGE_KEY
-					? localStorage.getItem(window.BYOK_STORAGE_KEY)
+				const raw = BYOK_STORAGE_KEY
+					? localStorage.getItem(BYOK_STORAGE_KEY)
 					: null;
 				if (raw) {
 					init.headers.set("X-BYOK-Config", btoa(encodeURIComponent(raw)));
@@ -65,8 +66,8 @@ function _ensureAuthOverlay() {
 			<h2>Session Expired</h2>
 			<p>Please sign in again to continue.</p>
 			<div class="auth-overlay-buttons">
-				<button class="auth-btn auth-google-btn" onclick="loginWith('google')">${_GOOGLE_SVG} Sign in with Google</button>
-				<button class="auth-btn auth-github-btn" onclick="loginWith('github')">${_GITHUB_SVG} Sign in with GitHub</button>
+				<button class="auth-btn auth-google-btn" data-auth-provider="google">${_GOOGLE_SVG} Sign in with Google</button>
+				<button class="auth-btn auth-github-btn" data-auth-provider="github">${_GITHUB_SVG} Sign in with GitHub</button>
 			</div>
 		</div>
 	`;
@@ -88,9 +89,6 @@ const _GOOGLE_SVG =
 const _GITHUB_SVG =
 	'<img class="auth-provider-logo" src="/static/assets/logos/providers/github.svg" width="20" height="20" alt="" aria-hidden="true">';
 
-if (typeof window.initCustomScrollbars === "function") {
-	window.initCustomScrollbars(document.getElementById("mainSidebar"));
-}
 function _injectAuthSection() {
 	const sidebar = document.getElementById("mainSidebar");
 	if (!sidebar) return;
@@ -152,7 +150,7 @@ function _renderAuthenticated(container, data) {
 					<div class="auth-user-email" title="${_escapeHtml(email)}">${_escapeHtml(email || "")}</div>
 				</div>
 			</div>
-			<button class="auth-logout-btn" onclick="handleLogout()">Sign Out</button>
+			<button class="auth-logout-btn" data-action="logout">Sign Out</button>
 		</div>
 	`;
 }
@@ -160,8 +158,8 @@ function _renderAuthenticated(container, data) {
 function _renderUnauthenticated(container) {
 	container.innerHTML = `
 		<div class="auth-login-buttons">
-			<button class="auth-btn auth-google-btn" onclick="loginWith('google')">${_GOOGLE_SVG} Sign in with Google</button>
-			<button class="auth-btn auth-github-btn" onclick="loginWith('github')">${_GITHUB_SVG} Sign in with GitHub</button>
+			<button class="auth-btn auth-google-btn" data-auth-provider="google">${_GOOGLE_SVG} Sign in with Google</button>
+			<button class="auth-btn auth-github-btn" data-auth-provider="github">${_GITHUB_SVG} Sign in with GitHub</button>
 		</div>
 	`;
 }
@@ -171,21 +169,7 @@ function loginWith(provider) {
 }
 
 function clearUserScopedClientState() {
-	const prefix = window.BYOK_STORAGE_KEY
-		? window.BYOK_STORAGE_KEY.replace(/_api_keys$/, "")
-		: "";
-	for (let index = localStorage.length - 1; index >= 0; index -= 1) {
-		const key = localStorage.key(index);
-		if (prefix && key?.startsWith(`${prefix}_`)) {
-			localStorage.removeItem(key);
-		}
-	}
-	if (window.BYOK_STORAGE_KEY) localStorage.removeItem(window.BYOK_STORAGE_KEY);
-	if (window.USER_THEME_STORAGE_KEY) {
-		localStorage.removeItem(window.USER_THEME_STORAGE_KEY);
-	}
-	window.BYOK_STORAGE_KEY = "";
-	window.USER_THEME_STORAGE_KEY = "";
+	clearUserScopedStorage();
 }
 
 async function handleLogout() {
@@ -291,8 +275,8 @@ function switchTheme(theme) {
 			option.classList.add("active");
 		}
 	}
-	if (window.USER_THEME_STORAGE_KEY) {
-		localStorage.setItem(window.USER_THEME_STORAGE_KEY, theme);
+	if (USER_THEME_STORAGE_KEY) {
+		localStorage.setItem(USER_THEME_STORAGE_KEY, theme);
 	}
 }
 
@@ -359,8 +343,7 @@ function loadSidebarSessions() {
 				renameBtn.type = "button";
 				renameBtn.className = "session-action-btn rename-btn";
 				renameBtn.title = "Rename session";
-				renameBtn.innerHTML =
-					window.RuntimeIconRenderer?.render("edit", { size: 14 }) || "";
+				renameBtn.innerHTML = renderRuntimeIcon("edit", { size: 14 }) || "";
 				renameBtn.onclick = (e) => {
 					e.stopPropagation();
 					renameSessionPrompt(session.id, session.name);
@@ -372,8 +355,7 @@ function loadSidebarSessions() {
 					deleteBtn.type = "button";
 					deleteBtn.className = "session-action-btn delete-btn";
 					deleteBtn.title = "Delete session";
-					deleteBtn.innerHTML =
-						window.RuntimeIconRenderer?.render("trash", { size: 14 }) || "";
+					deleteBtn.innerHTML = renderRuntimeIcon("trash", { size: 14 }) || "";
 					deleteBtn.onclick = (e) => {
 						e.stopPropagation();
 						deleteSessionPrompt(session.id);
@@ -484,14 +466,9 @@ function createNewSession() {
 			if (data.status === "success") {
 				loadSidebarSessions();
 				toggleSidebar();
-				if (window.router) {
-					window.router.updateUrl(data.session_id);
-				}
-				if (
-					window.location.pathname === "/chat" &&
-					window.handleSessionSwitch
-				) {
-					void window.handleSessionSwitch(data.session_id);
+				router.updateUrl(data.session_id);
+				if (window.location.pathname === "/chat") {
+					void handleSessionSwitch(data.session_id);
 				} else {
 					window.location.href = "/chat";
 				}
@@ -505,18 +482,15 @@ function createNewSession() {
 function switchSession(sessionId) {
 	if (_sessionSwitchCooldown || _isSessionSwitching) return;
 
-	// Dynamic import to avoid module issues outside module scripts
-	if (window.eventRouter && window.router) {
-		const currentSession = window.router.currentSessionId;
-		if (
-			currentSession &&
-			window.chatStore?.isGenerating &&
-			window.chatStore.sessionId === currentSession
-		) {
-			console.log(
-				`[Sidebar] Active stream in session ${currentSession}, pausing`,
-			);
-		}
+	const currentSession = router.currentSessionId;
+	if (
+		currentSession &&
+		chatStore.isGenerating &&
+		chatStore.sessionId === currentSession
+	) {
+		console.log(
+			`[Sidebar] Active stream in session ${currentSession}, pausing`,
+		);
 	}
 
 	const isOnChatPage = window.location.pathname.startsWith("/chat");
@@ -533,28 +507,17 @@ function switchSession(sessionId) {
 
 	_isSessionSwitching = true;
 	_setSessionSwitchingVisual(sessionId, true);
-
-	// Cancel any active stream for current session before switching
-	if (window.eventRouter && window.router?.currentSessionId) {
-		window.eventRouter.cancelStream(window.router.currentSessionId);
+	if (router.currentSessionId) {
+		eventRouter.cancelStream(router.currentSessionId);
 	}
 
-	if (window.handleSessionSwitch) {
-		window
-			.handleSessionSwitch(sessionId)
-			.then(() => {
-				toggleSidebar();
-			})
-			.catch(() => showNotification("Failed to switch session", "error"))
-			.finally(() => {
-				_isSessionSwitching = false;
-				_setSessionSwitchingVisual(sessionId, false);
-			});
-		return;
-	}
-
-	_isSessionSwitching = false;
-	_setSessionSwitchingVisual(sessionId, false);
+	handleSessionSwitch(sessionId)
+		.then(() => toggleSidebar())
+		.catch(() => showNotification("Failed to switch session", "error"))
+		.finally(() => {
+			_isSessionSwitching = false;
+			_setSessionSwitchingVisual(sessionId, false);
+		});
 }
 
 function _setSessionSwitchingVisual(_sessionId, isLoading) {
@@ -607,8 +570,8 @@ function showNotification(message, type = "info") {
 
 document.addEventListener("DOMContentLoaded", () => {
 	const savedTheme =
-		(window.USER_THEME_STORAGE_KEY
-			? localStorage.getItem(window.USER_THEME_STORAGE_KEY)
+		(USER_THEME_STORAGE_KEY
+			? localStorage.getItem(USER_THEME_STORAGE_KEY)
 			: null) || "stellar-night-suisei";
 	document.body.setAttribute("data-theme", savedTheme);
 	_currentTheme = savedTheme;
@@ -630,24 +593,39 @@ document.addEventListener("DOMContentLoaded", () => {
 	loadSidebarSessions();
 });
 
-function syncActiveSidebarItem(sessionId) {
-	const list = document.getElementById("sidebarSessionsList");
-	if (!list) return;
-	for (const item of list.querySelectorAll(".sidebar-session-item")) {
-		const id = item.getAttribute("data-session-id");
-		item.classList.toggle("active", String(id) === String(sessionId));
+function handleSidebarAction(event) {
+	const actionTarget = event.target.closest(
+		"[data-action], [data-auth-provider]",
+	);
+	if (!actionTarget) return;
+	const action = actionTarget.dataset.action;
+	if (action === "toggle-sidebar" || action === "close-sidebar") {
+		toggleSidebar();
+		return;
+	}
+	if (action === "create-session") {
+		createNewSession();
+		return;
+	}
+	if (action === "logout") {
+		void handleLogout();
+		return;
+	}
+	if (actionTarget.dataset.authProvider) {
+		loginWith(actionTarget.dataset.authProvider);
 	}
 }
 
-window.toggleSidebar = toggleSidebar;
-window.switchTheme = switchTheme;
-window.createNewSession = createNewSession;
-window.switchSession = switchSession;
-window.renameSessionPrompt = renameSessionPrompt;
-window.renameSession = renameSession;
-window.deleteSessionPrompt = deleteSessionPrompt;
-window.deleteSession = deleteSession;
-window.loadSidebarSessions = loadSidebarSessions;
-window.syncActiveSidebarItem = syncActiveSidebarItem;
-window.loginWith = loginWith;
-window.handleLogout = handleLogout;
+document.addEventListener("click", handleSidebarAction);
+
+export {
+	createNewSession,
+	deleteSession,
+	handleLogout,
+	loadSidebarSessions,
+	loginWith,
+	renameSession,
+	switchSession,
+	switchTheme,
+	toggleSidebar,
+};

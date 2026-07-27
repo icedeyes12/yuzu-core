@@ -1,6 +1,7 @@
 // FILE: static/js/modules/multimodal.js
 // DESCRIPTION: Multimodal manager for image upload, generation, and streaming
 
+import { renderRuntimeIcon } from "../runtime-icon-renderer.js";
 import { eventRouter } from "./event-router.js";
 import { router } from "./router.js";
 import { isProcessingMessage, setIsProcessingMessage } from "./state.js";
@@ -54,7 +55,7 @@ export class MultimodalManager {
 	getSVGIcon(mode) {
 		const iconName = mode === "regenerate" ? "refresh" : mode;
 		return (
-			window.RuntimeIconRenderer?.render(iconName, {
+			renderRuntimeIcon(iconName, {
 				size:
 					mode === "close"
 						? 14
@@ -324,7 +325,7 @@ export class MultimodalManager {
 		} else {
 			sendBtn.disabled = false;
 			sendBtn.innerHTML =
-				window.RuntimeIconRenderer?.render("send", {
+				renderRuntimeIcon("send", {
 					size: 20,
 					strokeWidth: 2.5,
 				}) || "";
@@ -396,8 +397,8 @@ export class MultimodalManager {
                     <div class="upload-placeholder">
                         ${this.selectedImages.length > 0 ? `${this.selectedImages.length} image(s) ready!` : "Upload images for analysis"}
                     </div>
-                    <input type="file" id="imageUpload" class="visually-hidden-input" accept="image/*" multiple>
-                    <button class="upload-btn" onclick="multimodal.openFilePicker()">
+                    <input type="file" id="imageUpload" class="visually-hidden-input" accept="image/*" multiple data-multimodal-action="select-images">
+                    <button class="upload-btn" data-multimodal-action="open-file-picker" type="button">
                         ${this.getSVGIcon("upload")}
                         <span>${this.selectedImages.length > 0 ? "Add More Images" : "Choose Images"}</span>
                     </button>
@@ -413,6 +414,21 @@ export class MultimodalManager {
 		this.isDropdownOpen = true;
 
 		const dropdown = this.toggleBtn.nextElementSibling;
+		dropdown.addEventListener("click", (event) => {
+			const action = event.target.closest("[data-multimodal-action]");
+			if (!action) return;
+			switch (action.dataset.multimodalAction) {
+				case "open-file-picker":
+					this.openFilePicker();
+					break;
+				case "remove-image":
+					this.removeImage(Number(action.dataset.imageIndex));
+					break;
+				case "clear-images":
+					this.clearImages();
+					break;
+			}
+		});
 		dropdown
 			.querySelectorAll(".multimodal-option[data-mode]")
 			.forEach((option) => {
@@ -425,13 +441,13 @@ export class MultimodalManager {
 
 		if (this.currentMode === "image") {
 			const fileInput = document.getElementById("imageUpload");
-			fileInput.onchange = (e) => {
+			fileInput.addEventListener("change", (e) => {
 				if (e.target.files.length > 0) {
 					this.addImages(Array.from(e.target.files));
 					this.closeDropdown();
 					setTimeout(() => this.openDropdown(), 100);
 				}
-			};
+			});
 		}
 	}
 
@@ -444,7 +460,7 @@ export class MultimodalManager {
 				return `
                 <div class="image-preview-container">
                     <img class="image-preview" src="${previewUrl}" alt="Preview ${index + 1}">
-                    <button class="remove-image-btn" onclick="multimodal.removeImage(${index})" type="button">
+                    <button class="remove-image-btn" data-multimodal-action="remove-image" data-image-index="${index}" type="button">
                         ${this.getSVGIcon("close")}
                     </button>
                 </div>
@@ -455,7 +471,7 @@ export class MultimodalManager {
 		return `
             <div class="image-previews-header">
                 <span>${this.selectedImages.length} image(s) ready</span>
-                <button class="clear-all-btn" onclick="multimodal.clearImages()" type="button">Clear All</button>
+                <button class="clear-all-btn" data-multimodal-action="clear-images" type="button">Clear All</button>
             </div>
             <div class="image-previews-grid">
                 ${previews}

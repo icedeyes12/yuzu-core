@@ -1,5 +1,8 @@
 // FILE: static/js/about.js
 // DESCRIPTION: About page interactions
+
+import { switchTheme, toggleSidebar } from "./sidebar.js";
+
 document.addEventListener("DOMContentLoaded", () => {
 	console.log("Yuzu Companion About Page Loaded");
 
@@ -56,7 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
 		if (e.key === "Escape") {
 			const sidebar = document.getElementById("mainSidebar");
 			if (sidebar?.classList.contains("open")) {
-				window.toggleSidebar();
+				toggleSidebar();
 			}
 		}
 
@@ -72,7 +75,7 @@ document.addEventListener("DOMContentLoaded", () => {
 			];
 			const themeIndex = parseInt(e.key, 10) - 1;
 			if (themes[themeIndex]) {
-				window.switchTheme(themes[themeIndex]);
+				switchTheme(themes[themeIndex]);
 			}
 		}
 	});
@@ -141,7 +144,4 @@ function showSecretMessage() {
 	}, 5000);
 }
 
-// Export functions for global access
-window.showSecretMessage = showSecretMessage;
-window.toggleSidebar = window.toggleSidebar || (() => {});
-window.switchTheme = window.switchTheme || (() => {});
+export { showSecretMessage };
