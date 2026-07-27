@@ -6,6 +6,7 @@ from app.api.utils import get_current_user
 from app.db import Database
 from app.logging_config import get_logger
 from app.services.memory_service import MemoryService
+from app.services.memory_stats_service import MemoryStatsService
 
 log = get_logger(__name__)
 
@@ -40,19 +41,8 @@ async def api_rebuild_structured_memory(user_id: str = Depends(get_current_user)
 async def api_memory_stats(user_id: str = Depends(get_current_user)):
     """Return graph-memory counts for the current tenant."""
     try:
-        from app.db.connection import pg_fetchall_async
-
-        rows = await pg_fetchall_async(
-            """
-            SELECT
-                (SELECT COUNT(*) FROM memory_nodes WHERE user_id = %s AND status = 'active' AND valid_until IS NULL) AS nodes,
-                (SELECT COUNT(*) FROM memory_edges WHERE user_id = %s AND valid_until IS NULL) AS edges,
-                (SELECT COUNT(*) FROM memory_evidence WHERE user_id = %s) AS evidence,
-                (SELECT COUNT(*) FROM episodes WHERE user_id = %s AND archived_at IS NULL) AS episodes
-            """,
-            (user_id, user_id, user_id, user_id),
-        )
-        return {"status": "success", "stats": rows[0] if rows else {}}
+        stats = await MemoryStatsService.get_stats(user_id)
+        return {"status": "success", "stats": stats}
     except Exception as e:
         log.error("Error getting graph memory stats: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
