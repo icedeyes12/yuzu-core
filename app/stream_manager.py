@@ -7,6 +7,7 @@ import logging
 import time
 from typing import Any
 
+from app.core.stream_fence import StreamFence
 from app.orchestrator import (
     handle_user_message_streaming,
     run_post_turn_after_stream_async,
@@ -170,17 +171,10 @@ class StreamBuffer:
     async def _force_complete_fence(self) -> None:
         """Best-effort fence release so a crashed stream doesn't lock the session."""
         try:
-            from app.orchestrator import StreamFence
-
-            async with StreamFence._lock:
-                fence = StreamFence._fences.get(str(self.session_id))
-                if fence and not fence.get("completed"):
-                    fence["completed"] = True
-                    log.info(
-                        "[Stream] Force-completed fence for session %s (fence_id=%s)",
-                        self.session_id,
-                        fence.get("fence_id"),
-                    )
+            if await StreamFence.force_complete(self.session_id):
+                log.info(
+                    "[Stream] Force-completed fence for session %s", self.session_id
+                )
         except Exception as e:
             log.warning(
                 "[Stream] Could not force-complete fence for session %s: %s",

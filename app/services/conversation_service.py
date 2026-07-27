@@ -12,6 +12,7 @@ from fastapi import UploadFile
 from app.db import Database
 from app.orchestrator import handle_user_message
 from app.stream_manager import StreamManager
+from app.tools.schemas import StreamToolEvent
 
 log = logging.getLogger(__name__)
 
@@ -75,8 +76,6 @@ class ConversationService:
 
         q = buffer.subscribe()
         try:
-            from app.tools.schemas import StreamToolEvent
-
             while True:
                 chunk = await q.get()
                 if chunk is None:

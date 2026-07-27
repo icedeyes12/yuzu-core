@@ -11,12 +11,14 @@ from pathlib import Path
 from typing import Any
 
 from app.core.llm_context import LLMContext
+from app.core.stream_fence import StreamFence
 from app.db import Database
 from app.llm_client import (
     generate_ai_response,
     generate_ai_response_streaming,
 )
 from app.logging_config import get_logger
+from app.memory.retrieval import _clear_embedding_cache
 from app.providers import get_ai_manager
 from app.providers.openai_protocol import normalize_tool_calls
 from app.services.memory_service import MemoryService
@@ -39,7 +41,6 @@ _EMPTY_RESPONSE_FALLBACK = "I'm having trouble responding right now. Please try 
 _MD_IMAGE_PATTERN = re.compile(r"!\[[^\]]{0,200}\]\(([^)]{1,200})\)")
 
 _MAX_ORCHESTRATION_LOOPS = 4
-_STREAM_FENCE_TIMEOUT = 300
 
 _BASE_DIR = Path(__file__).resolve().parent.parent
 _ALLOWED_IMAGE_DIRS = [
@@ -410,8 +411,6 @@ async def _post_turn_async(
         log.info("[post-turn] memory maintenance skipped: %s", type(exc).__name__)
 
     try:
-        from app.memory.retrieval import _clear_embedding_cache
-
         _clear_embedding_cache()
     except Exception:
         pass
@@ -552,118 +551,6 @@ async def handle_user_message(
         )
     )
     return text_response or _EMPTY_RESPONSE_FALLBACK
-
-
-class StreamFence:
-    """Prevents race conditions between user message persistence and stream completion.
-
-    Each stream gets a unique fence ID that must be cleared after successful completion.
-    Abandoned fences expire after timeout to prevent deadlocks.
-    """
-
-    _fences: dict[str, dict[str, Any]] = {}  # session_id -> fence_info
-    _lock = asyncio.Lock()
-
-    @classmethod
-    async def acquire(cls, session_id: str, user_msg_id: int) -> str:
-        """Acquire a fence for a streaming session. Returns fence_id.
-
-        Proactively runs cleanup_expired() to evict any stale fences from
-        prior sessions before claiming a new one. Without this, abandoned
-        fences can pin session memory for up to _STREAM_FENCE_TIMEOUT.
-        """
-        import uuid
-
-        await cls.cleanup_expired()
-
-        fence_id = str(uuid.uuid4())[:8]
-        async with cls._lock:
-            # If a previous fence is still pinned for this session, log and
-            # overwrite rather than silently keep the stale one.
-            if session_id in cls._fences:
-                prior = cls._fences[session_id]
-                if not prior.get("completed"):
-                    log.warning(
-                        "stream fence for session %s was not completed "
-                        "(prior fence_id=%s); replacing with %s",
-                        session_id,
-                        prior.get("fence_id"),
-                        fence_id,
-                    )
-            cls._fences[session_id] = {
-                "fence_id": fence_id,
-                "user_msg_id": user_msg_id,
-                "acquired_at": asyncio.get_event_loop().time(),
-                "completed": False,
-            }
-        return fence_id
-
-    @classmethod
-    async def complete(cls, session_id: str, fence_id: str) -> bool:
-        """Mark fence as completed, allowing persistence.
-
-        Returns True on a successful transition, False if the fence was
-        missing or owned by a different fence_id (i.e. already evicted or
-        replaced). Callers should log accordingly; the return value is the
-        source of truth for whether the fence was safely retired.
-        """
-        async with cls._lock:
-            if session_id not in cls._fences:
-                log.warning(
-                    "stream fence complete() called for session %s but no "
-                    "fence is registered (fence_id=%s)",
-                    session_id,
-                    fence_id,
-                )
-                return False
-            fence = cls._fences[session_id]
-            if fence["fence_id"] != fence_id:
-                log.warning(
-                    "stream fence id mismatch for session %s: expected %s, "
-                    "got %s — likely already replaced",
-                    session_id,
-                    fence.get("fence_id"),
-                    fence_id,
-                )
-                return False
-            fence["completed"] = True
-        return True
-
-    @classmethod
-    async def is_completed(cls, session_id: str) -> bool:
-        """Check if fence is completed or expired. Logs when it self-clears."""
-        async with cls._lock:
-            if session_id not in cls._fences:
-                return True  # No fence = already cleared
-
-            fence = cls._fences[session_id]
-            elapsed = asyncio.get_event_loop().time() - fence["acquired_at"]
-
-            # If completed or expired, clear it
-            if fence["completed"] or elapsed > _STREAM_FENCE_TIMEOUT:
-                del cls._fences[session_id]
-                if elapsed > _STREAM_FENCE_TIMEOUT:
-                    log.warning(
-                        "stream fence for session %s expired after %.0fs",
-                        session_id,
-                        elapsed,
-                    )
-                return True
-
-            return False
-
-    @classmethod
-    async def cleanup_expired(cls) -> None:
-        """Remove all expired fences."""
-        async with cls._lock:
-            now = asyncio.get_event_loop().time()
-            expired = [
-                sid
-                for sid, fence in cls._fences.items()
-                if now - fence["acquired_at"] > _STREAM_FENCE_TIMEOUT
-            ]
-            for sid in expired:
-                del cls._fences[sid]
 
 
 async def handle_user_message_streaming(

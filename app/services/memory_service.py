@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any
 
 from app.db import Database
-from app.memory.memory import _is_fence_active_async, trigger_memory_pipeline_async
+from app.db.connection import pg_fetchall_async
+from app.logging_config import get_logger
+from app.memory.memory import (
+    _is_fence_active_async,
+    run_memory_pipeline_async,
+    trigger_memory_pipeline_async,
+)
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MemoryService:
@@ -67,9 +72,6 @@ class MemoryService:
         session_id: str, user_id: str
     ) -> dict[str, Any]:
         """Run extraction and return graph-owned memory counts."""
-        from app.db.connection import pg_fetchall_async
-        from app.memory.memory import run_memory_pipeline_async
-
         count = await Database.get_session_messages_count(session_id, user_id=user_id)
         result = await run_memory_pipeline_async(session_id, count, user_id=user_id)
         rows = await pg_fetchall_async(

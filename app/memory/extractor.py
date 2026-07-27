@@ -4,6 +4,9 @@ import json
 import logging
 from typing import Any
 
+from app.core.memory_llm import memory_llm_call
+from app.providers import get_ai_manager
+
 __all__ = [
     "extract_batch_async",
     "normalize_extraction",
@@ -190,11 +193,8 @@ async def extract_batch_async(
     messages: list[dict[str, Any]],
     profile: dict[str, Any] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
-    from app.memory.memory import _memory_llm_call
-    from app.providers import get_ai_manager
-
     system_prompt, user_prompt = build_extraction_prompt(messages)
-    response = await _memory_llm_call(
+    response = await memory_llm_call(
         await get_ai_manager(),
         messages=[
             {"role": "system", "content": system_prompt},
