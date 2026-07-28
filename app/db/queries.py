@@ -201,8 +201,8 @@ SCHEMA_DDL: tuple[str, ...] = (
         summary TEXT NOT NULL,
         embedding vector(1536),
         importance REAL NOT NULL DEFAULT 0.5,
-        source_start_message_id INTEGER,
-        source_end_message_id INTEGER,
+        source_start_message_id UUID,
+        source_end_message_id UUID,
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         archived_at TIMESTAMP NULL,
         FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE,
@@ -253,7 +253,7 @@ SCHEMA_DDL: tuple[str, ...] = (
         node_id UUID NULL REFERENCES memory_nodes(id) ON DELETE CASCADE,
         edge_id UUID NULL REFERENCES memory_edges(id) ON DELETE CASCADE,
         episode_id UUID NULL REFERENCES episodes(id) ON DELETE CASCADE,
-        message_id INTEGER NULL REFERENCES messages(id) ON DELETE CASCADE,
+        message_id UUID NULL REFERENCES messages(id) ON DELETE CASCADE,
         evidence_kind TEXT NOT NULL,
         excerpt_hash TEXT NULL,
         observed_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -334,8 +334,8 @@ SCHEMA_DDL: tuple[str, ...] = (
     """
     DO $$ BEGIN
       ALTER TABLE episodes
-        ALTER COLUMN source_start_message_id TYPE INTEGER USING source_start_message_id::text::integer,
-        ALTER COLUMN source_end_message_id TYPE INTEGER USING source_end_message_id::text::integer;
+        ALTER COLUMN source_start_message_id TYPE UUID USING source_start_message_id::text::uuid,
+        ALTER COLUMN source_end_message_id TYPE UUID USING source_end_message_id::text::uuid;
     EXCEPTION WHEN undefined_table OR undefined_column OR datatype_mismatch THEN NULL;
     END $$;
     """,

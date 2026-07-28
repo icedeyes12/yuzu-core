@@ -191,10 +191,13 @@ async def should_trigger_segmentation_async(
     state = await _get_cached_pipeline_state_async(session_id, user_id=user_id)
 
     last_message_id = state.get("last_segmented_message_id")
+    if isinstance(last_message_id, int):
+        last_message_id = "00000000-0000-0000-0000-000000000000"
+    
     try:
         messages_after = await get_session_messages_after_id_async(
             session_id,
-            last_message_id or "00000000-00000000-0000-000000000000",
+            last_message_id or "00000000-0000-0000-0000-000000000000",
             limit=10000,
             user_id=user_id or "",
         )
@@ -288,6 +291,8 @@ async def run_memory_pipeline_async(
     # Get current state for tracking
     state = await get_pipeline_state_async(session_id, user_id)
     last_message_id = state.get("last_segmented_message_id")
+    if isinstance(last_message_id, int):
+        last_message_id = "00000000-0000-0000-0000-000000000000"
     last_count = state.get("last_segmented_count", 0) or 0
 
     try:
@@ -542,6 +547,9 @@ async def _background_worker_async():
                     break
                 state = await get_pipeline_state_async(session_to_process, user_id)
                 last_message_id = state.get("last_segmented_message_id")
+                if isinstance(last_message_id, int):
+                    last_message_id = "00000000-0000-0000-0000-000000000000"
+                
                 remaining = await get_session_messages_after_id_async(
                     session_to_process,
                     last_message_id or "00000000-00000000-0000-000000000000",
