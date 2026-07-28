@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -134,13 +134,13 @@ async def _rate_limit_provider(provider: str, model: str, source: str = "llm"):
 
 
 async def _retry_with_backoff(
-    func,
+    func: Callable[..., Awaitable[Any]],
     provider: str,
     model: str,
     max_retries: int = 3,
     backoff_base: float = 2.0,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Any:
     """Execute function with retry logic for 429 errors.
 
     IMPORTANT: This function releases the rate limit lock BEFORE sleeping,
@@ -257,7 +257,7 @@ class AIProvider:
         ctx: LLMContext,
         messages: list[dict[str, Any]],
         source: str = "llm",
-        **kwargs,
+        **kwargs: Any,
     ) -> str | None:
         raise NotImplementedError
 
@@ -266,7 +266,7 @@ class AIProvider:
         ctx: LLMContext,
         messages: list[dict[str, Any]],
         source: str = "llm",
-        **kwargs,
+        **kwargs: Any,
     ) -> dict[str, Any] | None:
         text = await self.send_message(ctx, messages, source=source, **kwargs)
         if text is not None:
@@ -278,7 +278,7 @@ class AIProvider:
         ctx: LLMContext,
         messages: list[dict[str, Any]],
         source: str = "llm",
-        **kwargs,
+        **kwargs: Any,
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
         """Default implementation raises; subclasses override this."""
         raise NotImplementedError
@@ -512,7 +512,7 @@ class AIProviderManager:
         ctx: LLMContext,
         messages: list[dict[str, Any]],
         source: str = "llm",
-        **kwargs,
+        **kwargs: Any,
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
         if ctx.provider not in self.providers:
             yield ""
@@ -537,7 +537,7 @@ class AIProviderManager:
         messages: list[dict[str, Any]],
         source: str = "internal",
         profile: dict[str, Any] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> str | None:
         from app.core.llm_context import LLMContext
 
