@@ -5,6 +5,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from app.core.context import (
     MissingProviderKeyError,
@@ -14,7 +15,7 @@ from app.providers.openai_protocol import (
     sanitize_and_validate_messages,
     sanitize_openai_payload,
 )
-from app.tools import multimodal_tools
+from app.tools.multimodal import multimodal_tools
 from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)
@@ -231,11 +232,11 @@ class ProviderCapabilities:
 
 
 class AIProvider:
-    def __init__(self, name: str, config: dict | None = None):
+    def __init__(self, name: str, config: dict[str, Any] | None = None):
         self.name = name
         self.config = config or {}
         self.is_available = True
-        self._last_raw_response: dict | None = None
+        self._last_raw_response: dict[str, Any] | None = None
         self.capabilities = ProviderCapabilities()  # Subclasses override
 
     async def initialize(self) -> None:
@@ -252,20 +253,32 @@ class AIProvider:
         raise NotImplementedError
 
     async def send_message(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
     ) -> str | None:
         raise NotImplementedError
 
     async def send_message_raw(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
-    ) -> dict | None:
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
+    ) -> dict[str, Any] | None:
         text = await self.send_message(ctx, messages, source=source, **kwargs)
         if text is not None:
             return {"choices": [{"message": {"content": text, "tool_calls": []}}]}
         return None
 
     async def _send_message_streaming_impl(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
         """Default implementation raises; subclasses override this."""
         raise NotImplementedError
@@ -274,7 +287,11 @@ class AIProvider:
             yield ""
 
     async def send_message_streaming(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
         """Yield raw chunks from the provider. Default delegates to abstract impl."""
         async for chunk in self._send_message_streaming_impl(
@@ -282,7 +299,7 @@ class AIProvider:
         ):
             yield chunk
 
-    def parse_tool_calls(self, raw_response) -> list[dict]:
+    def parse_tool_calls(self, raw_response) -> list[dict[str, Any]]:
         return []
 
     async def test_connection(self) -> bool:
@@ -295,18 +312,21 @@ class AIProvider:
     def supports_vision(self, model: str) -> bool:
         return self.capabilities.supports_vision
 
-    def format_vision_message(self, user_message: str) -> list[dict]:
+    def format_vision_message(self, user_message: str) -> list[dict[str, Any]]:
         return multimodal_tools.format_vision_message(user_message, self.name)
 
-    def _get_last_user_message(self, messages: list[dict]) -> str | None:
+    def _get_last_user_message(self, messages: list[dict[str, Any]]) -> str | None:
         for msg in reversed(messages):
             if msg["role"] == "user":
                 return msg["content"] if isinstance(msg["content"], str) else None
         return None
 
     def _replace_last_user_message(
-        self, messages: list[dict], old_message: str, new_messages: list[dict]
-    ) -> list[dict]:
+        self,
+        messages: list[dict[str, Any]],
+        old_message: str,
+        new_messages: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         new_message_list = []
         replaced = False
         for msg in messages:
@@ -317,7 +337,9 @@ class AIProvider:
                 new_message_list.append(msg)
         return new_message_list
 
-    def _normalize_messages(self, messages: list[dict]) -> list[dict]:
+    def _normalize_messages(
+        self, messages: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Common message normalization for OpenAI-compatible providers."""
         normalized = sanitize_and_validate_messages(messages)
         return normalized
@@ -348,7 +370,9 @@ class AIProviderManager:
         self.providers[name] = provider
 
     @staticmethod
-    def _sanitize_outbound_messages(messages: list[dict]) -> list[dict]:
+    def _sanitize_outbound_messages(
+        messages: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """(｡•̀ᴗ-)✧"""
         try:
             return sanitize_and_validate_messages(messages)
@@ -359,7 +383,9 @@ class AIProviderManager:
             raise
 
     @staticmethod
-    def _sanitize_provider_kwargs(provider: AIProvider, kwargs: dict) -> dict:
+    def _sanitize_provider_kwargs(
+        provider: AIProvider, kwargs: dict[str, Any]
+    ) -> dict[str, Any]:
         extensions_by_provider = {
             "chutes": {"top_k", "typical_p"},
             "openrouter": {"top_k", "typical_p"},
@@ -387,17 +413,14 @@ class AIProviderManager:
         """(｡•̀ᴗ-)✧"""
         all_models: dict[str, list[str]] = {}
         for provider_name, provider in self.providers.items():
-            if asyncio.iscoroutinefunction(provider.get_models):
-                models = await provider.get_models()
-            else:
-                models = provider.get_models()  # type: ignore[call-overload]
+            models = await provider.get_models()
             all_models[provider_name] = [
                 model for model in models if isinstance(model, str) and model
             ]
         return all_models
 
     async def send_message(
-        self, ctx: LLMContext, messages: list[dict], **kwargs
+        self, ctx: LLMContext, messages: list[dict[str, Any]], **kwargs
     ) -> str | None:
         if ctx.provider not in self.providers:
             return None
@@ -417,10 +440,10 @@ class AIProviderManager:
     async def send_message_raw(
         self,
         ctx: LLMContext,
-        messages: list[dict],
+        messages: list[dict[str, Any]],
         source: str = "llm",
         **kwargs,
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         if ctx.provider not in self.providers:
             return None
         provider = self.providers[ctx.provider]
@@ -471,8 +494,8 @@ class AIProviderManager:
         return {name: p.capabilities.to_dict() for name, p in self.providers.items()}
 
     def parse_tool_calls(
-        self, provider_name: str, raw_response: dict | None
-    ) -> list[dict]:
+        self, provider_name: str, raw_response: dict[str, Any] | None
+    ) -> list[dict[str, Any]]:
         """Parse tool calls from a raw response using the provider's parser.
 
         Returns a canonical list of dicts: [{id, name, arguments}, ...]
@@ -487,7 +510,7 @@ class AIProviderManager:
     async def send_message_streaming(
         self,
         ctx: LLMContext,
-        messages: list[dict],
+        messages: list[dict[str, Any]],
         source: str = "llm",
         **kwargs,
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
@@ -511,9 +534,9 @@ class AIProviderManager:
 
     async def _internal_llm_call(
         self,
-        messages: list[dict],
+        messages: list[dict[str, Any]],
         source: str = "internal",
-        profile: dict | None = None,
+        profile: dict[str, Any] | None = None,
         **kwargs,
     ) -> str | None:
         from app.core.llm_context import LLMContext

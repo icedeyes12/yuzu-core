@@ -7,7 +7,7 @@ import io
 import json as _json
 import os
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, TypedDict
 
 from PIL import Image
 
@@ -18,6 +18,20 @@ log = get_logger(__name__)
 
 MAX_HISTORY_TOKENS = 15000
 _MAX_EMBEDDED_IMAGES = 3
+
+
+class PromptSections(TypedDict):
+    identity: str
+    instructions: str
+    knowledge: str
+    memory: str
+    formatting: str
+    env: str
+    constraints: str
+    adaptability: str
+    partner_name: str
+    conversation_id: str
+    timestamp: int
 
 
 def _estimate_tokens(text: str) -> int:
@@ -83,9 +97,9 @@ def _history_blocks(messages: list[dict[str, Any]]) -> list[list[dict[str, Any]]
 
 
 def _trim_history_to_token_limit(
-    messages: list[dict],
+    messages: list[dict[str, Any]],
     max_tokens: int = MAX_HISTORY_TOKENS,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Trim history by atomic message and tool-call blocks."""
     if not messages:
         return messages
@@ -212,7 +226,7 @@ async def _retrieve_memories_async(
         return [], "", ""
 
 
-async def _location_block_async(profile: dict | None = None) -> str:
+async def _location_block_async(profile: dict[str, Any] | None = None) -> str:
     if profile:
         lat = profile.get("location_lat")
         lon = profile.get("location_lon")
@@ -561,7 +575,13 @@ def _encode_image_safe(path: str) -> dict[str, Any] | None:
 # ── Phase 1: Structured-payload message builder (helpers) ────────────────
 
 
-async def _build_sections_async(profile, session_id, interface, user_message, user_id):
+async def _build_sections_async(
+    profile: dict[str, Any],
+    session_id: str,
+    interface: str,
+    user_message: str | None,
+    user_id: str,
+) -> PromptSections:
     """Gather prompt sections as plain strings for structured composition."""
     from datetime import datetime as _dt
 
@@ -673,7 +693,9 @@ def _json_escape(obj):
     return _json.dumps(obj, ensure_ascii=False, default=str)
 
 
-def _compose_structured_system_message(sections, additional_instructions=""):
+def _compose_structured_system_message(
+    sections: PromptSections, additional_instructions: str = ""
+) -> dict[str, Any]:
     """Compose a single system message with structured content parts.
 
     Order matches the contract:

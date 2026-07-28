@@ -3,19 +3,20 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import httpx
 
 from app.core.llm_context import LLMContext
 from app.providers.base import AIProvider, ProviderCapabilities
-from app.tools import multimodal_tools
+from app.tools.multimodal import multimodal_tools
 from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)
 
 
 class OpenRouterProvider(AIProvider):
-    def __init__(self, config: dict | None = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("openrouter", config)
         self.base_url = "https://openrouter.ai/api/v1/chat/completions"
         self.capabilities = ProviderCapabilities(
@@ -63,11 +64,13 @@ class OpenRouterProvider(AIProvider):
             return []
 
     def _prepare_payload(
-        self, ctx: LLMContext, messages: list[dict], stream: bool, **kwargs
-    ) -> tuple[dict, dict]:
+        self, ctx: LLMContext, messages: list[dict[str, Any]], stream: bool, **kwargs
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         messages = self._normalize_messages(messages)
+        model = ctx.model
+        assert model is not None
 
-        if self.supports_vision(ctx.model) and messages:
+        if self.supports_vision(model) and messages:
             last_user_message = self._get_last_user_message(messages)
             if last_user_message and multimodal_tools.has_images(last_user_message):
                 vision_messages = self.format_vision_message(last_user_message)
@@ -107,7 +110,11 @@ class OpenRouterProvider(AIProvider):
         return headers, payload
 
     async def send_message(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
     ) -> str | None:
 
         try:
@@ -140,8 +147,12 @@ class OpenRouterProvider(AIProvider):
             return None
 
     async def send_message_raw(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
-    ) -> dict | None:
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
+    ) -> dict[str, Any] | None:
 
         try:
             headers, payload = self._prepare_payload(ctx, messages, False, **kwargs)
@@ -170,7 +181,7 @@ class OpenRouterProvider(AIProvider):
     async def _send_message_streaming_impl(
         self,
         ctx: LLMContext,
-        messages: list[dict],
+        messages: list[dict[str, Any]],
         source: str = "llm",
         **kwargs,
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
@@ -194,7 +205,7 @@ class OpenRouterProvider(AIProvider):
                     if response.status_code == 200:
                         if has_tools:
                             # FC9: Accumulate tool call fragments from delta chunks
-                            tool_call_fragments: dict[int, dict] = {}
+                            tool_call_fragments: dict[int, dict[str, Any]] = {}
                             async for line in response.aiter_lines():
                                 if not line or not line.startswith("data: "):
                                     continue
@@ -292,7 +303,7 @@ class OpenRouterProvider(AIProvider):
                 error_msg = repr(e)
             yield f"Error: {type(e).__name__} - {error_msg}"
 
-    def parse_tool_calls(self, raw_response) -> list[dict]:
+    def parse_tool_calls(self, raw_response) -> list[dict[str, Any]]:
         if not isinstance(raw_response, dict):
             return []
         try:

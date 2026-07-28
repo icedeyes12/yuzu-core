@@ -55,7 +55,7 @@ class StreamBuffer:
         """(Deprecated) Handled by Orchestrator."""
         pass
 
-    async def _process(self):
+    async def _process(self) -> None:
         """Asynchronously process chunks from the orchestrator.
 
         RAM-only accumulation during streaming.
@@ -63,6 +63,7 @@ class StreamBuffer:
         Self-cleanup in finally block.
         """
         try:
+            assert self.user_id is not None
             raw_stream = handle_user_message_streaming(
                 self.user_message,
                 interface=self.interface,
@@ -194,7 +195,7 @@ class StreamBuffer:
         self.queues.append(q)
         return q
 
-    def unsubscribe(self, q: asyncio.Queue):
+    def unsubscribe(self, q: asyncio.Queue[Any]) -> None:
         """Remove a subscriber queue and cancel stream if last subscriber."""
         if q in self.queues:
             self.queues.remove(q)
@@ -227,7 +228,7 @@ class StreamBuffer:
         except Exception:
             return str(hash(self.full_content))[:16]
 
-    def get_status(self) -> dict:
+    def get_status(self) -> dict[str, Any]:
         """Return stream status for API endpoint."""
         return {
             "session_id": self.session_id,
@@ -251,7 +252,7 @@ class StreamManager:
 
     _streams: dict[str, StreamBuffer] = {}
     _lock = asyncio.Lock()
-    _cleanup_task: asyncio.Task | None = None
+    _cleanup_task: asyncio.Task[None] | None = None
 
     @classmethod
     async def start_stream(

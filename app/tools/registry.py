@@ -16,69 +16,69 @@ from app.tools.schemas import (
 logger = logging.getLogger(__name__)
 
 # Lazy-load tool modules on first dispatch
-_TOOL_MODULES: dict = {}
+_TOOL_MODULES: dict[str, Any] = {}
 
 
 # Lazily populated on first get_tool_definitions() call
-_TOOL_DEFINITIONS: dict = {}
-_DEFINITIONS_INITIALIZED = False
+_TOOL_DEFINITIONS: dict[str, Any] = {}
+_definitions_initialized = False
 
 
 def _load_tool_module(tool_name: str):
     """Lazy-import a tool module by name."""
     if tool_name not in _TOOL_MODULES:
         if tool_name == "image_generate":
-            from app.tools import image_generate
+            import app.tools.image_generate as image_generate
 
             _TOOL_MODULES[tool_name] = image_generate
         elif tool_name == "image_edit":
-            from app.tools import image_edit
+            import app.tools.image_edit as image_edit
 
             _TOOL_MODULES[tool_name] = image_edit
         elif tool_name == "imagine":
             # Alias for image_generate
-            from app.tools import image_generate
+            import app.tools.image_generate as image_generate
 
             _TOOL_MODULES[tool_name] = image_generate
         elif tool_name == "request" or tool_name == "http_request":
-            from app.tools import http_request
+            import app.tools.http_request as http_request
 
             _TOOL_MODULES[tool_name] = http_request
         elif tool_name == "memory_store":
-            from app.tools import memory_store
+            import app.tools.memory_store as memory_store
 
             _TOOL_MODULES[tool_name] = memory_store
         elif tool_name == "memory_search":
-            from app.tools import memory_search
+            import app.tools.memory_search as memory_search
 
             _TOOL_MODULES[tool_name] = memory_search
         elif tool_name == "multimodal":
-            from app.tools import multimodal
+            import app.tools.multimodal as multimodal
 
             _TOOL_MODULES[tool_name] = multimodal
         # File system tools
         elif tool_name in ("read", "write", "ls", "mkdir", "rm"):
-            from app.tools import fs_operations
+            import app.tools.fs_operations as fs_operations
 
             _TOOL_MODULES[tool_name] = fs_operations
         elif tool_name == "terminal":
-            from app.tools import shell_exec
+            import app.tools.shell_exec as shell_exec
 
             _TOOL_MODULES[tool_name] = shell_exec
         elif tool_name == "python":
-            from app.tools import python_exec
+            import app.tools.python_exec as python_exec
 
             _TOOL_MODULES[tool_name] = python_exec
         elif tool_name == "sql":
-            from app.tools import db_query
+            import app.tools.db_query as db_query
 
             _TOOL_MODULES[tool_name] = db_query
         elif tool_name == "ask_rei":
-            from app.tools import ask_rei
+            import app.tools.ask_rei as ask_rei
 
             _TOOL_MODULES[tool_name] = ask_rei
         elif tool_name == "weather":
-            from app.tools import weather
+            import app.tools.weather as weather
 
             _TOOL_MODULES[tool_name] = weather
         else:
@@ -88,12 +88,12 @@ def _load_tool_module(tool_name: str):
 
 def _collect_definitions():
     """Lazily import and register all tool definitions."""
-    global _TOOL_DEFINITIONS, _DEFINITIONS_INITIALIZED
-    if _DEFINITIONS_INITIALIZED:
+    global _TOOL_DEFINITIONS, _definitions_initialized
+    if _definitions_initialized:
         return
 
     try:
-        from app.tools import image_generate
+        import app.tools.image_generate as image_generate
 
         _TOOL_DEFINITIONS["image_generate"] = image_generate.TOOL_DEFINITION
         _TOOL_DEFINITIONS["imagine"] = image_generate.TOOL_DEFINITION  # alias
@@ -101,14 +101,14 @@ def _collect_definitions():
         logger.info(f"[registry] Failed to load image_generate definition: {e}")
 
     try:
-        from app.tools import image_edit
+        import app.tools.image_edit as image_edit
 
         _TOOL_DEFINITIONS["image_edit"] = image_edit.TOOL_DEFINITION
     except Exception as e:
         logger.info(f"[registry] Failed to load image_edit definition: {e}")
 
     try:
-        from app.tools import http_request
+        import app.tools.http_request as http_request
 
         _TOOL_DEFINITIONS["http_request"] = http_request.TOOL_DEFINITION
         _TOOL_DEFINITIONS["request"] = http_request.TOOL_DEFINITION  # alias
@@ -116,14 +116,14 @@ def _collect_definitions():
         logger.info(f"[registry] Failed to load http_request definition: {e}")
 
     try:
-        from app.tools import memory_store
+        import app.tools.memory_store as memory_store
 
         _TOOL_DEFINITIONS["memory_store"] = memory_store.TOOL_DEFINITION
     except Exception as e:
         logger.info(f"[registry] Failed to load memory_store definition: {e}")
 
     try:
-        from app.tools import memory_search
+        import app.tools.memory_search as memory_search
 
         _TOOL_DEFINITIONS["memory_search"] = memory_search.TOOL_DEFINITION
     except Exception as e:
@@ -131,7 +131,7 @@ def _collect_definitions():
 
     # File system tools
     try:
-        from app.tools import fs_operations
+        import app.tools.fs_operations as fs_operations
 
         for name in ["read", "write", "ls", "mkdir", "rm"]:
             _TOOL_DEFINITIONS[name] = getattr(fs_operations, f"TOOL_{name.upper()}")
@@ -141,7 +141,7 @@ def _collect_definitions():
 
     # Shell execution tool
     try:
-        from app.tools import shell_exec
+        import app.tools.shell_exec as shell_exec
 
         for name, defn in shell_exec.TOOL_DEFINITION.items():
             _TOOL_DEFINITIONS[name] = defn
@@ -151,7 +151,7 @@ def _collect_definitions():
 
     # Python execution tool
     try:
-        from app.tools import python_exec
+        import app.tools.python_exec as python_exec
 
         _TOOL_DEFINITIONS["python"] = python_exec.TOOL_DEFINITION
         _TOOL_MODULES["python_exec"] = python_exec
@@ -160,7 +160,7 @@ def _collect_definitions():
 
     # SQL query tool
     try:
-        from app.tools import db_query
+        import app.tools.db_query as db_query
 
         _TOOL_DEFINITIONS["sql"] = db_query.TOOL_DEFINITION
         _TOOL_MODULES["db_query"] = db_query
@@ -169,7 +169,7 @@ def _collect_definitions():
 
     # Ask Rei tool
     try:
-        from app.tools import ask_rei
+        import app.tools.ask_rei as ask_rei
 
         _TOOL_DEFINITIONS["ask_rei"] = ask_rei.TOOL_DEFINITION
         _TOOL_MODULES["ask_rei"] = ask_rei
@@ -178,14 +178,14 @@ def _collect_definitions():
 
     # Weather tool
     try:
-        from app.tools import weather
+        import app.tools.weather as weather
 
         _TOOL_DEFINITIONS["weather"] = weather.TOOL_DEFINITION["weather"]
         _TOOL_MODULES["weather"] = weather
     except Exception as e:
         logger.info(f"[registry] Failed to load weather definition: {e}")
 
-    _DEFINITIONS_INITIALIZED = True
+    _definitions_initialized = True
 
 
 # --------------------------------------------------------------------
@@ -193,7 +193,7 @@ def _collect_definitions():
 # --------------------------------------------------------------------
 
 
-def get_tool_definitions() -> list:
+def get_tool_definitions() -> list[Any]:
     """Return all tool definitions for LLM tools[] array."""
     _collect_definitions()
     return list(_TOOL_DEFINITIONS.values())
@@ -212,10 +212,10 @@ def get_tool_definition(name: str):
 
 async def execute_tool(
     tool_name: str,
-    arguments: dict,
+    arguments: dict[str, Any],
     session_id: str | None = None,
     user_id: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Dispatch a tool call and return a structured result dict (async).
 
     This is the SINGLE source of truth for tool dispatch.

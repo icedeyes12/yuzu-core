@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import httpx
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class CustomAnthropicProvider(AIProvider):
-    def __init__(self, config: dict | None = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("custom_anthropic", config)
         self.base_url = "https://api.anthropic.com/v1/messages"
         self.capabilities = ProviderCapabilities(
@@ -42,7 +43,9 @@ class CustomAnthropicProvider(AIProvider):
     async def get_models(self) -> list[str]:
         return await self.fetch_live_models()
 
-    def _convert_tools_to_anthropic(self, openai_tools: list[dict]) -> list[dict]:
+    def _convert_tools_to_anthropic(
+        self, openai_tools: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         anthropic_tools = []
         for t in openai_tools:
             if t.get("type") == "function":
@@ -59,8 +62,8 @@ class CustomAnthropicProvider(AIProvider):
         return anthropic_tools
 
     def _prepare_payload(
-        self, ctx: LLMContext, messages: list[dict], stream: bool, **kwargs
-    ) -> tuple[dict, dict]:
+        self, ctx: LLMContext, messages: list[dict[str, Any]], stream: bool, **kwargs
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         system_text = ""
         anthropic_messages = []
 
@@ -91,7 +94,7 @@ class CustomAnthropicProvider(AIProvider):
             "content-type": "application/json",
         }
 
-        payload: dict = {
+        payload: dict[str, Any] = {
             "model": ctx.model,
             "messages": anthropic_messages,
             "max_tokens": kwargs.get("max_tokens"),
@@ -110,7 +113,11 @@ class CustomAnthropicProvider(AIProvider):
         return headers, payload
 
     async def send_message(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
     ) -> str | None:
         try:
             headers, payload = self._prepare_payload(ctx, messages, False, **kwargs)
@@ -140,8 +147,12 @@ class CustomAnthropicProvider(AIProvider):
             return None
 
     async def send_message_raw(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
-    ) -> dict | None:
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
+    ) -> dict[str, Any] | None:
         try:
             headers, payload = self._prepare_payload(ctx, messages, False, **kwargs)
             base = self._resolve_url(ctx)
@@ -166,7 +177,7 @@ class CustomAnthropicProvider(AIProvider):
             logger.error("[CustomAnthropic] send_message_raw error: %s", e)
             return None
 
-    def _convert_response_to_openai(self, anth_res: dict) -> dict:
+    def _convert_response_to_openai(self, anth_res: dict[str, Any]) -> dict[str, Any]:
         text = ""
         tool_calls = []
         for block in anth_res.get("content", []):
@@ -193,7 +204,7 @@ class CustomAnthropicProvider(AIProvider):
     async def _send_message_streaming_impl(
         self,
         ctx: LLMContext,
-        messages: list[dict],
+        messages: list[dict[str, Any]],
         source: str = "llm",
         **kwargs,
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
@@ -222,7 +233,7 @@ class CustomAnthropicProvider(AIProvider):
                         )
                         yield f"\n[System] {self.name} API returned HTTP {response.status_code}. Please try again."
                         return
-                    tool_call_fragments: dict[int, dict] = {}
+                    tool_call_fragments: dict[int, dict[str, Any]] = {}
 
                     async for line in response.aiter_lines():
                         if not line or not line.startswith("data: "):
@@ -285,7 +296,7 @@ class CustomAnthropicProvider(AIProvider):
             )
             yield f"Error: {type(e).__name__} - {e}"
 
-    def parse_tool_calls(self, raw_response) -> list[dict]:
+    def parse_tool_calls(self, raw_response) -> list[dict[str, Any]]:
         if not isinstance(raw_response, dict):
             return []
         try:

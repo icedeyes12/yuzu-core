@@ -170,7 +170,10 @@ async def generate_ai_response(
     if session_id is None:
         session_id = (await Database.get_active_session(user_id))["id"]
 
+    assert session_id is not None
+
     ctx = LLMContext.from_profile(profile).require_configured()
+    assert ctx.provider is not None and ctx.model is not None
 
     # FC9-C: Check if provider supports native FC for prompt construction
     ai_manager = await get_ai_manager()
@@ -265,7 +268,10 @@ async def generate_ai_response_streaming(
     if session_id is None:
         session_id = (await Database.get_active_session(user_id))["id"]
 
-    ctx = LLMContext.from_profile(profile)
+    assert session_id is not None
+
+    ctx = LLMContext.from_profile(profile).require_configured()
+    assert ctx.provider is not None and ctx.model is not None
 
     # FC9-C: Check if provider supports native FC for prompt construction
     ai_manager = await get_ai_manager()

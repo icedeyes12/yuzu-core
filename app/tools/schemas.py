@@ -34,7 +34,7 @@ class ToolDefinition:
     supports_native_fc: bool = True
     supports_streaming_fc: bool = True
 
-    def to_llm_schema(self) -> dict:
+    def to_llm_schema(self) -> dict[str, Any]:
         """Serialize to OpenAI function-calling schema format."""
         properties: dict[str, dict[str, Any]] = {}
         required: list[str] = []
@@ -213,11 +213,11 @@ def new_turn_id() -> str:
 
 
 def ok_result(
-    data: dict,
+    data: dict[str, Any],
     tool_def: ToolDefinition | None = None,
     full_command: str = "",
     partner_name: str = "Yuzu",
-) -> dict:
+) -> dict[str, Any]:
     """Construct a successful tool result payload (pure data)."""
     return {
         "ok": True,
@@ -230,7 +230,7 @@ def error_result(
     tool_def: ToolDefinition | None = None,
     full_command: str = "",
     partner_name: str = "Yuzu",
-) -> dict:
+) -> dict[str, Any]:
     """Construct an error tool result payload."""
     return {
         "ok": False,
@@ -281,7 +281,7 @@ LANG_HINTS = {
 }
 
 
-def _flatten_lines(data: dict) -> list[str]:
+def _flatten_lines(data: dict[str, Any]) -> list[str]:
     """Flatten a result dict into displayable lines."""
     lines: list[str] = []
     file_ext = data.get("file_ext", "")

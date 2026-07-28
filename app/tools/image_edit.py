@@ -6,6 +6,7 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -98,7 +99,7 @@ def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
     return data, mime
 
 
-async def execute(arguments, **kwargs) -> dict:
+async def execute(arguments, **kwargs) -> dict[str, Any]:
     prompt = arguments.get("prompt", "")
     image_path = arguments.get("image_path", "")
 

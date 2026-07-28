@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, timedelta
+from typing import Any
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
@@ -132,7 +133,7 @@ async def _resolve_coordinates(
     return float(result["latitude"]), float(result["longitude"]), label or location
 
 
-def _daily_rows(data: dict) -> list[dict]:
+def _daily_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
     daily = data.get("daily") or {}
     keys = (
         "time",
@@ -154,11 +155,11 @@ def _daily_rows(data: dict) -> list[dict]:
 
 
 async def execute(
-    arguments: dict,
+    arguments: dict[str, Any],
     session_id: str | None = None,
     tool_name: str = TOOL_NAME,
     user_id: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     try:
         request = WeatherRequest(**arguments)
     except Exception as exc:

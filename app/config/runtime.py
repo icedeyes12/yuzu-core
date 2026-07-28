@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.core.context import get_request_keyring
+
 
 @dataclass(frozen=True)
 class RuntimeContext:
@@ -21,12 +23,9 @@ class RuntimeContext:
         request: Any,
         preferences: Any | None = None,
     ) -> RuntimeContext:
-        # Parallel path: builds RuntimeContext without changing
-        # existing resolve_api_key / resolve_base_url behavior.
-        from app.core.context import resolve_api_key, resolve_base_url
-
-        api_key = resolve_api_key(provider)
-        base_url = resolve_base_url(provider, fallback="")
+        keyring = get_request_keyring(provider)
+        api_key = keyring.key if keyring else None
+        base_url = keyring.base_url if keyring and keyring.base_url else ""
 
         return cls(
             provider=provider,

@@ -14,6 +14,7 @@ import json
 import logging
 import time
 from datetime import datetime, timedelta
+from typing import Any
 
 from app.db import (
     Database,
@@ -59,12 +60,12 @@ HISTORICAL_BACKLOG_THRESHOLD = 1000
 
 _pending_sessions: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
 _queued_sessions: set[tuple[str, str]] = set()
-_worker_task: asyncio.Task | None = None
+_worker_task: asyncio.Task[None] | None = None
 
 
 async def _get_cached_pipeline_state_async(
     session_id: str, user_id: str | None
-) -> dict:
+) -> dict[str, Any]:
     """(｡•̀ᴗ-)✧"""
     if not user_id:
         return {}
@@ -259,8 +260,8 @@ async def mark_segmentation_done_async(
 
 
 async def extract_memory_batch_async(
-    messages: list[dict], profile: dict | None = None
-) -> dict:
+    messages: list[dict[str, Any]], profile: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Extract episodes and claims with one structured LLM call."""
     return await extract_batch_async(messages, profile=profile)
 
@@ -270,7 +271,7 @@ async def extract_memory_batch_async(
 
 async def run_memory_pipeline_async(
     session_id: str, message_count: int, user_id: str
-) -> dict:
+) -> dict[str, Any]:
     """Run the full memory pipeline for a session.
 
     Steps:
@@ -429,11 +430,19 @@ async def run_memory_pipeline_async(
             if node_row:
                 node_id = str(node_row["id"])
                 if episode_id:
+                    evidence_message_ids = metadata.get("evidence_message_ids", [])
+                    if not isinstance(evidence_message_ids, list):
+                        evidence_message_ids = []
+                    evidence_message_ids = [
+                        item
+                        for item in evidence_message_ids
+                        if isinstance(item, (str, int))
+                    ]
                     await GraphMemoryRepository.add_evidence(
                         user_id=user_id,
                         node_id=node_id,
                         episode_id=episode_id,
-                        message_ids=metadata["evidence_message_ids"],
+                        message_ids=evidence_message_ids,
                     )
                 claim_count += 1
 

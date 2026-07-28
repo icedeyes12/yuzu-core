@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+from typing import Any
 
 from app.logging_config import get_logger
 from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
@@ -108,7 +109,7 @@ def _validate_query(query: str, write_mode: bool) -> tuple[bool, str]:
 
 
 def _format_table(
-    rows: list[dict], columns: list[str], max_rows: int = MAX_ROWS
+    rows: list[dict[str, Any]], columns: list[str], max_rows: int = MAX_ROWS
 ) -> str:
     if not rows:
         return "No results"
@@ -142,8 +143,8 @@ def _format_table(
 
 
 def execute(
-    arguments: dict, session_id: str | None = None, tool_name: str = "sql"
-) -> dict:
+    arguments: dict[str, Any], session_id: str | None = None, tool_name: str = "sql"
+) -> dict[str, Any]:
     query_arg = arguments.get("query", "").strip()
 
     if not query_arg:

@@ -10,14 +10,14 @@ import httpx
 
 from app.core.llm_context import LLMContext
 from app.providers.base import AIProvider, ProviderCapabilities, _rate_limit_provider
-from app.tools import multimodal_tools
+from app.tools.multimodal import multimodal_tools
 from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)
 
 
 class ChutesProvider(AIProvider):
-    def __init__(self, config: dict | None = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("chutes", config)
         self.base_url = "https://llm.chutes.ai/v1/chat/completions"
         self.capabilities = ProviderCapabilities(
@@ -41,7 +41,9 @@ class ChutesProvider(AIProvider):
             "Content-Type": "application/json",
         }
 
-    def _normalize_messages_for_chutes(self, messages: list[dict]) -> list[dict]:
+    def _normalize_messages_for_chutes(
+        self, messages: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Keep canonical chat roles; preserve structured system content arrays.
 
         Plain-string system prompts are concatenated. Structured (list-of-parts)
@@ -52,8 +54,8 @@ class ChutesProvider(AIProvider):
             return messages
         standard_roles = {"system", "user", "assistant", "tool"}
         system_string_parts: list[str] = []
-        system_structured_parts: list[dict] = []
-        normalized_messages: list[dict] = []
+        system_structured_parts: list[dict[str, Any]] = []
+        normalized_messages: list[dict[str, Any]] = []
         for msg in messages:
             role = msg.get("role", "")
             if role == "system":
@@ -73,7 +75,7 @@ class ChutesProvider(AIProvider):
                 continue
             normalized_messages.append(msg)
         if system_string_parts or system_structured_parts:
-            system_payload: list[dict] | str
+            system_payload: list[dict[str, Any]] | str
             system_payload = list(system_structured_parts)
             if system_string_parts:
                 system_payload.insert(
@@ -88,7 +90,12 @@ class ChutesProvider(AIProvider):
         return normalized_messages
 
     def _prepare_payload(
-        self, ctx: LLMContext, model: str, messages: list[dict], stream: bool, **kwargs
+        self,
+        ctx: LLMContext,
+        model: str,
+        messages: list[dict[str, Any]],
+        stream: bool,
+        **kwargs,
     ) -> tuple[dict[str, str], dict[str, Any]]:
         messages = self._normalize_messages_for_chutes(list(messages))
 
@@ -173,12 +180,17 @@ class ChutesProvider(AIProvider):
         return self.available_models
 
     async def send_message(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
     ) -> str | None:
         log_prefix = kwargs.pop("log_prefix", "[CHAT]")
         kwargs.pop("model", None)
         kwargs.pop("model_name", None)
-        if not ctx.model:
+        model = ctx.model
+        if not model:
             return None
 
         max_429_retries = 3
@@ -186,9 +198,9 @@ class ChutesProvider(AIProvider):
         last_error: str | None = None
 
         for retry in range(max_429_retries):
-            async with _rate_limit_provider("chutes", ctx.model, source):
+            async with _rate_limit_provider("chutes", model, source):
                 status, data, error_msg = await self._chutes_raw(
-                    ctx, ctx.model, messages, kwargs
+                    ctx, model, messages, kwargs
                 )
 
             if status == 200:
@@ -214,13 +226,13 @@ class ChutesProvider(AIProvider):
             break
 
         logger.error(
-            "%s failed for configured model %s: %s", log_prefix, ctx.model, last_error
+            "%s failed for configured model %s: %s", log_prefix, model, last_error
         )
         return None
 
     async def _chutes_raw(
-        self, ctx: LLMContext, model: str, messages: list[dict], kwargs
-    ) -> tuple:
+        self, ctx: LLMContext, model: str, messages: list[dict[str, Any]], kwargs
+    ) -> tuple[Any, ...]:
         headers, payload = self._prepare_payload(ctx, model, messages, False, **kwargs)
 
         log_prefix = kwargs.get("log_prefix", "[CHAT]")
@@ -248,12 +260,19 @@ class ChutesProvider(AIProvider):
                 return (0, None, str(e))
 
     async def _send_message_streaming_impl(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
 
         try:
+            model = ctx.model
+            if not model:
+                return
             headers, payload = self._prepare_payload(
-                ctx, ctx.model, messages, True, **kwargs
+                ctx, model, messages, True, **kwargs
             )
             if kwargs.get("suppress_tools"):
                 payload.pop("tools", None)
@@ -261,7 +280,7 @@ class ChutesProvider(AIProvider):
 
             has_tools = bool(payload.get("tools"))
 
-            async with _rate_limit_provider("chutes", ctx.model, source):
+            async with _rate_limit_provider("chutes", model, source):
                 async with httpx.AsyncClient() as client:
                     async with client.stream(
                         "POST",
@@ -272,7 +291,7 @@ class ChutesProvider(AIProvider):
                     ) as response:
                         if response.status_code == 200:
                             if has_tools:
-                                tool_call_fragments: dict[int, dict] = {}
+                                tool_call_fragments: dict[int, dict[str, Any]] = {}
                                 async for line in response.aiter_lines():
                                     if not line or not line.startswith("data: "):
                                         continue
@@ -372,7 +391,7 @@ class ChutesProvider(AIProvider):
                 error_msg = repr(e)
             yield f"Error: {type(e).__name__} - {error_msg}"
 
-    def parse_tool_calls(self, raw_response) -> list[dict]:
+    def parse_tool_calls(self, raw_response) -> list[dict[str, Any]]:
         if not isinstance(raw_response, dict):
             return []
         try:

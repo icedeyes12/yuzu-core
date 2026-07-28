@@ -5,6 +5,7 @@ import re
 import subprocess
 import tempfile
 import time
+from typing import Any
 
 from app.logging_config import get_logger
 from app.tools.schemas import (
@@ -172,11 +173,11 @@ def _execute_python(code: str, timeout: float = 10.0) -> tuple[bool, str, str, i
 
 
 async def execute(
-    arguments: dict,
+    arguments: dict[str, Any],
     session_id: str | None = None,
     tool_name: str = "python",
     user_id: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     code_raw = arguments.get("code", "").strip()
     timeout = float(arguments.get("timeout", 10.0))
     full_command = f"/python {code_raw[:50]}{'...' if len(code_raw) > 50 else ''}"

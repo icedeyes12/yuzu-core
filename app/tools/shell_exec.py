@@ -7,6 +7,7 @@ import re
 import shutil
 import time
 from pathlib import Path
+from typing import Any
 
 from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
 
@@ -56,10 +57,10 @@ DANGEROUS_REGEX = re.compile("|".join(DANGEROUS_PATTERNS), re.IGNORECASE)
 # /data/data/com.termux/files/usr/bin/bash; on other platforms we fall back to
 # the system bash on PATH, then /bin/bash.
 TERMUX_BASH = "/data/data/com.termux/files/usr/bin/bash"
-BASH_EXECUTABLE = os.environ.get("TERMUX_BASH") or TERMUX_BASH
-if not Path(BASH_EXECUTABLE).exists():
+bash_executable = os.environ.get("TERMUX_BASH") or TERMUX_BASH
+if not Path(bash_executable).exists():
     resolved = shutil.which("bash")
-    BASH_EXECUTABLE = resolved or "/bin/bash"
+    bash_executable = resolved or "/bin/bash"
 
 # Default working directory - use HOME env var with Termux fallback
 DEFAULT_CWD = Path(os.environ.get("HOME", "")) or Path.cwd()
@@ -93,11 +94,11 @@ async def _get_partner_name_async(user_id: str | None = None) -> str:
 
 
 async def execute(
-    arguments: dict,
+    arguments: dict[str, Any],
     session_id: str | None = None,
     tool_name: str = "terminal",
     user_id: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Execute a bash command (async).
 
     Args:
@@ -139,7 +140,7 @@ async def execute(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(DEFAULT_CWD),
-            executable=BASH_EXECUTABLE,
+            executable=bash_executable,
         )
 
         try:

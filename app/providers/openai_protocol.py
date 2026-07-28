@@ -76,7 +76,9 @@ def _json_object(value: Any) -> str | None:
     return json.dumps(parsed, ensure_ascii=False, separators=(",", ":"))
 
 
-def _deterministic_call_id(message_index: int, call_index: int, call: dict) -> str:
+def _deterministic_call_id(
+    message_index: int, call_index: int, call: dict[str, Any]
+) -> str:
     seed = json.dumps(
         {
             "message": message_index,

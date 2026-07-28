@@ -3,13 +3,13 @@ from __future__ import annotations
 import logging
 import os
 
-_CONFIGURED = False
+_configured = False
 
 
 def configure(level: str | None = None) -> None:
     """Configure root logging once. Idempotent."""
-    global _CONFIGURED
-    if _CONFIGURED:
+    global _configured
+    if _configured:
         return
     resolved = (level or os.getenv("LOG_LEVEL") or "INFO").upper()
     logging.basicConfig(
@@ -22,7 +22,7 @@ def configure(level: str | None = None) -> None:
     for logger_name in ["httpx", "httpcore", "urllib3"]:
         logging.getLogger(logger_name).setLevel(logging.WARNING)
 
-    _CONFIGURED = True
+    _configured = True
 
 
 def get_logger(name: str) -> logging.Logger:

@@ -7,6 +7,7 @@ import os
 import re
 import time
 from pathlib import Path
+from typing import Any
 
 import requests
 
@@ -84,7 +85,7 @@ class MultimodalTools:
             return None
 
     @staticmethod
-    def encode_image_to_base64(filepath: str) -> dict | None:
+    def encode_image_to_base64(filepath: str) -> dict[str, Any] | None:
         """Read a local image file and return an OpenAI-compatible
         ``image_url`` content block with a ``data:`` URI."""
         if not os.path.isfile(filepath):
@@ -242,7 +243,7 @@ class MultimodalTools:
 
         return len(urls) > 0
 
-    def download_and_encode_image(self, image_url: str) -> dict | None:
+    def download_and_encode_image(self, image_url: str) -> dict[str, Any] | None:
         """Download and encode image with caching support"""
         # Clean expired cache entries
         self._clean_cache()
@@ -284,7 +285,7 @@ class MultimodalTools:
 
     def format_vision_message(
         self, user_message: str, provider: str | None = None
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         image_sources = self._extract_image_sources(user_message)
 
         if not image_sources:
@@ -439,20 +440,8 @@ class MultimodalTools:
         model: str | None = None,
         size: str = "1024x1024",
     ) -> tuple[str | None, str | None]:
-        """Generate an image using the tool registry (single source of truth)."""
-        from app.tools.registry import execute_tool
-
-        result = execute_tool("image_generate", {"prompt": prompt})
-        if hasattr(result, "__await__"):
-            return None, "Image generation requires async execution"
-        if not isinstance(result, dict):
-            return None, "Invalid image generation result"
-        if result.get("ok"):
-            image_path = result.get("data", {}).get("image_path")
-            if image_path:
-                return image_path, None
-            return None, "No image path in result"
-        return None, result.get("error", "Image generation failed")
+        """Legacy sync image helper retained for callers outside the dispatch path."""
+        return None, "Image generation requires async execution"
 
     def should_use_vision(
         self, user_message: str, current_provider: str, current_model: str
@@ -504,9 +493,9 @@ class MultimodalTools:
 
     def inject_vision_context(
         self,
-        messages: list[dict],
+        messages: list[dict[str, Any]],
         current_model: str,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Deprecated — returns *messages* unchanged.
 
         Image embedding is now handled in ``app.prompts.build_messages()``

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import httpx
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class OllamaProvider(AIProvider):
-    def __init__(self, config: dict | None = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("ollama", config)
         self.base_url = self.config.get("base_url", "http://127.0.0.1:11434")
         self.capabilities = ProviderCapabilities(
@@ -28,7 +29,11 @@ class OllamaProvider(AIProvider):
         return self.available_models
 
     async def send_message(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
     ) -> str | None:
 
         try:
@@ -68,7 +73,11 @@ class OllamaProvider(AIProvider):
             return None
 
     async def _send_message_streaming_impl(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
 
         try:
