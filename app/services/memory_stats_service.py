@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
-
 from app.db.connection import pg_fetchall_async
 
 
 class MemoryStatsService:
     @staticmethod
-    async def get_stats(user_id: str) -> dict[str, Any]:
+    async def get_stats(user_id: str) -> dict[str, object]:
         rows = await pg_fetchall_async(
             """
             SELECT

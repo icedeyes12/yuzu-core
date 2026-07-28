@@ -3,17 +3,24 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from typing import Any
+from typing import TypedDict
 
 log = logging.getLogger(__name__)
 
 STREAM_FENCE_TIMEOUT = 300
 
 
+class FenceState(TypedDict):
+    fence_id: str
+    user_msg_id: int
+    acquired_at: float
+    completed: bool
+
+
 class StreamFence:
     """Coordinate stream persistence fences independently of orchestration."""
 
-    _fences: dict[str, dict[str, Any]] = {}
+    _fences: dict[str, FenceState] = {}
     _lock: asyncio.Lock = asyncio.Lock()
 
     @classmethod

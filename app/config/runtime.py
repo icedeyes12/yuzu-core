@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Protocol
 
 from app.core.context import get_request_keyring
+
+
+class RequestLike(Protocol):
+    client: object | None
+    headers: Mapping[str, str]
 
 
 @dataclass(frozen=True)
@@ -13,15 +19,15 @@ class RuntimeContext:
     api_key: str | None
     base_url: str
     timeout: float = 180.0
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, object] = field(default_factory=dict)
 
     @classmethod
     def from_request(
         cls,
         provider: str,
         model: str,
-        request: Any,
-        preferences: Any | None = None,
+        request: RequestLike,
+        preferences: object | None = None,
     ) -> RuntimeContext:
         keyring = get_request_keyring(provider)
         api_key = keyring.key if keyring else None

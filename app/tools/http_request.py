@@ -6,7 +6,6 @@ import re
 import socket
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -73,7 +72,7 @@ def is_safe_public_url(url: str) -> tuple[bool, str]:
     return True, ""
 
 
-def _extract_url(args_str: str) -> tuple[Any, ...]:
+def _extract_url(args_str: str) -> tuple[str, str]:
     args_str = args_str.strip()
 
     method_match = re.match(
@@ -93,7 +92,9 @@ def get_media_dir() -> Path:
     return media_dir
 
 
-async def execute(arguments, **kwargs):
+async def execute(
+    arguments: dict[str, str] | str, **kwargs: object
+) -> dict[str, object]:
     from app.db import Database
 
     profile = await Database.get_profile(kwargs.get("user_id")) or {}
