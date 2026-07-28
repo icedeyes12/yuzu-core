@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import time
+from typing import Any, cast
 
 # Add app to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -28,7 +29,7 @@ def get_session_messages(session_id: int, limit: int = 100):
     )
 
 
-def extract_facts_from_messages(messages: list[dict]) -> list[dict]:
+def extract_facts_from_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Extract semantic facts from messages using LLM."""
     if not messages:
         return []
@@ -65,7 +66,7 @@ Return empty array if no valuable facts."""
         from app.providers import AIProviderManager
 
         manager = AIProviderManager()
-        resp = manager.send_message(
+        resp = manager.send_message(  # pyright: ignore[reportCallIssue]
             provider_name="chutes",
             message=prompt,
             model="Qwen/Qwen3-Next-80B-A3B-Instruct",
@@ -176,7 +177,7 @@ def main():
         print(f"\n[3.{i + 1}] Processing session {session_id}...")
 
         # Get messages
-        messages = get_session_messages(session_id, limit=200)
+        messages = get_session_messages(cast(int, session_id), limit=200)
         print(f"    Got {len(messages)} messages")
 
         if not messages:
@@ -193,7 +194,9 @@ def main():
                 continue
 
             # Store
-            if store_fact(session_id, fact["fact"], embedding, fact["category"]):
+            if store_fact(
+                cast(int, session_id), fact["fact"], embedding, fact["category"]
+            ):
                 total_facts += 1
                 print(f"    + Stored: {fact['fact'][:50]}...")
 

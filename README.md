@@ -1,13 +1,12 @@
-# [PROJECT: HKKM - Yuzu Companion]
-
+# \[PROJECT: HKKM - Yuzu Companion\]
 
 ---
 
 ## What Even Is This?
 
-Honestly, what are you looking for here? This is just another AI project. 
+Honestly, what are you looking for here? This is just another AI project.
 
-You know what's more interesting? Mending scroll **[Fesnuk](https://www.facebook.com/groups/programmerhandal/)**. Or maybe some cat videos on YouTube.
+You know what's more interesting? Mending scroll [**Fesnuk**](https://www.facebook.com/groups/programmerhandal/). Or maybe some cat videos on YouTube.
 
 Seriously, go scroll some social media. This code isn't going to entertain you like that latest meme trend.
 
@@ -15,7 +14,7 @@ Seriously, go scroll some social media. This code isn't going to entertain you l
 
 ## No Really, What Does It Do?
 
-It's an AI companion. It talks. It remembers things. Sometimes it generates images. 
+It's an AI companion. It talks. It remembers things. Sometimes it generates images.
 
 But let's be real - you're probably just here because you're bored. Might as well go watch some TikTok.
 
@@ -54,9 +53,11 @@ Now go away and do something more productive. Like scrolling through memes.
 ## Author
 
 ### Project Lead
+
 - [Bani Baskara](https://github.com/icedeyes12/)
 
 ### Team
+
 - [Aihara](https://github.com/icedeyes12/yuzu-companion)
 - [Claude](https://www.anthropic.com/)
 - [DeepSeek](https://www.deepseek.com/)
@@ -68,7 +69,6 @@ Now go away and do something more productive. Like scrolling through memes.
 - [Moonshot ai](https://www.moonshot.cn/)
 - [Qwen](https://github.com/QwenLM/Qwen3-Coder)
 
-
 ---
 
-©2025-2026 [HKKM project](https://guthib.com/icedeyes12/ | Built with love 💕
+©2025-2026 \[HKKM project\](https://guthib.com/icedeyes12/) | Built with love 💕

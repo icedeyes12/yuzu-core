@@ -28,7 +28,7 @@ class TestParseJson:
 
     def test_already_dict_passes_through(self):
         # Tolerate the case where the column already deserialized.
-        assert parse_json({"a": 1}) == {"a": 1}  # type: ignore[arg-type]
+        assert parse_json({"a": 1}) == {"a": 1}  # pyright: ignore[reportArgumentType]
 
 
 class TestProfileParsers:

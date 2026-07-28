@@ -12,7 +12,7 @@ from app.providers.openai_protocol import (
 )
 
 
-def assistant_tool_block() -> list[dict]:
+def assistant_tool_block() -> list[dict[str, object]]:
     return [
         {
             "role": "assistant",

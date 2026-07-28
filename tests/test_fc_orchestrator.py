@@ -160,7 +160,7 @@ class TestPersistToolResultAsync:
                 tool_call_id="call_1",
                 turn_id="turn_2",
             )
-        assert add_message.await_args.args[0] == "tool"
+        assert add_message.await_args.args[0] == "tool"  # pyright: ignore[reportOptionalMemberAccess]
 
     @pytest.mark.asyncio
     async def test_streaming_tool_results_preserve_tool_call_ids(self):
@@ -206,11 +206,11 @@ class TestPersistToolResultAsync:
                 tool_call_id="call_1",
                 turn_id="turn_2",
             )
-        assert add_message.await_args.args[0] == "tool"
+        assert add_message.await_args.args[0] == "tool"  # pyright: ignore[reportOptionalMemberAccess]
         assert add_message.await_count == 1
-        args, kwargs = add_message.await_args
-        assert args[0] == "tool"
-        assert args[1] == '{"ok": true}'
+        args, kwargs = add_message.await_args or ([], {})  # pyright: ignore[reportOptionalMemberAccess]
+        assert args[0] == "tool"  # pyright: ignore[reportOptionalMemberAccess]
+        assert args[1] == '{"ok": true}'  # pyright: ignore[reportGeneralTypeIssues]
         assert kwargs["session_id"] == "session_1"
         assert kwargs["turn_id"] == "turn_2"
 

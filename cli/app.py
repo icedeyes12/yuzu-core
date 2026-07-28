@@ -22,7 +22,7 @@ from cli.widgets import (
 log = get_logger(__name__)
 
 
-class YuzuTUI(App):
+class YuzuTUI(App[None]):
     """
     Main Textual TUI application with persistent chat interface.
 
@@ -48,7 +48,7 @@ class YuzuTUI(App):
         )
         self.client = YuzuClient(base_url=self.backend_url)
         self._processing = False
-        self._session_id: int = 1
+        self._session_id: int | str = 1
         self._sidebar_visible = False
         self._last_response_widget: Static | None
         self._response_start_time: float | None = None
@@ -152,14 +152,15 @@ class YuzuTUI(App):
                 "system", f"⚠️  Backend unreachable: {self.backend_url}"
             )
 
-    def _update_sessions(self, sessions: list) -> None:
+    def _update_sessions(self, sessions: list[dict[str, object]]) -> None:
         """Update session list UI (called from main thread)."""
         session_list = self.query_one(SessionList)
         session_list.load_sessions(sessions)
 
         if sessions:
-            self._session_id = sessions[0].get("id", 1)
-            session_list.set_active_session(self._session_id)
+            session_id = sessions[0].get("id", 1)
+            self._session_id = session_id if isinstance(session_id, (int, str)) else 1
+            session_list.set_active_session(str(self._session_id))
         else:
             self._session_id = 1
 
@@ -179,7 +180,7 @@ class YuzuTUI(App):
             log.error(f"Failed to load history: {e}")
             self.call_later(self._show_error, f"Could not load history: {e}")
 
-    def _display_history(self, history: list) -> None:
+    def _display_history(self, history: list[dict[str, object]]) -> None:
         """Display history in chat log (called from main thread)."""
         chat_log = self.query_one(ChatLog)
         chat_log.clear_messages()
@@ -189,8 +190,12 @@ class YuzuTUI(App):
             return
 
         for msg in history:
-            role = msg.get("role", "unknown")
-            content = msg.get("content", "")
+            role_value = msg.get("role", "unknown")
+            content_value = msg.get("content", "")
+            role = role_value if isinstance(role_value, str) else "unknown"
+            content = (
+                content_value if isinstance(content_value, str) else str(content_value)
+            )
             if role == "user":
                 chat_log.add_message("you", content)
             elif role == "assistant":
@@ -330,7 +335,7 @@ class YuzuTUI(App):
 
         # Update UI
         session_list = self.query_one(SessionList)
-        session_list.set_active_session(session_id)
+        session_list.set_active_session(str(session_id))
 
         # Reload history in background
         asyncio.create_task(self._load_history())

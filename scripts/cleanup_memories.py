@@ -10,9 +10,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from app.memory.db_memory_queries import FACT_TYPE_STATIC
-
 from app.db import pg_execute, pg_fetchall
+
+FACT_TYPE_STATIC = "static"
 
 
 def show_facts():

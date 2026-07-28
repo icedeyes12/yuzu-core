@@ -95,7 +95,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
     # Disable default exception handlers for DB errors
-    exception_handlers={
+    exception_handlers={  # pyright: ignore[reportArgumentType]
         PoolTimeout: None,  # Will be added below
         OperationalError: None,
     },

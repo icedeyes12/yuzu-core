@@ -14,6 +14,7 @@ import argparse
 import datetime
 import json
 import os
+from typing import Any
 
 import requests
 
@@ -58,7 +59,7 @@ def get_history(
     limit: int = 20,
     url: str = DEFAULT_URL,
     timeout: int = DEFAULT_TIMEOUT_GET,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Get last N messages from session."""
     requests.post(
         f"{url}/api/sessions/switch", json={"session_id": session_id}, timeout=timeout
@@ -109,7 +110,7 @@ def send_message(
     return data.get("reply", "(no reply)")
 
 
-def format_history(history: list[dict], max_len: int = 0) -> str:
+def format_history(history: list[dict[str, Any]], max_len: int = 0) -> str:
     """Format history for display. max_len=0 means no truncation."""
     lines = []
     for msg in history:

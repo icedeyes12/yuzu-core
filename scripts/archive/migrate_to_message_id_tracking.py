@@ -29,6 +29,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -43,7 +44,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def get_all_sessions_async() -> list[dict]:
+async def get_all_sessions_async() -> list[dict[str, Any]]:
     """Get all sessions with their current memory_state."""
     pool = await get_async_pool()
     async with pool.connection() as conn:
@@ -53,7 +54,7 @@ async def get_all_sessions_async() -> list[dict]:
             )
             rows = await cur.fetchall()
             # rows are already dicts due to row_factory=dict_row
-            return list(rows)
+            return cast(list[dict[str, Any]], list(rows))
 
 
 async def get_last_message_id_async(session_id: int) -> int | None:
@@ -66,7 +67,7 @@ async def get_last_message_id_async(session_id: int) -> int | None:
                 "SELECT id FROM messages WHERE session_id = %s AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT 1",
                 (session_id,),
             )
-            row = await cur.fetchone()
+            row = cast(dict[str, Any] | None, await cur.fetchone())
             return row["id"] if row else None
 
 
@@ -106,7 +107,7 @@ async def update_memory_state_async(
             return True
 
 
-async def run_migration_async(dry_run: bool = False) -> dict:
+async def run_migration_async(dry_run: bool = False) -> dict[str, Any]:
     """Run the migration for all sessions."""
     logger.info("=" * 60)
     logger.info("Phase 3: Message ID Tracking Migration")
