@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 class OpenAIProvider(AIProvider):
     def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("openai", config)
-        self.base_url = "https://api.openai.com/v1/chat/completions"
-        self.models_url = "https://api.openai.com/v1/models"
-        self.capabilities = ProviderCapabilities(
+        self.base_url: str = "https://api.openai.com/v1/chat/completions"
+        self.models_url: str = "https://api.openai.com/v1/models"
+        self.capabilities: ProviderCapabilities = ProviderCapabilities(
             supports_native_fc=True,
             supports_streaming_fc=True,
             supports_tool_call_parsing=True,

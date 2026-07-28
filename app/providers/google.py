@@ -17,10 +17,10 @@ logger = logging.getLogger(__name__)
 class GoogleProvider(AIProvider):
     def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("google", config)
-        self.base_url = (
+        self.base_url: str = (
             "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
         )
-        self.capabilities = ProviderCapabilities(
+        self.capabilities: ProviderCapabilities = ProviderCapabilities(
             supports_native_fc=True,
             supports_streaming_fc=True,
             supports_tool_call_parsing=True,

@@ -14,7 +14,7 @@ class StreamFence:
     """Coordinate stream persistence fences independently of orchestration."""
 
     _fences: dict[str, dict[str, Any]] = {}
-    _lock = asyncio.Lock()
+    _lock: asyncio.Lock = asyncio.Lock()
 
     @classmethod
     async def acquire(cls, session_id: str, user_msg_id: int) -> str:

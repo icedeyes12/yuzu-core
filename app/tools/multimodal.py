@@ -15,13 +15,15 @@ logger = logging.getLogger(__name__)
 
 
 class MultimodalTools:
-    IMAGE_CACHE_DIR = Path(__file__).resolve().parent.parent / "static" / "image_cache"
+    IMAGE_CACHE_DIR: Path = (
+        Path(__file__).resolve().parent.parent / "static" / "image_cache"
+    )
 
     def __init__(self):
 
         # Image cache for base64 encoded images
-        self.image_cache = {}
-        self.cache_ttl = 3600  # 1 hour TTL
+        self.image_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        self.cache_ttl: int = 3600  # 1 hour TTL
 
         # Ensure cache directory exists
         self.IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)

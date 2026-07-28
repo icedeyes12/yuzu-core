@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 class OllamaProvider(AIProvider):
     def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("ollama", config)
-        self.base_url = self.config.get("base_url", "http://127.0.0.1:11434")
-        self.capabilities = ProviderCapabilities(
+        self.base_url: str = self.config.get("base_url", "http://127.0.0.1:11434")
+        self.capabilities: ProviderCapabilities = ProviderCapabilities(
             supports_native_fc=False,  # Ollama FC support is model-dependent, disabled by default
             supports_streaming_fc=False,
             supports_tool_call_parsing=False,

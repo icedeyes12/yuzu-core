@@ -33,23 +33,23 @@ class StreamBuffer:
         attachments: list[str] | None = None,
         user_id: str | None = None,
     ):
-        self.session_id = session_id
-        self.user_message = user_message
-        self.interface = interface
-        self.attachments = attachments or []
-        self.user_id = user_id
+        self.session_id: str = session_id
+        self.user_message: str = user_message
+        self.interface: str = interface
+        self.attachments: list[str] = attachments or []
+        self.user_id: str | None = user_id
 
-        self.full_content = ""
+        self.full_content: str = ""
         self.queues: list[asyncio.Queue[Any]] = []
-        self.lock = asyncio.Lock()
-        self.is_finished = False
-        self.start_time = time.time()
-        self.last_activity = self.start_time
+        self.lock: asyncio.Lock = asyncio.Lock()
+        self.is_finished: bool = False
+        self.start_time: float = time.time()
+        self.last_activity: float = self.start_time
         self.error: str | None = None
         self.turn_id: str = ""  # current turn correlation ID
-        self.has_tools = False
+        self.has_tools: bool = False
 
-        self.task = asyncio.create_task(self._process())
+        self.task: asyncio.Task[None] = asyncio.create_task(self._process())
 
     async def _persist_to_db(self, content: str, is_error: bool = False) -> None:
         """(Deprecated) Handled by Orchestrator."""
@@ -251,7 +251,7 @@ class StreamManager:
     """
 
     _streams: dict[str, StreamBuffer] = {}
-    _lock = asyncio.Lock()
+    _lock: asyncio.Lock = asyncio.Lock()
     _cleanup_task: asyncio.Task[None] | None = None
 
     @classmethod

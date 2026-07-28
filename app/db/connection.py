@@ -125,10 +125,10 @@ class PgSession:
             s.execute("INSERT INTO ...")
     """
 
-    __slots__ = ("conn", "autocommit", "_pool")
+    __slots__: tuple[str, ...] = ("conn", "autocommit", "_pool")
 
     def __init__(self, autocommit: bool = False) -> None:
-        self.autocommit = autocommit
+        self.autocommit: bool = autocommit
         self.conn: Any = None
         self._pool: ConnectionPool | None = None
 
@@ -203,10 +203,10 @@ class AsyncPgSession:
             await s.execute("INSERT INTO ...")
     """
 
-    __slots__ = ("conn", "autocommit", "_pool")
+    __slots__: tuple[str, ...] = ("conn", "autocommit", "_pool")
 
     def __init__(self, autocommit: bool = False) -> None:
-        self.autocommit = autocommit
+        self.autocommit: bool = autocommit
         self.conn: Any = None
         self._pool: AsyncConnectionPool | None = None
 

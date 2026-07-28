@@ -14,7 +14,7 @@ class ConfigurationRequiredError(Exception):
     """(｡•̀ᴗ-)✧"""
 
     def __init__(self, field: str):
-        self.field = field
+        self.field: str = field
         super().__init__(f"Configuration required: {field}")
 
 
@@ -32,8 +32,8 @@ class MissingProviderKeyError(Exception):
     """(｡•̀ᴗ-)✧"""
 
     def __init__(self, provider_name: str):
-        self.provider_name = provider_name
-        self.provider = provider_name
+        self.provider_name: str = provider_name
+        self.provider: str = provider_name
         super().__init__(f"No API key available for provider '{provider_name}'.")
 
 

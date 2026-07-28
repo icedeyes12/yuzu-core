@@ -58,7 +58,7 @@ class OpenAIProtocolError(ValueError):
     """(｡•̀ᴗ-)✧"""
 
     def __init__(self, errors: list[str]):
-        self.errors = errors
+        self.errors: list[str] = errors
         super().__init__("; ".join(errors))
 
 
