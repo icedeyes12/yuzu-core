@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from app.db import Database
 from app.providers import get_ai_manager, reload_ai_manager
@@ -12,13 +12,14 @@ logger = logging.getLogger(__name__)
 class ConfigService:
     @staticmethod
     async def get_ai_providers_payload(
-        user_id: str, profile: dict | None = None
+        user_id: str, profile: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         if profile is None:
             profile = await Database.get_profile(user_id)
+        profile = cast(dict[str, Any], profile)
 
         ai_manager = await get_ai_manager()
-        providers_config = profile.get("providers_config", {})
+        providers_config = cast(dict[str, Any], profile.get("providers_config") or {})
 
         return {
             "available_providers": ai_manager.get_available_providers(),
@@ -48,10 +49,11 @@ class ConfigService:
 
     @staticmethod
     async def get_vision_payload_async(
-        user_id: str, profile: dict | None = None
+        user_id: str, profile: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         if profile is None:
             profile = await Database.get_profile(user_id)
+        profile = cast(dict[str, Any], profile)
 
         ai_manager = await get_ai_manager()
         capabilities = ai_manager.get_all_provider_capabilities()
@@ -61,8 +63,10 @@ class ConfigService:
             for provider, metadata in capabilities.items()
             if metadata.get("supports_vision")
         }
-        providers_config = profile.get("providers_config", {})
-        vision_prefs = providers_config.get("vision_model_preferences") or {}
+        providers_config = cast(dict[str, Any], profile.get("providers_config") or {})
+        vision_prefs = cast(
+            dict[str, Any], providers_config.get("vision_model_preferences") or {}
+        )
 
         return {
             "capabilities": vision_capabilities,
@@ -74,7 +78,7 @@ class ConfigService:
         }
 
     @staticmethod
-    def format_profile_dict(profile: dict) -> dict[str, Any]:
+    def format_profile_dict(profile: dict[str, Any]) -> dict[str, Any]:
         """Format raw profile row into a frontend-friendly dictionary."""
         ctx = profile.get("context") or {}
         return {
@@ -158,7 +162,7 @@ class ConfigService:
     async def set_vision_model_async(user_id: str, provider: str, model: str) -> str:
         """Async version for web API endpoints."""
         profile = await Database.get_profile(user_id)
-        config = profile.get("providers_config") or {}
+        config = cast(dict[str, Any], profile.get("providers_config") or {})
         config["vision_model_preferences"] = {"provider": provider, "model": model}
         await Database.update_profile({"providers_config": config}, user_id)
         return f"Vision model set to: {provider}/{model}"

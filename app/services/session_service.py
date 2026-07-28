@@ -189,11 +189,11 @@ class SessionService:
     @staticmethod
     async def init_new_session_async(
         interface: str = "terminal",
-        profile: dict | None = None,
-        sessions: list | None = None,
+        profile: dict[str, Any] | None = None,
+        sessions: list[dict[str, Any]] | None = None,
         *,
         user_id: str,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Initialize a new session for the given interface (async).
 
         DEPRECATED: No longer creates connection log messages to avoid
@@ -202,6 +202,8 @@ class SessionService:
         if not profile:
             profile = await Database.get_profile(user_id)
         active_session = await Database.get_active_session(user_id)
+        if profile is None:
+            raise ValueError(f"Profile not found for user: {user_id}")
 
         # Connection logging removed to prevent context pollution
         # The LLM does not need timestamped connection logs in its context
