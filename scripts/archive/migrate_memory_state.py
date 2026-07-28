@@ -22,6 +22,7 @@ import os
 
 # Ensure app module is accessible
 import sys
+from typing import Any, cast
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -71,36 +72,40 @@ async def _get_pool() -> AsyncConnectionPool:
     return _pool
 
 
-async def pg_fetchall_async(query: str, params: tuple = ()) -> list[dict]:
+async def pg_fetchall_async(
+    query: str, params: tuple[Any, ...] = ()
+) -> list[dict[str, Any]]:
     """Execute a query and return all rows as dicts."""
     pool = await _get_pool()
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(query, params)
+            await cur.execute(query, params)  # pyright: ignore[reportArgumentType]
             rows = await cur.fetchall()
-            return list(rows)
+            return cast(list[dict[str, Any]], list(rows))
 
 
-async def pg_fetchone_async(query: str, params: tuple = ()) -> dict | None:
+async def pg_fetchone_async(
+    query: str, params: tuple[Any, ...] = ()
+) -> dict[str, Any] | None:
     """Execute a query and return a single row as dict."""
     pool = await _get_pool()
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(query, params)
+            await cur.execute(query, params)  # pyright: ignore[reportArgumentType]
             row = await cur.fetchone()
-            return row
+            return cast(dict[str, Any] | None, row)
 
 
-async def pg_execute_async(query: str, params: tuple = ()) -> None:
+async def pg_execute_async(query: str, params: tuple[Any, ...] = ()) -> None:
     """Execute a query without returning results."""
     pool = await _get_pool()
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(query, params)
+            await cur.execute(query, params)  # pyright: ignore[reportArgumentType]
             await conn.commit()
 
 
-async def get_all_sessions_async() -> list[dict]:
+async def get_all_sessions_async() -> list[dict[str, Any]]:
     """Fetch all sessions with their current memory_state."""
     return await pg_fetchall_async(
         "SELECT id, name, memory_state FROM chat_sessions ORDER BY id"
@@ -120,7 +125,7 @@ async def get_message_count_async(session_id: int) -> int:
     return row["count"] if row else 0
 
 
-async def update_memory_state_async(session_id: int, state: dict) -> None:
+async def update_memory_state_async(session_id: int, state: dict[str, Any]) -> None:
     """Update memory_state for a session (merge with existing)."""
     # Fetch existing
     row = await pg_fetchone_async(
@@ -151,7 +156,9 @@ async def close_pool() -> None:
 # ── Migration logic ─────────────────────────────────────────────────────────────
 
 
-async def migrate_session(session_id: int, session_name: str, dry_run: bool) -> dict:
+async def migrate_session(
+    session_id: int, session_name: str, dry_run: bool
+) -> dict[str, Any]:
     """
     Reset memory_state.last_segmented_count for a single session.
 

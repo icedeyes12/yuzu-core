@@ -51,8 +51,8 @@ def test_round_trip_preserves_all_fields():
     ctx["presets"] = normalized
     payload = presets_mod.resolve_active_preset_payload(ctx)
     assert payload == normalized[0]["payload"]
-    assert payload["additional_instructions"] == "code-only"
-    assert payload["top_k"] == 20
+    assert payload["additional_instructions"] == "code-only"  # pyright: ignore[reportOptionalSubscript]
+    assert payload["top_k"] == 20  # pyright: ignore[reportOptionalSubscript]
 
 
 def test_no_active_preset_returns_none():
@@ -73,7 +73,7 @@ def test_multiple_active_keeps_last():
         ]
     }
     payload = presets_mod.resolve_active_preset_payload(ctx)
-    assert payload["temperature"] == 0.9
+    assert payload["temperature"] == 0.9  # pyright: ignore[reportOptionalSubscript]
 
 
 def test_payload_to_parameters_overrides_context():

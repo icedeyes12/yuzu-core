@@ -18,7 +18,7 @@ def main():
     print("=" * 60)
     print("This shows exactly what goes into {memory_context}\n")
 
-    session_id = int(
+    session_id = (
         os.getenv("TEST_SESSION_ID") or input("Session ID [1]: ").strip() or "1"
     )
     query = input("Query (optional, press Enter to skip): ").strip() or None
@@ -26,7 +26,7 @@ def main():
     print(f"\n[Fetching memories for session_id={session_id}...]\n")
 
     try:
-        bundle = retrieve_memory(session_id, query=query)
+        bundle = retrieve_memory(session_id, query=query)  # pyright: ignore[reportArgumentType]
     except Exception as e:
         print(f"ERROR: {e}")
         sys.exit(1)

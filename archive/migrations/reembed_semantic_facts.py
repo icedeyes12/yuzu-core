@@ -37,7 +37,7 @@ def get_null_embeddings_batch(last_id: int, batch_size: int = 100):
     )
 
 
-def update_embedding(fact_id: int, embedding: list):
+def update_embedding(fact_id: int, embedding: list[float]):
     """Store embedding as JSON string for halvec."""
     pg_execute(
         "UPDATE semantic_facts SET embedding = %s WHERE id = %s",
@@ -78,6 +78,8 @@ def main():
         for row in rows:
             fact_id = row.get("id")
             content = row.get("content", "")
+            if not isinstance(fact_id, int):
+                continue
 
             if not content or len(content.strip()) < 5:
                 last_id = fact_id

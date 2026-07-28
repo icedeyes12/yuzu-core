@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime
+from typing import Any
 
 import numpy as np
 import scipy.stats as stats
@@ -21,7 +22,7 @@ def ascii_values(text: str) -> np.ndarray:
     return np.array([ord(c) for c in text], dtype=np.int64)
 
 
-def compute_svd(matrix: np.ndarray) -> dict:
+def compute_svd(matrix: np.ndarray) -> dict[str, Any]:
     """Singular Value Decomposition."""
     U, s, Vt = np.linalg.svd(matrix, full_matrices=False)
     return {
@@ -33,7 +34,7 @@ def compute_svd(matrix: np.ndarray) -> dict:
     }
 
 
-def compute_fft(signal: np.ndarray) -> dict:
+def compute_fft(signal: np.ndarray) -> dict[str, Any]:
     """Fast Fourier Transform analysis."""
     n = len(signal)
     fft_vals = np.fft.fft(signal)
@@ -51,7 +52,7 @@ def compute_fft(signal: np.ndarray) -> dict:
     }
 
 
-def compute_stats(data: np.ndarray) -> dict:
+def compute_stats(data: np.ndarray) -> dict[str, Any]:
     """Descriptive statistics."""
     n = len(data)
     mean_val = float(np.mean(data))
@@ -132,7 +133,7 @@ def build_char_table(ascii_vals: np.ndarray, text: str) -> Table:
     return table
 
 
-def build_stats_table(desc: dict) -> Table:
+def build_stats_table(desc: dict[str, Any]) -> Table:
     """Build descriptive statistics table."""
     table = Table(
         title="[bold magenta]Descriptive Statistics[/bold magenta]",
@@ -156,7 +157,7 @@ def build_stats_table(desc: dict) -> Table:
     return table
 
 
-def build_inference_table(desc: dict) -> Table:
+def build_inference_table(desc: dict[str, Any]) -> Table:
     """Build inferential statistics table."""
     conclusion = (
         "[green]Normal[/green]" if desc["is_normal"] else "[yellow]Non-normal[/yellow]"
@@ -175,7 +176,7 @@ def build_inference_table(desc: dict) -> Table:
     return table
 
 
-def build_svd_table(svd_result: dict) -> Table:
+def build_svd_table(svd_result: dict[str, Any]) -> Table:
     """Build SVD results table."""
     table = Table(
         title="[bold magenta]SVD — Singular Value Decomposition[/bold magenta]",
@@ -192,7 +193,7 @@ def build_svd_table(svd_result: dict) -> Table:
     return table
 
 
-def build_fft_table(fft_result: dict) -> Table:
+def build_fft_table(fft_result: dict[str, Any]) -> Table:
     """Build FFT results table."""
     table = Table(
         title="[bold magenta]FFT — Fast Fourier Transform[/bold magenta]",

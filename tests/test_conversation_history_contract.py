@@ -4,7 +4,7 @@ from app.db.models_async import _trim_public_history_blocks, _trim_tool_history_
 from app.db.queries import format_public_history_rows
 
 
-def _assistant() -> dict:
+def _assistant() -> dict[str, object]:
     return {
         "id": 1,
         "role": "assistant",
@@ -16,7 +16,7 @@ def _assistant() -> dict:
     }
 
 
-def _tool() -> dict:
+def _tool() -> dict[str, object]:
     return {
         "id": 2,
         "role": "tool",

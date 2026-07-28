@@ -59,14 +59,14 @@ class YuzuClient:
         except Exception:
             return False
 
-    async def list_sessions(self) -> list[dict]:
+    async def list_sessions(self) -> list[dict[str, object]]:
         """Fetch list of all sessions."""
         response = await self.client.get("/api/sessions/list")
         response.raise_for_status()
         data = response.json()
         return data.get("sessions", [])
 
-    async def switch_session(self, session_id: int) -> None:
+    async def switch_session(self, session_id: int | str) -> None:
         """Switch the active session on the backend.
 
         Args:
@@ -108,7 +108,9 @@ class YuzuClient:
                         # Fallback: yield raw if not valid JSON
                         yield line[5:].strip()
 
-    async def get_history(self, session_id: int, limit: int = 50) -> list[dict]:
+    async def get_history(
+        self, session_id: int | str, limit: int = 50
+    ) -> list[dict[str, object]]:
         """
         Fetch chat history for a session.
 

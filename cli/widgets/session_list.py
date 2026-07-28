@@ -51,7 +51,7 @@ class SessionList(OptionList):
             disabled=disabled,
         )
 
-    def load_sessions(self, sessions: list[dict]) -> None:
+    def load_sessions(self, sessions: list[dict[str, object]]) -> None:
         """
         Populate the session list from backend data.
 

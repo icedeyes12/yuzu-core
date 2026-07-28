@@ -55,7 +55,7 @@ async def test_lifespan_bootstraps_schema_before_serving(monkeypatch):
     monkeypatch.setattr(main, "init_pg_tables_async", _bootstrap)
     monkeypatch.setattr(main, "close_async_pool", _close)
 
-    async with main.lifespan(app):
+    async with main.lifespan(app):  # pyright: ignore[reportArgumentType]
         pass
 
     assert calls == ["bootstrap", "close"]

@@ -45,17 +45,18 @@ NEW_EMBEDDING_DIM = 4096
 NEW_COL = "embedding"
 
 
-def get_total_count(active_only=True):
+def get_total_count(active_only: bool = True) -> int:
     """Count rows with embeddings. If active_only, only count non-invalidated facts."""
     with PgSession() as s:
         if active_only:
-            return s.fetchone(
+            row = s.fetchone(
                 "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE invalid_at IS NULL"
-            )["cnt"]
+            )
         else:
-            return s.fetchone("SELECT COUNT(*) AS cnt FROM semantic_facts WHERE 1=1")[
-                "cnt"
-            ]
+            row = s.fetchone("SELECT COUNT(*) AS cnt FROM semantic_facts WHERE 1=1")
+        if row is None:
+            raise RuntimeError("Could not count semantic facts")
+        return int(row["cnt"])
 
 
 def fetch_batch(offset, batch_size, active_only=True):
@@ -132,9 +133,13 @@ def migrate_column():
         count_row = s.fetchone(
             "SELECT COUNT(*) AS cnt FROM semantic_facts WHERE invalid_at IS NULL"
         )
+        if count_row is None:
+            raise RuntimeError("Could not count active semantic facts")
         print(f"[migrate] {count_row['cnt']} ACTIVE rows need re-embedding.")
 
         total_row = s.fetchone("SELECT COUNT(*) AS cnt FROM semantic_facts WHERE 1=1")
+        if total_row is None:
+            raise RuntimeError("Could not count semantic facts")
         print(f"[migrate] {total_row['cnt']} total rows (including invalidated).")
 
 
@@ -237,6 +242,8 @@ def finalize_migration():
         count_row = s.fetchone(
             f"SELECT COUNT(*) AS cnt FROM semantic_facts WHERE {NEW_COL} IS NOT NULL"
         )
+        if count_row is None:
+            raise RuntimeError("Could not count new embeddings")
         print(f"[finalize] Rows with new embeddings: {count_row['cnt']}")
 
         if count_row["cnt"] == 0:
