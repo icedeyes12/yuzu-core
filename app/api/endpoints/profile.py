@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from typing import cast
 from uuid import UUID
 
 import httpx
@@ -43,7 +45,9 @@ class LocationUpdateRequest(BaseModel):
 
 
 class ProfileUpdateRequest(BaseModel):
-    updates: dict = Field(..., description="Key-value pairs for profile updates")
+    updates: dict[str, object] = Field(
+        ..., description="Key-value pairs for profile updates"
+    )
 
 
 class GlobalKnowledgeEntryCreateRequest(BaseModel):
@@ -74,6 +78,7 @@ async def api_get_profile(
         else:
             active_session = {"id": session_id}
         session_id = active_session["id"]
+        assert isinstance(session_id, str)
         chat_history = await get_chat_history_async(
             session_id=session_id, limit=50, recent=True, user_id=user_id
         )
@@ -249,7 +254,8 @@ async def api_refresh_provider_models(
         if "base_url" in sig.parameters:
             kwargs["base_url"] = request.headers.get("X-Provider-BaseUrl")
 
-        models = await fetcher(**kwargs)
+        fetch_models = cast(Callable[..., Awaitable[list[str]]], fetcher)
+        models = await fetch_models(**kwargs)
         models = sorted({model for model in models if isinstance(model, str) and model})
         if not models:
             raise HTTPException(status_code=502, detail="Provider returned no models")

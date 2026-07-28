@@ -215,6 +215,7 @@ async def api_clear_chat(
             active_session = await get_active_session_async(user_id)
             session_id = active_session["id"]
 
+        assert isinstance(session_id, str)
         await clear_session_messages_async(session_id, user_id=user_id)
 
         client_id = get_client_id(request)
