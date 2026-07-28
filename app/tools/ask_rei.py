@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime
-from typing import Any
+from typing import TypedDict
 
 import requests
 
@@ -16,6 +16,11 @@ DEFAULT_CONVERSATION_ID = "con_TzvviTNTYCFCJ7AR"
 ZO_ASK_URL = "https://api.zo.computer/zo/ask"
 
 TIMEOUT = 120
+
+
+class ParsedAskArgs(TypedDict):
+    conversation_id: str
+    message: str
 
 
 TOOL_DEFINITION = ToolDefinition(
@@ -52,10 +57,13 @@ def _build_yuzuki_signature() -> str:
     return f'[Yuzuki via /ask-rei] {{"signature":{{"identity":"yuzuki","timestamp":"{timestamp}"}}}}'
 
 
-def _parse_args(args_str: str) -> dict[str, Any]:
+def _parse_args(args_str: str) -> ParsedAskArgs:
     args_str = args_str.strip()
 
-    result = {"conversation_id": DEFAULT_CONVERSATION_ID}
+    result: ParsedAskArgs = {
+        "conversation_id": DEFAULT_CONVERSATION_ID,
+        "message": "",
+    }
 
     if args_str.startswith("--id "):
         parts = args_str.split(None, 2)
@@ -71,7 +79,7 @@ def _parse_args(args_str: str) -> dict[str, Any]:
     return result
 
 
-def execute(arguments, **kwargs):
+def execute(arguments: dict[str, str] | str, **kwargs: object) -> dict[str, object]:
     from app.db.connection import pg_fetchone
     from app.db.queries import SQL_PROFILE_SELECT_BY_ID, parse_profile_row
 
