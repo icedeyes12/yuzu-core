@@ -7,6 +7,7 @@ import json
 import secrets
 import time
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
@@ -130,7 +131,7 @@ async def exchange_code(
     redirect_uri: str,
     code: str,
     code_verifier: str,
-) -> dict:
+) -> dict[str, Any]:
     data = {
         "client_id": client_id,
         "client_secret": client_secret,
@@ -146,7 +147,7 @@ async def exchange_code(
         return resp.json()
 
 
-async def _verify_google_id_token(id_token: str, client_id: str) -> dict:
+async def _verify_google_id_token(id_token: str, client_id: str) -> dict[str, Any]:
     jwks_client = jwt.PyJWKClient(_GOOGLE_JWKS_URL)
     signing_key = jwks_client.get_signing_key_from_jwt(id_token)
     return jwt.decode(
@@ -188,7 +189,7 @@ async def _get_github_identity(
 
 async def resolve_identity(
     config: OAuthProviderConfig,
-    token_response: dict,
+    token_response: dict[str, Any],
     client_id: str,
 ) -> tuple[str, str | None, str | None, str | None]:
     """Resolve OAuth identity → (provider_sub, email, avatar_url, user_name)."""

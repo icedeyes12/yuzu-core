@@ -23,7 +23,7 @@ from app.providers import get_ai_manager
 from app.providers.openai_protocol import normalize_tool_calls
 from app.services.memory_service import MemoryService
 from app.services.session_service import SessionService
-from app.tools import multimodal_tools
+from app.tools.multimodal import multimodal_tools
 from app.tools.registry import (
     execute_tool_event,
 )
@@ -188,9 +188,9 @@ def _cache_images_from_message(message: str) -> list[str]:
     return cached
 
 
-def _normalise_tool_calls(tool_calls: list[dict]) -> list[dict]:
+def _normalise_tool_calls(tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Ensure every native tool call has a valid canonical shape."""
-    canonical: list[dict] = []
+    canonical: list[dict[str, Any]] = []
     for index, tool_call in enumerate(tool_calls):
         if not isinstance(tool_call, dict):
             continue
@@ -209,8 +209,8 @@ def _normalise_tool_calls(tool_calls: list[dict]) -> list[dict]:
 
 
 async def _parse_raw_tool_calls_async(
-    provider_name: str, raw_response: dict | None, turn_id: str = ""
-) -> list[dict]:
+    provider_name: str, raw_response: dict[str, Any] | None, turn_id: str = ""
+) -> list[dict[str, Any]]:
     """Parse tool_calls from a raw provider API response (async).
 
     Uses the FC2 canonical AIProviderManager.parse_tool_calls() which routes
@@ -238,7 +238,7 @@ async def _parse_raw_tool_calls_async(
 
 
 async def _execute_tool_calls_async(
-    tool_calls: list[dict],
+    tool_calls: list[dict[str, Any]],
     session_id: str,
     user_id: str | None = None,
     turn_id: str = "",
@@ -338,7 +338,7 @@ async def _persist_tool_result_async(
 
 async def _persist_streaming_tool_results_async(
     tool_results: list[ToolResultEvent],
-    tool_calls_data: list[dict],
+    tool_calls_data: list[dict[str, Any]],
     session_id: str,
     *,
     user_id: str,
@@ -476,6 +476,7 @@ async def handle_user_message(
     cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
 
     ctx = LLMContext.from_profile(profile).require_configured()
+    assert ctx.provider is not None
     provider_name = ctx.provider
     turn_id = new_turn_id()
 
@@ -584,6 +585,8 @@ async def handle_user_message_streaming(
     else:
         active_session = {"id": session_id}
 
+    assert session_id is not None
+
     # Cache any images referenced in the message (URLs, etc.)
     cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
 
@@ -607,7 +610,7 @@ async def handle_user_message_streaming(
     while loop_count < _MAX_ORCHESTRATION_LOOPS:
         loop_count += 1
         response_chunks: list[str] = []
-        tool_calls_data: list[dict] = []
+        tool_calls_data: list[dict[str, Any]] = []
 
         # Clear user message text after the first iteration so we just rebuild
         # the history and prompt for the next assistant turn.

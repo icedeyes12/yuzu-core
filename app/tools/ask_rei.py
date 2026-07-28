@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime
+from typing import Any
 
 import requests
 
@@ -51,7 +52,7 @@ def _build_yuzuki_signature() -> str:
     return f'[Yuzuki via /ask-rei] {{"signature":{{"identity":"yuzuki","timestamp":"{timestamp}"}}}}'
 
 
-def _parse_args(args_str: str) -> dict:
+def _parse_args(args_str: str) -> dict[str, Any]:
     args_str = args_str.strip()
 
     result = {"conversation_id": DEFAULT_CONVERSATION_ID}

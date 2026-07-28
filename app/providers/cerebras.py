@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import httpx
 
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class CerebrasProvider(AIProvider):
-    def __init__(self, config: dict | None = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("cerebras", config)
         self.base_url = "https://api.cerebras.ai/v1/chat/completions"
         self.capabilities = ProviderCapabilities(
@@ -27,7 +28,11 @@ class CerebrasProvider(AIProvider):
         return self.available_models
 
     async def send_message(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
     ) -> str | None:
 
         try:
@@ -74,7 +79,11 @@ class CerebrasProvider(AIProvider):
             return None
 
     async def _send_message_streaming_impl(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
 
         try:

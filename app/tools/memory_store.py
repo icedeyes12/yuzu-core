@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from app.db import Database
 from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
@@ -41,7 +42,7 @@ TOOL_DEFINITION = ToolDefinition(
 )
 
 
-async def _classify_category_llm_async(fact: str, profile: dict) -> str:
+async def _classify_category_llm_async(fact: str, profile: dict[str, Any]) -> str:
     """Classify a fact into one graph node category."""
     try:
         from app.providers import get_ai_manager

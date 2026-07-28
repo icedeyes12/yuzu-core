@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from app.tools.multimodal import MultimodalTools as MultimodalTools
-from app.tools.multimodal import multimodal_tools as multimodal_tools
-
 # tools package
 from app.tools.registry import execute_tool as execute_tool
 from app.tools.registry import execute_tool_event as execute_tool_event
@@ -44,7 +41,4 @@ __all__ = [
     "make_tool_call_event",
     "make_tool_result_event",
     "new_turn_id",
-    # Multimodal
-    "multimodal_tools",
-    "MultimodalTools",
 ]

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import httpx
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class CustomOpenAIProvider(AIProvider):
-    def __init__(self, config: dict | None = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("custom_openai", config)
         self.base_url = "https://api.openai.com/v1/chat/completions"
         self.capabilities = ProviderCapabilities(
@@ -66,8 +67,8 @@ class CustomOpenAIProvider(AIProvider):
         return await self.fetch_live_models()
 
     def _prepare_payload(
-        self, ctx: LLMContext, messages: list[dict], stream: bool, **kwargs
-    ) -> tuple[dict, dict]:
+        self, ctx: LLMContext, messages: list[dict[str, Any]], stream: bool, **kwargs
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         messages = self._normalize_messages(messages)
         temperature = kwargs.get("temperature")
         max_tokens = kwargs.get("max_tokens")
@@ -78,7 +79,7 @@ class CustomOpenAIProvider(AIProvider):
             "Content-Type": "application/json",
         }
 
-        payload: dict = {
+        payload: dict[str, Any] = {
             "model": ctx.model,
             "messages": messages,
             "temperature": temperature,
@@ -95,7 +96,11 @@ class CustomOpenAIProvider(AIProvider):
         return headers, payload
 
     async def send_message(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
     ) -> str | None:
         try:
             headers, payload = self._prepare_payload(ctx, messages, False, **kwargs)
@@ -121,8 +126,12 @@ class CustomOpenAIProvider(AIProvider):
             return None
 
     async def send_message_raw(
-        self, ctx: LLMContext, messages: list[dict], source: str = "llm", **kwargs
-    ) -> dict | None:
+        self,
+        ctx: LLMContext,
+        messages: list[dict[str, Any]],
+        source: str = "llm",
+        **kwargs,
+    ) -> dict[str, Any] | None:
         try:
             headers, payload = self._prepare_payload(ctx, messages, False, **kwargs)
             base = self._resolve_url(ctx)
@@ -148,7 +157,7 @@ class CustomOpenAIProvider(AIProvider):
     async def _send_message_streaming_impl(
         self,
         ctx: LLMContext,
-        messages: list[dict],
+        messages: list[dict[str, Any]],
         source: str = "llm",
         **kwargs,
     ) -> AsyncGenerator[str | StreamToolEvent, None]:
@@ -181,7 +190,7 @@ class CustomOpenAIProvider(AIProvider):
                         return
 
                     if has_tools:
-                        tool_call_fragments: dict[int, dict] = {}
+                        tool_call_fragments: dict[int, dict[str, Any]] = {}
                         async for line in response.aiter_lines():
                             if not line or not line.startswith("data: "):
                                 continue
@@ -251,7 +260,7 @@ class CustomOpenAIProvider(AIProvider):
             logger.error("[CustomOpenAI] streaming error: %s", repr(e), exc_info=True)
             yield f"Error: {type(e).__name__} - {e}"
 
-    def parse_tool_calls(self, raw_response) -> list[dict]:
+    def parse_tool_calls(self, raw_response) -> list[dict[str, Any]]:
         if not isinstance(raw_response, dict):
             return []
         try:

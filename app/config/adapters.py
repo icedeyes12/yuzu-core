@@ -15,7 +15,7 @@ def application_config_from_env() -> ApplicationConfig:
     return ApplicationConfig.from_env()
 
 
-def user_preferences_from_profile(profile: dict | None) -> UserPreferences:
+def user_preferences_from_profile(profile: dict[str, Any] | None) -> UserPreferences:
     return UserPreferences.from_profile_row(profile)
 
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from app.core.context import get_request_keyring
+
 
 class CredentialProvider(ABC):
     @abstractmethod
@@ -14,6 +16,5 @@ class CredentialProvider(ABC):
 
 class EnvCredentialProvider(CredentialProvider):
     def for_request(self, provider: str) -> str | None:
-        from app.core.context import resolve_api_key
-
-        return resolve_api_key(provider)
+        keyring = get_request_keyring(provider)
+        return keyring.key if keyring else None
