@@ -131,7 +131,7 @@ async def execute(arguments, **kwargs) -> dict[str, Any]:
             partner_name,
         )
 
-    image_base64, mime = _load_image_base64(image_path)
+    image_base64, _mime = _load_image_base64(image_path)
     if not image_base64:
         return error_result(
             f"Failed to load image: {image_path}",
@@ -211,9 +211,9 @@ async def execute(arguments, **kwargs) -> dict[str, Any]:
         filename = f"{timestamp}_{safe_prompt}.jpg"
 
         filepath = (images_dir / filename).resolve()
-        filepath.relative_to(images_dir)
+        _ = filepath.relative_to(images_dir)
 
-        await asyncio.to_thread(filepath.write_bytes, response.content)
+        _ = await asyncio.to_thread(filepath.write_bytes, response.content)
 
         logger.debug(f"[IMAGE EDIT] Saved: {filepath}")
 

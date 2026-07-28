@@ -41,7 +41,7 @@ class MemoryService:
         if await _is_fence_active_async(session_id, user_id=user_id):
             return
         try:
-            await MemoryService.trigger_pipeline_async(session_id, user_id)
+            _ = await MemoryService.trigger_pipeline_async(session_id, user_id)
         except Exception as exc:
             logger.info("Memory pipeline skipped: %s", type(exc).__name__)
 

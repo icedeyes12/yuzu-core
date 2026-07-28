@@ -368,7 +368,7 @@ class AIProviderManager:
         except Exception:
             pass
 
-        await asyncio.gather(*[p.initialize() for p in self.providers.values()])
+        _ = await asyncio.gather(*[p.initialize() for p in self.providers.values()])
 
     def register_provider(self, name: str, provider: AIProvider):
         self.providers[name] = provider

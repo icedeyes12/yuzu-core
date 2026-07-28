@@ -120,7 +120,7 @@ def _execute_python(code: str, timeout: float = 10.0) -> tuple[bool, str, str, i
     duration_ms = 0
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(code)
+        _ = f.write(code)
         temp_path = f.name
 
     try:

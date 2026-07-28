@@ -14,7 +14,7 @@ router = APIRouter(prefix="/stream", tags=["stream"])
 @router.get("/{session_id}/status")
 async def get_stream_status(
     session_id: str = Path(..., description="Session ID", min_length=1),
-    user_id: str = Depends(get_current_user),
+    _user_id: str = Depends(get_current_user),
 ):
     """Get current stream status and buffer state for a session."""
     try:
@@ -44,7 +44,7 @@ async def get_stream_status(
 @router.get("/{session_id}/sync")
 async def sync_stream_buffer(
     session_id: str = Path(..., description="Session ID", min_length=1),
-    user_id: str = Depends(get_current_user),
+    _user_id: str = Depends(get_current_user),
 ):
     """Sync frontend buffer with backend and return validation checksum."""
     try:

@@ -253,7 +253,7 @@ async def mark_segmentation_done_async(
     if last_message_id:
         state_update["last_segmented_message_id"] = last_message_id
 
-    await update_pipeline_state_async(session_id, state_update, user_id=user_id)
+    _ = await update_pipeline_state_async(session_id, state_update, user_id=user_id)
 
 
 # ── Single-pass extraction ────────────────────────────────────────────────────
@@ -438,7 +438,7 @@ async def run_memory_pipeline_async(
                         for item in evidence_message_ids
                         if isinstance(item, (str, int))
                     ]
-                    await GraphMemoryRepository.add_evidence(
+                    _ = await GraphMemoryRepository.add_evidence(
                         user_id=user_id,
                         node_id=node_id,
                         episode_id=episode_id,
@@ -468,7 +468,7 @@ async def run_memory_pipeline_async(
                         embedding_dimensions=None,
                     )
                     if related_node and str(related_node["id"]) != node_id:
-                        await GraphMemoryRepository.add_edge(
+                        _ = await GraphMemoryRepository.add_edge(
                             user_id=user_id,
                             from_node_id=node_id,
                             to_node_id=str(related_node["id"]),
@@ -528,7 +528,7 @@ async def _background_worker_async():
         try:
             # Retrieve count from DB-persisted fence
             started = time.monotonic()
-            for batch_number in range(MAX_BATCHES_PER_WORKER):
+            for _ in range(MAX_BATCHES_PER_WORKER):
                 count = await get_message_count_async(
                     session_to_process, user_id=user_id
                 )
@@ -593,7 +593,7 @@ async def trigger_memory_pipeline_async(
 
     Returns True if pipeline was triggered.
     """
-    should_trigger, delta = await should_trigger_segmentation_async(
+    should_trigger, _ = await should_trigger_segmentation_async(
         session_id, current_count, user_id=user_id
     )
 

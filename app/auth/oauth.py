@@ -143,7 +143,7 @@ async def exchange_code(
     headers = {"Accept": "application/json"}
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(config.token_url, data=data, headers=headers)
-        resp.raise_for_status()
+        _ = resp.raise_for_status()
         return resp.json()
 
 
@@ -169,7 +169,7 @@ async def _get_github_identity(
     headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get("https://api.github.com/user", headers=headers)
-        resp.raise_for_status()
+        _ = resp.raise_for_status()
         data = resp.json()
         provider_sub = str(data["id"])
         email = data.get("email")
@@ -177,7 +177,7 @@ async def _get_github_identity(
             emails_resp = await client.get(
                 "https://api.github.com/user/emails", headers=headers
             )
-            emails_resp.raise_for_status()
+            _ = emails_resp.raise_for_status()
             for entry in emails_resp.json():
                 if entry.get("primary") and entry.get("verified"):
                     email = entry["email"]

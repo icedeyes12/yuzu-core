@@ -27,7 +27,7 @@ class RuntimeContext:
         provider: str,
         model: str,
         request: RequestLike,
-        preferences: object | None = None,
+        _preferences: object | None = None,
     ) -> RuntimeContext:
         keyring = get_request_keyring(provider)
         api_key = keyring.key if keyring else None

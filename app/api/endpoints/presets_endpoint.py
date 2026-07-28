@@ -46,7 +46,7 @@ async def _load_context(user_id: str) -> dict[str, object]:
 
 
 async def _save_context(context: dict[str, object], user_id: str) -> None:
-    await update_profile_async({"context": context}, user_id)
+    _ = await update_profile_async({"context": context}, user_id)
 
 
 @router.get("/presets/list")

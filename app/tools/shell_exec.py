@@ -149,7 +149,7 @@ async def execute(
             )
         except TimeoutError:
             process.kill()
-            await process.wait()
+            _ = await process.wait()
             logger.warning(f"[shell] Command timed out: {command}")
             return error_result(
                 f"Command timed out after {DEFAULT_TIMEOUT}s",

@@ -8,7 +8,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 _ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
-load_dotenv(_ENV_PATH)
+_ = load_dotenv(_ENV_PATH)
 
 from app.db.connection import AsyncPgSession  # noqa: E402
 from app.memory.embedder import embed_texts_async  # noqa: E402

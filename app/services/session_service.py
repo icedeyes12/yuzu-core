@@ -30,7 +30,7 @@ class SessionService:
 
     @classmethod
     def clear_client_session(cls, client_id: str):
-        cls._web_session_tracker.pop(client_id, None)
+        _ = cls._web_session_tracker.pop(client_id, None)
 
     @staticmethod
     async def start_session_async(

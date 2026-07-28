@@ -210,7 +210,7 @@ class StreamBuffer:
     def cancel(self):
         """Cancel the background producer task."""
         if self.task and not self.task.done():
-            self.task.cancel()
+            _ = self.task.cancel()
             log.info(
                 f"[StreamBuffer] Cancelled producer task for session {self.session_id}"
             )
@@ -270,7 +270,7 @@ class StreamManager:
                 old_stream = cls._streams[session_id]
                 if not old_stream.is_finished:
                     # Cancel the old stream - it will cleanup itself
-                    old_stream.task.cancel()
+                    _ = old_stream.task.cancel()
                 # Don't delete here - let the finally block handle it
 
             stream = StreamBuffer(
@@ -320,7 +320,7 @@ class StreamManager:
                     if stream.is_finished and (now - stream.last_activity > 300):
                         to_delete.append(sid)
                     elif now - stream.last_activity > 1800:
-                        stream.task.cancel()
+                        _ = stream.task.cancel()
                         to_delete.append(sid)
 
                 for sid in to_delete:

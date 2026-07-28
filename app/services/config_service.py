@@ -153,7 +153,7 @@ class ConfigService:
         else:
             config.pop("preferred_model", None)
         await Database.update_profile({"providers_config": config}, user_id)
-        await reload_ai_manager()
+        _ = await reload_ai_manager()
 
         suffix = f" with model: {model_name}" if model_name else ""
         return f"Preferred provider set to: {provider_name}{suffix}"

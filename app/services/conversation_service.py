@@ -125,7 +125,7 @@ class ConversationService:
                     filepath = uploads_dir / f"{timestamp}_{i}_{safe_filename}"
 
                     content = await image_file.read()
-                    filepath.write_bytes(content)
+                    _ = filepath.write_bytes(content)
                     saved_paths.append(str(filepath))
                 except Exception as e:
                     log.error("Error saving image %s: %s", image_file.filename, e)

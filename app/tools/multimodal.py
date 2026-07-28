@@ -78,7 +78,7 @@ class MultimodalTools:
                 ext = ".jpg"
 
             filepath = self.IMAGE_CACHE_DIR / f"{url_hash}{ext}"
-            filepath.write_bytes(response.content)
+            _ = filepath.write_bytes(response.content)
 
             logger.debug(f"[Vision] Downloaded image → {filepath}")
             return str(filepath)
@@ -336,7 +336,7 @@ class MultimodalTools:
         matches = re.findall(markdown_pattern, text)
 
         image_sources = []
-        for alt, url in matches:
+        for _alt, url in matches:
             if (
                 "onerror=" in url
                 or "onload=" in url

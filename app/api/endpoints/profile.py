@@ -140,10 +140,10 @@ async def api_update_profile(
             # Fetch current profile to get existing context
             profile = await get_profile_async(user_id)
             ctx = profile.get("context") or {}
-            ctx.update(context_updates)
+            _ = ctx.update(context_updates)
             updates["context"] = ctx
 
-        await update_profile_async(updates, user_id)
+        _ = await update_profile_async(updates, user_id)
         return {"status": "success"}
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -175,7 +175,7 @@ async def api_list_providers(user_id: str = Depends(get_current_user)):
 
 @router.get("/proxy/models/{provider}")
 async def api_proxy_models(
-    provider: str, request: Request, user_id: str = Depends(get_current_user)
+    provider: str, request: Request, _user_id: str = Depends(get_current_user)
 ):
     try:
         ai_manager = await get_ai_manager()
@@ -230,7 +230,7 @@ async def api_proxy_models(
 
 @router.post("/proxy/models/{provider}/refresh")
 async def api_refresh_provider_models(
-    provider: str, request: Request, user_id: str = Depends(get_current_user)
+    provider: str, request: Request, _user_id: str = Depends(get_current_user)
 ):
     ai_manager = await get_ai_manager()
     provider_instance = ai_manager.providers.get(provider)
@@ -289,7 +289,7 @@ async def api_set_preferred_provider(
 async def api_test_provider_connection(
     request: Request,
     payload: ProviderTestRequest,
-    user_id: str = Depends(get_current_user),
+    _user_id: str = Depends(get_current_user),
 ):
     try:
         from app.api.endpoints.chat import _extract_keyrings

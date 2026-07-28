@@ -248,7 +248,7 @@ async def _execute_tool_calls_async(
     Uses the canonical execute_tool_event() path.
     """
     results: list[ToolResultEvent] = []
-    _normalise_tool_calls(tool_calls)
+    _ = _normalise_tool_calls(tool_calls)
     for tc in tool_calls:
         raw_name: str = tc["name"]
         tool_name: str = raw_name
@@ -459,7 +459,7 @@ async def _finalize_and_persist_async(
             final_response, session_id, user_id=user_id, turn_id=turn_id
         )
 
-    await StreamFence.complete(session_id or "", fence_id)
+    _ = await StreamFence.complete(session_id or "", fence_id)
     log.info(f"[stream] fence {fence_id} completed")
 
 
@@ -480,7 +480,7 @@ async def handle_user_message(
     provider_name = ctx.provider
     turn_id = new_turn_id()
 
-    await _persist_user_async(
+    _ = await _persist_user_async(
         user_message, session_id, cached_images, user_id=user_id, turn_id=turn_id
     )
 
@@ -537,11 +537,11 @@ async def handle_user_message(
             tool_calls, session_id, user_id=user_id, turn_id=turn_id
         )
 
-        await _persist_streaming_tool_results_async(
+        _ = await _persist_streaming_tool_results_async(
             tool_results, tool_calls, session_id, user_id=user_id, turn_id=turn_id
         )
 
-    asyncio.create_task(
+    _ = asyncio.create_task(
         _post_turn_async(
             profile,
             user_message,
@@ -716,8 +716,8 @@ async def handle_user_message_streaming(
                 tool_calls_data, session_id, user_id=user_id, turn_id=turn_id
             )
             (
-                tool_jsons,
-                all_generated_paths,
+                _tool_jsons,
+                _all_generated_paths,
             ) = await _persist_streaming_tool_results_async(
                 tool_results,
                 tool_calls_data,
@@ -726,7 +726,7 @@ async def handle_user_message_streaming(
                 turn_id=turn_id,
             )
 
-            for i, result_event in enumerate(tool_results):
+            for result_event in tool_results:
                 tc_id = result_event.call_id
                 yield StreamToolEvent(
                     type="tool_result",

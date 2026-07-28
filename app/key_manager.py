@@ -16,8 +16,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Yuzu Companion Encryption Key Manager"
     )
-    parser.add_argument("--info", action="store_true", help="Show key information")
-    parser.add_argument(
+    _ = parser.add_argument("--info", action="store_true", help="Show key information")
+    _ = parser.add_argument(
         "--test", action="store_true", help="Test encryption/decryption"
     )
     # parser.add_argument('--backup', action='store_true', help='Backup encryption key')

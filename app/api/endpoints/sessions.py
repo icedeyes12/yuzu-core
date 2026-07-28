@@ -101,7 +101,7 @@ async def api_create_session(
         session_id = await create_session_async(request.name, user_id=user_id)
         if session_id is None:
             raise HTTPException(status_code=500, detail="Failed to create session")
-        await switch_session_async(session_id, user_id=user_id)
+        _ = await switch_session_async(session_id, user_id=user_id)
 
         client_id = get_client_id(http_request)
         SessionService.clear_client_session(client_id)
@@ -129,7 +129,7 @@ async def api_switch_session(
         client_id = get_client_id(http_request)
         SessionService.clear_client_session(client_id)
 
-        await SessionService.start_session_async(interface="web", user_id=user_id)
+        _ = await SessionService.start_session_async(interface="web", user_id=user_id)
 
         SessionService.mark_client_connected(client_id)
 
@@ -216,7 +216,7 @@ async def api_clear_chat(
             session_id = active_session["id"]
 
         assert isinstance(session_id, str)
-        await clear_session_messages_async(session_id, user_id=user_id)
+        _ = await clear_session_messages_async(session_id, user_id=user_id)
 
         client_id = get_client_id(request)
         SessionService.clear_client_session(client_id)
@@ -233,7 +233,7 @@ async def api_end_session(request: Request, user_id: str = Depends(get_current_u
         SessionService.clear_client_session(client_id)
 
         profile = await Database.get_profile(user_id)
-        await SessionService.end_session_cleanup_async(
+        _ = await SessionService.end_session_cleanup_async(
             profile, interface="web", unexpected_exit=False, user_id=user_id
         )
         return {"status": "session ended"}
