@@ -10,8 +10,8 @@ log = get_logger(__name__)
 
 
 class SessionService:
-    _AUTO_NAME_TRIGGER_COUNT = 10
-    _AUTO_NAME_TRUNCATE = 40
+    _AUTO_NAME_TRIGGER_COUNT: int = 10
+    _AUTO_NAME_TRUNCATE: int = 40
 
     # Global session tracker for web clients to prevent duplicate connection messages
     _web_session_tracker: dict[str, bool] = {}

@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 class CustomAnthropicProvider(AIProvider):
     def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("custom_anthropic", config)
-        self.base_url = "https://api.anthropic.com/v1/messages"
-        self.capabilities = ProviderCapabilities(
+        self.base_url: str = "https://api.anthropic.com/v1/messages"
+        self.capabilities: ProviderCapabilities = ProviderCapabilities(
             supports_native_fc=True,
             supports_streaming_fc=True,
             supports_tool_call_parsing=True,

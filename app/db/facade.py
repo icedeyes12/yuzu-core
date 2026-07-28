@@ -165,7 +165,7 @@ class TenantScopeError(RuntimeError):
         super().__init__(
             f"{method}: user_id is required and must be non-empty (tenant isolation)"
         )
-        self.method = method
+        self.method: str = method
 
 
 def _require_user_id(method: str, user_id: str | None) -> None:

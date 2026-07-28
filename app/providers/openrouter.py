@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 class OpenRouterProvider(AIProvider):
     def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("openrouter", config)
-        self.base_url = "https://openrouter.ai/api/v1/chat/completions"
-        self.capabilities = ProviderCapabilities(
+        self.base_url: str = "https://openrouter.ai/api/v1/chat/completions"
+        self.capabilities: ProviderCapabilities = ProviderCapabilities(
             supports_native_fc=True,
             supports_streaming_fc=True,  # FC9: streaming tool-call parsing implemented
             supports_tool_call_parsing=True,

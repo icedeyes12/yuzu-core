@@ -215,11 +215,13 @@ class ProviderCapabilities:
         supports_structured_system_content: bool = False,
         supports_vision: bool = False,
     ):
-        self.supports_native_fc = supports_native_fc
-        self.supports_streaming_fc = supports_streaming_fc
-        self.supports_tool_call_parsing = supports_tool_call_parsing
-        self.supports_structured_system_content = supports_structured_system_content
-        self.supports_vision = supports_vision
+        self.supports_native_fc: bool = supports_native_fc
+        self.supports_streaming_fc: bool = supports_streaming_fc
+        self.supports_tool_call_parsing: bool = supports_tool_call_parsing
+        self.supports_structured_system_content: bool = (
+            supports_structured_system_content
+        )
+        self.supports_vision: bool = supports_vision
 
     def to_dict(self) -> dict[str, bool]:
         return {
@@ -233,11 +235,13 @@ class ProviderCapabilities:
 
 class AIProvider:
     def __init__(self, name: str, config: dict[str, Any] | None = None):
-        self.name = name
-        self.config = config or {}
-        self.is_available = True
+        self.name: str = name
+        self.config: dict[str, Any] = config or {}
+        self.is_available: bool = True
         self._last_raw_response: dict[str, Any] | None = None
-        self.capabilities = ProviderCapabilities()  # Subclasses override
+        self.capabilities: ProviderCapabilities = (
+            ProviderCapabilities()
+        )  # Subclasses override
 
     async def initialize(self) -> None:
         """Async initialization."""

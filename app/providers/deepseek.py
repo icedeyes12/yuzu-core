@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 class DeepSeekProvider(AIProvider):
     def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("deepseek", config)
-        self.base_url = "https://api.deepseek.com/v1/chat/completions"
-        self.capabilities = ProviderCapabilities(
+        self.base_url: str = "https://api.deepseek.com/v1/chat/completions"
+        self.capabilities: ProviderCapabilities = ProviderCapabilities(
             supports_native_fc=True,
             supports_streaming_fc=True,
             supports_tool_call_parsing=True,

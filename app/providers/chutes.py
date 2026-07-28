@@ -19,17 +19,17 @@ logger = logging.getLogger(__name__)
 class ChutesProvider(AIProvider):
     def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("chutes", config)
-        self.base_url = "https://llm.chutes.ai/v1/chat/completions"
-        self.capabilities = ProviderCapabilities(
+        self.base_url: str = "https://llm.chutes.ai/v1/chat/completions"
+        self.capabilities: ProviderCapabilities = ProviderCapabilities(
             supports_native_fc=True,
             supports_streaming_fc=True,
             supports_tool_call_parsing=True,
             supports_structured_system_content=True,
             supports_vision=True,
         )
-        self.api_models_url = "https://llm.chutes.ai/v1/models"
-        self._models_cache_ttl = 600
-        self._models_cache_at = 0.0
+        self.api_models_url: str = "https://llm.chutes.ai/v1/models"
+        self._models_cache_ttl: int = 600
+        self._models_cache_at: float = 0.0
         self._models_cache_data: list[str] | None = None
 
         self._last_error: str | None = None

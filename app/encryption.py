@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 class ModernEncryptor:
     def __init__(self, key_path="encryption.key"):
-        self.key_path = key_path
-        self.key = self._load_or_generate_key()
+        self.key_path: str = key_path
+        self.key: bytes = self._load_or_generate_key()
 
     def _load_or_generate_key(self):
         # ChaCha20-Poly1305 uses a 32-byte (256-bit) key

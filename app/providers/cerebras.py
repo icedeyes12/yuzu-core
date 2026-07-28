@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 class CerebrasProvider(AIProvider):
     def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("cerebras", config)
-        self.base_url = "https://api.cerebras.ai/v1/chat/completions"
-        self.capabilities = ProviderCapabilities(
+        self.base_url: str = "https://api.cerebras.ai/v1/chat/completions"
+        self.capabilities: ProviderCapabilities = ProviderCapabilities(
             supports_native_fc=False,  # Cerebras API doesn't expose FC yet
             supports_streaming_fc=False,
             supports_tool_call_parsing=False,
