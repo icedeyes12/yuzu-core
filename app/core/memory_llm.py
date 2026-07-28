@@ -3,7 +3,18 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any
+from typing import Any, Protocol
+
+
+class MemoryLLMManager(Protocol):
+    async def _internal_llm_call(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        source: str,
+        **kwargs: Any,
+    ) -> str | None: ...
+
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +23,9 @@ _last_memory_llm_call = 0.0
 
 
 async def memory_llm_call(
-    ai_manager: Any, messages: list[dict], **kwargs
+    ai_manager: MemoryLLMManager,
+    messages: list[dict[str, Any]],
+    **kwargs: Any,
 ) -> str | None:
     """Call the memory LLM with the shared pipeline rate limit."""
     global _last_memory_llm_call
