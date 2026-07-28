@@ -9,6 +9,8 @@ from typing import Any
 
 from app.providers.openai_protocol import normalize_tool_calls
 
+type DBRow = dict[str, Any]
+
 
 def encrypt_api_key(api_key: str) -> str:
     """Encrypt an API key with the project-wide encryptor."""
@@ -569,11 +571,6 @@ DEFAULT_PROFILE_PARAMS = (
     "{}",
 )
 
-_PROFILE_JSON_FIELDS = (
-    "session_history",
-    "providers_config",
-    "context",
-)
 _PROFILE_TEXT_FIELDS = (
     "user_name",
     "partner_name",
@@ -632,7 +629,7 @@ def build_profile_update(updates: dict[str, Any]) -> tuple[str, list[Any]] | Non
     return f"UPDATE profiles SET {', '.join(set_parts)}", params
 
 
-def parse_global_knowledge_row(row: dict | None) -> dict:
+def parse_global_knowledge_row(row: DBRow | None) -> DBRow:
     if not row:
         return {}
     return {
@@ -646,13 +643,13 @@ def parse_global_knowledge_row(row: dict | None) -> dict:
     }
 
 
-def parse_profile_row(row: dict | None) -> dict:
+def parse_profile_row(row: DBRow | None) -> DBRow:
     """Convert a raw profile row into the public dict shape."""
     if not row:
         return {}
     import json
 
-    def _parse_json(val: Any) -> dict:
+    def _parse_json(val: Any) -> DBRow:
         if isinstance(val, str):
             try:
                 return json.loads(val)
@@ -759,7 +756,7 @@ SQL_PIPELINE_STATE_LOCK = (
 )
 
 
-def parse_session_row(row: dict | None) -> dict:
+def parse_session_row(row: DBRow | None) -> DBRow:
     """(｡•̀ᴗ-)✧"""
     if not row:
         return {}
@@ -886,7 +883,7 @@ SQL_MESSAGE_UPDATE_DECRYPTED = (
 )
 
 
-def parse_message_row(row: dict) -> dict:
+def parse_message_row(row: DBRow) -> DBRow:
     """Convert a raw messages row into the public dict shape."""
     return {
         "id": row.get("id"),
@@ -901,7 +898,7 @@ def parse_message_row(row: dict) -> dict:
     }
 
 
-def parse_event_row(row: dict) -> dict:
+def parse_event_row(row: DBRow) -> DBRow:
     """Convert a raw event row (system messages list)."""
     return {
         "content": row.get("content", ""),
@@ -909,7 +906,7 @@ def parse_event_row(row: dict) -> dict:
     }
 
 
-def format_conversation_summary(rows: list[dict]) -> str:
+def format_conversation_summary(rows: list[DBRow]) -> str:
     """Render a brief 'User: ... / AI: ...' summary from message rows."""
     lines: list[str] = []
     for r in rows:
@@ -1007,8 +1004,8 @@ def _format_user_timestamp(ts: Any) -> str:
 
 
 def format_ai_history_rows(
-    rows: list[dict], include_attachments: bool = False
-) -> list[dict]:
+    rows: list[DBRow], include_attachments: bool = False
+) -> list[DBRow]:
     """Format message rows for AI consumption.
 
     Filters out system messages to prevent log/context pollution.
@@ -1081,7 +1078,7 @@ def format_ai_history_rows(
     return formatted
 
 
-def format_public_history_rows(rows: list[dict]) -> list[dict]:
+def format_public_history_rows(rows: list[DBRow]) -> list[DBRow]:
     """(｡•̀ᴗ-)✧"""
     formatted: list[dict[str, Any]] = []
     for row in rows:
@@ -1119,12 +1116,12 @@ SQL_ENC_ENCRYPTED_MESSAGES = (
 
 
 def build_encryption_status(
-    total_msg: dict | None,
-    encrypted_msg: dict | None,
-) -> dict:
+    total_msg: DBRow | None,
+    encrypted_msg: DBRow | None,
+) -> DBRow:
     """Assemble the encryption-status response from message count rows."""
 
-    def cnt(row: dict | None) -> int:
+    def cnt(row: DBRow | None) -> int:
         return row.get("cnt", 0) if row else 0
 
     return {

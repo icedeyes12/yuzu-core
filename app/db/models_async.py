@@ -67,6 +67,8 @@ from app.logging_config import get_logger
 
 log = get_logger(__name__)
 
+type DBRow = dict[str, Any]
+
 # Backward-compat re-export
 __re_exports__ = (TOOL_ROLES, ALL_TOOL_ROLES)
 
@@ -89,7 +91,7 @@ async def init_pg_tables_async() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def get_profile_async(user_id: str) -> dict:
+async def get_profile_async(user_id: str) -> DBRow:
     row = await pg_fetchone_async(SQL_PROFILE_SELECT_BY_ID, (user_id,))
     if not row:
         now = datetime.now()
@@ -100,7 +102,7 @@ async def get_profile_async(user_id: str) -> dict:
     return parse_profile_row(row)
 
 
-async def update_profile_async(updates: dict, user_id: str) -> bool:
+async def update_profile_async(updates: dict[str, Any], user_id: str) -> bool:
     if not updates:
         return False
     built = build_profile_update(updates)
@@ -117,27 +119,27 @@ async def update_profile_async(updates: dict, user_id: str) -> bool:
         return False
 
 
-async def get_context_async(user_id: str) -> dict:
+async def get_context_async(user_id: str) -> DBRow:
     return (await get_profile_async(user_id)).get("context", {})
 
 
-async def update_context_async(context_dict: dict, user_id: str) -> bool:
+async def update_context_async(context_dict: dict[str, Any], user_id: str) -> bool:
     return await update_profile_async({"context": context_dict}, user_id)
 
 
-async def list_global_knowledge_async(user_id: str) -> list[dict]:
+async def list_global_knowledge_async(user_id: str) -> list[DBRow]:
     rows = await pg_fetchall_async(SQL_GLOBAL_KNOWLEDGE_LIST, (user_id,))
     return [parse_global_knowledge_row(row) for row in rows]
 
 
-async def get_global_knowledge_async(entry_id: str, user_id: str) -> dict:
+async def get_global_knowledge_async(entry_id: str, user_id: str) -> DBRow:
     row = await pg_fetchone_async(SQL_GLOBAL_KNOWLEDGE_GET, (entry_id, user_id))
     return parse_global_knowledge_row(row)
 
 
 async def create_global_knowledge_async(
     category: str, content: str, sort_order: int, enabled: bool, user_id: str
-) -> dict:
+) -> DBRow:
     async with AsyncPgSession() as s:
         row = await s.execute_returning(
             SQL_GLOBAL_KNOWLEDGE_INSERT,
@@ -153,7 +155,7 @@ async def update_global_knowledge_async(
     sort_order: int,
     enabled: bool,
     user_id: str,
-) -> dict:
+) -> DBRow:
     async with AsyncPgSession() as s:
         row = await s.execute_returning(
             SQL_GLOBAL_KNOWLEDGE_UPDATE,
@@ -172,7 +174,7 @@ async def delete_global_knowledge_async(entry_id: str, user_id: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-async def get_active_session_async(user_id: str) -> dict:
+async def get_active_session_async(user_id: str) -> DBRow:
     row = await pg_fetchone_async(SQL_SESSION_SELECT_ACTIVE_FOR_USER, (user_id,))
     if not row:
         now = datetime.now()
@@ -183,7 +185,7 @@ async def get_active_session_async(user_id: str) -> dict:
     return parse_session_row(row)
 
 
-async def get_all_sessions_async(user_id: str) -> list[dict]:
+async def get_all_sessions_async(user_id: str) -> list[DBRow]:
     rows = await pg_fetchall_async(SQL_SESSION_SELECT_ALL_FOR_USER, (user_id,))
     return [parse_session_row(r) for r in rows]
 
@@ -265,7 +267,7 @@ async def increment_message_count_async(session_id: str) -> bool:
         return False
 
 
-async def get_pipeline_state_async(session_id: str, user_id: str) -> dict:
+async def get_pipeline_state_async(session_id: str, user_id: str) -> DBRow:
     """(｡•̀ᴗ-)✧"""
     row = await pg_fetchone_async(SQL_PIPELINE_STATE_SELECT, (session_id, user_id))
     state = row.get("memory_pipeline_state") if row else None
@@ -273,7 +275,7 @@ async def get_pipeline_state_async(session_id: str, user_id: str) -> dict:
 
 
 async def update_pipeline_state_async(
-    session_id: str, state: dict, user_id: str
+    session_id: str, state: dict[str, Any], user_id: str
 ) -> bool:
     """(｡•̀ᴗ-)✧"""
     try:
@@ -349,7 +351,7 @@ async def update_message_async(message_id: int, content: str) -> bool:
 
 async def get_session_messages_async(
     session_id: str, limit: int = 100, order: str = "ASC", *, user_id: str
-) -> list[dict]:
+) -> list[DBRow]:
     """Fetch messages for a session in chronological order.
 
     order: "ASC" (oldest first) or "DESC" (newest first).
@@ -364,7 +366,7 @@ async def get_session_messages_async(
 
 async def get_session_messages_after_id_async(
     session_id: str, after_message_id: str, limit: int = 1000, *, user_id: str
-) -> list[dict]:
+) -> list[DBRow]:
     """Fetch messages for a session after a specific message ID.
 
     Used by memory pipeline for ID-based tracking. Returns messages
@@ -382,7 +384,7 @@ async def get_chat_history_async(
     recent: bool = False,
     *,
     user_id: str,
-) -> list[dict]:
+) -> list[DBRow]:
     if limit and recent:
         rows = await pg_fetchall_async(
             SQL_MESSAGE_SELECT_DESC_LIMIT, (session_id, user_id, limit)
@@ -399,9 +401,9 @@ async def get_chat_history_async(
     return _trim_public_history_blocks(format_public_history_rows(rows))
 
 
-def _trim_public_history_blocks(messages: list[dict]) -> list[dict]:
+def _trim_public_history_blocks(messages: list[DBRow]) -> list[DBRow]:
     """(｡•̀ᴗ-)✧"""
-    result: list[dict] = []
+    result: list[DBRow] = []
     index = 0
     while index < len(messages):
         message = messages[index]
@@ -467,7 +469,7 @@ async def add_session_event_async(
 
 async def get_recent_active_sessions_async(
     user_id: str, current_session_id: str, limit: int = 5
-) -> list[dict]:
+) -> list[DBRow]:
     """Fetch recently active sessions for meta-awareness block.
 
     Returns sessions ordered by last activity, excluding the current session.
@@ -515,7 +517,7 @@ async def get_chat_history_for_ai_async(
     include_attachments: bool = False,
     *,
     user_id: str,
-) -> list[dict]:
+) -> list[DBRow]:
     if limit and recent:
         rows = await pg_fetchall_async(
             SQL_MESSAGE_HISTORY_FOR_AI_DESC_LIMIT, (session_id, user_id, limit)
@@ -533,9 +535,9 @@ async def get_chat_history_for_ai_async(
     return _trim_tool_history_blocks(formatted)
 
 
-def _trim_tool_history_blocks(messages: list[dict]) -> list[dict]:
+def _trim_tool_history_blocks(messages: list[DBRow]) -> list[DBRow]:
     """(｡•̀ᴗ-)✧"""
-    result: list[dict] = []
+    result: list[DBRow] = []
     index = 0
     while index < len(messages):
         message = messages[index]
@@ -571,19 +573,19 @@ def _trim_tool_history_blocks(messages: list[dict]) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-async def get_encryption_status_async() -> dict:
+async def get_encryption_status_async() -> DBRow:
     return build_encryption_status(
         await pg_fetchone_async(SQL_ENC_TOTAL_MESSAGES),
         await pg_fetchone_async(SQL_ENC_ENCRYPTED_MESSAGES),
     )
 
 
-async def get_all_encrypted_messages_async() -> list[dict]:
+async def get_all_encrypted_messages_async() -> list[DBRow]:
     rows = await pg_fetchall_async(SQL_MESSAGE_SELECT_ENCRYPTED)
     return [parse_message_row(r) for r in rows]
 
 
-async def batch_decrypt_messages_async(message_ids: list[int]) -> dict:
+async def batch_decrypt_messages_async(message_ids: list[int]) -> DBRow:
     decrypted_count = 0
     failed_count = 0
     for msg_id in message_ids:
@@ -666,7 +668,7 @@ async def create_session_token_async(
     await pg_execute_async(SQL_SESSION_TOKEN_CREATE, (token, user_id, now, expires_at))
 
 
-async def validate_session_token_async(token: str) -> dict | None:
+async def validate_session_token_async(token: str) -> DBRow | None:
     from app.db.queries import SQL_SESSION_TOKEN_VALIDATE
 
     return await pg_fetchone_async(SQL_SESSION_TOKEN_VALIDATE, (token,))
@@ -678,21 +680,21 @@ async def revoke_session_token_async(token: str, now: datetime) -> None:
     await pg_execute_async(SQL_SESSION_TOKEN_REVOKE, (now, token))
 
 
-async def lookup_identity_async(provider: str, provider_sub: str) -> dict | None:
+async def lookup_identity_async(provider: str, provider_sub: str) -> DBRow | None:
     from app.db.queries import SQL_IDENTITY_LOOKUP
 
     return await pg_fetchone_async(SQL_IDENTITY_LOOKUP, (provider, provider_sub))
 
 
-async def lookup_unclaimed_profile_async() -> dict | None:
+async def lookup_unclaimed_profile_async() -> DBRow | None:
     from app.db.queries import SQL_PROFILE_UNCLAIMED_LOOKUP
 
     return await pg_fetchone_async(SQL_PROFILE_UNCLAIMED_LOOKUP)
 
 
 async def insert_default_profile_returning_async(
-    params: tuple, created_at: datetime, updated_at: datetime
-) -> dict | None:
+    params: tuple[Any, ...], created_at: datetime, updated_at: datetime
+) -> DBRow | None:
     from app.db.queries import SQL_PROFILE_INSERT_DEFAULT_RETURNING
 
     return await pg_fetchone_async(
@@ -726,7 +728,7 @@ async def insert_identity_async(
     )
 
 
-async def lookup_auth_me_async(user_id: str) -> dict | None:
+async def lookup_auth_me_async(user_id: str) -> DBRow | None:
     from app.db.queries import SQL_AUTH_ME_LOOKUP
 
     return await pg_fetchone_async(SQL_AUTH_ME_LOOKUP, (user_id,))
