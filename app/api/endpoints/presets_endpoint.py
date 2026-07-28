@@ -28,7 +28,7 @@ router = APIRouter(tags=["presets"])
 
 class PresetUpsertRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
-    payload: dict = Field(default_factory=dict)
+    payload: dict[str, object] = Field(default_factory=dict)
     make_active: bool = False
 
 
@@ -40,12 +40,12 @@ class PresetDeleteRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
 
 
-async def _load_context(user_id: str) -> dict:
+async def _load_context(user_id: str) -> dict[str, object]:
     profile = await get_profile_async(user_id)
     return profile.get("context") or {}
 
 
-async def _save_context(context: dict, user_id: str) -> None:
+async def _save_context(context: dict[str, object], user_id: str) -> None:
     await update_profile_async({"context": context}, user_id)
 
 
