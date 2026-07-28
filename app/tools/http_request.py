@@ -157,7 +157,7 @@ async def execute(
                 filename = f"{timestamp}.{'jpg' if ext == 'jpeg' else ext}"
                 filepath = media_dir / filename
 
-                filepath.write_bytes(content)
+                _ = filepath.write_bytes(content)
 
                 web_path = f"static/media/{filename}"
 

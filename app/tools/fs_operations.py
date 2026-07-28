@@ -312,7 +312,7 @@ def execute_write(
             )
 
     try:
-        resolved.write_text(content, encoding="utf-8")
+        _ = resolved.write_text(content, encoding="utf-8")
     except OSError as e:
         return error_result(
             f"Cannot write file: {e}",

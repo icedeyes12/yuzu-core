@@ -94,7 +94,7 @@ async def _send_to_provider(
     source: str = "chat",
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single LLM dispatch with timing log. Returns (text, raw_response)."""
-    ctx.require_configured()
+    _ = ctx.require_configured()
     ai_manager = await get_ai_manager()
     schemas = _unique_tool_schemas()
 
@@ -210,7 +210,7 @@ async def _stream_from_provider(
     source: str = "chat",
 ) -> AsyncGenerator[str | StreamToolEvent, None]:
     """Yield raw chunks from the provider's streaming API."""
-    ctx.require_configured()
+    _ = ctx.require_configured()
     ai_manager = await get_ai_manager()
 
     # Generate tool schemas

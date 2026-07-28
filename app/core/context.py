@@ -44,7 +44,7 @@ _keyring_ctx: ContextVar[dict[str, RequestKeyring]] = ContextVar(
 
 def set_request_keyrings(keyrings: dict[str, RequestKeyring]) -> None:
     """Bind a map of keyrings to the current async context (request plane)."""
-    _keyring_ctx.set(keyrings)
+    _ = _keyring_ctx.set(keyrings)
 
 
 def get_request_keyring(provider_name: str) -> RequestKeyring | None:
@@ -59,4 +59,4 @@ def get_request_keyrings() -> dict[str, RequestKeyring]:
 
 def clear_request_keyring() -> None:
     """Unbind the keyring — call in finally to prevent cross-request leakage."""
-    _keyring_ctx.set({})
+    _ = _keyring_ctx.set({})

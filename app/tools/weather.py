@@ -122,7 +122,7 @@ async def _resolve_coordinates(
         "https://geocoding-api.open-meteo.com/v1/search",
         params={"name": location, "count": 1, "language": "en", "format": "json"},
     )
-    response.raise_for_status()
+    _ = response.raise_for_status()
     results = response.json().get("results") or []
     if not results:
         return None
@@ -215,7 +215,7 @@ async def execute(
                 "timezone": "auto",
             },
         )
-        response.raise_for_status()
+        _ = response.raise_for_status()
         data = response.json()
 
     current = data.get("current") or {}

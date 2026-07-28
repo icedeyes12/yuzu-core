@@ -54,7 +54,7 @@ async def embed_texts_async(
                 resp = await client.post(
                     CHUTES_EMBED_ENDPOINT, json=payload, timeout=timeout
                 )
-            resp.raise_for_status()
+            _ = resp.raise_for_status()
             data = resp.json().get("data", [])
             results = [item["embedding"] for item in data]
 

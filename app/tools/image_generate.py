@@ -111,9 +111,9 @@ async def execute(arguments, **kwargs):
         filename = f"{timestamp}_{safe_prompt}.{ext}"
 
         filepath = (images_dir / filename).resolve()
-        filepath.relative_to(images_dir)
+        _ = filepath.relative_to(images_dir)
 
-        await asyncio.to_thread(filepath.write_bytes, response.content)
+        _ = await asyncio.to_thread(filepath.write_bytes, response.content)
 
         logger.debug(f"[IMAGE TOOL] Saved: {filepath}")
 

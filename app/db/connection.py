@@ -14,7 +14,7 @@ from app.logging_config import get_logger
 # Load .env from project root (relative to this module)
 _env_path = Path(__file__).resolve().parent.parent.parent / ".env"
 if _env_path.exists():
-    load_dotenv(_env_path)
+    _ = load_dotenv(_env_path)
 
 # PostgreSQL connection parameters
 DB_HOST = os.getenv("DB_HOST", os.getenv("PGHOST", "localhost"))
@@ -112,7 +112,7 @@ async def close_async_pool() -> None:
         log.info("async pool closed")
 
 
-atexit.register(close_sync_pool)
+_ = atexit.register(close_sync_pool)
 
 
 # ── SYNC session context manager ──────────────────────────────────────────────

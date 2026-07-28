@@ -209,7 +209,7 @@ async def _map_identity_to_profile(
 async def logout(request: Request):
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if token:
-        await revoke_session(token)
+        _ = await revoke_session(token)
     response = JSONResponse({"status": "logged out"})
     response.headers["Cache-Control"] = "no-store"
     clear_session_cookie(response)

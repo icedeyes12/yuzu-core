@@ -241,7 +241,7 @@ class Database:
 
     @staticmethod
     async def update_message(
-        message_id: int, content: str, attachments: list[str] | None = None
+        message_id: int, content: str, _attachments: list[str] | None = None
     ) -> bool:
         return await _pg_update_message_async(message_id, content)
 

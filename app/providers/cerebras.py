@@ -137,7 +137,7 @@ class CerebrasProvider(AIProvider):
                                 except (json.JSONDecodeError, KeyError):
                                     continue
                     else:
-                        await response.aread()
+                        _ = await response.aread()
                         logger.warning(
                             "[%s] HTTP %d for model %s: %s",
                             self.name,

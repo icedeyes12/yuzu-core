@@ -331,7 +331,7 @@ async def add_message_async(
                 ),
             )
             if row:
-                await increment_message_count_async(session_id)
+                _ = await increment_message_count_async(session_id)
                 return row.get("id")
         return None
     except Exception as e:

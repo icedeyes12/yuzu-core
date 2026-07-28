@@ -31,7 +31,7 @@ class ModernEncryptor:
             logger.info("Generating new 256-bit key (Quantum Resistant)...")
             key = get_random_bytes(32)
             with open(self.key_path, "wb") as f:
-                f.write(key)
+                _ = f.write(key)
             logger.info(f"New key saved to {self.key_path}")
             logger.warning("BACKUP THIS KEY FILE IMMEDIATELY!")
             return key
