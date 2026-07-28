@@ -139,11 +139,10 @@ class ConfigService:
 
         if model_name:
             if not provider_name.startswith("custom_"):
-                models = await ai_manager.get_provider_models(provider_name)
-                if model_name not in models:
-                    raise ValueError(
-                        f"Model '{model_name}' is not available for provider '{provider_name}'"
-                    )
+                # Warning: We no longer do strict model presence validation here.
+                # Since we use BYOK (client-side keys), the backend may not have 
+                # a hydrated list of models via get_models() at save time.
+                pass
 
         profile = await Database.get_profile(user_id)
         config = dict(profile.get("providers_config") or {})

@@ -1,4 +1,4 @@
-import { renderRuntimeIcon } from "../../runtime-icon-renderer.js";
+import { renderRuntimeIcon } from "../../../runtime-icon-renderer.js";
 import { escapeHtml } from "../dom-utils.js";
 
 const WEATHER_ICONS = Object.freeze({
