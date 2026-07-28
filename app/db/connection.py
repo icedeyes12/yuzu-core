@@ -25,6 +25,9 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", os.getenv("PGPASSWORD", ""))
 
 log = get_logger(__name__)
 
+type DBRow = dict[str, Any]
+type DBParams = tuple[Any, ...] | list[Any] | dict[str, Any] | None
+
 # ── Connection settings (env-driven) ──────────────────────────────────────────
 _PG_HOST = os.getenv("PGHOST", os.getenv("PG_HOST", ""))
 _PG_PORT = os.getenv("PGPORT", os.getenv("PG_PORT", ""))
@@ -147,52 +150,43 @@ class PgSession:
         except Exception:
             self.conn.rollback()
         finally:
+            assert self._pool is not None
             self._pool.putconn(self.conn)
             self.conn = None
 
-    def fetchone(
-        self, query: str, params: tuple | list[Any] | dict | None = None
-    ) -> dict | None:
+    def fetchone(self, query: str, params: DBParams = None) -> DBRow | None:
         """Return the first row as a dict, or None."""
         with self.conn.cursor() as cur:
             cur.execute(query, params)
             row = cur.fetchone()
             return dict(row) if row else None
 
-    def fetchall(
-        self, query: str, params: tuple | list[Any] | dict | None = None
-    ) -> list[dict]:
+    def fetchall(self, query: str, params: DBParams = None) -> list[DBRow]:
         """Return all rows as a list of dicts."""
         with self.conn.cursor() as cur:
             cur.execute(query, params)
             return [dict(row) for row in cur.fetchall()]
 
-    def execute(
-        self, query: str, params: tuple | list[Any] | dict | None = None
-    ) -> None:
+    def execute(self, query: str, params: DBParams = None) -> None:
         """Execute a non-returning query (INSERT/UPDATE/DELETE/DDL)."""
         with self.conn.cursor() as cur:
             cur.execute(query, params)
 
-    def execute_scalar(
-        self, query: str, params: tuple | list[Any] | dict | None = None
-    ) -> Any:
+    def execute_scalar(self, query: str, params: DBParams = None) -> Any:
         """Return the first column of the first row (e.g. COUNT, SUM)."""
         with self.conn.cursor() as cur:
             cur.execute(query, params)
             row = cur.fetchone()
             return list(row.values())[0] if row else None
 
-    def execute_returning(
-        self, query: str, params: tuple | list[Any] | dict | None = None
-    ) -> dict | None:
+    def execute_returning(self, query: str, params: DBParams = None) -> DBRow | None:
         """Execute INSERT/UPDATE ... RETURNING * and return the row dict."""
         with self.conn.cursor() as cur:
             cur.execute(query, params)
             row = cur.fetchone()
             return dict(row) if row else None
 
-    def execute_batch(self, query: str, params_list: list[tuple]) -> int:
+    def execute_batch(self, query: str, params_list: list[tuple[Any, ...]]) -> int:
         """Execute many parameter sets. Returns rowcount."""
         with self.conn.cursor() as cur:
             cur.executemany(query, params_list)
@@ -234,36 +228,30 @@ class AsyncPgSession:
         except Exception:
             await self.conn.rollback()
         finally:
-            await self._pool.putconn(self.conn)
+            pool = self._pool
+            if pool is not None:
+                await pool.putconn(self.conn)
             self.conn = None
 
-    async def fetchone(
-        self, query: str, params: tuple | list[Any] | dict | None = None
-    ) -> dict | None:
+    async def fetchone(self, query: str, params: DBParams = None) -> DBRow | None:
         """Return the first row as a dict, or None."""
         async with self.conn.cursor() as cur:
             await cur.execute(query, params)
             row = await cur.fetchone()
             return dict(row) if row else None
 
-    async def fetchall(
-        self, query: str, params: tuple | list[Any] | dict | None = None
-    ) -> list[dict]:
+    async def fetchall(self, query: str, params: DBParams = None) -> list[DBRow]:
         """Return all rows as a list of dicts."""
         async with self.conn.cursor() as cur:
             await cur.execute(query, params)
             return [dict(row) for row in await cur.fetchall()]
 
-    async def execute(
-        self, query: str, params: tuple | list[Any] | dict | None = None
-    ) -> None:
+    async def execute(self, query: str, params: DBParams = None) -> None:
         """Execute a non-returning query (INSERT/UPDATE/DELETE/DDL)."""
         async with self.conn.cursor() as cur:
             await cur.execute(query, params)
 
-    async def execute_scalar(
-        self, query: str, params: tuple | list[Any] | dict | None = None
-    ) -> Any:
+    async def execute_scalar(self, query: str, params: DBParams = None) -> Any:
         """Return the first column of the first row (e.g. COUNT, SUM)."""
         async with self.conn.cursor() as cur:
             await cur.execute(query, params)
@@ -271,15 +259,17 @@ class AsyncPgSession:
             return list(row.values())[0] if row else None
 
     async def execute_returning(
-        self, query: str, params: tuple | list[Any] | dict | None = None
-    ) -> dict | None:
+        self, query: str, params: DBParams = None
+    ) -> DBRow | None:
         """Execute INSERT/UPDATE ... RETURNING * and return the row dict."""
         async with self.conn.cursor() as cur:
             await cur.execute(query, params)
             row = await cur.fetchone()
             return dict(row) if row else None
 
-    async def execute_batch(self, query: str, params_list: list[tuple]) -> int:
+    async def execute_batch(
+        self, query: str, params_list: list[tuple[Any, ...]]
+    ) -> int:
         """Execute many parameter sets. Returns rowcount."""
         async with self.conn.cursor() as cur:
             await cur.executemany(query, params_list)
@@ -291,67 +281,53 @@ class AsyncPgSession:
 # and returns. Useful for one-off queries that don't need a transaction.
 
 
-def pg_fetchone(
-    query: str, params: tuple | list[Any] | dict | None = None
-) -> dict | None:
+def pg_fetchone(query: str, params: DBParams = None) -> DBRow | None:
     with PgSession() as s:
         return s.fetchone(query, params)
 
 
-def pg_fetchall(
-    query: str, params: tuple | list[Any] | dict | None = None
-) -> list[dict]:
+def pg_fetchall(query: str, params: DBParams = None) -> list[DBRow]:
     with PgSession() as s:
         return s.fetchall(query, params)
 
 
-def pg_execute(query: str, params: tuple | list[Any] | dict | None = None) -> None:
+def pg_execute(query: str, params: DBParams = None) -> None:
     with PgSession() as s:
         s.execute(query, params)
 
 
-def pg_exists(query: str, params: tuple | list[Any] | dict | None = None) -> bool:
+def pg_exists(query: str, params: DBParams = None) -> bool:
     """True when *query* returns at least one row."""
     return pg_fetchone(query, params) is not None
 
 
-def pg_scalar(query: str, params: tuple | list[Any] | dict | None = None) -> Any:
+def pg_scalar(query: str, params: DBParams = None) -> Any:
     """Return the first column of the first row (e.g. COUNT, SUM)."""
     with PgSession() as s:
         return s.execute_scalar(query, params)
 
 
-async def pg_fetchone_async(
-    query: str, params: tuple | list[Any] | dict | None = None
-) -> dict | None:
+async def pg_fetchone_async(query: str, params: DBParams = None) -> DBRow | None:
     async with AsyncPgSession() as s:
         return await s.fetchone(query, params)
 
 
-async def pg_fetchall_async(
-    query: str, params: tuple | list[Any] | dict | None = None
-) -> list[dict]:
+async def pg_fetchall_async(query: str, params: DBParams = None) -> list[DBRow]:
     async with AsyncPgSession() as s:
         return await s.fetchall(query, params)
 
 
-async def pg_execute_async(
-    query: str, params: tuple | list[Any] | dict | None = None
-) -> None:
+async def pg_execute_async(query: str, params: DBParams = None) -> None:
     async with AsyncPgSession() as s:
         await s.execute(query, params)
 
 
-async def pg_exists_async(
-    query: str, params: tuple | list[Any] | dict | None = None
-) -> bool:
+async def pg_exists_async(query: str, params: DBParams = None) -> bool:
     """True when *query* returns at least one row."""
     return await pg_fetchone_async(query, params) is not None
 
 
-async def pg_scalar_async(
-    query: str, params: tuple | list[Any] | dict | None = None
-) -> Any:
+async def pg_scalar_async(query: str, params: DBParams = None) -> Any:
     """Return the first column of the first row (e.g. COUNT, SUM)."""
     async with AsyncPgSession() as s:
         return await s.execute_scalar(query, params)

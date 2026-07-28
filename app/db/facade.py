@@ -132,6 +132,8 @@ from app.logging_config import get_logger
 
 log = get_logger(__name__)
 
+type DBRow = dict[str, Any]
+
 
 def init_db() -> None:
     """Create PostgreSQL tables if missing (runs sync init for bootstrap)."""
@@ -172,7 +174,7 @@ def _require_user_id(method: str, user_id: str | None) -> None:
         raise TenantScopeError(method)
 
 
-def _proxy_async(target: Callable[..., Any]) -> staticmethod:
+def _proxy_async(target: Callable[..., Any]) -> Any:
     """Wrap an async function in a staticmethod that forwards *args/**kwargs."""
 
     async def _call(*args: Any, **kwargs: Any) -> Any:
@@ -279,7 +281,7 @@ class Database:
         """Get messages for a session (defaults to active session)."""
         _require_user_id("get_messages", user_id)
 
-        async def _call() -> list[dict]:
+        async def _call() -> list[DBRow]:
             return await _pg_get_session_messages_async(
                 await _resolve_session_id_async(session_id, user_id),
                 limit or 100,
@@ -299,7 +301,7 @@ class Database:
         """Get chat history for a session (defaults to active session)."""
         _require_user_id("get_chat_history", user_id)
 
-        async def _call() -> list[dict]:
+        async def _call() -> list[DBRow]:
             return await _pg_get_chat_history_async(
                 await _resolve_session_id_async(session_id, user_id),
                 limit,
@@ -321,7 +323,7 @@ class Database:
         """Build message context for AI provider (defaults to active session)."""
         _require_user_id("get_chat_history_for_ai", user_id)
 
-        async def _call() -> list[dict]:
+        async def _call() -> list[DBRow]:
             return await _pg_get_chat_history_for_ai_async(
                 await _resolve_session_id_async(session_id, user_id),
                 limit,
