@@ -659,7 +659,7 @@ def parse_profile_row(row: DBRow | None) -> DBRow:
 
     ctx = _parse_json(row.get("context"))
     return {
-        "id": row.get("id"),
+        "id": str(row.get("id")) if row.get("id") is not None else "",
         "user_name": row.get("user_name", ""),
         "partner_name": row.get("partner_name", ""),
         "affection": row.get("affection", 50),
@@ -761,7 +761,7 @@ def parse_session_row(row: DBRow | None) -> DBRow:
     if not row:
         return {}
     return {
-        "id": row.get("id"),
+        "id": str(row.get("id")) if row.get("id") is not None else "",
         "name": row.get("name", "New Chat"),
         "is_active": row.get("is_active", False),
         "message_count": row.get("message_count", 0),
@@ -886,8 +886,10 @@ SQL_MESSAGE_UPDATE_DECRYPTED = (
 def parse_message_row(row: DBRow) -> DBRow:
     """Convert a raw messages row into the public dict shape."""
     return {
-        "id": row.get("id"),
-        "session_id": row.get("session_id"),
+        "id": str(row.get("id")) if row.get("id") is not None else "",
+        "session_id": str(row.get("session_id"))
+        if row.get("session_id") is not None
+        else "",
         "role": row.get("role"),
         "content": row.get("content"),
         "attachments": parse_json(row.get("attachments", "[]")),

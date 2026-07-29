@@ -472,7 +472,7 @@ async def handle_user_message(
         return "Please enter a message!"
 
     active_session = await Database.get_active_session(user_id)
-    session_id = active_session["id"]
+    session_id = str(active_session["id"])
     cached_images = await asyncio.to_thread(_cache_images_from_message, user_message)
 
     ctx = LLMContext.from_profile(profile).require_configured()
@@ -581,7 +581,7 @@ async def handle_user_message_streaming(
 
     if session_id is None:
         active_session = await Database.get_active_session(user_id)
-        session_id = active_session["id"]
+        session_id = str(active_session["id"])
     else:
         active_session = {"id": session_id}
 

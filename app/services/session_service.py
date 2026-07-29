@@ -69,7 +69,7 @@ class SessionService:
     ) -> str:
         """Persist a disconnect note and update aggregate session history (async)."""
         active_session = await Database.get_active_session(user_id)
-        session_id = active_session["id"]
+        session_id = str(active_session["id"])
 
         # Calculate duration if possible
         history = profile.get("session_history") or {}

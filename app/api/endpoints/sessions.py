@@ -64,7 +64,7 @@ async def api_get_chat_history(
             active_session = await get_active_session_async(user_id)
             if active_session:
                 chat_history = await get_chat_history_async(
-                    active_session["id"],
+                    str(active_session["id"]),
                     limit=effective_limit,
                     recent=True,
                     user_id=user_id,
@@ -73,7 +73,7 @@ async def api_get_chat_history(
                 chat_history = []
         return {
             "status": "success",
-            "active_session_id": active_session["id"] if active_session else None,
+            "active_session_id": str(active_session["id"]) if active_session else None,
             "chat_history": chat_history,
         }
     except Exception as e:
@@ -185,7 +185,7 @@ async def api_delete_session(
             active_session = await get_active_session_async(user_id)
             if active_session:
                 chat_history = await get_chat_history_async(
-                    active_session["id"], limit=50, recent=True, user_id=user_id
+                    str(active_session["id"]), limit=50, recent=True, user_id=user_id
                 )
             else:
                 chat_history = []
@@ -213,9 +213,8 @@ async def api_clear_chat(
     try:
         if not session_id:
             active_session = await get_active_session_async(user_id)
-            session_id = active_session["id"]
+            session_id = str(active_session["id"])
 
-        assert isinstance(session_id, str)
         _ = await clear_session_messages_async(session_id, user_id=user_id)
 
         client_id = get_client_id(request)

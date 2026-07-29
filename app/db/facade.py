@@ -155,7 +155,7 @@ async def _resolve_session_id_async(session_id: str | None, user_id: str) -> str
     if session_id is not None:
         return session_id
     active = await _pg_get_active_session_async(user_id)
-    return active["id"]
+    return str(active["id"])
 
 
 class TenantScopeError(RuntimeError):
@@ -358,7 +358,7 @@ class Database:
         async def _call() -> int | None:
             active = await _pg_get_active_session_async(user_id)
             return await _pg_add_session_event_async(
-                active["id"], content, interface, user_id=user_id
+                str(active["id"]), content, interface, user_id=user_id
             )
 
         return _call()

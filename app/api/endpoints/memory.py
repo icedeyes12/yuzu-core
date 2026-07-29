@@ -18,7 +18,7 @@ async def api_rebuild_structured_memory(user_id: str = Depends(get_current_user)
     """Rebuild structured memory for the active session."""
     try:
         active_session = await Database.get_active_session(user_id)
-        session_id = active_session["id"]
+        session_id = str(active_session["id"])
 
         result = await MemoryService.rebuild_structured_memory_async(
             session_id, user_id=user_id

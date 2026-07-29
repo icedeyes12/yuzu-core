@@ -77,8 +77,7 @@ async def api_get_profile(
             active_session = await get_active_session_async(user_id)
         else:
             active_session = {"id": session_id}
-        session_id = active_session["id"]
-        assert isinstance(session_id, str)
+        session_id = str(active_session["id"])
         chat_history = await get_chat_history_async(
             session_id=session_id, limit=50, recent=True, user_id=user_id
         )
