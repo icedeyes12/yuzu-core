@@ -167,12 +167,17 @@ async function loadProviderSettings() {
 		});
 		saveModelCatalog(modelCatalog);
 
+		const byok = JSON.parse(
+			(BYOK_STORAGE_KEY && localStorage.getItem(BYOK_STORAGE_KEY)) || "{}",
+		);
 		const providersList = listProviders();
 
 		providersList.forEach((provObj) => {
 			const provider = provObj.id;
 			const isCustom = provObj.custom;
 			const isActive = provider === data.current_provider;
+			const provKey = byok[provider]?.api_key || "";
+			const provUrl = byok[provider]?.base_url || "";
 
 			const card = document.createElement("div");
 			card.className = `provider-card ${isActive ? "active-provider" : ""}`;
@@ -189,7 +194,7 @@ async function loadProviderSettings() {
 					<div class="form-group">
 						<label for="key-${provider}">API Key (Saved in browser)</label>
 						<div class="provider-input-row">
-							<input type="password" id="key-${provider}" class="provider-flex-input" placeholder="sk-..." autocomplete="off">
+							<input type="password" id="key-${provider}" class="provider-flex-input" placeholder="sk-..." autocomplete="off" value="${provKey}">
 							<button class="btn btn-secondary btn-sm save-byok-btn" type="button" data-provider="${provider}">Save Key</button>
 						</div>
 					</div>
@@ -199,7 +204,7 @@ async function loadProviderSettings() {
 				innerHtml += `
 					<div class="form-group">
 						<label for="url-${provider}">Base URL</label>
-						<input type="text" id="url-${provider}" placeholder="https://api.openai.com/v1" autocomplete="url">
+						<input type="text" id="url-${provider}" placeholder="https://api.openai.com/v1" autocomplete="url" value="${provUrl}">
 					</div>
 				`;
 			}

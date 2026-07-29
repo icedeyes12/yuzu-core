@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from app.core.llm_context import LLMContext
+from app.core.context import MissingProviderKeyError
 from app.providers.base import AIProvider, ProviderCapabilities, _rate_limit_provider
 from app.tools.multimodal import multimodal_tools
 from app.tools.schemas import StreamToolEvent
@@ -175,6 +176,8 @@ class ChutesProvider(AIProvider):
                     self._models_cache_data = sorted(set(ids))
                     self._models_cache_at = now
                     return self._models_cache_data
+        except MissingProviderKeyError:
+            raise
         except Exception:
             pass
         return self.available_models
@@ -256,6 +259,8 @@ class ChutesProvider(AIProvider):
                     self._last_raw_response = result
                     return (200, result)
                 return (response.status_code, None, response.text[:200])
+            except MissingProviderKeyError:
+                raise
             except Exception as e:
                 return (0, None, str(e))
 
@@ -384,6 +389,8 @@ class ChutesProvider(AIProvider):
 
         except asyncio.CancelledError:
             raise
+        except MissingProviderKeyError:
+            raise
         except Exception as e:
             logger.error("Chutes streaming error: %s", repr(e), exc_info=True)
             error_msg = str(e)
@@ -416,5 +423,7 @@ class ChutesProvider(AIProvider):
                     }
                 )
             return results
+        except MissingProviderKeyError:
+            raise
         except Exception:
             return []

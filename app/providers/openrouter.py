@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from app.core.llm_context import LLMContext
+from app.core.context import MissingProviderKeyError
 from app.providers.base import AIProvider, ProviderCapabilities
 from app.tools.multimodal import multimodal_tools
 from app.tools.schemas import StreamToolEvent
@@ -47,6 +48,8 @@ class OpenRouterProvider(AIProvider):
                 keyring = get_request_keyring("openrouter")
                 if keyring and keyring.key:
                     key = keyring.key
+            except MissingProviderKeyError:
+                raise
             except Exception:  # noqa: BLE001
                 pass
             headers = {"Authorization": f"Bearer {key}"} if key else {}
@@ -60,6 +63,8 @@ class OpenRouterProvider(AIProvider):
                 for m in (data.get("data") or [])
                 if isinstance(m, dict) and isinstance(model_id := m.get("id"), str)
             ]
+        except MissingProviderKeyError:
+            raise
         except Exception:
             return []
 
@@ -143,6 +148,8 @@ class OpenRouterProvider(AIProvider):
             if response.status_code == 429:
                 return "Rate limit exceeded. Please wait a moment and try again."
             return None
+        except MissingProviderKeyError:
+            raise
         except Exception:
             return None
 
@@ -172,6 +179,8 @@ class OpenRouterProvider(AIProvider):
                 f"[OpenRouter] raw error {response.status_code}: {response.text[:500]}"
             )
             return None
+        except MissingProviderKeyError:
+            raise
         except Exception as e:
             logger.error(
                 f"[OpenRouter] exception in send_message_raw: {type(e).__name__}: {e}"
@@ -296,6 +305,8 @@ class OpenRouterProvider(AIProvider):
                             response.text[:200],
                         )
                         yield f"\n[System] API returned HTTP {response.status_code}. Please try again."
+        except MissingProviderKeyError:
+            raise
         except Exception as e:
             logger.error("OpenRouter streaming error: %s", repr(e), exc_info=True)
             error_msg = str(e)
@@ -320,5 +331,7 @@ class OpenRouterProvider(AIProvider):
                     }
                 )
             return results
+        except MissingProviderKeyError:
+            raise
         except Exception:
             return []
