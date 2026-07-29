@@ -140,7 +140,7 @@ class ConfigService:
         if model_name:
             if not provider_name.startswith("custom_"):
                 # Warning: We no longer do strict model presence validation here.
-                # Since we use BYOK (client-side keys), the backend may not have 
+                # Since we use BYOK (client-side keys), the backend may not have
                 # a hydrated list of models via get_models() at save time.
                 pass
 

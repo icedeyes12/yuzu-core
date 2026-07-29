@@ -119,7 +119,8 @@ class TestMessageParsers:
             "timestamp": "2026-01-01 00:00:00",
         }
         out = parse_message_row(row)
-        assert out["id"] == 1
+        assert out["id"] == "1"
+        assert out["session_id"] == "2"
         assert out["role"] == "user"
         assert out["content"] == "hi"
         assert out["timestamp"] == "2026-01-01 00:00:00"

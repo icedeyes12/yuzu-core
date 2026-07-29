@@ -52,7 +52,7 @@ class ConversationService:
             attachments = await ConversationService.process_image_uploads(images)
 
         active_session = await Database.get_active_session(user_id)
-        session_id = active_session["id"]
+        session_id = str(active_session["id"])
 
         # Build text string for display in history
         history_summary = "Processed pending knowledge items"
