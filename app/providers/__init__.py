@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.providers.anthropic import AnthropicProvider
+from app.core.context import MissingProviderKeyError
 from app.providers.base import (
     AIProviderManager,
     ProviderCapabilities,

@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from app.core.llm_context import LLMContext
+from app.core.context import MissingProviderKeyError
 from app.providers.base import AIProvider, ProviderCapabilities
 from app.tools.schemas import StreamToolEvent
 
@@ -75,6 +76,8 @@ class CerebrasProvider(AIProvider):
                 result = response.json()
                 return result["choices"][0]["message"]["content"].strip()
             return None
+        except MissingProviderKeyError:
+            raise
         except Exception:
             return None
 
@@ -146,6 +149,8 @@ class CerebrasProvider(AIProvider):
                             response.text[:200],
                         )
                         yield f"\n[System] API returned HTTP {response.status_code}. Please try again."
+        except MissingProviderKeyError:
+            raise
         except Exception as e:
             logger.error("Cerebras streaming error: %s", repr(e), exc_info=True)
             error_msg = str(e)

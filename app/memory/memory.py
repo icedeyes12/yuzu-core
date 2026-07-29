@@ -27,6 +27,8 @@ from app.db import (
     update_pipeline_state_async,
 )
 from app.db.queries import SQL_PIPELINE_STATE_LOCK, SQL_PIPELINE_STATE_UPDATE
+from app.core.context import get_request_keyrings, set_request_keyrings, clear_request_keyring
+from app.core.context import RequestKeyring
 from app.memory.embedder import embed_text_async
 from app.memory.extractor import extract_batch_async
 from app.memory.graph import GraphMemoryRepository
@@ -58,7 +60,7 @@ HISTORICAL_BACKLOG_THRESHOLD = 1000
 
 # ── Background state ─────────────────────────────────────────────────────────
 
-_pending_sessions: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
+_pending_sessions: asyncio.Queue[tuple[str, str | None, dict[str, RequestKeyring]]] = asyncio.Queue()
 _queued_sessions: set[tuple[str, str]] = set()
 _worker_task: asyncio.Task[None] | None = None
 
@@ -526,11 +528,14 @@ async def run_memory_pipeline_async(
 async def _background_worker_async():
     """Async background worker."""
     while True:
-        session_to_process, user_id = await _pending_sessions.get()
+        item = await _pending_sessions.get()
+        session_to_process, user_id, keyrings = item[0], item[1], item[2]
         if not session_to_process or not user_id:
             _pending_sessions.task_done()
             continue
         try:
+            if keyrings:
+                set_request_keyrings(keyrings)
             # Retrieve count from DB-persisted fence
             started = time.monotonic()
             for _ in range(MAX_BATCHES_PER_WORKER):
@@ -568,6 +573,7 @@ async def _background_worker_async():
         except Exception as e:
             logger.error(f"Background worker error: {e}")
         finally:
+            clear_request_keyring()
             _queued_sessions.discard((session_to_process, user_id))
             _pending_sessions.task_done()
 
@@ -584,10 +590,11 @@ async def enqueue_memory_pipeline_async(session_id: str, user_id: str) -> bool:
         return False
 
     _queued_sessions.add(queue_key)
+    keyrings = get_request_keyrings()
     try:
         if _worker_task is None or _worker_task.done():
             _worker_task = asyncio.create_task(_background_worker_async())
-        await _pending_sessions.put((session_id, user_id))
+        await _pending_sessions.put((session_id, user_id, keyrings))
     except Exception:
         _queued_sessions.discard(queue_key)
         raise

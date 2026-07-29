@@ -204,4 +204,7 @@ async def extract_batch_async(
         response_format=_EXTRACTION_SCHEMA,
         profile=profile,
     )
+    if response is None:
+        raise RuntimeError("Memory LLM call failed (returned None)")
+        
     return normalize_extraction(_parse_extraction_response(response), len(messages))

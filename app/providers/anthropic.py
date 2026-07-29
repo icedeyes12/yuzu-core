@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from app.core.llm_context import LLMContext
+from app.core.context import MissingProviderKeyError
 from app.providers.base import AIProvider, ProviderCapabilities
 from app.tools.schemas import StreamToolEvent
 
@@ -132,6 +133,8 @@ class AnthropicProvider(AIProvider):
                 "[Anthropic] %s: %s", response.status_code, response.text[:300]
             )
             return None
+        except MissingProviderKeyError:
+            raise
         except Exception as e:
             logger.error("[Anthropic] send_message error: %s", e)
             return None
@@ -162,6 +165,8 @@ class AnthropicProvider(AIProvider):
                 "[Anthropic] raw %s: %s", response.status_code, response.text[:300]
             )
             return None
+        except MissingProviderKeyError:
+            raise
         except Exception as e:
             logger.error("[Anthropic] send_message_raw error: %s", e)
             return None
@@ -279,6 +284,10 @@ class AnthropicProvider(AIProvider):
                             },
                         )
 
+        except MissingProviderKeyError:
+
+            raise
+
         except Exception as e:
             logger.error("[Anthropic] streaming error: %s", repr(e), exc_info=True)
             yield f"Error: {type(e).__name__} - {e}"
@@ -300,5 +309,7 @@ class AnthropicProvider(AIProvider):
                     }
                 )
             return results
+        except MissingProviderKeyError:
+            raise
         except Exception:
             return []
