@@ -16,6 +16,12 @@ import time
 from datetime import datetime, timedelta
 from typing import Any
 
+from app.core.context import (
+    RequestKeyring,
+    clear_request_keyring,
+    get_request_keyrings,
+    set_request_keyrings,
+)
 from app.db import (
     Database,
     get_message_count_async,
@@ -27,8 +33,6 @@ from app.db import (
     update_pipeline_state_async,
 )
 from app.db.queries import SQL_PIPELINE_STATE_LOCK, SQL_PIPELINE_STATE_UPDATE
-from app.core.context import get_request_keyrings, set_request_keyrings, clear_request_keyring
-from app.core.context import RequestKeyring
 from app.memory.embedder import embed_text_async
 from app.memory.extractor import extract_batch_async
 from app.memory.graph import GraphMemoryRepository

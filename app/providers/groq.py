@@ -7,8 +7,8 @@ from typing import Any
 
 import httpx
 
-from app.core.llm_context import LLMContext
 from app.core.context import MissingProviderKeyError
+from app.core.llm_context import LLMContext
 from app.providers.base import AIProvider, ProviderCapabilities
 from app.tools.schemas import StreamToolEvent
 
@@ -220,7 +220,6 @@ class GroqProvider(AIProvider):
                                 continue
 
         except MissingProviderKeyError:
-
             raise
 
         except Exception as e:
