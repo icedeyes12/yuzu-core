@@ -131,8 +131,9 @@ export function renderMessageContent(rawText, _isUser = false) {
 	try {
 		// Use marked if available
 		if (window.marked) {
-			// Configure marked if not already done
-			if (!window._markedConfigured) {
+			// If fence renderer is already installed (by store-renderer.js), just parse.
+			// Otherwise configure basic options (fence renderer will be installed later).
+			if (!window._fenceRendererInstalled && !window._markedConfigured) {
 				window.marked.setOptions({
 					breaks: true,
 					gfm: true,

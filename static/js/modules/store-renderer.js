@@ -2,6 +2,61 @@ import { createMessageElement, renderMessageContent } from "./messages.js";
 import { scrollToBottom } from "./scroll.js";
 import { chatStore } from "./store.js";
 import { renderToolResultEvent } from "./tool-renderer/index.js";
+import {
+	buildFenceHTML,
+	activateFenceBlocks,
+	flushPendingFenceBlocks,
+} from "./fence-registry.js";
+// Side-effect: registers mermaid, html, and default handlers
+import "./fence-components.js";
+
+// ── Custom marked renderer ─────────────────────────────────────────────────────
+// Intercepts fenced code blocks and routes them through the fence registry.
+// Installed once at module load.
+(function _installMarkedFenceRenderer() {
+	if (!window.marked) return; // marked not yet loaded — will be installed lazily
+	_applyMarkedFenceRenderer();
+	// Also hook if marked loads later (belt-and-suspenders for dynamic script load order)
+})();
+
+function _applyMarkedFenceRenderer() {
+	if (!window.marked || window._fenceRendererInstalled) return;
+	window._fenceRendererInstalled = true;
+
+	const renderer = new window.marked.Renderer();
+
+	renderer.code = function (tokenOrCode, infostring, _escaped) {
+		// marked v5+ passes a token object; older versions pass (code, lang, escaped)
+		let source, lang;
+		if (tokenOrCode && typeof tokenOrCode === "object" && "text" in tokenOrCode) {
+			source = tokenOrCode.text ?? "";
+			lang = tokenOrCode.lang ?? "";
+		} else {
+			source = String(tokenOrCode ?? "");
+			lang = infostring ?? "";
+		}
+
+		// During streaming the message hasn't "closed" yet, so we pass
+		// isComplete=false for buffered blocks. The store-renderer patches
+		// them to complete when the message is frozen.
+		//
+		// Limitation: marked sees the full content it was given at parse time.
+		// "Incomplete" means the last fence token has no closing ``` yet, which
+		// we detect by checking if the source text ends mid-block.  For simplicity
+		// we pass isComplete=true here (marked only calls this renderer when it
+		// has a complete token), and rely on the outer message-level freeze signal
+		// to control buffered block visibility.
+		return buildFenceHTML(lang, source, true);
+	};
+
+	window.marked.setOptions({
+		breaks: true,
+		gfm: true,
+		sanitize: false,
+		renderer,
+	});
+	window._markedConfigured = true;
+}
 
 /**
  * The DOMRenderer acts strictly as a subscriber to ConversationStore.
@@ -69,6 +124,11 @@ export class DOMRenderer {
 		const contentContainer = el.querySelector(".message-content");
 		if (!contentContainer) return;
 
+		// Ensure marked renderer is installed (handles late script load order)
+		_applyMarkedFenceRenderer();
+
+		const isFrozen = msg.metadata?.isFrozen ?? false;
+
 		let html;
 
 		// 1. Base Content rendering based on role
@@ -91,7 +151,14 @@ export class DOMRenderer {
 			html = renderMessageContent(msg.content, msg.role === "user");
 		}
 
-		// 2. Attachments
+		// 2. For streaming assistant messages, classify each buffered fence:
+		//    - complete (closing fence seen in raw) → render immediately
+		//    - incomplete (still streaming) → show loading placeholder
+		if (msg.role === "assistant") {
+			html = _classifyBufferedFences(html, msg.content);
+		}
+
+		// 3. Attachments
 		if (msg.attachments?.length) {
 			const attachmentsHtml = msg.attachments
 				.map((att) => {
@@ -115,7 +182,7 @@ export class DOMRenderer {
 			html += `<div class="attachments">${attachmentsHtml}</div>`;
 		}
 
-		// 3. Tool Calls (For Assistant messages)
+		// 4. Tool Calls (For Assistant messages)
 		if (msg.toolCalls?.length) {
 			const toolsHtml = msg.toolCalls
 				.map((tc) => {
@@ -137,11 +204,30 @@ export class DOMRenderer {
 			html += `<div class="tools-container">${toolsHtml}</div>`;
 		}
 
+		// 5. Preserve activated fence nodes across innerHTML rewrites.
+		//    Stash live DOM nodes keyed by lang+occurrence-index before clobbering.
+		const liveNodes = _stashActivatedFences(contentContainer);
+
 		if (contentContainer.getAttribute("data-last-hash") !== html) {
 			contentContainer.innerHTML = html;
 			contentContainer.setAttribute("data-last-hash", html);
+
+			// Restore live activated fence nodes (no re-render, no re-activate)
+			_restoreActivatedFences(contentContainer, liveNodes);
+
+			// Activate newly-rendered immediate fence blocks
+			activateFenceBlocks(contentContainer);
 			this._enhanceContent(contentContainer);
+		} else {
+			// Hash unchanged — still restore in case a pending block just completed
+			_restoreActivatedFences(contentContainer, liveNodes);
 		}
+
+		// 6. Flush any pending blocks whose fences are now complete in the raw content.
+		//    This runs on every tick — not only when frozen — so diagrams appear
+		//    the moment the closing fence arrives, while the rest streams on.
+		flushPendingFenceBlocks(contentContainer);
+
 		const copyButton = el.querySelector(".copy-message-btn");
 		if (copyButton) {
 			copyButton.setAttribute("data-message-content", msg.content || "");
@@ -151,19 +237,8 @@ export class DOMRenderer {
 	_enhanceContent(contentContainer) {
 		if (window.hljs) {
 			contentContainer.querySelectorAll("pre code").forEach((block) => {
-				if (block.classList.contains("language-mermaid") && window.mermaid) {
-					const pre = block.parentElement;
-					const div = document.createElement("div");
-					div.className = "mermaid";
-					div.textContent = block.textContent;
-					pre.parentNode.replaceChild(div, pre);
-					try {
-						window.mermaid.init(undefined, div);
-					} catch (_error) {
-						return;
-					}
-					return;
-				}
+				// Skip fence-registry managed blocks (they handle their own activation)
+				if (block.closest("[data-fence-lang]")) return;
 				if (!block.classList.contains("hljs"))
 					window.hljs.highlightElement(block);
 			});
@@ -233,6 +308,132 @@ function escapeHtml(value) {
 		.replace(/>/g, "&gt;")
 		.replace(/"/g, "&quot;")
 		.replace(/'/g, "&#39;");
+}
+
+/**
+ * Classify buffered fences in rendered HTML against the raw markdown source.
+ * Complete fences (opening + closing ``` both present) are left as-is so they
+ * render immediately.  Incomplete fences (still streaming) are replaced with a
+ * loading placeholder — hidden until the closing fence arrives.
+ *
+ * This runs on every store update tick. `flushPendingFenceBlocks` then
+ * activates any placeholder whose fence became complete.
+ *
+ * @param {string} html        — rendered HTML from marked
+ * @param {string} rawContent  — original raw markdown text
+ * @returns {string}
+ */
+function _classifyBufferedFences(html, rawContent) {
+	const BUFFERED_LANGS = ["mermaid", "html"];
+	let result = html;
+	const raw = rawContent || "";
+
+	for (const lang of BUFFERED_LANGS) {
+		if (!result.includes(`data-fence-lang="${lang}"`)) continue;
+
+		const openRe = new RegExp("^```" + lang + "\\b", "im");
+		if (!openRe.test(raw)) continue;
+
+		// Count standalone closing ``` lines that appear AFTER the opening fence
+		const openMatch = openRe.exec(raw);
+		const afterOpen = raw.slice((openMatch?.index ?? 0) + (openMatch?.[0]?.length ?? 0));
+		const closeCount = afterOpen.split("\n").filter((l) => l.trim() === "```").length;
+
+		// If no closing fence yet — fence is still streaming — replace with placeholder
+		if (closeCount === 0) {
+			result = _replaceOuterDiv(
+				result,
+				`data-fence-lang="${lang}"`,
+				`<div class="fence-block fence-block--pending" data-fence-lang="${lang}" data-fence-strategy="buffered"></div>`,
+			);
+		}
+		// closeCount > 0 → fence is complete → leave the rendered component in place
+	}
+
+	return result;
+}
+
+/**
+ * Replace the outer <div> containing `marker` in `html` with `replacement`.
+ * Uses a depth counter to correctly match nested divs.
+ *
+ * @param {string} html
+ * @param {string} marker   — attribute string to locate the target div
+ * @param {string} replacement
+ * @returns {string}
+ */
+function _replaceOuterDiv(html, marker, replacement) {
+	const markerIdx = html.indexOf(marker);
+	if (markerIdx === -1) return html;
+
+	const divStart = html.lastIndexOf("<div", markerIdx);
+	if (divStart === -1) return html;
+
+	let depth = 0;
+	let i = divStart;
+	let divEnd = -1;
+	while (i < html.length) {
+		const nextOpen = html.indexOf("<div", i);
+		const nextClose = html.indexOf("</div>", i);
+		if (nextOpen !== -1 && nextOpen < nextClose) {
+			depth++;
+			i = nextOpen + 1;
+		} else if (nextClose !== -1) {
+			depth--;
+			if (depth === 0) {
+				divEnd = nextClose + 6;
+				break;
+			}
+			i = nextClose + 1;
+		} else {
+			break;
+		}
+	}
+
+	if (divEnd === -1) return html;
+	return html.slice(0, divStart) + replacement + html.slice(divEnd);
+}
+
+/**
+ * Stash all currently-activated fence DOM nodes from `root`.
+ * Returns a map of "lang:occurrenceIndex" → live HTMLElement.
+ * Called before innerHTML is overwritten.
+ *
+ * @param {HTMLElement} root
+ * @returns {Map<string, HTMLElement>}
+ */
+function _stashActivatedFences(root) {
+	const stash = new Map();
+	const counts = {};
+	for (const el of root.querySelectorAll("[data-fence-lang][data-fence-activated]")) {
+		const lang = el.dataset.fenceLang || "__unknown__";
+		counts[lang] = (counts[lang] || 0) + 1;
+		stash.set(`${lang}:${counts[lang]}`, el);
+	}
+	return stash;
+}
+
+/**
+ * After innerHTML rewrite, find placeholder slots and swap in live nodes.
+ * Placeholder slots are NEW (not yet activated) elements with the same lang.
+ * This preserves mermaid SVG renders and iframe document state across re-renders.
+ *
+ * @param {HTMLElement} root
+ * @param {Map<string, HTMLElement>} stash
+ */
+function _restoreActivatedFences(root, stash) {
+	if (stash.size === 0) return;
+	const counts = {};
+	for (const el of root.querySelectorAll("[data-fence-lang]")) {
+		if (el.dataset.fenceActivated) continue; // already live — shouldn't happen post-innerHTML
+		const lang = el.dataset.fenceLang || "__unknown__";
+		counts[lang] = (counts[lang] || 0) + 1;
+		const key = `${lang}:${counts[lang]}`;
+		const live = stash.get(key);
+		if (live) {
+			el.replaceWith(live);
+		}
+	}
 }
 
 export const domRenderer = new DOMRenderer("chatContainer");
