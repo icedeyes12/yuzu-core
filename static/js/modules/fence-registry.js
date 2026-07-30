@@ -30,6 +30,7 @@ const _registry = new Map(); // lang → FenceHandler
 const _activationLocks = new WeakSet();
 const _rootActivationLocks = new WeakSet();
 const _cleanupHandlers = new WeakMap();
+const _cancellationHandlers = new WeakMap();
 
 /**
  * Register a fenced-block handler for one or more language strings.
@@ -59,12 +60,17 @@ export function registerFenceCleanup(el, cleanup) {
 	if (el && typeof cleanup === "function") _cleanupHandlers.set(el, cleanup);
 }
 
+export function registerFenceCancellation(el, cancel) {
+	if (el && typeof cancel === "function") _cancellationHandlers.set(el, cancel);
+}
+
 export function cleanupFenceBlocks(root) {
 	if (!root) return;
 	const blocks = root.matches?.("[data-fence-lang]")
 		? [root]
 		: [...(root.querySelectorAll?.("[data-fence-lang]") || [])];
 	for (const el of blocks) {
+		_cancellationHandlers.delete(el);
 		const cleanup = _cleanupHandlers.get(el);
 		if (!cleanup) continue;
 		_cleanupHandlers.delete(el);
@@ -72,6 +78,23 @@ export function cleanupFenceBlocks(root) {
 			cleanup();
 		} catch (error) {
 			console.warn("Fence cleanup failed", { error });
+		}
+	}
+}
+
+export function cancelFenceAsyncWork(root) {
+	if (!root) return;
+	const blocks = root.matches?.("[data-fence-lang]")
+		? [root]
+		: [...(root.querySelectorAll?.("[data-fence-lang]") || [])];
+	for (const el of blocks) {
+		const cancel = _cancellationHandlers.get(el);
+		if (!cancel) continue;
+		_cancellationHandlers.delete(el);
+		try {
+			cancel();
+		} catch (error) {
+			console.warn("Fence cancellation failed", { error });
 		}
 	}
 }

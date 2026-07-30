@@ -11,6 +11,7 @@
 
 import {
 	escAttr,
+	registerFenceCancellation,
 	registerFenceCleanup,
 	registerFenceHandler,
 } from "./fence-registry.js";
@@ -235,6 +236,9 @@ const mermaidHandler = {
 		});
 
 		if (diagramEl) void renderMermaidDiagram(diagramEl, source);
+		registerFenceCancellation(el, () => {
+			if (diagramEl) mermaidRenderTokens.delete(diagramEl);
+		});
 		registerFenceCleanup(el, () => {
 			if (diagramEl) mermaidRenderTokens.delete(diagramEl);
 		});
