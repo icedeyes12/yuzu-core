@@ -64,7 +64,9 @@ HISTORICAL_BACKLOG_THRESHOLD = 1000
 
 # ── Background state ─────────────────────────────────────────────────────────
 
-_pending_sessions: asyncio.Queue[tuple[str, str | None, dict[str, RequestKeyring]]] = asyncio.Queue()
+_pending_sessions: asyncio.Queue[tuple[str, str | None, dict[str, RequestKeyring]]] = (
+    asyncio.Queue()
+)
 _queued_sessions: set[tuple[str, str]] = set()
 _worker_task: asyncio.Task[None] | None = None
 
