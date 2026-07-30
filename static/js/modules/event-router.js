@@ -3,6 +3,7 @@ import {
 	serializeToolResultEvent,
 } from "./conversation-serializer.js";
 import { chatStore } from "./store.js";
+import { domRenderer } from "./store-renderer.js";
 
 /**
  * EventRouter receives Server-Sent Events (SSE) and decodes them into semantic
@@ -42,7 +43,10 @@ export class EventRouter {
 		if (controller && !controller.signal.aborted) controller.abort();
 		this.controllers.delete(sessionId);
 		this.activeTurnIds.delete(sessionId);
-		if (chatStore.sessionId === sessionId) chatStore.finishGeneration();
+		if (chatStore.sessionId === sessionId) {
+			chatStore.finishGeneration();
+			domRenderer.flushPendingRender();
+		}
 	}
 
 	/**
@@ -58,6 +62,7 @@ export class EventRouter {
 				this.pendingToolCalls.delete(callId);
 		}
 		if (chatStore.isGenerating) chatStore.finishGeneration();
+		domRenderer.flushPendingRender();
 	}
 
 	/**
