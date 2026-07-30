@@ -7,6 +7,60 @@ export let isLoadingOlder = false;
 let currentHistorySessionId = null;
 let historyRequest = null;
 let historyRequestSequence = 0;
+let scrollListenerAttached = false;
+
+async function _loadOlderMessages() {
+	if (isLoadingOlder || !chatStore.hasMoreOlder || !currentHistorySessionId)
+		return;
+
+	// Oldest message visible — use its timestamp as the cursor
+	const oldest = chatStore.messages[0];
+	if (!oldest) return;
+	const beforeTs = oldest.timestamp;
+	if (!beforeTs) return;
+
+	isLoadingOlder = true;
+	const chatContainer = document.getElementById("chatContainer");
+
+	try {
+		const res = await fetch(
+			`/api/chat_history/before?session_id=${encodeURIComponent(currentHistorySessionId)}&before_ts=${encodeURIComponent(beforeTs)}&limit=50`,
+			{ headers: { Accept: "application/json" } },
+		);
+		if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		const data = await res.json();
+		const older = Array.isArray(data.chat_history) ? data.chat_history : [];
+
+		// Preserve scroll position before prepending
+		const oldScrollHeight = chatContainer ? chatContainer.scrollHeight : 0;
+		chatStore.prependHistory(older, data.has_more ?? false);
+		// Scroll correction happens in DOMRenderer on "prepend" event using saved oldScrollHeight.
+		// We stash it on the container so the renderer can pick it up.
+		if (chatContainer)
+			chatContainer._prependOldScrollHeight = oldScrollHeight;
+
+		olderMessagesLoaded += older.length;
+	} finally {
+		isLoadingOlder = false;
+	}
+}
+
+function _setupScrollListener(chatContainer) {
+	if (scrollListenerAttached) return;
+	scrollListenerAttached = true;
+
+	let ticking = false;
+	chatContainer.addEventListener("scroll", () => {
+		if (ticking) return;
+		ticking = true;
+		requestAnimationFrame(() => {
+			ticking = false;
+			if (chatContainer.scrollTop < 100) {
+				void _loadOlderMessages();
+			}
+		});
+	});
+}
 
 export async function loadChatHistory(sessionId = null) {
 	const chatContainer = document.getElementById("chatContainer");
@@ -17,6 +71,7 @@ export async function loadChatHistory(sessionId = null) {
 	historyRequest = new AbortController();
 	chatContainer.classList.add("session-switching");
 	showChatSkeleton();
+	scrollListenerAttached = false;
 
 	try {
 		let data;
@@ -59,7 +114,12 @@ export async function loadChatHistory(sessionId = null) {
 		eventRouter.setActiveView(currentHistorySessionId);
 		olderMessagesLoaded = 0;
 		isLoadingOlder = false;
-		chatStore.loadHistory(currentHistorySessionId, history);
+		chatStore.loadHistory(
+			currentHistorySessionId,
+			history,
+			data.has_more || false,
+		);
+		_setupScrollListener(chatContainer);
 		return true;
 	} catch (error) {
 		if (error.name !== "AbortError" && requestId === historyRequestSequence) {

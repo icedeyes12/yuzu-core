@@ -12,6 +12,7 @@ from app.db import (
     get_active_session_async,
     get_all_sessions_async,
     get_chat_history_async,
+    get_chat_history_before_ts_async,
     rename_session_async,
     switch_session_async,
 )
@@ -75,9 +76,37 @@ async def api_get_chat_history(
             "status": "success",
             "active_session_id": str(active_session["id"]) if active_session else None,
             "chat_history": chat_history,
+            "has_more": len(chat_history) == (effective_limit or 50),
         }
     except Exception as e:
         log.error("Error getting chat history: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/chat_history/before")
+async def api_get_chat_history_before(
+    session_id: str,
+    before_ts: str,
+    limit: int = 50,
+    user_id: str = Depends(get_current_user),
+):
+    """Paginated upward scroll: return messages older than before_ts for a session."""
+    try:
+        if limit <= 0 or limit > 200:
+            limit = 50
+        chat_history = await get_chat_history_before_ts_async(
+            session_id=session_id,
+            before_ts=before_ts,
+            limit=limit,
+            user_id=user_id,
+        )
+        return {
+            "status": "success",
+            "chat_history": chat_history,
+            "has_more": len(chat_history) == limit,
+        }
+    except Exception as e:
+        log.error("Error getting chat history (before): %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -142,6 +171,7 @@ async def api_switch_session(
             "active_session_id": request.session_id,
             "session_id": request.session_id,
             "chat_history": chat_history,
+            "has_more": len(chat_history) == 50,
         }
     except HTTPException:
         raise

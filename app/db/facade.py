@@ -48,6 +48,9 @@ from app.db.models_async import (
     get_chat_history_async as _pg_get_chat_history_async,
 )
 from app.db.models_async import (
+    get_chat_history_before_ts_async as _pg_get_chat_history_before_ts_async,
+)
+from app.db.models_async import (
     get_chat_history_for_ai_async as _pg_get_chat_history_for_ai_async,
 )
 from app.db.models_async import (
@@ -307,6 +310,24 @@ class Database:
                 limit,
                 recent,
                 user_id=user_id,
+            )
+
+        return _call()
+
+    @staticmethod
+    def get_chat_history_before_ts(
+        session_id: str,
+        before_ts: str,
+        limit: int = 50,
+        *,
+        user_id: str,
+    ) -> Any:
+        """Fetch older history chunk before a timestamp (for infinite scroll)."""
+        _require_user_id("get_chat_history_before_ts", user_id)
+
+        async def _call() -> list[DBRow]:
+            return await _pg_get_chat_history_before_ts_async(
+                session_id, before_ts, limit, user_id=user_id
             )
 
         return _call()

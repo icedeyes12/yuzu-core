@@ -31,6 +31,7 @@ from app.db.queries import (
     SQL_MESSAGE_SELECT_AFTER_ID,
     SQL_MESSAGE_SELECT_ASC_ALL,
     SQL_MESSAGE_SELECT_ASC_LIMIT,
+    SQL_MESSAGE_SELECT_BEFORE_TS,
     SQL_MESSAGE_SELECT_CONTENT_BY_ID,
     SQL_MESSAGE_SELECT_DESC_LIMIT,
     SQL_MESSAGE_SELECT_ENCRYPTED,
@@ -378,6 +379,21 @@ async def get_session_messages_after_id_async(
     return [parse_message_row(r) for r in rows]
 
 
+async def get_chat_history_before_ts_async(
+    session_id: str,
+    before_ts: str,
+    limit: int = 50,
+    *,
+    user_id: str,
+) -> list[DBRow]:
+    """Fetch history chunk before a specific timestamp for infinite scroll."""
+    rows = await pg_fetchall_async(
+        SQL_MESSAGE_SELECT_BEFORE_TS, (session_id, user_id, before_ts, limit)
+    )
+    rows = list(reversed(rows))
+    return _trim_public_history_blocks(format_public_history_rows(rows))
+
+
 async def get_chat_history_async(
     session_id: str,
     limit: int | None = None,
@@ -640,6 +656,7 @@ __all__ = [
     "get_session_messages_async",
     "get_session_messages_after_id_async",
     "get_chat_history_async",
+    "get_chat_history_before_ts_async",
     "clear_session_messages_async",
     "get_message_count_async",
     "add_session_event_async",
