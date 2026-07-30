@@ -214,13 +214,12 @@ export class DOMRenderer {
 
 			// Restore live activated fence nodes (no re-render, no re-activate)
 			_restoreActivatedFences(contentContainer, liveNodes);
-
-			// Activate newly-rendered immediate fence blocks
 			activateFenceBlocks(contentContainer);
 			this._enhanceContent(contentContainer);
 		} else {
 			// Hash unchanged — still restore in case a pending block just completed
 			_restoreActivatedFences(contentContainer, liveNodes);
+			activateFenceBlocks(contentContainer);
 		}
 
 		// 6. Flush any pending blocks whose fences are now complete in the raw content.
