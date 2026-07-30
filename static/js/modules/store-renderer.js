@@ -406,6 +406,7 @@ function _stashActivatedFences(root) {
 	const stash = new Map();
 	const counts = {};
 	for (const el of root.querySelectorAll("[data-fence-lang][data-fence-activated]")) {
+		if (el.dataset.fenceInert) continue; // managed by parent component
 		const lang = el.dataset.fenceLang || "__unknown__";
 		counts[lang] = (counts[lang] || 0) + 1;
 		stash.set(`${lang}:${counts[lang]}`, el);
@@ -425,7 +426,8 @@ function _restoreActivatedFences(root, stash) {
 	if (stash.size === 0) return;
 	const counts = {};
 	for (const el of root.querySelectorAll("[data-fence-lang]")) {
-		if (el.dataset.fenceActivated) continue; // already live — shouldn't happen post-innerHTML
+		if (el.dataset.fenceActivated) continue;
+		if (el.dataset.fenceInert) continue; // managed by parent component
 		const lang = el.dataset.fenceLang || "__unknown__";
 		counts[lang] = (counts[lang] || 0) + 1;
 		const key = `${lang}:${counts[lang]}`;

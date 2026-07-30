@@ -174,59 +174,76 @@ const htmlPreviewHandler = {
 	strategy: "buffered",
 
 	buildHTML(source, _lang) {
-		const header = buildHeader("HTML Preview", [buildInspectBtn(), buildCopyBtn()]);
+		// Two named toggle buttons — only one visible at a time (toggled in activate)
+		const previewBtn = `<button class="fence-action-btn fence-preview-btn fence-action-btn--active" title="Show rendered preview" type="button">Preview</button>`;
+		const rawBtn = `<button class="fence-action-btn fence-rawcode-btn" title="Show raw HTML source" type="button">Raw Code</button>`;
+		const header = buildHeader("HTML Preview", [previewBtn, rawBtn, buildCopyBtn()]);
+
+		// Inspect view: reuse the default code block component so hljs applies.
+		// Built at HTML-generation time; activated later by defaultCodeHandler.activate().
+		// data-fence-inert marks it as excluded from the outer registry scan.
+		const inspectBlock = defaultCodeHandler.buildHTML(source, "html")
+			.replace('data-fence-lang="html"', 'data-fence-lang="html" data-fence-inert="1"');
+
 		return `<div class="fence-block fence-block--html-preview" data-fence-lang="html" data-fence-source="${escAttr(source)}">
   ${header}
   <div class="fence-html-body">
-    <iframe class="fence-html-iframe" sandbox="allow-scripts allow-forms allow-popups allow-modals" title="HTML Preview"></iframe>
-    <pre class="fence-html-source" data-view="source" hidden><code>${escAttr(source)}</code></pre>
+    <iframe class="fence-html-iframe" sandbox="allow-scripts allow-forms allow-popups allow-modals" srcdoc="${escAttr(source)}" title="HTML Preview"></iframe>
+    <div class="fence-html-source-block" hidden>${inspectBlock}</div>
   </div>
 </div>`;
 	},
 
 	activate(el, source) {
 		const iframe = el.querySelector(".fence-html-iframe");
-		const sourceEl = el.querySelector(".fence-html-source");
-		let showingSource = false;
+		const sourceBlock = el.querySelector(".fence-html-source-block");
+		const previewBtn = el.querySelector(".fence-preview-btn");
+		const rawBtn = el.querySelector(".fence-rawcode-btn");
 
-		// Write HTML into sandboxed iframe
+		// Auto-resize iframe to its content height once loaded.
+		// srcdoc triggers load; no sandbox escape needed — iframe is same-null-origin.
 		if (iframe) {
-			const doc = iframe.contentDocument || iframe.contentWindow?.document;
-			if (doc) {
-				doc.open();
-				doc.write(source);
-				doc.close();
+			const resize = () => {
+				try {
+					const h = iframe.contentDocument?.body?.scrollHeight;
+					if (h && h > 0) iframe.style.height = `${h + 32}px`;
+				} catch (_err) {
+					// sandboxed null-origin — leave CSS min-height
+				}
+			};
+			iframe.addEventListener("load", resize, { once: true });
+		}
 
-				// Auto-resize to content height
-				iframe.onload = () => {
-					try {
-						const h = iframe.contentDocument?.body?.scrollHeight;
-						if (h && h > 0) iframe.style.height = `${h + 32}px`;
-					} catch (_err) {
-						// cross-origin guard — leave default height
-					}
-				};
+		// Activate the inner code block (hljs highlight) — runs once
+		if (sourceBlock) {
+			const innerFenceEl = sourceBlock.querySelector("[data-fence-lang]");
+			if (innerFenceEl && !innerFenceEl.dataset.fenceActivated) {
+				innerFenceEl.dataset.fenceActivated = "1";
+				defaultCodeHandler.activate(innerFenceEl, source);
 			}
 		}
 
-		// Inspect toggle
-		el.querySelector(".fence-inspect-btn")?.addEventListener("click", () => {
-			showingSource = !showingSource;
-			if (iframe) iframe.hidden = showingSource;
-			sourceEl.hidden = !showingSource;
-			const btn = el.querySelector(".fence-inspect-btn");
-			if (btn) btn.classList.toggle("fence-action-btn--active", showingSource);
-		});
+		// Toggle: Preview ⇄ Raw Code — visibility only, no re-render
+		let showingPreview = true;
 
-		// Copy
+		function setView(preview) {
+			showingPreview = preview;
+			if (iframe) iframe.hidden = !preview;
+			if (sourceBlock) sourceBlock.hidden = preview;
+			previewBtn?.classList.toggle("fence-action-btn--active", preview);
+			rawBtn?.classList.toggle("fence-action-btn--active", !preview);
+		}
+
+		previewBtn?.addEventListener("click", () => setView(true));
+		rawBtn?.addEventListener("click", () => setView(false));
+
+		// Copy always uses raw source
 		el.querySelector(".fence-copy-btn")?.addEventListener("click", () => {
 			copyToClipboard(el.dataset.fenceSource || source);
 			const btn = el.querySelector(".fence-copy-btn");
 			if (btn) {
 				btn.textContent = "Copied!";
-				setTimeout(() => {
-					btn.innerHTML = `${iconCopy()} Copy`;
-				}, 1200);
+				setTimeout(() => { btn.innerHTML = `${iconCopy()} Copy`; }, 1200);
 			}
 		});
 	},
