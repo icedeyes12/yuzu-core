@@ -38,15 +38,15 @@ export class DOMRenderer {
 		this.pendingRender = { messages, isGenerating, error, eventObj };
 		if (this.renderFrame !== null) return;
 		if (typeof requestAnimationFrame === "function") {
-			this.renderFrameCancel = cancelAnimationFrame;
-			this.renderFrame = requestAnimationFrame(() => {
+			this.renderFrameCancel = window.cancelAnimationFrame.bind(window);
+			this.renderFrame = window.requestAnimationFrame(() => {
 				this.renderFrame = null;
 				this.renderFrameCancel = null;
 				this._renderPending();
 			});
 		} else {
-			this.renderFrameCancel = clearTimeout;
-			this.renderFrame = setTimeout(() => {
+			this.renderFrameCancel = window.clearTimeout.bind(window);
+			this.renderFrame = window.setTimeout(() => {
 				this.renderFrame = null;
 				this.renderFrameCancel = null;
 				this._renderPending();

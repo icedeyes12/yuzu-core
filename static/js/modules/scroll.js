@@ -78,9 +78,9 @@ export function scrollToBottom({ force = false, follow = followBottom } = {}) {
 	if (scrollFrame !== null) return;
 
 	const scheduleFrame =
-		typeof requestAnimationFrame === "function"
-			? requestAnimationFrame
-			: (callback) => setTimeout(callback, 16);
+		typeof window.requestAnimationFrame === "function"
+			? window.requestAnimationFrame.bind(window)
+			: (callback) => window.setTimeout(callback, 16);
 	scrollFrame = scheduleFrame(() => {
 		scrollFrame = null;
 		const request = pendingScroll;
