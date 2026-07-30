@@ -66,11 +66,12 @@ export class ConversationStore {
 	finishGeneration() {
 		this.isGenerating = false;
 
-		// Freeze the last message if it belongs to the assistant
-		if (this.messages.length > 0) {
-			const lastMsg = this.messages[this.messages.length - 1];
-			if (lastMsg.role === "assistant" || lastMsg.role === "tool") {
-				lastMsg.metadata.isFrozen = true;
+		// Freeze every message still owned by the completed turn. A tool result
+		// can be appended after the assistant message, so inspecting only the
+		// final array item leaves the assistant bubble unfrozen.
+		for (const message of this.messages) {
+			if (message.role === "assistant" || message.role === "tool") {
+				message.metadata.isFrozen = true;
 			}
 		}
 

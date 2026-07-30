@@ -1,12 +1,12 @@
+import {
+	activateFenceBlocks,
+	buildFenceHTML,
+	flushPendingFenceBlocks,
+} from "./fence-registry.js";
 import { createMessageElement, renderMessageContent } from "./messages.js";
 import { scrollToBottom } from "./scroll.js";
 import { chatStore } from "./store.js";
 import { renderToolResultEvent } from "./tool-renderer/index.js";
-import {
-	buildFenceHTML,
-	activateFenceBlocks,
-	flushPendingFenceBlocks,
-} from "./fence-registry.js";
 // Side-effect: registers mermaid, html, and default handlers
 import "./fence-components.js";
 
@@ -25,10 +25,14 @@ function _applyMarkedFenceRenderer() {
 
 	const renderer = new window.marked.Renderer();
 
-	renderer.code = function (tokenOrCode, infostring, _escaped) {
+	renderer.code = (tokenOrCode, infostring, _escaped) => {
 		// marked v5+ passes a token object; older versions pass (code, lang, escaped)
 		let source, lang;
-		if (tokenOrCode && typeof tokenOrCode === "object" && "text" in tokenOrCode) {
+		if (
+			tokenOrCode &&
+			typeof tokenOrCode === "object" &&
+			"text" in tokenOrCode
+		) {
 			source = tokenOrCode.text ?? "";
 			lang = tokenOrCode.lang ?? "";
 		} else {
@@ -86,6 +90,7 @@ export class DOMRenderer {
 			if (!el) {
 				el = this._createMessageDOM(msg);
 				this.container.appendChild(el);
+				this._updateMessageDOM(el, msg);
 				this.renderedIds.add(msg.id);
 				scrollToBottom();
 			} else {
@@ -106,6 +111,7 @@ export class DOMRenderer {
 		// Handle typing indicator via the `isGenerating` flag and message states
 		this._syncTypingIndicator(messages, isGenerating);
 		this._syncError(error);
+		this._finalizeFenceBlocks(messages, isGenerating);
 	}
 
 	_createMessageDOM(msg) {
@@ -114,10 +120,26 @@ export class DOMRenderer {
 		const el = createMessageElement(msg.role, msg.content, msg.timestamp);
 		el.setAttribute("data-message-id", msg.id);
 
-		// Render attachments and tool calls if any
-		this._updateMessageDOM(el, msg);
-
+		// The caller appends the element before this method activates fence blocks.
 		return el;
+	}
+
+	_finalizeFenceBlocks(messages, isGenerating) {
+		if (!this.container?.isConnected) return;
+
+		for (const message of messages) {
+			if (message.role !== "assistant") continue;
+			const messageElement = this.container.querySelector(
+				`[data-message-id="${message.id}"]`,
+			);
+			const contentContainer =
+				messageElement?.querySelector(".message-content");
+			if (!contentContainer) continue;
+			activateFenceBlocks(contentContainer);
+			if (isGenerating || !message.metadata?.isFrozen) continue;
+			flushPendingFenceBlocks(contentContainer);
+			activateFenceBlocks(contentContainer);
+		}
 	}
 
 	_updateMessageDOM(el, msg) {
@@ -127,7 +149,7 @@ export class DOMRenderer {
 		// Ensure marked renderer is installed (handles late script load order)
 		_applyMarkedFenceRenderer();
 
-		const isFrozen = msg.metadata?.isFrozen ?? false;
+		const _isFrozen = msg.metadata?.isFrozen ?? false;
 
 		let html;
 
@@ -222,10 +244,8 @@ export class DOMRenderer {
 			activateFenceBlocks(contentContainer);
 		}
 
-		// 6. Flush any pending blocks whose fences are now complete in the raw content.
-		//    This runs on every tick — not only when frozen — so diagrams appear
-		//    the moment the closing fence arrives, while the rest streams on.
-		flushPendingFenceBlocks(contentContainer);
+		// 6. The final frozen-state pass is handled after the message is attached.
+		//    Pending buffered blocks are flushed there, once the stream is complete.
 
 		const copyButton = el.querySelector(".copy-message-btn");
 		if (copyButton) {
@@ -330,20 +350,24 @@ function _classifyBufferedFences(html, rawContent) {
 	for (const lang of BUFFERED_LANGS) {
 		if (!result.includes(`data-fence-lang="${lang}"`)) continue;
 
-		const openRe = new RegExp("^```" + lang + "\\b", "im");
+		const openRe = new RegExp(`^\`\`\`${lang}\\b`, "im");
 		if (!openRe.test(raw)) continue;
 
 		// Count standalone closing ``` lines that appear AFTER the opening fence
 		const openMatch = openRe.exec(raw);
-		const afterOpen = raw.slice((openMatch?.index ?? 0) + (openMatch?.[0]?.length ?? 0));
-		const closeCount = afterOpen.split("\n").filter((l) => l.trim() === "```").length;
+		const afterOpen = raw.slice(
+			(openMatch?.index ?? 0) + (openMatch?.[0]?.length ?? 0),
+		);
+		const closeCount = afterOpen
+			.split("\n")
+			.filter((l) => l.trim() === "```").length;
 
 		// If no closing fence yet — fence is still streaming — replace with placeholder
 		if (closeCount === 0) {
 			result = _replaceOuterDiv(
 				result,
 				`data-fence-lang="${lang}"`,
-				`<div class="fence-block fence-block--pending" data-fence-lang="${lang}" data-fence-strategy="buffered"></div>`,
+				`<div class="fence-block fence-block--pending" data-fence-lang="${lang}" data-fence-source="${escapeHtml(afterOpen)}" data-fence-strategy="buffered"></div>`,
 			);
 		}
 		// closeCount > 0 → fence is complete → leave the rendered component in place
@@ -404,7 +428,9 @@ function _replaceOuterDiv(html, marker, replacement) {
 function _stashActivatedFences(root) {
 	const stash = new Map();
 	const counts = {};
-	for (const el of root.querySelectorAll('[data-fence-lang][data-fence-activated][data-fence-strategy="buffered"]')) {
+	for (const el of root.querySelectorAll(
+		'[data-fence-lang][data-fence-activated][data-fence-strategy="buffered"]',
+	)) {
 		if (el.dataset.fenceInert) continue;
 		const lang = el.dataset.fenceLang || "__unknown__";
 		counts[lang] = (counts[lang] || 0) + 1;
@@ -424,7 +450,9 @@ function _stashActivatedFences(root) {
 function _restoreActivatedFences(root, stash) {
 	if (stash.size === 0) return;
 	const counts = {};
-	for (const el of root.querySelectorAll("[data-fence-lang]")) {
+	for (const el of root.querySelectorAll(
+		'[data-fence-lang][data-fence-strategy="buffered"]',
+	)) {
 		if (el.dataset.fenceActivated) continue;
 		if (el.dataset.fenceInert) continue; // managed by parent component
 		const lang = el.dataset.fenceLang || "__unknown__";
