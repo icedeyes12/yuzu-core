@@ -4,7 +4,7 @@ import {
 	flushPendingFenceBlocks,
 } from "./fence-registry.js";
 import { createMessageElement, renderMessageContent } from "./messages.js";
-import { scrollToBottom } from "./scroll.js";
+import { isNearBottom, scrollToBottom, shouldFollowBottom } from "./scroll.js";
 import { chatStore } from "./store.js";
 import { renderToolResultEvent } from "./tool-renderer/index.js";
 // Side-effect: registers mermaid, html, and default handlers
@@ -72,13 +72,35 @@ export class DOMRenderer {
 		this.renderedIds = new Set();
 		this.activeTypingIndicator = null;
 		this.activeError = null;
+		this.pendingRender = null;
+		this.renderFrame = null;
+		this.lastRenderArgs = null;
+		this.lastRenderedMessageHashes = new Map();
 
 		// Subscribe to store updates
-		chatStore.subscribe(this.render.bind(this));
+		chatStore.subscribe((...args) => this.scheduleRender(...args));
+	}
+
+	scheduleRender(messages, isGenerating, error = null) {
+		this.pendingRender = { messages, isGenerating, error };
+		if (this.renderFrame !== null) return;
+
+		const scheduleFrame =
+			typeof requestAnimationFrame === "function"
+				? requestAnimationFrame
+				: (callback) => setTimeout(callback, 16);
+		this.renderFrame = scheduleFrame(() => {
+			this.renderFrame = null;
+			const pending = this.pendingRender;
+			this.pendingRender = null;
+			if (pending)
+				this.render(pending.messages, pending.isGenerating, pending.error);
+		});
 	}
 
 	render(messages, isGenerating, error = null) {
 		if (!this.container) return;
+		this.lastRenderArgs = { messages, isGenerating, error };
 
 		const newRenderedIds = new Set();
 
@@ -92,11 +114,16 @@ export class DOMRenderer {
 				this.container.appendChild(el);
 				this._updateMessageDOM(el, msg);
 				this.renderedIds.add(msg.id);
-				scrollToBottom();
+				if (shouldFollowBottom(this.container)) scrollToBottom();
 			} else {
 				this._updateMessageDOM(el, msg);
-				if (msg.role === "assistant" && !msg.metadata.isFrozen)
+				if (
+					msg.role === "assistant" &&
+					!msg.metadata.isFrozen &&
+					isNearBottom(this.container)
+				) {
 					scrollToBottom();
+				}
 			}
 		}
 
@@ -105,6 +132,7 @@ export class DOMRenderer {
 			if (!newRenderedIds.has(oldId)) {
 				this.container.querySelector(`[data-message-id="${oldId}"]`)?.remove();
 				this.renderedIds.delete(oldId);
+				this.lastRenderedMessageHashes.delete(oldId);
 			}
 		}
 
@@ -145,6 +173,17 @@ export class DOMRenderer {
 	_updateMessageDOM(el, msg) {
 		const contentContainer = el.querySelector(".message-content");
 		if (!contentContainer) return;
+		const messageHash = JSON.stringify([
+			msg.content || "",
+			msg.metadata?.isFrozen ?? false,
+			msg.toolCalls || [],
+			msg.attachments || [],
+			msg.toolResponse || null,
+		]);
+		if (this.lastRenderedMessageHashes.get(msg.id) === messageHash) {
+			return;
+		}
+		this.lastRenderedMessageHashes.set(msg.id, messageHash);
 
 		// Ensure marked renderer is installed (handles late script load order)
 		_applyMarkedFenceRenderer();
