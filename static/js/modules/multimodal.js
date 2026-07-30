@@ -238,6 +238,7 @@ export class MultimodalManager {
 				}
 			}
 
+			eventRouter.finishStream(sessionId);
 			this.clearInput();
 		} catch (error) {
 			if (error.name === "AbortError") {

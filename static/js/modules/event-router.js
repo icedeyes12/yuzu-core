@@ -46,6 +46,21 @@ export class EventRouter {
 	}
 
 	/**
+	 * Complete a stream through the same terminal path regardless of whether
+	 * the server emits `done` or the fetch reader ends cleanly without it.
+	 */
+	finishStream(sessionId) {
+		if (sessionId !== this.activeViewSessionId) return;
+		this.controllers.delete(sessionId);
+		this.activeTurnIds.delete(sessionId);
+		for (const [callId, pendingCall] of this.pendingToolCalls) {
+			if (pendingCall.sessionId === sessionId)
+				this.pendingToolCalls.delete(callId);
+		}
+		if (chatStore.isGenerating) chatStore.finishGeneration();
+	}
+
+	/**
 	 * Process a raw JSON chunk from the stream.
 	 */
 	handleEvent(sessionId, jsonString) {
@@ -139,13 +154,7 @@ export class EventRouter {
 
 			if (type === "done") {
 				if (event.turn_id) this.activeTurnIds.set(sessionId, event.turn_id);
-				this.controllers.delete(sessionId);
-				this.activeTurnIds.delete(sessionId);
-				for (const [callId, pendingCall] of this.pendingToolCalls) {
-					if (pendingCall.sessionId === sessionId)
-						this.pendingToolCalls.delete(callId);
-				}
-				chatStore.finishGeneration();
+				this.finishStream(sessionId);
 				return;
 			}
 

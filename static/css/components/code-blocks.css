@@ -100,8 +100,12 @@
 }
 
 @keyframes fence-shimmer {
-	0% { background-position: 200% 0; }
-	100% { background-position: -200% 0; }
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
 }
 
 /* ── Header ── */
@@ -142,7 +146,10 @@
 	border-radius: 4px;
 	cursor: pointer;
 	white-space: nowrap;
-	transition: background 0.15s, color 0.15s, border-color 0.15s;
+	transition:
+		background 0.15s,
+		color 0.15s,
+		border-color 0.15s;
 }
 
 .fence-action-btn:hover {
@@ -234,4 +241,3 @@
 	line-height: 1.55;
 	background: transparent;
 }
-

@@ -47,7 +47,9 @@ export function registerFenceHandler(langs, handler) {
  * @returns {FenceHandler}
  */
 export function resolveFenceHandler(lang) {
-	return _registry.get((lang || "").toLowerCase()) || _registry.get("__default__");
+	return (
+		_registry.get((lang || "").toLowerCase()) || _registry.get("__default__")
+	);
 }
 
 /**
@@ -80,6 +82,8 @@ export function buildFenceHTML(lang, source, isComplete = true) {
  * @param {HTMLElement} root
  */
 export function activateFenceBlocks(root) {
+	if (!root?.isConnected) return;
+
 	for (const el of root.querySelectorAll("[data-fence-lang]")) {
 		// Inert: managed manually by a parent component (e.g. HTML inspect block)
 		if (el.dataset.fenceInert) continue;
@@ -88,14 +92,16 @@ export function activateFenceBlocks(root) {
 		// Already activated
 		if (el.dataset.fenceActivated) continue;
 
-		el.dataset.fenceActivated = "1";
 		const lang = el.dataset.fenceLang || "";
 		const source = el.dataset.fenceSource || el.dataset.fenceRawsource || "";
 		const handler = resolveFenceHandler(lang);
+		if (!handler) continue;
+		el.dataset.fenceActivated = "1";
 		try {
 			handler.activate(el, source);
-		} catch (_err) {
-			// Activation failures are silent — the raw source is preserved
+		} catch (error) {
+			delete el.dataset.fenceActivated;
+			console.error("Fence activation failed", { lang, error });
 		}
 	}
 }
@@ -105,12 +111,16 @@ export function activateFenceBlocks(root) {
  * and activate them.  Called when the stream closes.
  *
  * @param {HTMLElement} root
+ * @returns {number} Number of pending blocks flushed.
  */
 export function flushPendingFenceBlocks(root) {
+	if (!root?.isConnected) return 0;
+	let flushed = 0;
 	for (const el of root.querySelectorAll(".fence-block--pending")) {
 		const lang = el.dataset.fenceLang || "";
 		const source = el.dataset.fenceSource || "";
 		const handler = resolveFenceHandler(lang);
+		if (!handler) continue;
 
 		// Replace placeholder with the real component HTML
 		const tmp = document.createElement("div");
@@ -119,14 +129,16 @@ export function flushPendingFenceBlocks(root) {
 		if (!real) continue;
 
 		el.replaceWith(real);
-
 		real.dataset.fenceActivated = "1";
+		flushed += 1;
 		try {
 			handler.activate(real, source);
-		} catch (_err) {
-			// silent
+		} catch (error) {
+			delete real.dataset.fenceActivated;
+			console.error("Buffered fence activation failed", { lang, error });
 		}
 	}
+	return flushed;
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

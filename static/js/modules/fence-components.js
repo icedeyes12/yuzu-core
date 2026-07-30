@@ -9,10 +9,7 @@
  *   - expose an Inspect toggle where applicable
  */
 
-import {
-	registerFenceHandler,
-	escAttr,
-} from "./fence-registry.js";
+import { escAttr, registerFenceHandler } from "./fence-registry.js";
 
 // ── Copy helper (shared) ─────────────────────────────────────────────────────
 
@@ -219,7 +216,11 @@ const htmlPreviewHandler = {
 	buildHTML(source, _lang) {
 		const previewBtn = `<button class="fence-action-btn fence-preview-btn fence-action-btn--active" title="Show rendered preview" type="button">Preview</button>`;
 		const rawBtn = `<button class="fence-action-btn fence-rawcode-btn" title="Show raw HTML source" type="button">Raw Code</button>`;
-		const header = buildHeader("HTML Preview", [previewBtn, rawBtn, buildCopyBtn()]);
+		const header = buildHeader("HTML Preview", [
+			previewBtn,
+			rawBtn,
+			buildCopyBtn(),
+		]);
 
 		// Script injected inside srcdoc to send height to parent window postMessage listener
 		const resizeHelperScript = `<script>(function(){function s(){var h=Math.max(document.documentElement?document.documentElement.scrollHeight:0,document.body?document.body.scrollHeight:0);if(h>0){window.parent.postMessage({type:'yuzu-html-resize',height:h},'*');}}window.addEventListener('load',s);if(typeof ResizeObserver!=='undefined'&&document.body){new ResizeObserver(s).observe(document.body);}setTimeout(s,200);setTimeout(s,600);})();</script>`;
@@ -250,10 +251,7 @@ const htmlPreviewHandler = {
 		}
 
 		// Toggle: Preview ⇄ Raw Code — visibility only, no re-render
-		let showingPreview = true;
-
 		function setView(preview) {
-			showingPreview = preview;
 			if (iframe) iframe.hidden = !preview;
 			if (sourceBlock) sourceBlock.hidden = preview;
 			previewBtn?.classList.toggle("fence-action-btn--active", preview);
@@ -269,7 +267,9 @@ const htmlPreviewHandler = {
 			const btn = el.querySelector(".fence-copy-btn");
 			if (btn) {
 				btn.textContent = "Copied!";
-				setTimeout(() => { btn.innerHTML = `${iconCopy()} Copy`; }, 1200);
+				setTimeout(() => {
+					btn.innerHTML = `${iconCopy()} Copy`;
+				}, 1200);
 			}
 		});
 	},
