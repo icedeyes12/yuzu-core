@@ -175,7 +175,7 @@
 .fence-block--mermaid .fence-mermaid-body {
 	padding: 1rem;
 	overflow-x: auto;
-	min-height: 80px;
+	min-height: 120px;
 	display: flex;
 	justify-content: center;
 	align-items: flex-start;
@@ -201,26 +201,21 @@
 /* ── HTML Preview ── */
 .fence-block--html-preview .fence-html-body {
 	background: #fff;
+	position: relative;
+	min-height: 350px;
+	overflow: hidden;
 }
 
 .fence-html-iframe {
 	width: 100%;
-	min-height: 200px;
-	max-height: 70vh;
+	min-height: 350px;
+	height: 350px;
 	border: none;
 	display: block;
 }
 
-.fence-html-source {
+.fence-html-source-block {
 	margin: 0;
-	padding: 0.9rem 1rem;
-	background: transparent;
-	overflow-x: auto;
-}
-
-.fence-html-source code {
-	font-family: var(--font-mono);
-	font-size: 0.85rem;
-	white-space: pre;
+	padding: 0;
 }
 
