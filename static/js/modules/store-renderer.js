@@ -29,13 +29,13 @@ export class DOMRenderer {
 		this.renderFrame = null;
 		this.renderFrameCancel = null;
 		this.lastRenderedMessageHashes = new Map();
-		this.unsubscribe = chatStore.subscribe((...args) =>
-			this.scheduleRender(...args),
+		this.unsubscribe = chatStore.subscribe((messages, isGenerating, error, eventObj) =>
+			this.scheduleRender(messages, isGenerating, error, eventObj),
 		);
 	}
 
-	scheduleRender(messages, isGenerating, error = null) {
-		this.pendingRender = { messages, isGenerating, error };
+	scheduleRender(messages, isGenerating, error = null, eventObj = null) {
+		this.pendingRender = { messages, isGenerating, error, eventObj };
 		if (this.renderFrame !== null) return;
 		if (typeof requestAnimationFrame === "function") {
 			this.renderFrameCancel = cancelAnimationFrame;
@@ -58,7 +58,12 @@ export class DOMRenderer {
 		const pending = this.pendingRender;
 		this.pendingRender = null;
 		if (pending)
-			this.render(pending.messages, pending.isGenerating, pending.error);
+			this.render(
+				pending.messages,
+				pending.isGenerating,
+				pending.error,
+				pending.eventObj,
+			);
 	}
 
 	flushPendingRender() {
@@ -88,21 +93,29 @@ export class DOMRenderer {
 		this.lastRenderedMessageHashes.clear();
 	}
 
-	render(messages, isGenerating, error = null) {
+	render(messages, isGenerating, error = null, eventObj = null) {
 		if (!this.container) return;
 		const newRenderedIds = new Set();
+		const isPrepend = eventObj?.type === "prepend";
+		const firstOldElement = isPrepend ? this.container.firstElementChild : null;
+
 		for (const msg of messages) {
 			newRenderedIds.add(msg.id);
 			let el = this.container.querySelector(`[data-message-id="${msg.id}"]`);
 			if (!el) {
 				el = this._createMessageDOM(msg);
-				this.container.appendChild(el);
+				if (isPrepend && firstOldElement) {
+					this.container.insertBefore(el, firstOldElement);
+				} else {
+					this.container.appendChild(el);
+				}
 				this._updateMessageDOM(el, msg);
 				this.renderedIds.add(msg.id);
-				if (shouldFollowBottom(this.container)) scrollToBottom();
+				if (!isPrepend && shouldFollowBottom(this.container)) scrollToBottom();
 			} else {
 				this._updateMessageDOM(el, msg);
 				if (
+					!isPrepend &&
 					msg.role === "assistant" &&
 					!msg.metadata?.isFrozen &&
 					isNearBottom(this.container)
@@ -110,6 +123,13 @@ export class DOMRenderer {
 					scrollToBottom();
 			}
 		}
+
+		if (isPrepend && this.container._prependOldScrollHeight !== undefined) {
+			const newScrollHeight = this.container.scrollHeight;
+			this.container.scrollTop += (newScrollHeight - this.container._prependOldScrollHeight);
+			this.container._prependOldScrollHeight = undefined;
+		}
+
 		for (const oldId of this.renderedIds) {
 			if (!newRenderedIds.has(oldId)) {
 				const oldElement = this.container.querySelector(

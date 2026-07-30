@@ -812,6 +812,15 @@ ORDER BY id ASC
 LIMIT %s
 """
 
+# Query messages before a specific timestamp (for upward infinite scroll pagination)
+SQL_MESSAGE_SELECT_BEFORE_TS = """
+SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
+FROM messages
+WHERE session_id = %s AND user_id = %s AND timestamp < %s
+ORDER BY timestamp DESC, id DESC
+LIMIT %s
+"""
+
 SQL_MESSAGE_UPDATE = "UPDATE messages SET content = %s, attachments = %s WHERE id = %s"
 
 SQL_MESSAGE_DELETE_FOR_SESSION = (
@@ -1232,8 +1241,9 @@ __all__ = [
     # Messages
     "SQL_MESSAGE_INSERT",
     "SQL_MESSAGE_SELECT_ASC_LIMIT",
-    "SQL_MESSAGE_SELECT_DESC_LIMIT",
     "SQL_MESSAGE_SELECT_ASC_ALL",
+    "SQL_MESSAGE_SELECT_AFTER_ID",
+    "SQL_MESSAGE_SELECT_BEFORE_TS",
     "SQL_MESSAGE_DELETE_FOR_SESSION",
     "SQL_MESSAGE_COUNT_CONVERSATIONAL",
     "SQL_MESSAGE_RECENT_SYSTEM_GLOBAL",

@@ -31,9 +31,9 @@ export class ConversationStore {
 	/**
 	 * Notify all subscribers of a state change.
 	 */
-	_notify() {
+	_notify(eventObj = { type: "update" }) {
 		this.subscribers.forEach((cb) => {
-			cb(this.messages, this.isGenerating, this.error);
+			cb(this.messages, this.isGenerating, this.error, eventObj);
 		});
 	}
 
@@ -42,13 +42,36 @@ export class ConversationStore {
 	 * Replaces current state.
 	 * @param {string} sessionId
 	 * @param {Array} history
+	 * @param {boolean} hasMore
 	 */
-	loadHistory(sessionId, history) {
+	loadHistory(sessionId, history, hasMore = false) {
 		this.sessionId = sessionId;
 		this.messages = serializeConversationHistory(history, { isFrozen: true });
+		this.hasMoreOlder = hasMore;
 		this.isGenerating = false;
 		this.error = null;
-		this._notify();
+		this._notify({ type: "reset" });
+	}
+
+	/**
+	 * Prepend older history chunk (upward scroll).
+	 * @param {Array} olderHistory
+	 * @param {boolean} hasMore
+	 */
+	prependHistory(olderHistory, hasMore = false) {
+		if (!olderHistory || !olderHistory.length) {
+			this.hasMoreOlder = hasMore;
+			return;
+		}
+		const serialized = serializeConversationHistory(olderHistory, {
+			isFrozen: true,
+		});
+		// Filter out duplicate message IDs
+		const existingIds = new Set(this.messages.map((m) => m.id));
+		const uniqueNew = serialized.filter((m) => !existingIds.has(m.id));
+		this.messages = [...uniqueNew, ...this.messages];
+		this.hasMoreOlder = hasMore;
+		this._notify({ type: "prepend", addedCount: uniqueNew.length });
 	}
 
 	/**
