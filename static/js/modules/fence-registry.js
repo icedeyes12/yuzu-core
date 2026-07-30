@@ -81,6 +81,8 @@ export function buildFenceHTML(lang, source, isComplete = true) {
  */
 export function activateFenceBlocks(root) {
 	for (const el of root.querySelectorAll("[data-fence-lang]")) {
+		// Inert: managed manually by a parent component (e.g. HTML inspect block)
+		if (el.dataset.fenceInert) continue;
 		// Pending (stream still open) — skip
 		if (el.classList.contains("fence-block--pending")) continue;
 		// Already activated
