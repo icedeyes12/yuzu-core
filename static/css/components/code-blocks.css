@@ -266,6 +266,13 @@
 .fence-html-source-block {
 	margin: 0;
 	padding: 0;
+	min-height: 380px;
+}
+
+.fence-html-source-block[hidden],
+.fence-html-iframe[hidden],
+.fence-html-loading[hidden] {
+	display: none;
 }
 
 /* ── Inspect / Raw Code flat layout ── */

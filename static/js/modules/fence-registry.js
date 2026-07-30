@@ -29,6 +29,7 @@
 const _registry = new Map(); // lang → FenceHandler
 const _activationLocks = new WeakSet();
 const _rootActivationLocks = new WeakSet();
+const _cleanupHandlers = new WeakMap();
 
 /**
  * Register a fenced-block handler for one or more language strings.
@@ -52,6 +53,27 @@ export function resolveFenceHandler(lang) {
 	return (
 		_registry.get((lang || "").toLowerCase()) || _registry.get("__default__")
 	);
+}
+
+export function registerFenceCleanup(el, cleanup) {
+	if (el && typeof cleanup === "function") _cleanupHandlers.set(el, cleanup);
+}
+
+export function cleanupFenceBlocks(root) {
+	if (!root) return;
+	const blocks = root.matches?.("[data-fence-lang]")
+		? [root]
+		: [...(root.querySelectorAll?.("[data-fence-lang]") || [])];
+	for (const el of blocks) {
+		const cleanup = _cleanupHandlers.get(el);
+		if (!cleanup) continue;
+		_cleanupHandlers.delete(el);
+		try {
+			cleanup();
+		} catch (error) {
+			console.warn("Fence cleanup failed", { error });
+		}
+	}
 }
 
 /**
@@ -87,10 +109,9 @@ export function activateFenceBlocks(root) {
 	if (!root?.isConnected || _rootActivationLocks.has(root)) return;
 	_rootActivationLocks.add(root);
 	try {
-		for (const el of root.querySelectorAll("[data-fence-lang]")) {
-			// Inert: managed manually by a parent component (e.g. HTML inspect block)
+		const elements = [...root.querySelectorAll("[data-fence-lang]")];
+		for (const el of elements) {
 			if (el.dataset.fenceInert) continue;
-			// Pending (stream still open) — skip
 			if (el.classList.contains("fence-block--pending")) continue;
 			_activateFenceElement(el);
 		}

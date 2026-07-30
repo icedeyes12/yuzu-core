@@ -1,6 +1,7 @@
 import {
 	activateFenceBlocks,
 	buildFenceHTML,
+	cleanupFenceBlocks,
 	flushPendingFenceBlocks,
 } from "./fence-registry.js";
 import { createMessageElement, renderMessageContent } from "./messages.js";
@@ -74,28 +75,69 @@ export class DOMRenderer {
 		this.activeError = null;
 		this.pendingRender = null;
 		this.renderFrame = null;
+		this.renderFrameCancel = null;
 		this.lastRenderArgs = null;
 		this.lastRenderedMessageHashes = new Map();
 
 		// Subscribe to store updates
-		chatStore.subscribe((...args) => this.scheduleRender(...args));
+		this.unsubscribe = chatStore.subscribe((...args) =>
+			this.scheduleRender(...args),
+		);
 	}
 
 	scheduleRender(messages, isGenerating, error = null) {
 		this.pendingRender = { messages, isGenerating, error };
 		if (this.renderFrame !== null) return;
 
-		const scheduleFrame =
-			typeof requestAnimationFrame === "function"
-				? requestAnimationFrame
-				: (callback) => setTimeout(callback, 16);
-		this.renderFrame = scheduleFrame(() => {
+		if (typeof requestAnimationFrame === "function") {
+			this.renderFrameCancel = cancelAnimationFrame;
+			this.renderFrame = requestAnimationFrame(() => {
+				this.renderFrame = null;
+				this.renderFrameCancel = null;
+				this._renderPending();
+			});
+		} else {
+			this.renderFrameCancel = clearTimeout;
+			this.renderFrame = setTimeout(() => {
+				this.renderFrame = null;
+				this.renderFrameCancel = null;
+				this._renderPending();
+			}, 16);
+		}
+	}
+
+	_renderPending() {
+		const pending = this.pendingRender;
+		this.pendingRender = null;
+		if (pending) {
+			this.render(pending.messages, pending.isGenerating, pending.error);
+		}
+	}
+
+	flushPendingRender() {
+		if (this.renderFrame !== null) {
+			this.renderFrameCancel?.(this.renderFrame);
 			this.renderFrame = null;
-			const pending = this.pendingRender;
-			this.pendingRender = null;
-			if (pending)
-				this.render(pending.messages, pending.isGenerating, pending.error);
-		});
+			this.renderFrameCancel = null;
+		}
+		this._renderPending();
+	}
+
+	cancelPendingRender() {
+		if (this.renderFrame !== null) {
+			this.renderFrameCancel?.(this.renderFrame);
+			this.renderFrame = null;
+			this.renderFrameCancel = null;
+		}
+		this.pendingRender = null;
+	}
+
+	dispose() {
+		this.unsubscribe?.();
+		this.unsubscribe = null;
+		this.cancelPendingRender();
+		cleanupFenceBlocks(this.container);
+		this.lastRenderedMessageHashes.clear();
 	}
 
 	render(messages, isGenerating, error = null) {
@@ -130,7 +172,11 @@ export class DOMRenderer {
 		// Remove orphaned DOM elements (messages no longer in store)
 		for (const oldId of this.renderedIds) {
 			if (!newRenderedIds.has(oldId)) {
-				this.container.querySelector(`[data-message-id="${oldId}"]`)?.remove();
+				const oldElement = this.container.querySelector(
+					`[data-message-id="${oldId}"]`,
+				);
+				if (oldElement) cleanupFenceBlocks(oldElement);
+				oldElement?.remove();
 				this.renderedIds.delete(oldId);
 				this.lastRenderedMessageHashes.delete(oldId);
 			}
@@ -188,11 +234,7 @@ export class DOMRenderer {
 		// Ensure marked renderer is installed (handles late script load order)
 		_applyMarkedFenceRenderer();
 
-		const _isFrozen = msg.metadata?.isFrozen ?? false;
-
 		let html;
-
-		// 1. Base Content rendering based on role
 		if (msg.role === "tool") {
 			try {
 				const toolEvent = JSON.parse(msg.content);
@@ -212,14 +254,10 @@ export class DOMRenderer {
 			html = renderMessageContent(msg.content, msg.role === "user");
 		}
 
-		// 2. For streaming assistant messages, classify each buffered fence:
-		//    - complete (closing fence seen in raw) → render immediately
-		//    - incomplete (still streaming) → show loading placeholder
 		if (msg.role === "assistant") {
 			html = _classifyBufferedFences(html, msg.content);
 		}
 
-		// 3. Attachments
 		if (msg.attachments?.length) {
 			const attachmentsHtml = msg.attachments
 				.map((att) => {
@@ -243,7 +281,6 @@ export class DOMRenderer {
 			html += `<div class="attachments">${attachmentsHtml}</div>`;
 		}
 
-		// 4. Tool Calls (For Assistant messages)
 		if (msg.toolCalls?.length) {
 			const toolsHtml = msg.toolCalls
 				.map((tc) => {
@@ -265,31 +302,20 @@ export class DOMRenderer {
 			html += `<div class="tools-container">${toolsHtml}</div>`;
 		}
 
-		// 5. Preserve activated fence nodes across innerHTML rewrites.
-		//    Stash live DOM nodes keyed by lang+occurrence-index before clobbering.
-		const liveNodes = _stashActivatedFences(contentContainer);
-
-		if (contentContainer.getAttribute("data-last-hash") !== html) {
-			contentContainer.innerHTML = html;
-			contentContainer.setAttribute("data-last-hash", html);
-
-			// Restore live activated fence nodes (no re-render, no re-activate)
-			_restoreActivatedFences(contentContainer, liveNodes);
-			activateFenceBlocks(contentContainer);
-			this._enhanceContent(contentContainer);
-		} else {
-			// Hash unchanged — still restore in case a pending block just completed
-			_restoreActivatedFences(contentContainer, liveNodes);
-			activateFenceBlocks(contentContainer);
-		}
-
-		// 6. The final frozen-state pass is handled after the message is attached.
-		//    Pending buffered blocks are flushed there, once the stream is complete.
+		this._patchContentContainer(contentContainer, html);
+		this._enhanceContent(contentContainer);
 
 		const copyButton = el.querySelector(".copy-message-btn");
-		if (copyButton) {
+		if (copyButton)
 			copyButton.setAttribute("data-message-content", msg.content || "");
-		}
+	}
+
+	_patchContentContainer(root, html) {
+		const desired = document.createElement("div");
+		desired.innerHTML = html;
+		_assignFenceKeys(root);
+		_assignFenceKeys(desired);
+		_patchChildren(root, desired);
 	}
 
 	_enhanceContent(contentContainer) {
@@ -415,6 +441,116 @@ function _classifyBufferedFences(html, rawContent) {
 	return result;
 }
 
+function _assignFenceKeys(root) {
+	const counts = new Map();
+	for (const el of root.querySelectorAll("[data-fence-lang]")) {
+		const lang = el.dataset.fenceLang || "__unknown__";
+		const index = (counts.get(lang) || 0) + 1;
+		counts.set(lang, index);
+		el.dataset.fenceKey = `${lang}:${index}`;
+	}
+}
+
+function _patchChildren(currentParent, desiredParent) {
+	const currentChildren = [...currentParent.childNodes];
+	const keyedCurrent = new Map(
+		currentChildren
+			.filter((node) => node.nodeType === Node.ELEMENT_NODE)
+			.map((node) => [node.dataset.fenceKey, node])
+			.filter(([key]) => key),
+	);
+	const used = new Set();
+	let cursor = currentParent.firstChild;
+
+	for (const desiredNode of desiredParent.childNodes) {
+		const key =
+			desiredNode.nodeType === Node.ELEMENT_NODE
+				? desiredNode.dataset.fenceKey
+				: null;
+		let currentNode = key ? keyedCurrent.get(key) : null;
+
+		if (currentNode && !used.has(currentNode)) {
+			if (currentNode !== cursor)
+				currentParent.insertBefore(currentNode, cursor);
+			used.add(currentNode);
+			_patchNode(currentNode, desiredNode);
+			cursor = currentNode.nextSibling;
+			continue;
+		}
+
+		if (
+			!key &&
+			cursor &&
+			!used.has(cursor) &&
+			_sameNodeType(cursor, desiredNode)
+		) {
+			currentNode = cursor;
+			used.add(currentNode);
+			_patchNode(currentNode, desiredNode);
+			cursor = currentNode.nextSibling;
+			continue;
+		}
+
+		currentNode = desiredNode.cloneNode(true);
+		currentParent.insertBefore(currentNode, cursor);
+		used.add(currentNode);
+		cursor = currentNode.nextSibling;
+	}
+
+	for (const node of [...currentParent.childNodes]) {
+		if (used.has(node)) continue;
+		cleanupFenceBlocks(node);
+		node.remove();
+	}
+}
+
+function _sameNodeType(current, desired) {
+	if (current.nodeType !== desired.nodeType) return false;
+	return (
+		current.nodeType !== Node.ELEMENT_NODE ||
+		current.nodeName === desired.nodeName
+	);
+}
+
+function _patchNode(current, desired) {
+	if (current.nodeType === Node.TEXT_NODE) {
+		if (current.nodeValue !== desired.nodeValue)
+			current.nodeValue = desired.nodeValue;
+		return;
+	}
+	if (current.nodeType !== Node.ELEMENT_NODE) return;
+
+	const isActivatedFence =
+		current.matches("[data-fence-lang]") && current.dataset.fenceActivated;
+	if (
+		isActivatedFence &&
+		current.dataset.fenceSource !== desired.dataset.fenceSource
+	) {
+		cleanupFenceBlocks(current);
+		delete current.dataset.fenceActivated;
+	}
+	_patchNodeAttributes(current, desired);
+	if (current.matches("[data-fence-lang]") && current.dataset.fenceActivated)
+		return;
+	_patchChildren(current, desired);
+}
+
+function _patchNodeAttributes(current, desired) {
+	for (const name of [...current.attributes].map(
+		(attribute) => attribute.name,
+	)) {
+		if (!desired.hasAttribute(name) && name !== "data-fence-activated") {
+			current.removeAttribute(name);
+		}
+	}
+	for (const attribute of desired.attributes) {
+		if (attribute.name === "data-fence-activated") continue;
+		if (current.getAttribute(attribute.name) !== attribute.value) {
+			current.setAttribute(attribute.name, attribute.value);
+		}
+	}
+}
+
 /**
  * Replace the outer <div> containing `marker` in `html` with `replacement`.
  * Uses a depth counter to correctly match nested divs.
@@ -454,54 +590,6 @@ function _replaceOuterDiv(html, marker, replacement) {
 
 	if (divEnd === -1) return html;
 	return html.slice(0, divStart) + replacement + html.slice(divEnd);
-}
-
-/**
- * Stash all currently-activated fence DOM nodes from `root`.
- * Returns a map of "lang:occurrenceIndex" → live HTMLElement.
- * Called before innerHTML is overwritten.
- *
- * @param {HTMLElement} root
- * @returns {Map<string, HTMLElement>}
- */
-function _stashActivatedFences(root) {
-	const stash = new Map();
-	const counts = {};
-	for (const el of root.querySelectorAll(
-		'[data-fence-lang][data-fence-activated][data-fence-strategy="buffered"]',
-	)) {
-		if (el.dataset.fenceInert) continue;
-		const lang = el.dataset.fenceLang || "__unknown__";
-		counts[lang] = (counts[lang] || 0) + 1;
-		stash.set(`${lang}:${counts[lang]}`, el);
-	}
-	return stash;
-}
-
-/**
- * After innerHTML rewrite, find placeholder slots and swap in live nodes.
- * Placeholder slots are NEW (not yet activated) elements with the same lang.
- * This preserves mermaid SVG renders and iframe document state across re-renders.
- *
- * @param {HTMLElement} root
- * @param {Map<string, HTMLElement>} stash
- */
-function _restoreActivatedFences(root, stash) {
-	if (stash.size === 0) return;
-	const counts = {};
-	for (const el of root.querySelectorAll(
-		'[data-fence-lang][data-fence-strategy="buffered"]',
-	)) {
-		if (el.dataset.fenceActivated) continue;
-		if (el.dataset.fenceInert) continue; // managed by parent component
-		const lang = el.dataset.fenceLang || "__unknown__";
-		counts[lang] = (counts[lang] || 0) + 1;
-		const key = `${lang}:${counts[lang]}`;
-		const live = stash.get(key);
-		if (live) {
-			el.replaceWith(live);
-		}
-	}
 }
 
 export const domRenderer = new DOMRenderer("chatContainer");

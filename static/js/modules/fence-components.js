@@ -9,7 +9,12 @@
  *   - expose an Inspect toggle where applicable
  */
 
-import { escAttr, registerFenceHandler } from "./fence-registry.js";
+import {
+	escAttr,
+	registerFenceCleanup,
+	registerFenceHandler,
+} from "./fence-registry.js";
+import { isNearBottom, scrollToBottom } from "./scroll.js";
 
 // ── Copy helper (shared) ─────────────────────────────────────────────────────
 
@@ -230,6 +235,9 @@ const mermaidHandler = {
 		});
 
 		if (diagramEl) void renderMermaidDiagram(diagramEl, source);
+		registerFenceCleanup(el, () => {
+			if (diagramEl) mermaidRenderTokens.delete(diagramEl);
+		});
 	},
 };
 
@@ -247,6 +255,8 @@ if (typeof window !== "undefined" && !window._htmlResizeListenerInstalled) {
 				if (iframe.contentWindow === event.source) {
 					const targetH = Math.max(380, Math.ceil(event.data.height) + 24);
 					iframe.style.height = `${targetH}px`;
+					const chatContainer = document.getElementById("chatContainer");
+					if (chatContainer && isNearBottom(chatContainer)) scrollToBottom();
 					break;
 				}
 			}
@@ -294,29 +304,30 @@ const htmlPreviewHandler = {
 			}
 		}
 
-		iframe?.addEventListener(
-			"load",
-			() => {
-				previewBody?.setAttribute("data-fence-preview-state", "ready");
-				if (!showingSource && loadingEl) loadingEl.hidden = true;
-			},
-			{ once: true },
-		);
+		const onLoad = () => {
+			previewBody?.setAttribute("data-fence-preview-state", "ready");
+			loadingEl?.remove();
+		};
+		iframe?.addEventListener("load", onLoad, { once: true });
 
-		// Toggle: Preview ⇄ Raw Code — visibility only, no re-render
 		function setView(showSource) {
 			showingSource = showSource;
 			if (iframe) iframe.hidden = showingSource;
 			if (sourceBlock) sourceBlock.hidden = !showingSource;
-			if (loadingEl)
+			if (loadingEl) {
 				loadingEl.hidden =
 					showingSource || previewBody?.dataset.fencePreviewState === "ready";
+			}
 			inspectBtn?.classList.toggle("fence-action-btn--active", showingSource);
 			inspectBtn?.setAttribute("aria-pressed", String(showingSource));
 		}
 
 		setView(false);
 		inspectBtn?.addEventListener("click", () => setView(!showingSource));
+		registerFenceCleanup(el, () => {
+			iframe?.removeEventListener("load", onLoad);
+			if (iframe) iframe.srcdoc = "";
+		});
 
 		// Copy always uses raw source
 		el.querySelector(".fence-copy-btn")?.addEventListener("click", () => {

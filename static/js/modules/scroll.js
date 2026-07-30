@@ -69,11 +69,12 @@ export function initializeScrollButtonAutoHide() {
  */
 export function scrollToBottom({ force = false, follow = followBottom } = {}) {
 	const chatContainer = document.getElementById("chatContainer");
-	if (!chatContainer || (!force && !follow)) return;
+	if (!chatContainer || (!force && !follow && !isNearBottom(chatContainer)))
+		return;
 
 	if (force) followBottom = true;
 	autoScrollUntil = Date.now() + 250;
-	pendingScroll = { force, follow: true };
+	pendingScroll = { force };
 	if (scrollFrame !== null) return;
 
 	const scheduleFrame =
@@ -84,11 +85,15 @@ export function scrollToBottom({ force = false, follow = followBottom } = {}) {
 		scrollFrame = null;
 		const request = pendingScroll;
 		pendingScroll = null;
-		if (!request || (!request.force && !request.follow)) return;
+		if (
+			!request ||
+			(!request.force && !followBottom && !isNearBottom(chatContainer))
+		)
+			return;
 
 		chatContainer.scrollTo({
 			top: chatContainer.scrollHeight,
-			behavior: "smooth",
+			behavior: request.force ? "smooth" : "auto",
 		});
 	});
 
