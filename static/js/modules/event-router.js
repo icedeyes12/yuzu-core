@@ -2,6 +2,7 @@ import {
 	serializeToolCallEvent,
 	serializeToolResultEvent,
 } from "./conversation-serializer.js";
+import { cancelMessageFenceWork } from "./renderer/fence-lifecycle.js";
 import { chatStore } from "./store.js";
 import { domRenderer } from "./store-renderer.js";
 
@@ -44,6 +45,7 @@ export class EventRouter {
 		this.controllers.delete(sessionId);
 		this.activeTurnIds.delete(sessionId);
 		if (chatStore.sessionId === sessionId) {
+			cancelMessageFenceWork();
 			chatStore.finishGeneration();
 			domRenderer.flushPendingRender();
 		}
