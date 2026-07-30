@@ -1,45 +1,90 @@
-# Database Architecture
+# Yuzu Companion Database Architecture
 
-Yuzu-Companion uses a PostgreSQL database with the `pgvector` extension. The database architecture is designed for direct SQL access using `psycopg` (v3) rather than an ORM, prioritizing performance and explicit control over queries.
+Yuzu Companion uses PostgreSQL with `pgcrypto`, `vector`, and `pg_trgm`. Database access uses raw `psycopg` v3; there is no ORM. The schema and shared SQL are defined in `app/db/queries.py`.
 
-## Connection Management
+## Connection and ownership
 
-The database uses connection pooling managed in `app/db/connection.py`. Both synchronous and asynchronous connection pools are maintained to serve different parts of the application:
-- **Synchronous Pool:** Used by background processes, CLI tasks, and the memory pipeline.
-- **Asynchronous Pool:** Used by FastAPI endpoints to serve web requests without blocking the ASGI event loop.
+- `app/db/connection.py` owns pooled synchronous/asynchronous access.
+- `app/db/queries.py` is the SQL and DDL source of truth.
+- Tenant-scoped tables reference `profiles(id)` through `user_id`.
+- Application queries must include the owning `user_id` for every tenant-scoped read or write.
+- Migrations are additive and must not introduce an alternate schema in business logic.
 
-## Schema Overview
+## Core tables
 
-The single source of truth for all SQL queries and Data Definition Language (DDL) is `app/db/queries.py`.
+### `profiles`
 
-### Core Tables
+User and companion settings. Location coordinates remain here and are not injected into the LLM prompt.
 
-1. **`profiles`**
-   - Stores user and companion settings.
-   - Key fields: `user_name`, `partner_name`, `affection`, `memory_json`, `providers_config_json`.
+### `chat_sessions`
 
-2. **`chat_sessions`**
-   - Tracks individual conversation threads.
-   - Key fields: `name`, `is_active`, `message_count`.
+Conversation sessions owned by a profile. Sessions carry `user_id`, names, active/deleted state, message counts, and pipeline state.
 
-3. **`messages`**
-   - The primary conversation log.
-   - Key fields: `session_id`, `role`, `content`, `image_paths`.
+### `messages`
 
-4. **`api_keys`**
-   - Stores encrypted API keys at rest using ChaCha20-Poly1305.
-   - Key fields: `provider`, `encrypted_key`.
+Original conversation records. Messages have UUID identifiers in the current schema, `session_id`, `user_id`, role, content, attachments, tool fields, and timestamp. Memory maintenance treats them as source history and does not rewrite them.
 
-5. **`semantic_facts`**
-   - The unified memory store for both episodic and semantic facts.
-   - Key fields: `fact_type`, `content`, `embedding` (VECTOR(1024)), `metadata` (JSONB).
+### `episodes`
 
-## CRUD Operations
+Summaries of eligible conversation batches. Each episode is tenant-scoped and tied to a session, with optional source message range and 1536-dimensional embedding.
 
-To separate concerns, the database layer provides identical sets of operations for both sync and async contexts:
-- **`app/db/models.py`**: Synchronous functions for querying and mutating data.
-- **`app/db/models_async.py`**: Asynchronous counterparts using `AsyncPgSession`.
+### `memory_nodes`
 
-## The Database Facade
+Inferred claims/entities. Nodes contain `node_type`, content, optional 1536-dimensional embedding, confidence, importance, status, validity interval, and embedding metadata.
 
-`app/db/facade.py` exposes a stable `Database` class that provides a unified interface. It handles default `session_id` routing and acts as a central proxy for the underlying model functions.
+### `memory_edges`
+
+Typed relationships between nodes. The schema enforces same-tenant ownership, unique endpoint/type tuples per tenant, and no self-loops.
+
+### `memory_evidence`
+
+Provenance for graph nodes and edges. It can point to an episode and/or source message. The target must be a node or edge.
+
+### `global_knowledge_entries`
+
+Explicit user-managed knowledge. It is separate from inferred graph memory and is read/written through its own API operations.
+
+## Graph constraints
+
+The graph schema includes:
+
+- tenant foreign keys through `user_id`;
+- confidence and importance checks between `0` and `1`;
+- temporal validity columns;
+- foreign keys from edges/evidence to graph objects;
+- unique edge identity per tenant, endpoint pair, and type;
+- self-loop prevention;
+- indexes for active nodes, validity, creation time, edge endpoints, evidence targets, source messages, and episodes;
+- trigram indexing for node content;
+- native pgvector columns using dimension `1536`.
+
+## Memory flow
+
+```text
+messages
+  -> batch extraction
+  -> episodes + memory_nodes + memory_edges + memory_evidence
+  -> vector/trigram graph retrieval
+  -> prompt presentation
+```
+
+`global_knowledge_entries` enters prompt construction as a separate explicit context source. It is never silently merged into inferred graph memory.
+
+## Security and configuration
+
+Provider keys use the BYOK browser flow described in `AGENTS.md`; do not recreate the retired `api_keys` persistence path. User location stays in the database and is resolved by the weather tool when needed. Memory queries and graph maintenance must never leak data across tenants.
+
+## Maintenance
+
+Run the graph-only maintenance helper from the Memory Guardian skill:
+
+```bash
+python3 /home/workspace/Skills/memory-guardian/scripts/memory_review.py \
+  --format markdown --report /home/workspace/MemoryGuardian-report.md
+```
+
+The helper is read-only by default. Its opt-in repair path is limited to high-confidence exact duplicate-node merges and never hard-deletes graph rows or evidence.
+
+## Maintenance boundary
+
+Legacy semantic-memory schema and review workflows are outside the current architecture. Do not introduce an alternate memory table, review queue, or decay workflow into current SQL or maintenance code.
