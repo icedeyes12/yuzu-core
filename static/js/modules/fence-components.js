@@ -105,11 +105,11 @@ const mermaidHandler = {
 
 	buildHTML(source, _lang) {
 		const header = buildHeader("Mermaid", [buildInspectBtn(), buildCopyBtn()]);
-		return `<div class="fence-block fence-block--mermaid" data-fence-lang="mermaid" data-fence-source="${escAttr(source)}">
+		return `<div class="fence-block fence-block--mermaid" data-fence-lang="mermaid" data-fence-source="${escAttr(source)}" data-fence-strategy="buffered">
   ${header}
   <div class="fence-mermaid-body">
     <div class="fence-mermaid-diagram" data-view="diagram"></div>
-    <div class="fence-mermaid-source" data-view="source" hidden>${defaultCodeHandler.buildHTML(source, "mermaid").replace('data-fence-lang="mermaid"', 'data-fence-lang="mermaid" data-fence-inert="1"')}</div>
+    <div class="fence-mermaid-source" data-view="source" hidden><pre class="fence-raw-code"><code class="language-mermaid">${escAttr(source)}</code></pre></div>
   </div>
 </div>`;
 	},
@@ -129,10 +129,9 @@ const mermaidHandler = {
 
 			// Activate inspect code block on first toggle if needed
 			if (showingSource && sourceEl) {
-				const innerFence = sourceEl.querySelector("[data-fence-lang]");
-				if (innerFence && !innerFence.dataset.fenceActivated) {
-					innerFence.dataset.fenceActivated = "1";
-					defaultCodeHandler.activate(innerFence, source);
+				const codeEl = sourceEl.querySelector("pre code");
+				if (codeEl && window.hljs && !codeEl.classList.contains("hljs")) {
+					window.hljs.highlightElement(codeEl);
 				}
 			}
 		});
@@ -222,19 +221,16 @@ const htmlPreviewHandler = {
 		const rawBtn = `<button class="fence-action-btn fence-rawcode-btn" title="Show raw HTML source" type="button">Raw Code</button>`;
 		const header = buildHeader("HTML Preview", [previewBtn, rawBtn, buildCopyBtn()]);
 
-		const inspectBlock = defaultCodeHandler.buildHTML(source, "html")
-			.replace('data-fence-lang="html"', 'data-fence-lang="html" data-fence-inert="1"');
-
 		// Script injected inside srcdoc to send height to parent window postMessage listener
 		const resizeHelperScript = `<script>(function(){function s(){var h=Math.max(document.documentElement?document.documentElement.scrollHeight:0,document.body?document.body.scrollHeight:0);if(h>0){window.parent.postMessage({type:'yuzu-html-resize',height:h},'*');}}window.addEventListener('load',s);if(typeof ResizeObserver!=='undefined'&&document.body){new ResizeObserver(s).observe(document.body);}setTimeout(s,200);setTimeout(s,600);})();</script>`;
 
 		const srcdocContent = source + resizeHelperScript;
 
-		return `<div class="fence-block fence-block--html-preview" data-fence-lang="html" data-fence-source="${escAttr(source)}">
+		return `<div class="fence-block fence-block--html-preview" data-fence-lang="html" data-fence-source="${escAttr(source)}" data-fence-strategy="buffered">
   ${header}
   <div class="fence-html-body">
     <iframe class="fence-html-iframe" sandbox="allow-scripts allow-forms allow-popups allow-modals" srcdoc="${escAttr(srcdocContent)}" title="HTML Preview"></iframe>
-    <div class="fence-html-source-block" hidden>${inspectBlock}</div>
+    <div class="fence-html-source-block" hidden><pre class="fence-raw-code"><code class="language-html">${escAttr(source)}</code></pre></div>
   </div>
 </div>`;
 	},
@@ -247,10 +243,9 @@ const htmlPreviewHandler = {
 
 		// Activate inner inspect code block once on load
 		if (sourceBlock) {
-			const innerFenceEl = sourceBlock.querySelector("[data-fence-lang]");
-			if (innerFenceEl && !innerFenceEl.dataset.fenceActivated) {
-				innerFenceEl.dataset.fenceActivated = "1";
-				defaultCodeHandler.activate(innerFenceEl, source);
+			const codeEl = sourceBlock.querySelector("pre code");
+			if (codeEl && window.hljs && !codeEl.classList.contains("hljs")) {
+				window.hljs.highlightElement(codeEl);
 			}
 		}
 

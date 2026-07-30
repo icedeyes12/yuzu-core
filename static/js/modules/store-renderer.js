@@ -404,8 +404,8 @@ function _replaceOuterDiv(html, marker, replacement) {
 function _stashActivatedFences(root) {
 	const stash = new Map();
 	const counts = {};
-	for (const el of root.querySelectorAll("[data-fence-lang][data-fence-activated]")) {
-		if (el.dataset.fenceInert) continue; // managed by parent component
+	for (const el of root.querySelectorAll('[data-fence-lang][data-fence-activated][data-fence-strategy="buffered"]')) {
+		if (el.dataset.fenceInert) continue;
 		const lang = el.dataset.fenceLang || "__unknown__";
 		counts[lang] = (counts[lang] || 0) + 1;
 		stash.set(`${lang}:${counts[lang]}`, el);

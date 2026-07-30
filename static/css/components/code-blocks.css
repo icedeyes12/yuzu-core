@@ -219,3 +219,19 @@
 	padding: 0;
 }
 
+/* ── Inspect / Raw Code flat layout ── */
+.fence-raw-code {
+	margin: 0;
+	padding: 0.9rem 1rem;
+	background: var(--surface-code);
+	border-radius: 0 0 8px 8px;
+	overflow-x: auto;
+}
+
+.fence-raw-code code {
+	font-family: var(--font-mono);
+	font-size: 0.85rem;
+	line-height: 1.55;
+	background: transparent;
+}
+
