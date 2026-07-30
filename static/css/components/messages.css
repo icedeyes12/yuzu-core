@@ -6,7 +6,6 @@
 	flex: 1;
 	overflow-y: auto;
 	overscroll-behavior: contain;
-	scroll-behavior: smooth;
 	padding: 4.75rem max(var(--space-4), calc((100vw - 900px) / 2)) 7rem;
 	display: flex;
 	flex-direction: column;
