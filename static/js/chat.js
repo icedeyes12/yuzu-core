@@ -10,6 +10,7 @@ import {
 	MultimodalManager,
 } from "./modules/index.js";
 import { router } from "./modules/router.js";
+import "./sidebar.js";
 import {
 	focusChatInput,
 	handleSessionSwitch,
