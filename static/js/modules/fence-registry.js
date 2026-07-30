@@ -27,6 +27,8 @@
  */
 
 const _registry = new Map(); // lang → FenceHandler
+const _activationLocks = new WeakSet();
+const _rootActivationLocks = new WeakSet();
 
 /**
  * Register a fenced-block handler for one or more language strings.
@@ -82,27 +84,46 @@ export function buildFenceHTML(lang, source, isComplete = true) {
  * @param {HTMLElement} root
  */
 export function activateFenceBlocks(root) {
-	if (!root?.isConnected) return;
-
-	for (const el of root.querySelectorAll("[data-fence-lang]")) {
-		// Inert: managed manually by a parent component (e.g. HTML inspect block)
-		if (el.dataset.fenceInert) continue;
-		// Pending (stream still open) — skip
-		if (el.classList.contains("fence-block--pending")) continue;
-		// Already activated
-		if (el.dataset.fenceActivated) continue;
-
-		const lang = el.dataset.fenceLang || "";
-		const source = el.dataset.fenceSource || el.dataset.fenceRawsource || "";
-		const handler = resolveFenceHandler(lang);
-		if (!handler) continue;
-		el.dataset.fenceActivated = "1";
-		try {
-			handler.activate(el, source);
-		} catch (error) {
-			delete el.dataset.fenceActivated;
-			console.error("Fence activation failed", { lang, error });
+	if (!root?.isConnected || _rootActivationLocks.has(root)) return;
+	_rootActivationLocks.add(root);
+	try {
+		for (const el of root.querySelectorAll("[data-fence-lang]")) {
+			// Inert: managed manually by a parent component (e.g. HTML inspect block)
+			if (el.dataset.fenceInert) continue;
+			// Pending (stream still open) — skip
+			if (el.classList.contains("fence-block--pending")) continue;
+			_activateFenceElement(el);
 		}
+	} finally {
+		_rootActivationLocks.delete(root);
+	}
+}
+
+function _activateFenceElement(el) {
+	if (
+		!el?.isConnected ||
+		el.dataset.fenceActivated ||
+		_activationLocks.has(el)
+	) {
+		return false;
+	}
+
+	const lang = el.dataset.fenceLang || "";
+	const source = el.dataset.fenceSource || el.dataset.fenceRawsource || "";
+	const handler = resolveFenceHandler(lang);
+	if (!handler) return false;
+
+	_activationLocks.add(el);
+	el.dataset.fenceActivated = "1";
+	try {
+		handler.activate(el, source);
+		return true;
+	} catch (error) {
+		delete el.dataset.fenceActivated;
+		console.error("Fence activation failed", { lang, error });
+		return false;
+	} finally {
+		_activationLocks.delete(el);
 	}
 }
 
@@ -129,14 +150,7 @@ export function flushPendingFenceBlocks(root) {
 		if (!real) continue;
 
 		el.replaceWith(real);
-		real.dataset.fenceActivated = "1";
-		flushed += 1;
-		try {
-			handler.activate(real, source);
-		} catch (error) {
-			delete real.dataset.fenceActivated;
-			console.error("Buffered fence activation failed", { lang, error });
-		}
+		if (_activateFenceElement(real)) flushed += 1;
 	}
 	return flushed;
 }

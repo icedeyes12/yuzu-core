@@ -97,6 +97,93 @@ registerFenceHandler("__default__", defaultCodeHandler);
 
 // ── Mermaid handler ───────────────────────────────────────────────────────────
 
+const mermaidRenderTokens = new WeakMap();
+
+async function renderMermaidDiagram(diagramEl, source) {
+	if (!diagramEl?.isConnected) return;
+	const activeRender = mermaidRenderTokens.get(diagramEl);
+	if (activeRender?.state === "rendering" && activeRender.source === source)
+		return;
+	if (
+		diagramEl.dataset.fenceRenderSource === source &&
+		diagramEl.dataset.fenceRenderState === "rendered"
+	) {
+		return;
+	}
+	diagramEl.dataset.fenceRenderSource = source;
+	if (!window.mermaid) {
+		diagramEl.dataset.fenceRenderState = "pending";
+		return;
+	}
+
+	if (!window._mermaidInitialized) {
+		try {
+			window.mermaid.initialize({
+				startOnLoad: false,
+				securityLevel: "loose",
+				theme: "dark",
+			});
+			window._mermaidInitialized = true;
+		} catch (error) {
+			console.warn("Mermaid initialization failed:", error);
+			diagramEl.dataset.fenceRenderState = "error";
+			return;
+		}
+	}
+
+	if (typeof window.mermaid.render !== "function") {
+		diagramEl.dataset.fenceRenderState = "error";
+		diagramEl.innerHTML = `<pre class="mermaid-fallback"><code>${escAttr(source)}</code></pre>`;
+		return;
+	}
+
+	const renderToken = { source, state: "rendering" };
+	mermaidRenderTokens.set(diagramEl, renderToken);
+	diagramEl.dataset.fenceRenderState = "rendering";
+	const renderId = `mermaid-svg-${Math.random().toString(36).slice(2, 9)}`;
+	try {
+		const result = await window.mermaid.render(renderId, source);
+		if (
+			!diagramEl.isConnected ||
+			mermaidRenderTokens.get(diagramEl) !== renderToken
+		)
+			return;
+		diagramEl.innerHTML = result.svg;
+		result.bindFunctions?.(diagramEl);
+		renderToken.state = "rendered";
+		diagramEl.dataset.fenceRenderState = "rendered";
+	} catch (error) {
+		console.warn("Mermaid rendering failed:", error);
+		if (
+			!diagramEl.isConnected ||
+			mermaidRenderTokens.get(diagramEl) !== renderToken
+		)
+			return;
+		diagramEl.innerHTML = `<pre class="mermaid-fallback"><code>${escAttr(source)}</code></pre>`;
+		renderToken.state = "error";
+		diagramEl.dataset.fenceRenderState = "error";
+	}
+}
+
+function retryPendingMermaidDiagrams() {
+	for (const el of document.querySelectorAll(
+		'[data-fence-lang="mermaid"][data-fence-activated]',
+	)) {
+		const diagramEl = el.querySelector(".fence-mermaid-diagram");
+		if (
+			diagramEl?.dataset.fenceRenderState === "pending" &&
+			el.dataset.fenceSource
+		) {
+			void renderMermaidDiagram(diagramEl, el.dataset.fenceSource);
+		}
+	}
+}
+
+if (typeof window !== "undefined" && !window._mermaidRetryListenerInstalled) {
+	window._mermaidRetryListenerInstalled = true;
+	window.addEventListener("load", retryPendingMermaidDiagrams, { once: true });
+}
+
 const mermaidHandler = {
 	strategy: "buffered",
 
@@ -117,14 +204,12 @@ const mermaidHandler = {
 		const inspectBtn = el.querySelector(".fence-inspect-btn");
 		let showingSource = false;
 
-		// Inspect toggle: visibility only, never re-renders diagram
 		inspectBtn?.addEventListener("click", () => {
 			showingSource = !showingSource;
 			if (diagramEl) diagramEl.hidden = showingSource;
 			if (sourceEl) sourceEl.hidden = !showingSource;
 			inspectBtn.classList.toggle("fence-action-btn--active", showingSource);
 
-			// Activate inspect code block on first toggle if needed
 			if (showingSource && sourceEl) {
 				const codeEl = sourceEl.querySelector("pre code");
 				if (codeEl && window.hljs && !codeEl.classList.contains("hljs")) {
@@ -133,7 +218,6 @@ const mermaidHandler = {
 			}
 		});
 
-		// Copy button
 		el.querySelector(".fence-copy-btn")?.addEventListener("click", () => {
 			copyToClipboard(el.dataset.fenceSource || source);
 			const btn = el.querySelector(".fence-copy-btn");
@@ -145,47 +229,7 @@ const mermaidHandler = {
 			}
 		});
 
-		// Async Mermaid rendering
-		if (!window.mermaid || !diagramEl) return;
-
-		// Global Mermaid initialization check
-		if (!window._mermaidInitialized) {
-			try {
-				window.mermaid.initialize({
-					startOnLoad: false,
-					securityLevel: "loose",
-					theme: "dark",
-				});
-				window._mermaidInitialized = true;
-			} catch (_e) {
-				// ignore if initialized
-			}
-		}
-
-		const svgId = `mermaid-svg-${Math.random().toString(36).slice(2, 9)}`;
-
-		if (typeof window.mermaid.render === "function") {
-			window.mermaid
-				.render(svgId, source)
-				.then(({ svg }) => {
-					if (diagramEl) diagramEl.innerHTML = svg;
-				})
-				.catch((err) => {
-					console.warn("Mermaid rendering failed:", err);
-					if (diagramEl) {
-						diagramEl.innerHTML = `<pre class="mermaid-fallback"><code>${escAttr(source)}</code></pre>`;
-					}
-				});
-		} else if (typeof window.mermaid.init === "function") {
-			diagramEl.id = svgId;
-			diagramEl.textContent = source;
-			diagramEl.className = "fence-mermaid-diagram mermaid";
-			try {
-				window.mermaid.init(undefined, diagramEl);
-			} catch (_err) {
-				diagramEl.textContent = source;
-			}
-		}
+		if (diagramEl) void renderMermaidDiagram(diagramEl, source);
 	},
 };
 
@@ -201,7 +245,7 @@ if (typeof window !== "undefined" && !window._htmlResizeListenerInstalled) {
 			const iframes = document.querySelectorAll(".fence-html-iframe");
 			for (const iframe of iframes) {
 				if (iframe.contentWindow === event.source) {
-					const targetH = Math.max(350, Math.ceil(event.data.height) + 24);
+					const targetH = Math.max(380, Math.ceil(event.data.height) + 24);
 					iframe.style.height = `${targetH}px`;
 					break;
 				}
@@ -214,22 +258,20 @@ const htmlPreviewHandler = {
 	strategy: "buffered",
 
 	buildHTML(source, _lang) {
-		const previewBtn = `<button class="fence-action-btn fence-preview-btn fence-action-btn--active" title="Show rendered preview" type="button">Preview</button>`;
-		const rawBtn = `<button class="fence-action-btn fence-rawcode-btn" title="Show raw HTML source" type="button">Raw Code</button>`;
 		const header = buildHeader("HTML Preview", [
-			previewBtn,
-			rawBtn,
+			buildInspectBtn(),
 			buildCopyBtn(),
 		]);
 
 		// Script injected inside srcdoc to send height to parent window postMessage listener
-		const resizeHelperScript = `<script>(function(){function s(){var h=Math.max(document.documentElement?document.documentElement.scrollHeight:0,document.body?document.body.scrollHeight:0);if(h>0){window.parent.postMessage({type:'yuzu-html-resize',height:h},'*');}}window.addEventListener('load',s);if(typeof ResizeObserver!=='undefined'&&document.body){new ResizeObserver(s).observe(document.body);}setTimeout(s,200);setTimeout(s,600);})();</script>`;
+		const resizeHelperScript = `<script>(function(){function s(){var d=document.documentElement,b=document.body,h=Math.max(d?d.scrollHeight:0,b?b.scrollHeight:0,d?d.offsetHeight:0,b?b.offsetHeight:0);window.parent.postMessage({type:'yuzu-html-resize',height:h},'*');}window.addEventListener('load',s);if(typeof ResizeObserver!=='undefined'&&document.body){new ResizeObserver(s).observe(document.body);}setTimeout(s,100);setTimeout(s,500);setTimeout(s,1200);})();</script>`;
 
 		const srcdocContent = source + resizeHelperScript;
 
 		return `<div class="fence-block fence-block--html-preview" data-fence-lang="html" data-fence-source="${escAttr(source)}" data-fence-strategy="buffered">
   ${header}
-  <div class="fence-html-body">
+  <div class="fence-html-body" data-fence-preview-state="loading">
+    <div class="fence-html-loading" aria-live="polite">Rendering preview…</div>
     <iframe class="fence-html-iframe" sandbox="allow-scripts allow-forms allow-popups allow-modals" srcdoc="${escAttr(srcdocContent)}" title="HTML Preview"></iframe>
     <div class="fence-html-source-block" hidden><pre class="fence-raw-code"><code class="language-html">${escAttr(source)}</code></pre></div>
   </div>
@@ -239,8 +281,10 @@ const htmlPreviewHandler = {
 	activate(el, source) {
 		const iframe = el.querySelector(".fence-html-iframe");
 		const sourceBlock = el.querySelector(".fence-html-source-block");
-		const previewBtn = el.querySelector(".fence-preview-btn");
-		const rawBtn = el.querySelector(".fence-rawcode-btn");
+		const previewBody = el.querySelector(".fence-html-body");
+		const loadingEl = el.querySelector(".fence-html-loading");
+		const inspectBtn = el.querySelector(".fence-inspect-btn");
+		let showingSource = false;
 
 		// Activate inner inspect code block once on load
 		if (sourceBlock) {
@@ -250,16 +294,29 @@ const htmlPreviewHandler = {
 			}
 		}
 
+		iframe?.addEventListener(
+			"load",
+			() => {
+				previewBody?.setAttribute("data-fence-preview-state", "ready");
+				if (!showingSource && loadingEl) loadingEl.hidden = true;
+			},
+			{ once: true },
+		);
+
 		// Toggle: Preview ⇄ Raw Code — visibility only, no re-render
-		function setView(preview) {
-			if (iframe) iframe.hidden = !preview;
-			if (sourceBlock) sourceBlock.hidden = preview;
-			previewBtn?.classList.toggle("fence-action-btn--active", preview);
-			rawBtn?.classList.toggle("fence-action-btn--active", !preview);
+		function setView(showSource) {
+			showingSource = showSource;
+			if (iframe) iframe.hidden = showingSource;
+			if (sourceBlock) sourceBlock.hidden = !showingSource;
+			if (loadingEl)
+				loadingEl.hidden =
+					showingSource || previewBody?.dataset.fencePreviewState === "ready";
+			inspectBtn?.classList.toggle("fence-action-btn--active", showingSource);
+			inspectBtn?.setAttribute("aria-pressed", String(showingSource));
 		}
 
-		previewBtn?.addEventListener("click", () => setView(true));
-		rawBtn?.addEventListener("click", () => setView(false));
+		setView(false);
+		inspectBtn?.addEventListener("click", () => setView(!showingSource));
 
 		// Copy always uses raw source
 		el.querySelector(".fence-copy-btn")?.addEventListener("click", () => {

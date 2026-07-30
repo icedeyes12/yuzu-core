@@ -14,11 +14,15 @@
 	background: var(--surface);
 	-webkit-overflow-scrolling: touch;
 	box-sizing: border-box;
+	contain: layout paint;
+	contain-intrinsic-size: auto 640px;
 }
 
 /* ==================== MESSAGES ==================== */
 .message {
 	position: relative;
+	content-visibility: auto;
+	contain-intrinsic-size: auto 96px;
 	animation: fadeIn var(--transition-slow);
 	display: flex;
 	flex-direction: column;
@@ -108,6 +112,8 @@
 
 .message-content {
 	color: var(--text-primary);
+	contain: layout style;
+	contain-intrinsic-size: auto 48px;
 	line-height: 1.6;
 	font-size: 0.95rem;
 }
