@@ -359,7 +359,7 @@ flowchart LR
     J --> K[LLM response]
 ```
 
-The pipeline runs asynchronously in batches. Retrieval is tenant-scoped, uses exact pgvector search when embeddings are available, falls back to trigram text search, and returns bounded graph expansion. Each retrieved node has explicit confidence, importance, validity, status, and provenance. There is no `semantic_facts` compatibility path, PCL pass, FSRS decay, or LLM review stage.
+The pipeline runs asynchronously in batches. Retrieval is tenant-scoped, uses exact pgvector search when embeddings are available, falls back to trigram text search, and returns bounded graph expansion. Each retrieved node has explicit confidence, importance, validity, status, and provenance. Graph quality is maintained separately by the Memory Guardian skill.
 
 ### Ownership
 

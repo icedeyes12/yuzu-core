@@ -1,28 +1,31 @@
 # Tools Registry and Architecture
 
-Yuzu-Companion features a pluggable tool system managed by the central registry in `app/tools/registry.py`.
+Yuzu Companion uses native provider function calling through `app/tools/registry.py`. Tool results are structured data and are validated before frontend rendering.
 
-## Tool Invocation
+## Supported tools
 
-Tool execution is driven by provider `tool_calls` and `ToolEvent` / `ToolResultEvent` objects. Legacy XML-style markup is cleanup text only and is not an active protocol.
+| Tool | Purpose | Memory behavior |
+|---|---|---|
+| `image_generate` | Generate an image through the configured provider | None |
+| `http_request` | Fetch public HTTP/HTTPS resources with validation | None |
+| `memory_search` | Search tenant-scoped graph nodes and bounded relationships | Read-only graph retrieval |
+| `memory_store` | Store an explicit inferred claim as a graph node | Creates a tenant-scoped `memory_nodes` row through `GraphMemoryRepository` and uses graph embedding metadata |
+| `multimodal` helpers | Vision routing, image caching, and encoding | None |
 
-## Supported Tools
+## `memory_search`
 
-All tools are located in the `app/tools/` directory and must implement an `execute(args, session_id)` interface.
+The tool calls `app.memory.retrieval.retrieve_memory_async()` with the authenticated `user_id`. Search uses graph nodes, optional vector similarity, trigram fallback, bounded relationship expansion, and provenance. It must not query a legacy unified fact table.
 
-1. **`image_generate`**
-   - **Usage:** native function call with `prompt`
-   - **Backend:** Calls the Chutes Image Generation API (Qwen Image Gen).
-   - **Result:** Saves the image to disk and returns the local `static/generated_images/` path.
+## `memory_store`
 
-2. **`http_request`**
-   - **Usage:** native function call with `url`
-   - **Backend:** Fetches raw text or HTML from the web.
+The tool validates the fact and category, embeds it when the embedding service is available, and persists a graph node with tenant ownership, confidence, importance, and embedding metadata. It does not write a legacy semantic-fact record.
 
-3. **`memory_search`**
-   - **Usage:** native function call with `query`
-   - **Backend:** Queries the `semantic_facts` pgvector table for similar memories using RRF hybrid scoring.
+Runtime extraction in `app/memory/memory.py` creates episodes, nodes, relationships, and evidence in one graph pipeline. The Memory Guardian does not invoke this extraction path; it only inspects and conservatively maintains stored graph state.
 
-4. **`memory_store`**
-   - **Usage:** native function call with `fact`
-   - **Backend:** Persists a new semantic fact directly to long-term memory.
+## Tool contract
+
+- Tool execution flows through `ToolEvent` / `ToolResultEvent` and `execute_tool_event()`.
+- Backend tool results contain structured data, not Markdown or HTML presentation.
+- Every memory operation requires `user_id` and, where relevant, `session_id`.
+- Frontend consumers validate tool results centrally through `validator.js`.
+- Legacy XML-style command/tool markup is strip-only cleanup and is not an execution protocol.

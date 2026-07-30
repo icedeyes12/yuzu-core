@@ -1,797 +1,121 @@
 # Yuzu Companion — Structural Blueprint
 
-> **Version:** 3.0.6 · **Python:** 3.12+ (3.13 compatible) · **Database:** PostgreSQL + pgvector · **Web:** FastAPI + Jinja2
+> **Version:** current `dev` branch · **Runtime:** Python 3.12+ · **Database:** PostgreSQL + pgvector · **Web:** FastAPI + Jinja2
 
----
+This blueprint describes the current implementation. The repository's source of truth for SQL and DDL is `app/db/queries.py`; the source of truth for graph memory behavior is `app/memory/`.
 
-## Table of Contents
-
-1. [System Topology](#1-system-topology)
-2. [Tech Stack Map](#2-tech-stack-map)
-3. [Directory Structure](#3-directory-structure)
-4. [Component Map](#4-component-map)
-5. [Data Flow Pipelines](#5-data-flow-pipelines)
-6. [Database Schema](#6-database-schema)
-7. [API Surface](#7-api-surface)
-8. [Frontend Architecture](#8-frontend-architecture)
-
----
-
-## 1. System Topology
+## 1. System topology
 
 ```mermaid
 flowchart TB
-    subgraph Interfaces["User Interfaces"]
-        direction LR
-        TERM["Terminal (main.py)"]
-        WEB["Web Browser (web.py)"]
-        EXT["External API Consumers"]
-    end
-
-    subgraph Facade["app.py (Facade)"]
-        F1["Re-exports orchestrator + session + profile"]
-    end
-
-    subgraph Orchestrator["orchestrator.py (Core Pipeline)"]
-        O1["1. Image cache detection"]
-        O2["2. LLM dispatch (llm_client.py)"]
-        O3["3. Native tool-call parsing via provider tool_calls"]
-        O4["4. Tool execution (tools/registry.py)"]
-        O5["5. Synthesis pass (2nd LLM call)"]
-        O6["6. Post-turn: memory pipeline + cache cleanup"]
-    end
-
-    subgraph Stream["stream_manager.py (Streaming State)"]
-        S1["StreamBuffer cache"]
-        S2["Chunk accumulation and replay"]
-        S3["Incremental persistence to PostgreSQL"]
-        S4["15-minute TTL cleanup"]
-    end
-
-    subgraph Providers["providers.py"]
-        P1["OllamaProvider"]
-        P2["CerebrasProvider"]
-        P3["OpenRouterProvider"]
-        P4["ChutesProvider"]
-        PM["AIProviderManager"]
-    end
-
-    subgraph Tools["tools/"]
-        T1["registry.py — central dispatch"]
-        T2["image_generate.py"]
-        T3["http_request.py"]
-        T4["memory_search.py"]
-        T5["memory_store.py"]
-        T6["multimodal.py — vision + image cache"]
-    end
-
-    subgraph Memory["memory/"]
-        M1["memory.py — pipeline + segmentation"]
-        M2["db_memory.py — CRUD + pgvector search"]
-        M3["embedder.py — Chutes API (1024-dim)"]
-        M4["retrieval.py — hybrid scoring + RRF"]
-        M5["review.py — FSRS decay"]
-        M6["pcl.py — Predict-Calibrate Learning"]
-        M7["memory_review.py — LLM-based review"]
-    end
-
-    subgraph Database["database/"]
-        D1["facade.py — Database class"]
-        D2["db_pg_models.py — sync CRUD"]
-        D3["db_pg_models_async.py — async CRUD"]
-        D4["db_queries.py — SQL constants"]
-        D5[(PostgreSQL + pgvector)]
-    end
-
-    TERM --> F1
-    WEB --> F1
-    EXT --> F1
-    F1 --> Orchestrator
-    O2 --> Providers
-    O4 --> Tools
-    O6 --> Memory
-    O6 --> Stream
-    Stream --> Database
-    Memory --> Database
-    Tools --> Database
-    Providers --> Database
-    O1 --> T6
-    O5 --> Providers
-    M3 --> Providers
-    M4 --> M3
-    M6 --> M2
-    M7 --> M2
-    M5 --> M2
-    T4 --> M4
-    T5 --> M2
-    T2 --> T6
+    UI[Web / terminal / API clients] --> O[orchestrator.py]
+    O --> L[llm_client.py]
+    L --> P[providers]
+    O --> T[tools/registry.py]
+    O --> S[stream_manager.py]
+    O --> M[app/memory/memory.py]
+    M --> X[extractor.py]
+    X --> G[GraphMemoryRepository]
+    G --> DB[(PostgreSQL)]
+    R[retrieval.py] --> G
+    R --> PR[prompts.py]
+    PR --> L
+    T --> R
+    T --> G
 ```
 
----
+## 2. Runtime components
 
-## 2. Tech Stack Map
+| Component | Location | Responsibility |
+|---|---|---|
+| Orchestrator | `app/orchestrator.py` | Coordinates message handling, tools, streaming, and post-turn work |
+| LLM client | `app/llm_client.py` | Builds provider requests and dispatches streaming/non-streaming calls |
+| Providers | `app/providers/` | Provider implementations and capability declarations |
+| Tool registry | `app/tools/registry.py` | Native function-call dispatch and structured tool results |
+| Memory pipeline | `app/memory/memory.py` | Batch gating, fencing, extraction persistence, and background worker |
+| Extractor | `app/memory/extractor.py` | One structured extraction pass for eligible batches |
+| Graph repository | `app/memory/graph.py` | Graph persistence, provenance writes, searches, and bounded expansion |
+| Retrieval | `app/memory/retrieval.py` | Vector/trigram graph retrieval and prompt-shaped formatting |
+| Embedder | `app/memory/embedder.py` | 1536-dimensional Chutes embeddings |
+| Prompt builder | `app/prompts.py` | Presents retrieved memory and explicit knowledge to providers |
+| Database layer | `app/db/queries.py`, `app/db/connection.py` | SQL/DDL source of truth and pooled psycopg access |
+| Stream manager | `app/stream_manager.py` | Stream ownership, buffering, persistence, and cleanup |
 
-```markdown
-┌─────────────────────────────────────────────────────────────────┐
-│                        Tech Stack                               │
-├──────────────┬──────────────────────────────────────────────────┤
-│ Language     │ Python 3.12+ (3.13 compatible)                  │
-│              │ Vanilla JavaScript (ESM, no build step)         │
-├──────────────┼──────────────────────────────────────────────────┤
-│ Web          │ FastAPI + uvicorn (ASGI)                        │
-│              │ Jinja2 templates                                │
-│              │ Pydantic v2 request/response models             │
-├──────────────┼──────────────────────────────────────────────────┤
-│ Database     │ PostgreSQL + pgvector extension                 │
-│              │ psycopg v3 (raw SQL, no ORM)                    │
-│              │ ThreadedConnectionPool                          │
-├──────────────┼──────────────────────────────────────────────────┤
-│ LLM          │ Ollama (local/cloud)                                  │
-│              │ Cerebras (cloud)                                │
-│              │ OpenRouter (cloud)                              │
-│              │ Chutes (cloud)                                  │
-├──────────────┼──────────────────────────────────────────────────┤
-│ Embedding    │ Qwen3-Embedding-0.6B via Chutes API            │
-│              │ 1024-dimensional vectors                        │
-├──────────────┼──────────────────────────────────────────────────┤
-│ Memory       │ FSRS v6.3.1 (Free Spaced Repetition Scheduler) │
-│              │ pgvector Exact Nearest Neighbor search          │
-├──────────────┼──────────────────────────────────────────────────┤
-│ Frontend     │ Marked.js v18 (markdown rendering)              │
-│              │ Mermaid (diagrams)                              │
-│              │ SSE (Server-Sent Events for streaming)          │
-├──────────────┼──────────────────────────────────────────────────┤
-│ Encryption   │ ChaCha20-Poly1305 (pycryptodome)               │
-├──────────────┼──────────────────────────────────────────────────┤
-│ Terminal UI  │ Rich + prompt_toolkit                           │
-├──────────────┼──────────────────────────────────────────────────┤
-│ Testing      │ pytest                                          │
-├──────────────┼──────────────────────────────────────────────────┤
-│ Linting      │ ruff (Python) · biome (JS)                     │
-└──────────────┴──────────────────────────────────────────────────┘
-```
-
----
-
-## 3. Directory Structure
-
-```markdown
-yuzu-companion/
-├── main.py                    # CLI entry (Rich TUI)
-├── web.py                     # FastAPI entry (web server)
-├── app/
-│   ├── __init__.py
-│   ├── app.py                 # Backward-compatible facade / re-exports
-│   ├── orchestrator.py        # Core message pipeline
-│   ├── llm_client.py          # LLM dispatch + vision routing + chutes_chat()
-│   ├── prompts.py             # System prompt assembly + message context
-│   ├── legacy_markup.py       # Legacy cleanup helpers for archived tool markup
-│   ├── providers.py           # AIProvider hierarchy + AIProviderManager
-│   ├── session_lifecycle.py   # Session start/end, auto-naming
-│   ├── profile_analysis.py    # Memory summarization, global profile analysis
-│   ├── visual_context.py      # Persistent visual context buffer
-│   ├── encryption.py          # ChaCha20-Poly1305 encryptor
-│   ├── logging_config.py      # Centralized logging
-│   ├── api/
-│   │   ├── __init__.py        # Exposes api_router
-│   │   └── routes.py          # All /api/* endpoints
-│   ├── tools/
-│   │   ├── __init__.py
-│   │   ├── schemas.py         # ToolParam + ToolDefinition dataclasses
-│   │   ├── registry.py        # Central tool registry
-│   │   ├── image_generate.py  # Image generation via Chutes
-│   │   ├── http_request.py    # HTTP GET/POST tool
-│   │   ├── memory_search.py   # Memory retrieval tool
-│   │   ├── memory_store.py    # Memory persistence tool
-│   │   └── multimodal.py      # Vision routing, image caching
-│   ├── memory/
-│   │   ├── __init__.py
-│   │   ├── memory.py          # Background pipeline + segmentation
-│   │   ├── db_memory.py       # Unified CRUD over semantic_facts
-│   │   ├── db_memory_queries.py # SQL constants + query builders
-│   │   ├── embedder.py        # Chutes API embedding client
-│   │   ├── extractor.py       # Semantic + episodic extraction
-│   │   ├── retrieval.py       # Hybrid scoring + RRF
-│   │   ├── review.py          # FSRS decay
-│   │   ├── memory_review.py   # LLM-based memory review
-│   │   ├── pcl.py             # Predict-Calibrate Learning
-│   │   └── docs/
-│   │       └── architecture.md
-│   └── database/
-│       ├── __init__.py
-│       ├── facade.py          # Database class
-│       ├── db_pg.py           # Connection pool
-│       ├── db_pg_models.py    # Sync CRUD
-│       ├── db_pg_models_async.py # Async CRUD
-│       └── db_queries.py      # SQL constants, parsers, DDL
-├── static/
-│   ├── css/                   # Stylesheets (theme, marked, chat, etc.)
-│   ├── js/                    # Vanilla JS (chat, renderer, config, etc.)
-│   ├── generated_images/      # AI-generated images
-│   ├── image_cache/           # Downloaded remote images
-│   └── uploads/               # User-uploaded files
-├── templates/                 # Jinja2 HTML templates
-├── tests/                     # pytest test suite
-├── CHANGELOG.md
-├── README.md
-└── INSTALL.md
-```
-
----
-
-## 4. Component Map
-
-### Backend Components
-
-| Component | File | Responsibility |
-| --- | --- | --- |
-| **Orchestrator** |  | Single entry point for all user messages. Coordinates image caching, LLM dispatch, tool execution, synthesis, and post-turn effects. |
-| **LLM Client** |  | Builds messages, resolves providers, handles vision routing, dispatches sync/streaming calls. Exposes `chutes_chat()` for internal LLM tasks. |
-| **Commands** |  | Legacy cleanup only; strips archived XML-style tool markup from stored text. |
-| **Prompts** |  | Assembles system prompt with identity, rules, memory context, affection mode, and session metadata. |
-| **Providers** |  | Pluggable LLM provider hierarchy (`AIProvider` base + 4 concrete providers) managed by `AIProviderManager` singleton. |
-| **Tools Registry** |  | Central tool dispatch. Lazy-loads tool modules, resolves aliases, returns structured results. |
-| **Tool Schemas** |  | `ToolParam` and `ToolDefinition` dataclasses for declarative tool registration. |
-| **Image Generation** |  | Image generation via Chutes API. |
-| **HTTP Request** |  | HTTP GET/POST tool for web requests. |
-| **Memory Search** |  | Hybrid memory retrieval tool. |
-| **Memory Store** |  | Semantic fact persistence tool. |
-| **Multimodal** |  | Vision model routing, image downloading/caching, base64 encoding. |
-| **Memory Pipeline** |  | Background segmentation, pipeline gating, request-scoped caching. |
-| **Stream Manager** |  | Stream buffer cache, reconnect replay, incremental persistence, TTL cleanup. |
-| **Memory CRUD** |  | Unified CRUD over `semantic_facts` with pgvector search. |
-| **Memory Queries** |  | SQL constants and query builders for memory operations. |
-| **Embedder** |  | Chutes API client for Qwen3-Embedding-0.6B (1024-dim). |
-| **Extractor** |  | LLM-based semantic and episodic fact extraction. |
-| **Retrieval** |  | Hybrid scoring (similarity + importance + confidence), RRF merge, combined static+dynamic retrieval. |
-| **Review** |  | FSRS-based decay for episodic memories. |
-| **Memory Review** |  | LLM-based memory quality review (Again/Hard/Good/Easy ratings). |
-| **PCL** |  | Predict-Calibrate Learning: PREDICT → CALIBRATE → CONSOLIDATE pipeline. |
-| **Session Lifecycle** |  | Session start/end, auto-naming, memory bootstrap. |
-| **Profile Analysis** |  | Memory summarization, global profile analysis. |
-| **Visual Context** |  | Thread-safe buffer for follow-up image references (3-turn TTL). |
-| **Encryption** |  | ChaCha20-Poly1305 encryptor for API keys at rest. |
-| **Database Facade** |  | `Database` class — stable API over raw psycopg2 with session_id defaulting. |
-| **DB Pool** |  | `ThreadedConnectionPool` with sync/async context managers. |
-| **DB Models (sync)** |  | Sync CRUD operations via raw psycopg2. |
-| **DB Models (async)** |  | Async CRUD for FastAPI routes. |
-| **DB Queries** |  | Single source of truth for SQL strings, DDL, and row parsers. |
-| **API Routes** |  | All `/api/*` endpoints (\~700 lines). |
-
-### Frontend Components
-
-| Component | File | Responsibility |
-| --- | --- | --- |
-| **Chat UI** |  | Chat interface, SSE streaming, typing indicator, scroll management, dynamic layout. |
-| **Renderer** |  | Marked.js v18 configuration, Mermaid diagram rendering, code highlighting. |
-| **Config** |  | Fetches `/api/config` on page load, populates `appConfig`. |
-| **Theme** |  | Design tokens (CSS variables). |
-| **Markdown CSS** |  | Markdown rendering styles. |
-| **Chat CSS** |  | Chat layout (flex-column, dynamic padding). |
-
----
-
-## 5. Data Flow Pipelines
-
-### 5.1 Message Processing (Synchronous)
-
-```markdown
-User Message
-    │
-    ▼
-orchestrator.handle_user_message()
-    │
-    ├─► _cache_images_from_message()          [multimodal.py]
-    │     └─ Extract image paths/URLs from message
-    │     └─ Download remote → static/image_cache/
-    │     └─ Validate paths (traversal protection)
-    │
-    ├─► /imagine fast path?
-    │     └─ YES → execute_tool("image_generate") → return markdown
-    │
-    ├─► generate_ai_response()                [llm_client.py]
-    │     ├─ build_system_message()           [prompts.py]
-    │     │     ├─ retrieve_memories_combined()  [retrieval.py]
-    │     │     │     ├─ embed_text()         [embedder.py → Chutes API]
-    │     │     │     ├─ pgvector search (static + dynamic)
-    │     │     │     └─ RRF merge + hybrid scoring
-    │     │     ├─ _legacy_memory_block()     [Database facade]
-    │     │     └─ Affection → closeness mode
-    │     ├─ build_messages()                 [history from Database]
-    │     ├─ _apply_vision_routing()          [multimodal.py]
-    │     └─ _send_to_provider()              [providers.py]
-    │           └─ AIProviderManager → Ollama/Cerebras/OpenRouter/Chutes
-    │
-    ├─► Response processing
-    │     ├─ Native tool_calls detected? → execute_tool() → recursive loop
-    │     └─ Final text         → persist + return
-    │
-    └─► _post_turn()
-          ├─ auto_name_session_if_needed()
-          ├─ summarize_memory() (if triggered)
-          ├─ trigger_memory_pipeline_async() (every 5th turn)
-          └─ _clear_request_cache() + _clear_embedding_cache()
-```
-
-### 5.2 Message Processing (Streaming)
-
-```markdown
-User Message
-    │
-    ▼
-orchestrator.handle_user_message_streaming()
-    │
-    ├─► StreamManager.start_stream()         [stream_manager.py]
-    │     └─ Spawn background worker thread
-    │
-    ├─► _cache_images_from_message()          [multimodal.py]
-    │
-    ├─► /imagine fast path?
-    │     └─ YES → execute_tool → yield markdown
-    │
-    ├─► StreamFilter.buffering               [commands.py]
-    │     ├─ Buffer chunks until structured tool-call state is confirmed
-    │     ├─ No tool call → stream to client
-    │     └─ Tool call detected → execute tool, loop to stream next assistant turn
-    │
-    ├─► generate_ai_response_streaming()      [llm_client.py]
-    │     └─ Same message building as sync path
-    │     └─ Provider streaming API → yield chunks
-    │
-    └─► _post_turn() (same as sync)
-```
-
-### 5.3 Memory Pipeline
-
-```markdown
-Every 5th turn (throttled)
-    │
-    ▼
-orchestrator._trigger_memory_pipeline()
-    │
-    ▼
-memory.trigger_memory_pipeline_async()         [memory.py]
-    │
-    ├─► Gate check
-    │     ├─ Delta ≥ 40 + idle ≥ 3h → trigger
-    │     └─ Delta ≥ 50 → force trigger
-    │
-    ├─► batch_segment()                       [memory.py]
-    │     ├─ Time-gap fast-path (≥ 15 min, no LLM)
-    │     └─ LLM boundary detection (topic shift / surprise)
-    │
-    ├─► create_episodic_memory()              [extractor.py]
-    │     └─ Summarized events → semantic_facts (fact_type='dynamic')
-    │
-    ├─► run_predict_calibrate()               [pcl.py]
-    │     ├─ PREDICT: LLM predicts from existing facts
-    │     ├─ CALIBRATE: Identify knowledge gaps
-    │     └─ CONSOLIDATE: new/reinforce/update/invalidate
-    │
-    ├─► embed_text()                          [embedder.py]
-    │     └─ Qwen3-Embedding-0.6B → 1024-dim vector
-    │
-    └─► save_fact()                           [db_memory.py]
-          └─ INSERT INTO semantic_facts (pgvector)
-```
-
-### 5.4 Memory Retrieval (Per-Turn Context Building)
-
-```markdown
-prompts.build_system_message()
-    │
-    ▼
-retrieval.retrieve_memories_combined()         [retrieval.py]
-    │
-    ├─► Embedding cache check
-    │     └─ Miss → embed_text() [embedder.py → Chutes API]
-    │
-    ├─► pgvector search (single embedding, two queries)
-    │     ├─ Static:  fact_type='static'  → top 10
-    │     └─ Dynamic: fact_type='dynamic' → top 5
-    │
-    ├─► Hybrid scoring
-    │     └─ score = similarity×0.6 + importance×0.2 + confidence×0.2
-    │
-    ├─► RRF merge
-    │     └─ RRF_score = Σ 1/(k + rank), k=60
-    │
-    └─► Return (static_ids, static_context, dynamic_context)
-          └─ Injected into system prompt
-```
-
-### 5.5 Tool Execution
-
-```markdown
-LLM Response (structured tool_calls)
-    │
-    ├─ tool_calls parsed                   [providers / orchestrator]
-    │     └─ normalize native tool arguments
-    │
-    ▼
-tools.registry.execute_tool()                  [registry.py]
-    │
-    ├─► Lazy-load tool module
-    ├─► Inject session_id if needed
-    ├─► module.execute(arguments, session_id)
-    │
-    └─► Return {"ok": bool, "data": {}, "markdown": "<details>...</details>"}
-          │
-          ├─ Plain text turn (no tools) → stream directly to user
-          └─ Assistant triggers tool → execute tools locally → recursive loop
-```
-
-### 5.6 Multimodal Pipeline
-
-```markdown
-Image in User Message
-    │
-    ▼
-orchestrator._cache_images_from_message()
-    │
-    ├─ Local path? → validate + cache
-    ├─ URL? → multimodal.download_image_to_cache() → static/image_cache/
-    └─ Upload? → validate path (traversal protection)
-    │
-    ▼
-llm_client.generate_ai_response()
-    │
-    ├─ Images detected? → Route to Vision Model (Kimi-K2.5, Gemma-4, Qwen-VL)
-    └─ multimodal.inject_vision_context()
-          └─ Two-pass global cap: Max 3 recent images across history
-          └─ is_tool_loop flag protects context eviction during internal agent loops
-```
-
-```markdown
-Native function calling example:
-
-- tool call: `image_generate` with a detailed prompt
-- runtime dispatch: `app/tools/registry.py`
-- result contract: `ToolEvent` / `ToolResultEvent`
-```
-
-### 5.7 Streaming State Lifecycle
+## 3. Graph memory architecture
 
 ```mermaid
-sequenceDiagram
-    participant F as Frontend
-    participant R as FastAPI Route
-    participant W as Background Thread
-    participant S as StreamManager
-    participant P as PostgreSQL
-
-    F->>R: POST /api/send_message_stream
-    R->>S: start_stream(session_id, user_message)
-    S->>W: spawn orchestrator worker
-    W->>S: add_chunk(chunk)
-    S->>P: update_message(...) every 2 seconds
-    F--xR: client disconnects
-    W->>S: continue generation independently
-    W->>S: finish() on completion
-    F->>R: reload /api/get_profile
-    R->>S: get_active_buffer(session_id)
-    S-->>R: full_text + buffered chunks
-    R->>F: history includes sentinel id -99
-    F->>R: reconnect and render live content
-    S-->>F: replay buffered chunks
-    S->>P: final persisted update
+flowchart LR
+    MSG[messages] --> GATE[batch gate]
+    GATE --> EXT[structured extraction]
+    EXT --> EP[episodes]
+    EXT --> N[memory_nodes]
+    EXT --> E[memory_edges]
+    EXT --> EV[memory_evidence]
+    N --> RET[vector/trigram retrieval]
+    E --> RET
+    EV --> RET
+    RET --> PROMPT[PromptBuilder]
+    GK[global_knowledge_entries] --> PROMPT
 ```
 
-The live buffer persists across disconnects for up to 15 minutes. The profile reload path injects the active buffer into the returned history so the UI can recover the in-flight assistant response without waiting for the original request socket.
+### Canonical stores
 
----
+| Table | Role |
+|---|---|
+| `messages` | Raw source history |
+| `episodes` | Batch summaries and source ranges |
+| `memory_nodes` | Inferred claims/entities |
+| `memory_edges` | Typed relationships |
+| `memory_evidence` | Node/edge provenance |
+| `global_knowledge_entries` | Explicit user-managed facts |
 
-## 6. Database Schema
+All are tenant-scoped where applicable. Graph embeddings use `vector(1536)` when present. Retrieval requires `user_id` and applies bounded expansion.
 
-### Entity-Relationship Diagram
+### Pipeline behavior
 
-```mermaid
-erDiagram
-    PROFILE {
-        int id PK
-        string user_name
-        string partner_name
-        int affection
-        json memory_json
-        json providers_config_json
-        json context
-        string image_model
-        string vision_model
-    }
-    CHAT_SESSION {
-        int id PK
-        string name
-        bool is_active
-        int message_count
-        json memory_json
-        timestamp created_at
-        timestamp updated_at
-    }
-    MESSAGE {
-        int id PK
-        int session_id FK
-        string role
-        text content
-        bool content_encrypted
-        string image_paths
-        timestamp created_at
-    }
-    API_KEY {
-        int id PK
-        string provider
-        string encrypted_key
-        timestamp created_at
-    }
-    SEMANTIC_FACT {
-        int id PK
-        int session_id FK
-        string fact_type "static | dynamic"
-        text content
-        vector embedding "VECTOR(1024)"
-        jsonb metadata
-        timestamp valid_at
-        timestamp created_at
-        timestamp last_accessed
-        timestamp invalid_at "soft delete"
-    }
-    PROFILE ||--o{ CHAT_SESSION : "owns"
-    CHAT_SESSION ||--o{ MESSAGE : "contains"
-    CHAT_SESSION ||--o{ SEMANTIC_FACT : "has memories"
-```
+The memory worker uses message-ID cursors and a per-session fence. Eligible batches are extracted once, then persisted as graph records. Evidence links extracted nodes to source messages and episodes.
 
-### Table Summary
+## 4. Tool and request flow
 
-| Table | Purpose | Key Columns |
-| --- | --- | --- |
-| `profiles` | User/companion settings | `user_name`, `partner_name`, `affection`, `memory_json`, `providers_config_json` |
-| `chat_sessions` | Session tracking | `name`, `is_active`, `message_count`, `memory_json` |
-| `messages` | Conversation log | `session_id`, `role`, `content`, `content_encrypted`, `image_paths` |
-| `api_keys` | Encrypted API key storage | `provider`, `encrypted_key` (ChaCha20-Poly1305) |
-| `semantic_facts` | Unified memory store | `fact_type`, `content`, `embedding VECTOR(1024)`, `metadata JSONB`, `invalid_at` |
+Native provider tool calls become structured `ToolEvent` objects, execute through the central registry, and return `ToolResultEvent` data. Memory tools use graph retrieval and graph node persistence. Backend tools do not emit UI Markdown or HTML.
 
-### Indexing Strategy
+## 5. Database model
 
-- **Primary keys**: B-tree on `id` for all tables
-- **Metadata**: GIN index on `semantic_facts.metadata` (jsonb_path_ops)
-- **Vector search**: Exact Nearest Neighbor (Sequential Scan). No HNSW/IVFFlat due to SIGILL on Termux ARM. 100% recall at \~36ms for 3,500 rows.
+The DDL is defined in `app/db/queries.py` and uses PostgreSQL extensions `pgcrypto`, `vector`, and `pg_trgm`.
 
----
+Important invariants:
 
-## 7. API Surface
+- all tenant-scoped reads/writes constrain `user_id`;
+- graph confidence and importance are within `0..1`;
+- edges are unique by tenant, endpoints, and type;
+- edge endpoints cannot be self-loops;
+- evidence targets a node or edge;
+- validity is represented by `valid_from` / `valid_until` and node status;
+- foreign keys preserve ownership and referential integrity;
+- provider API keys are supplied through the browser BYOK flow and are not persisted server-side.
 
-### REST Endpoints
+## 6. Memory retrieval
 
-| Endpoint | Method | Handler | Response |
-| --- | --- | --- | --- |
-| `/api/config` | GET | `get_config()` | Vision models by provider |
-| `/api/send_message` | POST | `send_message()` | `{response, session_id}` |
-| `/api/send_message_stream` | POST | `send_message_stream()` | SSE stream |
-| `/api/get_profile` | GET | `get_profile()` | Profile JSON |
-| `/api/update_profile` | POST | `update_profile()` | Updated profile |
-| `/api/providers` | GET | `get_providers()` | Provider list + models |
-| `/api/providers/switch` | POST | `switch_provider()` | Status message |
-| `/api/providers/test` | POST | `test_provider()` | Connection test result |
-| `/api/sessions` | GET | `get_sessions()` | Session list |
-| `/api/sessions/create` | POST | `create_session()` | New session |
-| `/api/sessions/switch` | POST | `switch_session()` | Status message |
-| `/api/sessions/rename` | POST | `rename_session()` | Status message |
-| `/api/sessions/delete` | POST | `delete_session()` | Status message |
-| `/api/memory_stats` | GET | `get_memory_stats()` | Memory statistics |
-| `/api/api_keys` | GET | `get_api_keys()` | Key list |
-| `/api/api_keys/add` | POST | `add_api_key()` | Status message |
-| `/api/api_keys/delete` | POST | `delete_api_key()` | Status message |
-| `/api/set_vision_model` | POST | `set_vision_model()` | Status message |
-| `/api/upload_image` | POST | `upload_image()` | Upload result |
-| `/api/generated_images/{filename}` | GET | `serve_generated_image()` | Image file |
+`app/memory/retrieval.py` uses an embedding when available and falls back to trigram text search. It retrieves active graph nodes, attaches evidence, expands one graph hop, and formats bounded context. Explicit knowledge is presented separately through `app/prompts.py`.
 
-### HTML Page Routes
+## 7. Memory maintenance
 
-| Path | Template | Purpose |
-| --- | --- | --- |
-| `/` |  | Home page |
-| `/chat` |  | Chat interface |
-| `/config` |  | Configuration page |
-| `/about` |  | About page |
-
-### Static Mounts
-
-| Mount | Directory | Purpose |
-| --- | --- | --- |
-| `/static` | `static/` | CSS, JS, assets |
-| `/uploads` | `static/uploads/` | User uploads |
-| `/generated_images` | `static/generated_images/` | AI-generated images |
-
----
-
-## 8. Frontend Architecture
-
-### Component Diagram
-
-```markdown
-┌─────────────────────────────────────────────────────────────┐
-│                      Browser                                 │
-│                                                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │  index.html  │  │  chat.html   │  │  config.html     │  │
-│  └──────┬───────┘  └──────┬───────┘  └────────┬─────────┘  │
-│         │                 │                    │             │
-│  ┌──────▼───────┐  ┌──────▼───────┐  ┌────────▼─────────┐  │
-│  │  home.js     │  │  chat.js     │  │  config.js       │  │
-│  │  about.js    │  │  renderer.js │  │                  │  │
-│  │  sidebar.js  │  │              │  │                  │  │
-│  └──────────────┘  └──────┬───────┘  └──────────────────┘  │
-│                           │                                  │
-│                    ┌──────▼───────┐                          │
-│                    │  /api/*      │                          │
-│                    │  (SSE + REST)│                          │
-│                    └──────────────┘                          │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### SSE Streaming Flow
-
-```markdown
-Browser                                    Server
-   │                                         │
-   │  POST /api/send_message_stream          │
-   │ ──────────────────────────────────────► │
-   │                                         │
-   │  SSE: "data: {chunk}..."                │
-   │ ◄────────────────────────────────────── │
-   │                                         │
-   │  chat.js appends chunk to DOM           │
-   │  (incremental rendering)                │
-   │                                         │
-   │  SSE: "event: done"                     │
-   │ ◄────────────────────────────────────── │
-   │                                         │
-   │  renderer.js renders Mermaid/code       │
-   │  hideTypingIndicator()                  │
-   │  scrollToBottom()                       │
-```
-
-The transport is stateful rather than purely request-scoped. Generation continues in a background thread, and the active `StreamManager` buffer remains available for reconnect and profile reload paths until completion or TTL expiration.
-
-### State Preservation & Re-rendering
-During SSE streaming, the DOM is incrementally updated. To prevent UI state resets (e.g., collapsed/expanded `<details>` accordions snapping closed on every chunk), the frontend uses state tracking for interactive elements. Copy button states and Highlight.js DOM bindings are also dynamically re-attached to ensure interactive consistency without full DOM thrashing.
-
-### Rendering Pipeline
-
-```markdown
-Raw Markdown Chunk
-    │
-    ▼
-renderer.renderSync()                     [renderer.js]
-    │
-    ├─ Marked.js v18 (GFM parsing)
-    ├─ Mermaid diagram detection → mermaid.render()
-    └─ Code block highlighting
-    │
-    ▼
-innerHTML injection into .message-content
-```
-
-### Dynamic Layout System
-
-```markdown
-updateDynamicLayout()                     [chat.js]
-    │
-    ├─ paddingTop = header height (48px) + margin
-    └─ paddingBottom = input area height + 60px margin
-
-Triggered by:
-    ├─ Page load
-    ├─ Textarea input (auto-resize)
-    ├─ Window resize
-    └─ ResizeObserver on input area
-```
-
----
-
-*This document describes the structural blueprint of Yuzu Companion — what the system is and how the pieces fit together. For operational guidelines and safety rules, see `file AGENTS.md`.*
-
----
-
-## 9. v4.0.0 Thin-Client TUI (2026-06)
-
-### Architecture Shift
-
-In v4.0.0, the system adopted a strict thin-client architecture:
-
-| Before | After |
-|--------|-------|
-| Legacy CLI (`main.py`) | Obsolete, retired |
-| Direct DB access in CLI | HTTP-only thin client |
-| Rich/prompt_toolkit TUI | Textual persistent TUI |
-
-### Entry Points
+The standalone skill at `Skills/memory-guardian/` is intentionally separate from runtime extraction. Its helper:
 
 ```bash
-# Backend server (FastAPI + PostgreSQL)
-yuzu-server
-# or: python3 main.py
-
-# Thin-client TUI (Textual)
-yuzu
-# or: python3 -m cli.app
+python3 /home/workspace/Skills/memory-guardian/scripts/memory_review.py --format markdown
 ```
 
-### Thin-Client Diagram
+reports metrics and detects duplicate nodes/edges, near-duplicates, contradiction candidates, orphan nodes, missing provenance, dangling evidence, tenant/integrity violations, invalid validity windows, self-loops, embedding anomalies, and explicit-knowledge overlaps.
 
-```mermaid
-flowchart TB
-    subgraph TUI["Yuzu CLI (Textual)"]
-        APP[cli/app.py<br/>YuzuTUI]
-        W[cli/widgets/]
-        CLIENT[cli/client.py<br/>YuzuClient]
-    end
-    
-    subgraph Backend["Yuzu Server (FastAPI)"]
-        MAIN[main.py<br/>FastAPI + Lifespan]
-        DB[(PostgreSQL + pgvector)]
-        MEM[Memory System]
-        ORCH[Orchestrator]
-    end
-    
-    APP --> W
-    W --> CLIENT
-    CLIENT -.->|HTTP/SSE| MAIN
-    MAIN --> ORCH
-    ORCH --> DB
-    ORCH --> MEM
-```
+Only exact normalized duplicate nodes with confidence at least `0.98` may be merged through an explicit repair run. Repairs are tenant-scoped, preserve evidence/history, and avoid hard deletes. Ambiguous contradictions and near-duplicates remain report-only.
 
-**Key invariant:** CLI never imports `app.db`, `app.memory`, or `app.orchestrator`. All data flows through `/api/*` endpoints.
+## 8. Documentation boundaries
 
-### CLI Directory
+- `docs/memory.md`: detailed graph memory behavior.
+- `docs/database.md`: storage, tenant, and schema invariants.
+- `docs/tools.md`: native tools and memory tool contracts.
+- `app/memory/README.md`: runtime memory ownership and flow.
+- `Skills/memory-guardian/`: operational graph maintenance, not runtime extraction.
 
-```
-cli/
-├── app.py              # Textual TUI application
-├── client.py           # Async HTTP client (YuzuClient)
-├── widgets/
-│   ├── chat_log.py     # Scrollable Markdown chat
-│   ├── input_box.py    # Message input widget
-│   └── session_list.py # Session sidebar
-├── styles/
-│   └── app.tcss        # Textual CSS
-└── README.md           # CLI documentation
-```
-
-### Widget Communication
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant IB as InputBox
-    participant A as YuzuTUI
-    participant C as YuzuClient
-    participant S as FastAPI Backend
-    participant CL as ChatLog
-    
-    U->>IB: Type message + Enter
-    IB->>A: MessageSubmitted
-    A->>CL: add_message("user", text)
-    A->>C: stream_message(session_id, text)
-    C->>S: POST /api/send_message_stream (SSE)
-    S-->>C: SSE chunks
-    C-->>A: Chunks arrive
-    A->>CL: update_message("yuzuki", chunk)
-    S-->>C: SSE done
-    A->>CL: finalize_message()
-```
-
-### Packaging
-
-```toml
-[project.scripts]
-yuzu = "cli.app:run_app"
-yuzu-server = "main:app"
-```
-
-- `yuzu` — Thin-client TUI entry point
-- `yuzu-server` — FastAPI server entry point
-
----
-
-*For CLI-specific documentation, see `file cli/README.md`.*
+Legacy semantic-memory implementations are outside the current architecture and must not be reintroduced into runtime SQL or maintenance workflows.
