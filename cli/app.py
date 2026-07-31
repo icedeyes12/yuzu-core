@@ -2,378 +2,164 @@ from __future__ import annotations
 
 import asyncio
 import os
-import time
 
-import httpx
-from textual.app import App, ComposeResult
-from textual.binding import Binding
-from textual.containers import Container, Horizontal
-from textual.widgets import Footer, Header, Static
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.patch_stdout import patch_stdout
+from rich.console import Console, Group
+from rich.live import Live
+from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.text import Text
 
-from app.core.logging_config import get_logger
-from cli.client import YuzuClient
-from cli.widgets import (
-    ChatLog,
-    InputBox,
-    SessionList,
-    SessionSelected,
-)
+from cli.client import StreamEvent, YuzuClient
 
-log = get_logger(__name__)
+DEFAULT_BACKEND_URL = "http://localhost:5000"
+console = Console()
 
 
-class YuzuTUI(App[None]):
-    """
-    Main Textual TUI application with persistent chat interface.
-
-    Layout:
-    - Left sidebar: SessionList (toggleable)
-    - Right: ChatLog + InputBox
-
-    Backend communication via HTTP only (no DB imports).
-    """
-
-    CSS_PATH = "styles/app.tcss"
-    BINDINGS = [
-        Binding("ctrl+c", "quit", "Quit", show=True),
-        Binding("ctrl+s", "toggle_session_sidebar", "Sessions", show=True),
-        Binding("tab", "focus_next", "Next", show=False),
-        Binding("shift+tab", "focus_previous", "Prev", show=False),
-    ]
+class YuzuREPL:
+    """Inline terminal REPL for the HTTP/SSE Yuzu Companion API."""
 
     def __init__(self, backend_url: str | None = None) -> None:
-        super().__init__()
         self.backend_url = backend_url or os.getenv(
-            "YUZU_BACKEND_URL", "http://localhost:5000"
+            "YUZU_BACKEND_URL", DEFAULT_BACKEND_URL
         )
-        self.client = YuzuClient(base_url=self.backend_url)
-        self._processing = False
-        self._session_id: int | str = 1
-        self._sidebar_visible = False
-        self._last_response_widget: Static | None
-        self._response_start_time: float | None = None
-        log.info(f"YuzuTUI initialized with backend: {self.backend_url}")
+        history_path = os.getenv("YUZU_CLI_HISTORY", "~/.yuzu_history")
+        self.prompt = PromptSession(
+            history=FileHistory(os.path.expanduser(history_path))
+        )
+        self.client = YuzuClient(self.backend_url)
+        self.session_id: str | None = None
+        self.running = True
 
-    def compose(self) -> ComposeResult:
-        """Compose the main application layout."""
-        yield Header(name="Yuzu Companion")
-        with Horizontal(id="main-layout"):
-            yield SessionList(id="sidebar")
-            with Container(id="chat-container"):
-                yield ChatLog(id="chat-log")
-                yield InputBox(id="input-box")
-        yield Footer()
-
-    def on_mount(self) -> None:
-        """On mount: health check, load sessions, load history."""
-        log.info("YuzuTUI mounted and ready")
-        self.title = "Yuzu Companion"
-        self.sub_title = f"Backend: {self.backend_url}"
-
-        # Detect screen size and apply desktop classes if needed
-        self._apply_responsive_layout()
-
-        # Use call_later to run async init in background
-        asyncio.create_task(self._init_app())
-        log.debug("Init task scheduled")
-
-    def _apply_responsive_layout(self) -> None:
-        """Apply desktop or mobile classes based on terminal width."""
+    async def start(self) -> None:
+        await self.client.connect()
         try:
-            # Get terminal width (fallback to 80 if detection fails)
-            import shutil
-
-            width = shutil.get_terminal_size().columns
-
-            log.debug(f"Terminal width: {width} columns")
-
-            # Desktop mode: width >= 80 columns
-            if width >= 80:
-                log.info("Applying desktop layout (width >= 80)")
-                main_layout = self.query_one("#main-layout")
-                main_layout.add_class("desktop")
-
-                sidebar = self.query_one(SessionList)
-                sidebar.add_class("desktop")
-                sidebar.display = True  # Always visible on desktop
-                self._sidebar_visible = True
-
-                chat_container = self.query_one("#chat-container")
-                chat_container.add_class("desktop")
-            else:
-                log.info("Applying mobile layout (width < 80)")
-                # Mobile mode: sidebar hidden by default, toggleable
-                self._sidebar_visible = False
-
-        except Exception as e:
-            log.warning(
-                f"Failed to detect terminal size: {e}, defaulting to mobile layout"
-            )
-            self._sidebar_visible = False
-
-    async def _init_app(self) -> None:
-        """Perform health check, load sessions, and load initial history."""
-        try:
-            # Connect client
-            await self.client.connect()
-
-            # Health check
-            log.info("Running health check...")
-            is_healthy = await self.client.check_health()
-
-            # Update UI via call_later (we're in async context)
-            self.call_later(self._update_health_status, is_healthy)
-
-            if not is_healthy:
+            if not await self.client.check_health():
+                console.print(f"[yellow]Backend tidak merespons:[/] {self.backend_url}")
                 return
-
-            log.info("Health check passed")
-
-            # Load sessions
-            sessions = await self.client.list_sessions()
-            self.call_later(self._update_sessions, sessions)
-
-            log.info(f"Loaded {len(sessions)} sessions, active: {self._session_id}")
-
-            # Load history for active session
-            await self._load_history()
-
-        except Exception as e:
-            log.error(f"Init failed: {e}")
-            self.call_later(self._show_error, f"Init error: {e}")
-
-    def _update_health_status(self, is_healthy: bool) -> None:
-        """Update UI with health check result (called from main thread)."""
-        chat_log = self.query_one(ChatLog)
-        if is_healthy:
-            chat_log.add_message("system", f"✓ Connected to {self.backend_url}")
-        else:
-            chat_log.add_message(
-                "system", f"⚠️  Backend unreachable: {self.backend_url}"
+            console.print(
+                Panel(
+                    "[bold]Yuzu Companion[/bold]\n"
+                    f"Connected to {self.backend_url}\n"
+                    "Ketik [cyan]/help[/] untuk perintah.",
+                    border_style="cyan",
+                )
             )
+            await self._select_initial_session()
+            await self._loop()
+        finally:
+            await self.client.disconnect()
 
-    def _update_sessions(self, sessions: list[dict[str, object]]) -> None:
-        """Update session list UI (called from main thread)."""
-        session_list = self.query_one(SessionList)
-        session_list.load_sessions(sessions)
-
-        if sessions:
-            session_id = sessions[0].get("id", 1)
-            self._session_id = session_id if isinstance(session_id, (int, str)) else 1
-            session_list.set_active_session(str(self._session_id))
-        else:
-            self._session_id = 1
-
-    def _show_error(self, message: str) -> None:
-        """Show error in chat log (called from main thread)."""
-        chat_log = self.query_one(ChatLog)
-        chat_log.add_message("system", f"❌ {message}")
-
-    async def _load_history(self) -> None:
-        """Load chat history for current session into ChatLog."""
-        try:
-            history = await self.client.get_history(self._session_id)
-            self.call_later(self._display_history, history)
-            log.info(f"Loaded {len(history)} messages for session {self._session_id}")
-
-        except Exception as e:
-            log.error(f"Failed to load history: {e}")
-            self.call_later(self._show_error, f"Could not load history: {e}")
-
-    def _display_history(self, history: list[dict[str, object]]) -> None:
-        """Display history in chat log (called from main thread)."""
-        chat_log = self.query_one(ChatLog)
-        chat_log.clear_messages()
-
-        if not history:
-            chat_log.add_message("system", "No previous messages")
+    async def _select_initial_session(self) -> None:
+        sessions = await self.client.list_sessions()
+        if not sessions:
+            console.print("[dim]Belum ada session aktif.[/]")
             return
+        first = sessions[0].get("id")
+        if isinstance(first, (str, int)):
+            self.session_id = str(first)
+            console.print(f"[dim]Session aktif: {self.session_id}[/]")
 
-        for msg in history:
-            role_value = msg.get("role", "unknown")
-            content_value = msg.get("content", "")
-            role = role_value if isinstance(role_value, str) else "unknown"
-            content = (
-                content_value if isinstance(content_value, str) else str(content_value)
+    async def _loop(self) -> None:
+        while self.running:
+            try:
+                with patch_stdout(raw=True):
+                    message = await self.prompt.prompt_async("You › ")
+            except (EOFError, KeyboardInterrupt):
+                console.print()
+                break
+            message = message.strip()
+            if not message:
+                continue
+            if await self._handle_command(message):
+                continue
+            await self._send_message(message)
+
+    async def _handle_command(self, message: str) -> bool:
+        command, _, argument = message.partition(" ")
+        command = command.lower()
+        if command in {"/quit", "/exit", "/q"}:
+            self.running = False
+            return True
+        if command == "/help":
+            console.print(
+                "[cyan]/sessions[/] list sessions · "
+                "[cyan]/switch <id>[/] switch session · "
+                "[cyan]/quit[/] exit"
             )
-            if role == "user":
-                chat_log.add_message("you", content)
-            elif role == "assistant":
-                chat_log.add_message("yuzuki", content)
-            else:
-                chat_log.add_message(role, content)
+            return True
+        if command == "/sessions":
+            await self._show_sessions()
+            return True
+        if command == "/switch":
+            await self._switch_session(argument.strip())
+            return True
+        return False
 
-    def on_input_box_message_submitted(self, event: InputBox.MessageSubmitted) -> None:
-        """Handle message submission from InputBox."""
-        if self._processing:
-            log.debug("Ignoring submit - already processing")
+    async def _show_sessions(self) -> None:
+        sessions = await self.client.list_sessions()
+        if not sessions:
+            console.print("[dim]Tidak ada session.[/]")
             return
+        for session in sessions:
+            session_id = session.get("id", "?")
+            name = session.get("name", session.get("title", "Untitled"))
+            marker = "*" if str(session_id) == self.session_id else " "
+            console.print(f"[dim]{marker}[/] {session_id}  {name}")
 
-        message = event.content
-        chat_log = self.query_one(ChatLog)
-
-        # Local echo
-        chat_log.add_message("you", message)
-        log.info(f"Message submitted: {message[:50]}...")
-
-        # Send to backend in background task
-        asyncio.create_task(self._send_message(message))
+    async def _switch_session(self, session_id: str) -> None:
+        if not session_id:
+            console.print("[yellow]Usage: /switch <session-id>[/]")
+            return
+        await self.client.switch_session(session_id)
+        self.session_id = session_id
+        console.print(f"[dim]Switched to session {session_id}.[/]")
 
     async def _send_message(self, message: str) -> None:
-        """Send message to backend and handle streaming response."""
-        self._processing = True
+        console.print("[bold green]You[/]")
+        console.print(message)
+        console.print("[bold magenta]Yuzuki[/]")
+        response_parts: list[str] = []
+        tool_lines: list[Text] = []
+        live_render = Group(Markdown(""), *tool_lines)
+        with Live(
+            live_render, console=console, refresh_per_second=12, transient=False
+        ) as live:
+            try:
+                async for event in self.client.stream_message(message):
+                    if event.type == "token":
+                        response_parts.append(event.content)
+                    elif event.type == "tool_call":
+                        tool_lines.append(self._tool_status("call", event))
+                    elif event.type == "tool_result":
+                        tool_lines.append(self._tool_status("result", event))
+                    elif event.type == "error":
+                        response_parts.append(
+                            f"**Error:** {event.error or event.content}"
+                        )
+                    elif event.type == "done":
+                        break
+                    live.update(Group(Markdown("".join(response_parts)), *tool_lines))
+            except Exception as exc:
+                live.update(
+                    Group(Markdown(f"**Connection error:** {exc}"), *tool_lines)
+                )
 
-        # Switch to current session first
-        try:
-            await self.client.switch_session(self._session_id)
-            log.info(f"Switched to session {self._session_id}")
-        except Exception as e:
-            log.error(f"Failed to switch session: {e}")
-            self.call_later(self._show_error, f"Could not switch session: {e}")
-            self._processing = False
-            return
-
-        # Disable input
-        self.call_later(self._set_input_state, False)
-
-        # Add placeholder message
-        self.call_later(self._add_response_placeholder)
-
-        full_response = ""
-
-        try:
-            # Stream response
-            async for chunk in self.client.stream_message(message):
-                full_response += chunk
-                self.call_later(self._update_response, full_response)
-
-            log.info(f"Response received: {len(full_response)} chars")
-
-        except httpx.ConnectError:
-            self.call_later(self._update_response, "❌ Connection failed")
-            log.error("Connection error")
-
-        except httpx.TimeoutException:
-            self.call_later(self._update_response, "❌ Request timed out")
-            log.error("Timeout")
-
-        except Exception as e:
-            self.call_later(self._update_response, f"❌ Error: {e}")
-            log.error(f"Send error: {e}")
-
-        finally:
-            # Re-enable input
-            self._processing = False
-            self.call_later(self._set_input_state, True)
-
-    def _set_input_state(self, enabled: bool) -> None:
-        """Enable/disable input box (called from main thread)."""
-        input_box = self.query_one(InputBox)
-        if enabled:
-            input_box.disabled = False
-            input_box.styles.opacity = 1.0
-            input_box.focus()
-        else:
-            input_box.disabled = True
-            input_box.styles.opacity = 0.5
-
-    def _add_response_placeholder(self) -> None:
-        """Add typing indicator with spinner."""
-        self._response_start_time = time.time()
-        chat_log = self.query_one(ChatLog)
-        # Typing indicator with animated dots
-        self._last_response_widget = chat_log.add_message("yuzu", "⏳ Typing...")
-
-        # Schedule spinner animation updates
-        self._update_spinner(0)
-
-    def _update_spinner(self, count: int) -> None:
-        """Animate typing indicator spinner."""
-        if not self._processing or count > 30:  # Max 30 updates (30s timeout)
-            return
-
-        spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-        spinner = spinner_chars[count % len(spinner_chars)]
-        elapsed = (
-            time.time() - self._response_start_time if self._response_start_time else 0
-        )
-
-        if self._last_response_widget:
-            chat_log = self.query_one(ChatLog)
-            chat_log.update_message(
-                self._last_response_widget,
-                "yuzu",
-                f"{spinner} Processing... ({elapsed:.1f}s)",
-            )
-
-        # Schedule next update (every 0.1s)
-        self.call_later(self._update_spinner, count + 1)
-
-    def _update_response(self, content: str) -> None:
-        """Update response with elapsed time."""
-        if self._last_response_widget:
-            # Calculate elapsed time
-            if self._response_start_time:
-                elapsed = time.time() - self._response_start_time
-                # Show elapsed time in first update
-                if not content.startswith(("⏱", " <")):
-                    content = f"⏱ {elapsed:.1f}s\n\n{content}"
-                    self._response_start_time = None
-
-            chat_log = self.query_one(ChatLog)
-            chat_log.update_message(self._last_response_widget, "yuzu", content)
-
-    def on_session_list_session_selected(self, event: SessionSelected) -> None:
-        """Handle session selection: switch session, reload history."""
-        session_id = event.session_id
-
-        if session_id == self._session_id:
-            return  # No change
-
-        log.info(f"Session selected: {session_id}")
-        self._session_id = session_id
-
-        # Update UI
-        session_list = self.query_one(SessionList)
-        session_list.set_active_session(str(session_id))
-
-        # Reload history in background
-        asyncio.create_task(self._load_history())
-
-    def action_toggle_session_sidebar(self) -> None:
-        """Toggle session sidebar visibility (for mobile layout)."""
-        try:
-            import shutil
-
-            width = shutil.get_terminal_size().columns
-
-            # On desktop (>= 80 cols), sidebar is always visible
-            if width >= 80:
-                log.debug("Desktop mode: sidebar toggle ignored (always visible)")
-                return
-
-            # Mobile mode: toggle sidebar
-            sidebar = self.query_one(SessionList)
-            self._sidebar_visible = not self._sidebar_visible
-
-            if self._sidebar_visible:
-                sidebar.add_class("visible")
-                sidebar.focus()
-            else:
-                sidebar.remove_class("visible")
-                self.query_one(InputBox).focus()
-
-            log.debug(f"Sidebar visible: {self._sidebar_visible}")
-        except Exception as e:
-            log.error(f"Failed to toggle sidebar: {e}")
+    @staticmethod
+    def _tool_status(kind: str, event: StreamEvent) -> Text:
+        data = event.data or {}
+        name = data.get("name", data.get("tool_name", "tool"))
+        return Text(f"  {kind}: {name}", style="dim italic")
 
 
 def run_app(backend_url: str | None = None) -> None:
-    """Entry point for the Yuzu Companion TUI."""
-    backend_url = backend_url or os.getenv("YUZU_BACKEND_URL", "http://localhost:5000")
-    print(f"Yuzu Companion CLI (v1.0.0) connecting to {backend_url}")
-    app = YuzuTUI(backend_url=backend_url)
-    app.run()
+    """Console entry point for the inline async REPL."""
+    try:
+        asyncio.run(YuzuREPL(backend_url).start())
+    except KeyboardInterrupt:
+        console.print("\n[dim]Bye.[/]")
 
 
 if __name__ == "__main__":
