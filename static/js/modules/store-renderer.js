@@ -29,8 +29,10 @@ export class DOMRenderer {
 		this.renderFrame = null;
 		this.renderFrameCancel = null;
 		this.lastRenderedMessageHashes = new Map();
-		this.unsubscribe = chatStore.subscribe((messages, isGenerating, error, eventObj) =>
-			this.scheduleRender(messages, isGenerating, error, eventObj),
+		this.renderMetrics = new Map();
+		this.unsubscribe = chatStore.subscribe(
+			(messages, isGenerating, error, eventObj) =>
+				this.scheduleRender(messages, isGenerating, error, eventObj),
 		);
 	}
 
@@ -91,6 +93,7 @@ export class DOMRenderer {
 		cancelMessageFenceWork();
 		cleanupMessageFences(this.container);
 		this.lastRenderedMessageHashes.clear();
+		this.renderMetrics.clear();
 	}
 
 	render(messages, isGenerating, error = null, eventObj = null) {
@@ -126,7 +129,8 @@ export class DOMRenderer {
 
 		if (isPrepend && this.container._prependOldScrollHeight !== undefined) {
 			const newScrollHeight = this.container.scrollHeight;
-			this.container.scrollTop += (newScrollHeight - this.container._prependOldScrollHeight);
+			this.container.scrollTop +=
+				newScrollHeight - this.container._prependOldScrollHeight;
 			this.container._prependOldScrollHeight = undefined;
 		}
 
@@ -170,6 +174,9 @@ export class DOMRenderer {
 		]);
 		if (this.lastRenderedMessageHashes.get(msg.id) === messageHash) return;
 		this.lastRenderedMessageHashes.set(msg.id, messageHash);
+		const metric = this.renderMetrics.get(msg.id) || { renderCount: 0 };
+		metric.renderCount += 1;
+		this.renderMetrics.set(msg.id, metric);
 		let html = renderMessageHTML(msg);
 		if (msg.attachments?.length) {
 			html += `<div class="attachments">${msg.attachments.map((att) => this._renderAttachment(att)).join("")}</div>`;

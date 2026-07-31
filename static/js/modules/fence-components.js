@@ -104,6 +104,11 @@ registerFenceHandler("__default__", defaultCodeHandler);
 // ── Mermaid handler ───────────────────────────────────────────────────────────
 
 const mermaidRenderTokens = new WeakMap();
+const mermaidMetrics = { renderCount: 0, renderDurationMs: 0 };
+
+export function getMermaidMetrics() {
+	return { ...mermaidMetrics };
+}
 
 async function renderMermaidDiagram(diagramEl, source) {
 	if (!diagramEl?.isConnected) return;
@@ -148,7 +153,10 @@ async function renderMermaidDiagram(diagramEl, source) {
 	diagramEl.dataset.fenceRenderState = "rendering";
 	const renderId = `mermaid-svg-${Math.random().toString(36).slice(2, 9)}`;
 	try {
+		const startedAt = performance.now();
 		const result = await window.mermaid.render(renderId, source);
+		mermaidMetrics.renderCount += 1;
+		mermaidMetrics.renderDurationMs += performance.now() - startedAt;
 		if (
 			!diagramEl.isConnected ||
 			mermaidRenderTokens.get(diagramEl) !== renderToken
