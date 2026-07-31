@@ -18,13 +18,24 @@ flowchart TB
     X --> G[GraphMemoryRepository]
     G --> DB[(PostgreSQL)]
     R[retrieval.py] --> G
-    R --> PR[prompts.py]
+    R --> PR[prompt_service.py]
     PR --> L
     T --> R
     T --> G
 ```
 
-## 2. Runtime components
+## 2. Separation of concerns
+
+The backend is organized into strict layers:
+
+- `app/core/` — cross-domain infrastructure, security, configuration, runtime context, and logging.
+- `app/services/` — business workflows and orchestration.
+- `app/providers/` — external API client execution and provider-specific response handling.
+- `app/tools/` — native function-calling schemas and structured tool dispatch only; provider HTTP calls do not belong here.
+
+These boundaries are intentional. New code must be placed in the layer that owns its responsibility rather than added to a convenient neighboring module.
+
+## 3. Runtime components
 
 | Component | Location | Responsibility |
 |---|---|---|
@@ -41,7 +52,7 @@ flowchart TB
 | Database layer | `app/db/queries.py`, `app/db/connection.py` | SQL/DDL source of truth and pooled psycopg access |
 | Stream manager | `app/services/stream_manager.py` | Stream ownership, buffering, persistence, and cleanup |
 
-## 3. Graph memory architecture
+## 4. Graph memory architecture
 
 ```mermaid
 flowchart LR
@@ -75,11 +86,11 @@ All are tenant-scoped where applicable. Graph embeddings use `vector(1536)` when
 
 The memory worker uses message-ID cursors and a per-session fence. Eligible batches are extracted once, then persisted as graph records. Evidence links extracted nodes to source messages and episodes.
 
-## 4. Tool and request flow
+## 5. Tool and request flow
 
 Native provider tool calls become structured `ToolEvent` objects, execute through the central registry, and return `ToolResultEvent` data. Memory tools use graph retrieval and graph node persistence. Backend tools do not emit UI Markdown or HTML.
 
-## 5. Database model
+## 6. Database model
 
 The DDL is defined in `app/db/queries.py` and uses PostgreSQL extensions `pgcrypto`, `vector`, and `pg_trgm`.
 
@@ -94,11 +105,11 @@ Important invariants:
 - foreign keys preserve ownership and referential integrity;
 - provider API keys are supplied through the browser BYOK flow and are not persisted server-side.
 
-## 6. Memory retrieval
+## 7. Memory retrieval
 
 `app/memory/retrieval.py` uses an embedding when available and falls back to trigram text search. It retrieves active graph nodes, attaches evidence, expands one graph hop, and formats bounded context. Explicit knowledge is presented separately through `app/services/prompt_service.py`.
 
-## 7. Memory maintenance
+## 8. Memory maintenance
 
 The standalone skill at `Skills/memory-guardian/` is intentionally separate from runtime extraction. Its helper:
 
@@ -110,7 +121,7 @@ reports metrics and detects duplicate nodes/edges, near-duplicates, contradictio
 
 Only exact normalized duplicate nodes with confidence at least `0.98` may be merged through an explicit repair run. Repairs are tenant-scoped, preserve evidence/history, and avoid hard deletes. Ambiguous contradictions and near-duplicates remain report-only.
 
-## 8. Documentation boundaries
+## 9. Documentation boundaries
 
 - `docs/memory.md`: detailed graph memory behavior.
 - `docs/database.md`: storage, tenant, and schema invariants.

@@ -3,7 +3,7 @@
 ## Request Flow
 
 ```
-Request → FastAPI (web.py) → Router (app/api/main.py) → Endpoint → Service → DB (app/db/)
+Request → FastAPI (`main.py`) → Router (`app/api/main.py`) → Endpoint → Service → DB (`app/db/`)
 ```
 
 ### Entry Points
@@ -11,9 +11,19 @@ Request → FastAPI (web.py) → Router (app/api/main.py) → Endpoint → Servi
 | File | Role |
 |------|------|
 | `app/web.py` | FastAPI app (~130 lines): mounts static files, includes API router, registers startup/shutdown |
-| `app/main.py` | CLI entry point: Rich TUI that calls `app.services.orchestrator` and `app.db` directly |
+| `main.py` | ASGI entry point for the FastAPI backend |
+| `cli/app.py` | Inline async REPL using `rich` and `prompt_toolkit`; communicates with the backend through HTTP/SSE |
 
-### Routing
+### Layer boundaries
+
+The backend follows strict Separation of Concerns:
+
+- `app/core/` contains cross-domain infrastructure such as encryption, configuration, runtime context, presets, and logging.
+- `app/services/` contains business logic and orchestration.
+- `app/providers/` contains all external API client execution, including image and embedding requests.
+- `app/tools/` contains native function-calling schemas and structured dispatch only; it must not contain provider HTTP clients or UI formatting.
+
+## Routing
 
 `app/api/main.py` is the central router registry. It includes sub-routers from:
 
@@ -61,6 +71,10 @@ Business logic extracted from endpoints into `app/services/`:
 6. Post-turn: async memory pipeline + cache cleanup
 ```
 
+## CLI
+
+The `yuzu` command is a thin-client inline REPL. It uses `prompt_toolkit` for asynchronous input and history, `rich` for Markdown rendering, and HTTP/SSE through `cli/client.py` for backend communication. The CLI does not import backend internals and must not be rebuilt as a full-screen TUI.
+
 ## Concurrency Guidelines (Async-Native)
 
 Following recent refactors, Yuzu-Companion mandates strict async-native patterns to avoid event loop blocking and deadlocks:
@@ -73,7 +87,6 @@ Following recent refactors, Yuzu-Companion mandates strict async-native patterns
 
 | Legacy | Replacement |
 |--------|-------------|
-| `app/app.py` (shim) | Direct imports from `app.services.orchestrator`, `app.db`, `app.services` |
 | `app/api/routes.py` (~650 line monolith) | `app/api/endpoints/{chat,sessions,profile,memory}.py` |
 | `app/api/routes/` (empty dir) | Deleted |
 | `app/database/` (Flask-era naming) | `app/db/` |
@@ -107,4 +120,4 @@ Each provider implements `chat()`, `chat_stream()`, and (for embedding-capable) 
 - All API endpoints use Pydantic models for input validation
 - Exception details are logged internally, generic messages returned to clients
 - Path construction uses `pathlib.Path` with `os.path.basename()` guards
-- API keys are encrypted at rest via ChaCha20-Poly1305
+- Provider API keys remain in the browser BYOK configuration and are sent per request; they are not persisted server-side

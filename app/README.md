@@ -324,7 +324,7 @@ Each tool module exports a `TOOL_DEFINITION` dict alongside its `execute()` func
 
 | Module | Purpose |
 | --- | --- |
-| `app/tools/image_generate.py` | Image generation via Chutes API |
+| `app/tools/image_generate.py` | Image-generation schema and structured dispatch contract |
 | `app/tools/http_request.py` | Fetch public HTTPS endpoints with size/type validation |
 | `app/tools/memory_store.py` | Persist inferred graph nodes with category metadata |
 | `app/tools/memory_search.py` | Search graph nodes and bounded relationships |
@@ -596,7 +596,6 @@ Jinja2>=3.1.0           # Template engine
 # Terminal UI
 rich>=13.0.0            # Rich terminal formatting
 prompt-toolkit>=3.0.0   # Interactive prompts
-textual>=0.47.0         # TUI framework
 
 # Networking
 requests>=2.33.0        # HTTP client for AI providers

@@ -11,12 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Major Architectural Shift
 
-**Thin-Client Architecture**: Complete separation between backend (FastAPI) and frontend (Textual TUI). The CLI never touches the database — all communication via HTTP/SSE.
+**Thin-Client Architecture**: Complete separation between backend (FastAPI) and frontend (inline Rich REPL). The CLI never touches the database — all communication via HTTP/SSE.
 
 ### Added
 
-- **Persistent TUI Client** (`cli/`)
-  - Textual-based terminal interface with real-time chat streaming
+- **Persistent Inline REPL Client** (`cli/`)
+  - Rich and prompt_toolkit terminal interface with real-time chat streaming
   - Session sidebar with history navigation
   - Scrollable chat log with Markdown rendering
   - Input box with message submission (`Enter` key)
@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Standard Packaging** (`pyproject.toml`)
   - `setuptools` build backend
-  - Entry points: `yuzu` (TUI), `yuzu-server` (backend)
+  - Entry points: `yuzu` (inline REPL), `yuzu-server` (backend)
   - Proper dependency management
   - Author metadata: `icedeyes12 <banibaskara@gmail.com>`
 
@@ -61,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Developer Experience
 
 - `pip install -e .` for editable install
-- `yuzu` command launches TUI
+- `yuzu` command launches the inline REPL
 - `yuzu-server` starts backend
 - No manual PYTHONPATH configuration needed
 
