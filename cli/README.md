@@ -58,4 +58,4 @@ CLI hanya menggunakan endpoint yang sudah tersedia. Tidak ada perubahan pada dir
 - `prompt-toolkit` untuk input async dan history
 - `httpx` untuk HTTP/SSE
 
-Framework TUI full-screen Textual sudah dihapus agar CLI tetap ringan untuk Termux/mobile.
+CLI sengaja menggunakan REPL inline, bukan framework TUI full-screen, agar tetap ringan dan cocok untuk Termux/mobile.

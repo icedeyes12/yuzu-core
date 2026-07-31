@@ -56,6 +56,8 @@ the repository at HEAD of `dev`.
 - `app/memory/graph.py` — graph persistence, provenance, and bounded expansion.
 - `app/memory/retrieval.py` — tenant-scoped vector/trigram graph retrieval.
 - `app/memory/embedder.py` — graph embedding client (`EMBEDDING_DIM=1536`).
+- **Strict Separation of Concerns:** Providers MUST live in `app/providers/`; `app/tools/` is ONLY for function-calling schemas and structured dispatch; shared utilities belong in `app/core/`; business logic and orchestration belong in `app/services/`.
+- **CLI:** `cli/` is an inline REPL built with `rich` and `prompt_toolkit`. Never rebuild it as a full-screen TUI or introduce Textual.
 - `app/tools/registry.py` — canonical tool dispatch via `ToolEvent` /
   `ToolResultEvent`. `execute_tool_event()` is the production execution path.
 - `app/tools/schemas.py` — `ToolEvent`, `ToolResultEvent`, `StreamToolEvent`
