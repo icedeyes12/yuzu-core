@@ -39,7 +39,7 @@ the repository at HEAD of `dev`.
   function. Structured content-array path is selected when the provider
   reports `supports_structured_system_content=True`.
 - `app/providers/` — one file per provider (`base.py`, `chutes.py`,
-  `openrouter.py`, `anthropic.py`, `openai.py`, `ollama.py`, `cerebras.py`,
+  `openrouter.py`, `anthropic.py`, `openai.py`, `cerebras.py`,
   `deepseek.py`, `google.py`, `grok.py`, `groq.py`, `custom_anthropic.py`,
   `custom_openai.py`). All declare a `ProviderCapabilities` instance.
 - `app/core/llm_context.py` — runtime SSOT dataclass assembled from profile,

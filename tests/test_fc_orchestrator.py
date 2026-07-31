@@ -62,12 +62,6 @@ class TestParseRawToolCallsAsync:
         assert calls[0]["arguments"] == {"cmd": "ls"}
 
     @pytest.mark.asyncio
-    async def test_ollama_returns_empty(self):
-        raw = {"choices": [{"message": {"content": "hello", "tool_calls": []}}]}
-        calls = await _parse_raw_tool_calls_async("ollama", raw)
-        assert calls == []
-
-    @pytest.mark.asyncio
     async def test_none_response_returns_empty(self):
         await self._ensure_manager()
         calls = await _parse_raw_tool_calls_async("openrouter", None)

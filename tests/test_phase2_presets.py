@@ -82,8 +82,8 @@ def test_payload_to_parameters_overrides_context():
 
     profile = {
         "providers_config": {
-            "preferred_provider": "ollama",
-            "preferred_model": "glm-4.6:cloud",
+            "preferred_provider": "openrouter",
+            "preferred_model": "openai/gpt-4o-mini",
         },
         "context": {
             "temperature": 1.5,  # loose

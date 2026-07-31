@@ -42,7 +42,6 @@ app.include_router(api_router, prefix="/api")
 | `/api/api_keys` | GET | List API keys |
 | `/api/api_keys/add` | POST | Add API key |
 | `/api/api_keys/delete` | POST | Delete API key |
-| `/api/set_vision_model` | POST | Set vision model preference |
 | `/api/upload_image` | POST | Upload image |
 | `/api/generated_images/{filename}` | GET | Serve generated image |
 
@@ -111,7 +110,6 @@ Request/response validation uses Pydantic models defined in `routes.py`:
 - `SessionDeleteRequest`
 - `ProviderSetRequest`
 - `ProviderTestRequest`
-- `VisionModelSetRequest`
 - `LocationUpdateRequest`
 - `GlobalKnowledgeUpdateRequest`
 

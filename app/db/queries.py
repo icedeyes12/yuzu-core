@@ -84,7 +84,6 @@ SCHEMA_DDL: tuple[str, ...] = (
         image_edit_endpoint TEXT,
         image_extra_body JSONB,
         image_edit_extra_body JSONB,
-        vision_model TEXT,
         location_lat REAL,
         location_lon REAL,
         created_at TIMESTAMP DEFAULT NOW(),
@@ -99,7 +98,6 @@ SCHEMA_DDL: tuple[str, ...] = (
     "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_provider TEXT",
     "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_edit_provider TEXT",
     "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_model TEXT",
-    "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS vision_model TEXT",
     # ── global_knowledge_entries (explicit user-managed facts) ──
     """
     CREATE TABLE IF NOT EXISTS global_knowledge_entries (
@@ -577,7 +575,6 @@ _PROFILE_TEXT_FIELDS = (
     "theme",
     "image_model",
     "image_provider",
-    "vision_model",
     "image_edit_provider",
     "image_endpoint",
     "image_edit_endpoint",
@@ -674,7 +671,6 @@ def parse_profile_row(row: DBRow | None) -> DBRow:
         "image_edit_endpoint": row.get("image_edit_endpoint"),
         "image_extra_body": _parse_json(row.get("image_extra_body")),
         "image_edit_extra_body": _parse_json(row.get("image_edit_extra_body")),
-        "vision_model": row.get("vision_model"),
         "location_lat": row.get("location_lat"),
         "location_lon": row.get("location_lon"),
         "created_at": row.get("created_at"),
@@ -750,10 +746,37 @@ SQL_PIPELINE_STATE_UPDATE = (
     "WHERE id = %s AND user_id = %s"
 )
 
-SQL_PIPELINE_STATE_LOCK = (
-    "SELECT memory_pipeline_state FROM chat_sessions "
-    "WHERE id = %s AND user_id = %s FOR UPDATE"
-)
+SQL_PIPELINE_STATE_CLAIM = """
+UPDATE chat_sessions
+SET memory_pipeline_state = jsonb_set(
+    jsonb_set(
+        COALESCE(memory_pipeline_state, '{}'::jsonb),
+        '{in_progress_fence_count}',
+        to_jsonb(%s::integer),
+        true
+    ),
+    '{in_progress_fence_since}',
+    to_jsonb(%s::text),
+    true
+),
+updated_at = %s
+WHERE id = %s
+  AND user_id = %s
+  AND (
+      NULLIF(memory_pipeline_state->>'in_progress_fence_since', '') IS NULL
+      OR NULLIF(memory_pipeline_state->>'in_progress_fence_since', '')::timestamp < %s::timestamp
+  )
+RETURNING memory_pipeline_state
+"""
+
+SQL_PIPELINE_STATE_CLEAR = """
+UPDATE chat_sessions
+SET memory_pipeline_state = memory_pipeline_state - 'in_progress_fence_count' - 'in_progress_fence_since',
+    updated_at = %s
+WHERE id = %s
+  AND user_id = %s
+RETURNING memory_pipeline_state
+"""
 
 
 def parse_session_row(row: DBRow | None) -> DBRow:
@@ -1236,7 +1259,8 @@ __all__ = [
     "SQL_SESSION_RESET_COUNT",
     "SQL_PIPELINE_STATE_SELECT",
     "SQL_PIPELINE_STATE_UPDATE",
-    "SQL_PIPELINE_STATE_LOCK",
+    "SQL_PIPELINE_STATE_CLAIM",
+    "SQL_PIPELINE_STATE_CLEAR",
     "parse_session_row",
     # Messages
     "SQL_MESSAGE_INSERT",

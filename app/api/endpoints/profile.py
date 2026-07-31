@@ -34,11 +34,6 @@ class ProviderTestRequest(BaseModel):
     provider_name: str = Field(..., min_length=1, description="Provider name to test")
 
 
-class VisionModelSetRequest(BaseModel):
-    provider: str = Field(..., min_length=1, description="Vision provider name")
-    model: str = Field(..., min_length=1, description="Vision model name")
-
-
 class LocationUpdateRequest(BaseModel):
     lat: float | None = Field(None, ge=-90, le=90, description="Latitude")
     lon: float | None = Field(None, ge=-180, le=180, description="Longitude")
@@ -86,16 +81,11 @@ async def api_get_profile(
         ai_providers_payload = await ConfigService.get_ai_providers_payload(
             user_id, profile
         )
-        vision_capabilities = await ConfigService.get_vision_payload_async(
-            user_id, profile
-        )
-
         return {
             **profile_dict,
             "chat_history": chat_history,
             "active_session": active_session,
             "ai_providers": ai_providers_payload,
-            "multimodal_capabilities": vision_capabilities["capabilities"],
         }
     except Exception as e:
         log.error("Error in api_get_profile: %s", e)
@@ -122,12 +112,6 @@ async def api_update_profile(
             "enable_reasoning",
             "enable_vision",
             "image_model",
-            "image_provider",
-            "image_endpoint",
-            "image_edit_provider",
-            "image_edit_endpoint",
-            "image_extra_body",
-            "image_edit_extra_body",
         ]
 
         context_updates = {}
@@ -318,30 +302,6 @@ async def api_test_provider_connection(
                 clear_request_keyring()
     except Exception as e:
         log.error("Error testing provider connection: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/get_vision_capabilities")
-async def api_get_vision_capabilities(user_id: str = Depends(get_current_user)):
-    try:
-        capabilities = await ConfigService.get_vision_payload_async(user_id)
-        return {"status": "success", "capabilities": capabilities}
-    except Exception as e:
-        log.error("Error getting vision capabilities: %s - %s", type(e).__name__, e)
-        raise HTTPException(status_code=500, detail="Failed to get vision capabilities")
-
-
-@router.post("/providers/set_vision_model")
-async def api_set_vision_model(
-    request: VisionModelSetRequest, user_id: str = Depends(get_current_user)
-):
-    try:
-        result = await ConfigService.set_vision_model_async(
-            user_id, request.provider, request.model
-        )
-        return {"status": "success", "message": result}
-    except Exception as e:
-        log.error("Error setting vision model: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

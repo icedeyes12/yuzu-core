@@ -686,10 +686,6 @@ input[type="range"]::-moz-range-thumb {
 	pointer-events: none;
 }
 
-.vision-model-row {
-	margin-top: var(--space-4);
-}
-
 .config-form-row {
 	margin-top: var(--space-4);
 }

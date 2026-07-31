@@ -251,20 +251,32 @@ export class DOMRenderer {
 
 	_syncTypingIndicator(messages, isGenerating) {
 		const lastMsg = messages[messages.length - 1];
-		const needsIndicator = Boolean(
-			isGenerating &&
-				lastMsg?.role === "assistant" &&
-				!lastMsg.content &&
-				!(lastMsg.toolCalls || []).length,
-		);
-		if (needsIndicator && !this.activeTypingIndicator) {
-			this.activeTypingIndicator = document.createElement("div");
-			this.activeTypingIndicator.className = "typing-indicator";
-			this.activeTypingIndicator.innerHTML =
-				"<span></span><span></span><span></span>";
-			this.container.appendChild(this.activeTypingIndicator);
-			scrollToBottom();
-		} else if (!needsIndicator && this.activeTypingIndicator) {
+		const lastElement = lastMsg
+			? this.container.querySelector(`[data-message-id="${lastMsg.id}"]`)
+			: null;
+		if (lastElement) {
+			const contentContainer = lastElement.querySelector(".message-content");
+			const needsIndicator = Boolean(
+				isGenerating &&
+					lastMsg.role === "assistant" &&
+					!lastMsg.content &&
+					!(lastMsg.toolCalls || []).length,
+			);
+			if (contentContainer && needsIndicator && !this.activeTypingIndicator) {
+				this.activeTypingIndicator = document.createElement("div");
+				this.activeTypingIndicator.className = "typing-indicator";
+				this.activeTypingIndicator.setAttribute(
+					"aria-label",
+					"Assistant is typing",
+				);
+				this.activeTypingIndicator.innerHTML =
+					"<span></span><span></span><span></span>";
+				contentContainer.appendChild(this.activeTypingIndicator);
+				scrollToBottom();
+				return;
+			}
+		}
+		if (this.activeTypingIndicator) {
 			this.activeTypingIndicator.remove();
 			this.activeTypingIndicator = null;
 		}

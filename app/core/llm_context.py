@@ -16,8 +16,6 @@ class LLMContext:
 
     provider: str | None
     model: str | None
-    vision_provider: str | None = None
-    vision_model: str | None = None
     api_key: str | None = None
     base_url: str | None = None
     parameters: dict[str, Any] = field(default_factory=dict)
@@ -37,12 +35,7 @@ class LLMContext:
         provider = config.get("preferred_provider")
         model = config.get("preferred_model")
 
-        # 2. Vision preferences
-        vision_prefs = config.get("vision_model_preferences") or {}
-        vision_provider = vision_prefs.get("provider")
-        vision_model = vision_prefs.get("model")
-
-        # 3. Credential and endpoint resolution
+        # 2. Credential and endpoint resolution
         keyring = get_request_keyring(provider) if provider else None
         api_key = keyring.key if keyring else None
         base_url = keyring.base_url if keyring else None
@@ -89,8 +82,6 @@ class LLMContext:
         return cls(
             provider=provider,
             model=model,
-            vision_provider=vision_provider,
-            vision_model=vision_model,
             api_key=api_key,
             base_url=base_url,
             parameters=parameters,

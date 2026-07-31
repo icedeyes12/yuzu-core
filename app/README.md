@@ -33,7 +33,7 @@ The `app/` directory is the core of Yuzu Companion — the AI companion system t
 
 Yuzu Companion is a multi-interface AI companion with:
 
-- **Multi-provider dispatch** — Chutes, OpenRouter, Anthropic, OpenAI, Ollama, Cerebras, DeepSeek, Google, Grok, Groq, plus custom OpenAI-/Anthropic-style endpoints
+- **Multi-provider dispatch** — Chutes, OpenRouter, Anthropic, OpenAI, Cerebras, DeepSeek, Google, Grok, Groq, plus custom OpenAI-/Anthropic-style endpoints
 - **Native function calling** — `ToolEvent` / `ToolResultEvent` is the only production tool protocol; legacy XML-style markup is stripped as cleanup text
 - **Structured system content** — providers advertising `supports_structured_system_content=True` receive a content-array system message; others fall back to legacy single-string
 - **Tenant-isolated PostgreSQL** — UUIDv7 primary keys, `user_id` FK on every tenant-scoped table, pgvector + pg_trgm extensions
@@ -224,7 +224,6 @@ classDiagram
     AIProvider <|-- OpenRouterProvider
     AIProvider <|-- AnthropicProvider
     AIProvider <|-- OpenAIProvider
-    AIProvider <|-- OllamaProvider
     AIProvider <|-- CerebrasProvider
     AIProvider <|-- DeepSeekProvider
     AIProvider <|-- GoogleProvider
@@ -243,7 +242,7 @@ classDiagram
 | OpenRouter | ✅ | ✅ | ✅ | ✅ |
 | Anthropic | ❌ | ✅ | ✅ | ✅ |
 | OpenAI | (default) | ✅ | ✅ | ✅ |
-| Ollama / Cerebras / DeepSeek / Google / Grok / Groq / custom | (default false) | per provider | per provider | per provider |
+| Cerebras / DeepSeek / Google / Grok / Groq / custom | (default false) | per provider | per provider | per provider |
 
 `ProviderCapabilities` defaults to `False` for every flag — providers opt in by passing kwargs to the `super().__init__()` call.
 
@@ -488,7 +487,6 @@ On session start:
     "providers_config": {
         "preferred_provider": str,
         "preferred_model": str,
-        "vision_model_preferences": {"provider": str, "model": str},
         "streaming_enabled": bool,
     },
     "context": {
