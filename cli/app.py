@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import os
 
@@ -162,5 +163,20 @@ def run_app(backend_url: str | None = None) -> None:
         console.print("\n[dim]Bye.[/]")
 
 
+def main() -> None:
+    """Parse CLI arguments, then run the REPL (exits before backend connect on -h)."""
+    parser = argparse.ArgumentParser(
+        prog="yuzu",
+        description="Inline terminal REPL for the Yuzu Companion HTTP/SSE API.",
+    )
+    parser.add_argument(
+        "--backend-url",
+        default=None,
+        help=f"Backend URL (env YUZU_BACKEND_URL, default {DEFAULT_BACKEND_URL})",
+    )
+    args = parser.parse_args()
+    run_app(args.backend_url)
+
+
 if __name__ == "__main__":
-    run_app()
+    main()
