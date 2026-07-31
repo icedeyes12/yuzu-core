@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.api.utils import get_current_user
 from app.db import Database
@@ -14,8 +14,16 @@ router = APIRouter(tags=["memory"])
 
 
 @router.post("/rebuild_structured_memory")
-async def api_rebuild_structured_memory(user_id: str = Depends(get_current_user)):
+async def api_rebuild_structured_memory(
+    request: Request, user_id: str = Depends(get_current_user)
+):
     """Rebuild structured memory for the active session."""
+    from app.api.endpoints.chat import _extract_keyrings
+    from app.core.context import clear_request_keyring, set_request_keyrings
+
+    keyrings = _extract_keyrings(request)
+    if keyrings:
+        set_request_keyrings(keyrings)
     try:
         active_session = await Database.get_active_session(user_id)
         session_id = str(active_session["id"])
@@ -35,6 +43,9 @@ async def api_rebuild_structured_memory(user_id: str = Depends(get_current_user)
     except Exception as e:
         log.error("Error rebuilding structured memory: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if keyrings:
+            clear_request_keyring()
 
 
 @router.get("/memory_stats")

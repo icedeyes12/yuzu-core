@@ -23,7 +23,7 @@ router = APIRouter(tags=["chat"])
 
 
 def _extract_keyrings(request: Request) -> dict[str, RequestKeyring] | None:
-    """Read BYOK headers from the request and build a map of RequestKeyring."""
+    """Read the grouped client-side BYOK configuration from the request."""
     import base64
     import json
     import urllib.parse
@@ -35,9 +35,12 @@ def _extract_keyrings(request: Request) -> dict[str, RequestKeyring] | None:
     try:
         raw_json = urllib.parse.unquote(base64.b64decode(byok_header).decode("utf-8"))
         byok_config = json.loads(raw_json)
+        providers = byok_config.get("providers", byok_config)
+        if not isinstance(providers, dict):
+            return {}
 
         keyrings = {}
-        for provider, cfg in byok_config.items():
+        for provider, cfg in providers.items():
             if not isinstance(cfg, dict):
                 continue
             keyrings[provider] = RequestKeyring(
@@ -85,7 +88,11 @@ async def api_send_message(
         log.warning("Missing provider key: %s", e)
         raise HTTPException(
             status_code=424,
-            detail=f"No API key for {e.provider}. Set your key in Settings → Provider Keys.",
+            detail=(
+                "Please set your Yuzu Portal API key in the config to use this chat model."
+                if e.provider == "yuzu_portal"
+                else f"No API key for {e.provider}. Set your key in Settings → Provider Keys."
+            ),
         )
     except Exception as e:
         log.error("Error in api_send_message: %s", type(e).__name__)
@@ -140,12 +147,17 @@ async def api_send_message_stream(
                     yield chunk
             except MissingProviderKeyError as e:
                 log.warning("Missing provider key in stream: %s", e)
+                message = (
+                    "Please set your Yuzu Portal API key in the config to use this chat model."
+                    if e.provider == "yuzu_portal"
+                    else f"No API key for {e.provider}. Set your key in Settings → Provider Keys."
+                )
                 payload = json.dumps(
                     {
                         "type": "error",
                         "error": "missing_key",
                         "provider": e.provider,
-                        "message": f"No API key for {e.provider}. Set your key in Settings → Provider Keys.",
+                        "message": message,
                     }
                 )
                 yield f"data: {payload}\n\n"
