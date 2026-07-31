@@ -7,7 +7,7 @@ import tempfile
 import time
 from typing import Any
 
-from app.logging_config import get_logger
+from app.core.logging_config import get_logger
 from app.tools.schemas import (
     ToolDefinition,
     ToolParam,

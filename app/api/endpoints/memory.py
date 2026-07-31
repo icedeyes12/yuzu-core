@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.api.utils import get_current_user
+from app.core.logging_config import get_logger
 from app.db import Database
-from app.logging_config import get_logger
 from app.services.memory_service import MemoryService
 from app.services.memory_stats_service import MemoryStatsService
 

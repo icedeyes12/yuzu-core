@@ -11,11 +11,11 @@ from app.core.context import (
     MissingProviderKeyError,
 )
 from app.core.llm_context import LLMContext
+from app.core.multimodal import multimodal_tools
 from app.providers.openai_protocol import (
     sanitize_and_validate_messages,
     sanitize_openai_payload,
 )
-from app.tools.multimodal import multimodal_tools
 from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)

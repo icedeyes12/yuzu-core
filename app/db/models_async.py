@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from typing import Any
 
+from app.core.logging_config import get_logger
 from app.db.connection import (
     AsyncPgSession,
     pg_execute_async,
@@ -64,7 +65,6 @@ from app.db.queries import (
     parse_profile_row,
     parse_session_row,
 )
-from app.logging_config import get_logger
 
 log = get_logger(__name__)
 
@@ -608,7 +608,7 @@ async def batch_decrypt_messages_async(message_ids: list[int]) -> DBRow:
         try:
             row = await pg_fetchone_async(SQL_MESSAGE_SELECT_CONTENT_BY_ID, (msg_id,))
             if row and row.get("content"):
-                from app.encryption import encryptor
+                from app.core.encryption import encryptor
 
                 plaintext = encryptor.decrypt(row["content"])
                 await pg_execute_async(

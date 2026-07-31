@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.orchestrator import (
+from app.services.orchestrator import (
     _execute_tool_calls_async,
     _parse_raw_tool_calls_async,
     _persist_streaming_tool_results_async,
@@ -110,7 +110,7 @@ class TestExecuteToolCallsAsync:
         mock_result.ok = True
         mock_result.error = ""
         with patch(
-            "app.orchestrator.execute_tool_event",
+            "app.services.orchestrator.execute_tool_event",
             new=AsyncMock(return_value=mock_result),
         ):
             tool_calls = [
@@ -129,7 +129,7 @@ class TestExecuteToolCallsAsync:
         mock_result.ok = True
         mock_result.error = ""
         with patch(
-            "app.orchestrator.execute_tool_event",
+            "app.services.orchestrator.execute_tool_event",
             new=AsyncMock(return_value=mock_result),
         ):
             tool_calls = [
@@ -151,7 +151,7 @@ class TestPersistToolResultAsync:
     @pytest.mark.asyncio
     async def test_native_tool_result_uses_canonical_tool_role(self):
         add_message = AsyncMock(return_value=123)
-        with patch("app.orchestrator.Database.add_message", new=add_message):
+        with patch("app.services.orchestrator.Database.add_message", new=add_message):
             await _persist_tool_result_async(
                 "bash",
                 '{"ok": true}',
@@ -165,7 +165,7 @@ class TestPersistToolResultAsync:
     @pytest.mark.asyncio
     async def test_streaming_tool_results_preserve_tool_call_ids(self):
         add_message = AsyncMock(return_value=123)
-        with patch("app.orchestrator.Database.add_message", new=add_message):
+        with patch("app.services.orchestrator.Database.add_message", new=add_message):
             tool_calls_data = [
                 {"id": "call_1", "name": "bash", "arguments": {}},
                 {"id": "call_2", "name": "python", "arguments": {}},
@@ -197,7 +197,7 @@ class TestPersistToolResultAsync:
     @pytest.mark.asyncio
     async def test_tool_results_always_persist_as_canonical_tool_role(self):
         add_message = AsyncMock(return_value=123)
-        with patch("app.orchestrator.Database.add_message", new=add_message):
+        with patch("app.services.orchestrator.Database.add_message", new=add_message):
             await _persist_tool_result_async(
                 "bash",
                 '{"ok": true}',

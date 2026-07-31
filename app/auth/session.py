@@ -4,8 +4,8 @@ import os
 import secrets
 from datetime import datetime, timedelta
 
+from app.core.logging_config import get_logger
 from app.db.facade import Database
-from app.logging_config import get_logger
 
 log = get_logger(__name__)
 

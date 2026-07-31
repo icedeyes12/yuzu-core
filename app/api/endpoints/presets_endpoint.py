@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.utils import get_current_user
+from app.core.logging_config import get_logger
 from app.core.presets import (
     active_preset,
     list_presets,
@@ -19,7 +20,6 @@ from app.core.presets import (
     upsert_preset as upsert_preset_helper,
 )
 from app.db import get_profile_async, update_profile_async
-from app.logging_config import get_logger
 
 log = get_logger(__name__)
 

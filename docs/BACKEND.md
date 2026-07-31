@@ -11,7 +11,7 @@ Request → FastAPI (web.py) → Router (app/api/main.py) → Endpoint → Servi
 | File | Role |
 |------|------|
 | `app/web.py` | FastAPI app (~130 lines): mounts static files, includes API router, registers startup/shutdown |
-| `app/main.py` | CLI entry point: Rich TUI that calls `app.orchestrator` and `app.db` directly |
+| `app/main.py` | CLI entry point: Rich TUI that calls `app.services.orchestrator` and `app.db` directly |
 
 ### Routing
 
@@ -50,11 +50,11 @@ Business logic extracted from endpoints into `app/services/`:
 
 ### Orchestrator
 
-`app/orchestrator.py` is the single entry point for all user messages:
+`app/services/orchestrator.py` is the single entry point for all user messages:
 
 ```
 1. Image cache detection
-2. LLM dispatch (app/llm_client.py)
+2. LLM dispatch (app/services/llm_client.py)
 3. Native tool-call parsing via provider `tool_calls`
 4. Tool execution (app/tools/registry.py)
 5. Synthesis pass (2nd LLM call)
@@ -73,7 +73,7 @@ Following recent refactors, Yuzu-Companion mandates strict async-native patterns
 
 | Legacy | Replacement |
 |--------|-------------|
-| `app/app.py` (shim) | Direct imports from `app.orchestrator`, `app.db`, `app.services` |
+| `app/app.py` (shim) | Direct imports from `app.services.orchestrator`, `app.db`, `app.services` |
 | `app/api/routes.py` (~650 line monolith) | `app/api/endpoints/{chat,sessions,profile,memory}.py` |
 | `app/api/routes/` (empty dir) | Deleted |
 | `app/database/` (Flask-era naming) | `app/db/` |
@@ -81,7 +81,7 @@ Following recent refactors, Yuzu-Companion mandates strict async-native patterns
 | `app/profile_analysis.py` | Memory logic → `app/memory/`, config → `app/services/config_service.py` |
 | `api_send_message_with_images` | Merged into `ChatService.process_uploaded_images()` |
 | `_NoopContext` in `app/session_lifecycle.py` | File deleted, no replacement needed |
-| Flask-era `print()` debugging | `log.info()` / `log.error()` via `app/logging_config.py` |
+| Flask-era `print()` debugging | `log.info()` / `log.error()` via `app/core/logging_config.py` |
 | `os.path` string manipulation | `pathlib.Path` throughout |
 
 ## Provider Architecture

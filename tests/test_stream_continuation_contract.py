@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from app.db.queries import format_ai_history_rows
-from app.orchestrator import _normalise_tool_calls
+from app.services.orchestrator import _normalise_tool_calls
 
 
 def test_normalise_tool_calls_generates_id_and_parses_arguments() -> None:

@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from app.core.logging_config import get_logger
 from app.db import Database
-from app.logging_config import get_logger
 
 log = get_logger(__name__)
 

@@ -13,7 +13,7 @@ from app.core.context import (
     clear_request_keyring,
     set_request_keyrings,
 )
-from app.logging_config import get_logger
+from app.core.logging_config import get_logger
 from app.services.conversation_service import ConversationService
 from app.services.session_service import SessionService
 

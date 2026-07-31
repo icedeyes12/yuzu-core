@@ -22,7 +22,7 @@ When writing or updating prompts:
 
 ## Current prompt surfaces
 
-- `app/prompts.py`
+- `app/services/prompt_service.py`
 - `app/prompt.md`
 - `docs/prompt.md`
 

@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from app.core.logging_config import get_logger
 from app.db import Database
 from app.db.connection import pg_fetchall_async
-from app.logging_config import get_logger
 from app.memory.memory import (
     _is_fence_active_async,
     run_memory_pipeline_async,

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.api.utils import get_client_id, get_current_user
+from app.core.logging_config import get_logger
 from app.db import (
     Database,
     clear_session_messages_async,
@@ -16,7 +17,6 @@ from app.db import (
     rename_session_async,
     switch_session_async,
 )
-from app.logging_config import get_logger
 from app.services.session_service import SessionService
 
 log = get_logger(__name__)

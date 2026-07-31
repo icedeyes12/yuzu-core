@@ -53,7 +53,7 @@ def _load_tool_module(tool_name: str):
 
             _TOOL_MODULES[tool_name] = memory_search
         elif tool_name == "multimodal":
-            import app.tools.multimodal as multimodal
+            import app.core.multimodal as multimodal
 
             _TOOL_MODULES[tool_name] = multimodal
         # File system tools

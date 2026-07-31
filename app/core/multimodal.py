@@ -500,7 +500,7 @@ class MultimodalTools:
     ) -> list[dict[str, Any]]:
         """Deprecated — returns *messages* unchanged.
 
-        Image embedding is now handled in ``app.prompts.build_messages()``
+        Image embedding is now handled in ``app.services.prompt_service.build_messages()``
         which converts ``attachments`` to base64 ``image_url`` blocks at
         build time.  This method is retained as a no-op stub so existing
         callers do not break.

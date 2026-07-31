@@ -25,9 +25,9 @@ from app.auth.session import (
     set_session_cookie,
     validate_session,
 )
+from app.core.logging_config import get_logger
 from app.db.facade import Database
 from app.db.queries import DEFAULT_PROFILE_PARAMS
-from app.logging_config import get_logger
 
 log = get_logger(__name__)
 

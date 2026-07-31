@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from app.core.logging_config import get_logger
 from app.db.models_async import (
     add_message_async as _pg_add_message_async,
 )
@@ -131,7 +132,6 @@ from app.db.models_async import (
 from app.db.models_async import (
     validate_session_token_async as _pg_validate_session_token_async,
 )
-from app.logging_config import get_logger
 
 log = get_logger(__name__)
 

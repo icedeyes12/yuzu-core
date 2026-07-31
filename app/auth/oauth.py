@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 import httpx
 import jwt
 
-from app.logging_config import get_logger
+from app.core.logging_config import get_logger
 
 log = get_logger(__name__)
 
