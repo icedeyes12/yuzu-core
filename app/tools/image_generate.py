@@ -6,7 +6,7 @@ from pathlib import Path
 import httpx
 
 from app.db import Database
-from app.tools.image_provider import request_image
+from app.providers.image_provider import request_image
 from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
 
 logger = logging.getLogger(__name__)

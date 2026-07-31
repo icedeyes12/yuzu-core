@@ -11,19 +11,19 @@ from pathlib import Path
 from typing import Any
 
 from app.core.llm_context import LLMContext
+from app.core.logging_config import get_logger
+from app.core.multimodal import multimodal_tools
 from app.core.stream_fence import StreamFence
 from app.db import Database
-from app.llm_client import (
-    generate_ai_response,
-    generate_ai_response_streaming,
-)
-from app.logging_config import get_logger
 from app.memory.retrieval import _clear_embedding_cache
 from app.providers import get_ai_manager
 from app.providers.openai_protocol import normalize_tool_calls
+from app.services.llm_client import (
+    generate_ai_response,
+    generate_ai_response_streaming,
+)
 from app.services.memory_service import MemoryService
 from app.services.session_service import SessionService
-from app.tools.multimodal import multimodal_tools
 from app.tools.registry import (
     execute_tool_event,
 )

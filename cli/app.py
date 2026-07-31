@@ -10,7 +10,7 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.widgets import Footer, Header, Static
 
-from app.logging_config import get_logger
+from app.core.logging_config import get_logger
 from cli.client import YuzuClient
 from cli.widgets import (
     ChatLog,

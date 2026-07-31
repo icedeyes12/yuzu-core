@@ -8,11 +8,11 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from app.core.llm_context import LLMContext
+from app.core.logging_config import get_logger
 from app.db import Database
-from app.logging_config import get_logger
-from app.prompts import build_messages
 from app.providers import get_ai_manager
 from app.providers.openai_protocol import validate_chat_completion_response
+from app.services.prompt_service import build_messages
 from app.tools.registry import get_tool_schemas
 from app.tools.schemas import StreamToolEvent
 

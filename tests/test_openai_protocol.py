@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-from app.prompts import _trim_history_to_token_limit
 from app.providers.openai_protocol import (
     OpenAIProtocolError,
     sanitize_openai_messages,
@@ -10,6 +9,7 @@ from app.providers.openai_protocol import (
     validate_chat_completion_response,
     validate_openai_messages,
 )
+from app.services.prompt_service import _trim_history_to_token_limit
 
 
 def assistant_tool_block() -> list[dict[str, object]]:

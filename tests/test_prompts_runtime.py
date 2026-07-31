@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-import app.prompts as prompts
+import app.services.prompt_service as prompts
 
 
 async def _noop(*args, **kwargs):
@@ -146,7 +146,7 @@ async def test_persona_injection_and_missing_data_fallback(monkeypatch):
 
 
 def test_tool_call_history_is_trimmed_as_atomic_block() -> None:
-    from app.prompts import _trim_history_to_token_limit
+    from app.services.prompt_service import _trim_history_to_token_limit
 
     assistant = {
         "role": "assistant",

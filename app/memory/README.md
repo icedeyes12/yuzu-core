@@ -14,7 +14,7 @@ The runtime memory owner is the PostgreSQL graph: `episodes`, `memory_nodes`, `m
 | Relationships | `memory_edges` |
 | Provenance | `memory_evidence` |
 | Explicit user facts | `global_knowledge_entries` |
-| Prompt presentation | `app/prompts.py` |
+| Prompt presentation | `app/services/prompt_service.py` |
 
 ## Runtime Flow
 

@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool, ConnectionPool
 
-from app.logging_config import get_logger
+from app.core.logging_config import get_logger
 
 # Load .env from project root (relative to this module)
 _env_path = Path(__file__).resolve().parent.parent.parent / ".env"

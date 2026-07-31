@@ -8,7 +8,7 @@ import time
 from typing import Any
 
 from app.core.stream_fence import StreamFence
-from app.orchestrator import (
+from app.services.orchestrator import (
     handle_user_message_streaming,
     run_post_turn_after_stream_async,
 )

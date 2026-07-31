@@ -9,8 +9,8 @@ import httpx
 
 from app.core.context import MissingProviderKeyError
 from app.core.llm_context import LLMContext
+from app.core.multimodal import multimodal_tools
 from app.providers.base import AIProvider, ProviderCapabilities
-from app.tools.multimodal import multimodal_tools
 from app.tools.schemas import StreamToolEvent
 
 logger = logging.getLogger(__name__)

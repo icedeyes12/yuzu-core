@@ -10,8 +10,8 @@ from pathlib import Path
 from fastapi import UploadFile
 
 from app.db import Database
-from app.orchestrator import handle_user_message
-from app.stream_manager import StreamManager
+from app.services.orchestrator import handle_user_message
+from app.services.stream_manager import StreamManager
 from app.tools.schemas import StreamToolEvent
 
 log = logging.getLogger(__name__)

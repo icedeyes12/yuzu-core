@@ -28,8 +28,8 @@ flowchart TB
 
 | Component | Location | Responsibility |
 |---|---|---|
-| Orchestrator | `app/orchestrator.py` | Coordinates message handling, tools, streaming, and post-turn work |
-| LLM client | `app/llm_client.py` | Builds provider requests and dispatches streaming/non-streaming calls |
+| Orchestrator | `app/services/orchestrator.py` | Coordinates message handling, tools, streaming, and post-turn work |
+| LLM client | `app/services/llm_client.py` | Builds provider requests and dispatches streaming/non-streaming calls |
 | Providers | `app/providers/` | Provider implementations and capability declarations |
 | Tool registry | `app/tools/registry.py` | Native function-call dispatch and structured tool results |
 | Memory pipeline | `app/memory/memory.py` | Batch gating, fencing, extraction persistence, and background worker |
@@ -37,9 +37,9 @@ flowchart TB
 | Graph repository | `app/memory/graph.py` | Graph persistence, provenance writes, searches, and bounded expansion |
 | Retrieval | `app/memory/retrieval.py` | Vector/trigram graph retrieval and prompt-shaped formatting |
 | Embedder | `app/memory/embedder.py` | 1536-dimensional Chutes embeddings |
-| Prompt builder | `app/prompts.py` | Presents retrieved memory and explicit knowledge to providers |
+| Prompt builder | `app/services/prompt_service.py` | Presents retrieved memory and explicit knowledge to providers |
 | Database layer | `app/db/queries.py`, `app/db/connection.py` | SQL/DDL source of truth and pooled psycopg access |
-| Stream manager | `app/stream_manager.py` | Stream ownership, buffering, persistence, and cleanup |
+| Stream manager | `app/services/stream_manager.py` | Stream ownership, buffering, persistence, and cleanup |
 
 ## 3. Graph memory architecture
 
@@ -96,7 +96,7 @@ Important invariants:
 
 ## 6. Memory retrieval
 
-`app/memory/retrieval.py` uses an embedding when available and falls back to trigram text search. It retrieves active graph nodes, attaches evidence, expands one graph hop, and formats bounded context. Explicit knowledge is presented separately through `app/prompts.py`.
+`app/memory/retrieval.py` uses an embedding when available and falls back to trigram text search. It retrieves active graph nodes, attaches evidence, expands one graph hop, and formats bounded context. Explicit knowledge is presented separately through `app/services/prompt_service.py`.
 
 ## 7. Memory maintenance
 

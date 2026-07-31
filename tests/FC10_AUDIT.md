@@ -62,19 +62,19 @@
 - ❌ OpenRouter streaming tool-call delta parsing
 - ❌ `supports_streaming_fc` matches actual behavior
 
-### LLM Client (`app/llm_client.py`)
+### LLM Client (`app/services/llm_client.py`)
 - ❌ `_unique_tool_schemas()` deduplication
 - ❌ Streaming yields `str | StreamToolEvent` union type
 - ❌ `provider_supports_fc` passed to `build_messages`
 
-### Orchestrator (`app/orchestrator.py`)
+### Orchestrator (`app/services/orchestrator.py`)
 - ❌ `_parse_raw_tool_calls_async()` canonical output
 - ❌ `_execute_tool_calls_async()` event-driven dispatch
 - ❌ Streaming `StreamToolEvent` handling
 - ❌ `turn_id` propagation through persistence
 - ❌ `<command>` blocks stripped (not executed) in synthesis loop
 
-### Streaming (`app/stream_manager.py`, `app/services/chat_service.py`)
+### Streaming (`app/services/stream_manager.py`, `app/services/chat_service.py`)
 - ❌ `StreamBuffer` handles `StreamToolEvent` objects
 - ❌ `ChatService` serializes typed events as SSE
 - ❌ SSE envelope shapes: token, tool_call, tool_result, done
@@ -89,7 +89,7 @@
 - ❌ Tool call indicator rendering
 - ❌ Tool result rendering
 
-### System Prompt (`app/prompts.py`)
+### System Prompt (`app/services/prompt_service.py`)
 - ❌ `provider_supports_fc=True` → native FC instructions
 - ❌ `provider_supports_fc=False` → `<command>` instructions
 

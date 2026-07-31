@@ -34,7 +34,7 @@ The runtime has no legacy semantic-memory compatibility path, decay loop, or LLM
 | Relationship | `memory_edges` | Typed and confidence-scored; endpoints are graph nodes |
 | Provenance | `memory_evidence` | Links a node or edge to source episode/message records |
 | Explicit user fact | `global_knowledge_entries` | User-managed and separate from inferred memory |
-| Prompt presentation | `app/prompts.py` | Formats already retrieved context; does not own storage |
+| Prompt presentation | `app/services/prompt_service.py` | Formats already retrieved context; does not own storage |
 
 Every graph table carries `user_id` and all graph reads/writes must be tenant-scoped.
 
@@ -102,7 +102,7 @@ Stores explicit, user-managed facts with category, ordering, enabled state, and 
 4. `GraphMemoryRepository` persists episodes, nodes, edges, and evidence through tenant-scoped SQL.
 5. `app/memory/retrieval.py` searches graph nodes using vector search when an embedding is available, with trigram text search as fallback.
 6. Retrieved nodes receive bounded one-hop graph expansion and provenance.
-7. `app/prompts.py` presents graph context and explicit knowledge to the provider.
+7. `app/services/prompt_service.py` presents graph context and explicit knowledge to the provider.
 
 The embedding client uses `EMBEDDING_DIM = 1536` and the graph stores `vector(1536)` embeddings when available.
 

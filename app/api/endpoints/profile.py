@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.api.utils import get_current_user
+from app.core.logging_config import get_logger
 from app.db import (
     Database,
     get_active_session_async,
@@ -16,7 +17,6 @@ from app.db import (
     get_profile_async,
     update_profile_async,
 )
-from app.logging_config import get_logger
 from app.providers import get_ai_manager
 from app.services.config_service import ConfigService
 

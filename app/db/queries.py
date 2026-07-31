@@ -14,7 +14,7 @@ type DBRow = dict[str, Any]
 
 def encrypt_api_key(api_key: str) -> str:
     """Encrypt an API key with the project-wide encryptor."""
-    from app.encryption import encryptor
+    from app.core.encryption import encryptor
 
     return encryptor.encrypt(api_key)
 
@@ -23,7 +23,7 @@ def decrypt_api_key(encrypted_key: str, is_encrypted: bool = True) -> str:
     """Decrypt an API key. Returns sentinel on failure."""
     if not is_encrypted:
         return encrypted_key
-    from app.encryption import encryptor
+    from app.core.encryption import encryptor
 
     try:
         return encryptor.decrypt(encrypted_key)

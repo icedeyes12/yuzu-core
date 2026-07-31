@@ -28,13 +28,13 @@ the repository at HEAD of `dev`.
 
 ### Backend (`app/`)
 
-- `app/orchestrator.py` — single entry point for user messages. Streaming +
+- `app/services/orchestrator.py` — single entry point for user messages. Streaming +
   non-streaming paths. Owns image dedup, vision routing, and the canonical
   execution loop (max 4 iterations).
-- `app/llm_client.py` — payload construction + provider dispatch (streaming
+- `app/services/llm_client.py` — payload construction + provider dispatch (streaming
   and non-streaming). Calls `build_messages()` and passes
   `**ctx.parameters` to providers.
-- `app/prompts.py` — system prompt assembly and the
+- `app/services/prompt_service.py` — system prompt assembly and the
   `build_messages(profile, session_id, interface, user_message, user_id, ...)`
   function. Structured content-array path is selected when the provider
   reports `supports_structured_system_content=True`.
@@ -60,11 +60,11 @@ the repository at HEAD of `dev`.
   `ToolResultEvent`. `execute_tool_event()` is the production execution path.
 - `app/tools/schemas.py` — `ToolEvent`, `ToolResultEvent`, `StreamToolEvent`
   dataclasses.
-- `app/tools/multimodal.py` — `MultimodalTools` class: image caching, base64
+- `app/core/multimodal.py` — `MultimodalTools` class: image caching, base64
   encoding, vision model detection, `format_vision_message()`.
 - `app/services/` — `SessionService`, `MemoryService`, `ChatService`,
   `ConfigService` — orchestration glue for the API layer.
-- `app/stream_manager.py` — `StreamBuffer`: in-RAM chunk accumulation,
+- `app/services/stream_manager.py` — `StreamBuffer`: in-RAM chunk accumulation,
   single DB write on completion, self-cleanup after persistence.
 - `app/legacy_markup.py` — strip-only helpers for archived XML-style
   `<command>` / `<tool>` blocks. **Not** an execution path.
@@ -82,11 +82,11 @@ the repository at HEAD of `dev`.
 7. **Runtime parameters come from the active preset.** `LLMContext.from_profile` calls `resolve_active_preset_payload()` and uses that as the only source of `temperature`, `top_p`, `top_k`, `max_tokens`, and `additional_instructions` when a preset is active. Loose top-level context values are ignored in that case to keep the runtime payload reproducible.
 8. **Structured system content is capability-gated.** When a provider's `ProviderCapabilities.supports_structured_system_content` is `True`, `build_messages` emits the system message as a content array (persona, metadata, memory, knowledge, instructions). Otherwise it falls back to legacy single-string assembly, but still appends `additional_instructions` as a second system message.
 9. **Image deduplication is layered.**
-   - `app/orchestrator.py` `_dedupe_image_paths` merges `cached_images` and `image_paths` by `os.path.realpath`, preserving first-occurrence order.
-   - `app/prompts.py` `_build_multimodal_message` keeps a `seen` set so the same file referenced via different path forms cannot produce duplicate `image_url` blocks.
-   - `app/tools/multimodal.py` `format_vision_message` keeps a parallel `seen` set as defense-in-depth.
-10. **Stream ownership lives in `app/stream_manager.py`.** Do not add parallel streaming stacks. The orchestrator yields, `StreamBuffer` writes to DB once on completion.
-11. **Vision routing is provider-via-`AIProviderManager.format_vision_message`.** `app/tools/multimodal.py` is the home of vision model detection and image cache; the orchestrator delegates through the base provider.
+   - `app/services/orchestrator.py` `_dedupe_image_paths` merges `cached_images` and `image_paths` by `os.path.realpath`, preserving first-occurrence order.
+   - `app/services/prompt_service.py` `_build_multimodal_message` keeps a `seen` set so the same file referenced via different path forms cannot produce duplicate `image_url` blocks.
+   - `app/core/multimodal.py` `format_vision_message` keeps a parallel `seen` set as defense-in-depth.
+10. **Stream ownership lives in `app/services/stream_manager.py`.** Do not add parallel streaming stacks. The orchestrator yields, `StreamBuffer` writes to DB once on completion.
+11. **Vision routing is provider-via-`AIProviderManager.format_vision_message`.** `app/core/multimodal.py` is the home of vision model detection and image cache; the orchestrator delegates through the base provider.
 12. **Frontend Architecture.** `ConversationStore` owns the state. `DOMRenderer` owns the DOM. Do not bypass the store with direct `innerHTML` appends.
 13. **Slider drag-threshold is required.** All `<input type="range">` elements must be wrapped with `attachSliderGuard(slider)` so vertical scroll does not move the slider. The guard activates on horizontal movement after a 6px touch-slop threshold and ignores minor vertical drift.
 14. **API keys never persist server-side.** BYOK architecture: keys live only in browser `localStorage` (`yuzu_byok_config`) and arrive via `X-Provider-Key` / `X-Provider-BaseUrl` headers. The retired `api_keys` table must not be recreated.

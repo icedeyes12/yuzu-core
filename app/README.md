@@ -10,7 +10,7 @@ The `app/` directory is the core of Yuzu Companion — the AI companion system t
 - [Overview](#overview)
 - [Directory Structure](#directory-structure)
 - [Core Entry Points](#core-entry-points)
-  - [`file app/orchestrator.py`](#apporchestratorpy--message-orchestration)
+  - [`file app/services/orchestrator.py`](#apporchestratorpy--message-orchestration)
   - [`file main.py`](#mainpy--fastapi-web-server)
   - [`file cli/app.py`](#cliapppy--cli-application)
 - [API Routing](#api-routing)
@@ -47,7 +47,7 @@ graph LR
     A --> C[main.py<br/>Web]
     A --> D[External<br/>API Calls]
 
-    B --> E[app/orchestrator.py<br/>Core Logic]
+    B --> E[app/services/orchestrator.py<br/>Core Logic]
     C --> E
     D --> E
 
@@ -70,31 +70,23 @@ app/
 │   ├── static.py               # Static file mounting
 │   └── utils.py
 ├── auth/                       # Cookie session + OAuth helpers
-├── core/                       # LLMContext, presets, request keyring
+├── core/                       # LLMContext, presets, keyring, encryption, logging, multimodal helpers
 ├── db/                         # psycopg v3 connection + Database facade + queries.py (SSOT SQL)
 ├── memory/                     # Embedder, graph retrieval, extraction, and pipeline
-├── providers/                  # One file per provider; ProviderCapabilities declarations
-├── services/                   # SessionService, MemoryService, ChatService, ConfigService
+├── providers/                  # One file per provider; ProviderCapabilities and API clients
+├── services/                   # Session, memory, config, LLM, orchestration, prompt, and stream services
 ├── static/                     # Subdir for additional static assets bundled with the package
-├── tools/                      # Native FC registry, schemas, multimodal helpers, per-tool modules
-├── encryption.py               # ChaCha20-Poly1305 encryptor
-├── key_manager.py              # Master key lifecycle
+├── tools/                      # Native FC registry, schemas, and per-tool modules
 ├── legacy_markup.py            # Strip-only cleanup helpers (not a live protocol)
-├── llm_client.py               # Payload construction + provider dispatch
-├── logging_config.py           # get_logger() factory
-├── orchestrator.py             # Single entry point for user messages
 ├── profile_analysis.py         # Cross-session profile analysis
-├── prompt.md                   # Canonical system prompt text
-├── prompts.py                  # build_messages(), structured system content composer
-├── stream_manager.py           # StreamBuffer (RAM buffering + single-write persistence)
-└── visual_context.py
+├── prompt.md                  # Canonical system prompt text
 ```
 
 ---
 
 ## Architectural Pipeline
 
-### 1. `app/orchestrator.py` — Message Orchestration
+### 1. `app/services/orchestrator.py` — Message Orchestration
 
 The single entry point for handling user messages. Coordinates:
 
@@ -128,7 +120,7 @@ Terminal interface using Rich + prompt_toolkit. Registered as the `yuzu` console
 - Code block extraction and saving
 - Web interface launcher
 
-### `file app/stream_manager.py` — Streaming State Coordinator
+### `file app/services/stream_manager.py` — Streaming State Coordinator
 
 `StreamBuffer` owns in-flight stream buffers outside the request thread. It accumulates chunks in RAM, replays buffered output to reconnecting clients, persists once on completion, and self-cleans after the DB write. The API layer reads from it during reconnect and profile reload paths, while the orchestrator worker thread writes into it as generation advances.
 
@@ -336,7 +328,7 @@ Each tool module exports a `TOOL_DEFINITION` dict alongside its `execute()` func
 | `app/tools/http_request.py` | Fetch public HTTPS endpoints with size/type validation |
 | `app/tools/memory_store.py` | Persist inferred graph nodes with category metadata |
 | `app/tools/memory_search.py` | Search graph nodes and bounded relationships |
-| `app/tools/multimodal.py` | Vision model routing and image caching (non-tool helpers) |
+| `app/core/multimodal.py` | Vision model routing and image caching (non-tool helpers) |
 
 ---
 
@@ -371,7 +363,7 @@ The pipeline runs asynchronously in batches. Retrieval is tenant-scoped, uses ex
 | `memory_edges` | Relationships |
 | `memory_evidence` | Links to source messages and episodes |
 | `global_knowledge_entries` | Explicit user-managed facts |
-| `app/prompts.py` | Prompt presentation only |
+| `app/services/prompt_service.py` | Prompt presentation only |
 
 ### Key Modules
 
@@ -387,7 +379,7 @@ The pipeline runs asynchronously in batches. Retrieval is tenant-scoped, uses ex
 
 ## Multimodal System
 
-### `file app/tools/multimodal.py`
+### `file app/core/multimodal.py`
 
 Handles image processing for vision and generation:
 
@@ -428,15 +420,15 @@ flowchart TD
 4. Return markdown with image path
 5. Synthesis pass (via orchestrator) for the model to describe / react to the generated image
 
-**Defense-in-depth image dedup** also lives in `app/orchestrator.py`
-(`_dedupe_image_paths` by `os.path.realpath`) and `app/prompts.py`
+**Defense-in-depth image dedup** also lives in `app/services/orchestrator.py`
+(`_dedupe_image_paths` by `os.path.realpath`) and `app/services/prompt_service.py`
 (`_build_multimodal_message` with a `seen` set).
 
 ---
 
 ## Encryption
 
-### `file app/encryption.py`
+### `file app/core/encryption.py`
 
 ChaCha20-Poly1305 encryption for API keys at rest:
 
@@ -444,14 +436,6 @@ ChaCha20-Poly1305 encryption for API keys at rest:
 - **Messages**: Encryption disabled by default (configurable)
 - Key derivation from master key in `encryption.key`
 - Fallback to sentinel on decryption failure
-
-### `file app/key_manager.py`
-
-Master key lifecycle management:
-
-- Key generation on first run
-- Secure key storage
-- Key rotation support
 
 ---
 
@@ -558,10 +542,10 @@ memory during the request lifecycle.
 sequenceDiagram
     participant U as User
     participant API as app/api/endpoints/chat.py
-    participant O as app/orchestrator.py
+    participant O as app/services/orchestrator.py
     participant M as app/memory/retrieval.py
-    participant P as app/prompts.py
-    participant L as app/llm_client.py
+    participant P as app/services/prompt_service.py
+    participant L as app/services/llm_client.py
     participant PV as Provider
     participant T as app/tools/registry.py
     participant DB as PostgreSQL
@@ -624,7 +608,7 @@ httpx>=0.27.0           # Async HTTP client
 ## Architecture Principles
 
 1. **Single entry point** — `handle_user_message()` / `handle_user_message_streaming()`
-   in `app/orchestrator.py` are the only gateways for user messages.
+   in `app/services/orchestrator.py` are the only gateways for user messages.
 2. **Native FC only** — all tool execution flows through
    `app/tools/registry.py::execute_tool_event`. No XML-style markup as a
    live protocol.
@@ -651,5 +635,5 @@ httpx>=0.27.0           # Async HTTP client
     per-turn and cleared at turn end to minimize API calls.
 11. **BYOK only** — API keys never persist server-side; the `api_keys`
     table is gone and must not be reintroduced.
-12. **Stream ownership** lives in `app/stream_manager.py`. Do not add
+12. **Stream ownership** lives in `app/services/stream_manager.py`. Do not add
     parallel streaming stacks.

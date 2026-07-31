@@ -23,13 +23,13 @@ from fastapi import HTTPException  # noqa: E402
 
 from app.api import api_router  # noqa: E402
 from app.auth.session import SESSION_COOKIE_NAME, validate_session  # noqa: E402
+from app.core.logging_config import get_logger  # noqa: E402
 from app.db import Database, init_pg_tables_async  # noqa: E402
 from app.db.connection import (  # noqa: E402
     close_async_pool,
     get_async_pool,
     get_sync_pool,
 )
-from app.logging_config import get_logger  # noqa: E402
 from app.services.session_service import SessionService  # noqa: E402, F401
 
 log = get_logger(__name__)
