@@ -2,8 +2,8 @@
 // DESCRIPTION: Unified sidebar management with session actions
 
 import {
-	BYOK_STORAGE_KEY,
 	clearUserScopedStorage,
+	encodeByokConfig,
 	USER_THEME_STORAGE_KEY,
 } from "./client-storage.js";
 import { eventRouter } from "./modules/event-router.js";
@@ -29,11 +29,9 @@ import { handleSessionSwitch } from "./session-controller.js";
 
 		if (_LLM_ENDPOINTS.some((ep) => url.includes(ep))) {
 			try {
-				const raw = BYOK_STORAGE_KEY
-					? localStorage.getItem(BYOK_STORAGE_KEY)
-					: null;
-				if (raw) {
-					init.headers.set("X-BYOK-Config", btoa(encodeURIComponent(raw)));
+				const encoded = encodeByokConfig();
+				if (encoded) {
+					init.headers.set("X-BYOK-Config", encoded);
 				}
 			} catch (_e) {
 				// BYOK settings are optional; continue without them.

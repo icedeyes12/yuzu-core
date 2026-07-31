@@ -3,12 +3,6 @@
 import asyncio
 import logging
 import os
-from pathlib import Path
-
-from dotenv import load_dotenv
-
-_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
-_ = load_dotenv(_ENV_PATH)
 
 from app.db.connection import AsyncPgSession  # noqa: E402
 from app.memory.embedder import embed_texts_async  # noqa: E402
@@ -107,9 +101,6 @@ async def _validate(table: str, total: int) -> None:
 
 
 async def run_migration() -> None:
-    if not os.getenv("EMBED_KEY"):
-        raise RuntimeError("EMBED_KEY is missing from .env/environment")
-
     for table, text_col in [("episodes", "summary")]:
         log.info("=== Migrating %s ===", table)
         total, processed = await _reembed_table(table, text_col)

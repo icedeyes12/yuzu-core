@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.core.byok import DEFAULT_YUZU_PORTAL_BASE_URL, YUZU_PORTAL
 from app.core.context import ConfigurationRequiredError, get_request_keyring
 
 
@@ -45,6 +46,8 @@ class LLMContext:
         keyring = get_request_keyring(provider) if provider else None
         api_key = keyring.key if keyring else None
         base_url = keyring.base_url if keyring else None
+        if provider == YUZU_PORTAL and keyring and not base_url:
+            base_url = DEFAULT_YUZU_PORTAL_BASE_URL
 
         # 4. Parameters (temperature, etc.) pulled from profile context.
         #

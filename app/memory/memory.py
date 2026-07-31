@@ -16,6 +16,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Any
 
+from app.core.byok import YUZU_PORTAL, get_provider_key
 from app.core.context import (
     RequestKeyring,
     clear_request_keyring,
@@ -293,6 +294,10 @@ async def run_memory_pipeline_async(
 
     Returns summary: {episodes: n, claims: n, llm_calls: n}
     """
+    if not get_provider_key(YUZU_PORTAL):
+        logger.warning("Memory module disabled: Missing Yuzu Portal API key")
+        return {"episodes": 0, "claims": 0, "llm_calls": 0, "processed_messages": 0}
+
     logger.info(f"Starting for session {session_id}, count={message_count}")
     profile = await Database.get_profile(user_id)
 

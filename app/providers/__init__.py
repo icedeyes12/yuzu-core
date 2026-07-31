@@ -18,6 +18,7 @@ from app.providers.groq import GroqProvider
 from app.providers.ollama import OllamaProvider
 from app.providers.openai import OpenAIProvider
 from app.providers.openrouter import OpenRouterProvider
+from app.providers.yuzu_portal import YuzuPortalProvider
 
 
 # Override load_providers to register actual provider implementations
@@ -69,6 +70,10 @@ async def load_all_providers(manager: AIProviderManager):
     google = GoogleProvider()
     await google.initialize()
     manager.register_provider("google", google)
+
+    yuzu_portal = YuzuPortalProvider()
+    await yuzu_portal.initialize()
+    manager.register_provider("yuzu_portal", yuzu_portal)
 
 
 # Patch the AIProviderManager to use our load function

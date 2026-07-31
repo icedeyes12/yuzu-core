@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import base64
 import logging
@@ -8,14 +6,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import httpx
-
-from app.core.context import get_request_keyring
 from app.db import Database
+from app.tools.image_provider import request_image
 from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
 
 logger = logging.getLogger(__name__)
-
 
 TOOL_DEFINITION = ToolDefinition(
     name="image_edit",
@@ -144,13 +139,24 @@ async def execute(arguments, **kwargs) -> dict[str, Any]:
         image_provider = profile.get("image_edit_provider") or profile.get(
             "image_provider"
         )
-        endpoint = profile.get("image_edit_endpoint")
         image_model = profile.get("image_model")
-        keyring = get_request_keyring(image_provider) if image_provider else None
-        api_key = keyring.key if keyring else None
-        if not api_key or not image_provider or not endpoint or not image_model:
+        image_bytes = await asyncio.to_thread(validated_path.read_bytes)
+        output_bytes, provider, error = await request_image(
+            image_model or "",
+            prompt,
+            image_provider or None,
+            image_bytes=image_bytes,
+        )
+        if error:
             return error_result(
-                "NOT CONFIGURED",
+                error,
+                TOOL_DEFINITION,
+                f"/edit {prompt}",
+                partner_name,
+            )
+        if not output_bytes:
+            return error_result(
+                "Execution failed: Image API returned no image",
                 TOOL_DEFINITION,
                 f"/edit {prompt}",
                 partner_name,
@@ -158,36 +164,6 @@ async def execute(arguments, **kwargs) -> dict[str, Any]:
 
         logger.debug(f"[IMAGE EDIT] Editing: {image_path}")
         logger.debug(f"[IMAGE EDIT] Prompt: {prompt}")
-
-        payload = {
-            "prompt": prompt,
-            "image_b64s": [image_base64],
-            **(profile.get("image_edit_extra_body") or {}),
-        }
-
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                endpoint,
-                headers=headers,
-                json=payload,
-                timeout=300,
-            )
-
-        if response.status_code != 200:
-            logger.debug(
-                f"[IMAGE EDIT] API error {response.status_code}: {response.text[:500]}"
-            )
-            return error_result(
-                f"API error {response.status_code}",
-                TOOL_DEFINITION,
-                f"/image_edit {prompt}",
-                partner_name,
-            )
 
         images_dir = (
             Path(__file__).resolve().parent.parent.parent
@@ -213,7 +189,7 @@ async def execute(arguments, **kwargs) -> dict[str, Any]:
         filepath = (images_dir / filename).resolve()
         _ = filepath.relative_to(images_dir)
 
-        _ = await asyncio.to_thread(filepath.write_bytes, response.content)
+        _ = await asyncio.to_thread(filepath.write_bytes, output_bytes)
 
         logger.debug(f"[IMAGE EDIT] Saved: {filepath}")
 

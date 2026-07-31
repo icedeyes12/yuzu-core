@@ -1,11 +1,18 @@
-import { render as renderBadge } from "./badge-registry.js";
-import { BYOK_STORAGE_KEY, getUserStorageKey } from "./client-storage.js";
-import { listProviders } from "./provider-registry.js";
-import { renderLogo } from "./visual-registry.js";
 // FILE: static/js/config.js
 // DESCRIPTION: Configuration page functionality
 
+import { render as renderBadge } from "./badge-registry.js";
+import {
+	DEFAULT_YUZU_PORTAL_BASE_URL,
+	encodeByokConfig,
+	getByokConfig,
+	getByokProvider,
+	getUserStorageKey,
+	writeByokConfig,
+} from "./client-storage.js";
+import { listProviders } from "./provider-registry.js";
 import { toggleSidebar } from "./sidebar.js";
+import { renderLogo } from "./visual-registry.js";
 
 // Global config state (populated from /api/config)
 let appConfig = null;
@@ -167,17 +174,18 @@ async function loadProviderSettings() {
 		});
 		saveModelCatalog(modelCatalog);
 
-		const byok = JSON.parse(
-			(BYOK_STORAGE_KEY && localStorage.getItem(BYOK_STORAGE_KEY)) || "{}",
-		);
 		const providersList = listProviders();
 
 		providersList.forEach((provObj) => {
 			const provider = provObj.id;
 			const isCustom = provObj.custom;
 			const isActive = provider === data.current_provider;
-			const provKey = byok[provider]?.api_key || "";
-			const provUrl = byok[provider]?.base_url || "";
+			const providerConfig = getByokProvider(provider);
+			const provKey = providerConfig.api_key || "";
+			const provUrl =
+				provider === "yuzu_portal"
+					? providerConfig.base_url || DEFAULT_YUZU_PORTAL_BASE_URL
+					: providerConfig.base_url || "";
 
 			const card = document.createElement("div");
 			card.className = `provider-card ${isActive ? "active-provider" : ""}`;
@@ -200,11 +208,11 @@ async function loadProviderSettings() {
 					</div>
 `;
 
-			if (isCustom) {
+			if (isCustom || provider === "yuzu_portal") {
 				innerHtml += `
 					<div class="form-group">
 						<label for="url-${provider}">Base URL</label>
-						<input type="text" id="url-${provider}" placeholder="https://api.openai.com/v1" autocomplete="url" value="${provUrl}">
+						<input type="text" id="url-${provider}" placeholder="http://localhost:20128/v1" autocomplete="url" value="${provUrl}">
 					</div>
 				`;
 			}
@@ -287,25 +295,27 @@ async function loadProviderSettings() {
 }
 
 function saveBYOKForProvider(provider) {
-	const byok = JSON.parse(
-		(BYOK_STORAGE_KEY && localStorage.getItem(BYOK_STORAGE_KEY)) || "{}",
-	);
 	const keyInput = document.getElementById(`key-${provider}`);
 	if (!keyInput) return;
 
-	if (!byok[provider]) byok[provider] = {};
-	byok[provider].api_key = keyInput.value;
+	const byok = getByokConfig();
+	const providerConfig = getByokProvider(provider);
+	providerConfig.api_key = keyInput.value.trim();
 
-	if (provider.startsWith("custom")) {
+	if (provider === "yuzu_portal") {
+		const baseInput = document.getElementById("url-yuzu_portal");
+		providerConfig.base_url =
+			baseInput?.value.trim() || DEFAULT_YUZU_PORTAL_BASE_URL;
+	} else if (provider.startsWith("custom") || provider === "ollama") {
 		const baseInput = document.getElementById(`url-${provider}`);
-		byok[provider].base_url = baseInput?.value || "";
+		providerConfig.base_url = baseInput?.value.trim() || "";
 	}
 
-	if (!BYOK_STORAGE_KEY) {
+	byok.providers[provider] = providerConfig;
+	if (!writeByokConfig(byok)) {
 		showError("User scope is unavailable; provider key was not saved.");
 		return;
 	}
-	localStorage.setItem(BYOK_STORAGE_KEY, JSON.stringify(byok));
 	showSuccess(`${provider} key saved in browser.`);
 }
 
@@ -380,10 +390,7 @@ async function fetchModelsForProvider(provider) {
 	}
 
 	try {
-		const byok = JSON.parse(
-			(BYOK_STORAGE_KEY && localStorage.getItem(BYOK_STORAGE_KEY)) || "{}",
-		);
-		const provConfig = byok[provider] || {};
+		const provConfig = getByokProvider(provider);
 
 		const headers = {};
 		if (provConfig.api_key) headers["X-Provider-Key"] = provConfig.api_key;
@@ -435,8 +442,8 @@ async function testProviderConnection(providerName) {
 	try {
 		const headers = { "Content-Type": "application/json" };
 		try {
-			const raw = localStorage.getItem(BYOK_STORAGE_KEY);
-			if (raw) headers["X-BYOK-Config"] = btoa(encodeURIComponent(raw));
+			const encoded = encodeByokConfig();
+			if (encoded) headers["X-BYOK-Config"] = encoded;
 		} catch (e) {
 			console.warn("Error attaching BYOK config for test:", e);
 		}

@@ -1,94 +1,95 @@
+from __future__ import annotations
+
 import asyncio
-import os
+import logging
 
 import httpx
 
+from app.core.byok import (
+    DEFAULT_YUZU_PORTAL_BASE_URL,
+    YUZU_PORTAL,
+    get_provider_base_url,
+    get_provider_key,
+)
 from app.providers.base import _rate_limit_provider
 
-CHUTES_EMBED_ENDPOINT = "http://localhost:20128/v1/embeddings"
 DEFAULT_MODEL = "gemini/gemini-embedding-2-preview"
 EMBEDDING_DIM = 1536
+logger = logging.getLogger(__name__)
 
 
-async def _get_client():
-    """Get an async client with API key from env (application-scoped)."""
-    api_key = os.environ.get("EMBED_KEY")
-
+async def _get_client() -> httpx.AsyncClient | None:
+    api_key = get_provider_key(YUZU_PORTAL)
     if not api_key:
+        logger.warning("Memory module disabled: Missing Yuzu Portal API key")
         return None
-
+    base_url = get_provider_base_url(YUZU_PORTAL) or DEFAULT_YUZU_PORTAL_BASE_URL
     return httpx.AsyncClient(
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-        }
+        },
+        base_url=base_url,
     )
 
 
 async def embed_texts_async(
     texts, model=None, dimensions=None, encoding_format="float", timeout=30
 ):
-    """Embed a list of strings via embedding API (async). Returns list of embedding lists.
-
-    Rate-limited to prevent errors from concurrent embedding + LLM requests.
-    """
     client = await _get_client()
     if client is None:
-        raise RuntimeError("EMBED_KEY not configured")
+        return []
 
     if isinstance(texts, str):
         texts = [texts]
     if not texts:
+        await client.aclose()
         return []
 
     payload = {
         "input": texts,
         "model": model or DEFAULT_MODEL,
         "dimensions": dimensions or EMBEDDING_DIM,
+        "encoding_format": encoding_format,
     }
 
-    # Use rate limiter
     async with client:
         try:
-            async with _rate_limit_provider("embedding", "embedding", "embedding"):
-                resp = await client.post(
-                    CHUTES_EMBED_ENDPOINT, json=payload, timeout=timeout
+            async with _rate_limit_provider(
+                "yuzu_portal", payload["model"], "embedding"
+            ):
+                response = await client.post(
+                    "/embeddings", json=payload, timeout=timeout
                 )
-            _ = resp.raise_for_status()
-            data = resp.json().get("data", [])
-            results = [item["embedding"] for item in data]
-
+            response.raise_for_status()
+            results = [item["embedding"] for item in response.json().get("data", [])]
             if results and len(results[0]) != EMBEDDING_DIM:
                 raise ValueError(
                     f"Embedding dim mismatch: got {len(results[0])}, expected {EMBEDDING_DIM}"
                 )
             return results
-        except httpx.TimeoutException:
-            raise TimeoutError(f"Embedding request timed out after {timeout}s")
-        except Exception as e:
-            raise e
+        except httpx.TimeoutException as exc:
+            raise TimeoutError(f"Embedding request timed out after {timeout}s") from exc
 
 
 def embed_texts(
     texts, model=None, dimensions=None, encoding_format="float", timeout=30
 ):
-    """Legacy sync wrapper for embed_texts_async."""
     return asyncio.run(
         embed_texts_async(texts, model, dimensions, encoding_format, timeout)
     )
 
 
 async def embed_text_async(text, timeout=30, **kwargs):
-    """Embed a single string (async). Returns None if embedding fails."""
     try:
         results = await embed_texts_async([text], timeout=timeout, **kwargs)
-        return results[0] if results and len(results) > 0 else None
-    except Exception:
+        return results[0] if results else None
+    except Exception as exc:
+        logger.warning("Embedding skipped: %s", type(exc).__name__)
         return None
 
 
 def embed_text(text, timeout=30, **kwargs):
-    """Legacy sync wrapper for embed_text_async."""
     return asyncio.run(embed_text_async(text, timeout, **kwargs))
 
 
