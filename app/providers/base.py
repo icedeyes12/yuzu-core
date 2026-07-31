@@ -29,7 +29,6 @@ _PROVIDER_LAST_CALL: dict[str, float] = {}
 _PROVIDER_RATE_LIMITS: dict[str, float] = {
     "chutes": 0.5,  # 0.5s between Chutes requests (strict)
     "openrouter": 0.3,  # 0.3s between OpenRouter requests
-    "ollama": 0.1,  # 0.1s for local Ollama (relaxed)
     # Default for unknown providers
     "default": 0.5,
 }
@@ -394,7 +393,6 @@ class AIProviderManager:
             "chutes": {"top_k", "typical_p"},
             "openrouter": {"top_k", "typical_p"},
             "cerebras": {"top_k", "typical_p"},
-            "ollama": {"top_k", "typical_p", "num_ctx"},
         }
         extensions = extensions_by_provider.get(provider.name, set())
         payload = sanitize_openai_payload(kwargs, provider_extensions=extensions)

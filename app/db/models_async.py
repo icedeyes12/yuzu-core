@@ -38,6 +38,8 @@ from app.db.queries import (
     SQL_MESSAGE_SELECT_ENCRYPTED,
     SQL_MESSAGE_UPDATE,
     SQL_MESSAGE_UPDATE_DECRYPTED,
+    SQL_PIPELINE_STATE_CLAIM,
+    SQL_PIPELINE_STATE_CLEAR,
     SQL_PIPELINE_STATE_SELECT,
     SQL_PIPELINE_STATE_UPDATE,
     SQL_PROFILE_INSERT_DEFAULT,
@@ -290,6 +292,36 @@ async def update_pipeline_state_async(
     except Exception as e:
         log.error("update_pipeline_state_async failed: %s", e)
         return False
+
+
+async def claim_pipeline_fence_async(
+    session_id: str,
+    user_id: str,
+    fence_count: int,
+    fence_since: str,
+    stale_before: str,
+) -> DBRow | None:
+    """(｡•̀ᴗ-)✧"""
+    async with AsyncPgSession() as session:
+        return await session.execute_returning(
+            SQL_PIPELINE_STATE_CLAIM,
+            (
+                fence_count,
+                fence_since,
+                datetime.now(),
+                session_id,
+                user_id,
+                stale_before,
+            ),
+        )
+
+
+async def clear_pipeline_fence_async(session_id: str, user_id: str) -> DBRow | None:
+    """(｡•̀ᴗ-)✧"""
+    async with AsyncPgSession() as session:
+        return await session.execute_returning(
+            SQL_PIPELINE_STATE_CLEAR, (datetime.now(), session_id, user_id)
+        )
 
 
 # ---------------------------------------------------------------------------

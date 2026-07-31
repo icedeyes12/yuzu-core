@@ -19,21 +19,6 @@ let appConfig = null;
 
 const PROVIDER_MODELS_CACHE_KEY = getUserStorageKey("provider_models");
 
-function parseOptionalJson(elementId) {
-	const raw = getValueIfExists(elementId, "").trim();
-	if (!raw) return null;
-	try {
-		const parsed = JSON.parse(raw);
-		if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-			throw new Error("Expected a JSON object");
-		}
-		return parsed;
-	} catch (_error) {
-		showError(`${elementId} must contain a valid JSON object.`);
-		throw new Error(`Invalid JSON in ${elementId}`);
-	}
-}
-
 function setTextIfExists(id, value) {
 	const el = document.getElementById(id);
 	if (el) el.textContent = String(value ?? "");
@@ -71,7 +56,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 	if (!loaded) return;
 	await Promise.all([loadGlobalKnowledge(), loadProviderSettings()]);
 	loadImageModelFromConfig();
-	loadVisionModel();
 	setupEventListeners();
 	initializeConfigAnimations();
 });
@@ -121,13 +105,6 @@ function loadProfileDataFromConfig(data) {
 	setValueIfExists("persona-prompt", data.persona_prompt || "");
 	setValueIfExists("location-lat", data.location_lat ?? "");
 	setValueIfExists("location-lon", data.location_lon ?? "");
-	const visPrefs = data.providers_config?.vision_model_preferences || {};
-	setTextIfExists(
-		"current-vision-model",
-		visPrefs.provider && visPrefs.model
-			? `${visPrefs.provider}/${visPrefs.model}`
-			: "Not set",
-	);
 }
 
 async function loadProfileData() {
@@ -306,7 +283,7 @@ function saveBYOKForProvider(provider) {
 		const baseInput = document.getElementById("url-yuzu_portal");
 		providerConfig.base_url =
 			baseInput?.value.trim() || DEFAULT_YUZU_PORTAL_BASE_URL;
-	} else if (provider.startsWith("custom") || provider === "ollama") {
+	} else if (provider.startsWith("custom")) {
 		const baseInput = document.getElementById(`url-${provider}`);
 		providerConfig.base_url = baseInput?.value.trim() || "";
 	}
@@ -488,18 +465,6 @@ function setupEventListeners() {
 	if (saveProfileBtn)
 		saveProfileBtn.addEventListener("click", saveProfileSettings);
 
-	const visionProviderSelect = document.getElementById("vision-provider");
-	const testVisionBtn = document.getElementById("test-vision");
-	const saveVisionModelBtn = document.getElementById("save-vision-model");
-	if (visionProviderSelect) {
-		visionProviderSelect.addEventListener("change", function () {
-			updateVisionModelDropdown(this.value);
-		});
-	}
-	if (testVisionBtn) testVisionBtn.addEventListener("click", testVisionModel);
-	if (saveVisionModelBtn)
-		saveVisionModelBtn.addEventListener("click", saveVisionModel);
-
 	const knowledgeForm = document.getElementById("global-knowledge-form");
 	if (knowledgeForm)
 		knowledgeForm.addEventListener("submit", saveKnowledgeEntry);
@@ -581,181 +546,64 @@ function setupEventListeners() {
 }
 
 // Load image model on page load
+const IMAGE_MODEL_OPTIONS = Object.freeze([
+	{ value: "", label: "Not configured", provider: "" },
+	{
+		value: "z-image-turbo",
+		label: "Z-Image Turbo",
+		provider: "chutes",
+		key: "Chutes Key",
+	},
+	{
+		value: "qwen-image",
+		label: "Qwen Image",
+		provider: "chutes",
+		key: "Chutes Key",
+	},
+	{
+		value: "qwen-image-edit",
+		label: "Qwen Image Edit",
+		provider: "chutes",
+		key: "Chutes Key",
+	},
+	{
+		value: "ag/gemini-3.1-flash-image",
+		label: "Gemini 3.1 Flash Image",
+		provider: "yuzu_portal",
+		key: "Yuzu Key",
+	},
+	{
+		value: "gemini/gemini-2.5-flash-image",
+		label: "Gemini 2.5 Flash Image",
+		provider: "yuzu_portal",
+		key: "Yuzu Key",
+	},
+]);
+
+function updateImageModelWarning(model) {
+	const warning = document.getElementById("image-model-warning");
+	if (!warning) return;
+	const selected = IMAGE_MODEL_OPTIONS.find((option) => option.value === model);
+	warning.hidden = !selected?.key;
+	warning.textContent = selected?.key
+		? `You need to setup ${selected.key} to use this model`
+		: "";
+}
+
 function loadImageModelFromConfig() {
 	const imageModel = appConfig?.profile?.image_model || "";
-	setValueIfExists("image-model", imageModel);
+	const select = document.getElementById("image-model");
+	if (select) {
+		select.innerHTML = IMAGE_MODEL_OPTIONS.map(
+			(option) => `<option value="${option.value}">${option.label}</option>`,
+		).join("");
+		select.value = imageModel;
+		select.addEventListener("change", () =>
+			updateImageModelWarning(select.value),
+		);
+	}
 	setTextIfExists("current-image-model", imageModel || "Not configured");
-	setValueIfExists("image-endpoint", appConfig?.profile?.image_endpoint);
-	setValueIfExists(
-		"image-edit-endpoint",
-		appConfig?.profile?.image_edit_endpoint,
-	);
-	setValueIfExists("image-provider", appConfig?.profile?.image_provider);
-	setValueIfExists(
-		"image-edit-provider",
-		appConfig?.profile?.image_edit_provider,
-	);
-	setValueIfExists(
-		"image-extra-body",
-		JSON.stringify(appConfig?.profile?.image_extra_body || {}, null, 2),
-	);
-	setValueIfExists(
-		"image-edit-extra-body",
-		JSON.stringify(appConfig?.profile?.image_edit_extra_body || {}, null, 2),
-	);
-}
-
-// Load vision model on page load
-async function loadVisionModel() {
-	if (!appConfig) {
-		await loadAppConfig();
-	}
-
-	const visionConfig = appConfig?.vision || {};
-	const currentProvider = visionConfig.current_provider || "";
-	const currentModel = visionConfig.current_model || "";
-
-	const visionProviderSelect = document.getElementById("vision-provider");
-	const visionModelSelect = document.getElementById("vision-model");
-	if (!visionProviderSelect || !visionModelSelect) return;
-
-	visionProviderSelect.innerHTML = "";
-	const visionProviders = Object.keys(visionConfig.models_by_provider || {});
-
-	visionProviders.forEach((provider) => {
-		const option = document.createElement("option");
-		option.value = provider;
-		option.textContent = provider.charAt(0).toUpperCase() + provider.slice(1);
-		if (provider === currentProvider) option.selected = true;
-		visionProviderSelect.appendChild(option);
-	});
-
-	updateVisionModelDropdown(currentProvider, currentModel);
-	setTextIfExists(
-		"current-vision-model",
-		currentProvider && currentModel
-			? `${currentProvider}/${currentModel}`
-			: "Not set",
-	);
-
-	console.log("Vision model loaded from config");
-}
-
-function updateVisionModelDropdown(provider, currentModel = "") {
-	const visionModelSelect = document.getElementById("vision-model");
-	if (!visionModelSelect) return;
-	visionModelSelect.innerHTML = "";
-
-	const models = appConfig?.vision?.models_by_provider?.[provider] || [];
-
-	if (models.length === 0) {
-		const option = document.createElement("option");
-		option.value = "";
-		option.textContent = "No vision models available";
-		visionModelSelect.appendChild(option);
-		return;
-	}
-
-	models.forEach((model) => {
-		const option = document.createElement("option");
-		option.value = model;
-		option.textContent = model;
-		if (model === currentModel) option.selected = true;
-		visionModelSelect.appendChild(option);
-	});
-
-	console.log(
-		`Updated vision model dropdown for ${provider}: ${models.length} models`,
-	);
-}
-
-async function testVisionModel() {
-	const provider = getValueIfExists("vision-provider", "");
-	const model = getValueIfExists("vision-model", "");
-
-	if (!provider || !model) {
-		showError("Please select both provider and model");
-		return;
-	}
-
-	const statusElement = document.getElementById("current-vision-model");
-	if (statusElement) statusElement.textContent = "Testing...";
-
-	try {
-		const response = await fetch("/api/providers/test_vision", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Accept: "application/json",
-			},
-			body: JSON.stringify({ provider, model }),
-		});
-
-		const result = await readJsonResponse(response);
-
-		if (!response.ok || !result.success) {
-			if (statusElement)
-				statusElement.textContent = `${provider}/${model} (unavailable)`;
-			throw new Error(
-				getApiError(result, response.status) || "Vision model test failed",
-			);
-		}
-		if (statusElement) statusElement.textContent = `${provider}/${model}`;
-		showSuccess("Vision model is available!");
-	} catch (error) {
-		console.error("Error testing vision model:", error);
-		if (statusElement) statusElement.textContent = `${provider}/${model}`;
-		showError(`Vision model test error: ${error.message}`);
-	}
-}
-
-async function saveVisionModel() {
-	const provider = getValueIfExists("vision-provider", "");
-	const model = getValueIfExists("vision-model", "");
-
-	if (!provider) {
-		showError("Please select a vision provider");
-		return;
-	}
-
-	if (!model) {
-		showError("Please select a vision model");
-		return;
-	}
-
-	const saveBtn = document.getElementById("save-vision-model");
-	if (!saveBtn) return;
-	const originalText = saveBtn.textContent;
-	saveBtn.textContent = "Saving...";
-	saveBtn.disabled = true;
-
-	try {
-		const response = await fetch("/api/providers/set_vision_model", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Accept: "application/json",
-			},
-			body: JSON.stringify({ provider, model }),
-		});
-
-		const result = await readJsonResponse(response);
-
-		if (response.ok && result.status === "success") {
-			setTextIfExists("current-vision-model", `${provider}/${model}`);
-			showSuccess("Vision model saved!");
-		} else {
-			showError(
-				`Failed to save vision model: ${getApiError(result, response.status)}`,
-			);
-		}
-	} catch (error) {
-		console.error("Error saving vision model:", error);
-		showError("Error saving vision model");
-	} finally {
-		saveBtn.textContent = originalText;
-		saveBtn.disabled = false;
-	}
+	updateImageModelWarning(imageModel);
 }
 
 // Save image model setting
@@ -770,15 +618,7 @@ async function saveImageModel() {
 
 	try {
 		const imageModel = getValueIfExists("image-model", "").trim() || null;
-		const updates = {
-			image_model: imageModel,
-			image_provider: getValueIfExists("image-provider", "") || null,
-			image_endpoint: getValueIfExists("image-endpoint", "") || null,
-			image_edit_provider: getValueIfExists("image-edit-provider", "") || null,
-			image_edit_endpoint: getValueIfExists("image-edit-endpoint", "") || null,
-			image_extra_body: parseOptionalJson("image-extra-body"),
-			image_edit_extra_body: parseOptionalJson("image-edit-extra-body"),
-		};
+		const updates = { image_model: imageModel };
 		const response = await fetch("/api/update_profile", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },

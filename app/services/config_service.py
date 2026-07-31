@@ -37,7 +37,6 @@ class ConfigService:
             "status": "success",
             "profile": ConfigService.format_profile_dict(profile),
             "ai_providers": ai_providers,
-            "vision": await ConfigService.get_vision_payload_async(user_id, profile),
             "all_models": ai_providers["all_models"],
             "current_provider": ai_providers["current_provider"],
             "current_model": ai_providers["current_model"],
@@ -46,36 +45,6 @@ class ConfigService:
     @staticmethod
     async def get_global_knowledge_async(user_id: str) -> list[dict[str, Any]]:
         return await Database.list_global_knowledge(user_id=user_id)
-
-    @staticmethod
-    async def get_vision_payload_async(
-        user_id: str, profile: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
-        if profile is None:
-            profile = await Database.get_profile(user_id)
-        profile = cast(dict[str, Any], profile)
-
-        ai_manager = await get_ai_manager()
-        capabilities = ai_manager.get_all_provider_capabilities()
-        models = await ai_manager.get_all_models()
-        vision_capabilities = {
-            provider: metadata
-            for provider, metadata in capabilities.items()
-            if metadata.get("supports_vision")
-        }
-        providers_config = cast(dict[str, Any], profile.get("providers_config") or {})
-        vision_prefs = cast(
-            dict[str, Any], providers_config.get("vision_model_preferences") or {}
-        )
-
-        return {
-            "capabilities": vision_capabilities,
-            "models_by_provider": {
-                provider: models.get(provider, []) for provider in vision_capabilities
-            },
-            "current_provider": vision_prefs.get("provider"),
-            "current_model": vision_prefs.get("model"),
-        }
 
     @staticmethod
     def format_profile_dict(profile: dict[str, Any]) -> dict[str, Any]:
@@ -91,16 +60,6 @@ class ConfigService:
             "providers_config": profile["providers_config"],
             "context": ctx,
             "image_model": profile["image_model"],
-            "image_provider": profile.get("image_provider"),
-            "vision_model": profile["vision_model"],
-            "image_edit_provider": profile.get("image_edit_provider"),
-            "image_endpoint": profile.get("image_endpoint"),
-            "image_edit_endpoint": profile.get("image_edit_endpoint"),
-            "image_extra_body": profile.get("image_extra_body") or {},
-            "image_edit_extra_body": profile.get("image_edit_extra_body") or {},
-            "vision_model_preferences": profile.get("providers_config", {}).get(
-                "vision_model_preferences", {}
-            ),
             "created_at": profile["created_at"].isoformat()
             if profile.get("created_at")
             else None,
@@ -156,12 +115,3 @@ class ConfigService:
 
         suffix = f" with model: {model_name}" if model_name else ""
         return f"Preferred provider set to: {provider_name}{suffix}"
-
-    @staticmethod
-    async def set_vision_model_async(user_id: str, provider: str, model: str) -> str:
-        """Async version for web API endpoints."""
-        profile = await Database.get_profile(user_id)
-        config = cast(dict[str, Any], profile.get("providers_config") or {})
-        config["vision_model_preferences"] = {"provider": provider, "model": model}
-        await Database.update_profile({"providers_config": config}, user_id)
-        return f"Vision model set to: {provider}/{model}"

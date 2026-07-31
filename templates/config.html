@@ -104,46 +104,16 @@
 
       <section class="config-section" aria-labelledby="media-heading">
         <h2 id="media-heading">Media Models</h2>
-        <p class="section-description">Choose the image and vision models used by the app.</p>
+        <p class="section-description">Choose the image generation model. Vision uses the active text provider and model automatically when an attachment is present.</p>
 
         <div class="provider-status">
           <p><strong>Current image model:</strong> <span id="current-image-model">Not set</span></p>
-          <p><strong>Current vision model:</strong> <span id="current-vision-model">Not set</span></p>
         </div>
 
         <div class="form-group">
           <label for="image-model">Image model</label>
-          <input id="image-model" type="text" class="form-input" autocomplete="off" placeholder="Not configured">
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="image-provider">Image provider</label>
-            <input id="image-provider" type="text" autocomplete="off" placeholder="Not configured">
-          </div>
-          <div class="form-group">
-            <label for="image-edit-provider">Image edit provider</label>
-            <input id="image-edit-provider" type="text" autocomplete="off" placeholder="Not configured">
-          </div>
-        </div>
-                <div class="form-row">
-          <div class="form-group">
-            <label for="image-endpoint">Image generation endpoint</label>
-            <input id="image-endpoint" type="url" autocomplete="url">
-          </div>
-          <div class="form-group">
-            <label for="image-edit-endpoint">Image edit endpoint</label>
-            <input id="image-edit-endpoint" type="url" autocomplete="url">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="image-extra-body">Image generation extra params (JSON)</label>
-            <textarea id="image-extra-body" rows="3" class="form-input" spellcheck="false" placeholder="{ &quot;size&quot;: &quot;1024x1024&quot; }"></textarea>
-          </div>
-          <div class="form-group">
-            <label for="image-edit-extra-body">Image edit extra params (JSON)</label>
-            <textarea id="image-edit-extra-body" rows="3" class="form-input" spellcheck="false" placeholder="{ &quot;steps&quot;: 20 }"></textarea>
-          </div>
+          <select id="image-model" class="form-select"></select>
+          <p id="image-model-warning" class="form-hint" role="status" hidden></p>
         </div>
         <div class="config-actions">
           <button id="save-image-model" type="button" class="btn btn-primary">Save Image Model</button>
@@ -152,21 +122,6 @@
         <div class="form-group">
           <label>Memory status</label>
           <p class="form-hint">Background extraction runs asynchronously in message batches. Manual memory mutation is disabled during architecture recovery.</p>
-        </div>
-
-        <div class="form-row config-form-row vision-model-row">
-          <div class="form-group">
-            <label for="vision-provider">Vision provider</label>
-            <select id="vision-provider" class="form-select"></select>
-          </div>
-          <div class="form-group">
-            <label for="vision-model">Vision model</label>
-            <select id="vision-model" class="form-select"></select>
-          </div>
-        </div>
-        <div class="config-actions">
-          <button id="test-vision" type="button" class="btn btn-success">Test Vision Model</button>
-          <button id="save-vision-model" type="button" class="btn btn-primary">Save Vision Model</button>
         </div>
       </section>
 

@@ -15,7 +15,6 @@ from app.providers.deepseek import DeepSeekProvider
 from app.providers.google import GoogleProvider
 from app.providers.grok import GrokProvider
 from app.providers.groq import GroqProvider
-from app.providers.ollama import OllamaProvider
 from app.providers.openai import OpenAIProvider
 from app.providers.openrouter import OpenRouterProvider
 from app.providers.yuzu_portal import YuzuPortalProvider
@@ -23,10 +22,6 @@ from app.providers.yuzu_portal import YuzuPortalProvider
 
 # Override load_providers to register actual provider implementations
 async def load_all_providers(manager: AIProviderManager):
-    ollama = OllamaProvider()
-    await ollama.initialize()
-    manager.register_provider("ollama", ollama)
-
     cerebras = CerebrasProvider()
     await cerebras.initialize()
     manager.register_provider("cerebras", cerebras)

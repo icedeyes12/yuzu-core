@@ -26,12 +26,6 @@ class TestProviderCapabilities:
         assert provider.capabilities.supports_streaming_fc is True
         assert provider.capabilities.supports_tool_call_parsing is True
 
-    def test_ollama_capabilities(self):
-        from app.providers.ollama import OllamaProvider
-
-        provider = OllamaProvider()
-        assert provider.capabilities.supports_native_fc is False
-
     def test_to_dict(self):
         caps = ProviderCapabilities(
             supports_native_fc=True,
@@ -69,11 +63,6 @@ class TestAIProviderManagerCapabilities:
         assert manager.provider_supports_tools("openrouter") is True
 
     @pytest.mark.asyncio
-    async def test_provider_supports_tools_ollama(self):
-        manager = await self._init_manager()
-        assert manager.provider_supports_tools("ollama") is False
-
-    @pytest.mark.asyncio
     async def test_provider_supports_tools_unknown(self):
         manager = await self._init_manager()
         assert manager.provider_supports_tools("nonexistent") is False
@@ -81,10 +70,7 @@ class TestAIProviderManagerCapabilities:
     @pytest.mark.asyncio
     async def test_provider_supports_streaming_tools(self):
         manager = await self._init_manager()
-        # OpenRouter now supports streaming FC (FC9)
         assert manager.provider_supports_streaming_tools("openrouter") is True
-        # Ollama does not
-        assert manager.provider_supports_streaming_tools("ollama") is False
 
 
 class TestOpenRouterParseToolCalls:

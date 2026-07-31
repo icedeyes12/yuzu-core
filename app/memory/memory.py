@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
 from datetime import datetime, timedelta
@@ -25,15 +24,14 @@ from app.core.context import (
 )
 from app.db import (
     Database,
+    claim_pipeline_fence_async,
+    clear_pipeline_fence_async,
     get_message_count_async,
     get_pipeline_state_async,
     get_session_messages_after_id_async,
     get_session_messages_async,
-    pg_execute_async,
-    pg_fetchone_async,
     update_pipeline_state_async,
 )
-from app.db.queries import SQL_PIPELINE_STATE_LOCK, SQL_PIPELINE_STATE_UPDATE
 from app.memory.embedder import embed_text_async
 from app.memory.extractor import extract_batch_async
 from app.memory.graph import GraphMemoryRepository
@@ -88,43 +86,22 @@ async def _try_set_fence_async(
     if not user_id:
         return False
     now = datetime.now()
-    state = await pg_fetchone_async(SQL_PIPELINE_STATE_LOCK, (session_id, user_id))
-    if not state:
-        return False
-    ms = state.get("memory_pipeline_state") or {}
-    existing_count = ms.get("in_progress_fence_count")
-    existing_since = ms.get("in_progress_fence_since")
-    if existing_count is not None and existing_since is not None:
-        try:
-            existing_dt = datetime.fromisoformat(existing_since)
-            age = now - existing_dt
-            if age <= timedelta(minutes=FENCE_TTL_MINUTES):
-                return False
-        except (ValueError, TypeError):
-            logger.warning("Invalid fence timestamp for session %s", session_id)
-    ms["in_progress_fence_count"] = fence_count
-    ms["in_progress_fence_since"] = now.isoformat()
-    await pg_execute_async(
-        SQL_PIPELINE_STATE_UPDATE,
-        (json.dumps(ms), datetime.now(), session_id, user_id),
+    stale_before = now - timedelta(minutes=FENCE_TTL_MINUTES)
+    claimed = await claim_pipeline_fence_async(
+        session_id,
+        user_id,
+        fence_count,
+        now.isoformat(),
+        stale_before.isoformat(),
     )
-    return True
+    return claimed is not None
 
 
 async def _clear_fence_async(session_id: str, user_id: str | None = None) -> None:
     """Clear a fence only on the owning session."""
     if not user_id:
         return
-    state = await pg_fetchone_async(SQL_PIPELINE_STATE_LOCK, (session_id, user_id))
-    if not state:
-        return
-    ms = state.get("memory_pipeline_state") or {}
-    ms["in_progress_fence_count"] = None
-    ms["in_progress_fence_since"] = None
-    await pg_execute_async(
-        SQL_PIPELINE_STATE_UPDATE,
-        (json.dumps(ms), datetime.now(), session_id, user_id),
-    )
+    await clear_pipeline_fence_async(session_id, user_id)
 
 
 async def _is_fence_active_async(session_id: str, user_id: str | None = None) -> bool:
@@ -294,21 +271,21 @@ async def run_memory_pipeline_async(
 
     Returns summary: {episodes: n, claims: n, llm_calls: n}
     """
-    if not get_provider_key(YUZU_PORTAL):
-        logger.warning("Memory module disabled: Missing Yuzu Portal API key")
-        return {"episodes": 0, "claims": 0, "llm_calls": 0, "processed_messages": 0}
-
-    logger.info(f"Starting for session {session_id}, count={message_count}")
-    profile = await Database.get_profile(user_id)
-
-    # Get current state for tracking
-    state = await get_pipeline_state_async(session_id, user_id)
-    last_message_id = state.get("last_segmented_message_id")
-    if isinstance(last_message_id, int):
-        last_message_id = "00000000-0000-0000-0000-000000000000"
-    last_count = state.get("last_segmented_count", 0) or 0
-
     try:
+        if not get_provider_key(YUZU_PORTAL):
+            logger.warning("Memory module disabled: Missing Yuzu Portal API key")
+            return {"episodes": 0, "claims": 0, "llm_calls": 0, "processed_messages": 0}
+
+        logger.info(f"Starting for session {session_id}, count={message_count}")
+        profile = await Database.get_profile(user_id)
+
+        # Get current state for tracking
+        state = await get_pipeline_state_async(session_id, user_id)
+        last_message_id = state.get("last_segmented_message_id")
+        if isinstance(last_message_id, int):
+            last_message_id = "00000000-0000-0000-0000-000000000000"
+        last_count = state.get("last_segmented_count", 0) or 0
+
         # ID-based query: fetch messages AFTER the last processed message ID
         if last_message_id:
             try:
@@ -527,8 +504,6 @@ async def run_memory_pipeline_async(
             "processed_messages": processed_count,
         }
     finally:
-        # Always clear fence when done (even on error)
-        # This mirrors plast-mem's finalize_job() behavior
         await _clear_fence_async(session_id, user_id=user_id)
         logger.debug(f"Fence cleared for session {session_id}")
 

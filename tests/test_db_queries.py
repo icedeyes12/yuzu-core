@@ -47,7 +47,6 @@ class TestProfileParsers:
             "providers_config": {"preferred_provider": "chutes"},
             "context": "{}",
             "image_model": "qwen_image",
-            "vision_model": "kimi-k2.5",
             "created_at": None,
             "updated_at": None,
         }

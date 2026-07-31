@@ -7,7 +7,6 @@ const badgeLabels = Object.freeze({
 	experimental: "Experimental",
 	deprecated: "Deprecated",
 	preview: "Preview",
-	local: "Local",
 	unknown: "Unknown",
 });
 

@@ -5,6 +5,8 @@ from app.db.queries import (
     SQL_GRAPH_NODE_EXPAND,
     SQL_GRAPH_NODE_SEARCH_TEXT,
     SQL_GRAPH_NODE_SEARCH_VECTOR,
+    SQL_PIPELINE_STATE_CLAIM,
+    SQL_PIPELINE_STATE_CLEAR,
 )
 from app.memory.graph import vector_literal
 
@@ -27,6 +29,17 @@ def test_vector_literal():
     assert vector_literal(None) is None
     assert vector_literal([]) == "[]"
     assert vector_literal([0.1, 0.2]) == "[0.1,0.2]"
+
+
+def test_pipeline_fence_sql_is_atomic_and_tenant_scoped():
+    assert "UPDATE chat_sessions" in SQL_PIPELINE_STATE_CLAIM
+    assert "WHERE id = %s" in SQL_PIPELINE_STATE_CLAIM
+    assert "AND user_id = %s" in SQL_PIPELINE_STATE_CLAIM
+    assert "RETURNING memory_pipeline_state" in SQL_PIPELINE_STATE_CLAIM
+    assert (
+        "memory_pipeline_state - 'in_progress_fence_count'" in SQL_PIPELINE_STATE_CLEAR
+    )
+    assert "AND user_id = %s" in SQL_PIPELINE_STATE_CLEAR
 
 
 @pytest.mark.asyncio
