@@ -31,6 +31,7 @@ const _activationLocks = new WeakSet();
 const _rootActivationLocks = new WeakSet();
 const _cleanupHandlers = new WeakMap();
 const _cancellationHandlers = new WeakMap();
+const _metrics = { activations: 0 };
 
 /**
  * Register a fenced-block handler for one or more language strings.
@@ -38,6 +39,10 @@ const _cancellationHandlers = new WeakMap();
  * @param {string|string[]} langs
  * @param {FenceHandler} handler
  */
+export function getFenceMetrics() {
+	return { ..._metrics };
+}
+
 export function registerFenceHandler(langs, handler) {
 	for (const lang of [langs].flat()) {
 		_registry.set(lang.toLowerCase(), handler);
@@ -159,6 +164,7 @@ function _activateFenceElement(el) {
 
 	_activationLocks.add(el);
 	el.dataset.fenceActivated = "1";
+	_metrics.activations += 1;
 	try {
 		handler.activate(el, source);
 		return true;

@@ -59,7 +59,7 @@ export class ConversationStore {
 	 * @param {boolean} hasMore
 	 */
 	prependHistory(olderHistory, hasMore = false) {
-		if (!olderHistory || !olderHistory.length) {
+		if (!olderHistory?.length) {
 			this.hasMoreOlder = hasMore;
 			return;
 		}

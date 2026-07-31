@@ -141,7 +141,12 @@ export function renderMessageContent(rawText, _isUser = false) {
 				});
 				window._markedConfigured = true;
 			}
+			const startedAt = performance.now();
 			const rendered = window.marked.parse(safeText);
+			window.__yuzuMarkdownMetrics ??= { parseCount: 0, parseDurationMs: 0 };
+			window.__yuzuMarkdownMetrics.parseCount += 1;
+			window.__yuzuMarkdownMetrics.parseDurationMs +=
+				performance.now() - startedAt;
 			return rendered.replace(
 				/(<img[^>]+(?:src|data-src)=["'])(?:(?:https?:\/\/[^/]+)?(?:\/chat\/|\/))?(?:(?:\.\.\/)+)?static\/(generated_images|uploads)\/([^"']+)(["'])/g,
 				(_match, prefix, kind, filename, suffix) =>

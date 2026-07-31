@@ -36,8 +36,7 @@ async function _loadOlderMessages() {
 		chatStore.prependHistory(older, data.has_more ?? false);
 		// Scroll correction happens in DOMRenderer on "prepend" event using saved oldScrollHeight.
 		// We stash it on the container so the renderer can pick it up.
-		if (chatContainer)
-			chatContainer._prependOldScrollHeight = oldScrollHeight;
+		if (chatContainer) chatContainer._prependOldScrollHeight = oldScrollHeight;
 
 		olderMessagesLoaded += older.length;
 	} finally {
