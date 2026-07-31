@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.scripts]
-yuzu = "cli.app:run_app"
+yuzu = "cli.app:main"
 yuzu-server = "main:app"
 
 [tool.setuptools.packages.find]
