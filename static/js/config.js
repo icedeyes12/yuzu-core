@@ -294,6 +294,7 @@ function saveBYOKForProvider(provider) {
 		return;
 	}
 	showSuccess(`${provider} key saved in browser.`);
+	updateImageModelWarning(getValueIfExists("image-model"));
 }
 
 function readModelCatalog() {
@@ -580,14 +581,31 @@ const IMAGE_MODEL_OPTIONS = Object.freeze([
 	},
 ]);
 
+function isImageModelKeyConfigured(option) {
+	if (!option?.provider) return true;
+	return Boolean(getByokProvider(option.provider).api_key?.trim());
+}
+
 function updateImageModelWarning(model) {
 	const warning = document.getElementById("image-model-warning");
-	if (!warning) return;
+	const saveButton = document.getElementById("save-image-model");
+	if (!warning) return true;
+
 	const selected = IMAGE_MODEL_OPTIONS.find((option) => option.value === model);
-	warning.hidden = !selected?.key;
-	warning.textContent = selected?.key
-		? `You need to setup ${selected.key} to use this model`
-		: "";
+	const requiresKey = Boolean(selected?.key);
+	const configured = !requiresKey || isImageModelKeyConfigured(selected);
+
+	warning.classList.toggle("image-model-warning", requiresKey && !configured);
+	warning.classList.toggle("image-model-configured", requiresKey && configured);
+	warning.hidden = !requiresKey;
+	warning.textContent = !requiresKey
+		? ""
+		: configured
+			? `✓ ${selected.key} is configured.`
+			: `⚠️ Warning: You have not set up the ${selected.key}. Please configure it in the provider list above to use this model.`;
+
+	if (saveButton) saveButton.disabled = requiresKey && !configured;
+	return configured;
 }
 
 function loadImageModelFromConfig() {
@@ -618,12 +636,20 @@ async function saveImageModel() {
 
 	const btn = document.getElementById("save-image-model");
 	if (!btn) return;
+
+	const imageModel = getValueIfExists("image-model", "").trim() || null;
+	const selected = IMAGE_MODEL_OPTIONS.find((option) => option.value === imageModel);
+	if (selected?.key && !isImageModelKeyConfigured(selected)) {
+		updateImageModelWarning(imageModel);
+		showError(`Configure the ${selected.key} before saving this image model.`);
+		return;
+	}
+
 	const originalText = btn.textContent;
 	btn.textContent = "Saving...";
 	btn.disabled = true;
 
 	try {
-		const imageModel = getValueIfExists("image-model", "").trim() || null;
 		const updates = { image_model: imageModel };
 		const response = await fetch("/api/update_profile", {
 			method: "POST",
@@ -636,6 +662,7 @@ async function saveImageModel() {
 		}
 		Object.assign(appConfig.profile, updates);
 		setTextIfExists("current-image-model", imageModel || "Not configured");
+		updateImageModelWarning(imageModel);
 		showSuccess("Image model saved successfully!");
 	} catch (error) {
 		console.error("Error saving image model:", error);
