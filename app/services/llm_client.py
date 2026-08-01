@@ -29,15 +29,15 @@ def _resolve_additional_instructions(profile: dict[str, Any]) -> str:
     """Return the user-configured additional instructions, if any.
 
     Source of truth order:
-      1. profile["context"]["additional_instructions"] (preset-aware, persistent)
+      1. profile["model_parameters"]["additional_instructions"] (preset-aware, persistent)
       2. profile["additional_instructions"] (legacy top-level)
 
     Hard-truncated to prevent prompt-bloat abuse.
     """
     if not profile:
         return ""
-    ctx = profile.get("context") or {}
-    raw = ctx.get("additional_instructions") or profile.get(
+    model_parameters = profile.get("model_parameters") or {}
+    raw = model_parameters.get("additional_instructions") or profile.get(
         "additional_instructions", ""
     )
     if not raw:

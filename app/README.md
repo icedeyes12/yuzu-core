@@ -489,8 +489,8 @@ On session start:
         "preferred_model": str,
         "streaming_enabled": bool,
     },
-    "context": {
-        # Loose top-level context (legacy)
+    "model_parameters": {
+        # Loose top-level model parameters (legacy)
         "temperature": float,
         "top_p": float,
         "top_k": int,
@@ -506,12 +506,12 @@ On session start:
 
 ### Preset Round-Trip (Phase 2 contract)
 
-- `context.presets` is the source of truth.
+- `model_parameters.presets` is the source of truth.
 - Schema: `[{name, payload, is_active}, ...]` with at most one `is_active=True`.
 - Active resolution: the most recently set `is_active` entry wins (deterministic).
 - `sync_top_level_with_active()` mirrors the active preset's payload into the
-  legacy top-level context keys so older readers that look at
-  `context["temperature"]` still see the active values during the transition
+  legacy top-level model-parameter keys so older readers that look at
+  `model_parameters["temperature"]` still see the active values during the transition
   window.
 - `LLMContext.from_profile` calls `resolve_active_preset_payload()` and uses
   that as the *only* source for runtime parameters when a preset is active.

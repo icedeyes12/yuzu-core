@@ -76,7 +76,7 @@ SCHEMA_DDL: tuple[str, ...] = (
         theme VARCHAR(255) NOT NULL DEFAULT 'default',
         session_history JSONB NOT NULL DEFAULT '{}',
         providers_config JSONB NOT NULL DEFAULT '{}',
-        context JSONB NOT NULL DEFAULT '{}',
+        model_parameters JSONB NOT NULL DEFAULT '{}',
         image_model TEXT,
         image_provider TEXT,
         image_endpoint TEXT,
@@ -90,6 +90,20 @@ SCHEMA_DDL: tuple[str, ...] = (
         updated_at TIMESTAMP DEFAULT NOW(),
         timestamp TIMESTAMP DEFAULT NOW()
     )
+    """,
+    """
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'profiles' AND column_name = 'context'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'profiles' AND column_name = 'model_parameters'
+      ) THEN
+        ALTER TABLE profiles RENAME COLUMN context TO model_parameters;
+      END IF;
+    END $$
     """,
     "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_endpoint TEXT",
     "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS image_edit_endpoint TEXT",
@@ -555,7 +569,7 @@ SQL_PROFILE_UPDATE_DISPLAY_NAME = (
 
 SQL_PROFILE_INSERT_DEFAULT = """
 INSERT INTO profiles (user_name, partner_name, affection, theme,
-                      session_history, providers_config, context, timestamp, updated_at)
+                      session_history, providers_config, model_parameters, timestamp, updated_at)
 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
 
@@ -582,7 +596,7 @@ _PROFILE_TEXT_FIELDS = (
 _PROFILE_JSON_FIELDS = (
     "session_history",
     "providers_config",
-    "context",
+    "model_parameters",
     "image_extra_body",
     "image_edit_extra_body",
 )
@@ -654,7 +668,7 @@ def parse_profile_row(row: DBRow | None) -> DBRow:
                 return {}
         return val or {}
 
-    ctx = _parse_json(row.get("context"))
+    model_parameters = _parse_json(row.get("model_parameters"))
     return {
         "id": str(row.get("id")) if row.get("id") is not None else "",
         "user_name": row.get("user_name", ""),
@@ -663,7 +677,7 @@ def parse_profile_row(row: DBRow | None) -> DBRow:
         "theme": row.get("theme", "default"),
         "session_history": _parse_json(row.get("session_history")),
         "providers_config": _parse_json(row.get("providers_config")),
-        "context": ctx,
+        "model_parameters": model_parameters,
         "image_model": row.get("image_model"),
         "image_provider": row.get("image_provider"),
         "image_endpoint": row.get("image_endpoint"),
@@ -675,18 +689,19 @@ def parse_profile_row(row: DBRow | None) -> DBRow:
         "location_lon": row.get("location_lon"),
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
-        "persona_preset": ctx.get("persona_preset"),
-        "persona_prompt": ctx.get("persona_prompt"),
-        "temperature": ctx.get("temperature"),
-        "top_p": ctx.get("top_p"),
-        "max_tokens": ctx.get("max_tokens"),
-        "top_k": ctx.get("top_k"),
-        "additional_instructions": ctx.get("additional_instructions") or "",
-        "presets": ctx.get("presets") or [],
-        "active_preset": ctx.get("active_preset"),
-        "history_limit": ctx.get("history_limit"),
-        "enable_reasoning": ctx.get("enable_reasoning"),
-        "enable_vision": ctx.get("enable_vision"),
+        "persona_preset": model_parameters.get("persona_preset"),
+        "persona_prompt": model_parameters.get("persona_prompt"),
+        "temperature": model_parameters.get("temperature"),
+        "top_p": model_parameters.get("top_p"),
+        "max_tokens": model_parameters.get("max_tokens"),
+        "top_k": model_parameters.get("top_k"),
+        "additional_instructions": model_parameters.get("additional_instructions")
+        or "",
+        "presets": model_parameters.get("presets") or [],
+        "active_preset": model_parameters.get("active_preset"),
+        "history_limit": model_parameters.get("history_limit"),
+        "enable_reasoning": model_parameters.get("enable_reasoning"),
+        "enable_vision": model_parameters.get("enable_vision"),
     }
 
 
@@ -1183,7 +1198,7 @@ VALUES (%s, %s, %s, %s)
 
 SQL_PROFILE_INSERT_DEFAULT_RETURNING = """
 INSERT INTO profiles (user_name, partner_name, affection, theme,
-                      session_history, providers_config, context, timestamp, updated_at)
+                      session_history, providers_config, model_parameters, timestamp, updated_at)
 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
 RETURNING id
 """

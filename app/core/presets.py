@@ -1,14 +1,14 @@
-"""Preset storage helpers — sub-document array inside profile.context JSONB.
+"""Preset storage helpers — sub-document array inside profile.model_parameters JSONB.
 
 Round-trip contract for Phase 2:
-- Storage: ``context.presets`` is the source of truth.
+- Storage: ``model_parameters.presets`` is the source of truth.
 - Schema: ``[{name, payload, is_active}, ...]`` with at most one ``is_active=True``.
 - Active resolution: the most recently set ``is_active`` entry wins (deterministic).
 - Sync: ``sync_top_level_with_active()`` mirrors the active preset's payload into
-  the legacy top-level context keys so callers that read raw ``context["temperature"]``
+  the legacy top-level model_parameters keys so callers that read raw ``model_parameters["temperature"]``
   still see the active values during the transition window.
 - Runtime: ``LLMContext.from_profile`` calls ``resolve_active_preset_payload()`` and
-  uses that as the *only* source for runtime parameters, never mixing loose context
+  uses that as the *only* source for runtime parameters, never mixing loose model_parameters
   overrides with preset values.
 """
 
@@ -32,7 +32,7 @@ PRESET_PAYLOAD_KEYS: frozenset[str] = frozenset(
 
 
 def normalize_presets(raw: Any) -> list[dict[str, Any]]:
-    """Coerce a stored ``context.presets`` value to a clean list of dicts.
+    """Coerce a stored ``model_parameters.presets`` value to a clean list of dicts.
 
     Drops entries that are not dicts or that lack a ``name`` / ``payload`` shape.
     Preserves the stored ``is_active`` flag when present.
@@ -68,25 +68,21 @@ def normalize_presets(raw: Any) -> list[dict[str, Any]]:
     return out
 
 
-def list_presets(ctx: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Return the user's preset list from a profile context dict."""
-    if not ctx:
+def list_presets(model_parameters: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Return the user's preset list from model parameters."""
+    if not model_parameters:
         return []
-    return normalize_presets(ctx.get("presets"))
+    return normalize_presets(model_parameters.get("presets"))
 
 
-def find_active_preset(ctx: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Find the preset that is currently active.
-
-    Resolution order:
-    1. ctx['active_preset'] name match (authoritative).
-    2. Last entry with is_active=True (legacy / upsert path).
-    3. None if nothing qualifies.
-    """
-    presets = list_presets(ctx)
+def find_active_preset(
+    model_parameters: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Find the currently active preset."""
+    presets = list_presets(model_parameters)
     if not presets:
         return None
-    named = (ctx or {}).get("active_preset")
+    named = (model_parameters or {}).get("active_preset")
     if isinstance(named, str) and named:
         for entry in presets:
             if entry.get("name") == named:
@@ -97,33 +93,30 @@ def find_active_preset(ctx: dict[str, Any] | None) -> dict[str, Any] | None:
     return None
 
 
-def active_preset(ctx: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Public alias for find_active_preset — returns the active preset dict, or None."""
-    return find_active_preset(ctx)
+def active_preset(model_parameters: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Return the active preset, or None."""
+    return find_active_preset(model_parameters)
 
 
-def resolve_active_preset_payload(ctx: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Return the active preset's payload, or None if no preset is active.
-
-    Used by LLMContext.from_profile as the *only* source of runtime parameters
-    when a preset is active. Loose top-level context values are ignored in that
-    case to keep the runtime payload reproducible.
-    """
-    entry = find_active_preset(ctx)
+def resolve_active_preset_payload(
+    model_parameters: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Return the active preset payload, or None."""
+    entry = find_active_preset(model_parameters)
     if not entry:
         return None
     return dict(entry.get("payload") or {})
 
 
 def upsert_preset(
-    ctx: dict[str, Any],
+    model_parameters: dict[str, Any],
     name: str,
     payload: dict[str, Any],
     *,
     make_active: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Insert or update a preset by name. Returns the new preset list + the target entry."""
-    presets = list_presets(ctx)
+    presets = list_presets(model_parameters)
     payload_clean = {
         k: v for k, v in (payload or {}).items() if k in PRESET_PAYLOAD_KEYS
     }
@@ -143,10 +136,10 @@ def upsert_preset(
 
 
 def set_active_preset(
-    ctx: dict[str, Any], name: str
+    model_parameters: dict[str, Any], name: str
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     """Mark the preset with the given name as active. Returns the new list + target entry."""
-    presets = list_presets(ctx)
+    presets = list_presets(model_parameters)
     target: dict[str, Any] | None = None
     for entry in presets:
         if entry.get("name") == name:
@@ -158,10 +151,10 @@ def set_active_preset(
 
 
 def delete_preset(
-    ctx: dict[str, Any], name: str
+    model_parameters: dict[str, Any], name: str
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     """Remove the preset with the given name. Returns the new list + removed entry (or None)."""
-    presets = list_presets(ctx)
+    presets = list_presets(model_parameters)
     kept: list[dict[str, Any]] = []
     removed: dict[str, Any] | None = None
     for entry in presets:
@@ -172,21 +165,20 @@ def delete_preset(
     return kept, removed
 
 
-def sync_top_level_with_active(ctx: dict[str, Any]) -> dict[str, Any]:
-    """Mirror the active preset's payload into the top-level context keys.
+def sync_top_level_with_active(model_parameters: dict[str, Any]) -> dict[str, Any]:
+    """Mirror the active preset's payload into top-level model-parameter keys.
 
-    This keeps older readers (that look at ``context["temperature"]`` directly)
-    seeing the active preset's values. Returns the (possibly modified) ctx.
-    Idempotent: calling twice yields the same dict.
+    This preserves the active preset values for readers of the model_parameters
+    object. Returns the possibly modified model_parameters mapping.
     """
-    active = find_active_preset(ctx)
+    active = find_active_preset(model_parameters)
     if not active:
-        return ctx
+        return model_parameters
     payload = active.get("payload") or {}
     for key, value in payload.items():
-        ctx[key] = value
-    ctx["active_preset"] = active.get("name")
-    return ctx
+        model_parameters[key] = value
+    model_parameters["active_preset"] = active.get("name")
+    return model_parameters
 
 
 __all__ = [

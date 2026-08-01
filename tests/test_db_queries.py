@@ -45,7 +45,7 @@ class TestProfileParsers:
             "theme": "dark",
             "session_history": {},
             "providers_config": {"preferred_provider": "chutes"},
-            "context": "{}",
+            "model_parameters": "{}",
             "image_model": "qwen_image",
             "created_at": None,
             "updated_at": None,

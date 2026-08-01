@@ -122,12 +122,16 @@ async def update_profile_async(updates: dict[str, Any], user_id: str) -> bool:
         return False
 
 
-async def get_context_async(user_id: str) -> DBRow:
-    return (await get_profile_async(user_id)).get("context", {})
+async def get_model_parameters_async(user_id: str) -> DBRow:
+    return (await get_profile_async(user_id)).get("model_parameters", {})
 
 
-async def update_context_async(context_dict: dict[str, Any], user_id: str) -> bool:
-    return await update_profile_async({"context": context_dict}, user_id)
+async def update_model_parameters_async(
+    model_parameters_dict: dict[str, Any], user_id: str
+) -> bool:
+    return await update_profile_async(
+        {"model_parameters": model_parameters_dict}, user_id
+    )
 
 
 async def list_global_knowledge_async(user_id: str) -> list[DBRow]:
@@ -664,8 +668,8 @@ __all__ = [
     # Profile
     "get_profile_async",
     "update_profile_async",
-    "get_context_async",
-    "update_context_async",
+    "get_model_parameters_async",
+    "update_model_parameters_async",
     "list_global_knowledge_async",
     "get_global_knowledge_async",
     "create_global_knowledge_async",

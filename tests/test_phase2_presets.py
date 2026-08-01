@@ -27,7 +27,7 @@ def test_normalize_presets_drops_garbage():
 
 def test_round_trip_preserves_all_fields():
     """Active preset payload must survive normalize -> active -> resolve."""
-    ctx = {
+    model_parameters = {
         "temperature": 0.5,
         "top_p": 0.9,
         "max_tokens": 2048,
@@ -47,9 +47,9 @@ def test_round_trip_preserves_all_fields():
             }
         ],
     }
-    normalized = presets_mod.normalize_presets(ctx["presets"])
-    ctx["presets"] = normalized
-    payload = presets_mod.resolve_active_preset_payload(ctx)
+    normalized = presets_mod.normalize_presets(model_parameters["presets"])
+    model_parameters["presets"] = normalized
+    payload = presets_mod.resolve_active_preset_payload(model_parameters)
     assert payload == normalized[0]["payload"]
     assert payload["additional_instructions"] == "code-only"  # pyright: ignore[reportOptionalSubscript]
     assert payload["top_k"] == 20  # pyright: ignore[reportOptionalSubscript]
@@ -57,27 +57,27 @@ def test_round_trip_preserves_all_fields():
 
 def test_no_active_preset_returns_none():
     """If no preset is active, no payload override is applied."""
-    ctx = {
+    model_parameters = {
         "temperature": 0.7,
         "presets": [{"name": "x", "payload": {}, "is_active": False}],
     }
-    assert presets_mod.resolve_active_preset_payload(ctx) is None
+    assert presets_mod.resolve_active_preset_payload(model_parameters) is None
 
 
 def test_multiple_active_keeps_last():
     """If multiple presets are marked active, the last one wins."""
-    ctx = {
+    model_parameters = {
         "presets": [
             {"name": "a", "payload": {"temperature": 0.1}, "is_active": True},
             {"name": "b", "payload": {"temperature": 0.9}, "is_active": True},
         ]
     }
-    payload = presets_mod.resolve_active_preset_payload(ctx)
+    payload = presets_mod.resolve_active_preset_payload(model_parameters)
     assert payload["temperature"] == 0.9  # pyright: ignore[reportOptionalSubscript]
 
 
-def test_payload_to_parameters_overrides_context():
-    """Active preset payload must win over loose context fields at runtime."""
+def test_payload_to_parameters_overrides_model_parameters():
+    """Active preset payload must win over loose model parameters at runtime."""
     from app.core.llm_context import LLMContext
 
     profile = {
@@ -85,7 +85,7 @@ def test_payload_to_parameters_overrides_context():
             "preferred_provider": "openrouter",
             "preferred_model": "openai/gpt-4o-mini",
         },
-        "context": {
+        "model_parameters": {
             "temperature": 1.5,  # loose
             "top_k": 99,  # loose
             "presets": [

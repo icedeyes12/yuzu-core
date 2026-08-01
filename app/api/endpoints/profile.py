@@ -99,8 +99,8 @@ async def api_update_profile(
     try:
         updates = request.updates
 
-        # Intercept fields that belong in context
-        context_keys = [
+        # Intercept fields that belong in model_parameters
+        model_parameter_keys = [
             "persona_preset",
             "persona_prompt",
             "temperature",
@@ -113,17 +113,17 @@ async def api_update_profile(
             "enable_vision",
         ]
 
-        context_updates = {}
-        for key in context_keys:
+        model_parameter_updates = {}
+        for key in model_parameter_keys:
             if key in updates:
-                context_updates[key] = updates.pop(key)
+                model_parameter_updates[key] = updates.pop(key)
 
-        if context_updates:
-            # Fetch current profile to get existing context
+        if model_parameter_updates:
+            # Fetch current profile to get existing model_parameters
             profile = await get_profile_async(user_id)
-            ctx = profile.get("context") or {}
-            _ = ctx.update(context_updates)
-            updates["context"] = ctx
+            model_parameters = profile.get("model_parameters") or {}
+            _ = model_parameters.update(model_parameter_updates)
+            updates["model_parameters"] = model_parameters
 
         _ = await update_profile_async(updates, user_id)
         return {"status": "success"}
