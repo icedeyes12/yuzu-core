@@ -32,7 +32,6 @@ def test_round_trip_preserves_all_fields():
         "top_p": 0.9,
         "max_tokens": 2048,
         "top_k": 40,
-        "additional_instructions": "be terse",
         "presets": [
             {
                 "name": "sharp",
@@ -41,7 +40,6 @@ def test_round_trip_preserves_all_fields():
                     "top_p": 0.8,
                     "top_k": 20,
                     "max_tokens": 1024,
-                    "additional_instructions": "code-only",
                 },
                 "is_active": True,
             }
@@ -51,7 +49,6 @@ def test_round_trip_preserves_all_fields():
     model_parameters["presets"] = normalized
     payload = presets_mod.resolve_active_preset_payload(model_parameters)
     assert payload == normalized[0]["payload"]
-    assert payload["additional_instructions"] == "code-only"  # pyright: ignore[reportOptionalSubscript]
     assert payload["top_k"] == 20  # pyright: ignore[reportOptionalSubscript]
 
 

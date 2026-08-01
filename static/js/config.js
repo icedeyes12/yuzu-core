@@ -100,10 +100,18 @@ function loadProfileDataFromConfig(data) {
 	setValueIfExists("affection-level", data.affection);
 	setValueIfExists("display-name", data.user_name || "");
 	setValueIfExists("partner-name", data.partner_name || "");
-	setValueIfExists("persona-preset", data.persona_preset || "helpful");
-	setValueIfExists("persona-prompt", data.persona_prompt || "");
+	setValueIfExists("personality-preset", data.personality_preset || "helpful");
+	setValueIfExists("personality-custom", data.personality_custom || "");
+	setValueIfExists("character-profile", data.character_profile || "");
+	updateCustomPersonalityVisibility();
 	setValueIfExists("location-lat", data.location_lat ?? "");
 	setValueIfExists("location-lon", data.location_lon ?? "");
+}
+
+function updateCustomPersonalityVisibility() {
+	const preset = getValueIfExists("personality-preset", "helpful");
+	const group = document.getElementById("custom-personality-group");
+	if (group) group.hidden = preset !== "custom";
 }
 
 async function loadProfileData() {
@@ -460,6 +468,14 @@ function setupEventListeners() {
 	if (saveProfileBtn)
 		saveProfileBtn.addEventListener("click", saveProfileSettings);
 
+	const personalityPreset = document.getElementById("personality-preset");
+	if (personalityPreset) {
+		personalityPreset.addEventListener(
+			"change",
+			updateCustomPersonalityVisibility,
+		);
+	}
+
 	const knowledgeForm = document.getElementById("global-knowledge-form");
 	if (knowledgeForm)
 		knowledgeForm.addEventListener("submit", saveKnowledgeEntry);
@@ -632,7 +648,9 @@ async function saveImageModel() {
 	if (!btn) return;
 
 	const imageModel = getValueIfExists("image-model", "").trim() || null;
-	const selected = IMAGE_MODEL_OPTIONS.find((option) => option.value === imageModel);
+	const selected = IMAGE_MODEL_OPTIONS.find(
+		(option) => option.value === imageModel,
+	);
 	if (selected?.key && !isImageModelKeyConfigured(selected)) {
 		updateImageModelWarning(imageModel);
 		showError(`Configure the ${selected.key} before saving this image model.`);
@@ -743,8 +761,9 @@ async function saveProfileSettings() {
 	const displayName = getValueIfExists("display-name", "");
 	const partnerName = getValueIfExists("partner-name", "");
 	const affection = getValueIfExists("affection-level", "0");
-	const personaPreset = getValueIfExists("persona-preset", "helpful");
-	const personaPrompt = getValueIfExists("persona-prompt", "");
+	const personalityPreset = getValueIfExists("personality-preset", "helpful");
+	const personalityCustom = getValueIfExists("personality-custom", "");
+	const characterProfile = getValueIfExists("character-profile", "");
 
 	if (!displayName.trim()) {
 		showError("Display name is required");
@@ -771,8 +790,9 @@ async function saveProfileSettings() {
 					user_name: displayName,
 					partner_name: partnerName,
 					affection: parseInt(affection, 10),
-					persona_preset: personaPreset,
-					persona_prompt: personaPrompt,
+					personality_preset: personalityPreset,
+					personality_custom: personalityCustom,
+					character_profile: characterProfile,
 				},
 			}),
 		});
@@ -784,8 +804,9 @@ async function saveProfileSettings() {
 			user_name: displayName,
 			partner_name: partnerName,
 			affection: parseInt(affection, 10),
-			persona_preset: personaPreset,
-			persona_prompt: personaPrompt,
+			personality_preset: personalityPreset,
+			personality_custom: personalityCustom,
+			character_profile: characterProfile,
 		});
 		showSuccess("Profile settings saved successfully!");
 	} catch (error) {
@@ -806,7 +827,7 @@ function loadAdvancedSettingsFromData(data) {
 	setValueIfExists("adv-history-limit", source.history_limit);
 	setValueIfExists(
 		"adv-additional-instructions",
-		source.additional_instructions ?? "",
+		source.additional_instructions || "",
 	);
 	const reasoning = document.getElementById("adv-reasoning");
 	if (reasoning) reasoning.checked = Boolean(source.enable_reasoning);
@@ -842,12 +863,12 @@ async function saveAdvancedSettings() {
 			top_k: getNumberIfExists("adv-top-k", 40),
 			max_tokens: getNumberIfExists("adv-max-tokens", 4096),
 			history_limit: getNumberIfExists("adv-history-limit", 20),
-			enable_reasoning: getCheckedIfExists("adv-reasoning"),
-			enable_vision: getCheckedIfExists("adv-vision"),
 			additional_instructions: getValueIfExists(
 				"adv-additional-instructions",
 				"",
 			),
+			enable_reasoning: getCheckedIfExists("adv-reasoning"),
+			enable_vision: getCheckedIfExists("adv-vision"),
 		};
 
 		const response = await fetch("/api/update_profile", {

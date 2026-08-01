@@ -101,8 +101,9 @@ async def api_update_profile(
 
         # Intercept fields that belong in model_parameters
         model_parameter_keys = [
-            "persona_preset",
-            "persona_prompt",
+            "personality_preset",
+            "personality_custom",
+            "character_profile",
             "temperature",
             "top_p",
             "max_tokens",

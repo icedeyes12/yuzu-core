@@ -45,7 +45,11 @@ class TestProfileParsers:
             "theme": "dark",
             "session_history": {},
             "providers_config": {"preferred_provider": "chutes"},
-            "model_parameters": "{}",
+            "model_parameters": {
+                "personality_preset": "custom",
+                "personality_custom": "Raw custom text",
+                "character_profile": "Raw character text",
+            },
             "image_model": "qwen_image",
             "created_at": None,
             "updated_at": None,
@@ -54,6 +58,9 @@ class TestProfileParsers:
         assert out["user_name"] == "Bani"
         assert out["affection"] == 75
         assert out["providers_config"] == {"preferred_provider": "chutes"}
+        assert out["personality_preset"] == "custom"
+        assert out["personality_custom"] == "Raw custom text"
+        assert out["character_profile"] == "Raw character text"
 
     def test_parse_profile_row_uses_defaults_for_missing(self):
         out = parse_profile_row({"id": 7})
@@ -77,6 +84,24 @@ class TestBuildProfileUpdate:
 
     def test_global_knowledge_is_not_a_profile_field(self):
         assert build_profile_update({"global_knowledge": {"facts": []}}) is None
+
+    def test_personality_fields_round_trip_in_model_parameters(self):
+        result = build_profile_update(
+            {
+                "model_parameters": {
+                    "personality_preset": "custom",
+                    "personality_custom": "Raw custom text",
+                    "character_profile": "Raw character text",
+                }
+            }
+        )
+        assert result is not None
+        query, params = result
+        assert "model_parameters = %s" in query
+        assert (
+            params[0]
+            == '{"personality_preset": "custom", "personality_custom": "Raw custom text", "character_profile": "Raw character text"}'
+        )
 
     def test_location_fields_are_persisted(self):
         result = build_profile_update({"location_lat": -6.2, "location_lon": 106.8})
