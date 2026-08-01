@@ -276,6 +276,21 @@ input[type="range"]::-moz-range-thumb {
 	font-weight: 600;
 }
 
+.image-model-warning,
+.image-model-configured {
+	display: block;
+	margin-top: 0.5rem;
+	font-weight: 600;
+}
+
+.image-model-warning {
+	color: var(--status-danger);
+}
+
+.image-model-configured {
+	color: var(--status-success);
+}
+
 #keys-list {
 	list-style: none;
 	padding: 0;
