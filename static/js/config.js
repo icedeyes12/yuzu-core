@@ -3,7 +3,6 @@
 
 import { render as renderBadge } from "./badge-registry.js";
 import {
-	DEFAULT_YUZU_PORTAL_BASE_URL,
 	encodeByokConfig,
 	getByokConfig,
 	getByokProvider,
@@ -159,10 +158,7 @@ async function loadProviderSettings() {
 			const isActive = provider === data.current_provider;
 			const providerConfig = getByokProvider(provider);
 			const provKey = providerConfig.api_key || "";
-			const provUrl =
-				provider === "yuzu_portal"
-					? providerConfig.base_url || DEFAULT_YUZU_PORTAL_BASE_URL
-					: providerConfig.base_url || "";
+			const provUrl = providerConfig.base_url || "";
 
 			const card = document.createElement("div");
 			card.className = `provider-card ${isActive ? "active-provider" : ""}`;
@@ -185,7 +181,7 @@ async function loadProviderSettings() {
 					</div>
 `;
 
-			if (isCustom || provider === "yuzu_portal") {
+			if (isCustom) {
 				innerHtml += `
 					<div class="form-group">
 						<label for="url-${provider}">Base URL</label>
@@ -280,9 +276,7 @@ function saveBYOKForProvider(provider) {
 	providerConfig.api_key = keyInput.value.trim();
 
 	if (provider === "yuzu_portal") {
-		const baseInput = document.getElementById("url-yuzu_portal");
-		providerConfig.base_url =
-			baseInput?.value.trim() || DEFAULT_YUZU_PORTAL_BASE_URL;
+		delete providerConfig.base_url;
 	} else if (provider.startsWith("custom")) {
 		const baseInput = document.getElementById(`url-${provider}`);
 		providerConfig.base_url = baseInput?.value.trim() || "";
@@ -372,7 +366,7 @@ async function fetchModelsForProvider(provider) {
 
 		const headers = {};
 		if (provConfig.api_key) headers["X-Provider-Key"] = provConfig.api_key;
-		if (provConfig.base_url)
+		if (provider.startsWith("custom") && provConfig.base_url)
 			headers["X-Provider-BaseUrl"] = provConfig.base_url;
 
 		const response = await fetch(`/api/proxy/models/${provider}/refresh`, {

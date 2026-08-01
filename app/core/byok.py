@@ -17,9 +17,9 @@ def get_provider_key(provider: str) -> str | None:
 
 
 def get_provider_base_url(provider: str) -> str:
+    if provider == YUZU_PORTAL:
+        return DEFAULT_YUZU_PORTAL_BASE_URL
     keyring = get_request_keyring(provider)
     if keyring and keyring.base_url and keyring.base_url.strip():
         return keyring.base_url.strip().rstrip("/")
-    if provider == YUZU_PORTAL:
-        return DEFAULT_YUZU_PORTAL_BASE_URL
     return ""

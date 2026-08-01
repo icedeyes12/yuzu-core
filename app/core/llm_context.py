@@ -38,9 +38,13 @@ class LLMContext:
         # 2. Credential and endpoint resolution
         keyring = get_request_keyring(provider) if provider else None
         api_key = keyring.key if keyring else None
-        base_url = keyring.base_url if keyring else None
-        if provider == YUZU_PORTAL and keyring and not base_url:
-            base_url = DEFAULT_YUZU_PORTAL_BASE_URL
+        base_url = (
+            DEFAULT_YUZU_PORTAL_BASE_URL
+            if provider == YUZU_PORTAL
+            else keyring.base_url
+            if keyring
+            else None
+        )
 
         # 4. Parameters (temperature, etc.) pulled from profile model_parameters.
         #
