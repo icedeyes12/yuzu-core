@@ -66,8 +66,10 @@ class ConfigService:
             "updated_at": profile["updated_at"].isoformat()
             if profile.get("updated_at")
             else None,
-            "persona_preset": model_parameters.get("persona_preset"),
-            "persona_prompt": model_parameters.get("persona_prompt"),
+            "personality_preset": model_parameters.get("personality_preset")
+            or "helpful",
+            "personality_custom": model_parameters.get("personality_custom") or "",
+            "character_profile": model_parameters.get("character_profile") or "",
             "temperature": model_parameters.get("temperature"),
             "top_p": model_parameters.get("top_p"),
             "max_tokens": model_parameters.get("max_tokens"),

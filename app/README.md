@@ -496,6 +496,9 @@ On session start:
         "top_k": int,
         "max_tokens": int,
         "additional_instructions": str,
+        "personality_preset": str,
+        "personality_custom": str,
+        "character_profile": str,
         "history_limit": int,
         # Preset storage (current SSOT for runtime params)
         "presets": [{"name": str, "payload": {...}, "is_active": bool}, ...],
@@ -615,7 +618,7 @@ httpx>=0.27.0           # Async HTTP client
    `user_id`; every retrieval function accepts and forwards it.
 5. **Preset-driven runtime params** — `LLMContext.from_profile` resolves the
    active preset payload and uses that as the only source for `temperature`,
-   `top_p`, `top_k`, `max_tokens`, `additional_instructions`.
+   `top_p`, `top_k`, `max_tokens`, and `additional_instructions`. Personality fields are resolved by the prompt builder.
 6. **Structured system content** is capability-gated per provider; legacy
    text fallback exists for providers that don't declare
    `supports_structured_system_content=True`.

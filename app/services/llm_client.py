@@ -19,37 +19,6 @@ from app.tools.schemas import StreamToolEvent
 log = get_logger(__name__)
 
 
-# Allowed keys for additional_instructions (post-history system message)
-# These are the only fields the user can attach. Free-form is intentionally
-# kept as a single string for transparency.
-_MAX_ADDITIONAL_INSTRUCTIONS_LEN = 4000
-
-
-def _resolve_additional_instructions(profile: dict[str, Any]) -> str:
-    """Return the user-configured additional instructions, if any.
-
-    Source of truth order:
-      1. profile["model_parameters"]["additional_instructions"] (preset-aware, persistent)
-      2. profile["additional_instructions"] (legacy top-level)
-
-    Hard-truncated to prevent prompt-bloat abuse.
-    """
-    if not profile:
-        return ""
-    model_parameters = profile.get("model_parameters") or {}
-    raw = model_parameters.get("additional_instructions") or profile.get(
-        "additional_instructions", ""
-    )
-    if not raw:
-        return ""
-    raw = str(raw).strip()
-    if not raw:
-        return ""
-    if len(raw) > _MAX_ADDITIONAL_INSTRUCTIONS_LEN:
-        raw = raw[:_MAX_ADDITIONAL_INSTRUCTIONS_LEN]
-    return raw
-
-
 # Vision context injection
 
 
@@ -175,24 +144,12 @@ async def generate_ai_response(
     ctx = LLMContext.from_profile(profile).require_configured()
     assert ctx.provider is not None and ctx.model is not None
 
-    # FC9-C: Check if provider supports native FC for prompt construction
-    ai_manager = await get_ai_manager()
-    provider_supports_fc = ai_manager.provider_supports_tools(ctx.provider)
-    provider_supports_struct = ai_manager.provider_supports_structured_system(
-        ctx.provider
-    )
-    additional_instructions = _resolve_additional_instructions(profile)
-
     messages = await build_messages(
         profile,
         session_id,
         interface,
         user_message,
         user_id,
-        include_attachments=True,
-        provider_supports_fc=provider_supports_fc,
-        provider_supports_structured_system=provider_supports_struct,
-        additional_instructions=additional_instructions,
     )
 
     text, raw = await _send_to_provider(
@@ -273,24 +230,12 @@ async def generate_ai_response_streaming(
     ctx = LLMContext.from_profile(profile).require_configured()
     assert ctx.provider is not None and ctx.model is not None
 
-    # FC9-C: Check if provider supports native FC for prompt construction
-    ai_manager = await get_ai_manager()
-    provider_supports_fc = ai_manager.provider_supports_tools(ctx.provider)
-    provider_supports_struct = ai_manager.provider_supports_structured_system(
-        ctx.provider
-    )
-    additional_instructions = _resolve_additional_instructions(profile)
-
     messages = await build_messages(
         profile,
         session_id,
         interface,
         user_message,
         user_id,
-        include_attachments=True,
-        provider_supports_fc=provider_supports_fc,
-        provider_supports_structured_system=provider_supports_struct,
-        additional_instructions=additional_instructions,
     )
 
     async for chunk in _stream_from_provider(

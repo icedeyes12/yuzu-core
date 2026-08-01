@@ -25,8 +25,9 @@ PRESET_PAYLOAD_KEYS: frozenset[str] = frozenset(
         "max_tokens",
         "top_k",
         "additional_instructions",
-        "persona_preset",
-        "persona_prompt",
+        "personality_preset",
+        "personality_custom",
+        "character_profile",
     }
 )
 

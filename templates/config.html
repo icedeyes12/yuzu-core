@@ -70,8 +70,8 @@
             </div>
 
             <div class="form-group">
-              <label for="persona-preset">Communication Style</label>
-              <select id="persona-preset" name="persona-preset" class="form-select">
+              <label for="personality-preset">Personality</label>
+              <select id="personality-preset" name="personality-preset" class="form-select">
                 <option value="helpful">Helpful &amp; Friendly</option>
                 <option value="concise">Concise Assistant</option>
                 <option value="technical">Technical Expert</option>
@@ -86,12 +86,18 @@
                 <option value="uwu">UwU Assistant</option>
                 <option value="philosopher">Philosopher</option>
                 <option value="hype">Hype Bro</option>
+                <option value="custom">Custom</option>
               </select>
             </div>
 
+            <div class="form-group" id="custom-personality-group" hidden>
+              <label for="personality-custom">Custom Personality</label>
+              <textarea id="personality-custom" name="personality-custom" rows="4" placeholder="Enter the personality exactly as it should be used..."></textarea>
+            </div>
+
             <div class="form-group">
-              <label for="persona-prompt">Character Profile</label>
-              <textarea id="persona-prompt" name="persona-prompt" rows="4" placeholder="Describe the AI's background, identity, character, or role here..."></textarea>
+              <label for="character-profile">Character Profile</label>
+              <textarea id="character-profile" name="character-profile" rows="4" placeholder="Describe the character profile exactly as it should be used..."></textarea>
             </div>
           </fieldset>
           <button id="save-profile" type="button" class="btn btn-primary">Save Identity Settings</button>
@@ -197,25 +203,6 @@
             </div>
           </fieldset>
 
-          <fieldset>
-            <legend class="sr-only">Post-history instructions</legend>
-            <div class="form-group">
-              <label for="adv-additional-instructions">
-                Additional Instructions
-                <span class="form-hint-inline">(appended as a second system message after chat history)</span>
-              </label>
-              <textarea
-                id="adv-additional-instructions"
-                name="additional_instructions"
-                rows="4"
-                maxlength="4000"
-                placeholder="Optional. Injected as a post-history system message. e.g. 'Always answer in Indonesian.' or 'Prefer concise replies.'"
-                aria-describedby="additional-instructions-hint"></textarea>
-              <span id="additional-instructions-hint" class="form-hint">
-                Free-form, single string. Max 4000 chars.
-              </span>
-            </div>
-          </fieldset>
 
           <fieldset>
             <legend class="sr-only">Token and history limits</legend>
@@ -228,6 +215,14 @@
                 <label for="adv-history-limit">History Limit (Turns)</label>
                 <input type="number" id="adv-history-limit" name="history_limit" min="1" max="100">
               </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Post-History Instructions</legend>
+            <div class="form-group">
+              <label for="adv-additional-instructions">Additional Instructions</label>
+              <textarea id="adv-additional-instructions" name="additional_instructions" rows="4" placeholder="Instructions added after chat history..."></textarea>
             </div>
           </fieldset>
 
