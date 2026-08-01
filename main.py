@@ -102,7 +102,9 @@ app = FastAPI(
 )
 
 # Trust proxy headers (e.g. X-Forwarded-Proto, X-Forwarded-For) from reverse proxies like Cloudflare
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+trusted_hosts_env = os.environ.get("TRUSTED_HOSTS", "127.0.0.1")
+trusted_hosts = [h.strip() for h in trusted_hosts_env.split(",") if h.strip()]
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=trusted_hosts)
 
 
 # ---------------------------------------------------------------------------
