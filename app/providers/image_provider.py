@@ -35,14 +35,14 @@ CHUTES_MODELS = {
 PORTAL_MODELS = {"ag/gemini-3.1-flash-image", "gemini/gemini-2.5-flash-image"}
 
 
-def _provider_for_model(model: str, requested_provider: str | None) -> str | None:
-    if requested_provider:
-        return requested_provider
-    if model in CHUTES_MODELS:
-        return CHUTES
-    if model in PORTAL_MODELS or "/" in model:
-        return YUZU_PORTAL
-    return None
+IMAGE_MODEL_PROVIDERS = {
+    **{model: CHUTES for model in CHUTES_MODELS},
+    **{model: YUZU_PORTAL for model in PORTAL_MODELS},
+}
+
+
+def _provider_for_model(model: str) -> str | None:
+    return IMAGE_MODEL_PROVIDERS.get(model)
 
 
 def _key_for(provider: str) -> str | None:
@@ -129,10 +129,10 @@ def _decode_image_response(data: Any) -> bytes | None:
 async def request_image(
     model: str,
     prompt: str,
-    requested_provider: str | None,
     image_bytes: bytes | None = None,
 ) -> tuple[bytes | None, str, str | None]:
-    provider = _provider_for_model(model, requested_provider)
+    model = model.strip()
+    provider = _provider_for_model(model)
     if provider not in {CHUTES, YUZU_PORTAL}:
         return (
             None,

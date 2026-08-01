@@ -36,12 +36,10 @@ async def execute(arguments, **kwargs):
     model = profile.get("image_model") or ""
 
     try:
-        image_provider = profile.get("image_provider")
         image_model = profile.get("image_model")
         image_bytes, provider, error = await request_image(
             image_model or "",
             prompt,
-            image_provider or None,
         )
         if error:
             return error_result(

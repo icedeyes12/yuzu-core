@@ -13,6 +13,14 @@
   <link rel="stylesheet" href="{{ url_for('static', path='css/sidebar.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', path='css/theme.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', path='css/components/visual-language.css') }}">
+  <script>
+    (() => {
+      const userId = document.querySelector('meta[name="user-id"]')?.content || "";
+      const key = userId ? `user_${userId}_theme` : "";
+      const theme = (key && localStorage.getItem(key)) || "stellar-night-suisei";
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
 </head>
 <body class="about-body page-frame">
   {% include 'sidebar.html' %}

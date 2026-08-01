@@ -570,7 +570,10 @@ document.addEventListener("DOMContentLoaded", () => {
 	const savedTheme =
 		(USER_THEME_STORAGE_KEY
 			? localStorage.getItem(USER_THEME_STORAGE_KEY)
-			: null) || "stellar-night-suisei";
+			: null) ||
+		document.documentElement.getAttribute("data-theme") ||
+		"stellar-night-suisei";
+	document.documentElement.setAttribute("data-theme", savedTheme);
 	document.body.setAttribute("data-theme", savedTheme);
 	_currentTheme = savedTheme;
 	initCustomDropdown();

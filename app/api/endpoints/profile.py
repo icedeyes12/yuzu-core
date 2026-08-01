@@ -111,7 +111,6 @@ async def api_update_profile(
             "history_limit",
             "enable_reasoning",
             "enable_vision",
-            "image_model",
         ]
 
         context_updates = {}

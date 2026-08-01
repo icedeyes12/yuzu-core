@@ -136,15 +136,11 @@ async def execute(arguments, **kwargs) -> dict[str, Any]:
         )
 
     try:
-        image_provider = profile.get("image_edit_provider") or profile.get(
-            "image_provider"
-        )
         image_model = profile.get("image_model")
         image_bytes = await asyncio.to_thread(validated_path.read_bytes)
         output_bytes, provider, error = await request_image(
             image_model or "",
             prompt,
-            image_provider or None,
             image_bytes=image_bytes,
         )
         if error:
