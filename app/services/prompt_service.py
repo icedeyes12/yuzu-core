@@ -249,7 +249,7 @@ async def _global_knowledge_block_async(user_id: str) -> str:
         lines.append(f"- [{category}] {content}" if category else f"- {content}")
     if not lines:
         return ""
-    return "\n\n **WHAT YOU SHOULD KNOW ABOUT YOUR HUMAN**\n" + "\n".join(lines)
+    return "\n\n[GLOBAL KNOWLEDGE]\n" + "\n".join(lines)
 
 
 async def _session_events_block_async(session_id: str, user_id: str) -> str:
