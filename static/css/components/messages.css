@@ -23,7 +23,11 @@
 	flex-direction: column;
 	gap: var(--space-2);
 	width: min(100%, 900px);
+	max-width: 100%;
+	min-width: 0;
 	margin: 0 auto;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 
 /* === USER MESSAGES === */
@@ -92,6 +96,10 @@
 	padding: var(--space-2);
 	font-family: var(--font-mono);
 	font-size: 0.85rem;
+	max-width: 100%;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 
 /* Headers inside bubbles (for Tool/System events) */
@@ -111,6 +119,10 @@
 	contain-intrinsic-size: auto 48px;
 	line-height: 1.6;
 	font-size: 0.95rem;
+	max-width: 100%;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 
 .timestamp {
@@ -272,6 +284,8 @@
 	border-radius: 6px;
 	border: 1px solid var(--border-normal);
 	background: var(--surface-subtle);
+	min-width: 0;
+	max-width: 100%;
 }
 
 .table-header {
@@ -341,6 +355,10 @@
 	border: 1px solid var(--border-normal);
 	border-radius: 6px;
 	background: var(--surface-subtle);
+	max-width: 100%;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 
 .message-content .tool-result {
@@ -363,7 +381,7 @@
 
 .message-content img,
 .markdown-image {
-	max-width: none;
+	max-width: 100%;
 	height: auto;
 	border-radius: 8px;
 	margin: 0.8rem 0;
@@ -412,7 +430,11 @@
 .tool-result-block {
 	border-left: 3px solid var(--accent);
 	width: 100%;
+	max-width: 100%;
+	min-width: 0;
 	display: block;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 
 .action-header {
@@ -433,6 +455,8 @@
 .action-content {
 	padding: 12px;
 	font-size: 0.85rem;
+	max-width: 100%;
+	min-width: 0;
 	overflow-wrap: anywhere;
 	word-break: break-word;
 	color: var(--text-primary);
@@ -483,8 +507,12 @@
 	border-left: 3px solid var(--accent);
 	border-radius: 4px;
 	padding: 0.5rem;
+	max-width: 100%;
+	min-width: 0;
 	font-size: 0.85rem;
 	opacity: 0.9;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 
 .tool-header {
@@ -496,8 +524,14 @@
 .tool-body pre {
 	margin: 0;
 	padding: 0;
+	max-width: 100%;
+	min-width: 0;
 	background: transparent;
 	border: none;
+	white-space: pre-wrap;
+	overflow-x: auto;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 
 /* FC6: Native tool event indicators */
@@ -520,4 +554,8 @@
 .tool-result-content {
 	margin-top: 0.5em;
 	padding: 0.5em;
+	max-width: 100%;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }

@@ -44,6 +44,30 @@ body {
 	line-height: var(--line-height-body);
 	overflow-x: hidden;
 	min-height: 100vh;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+:is(.card, .config-section, .brain-box, .tool-execution, .agentic-status-bar,
+	.message, .message-bubble, .message-content, .tool-card, .generic-card,
+	.tool-result, .tool-result-content, .action-content, .system-action-block,
+	details, summary) {
+	min-width: 0;
+	max-width: 100%;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+pre,
+code {
+	max-width: 100%;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+pre {
+	white-space: pre-wrap;
+	overflow-x: auto;
 }
 
 /* Typography Scale */
