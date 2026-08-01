@@ -26,6 +26,14 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    (() => {
+      const userId = document.querySelector('meta[name="user-id"]')?.content || "";
+      const key = userId ? `user_${userId}_theme` : "";
+      const theme = (key && localStorage.getItem(key)) || "stellar-night-suisei";
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
 </head>
 <body>
   {% include 'sidebar.html' %}

@@ -55,7 +55,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 	const loaded = await loadAppConfig();
 	if (!loaded) return;
 	await Promise.all([loadGlobalKnowledge(), loadProviderSettings()]);
-	loadImageModelFromConfig();
 	setupEventListeners();
 	initializeConfigAnimations();
 });
@@ -74,6 +73,7 @@ async function loadAppConfig() {
 		const profile = appConfig.profile || {};
 		loadProfileDataFromConfig(profile);
 		loadAdvancedSettingsFromData(profile);
+		loadImageModelFromConfig();
 		return true;
 	} catch (error) {
 		console.error("Error loading app config:", error);
@@ -591,19 +591,25 @@ function updateImageModelWarning(model) {
 }
 
 function loadImageModelFromConfig() {
-	const imageModel = appConfig?.profile?.image_model || "";
+	const imageModel = String(appConfig?.profile?.image_model || "").trim();
+	const selectedModel = IMAGE_MODEL_OPTIONS.some(
+		(option) => option.value === imageModel,
+	)
+		? imageModel
+		: "";
 	const select = document.getElementById("image-model");
 	if (select) {
 		select.innerHTML = IMAGE_MODEL_OPTIONS.map(
 			(option) => `<option value="${option.value}">${option.label}</option>`,
 		).join("");
-		select.value = imageModel;
+		select.value = selectedModel;
+		updateImageModelWarning(selectedModel);
 		select.addEventListener("change", () =>
 			updateImageModelWarning(select.value),
 		);
 	}
-	setTextIfExists("current-image-model", imageModel || "Not configured");
-	updateImageModelWarning(imageModel);
+	setTextIfExists("current-image-model", selectedModel || "Not configured");
+	updateImageModelWarning(selectedModel);
 }
 
 // Save image model setting
