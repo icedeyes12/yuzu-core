@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
+from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -35,11 +36,31 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _require_env(name: str) -> str:
+    """Retrieve mandatory environment variable or raise 500."""
     val = os.environ.get(name)
     if not val:
-        log.error("Missing required environment variable")
+        log.error(f"Missing required environment variable: {name}")
         raise HTTPException(status_code=500, detail="Server configuration error")
     return val.strip()
+
+
+def _rewrite_redirect_uri(request: Request, original_uri: str) -> str:
+    """Rewrites localhost callback URI to public domain using forwarded headers."""
+    forwarded_host = request.headers.get("x-forwarded-host")
+    forwarded_proto = request.headers.get("x-forwarded-proto", "http")
+
+    if forwarded_host:
+        parsed = urlsplit(original_uri)
+        return urlunsplit(
+            (
+                forwarded_proto,
+                forwarded_host,
+                parsed.path,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
+    return original_uri
 
 
 @router.get("/login")
@@ -50,21 +71,27 @@ async def login(request: Request, provider: str = "google"):
 
     client_id = _require_env(config.client_id_env)
     redirect_uri = _require_env(config.redirect_uri_env)
+
+    # Rewrite redirect_uri if behind Cloudflare
+    redirect_uri = _rewrite_redirect_uri(request, redirect_uri)
+
     session_secret = _require_env("SESSION_SECRET")
+    code_verifier, code_challenge = generate_pkce()
 
     # Capture the origin (where the login request came from) to redirect back to it after callback
-    # We read the Referer header to know the origin (e.g., http://localhost:5000)
-    origin = request.headers.get("referer")
-    if not origin:
-        # Fallback to host header
-        origin = f"{request.url.scheme}://{request.url.netloc}"
-
-    code_verifier, code_challenge = generate_pkce()
+    origin = request.headers.get("referer", "")
     state = sign_state(config.name, code_verifier, session_secret, origin)
     auth_url = build_auth_url(config, client_id, redirect_uri, code_challenge, state)
 
-    # Determine secure cookie attribute based on connection type or configuration
-    is_secure = _COOKIE_SECURE or request.url.scheme == "https"
+    # Allow cross-domain OAuth state cookie in development / proxy environments
+    is_secure = (
+        _COOKIE_SECURE
+        or request.url.scheme == "https"
+        or request.headers.get("x-forwarded-proto") == "https"
+    )
+
+    # Cloudflare drops cookies without samesite="none" in cross-origin redirects
+    samesite_policy = "none" if is_secure else "lax"
 
     log.info(
         "OAuth login: provider=%s redirect_uri='%s' origin='%s' is_secure=%s",
@@ -81,9 +108,10 @@ async def login(request: Request, provider: str = "google"):
         max_age=600,
         httponly=True,
         secure=is_secure,
-        samesite="lax",
+        samesite=samesite_policy,
         path="/",
     )
+
     return response
 
 
@@ -131,12 +159,15 @@ async def callback(request: Request):
     client_secret = _require_env(config.client_secret_env)
     redirect_uri = _require_env(config.redirect_uri_env)
 
+    # Rewrite redirect_uri for the token exchange to match what was sent in the login step
+    redirect_uri = _rewrite_redirect_uri(request, redirect_uri)
+
     try:
         token_response = await exchange_code(
             config, client_id, client_secret, redirect_uri, code, code_verifier
         )
     except Exception as e:
-        log.error("OAuth token exchange failed: %s", e)
+        log.error(f"OAuth token exchange failed: {e}")
         raise HTTPException(status_code=502, detail="Token exchange failed")
 
     try:
@@ -144,7 +175,7 @@ async def callback(request: Request):
             config, token_response, client_id
         )
     except Exception as e:
-        log.error("Identity resolution failed: %s", e)
+        log.error(f"Identity resolution failed: {e}")
         raise HTTPException(status_code=502, detail="Identity resolution failed")
 
     user_id = await _map_identity_to_profile(
@@ -162,7 +193,7 @@ async def callback(request: Request):
         except Exception:
             pass
 
-    log.info("OAuth successful. Redirecting user to: %s", redirect_target)
+    log.info(f"OAuth successful. Redirecting user to: {redirect_target}")
     response = RedirectResponse(url=redirect_target, status_code=302)
     set_session_cookie(response, token)
     response.delete_cookie(key=OAUTH_STATE_COOKIE_NAME, path="/")
