@@ -7,8 +7,11 @@ details.image-card,
 details.terminal-card {
 	width: min(100%, 900px);
 	max-width: 100%;
+	min-width: 0;
 	display: block;
 	box-sizing: border-box;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 
 details.tool-call-indicator > summary {
@@ -19,6 +22,10 @@ details.tool-call-indicator > summary {
 .tool-result-content {
 	margin-top: var(--space-2);
 	padding: var(--space-2);
+	max-width: 100%;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 
 /* Terminal card */
@@ -30,7 +37,11 @@ details.tool-call-indicator > summary {
 	border-radius: var(--radius-md);
 	margin: var(--space-2) 0;
 	padding: var(--space-2) var(--space-3);
+	max-width: 100%;
+	min-width: 0;
 	overflow-x: auto;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 .terminal-card .terminal-header {
 	font-size: 0.7em;
@@ -99,6 +110,10 @@ details.tool-call-indicator > summary {
 	display: flex;
 	align-items: center;
 	gap: var(--space-2);
+	min-width: 0;
+	max-width: 100%;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 	min-height: 2.5rem;
 	padding: var(--space-2) var(--space-3);
 	cursor: pointer;
@@ -111,7 +126,10 @@ details.tool-call-indicator > summary {
 }
 
 .tool-card__title {
+	min-width: 0;
 	font-weight: 650;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 
 .tool-card__meta {
@@ -149,6 +167,8 @@ details.tool-call-indicator > summary {
 
 .tool-card__body {
 	padding: 0 var(--space-3) var(--space-3);
+	max-width: 100%;
+	min-width: 0;
 }
 
 .tool-card--exec:not([open]) .tool-card__body {
@@ -193,6 +213,8 @@ details.tool-call-indicator > summary {
 .tool-card__footer {
 	display: flex;
 	gap: var(--space-3);
+	min-width: 0;
+	flex-wrap: wrap;
 	padding-top: var(--space-2);
 	color: var(--text-muted);
 	font-size: 0.72rem;
@@ -243,6 +265,10 @@ details.tool-call-indicator > summary {
 	border: 1px solid var(--border-normal);
 	border-radius: var(--radius-md);
 	margin: var(--space-2) 0;
+	max-width: 100%;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 .weather-card__header,
 .weather-card__hero,
@@ -255,9 +281,14 @@ details.tool-call-indicator > summary {
 .weather-card__hero {
 	justify-content: space-between;
 	gap: 1em;
+	min-width: 0;
+	flex-wrap: wrap;
 }
 .weather-card__title {
+	min-width: 0;
 	font-weight: 650;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 .weather-card__condition,
 .weather-card__metric-label,
@@ -324,6 +355,10 @@ details.tool-call-indicator > summary {
 /* Generic card */
 .generic-card {
 	padding: var(--space-2) var(--space-3);
+	max-width: 100%;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 	background: rgba(255, 255, 255, 0.03);
 	border: 1px solid var(--border-normal);
 	border-radius: var(--radius-md);
