@@ -46,7 +46,9 @@ def _extract_keyrings(request: Request) -> dict[str, RequestKeyring] | None:
             keyrings[provider] = RequestKeyring(
                 provider=provider,
                 key=cfg.get("api_key"),
-                base_url=cfg.get("base_url"),
+                base_url=(
+                    cfg.get("base_url") if provider.startswith("custom") else None
+                ),
                 model_id=cfg.get("model_id"),
             )
         return keyrings

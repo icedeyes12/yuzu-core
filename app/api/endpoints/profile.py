@@ -233,7 +233,7 @@ async def api_refresh_provider_models(
         sig = inspect.signature(fetcher)
         if "api_key" in sig.parameters:
             kwargs["api_key"] = request.headers.get("X-Provider-Key")
-        if "base_url" in sig.parameters:
+        if "base_url" in sig.parameters and provider.startswith("custom"):
             kwargs["base_url"] = request.headers.get("X-Provider-BaseUrl")
 
         fetch_models = cast(Callable[..., Awaitable[list[str]]], fetcher)

@@ -24,10 +24,7 @@ class YuzuPortalProvider(CustomOpenAIProvider):
         self._models_cache_data: list[str] | None = None
 
     def _resolve_url(self, ctx: LLMContext) -> str:
-        base_url = (ctx.base_url or DEFAULT_BASE_URL).rstrip("/")
-        if base_url.endswith("/chat/completions"):
-            return base_url
-        return f"{base_url}/chat/completions"
+        return f"{DEFAULT_BASE_URL.rstrip('/')}/chat/completions"
 
     async def get_models(self) -> list[str]:
         return self.available_models
@@ -37,11 +34,6 @@ class YuzuPortalProvider(CustomOpenAIProvider):
     ) -> list[str]:
         keyring = get_request_keyring("yuzu_portal")
         api_key = api_key or (keyring.key if keyring else None)
-        base_url = (
-            base_url or (keyring.base_url if keyring else None) or DEFAULT_BASE_URL
-        )
-        if base_url.endswith("/chat/completions"):
-            base_url = base_url.removesuffix("/chat/completions")
         if not api_key:
             raise MissingProviderKeyError("yuzu_portal")
 
@@ -54,7 +46,7 @@ class YuzuPortalProvider(CustomOpenAIProvider):
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{base_url.rstrip('/')}/models",
+                f"{DEFAULT_BASE_URL.rstrip('/')}/models",
                 headers={"Authorization": f"Bearer {api_key}"},
                 timeout=10,
             )
