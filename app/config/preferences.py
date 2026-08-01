@@ -16,7 +16,7 @@ class UserPreferences:
     display_name: str = ""
     partner_name: str = ""
     image_model: str = ""
-    context: dict[str, Any] = field(default_factory=dict)
+    model_parameters: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_profile_row(cls, row: dict[str, Any] | None) -> UserPreferences:
@@ -35,7 +35,7 @@ class UserPreferences:
             display_name=row.get("display_name") or "",
             partner_name=row.get("partner_name") or "",
             image_model=row.get("image_model") or "",
-            context=row.get("context") or {},
+            model_parameters=row.get("model_parameters") or {},
         )
 
     def to_profile_updates(self) -> dict[str, Any]:
@@ -50,7 +50,7 @@ class UserPreferences:
             "display_name": self.display_name,
             "partner_name": self.partner_name,
             "image_model": self.image_model,
-            "context": self.context,
+            "model_parameters": self.model_parameters,
         }
         if providers_config:
             updates["providers_config"] = providers_config

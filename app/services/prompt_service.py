@@ -436,8 +436,8 @@ async def build_messages(
             system_entry = [{"role": "system", "content": system_message}]
 
     # Fetch advanced settings limits
-    context_settings = profile.get("context", {})
-    history_limit = int(context_settings.get("history_limit", 100))
+    model_parameters_settings = profile.get("model_parameters", {})
+    history_limit = int(model_parameters_settings.get("history_limit", 100))
     # If the user sets it to 0 or very small, enforce a minimum sanity limit of 5
     if history_limit < 5:
         history_limit = 5

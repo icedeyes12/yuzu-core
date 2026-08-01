@@ -55,9 +55,6 @@ from app.db.models_async import (
     get_chat_history_for_ai_async as _pg_get_chat_history_for_ai_async,
 )
 from app.db.models_async import (
-    get_context_async as _pg_get_context_async,
-)
-from app.db.models_async import (
     get_encryption_status_async as _pg_get_encryption_status_async,
 )
 from app.db.models_async import (
@@ -65,6 +62,9 @@ from app.db.models_async import (
 )
 from app.db.models_async import (
     get_message_count_async as _pg_get_message_count_async,
+)
+from app.db.models_async import (
+    get_model_parameters_async as _pg_get_model_parameters_async,
 )
 from app.db.models_async import (
     get_profile_async as _pg_get_profile_async,
@@ -112,13 +112,13 @@ from app.db.models_async import (
     switch_session_async as _pg_switch_session_async,
 )
 from app.db.models_async import (
-    update_context_async as _pg_update_context_async,
-)
-from app.db.models_async import (
     update_global_knowledge_async as _pg_update_global_knowledge_async,
 )
 from app.db.models_async import (
     update_message_async as _pg_update_message_async,
+)
+from app.db.models_async import (
+    update_model_parameters_async as _pg_update_model_parameters_async,
 )
 from app.db.models_async import (
     update_profile_async as _pg_update_profile_async,
@@ -194,8 +194,8 @@ class Database:
     # Profile
     get_profile = _proxy_async(_pg_get_profile_async)
     update_profile = _proxy_async(_pg_update_profile_async)
-    get_context = _proxy_async(_pg_get_context_async)
-    update_context = _proxy_async(_pg_update_context_async)
+    get_model_parameters = _proxy_async(_pg_get_model_parameters_async)
+    update_model_parameters = _proxy_async(_pg_update_model_parameters_async)
 
     # Global Knowledge
     list_global_knowledge = _proxy_async(_pg_list_global_knowledge_async)

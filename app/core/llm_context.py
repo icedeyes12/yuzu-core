@@ -42,11 +42,11 @@ class LLMContext:
         if provider == YUZU_PORTAL and keyring and not base_url:
             base_url = DEFAULT_YUZU_PORTAL_BASE_URL
 
-        # 4. Parameters (temperature, etc.) pulled from profile context.
+        # 4. Parameters (temperature, etc.) pulled from profile model_parameters.
         #
-        # Preset payload wins over loose context when an active preset is
+        # Preset payload wins over loose model_parameters when an active preset is
         # present. This is the only path the runtime uses; there is no
-        # fallback to loose context when a preset is active. Without this
+        # fallback to loose model_parameters when a preset is active. Without this
         # precedence, the same preset would not produce a reproducible
         # payload, which violates the persistence contract.
         from app.core.presets import (
@@ -54,22 +54,24 @@ class LLMContext:
             resolve_active_preset_payload,
         )
 
-        ctx_data = profile.get("context") or {}
-        active_payload = resolve_active_preset_payload(ctx_data)
-        effective_ctx = active_payload if active_payload is not None else ctx_data
+        model_parameters_data = profile.get("model_parameters") or {}
+        active_payload = resolve_active_preset_payload(model_parameters_data)
+        effective_parameters = (
+            active_payload if active_payload is not None else model_parameters_data
+        )
 
         parameters: dict[str, Any] = {}
-        if effective_ctx.get("temperature") is not None:
-            parameters["temperature"] = float(effective_ctx["temperature"])
-        if effective_ctx.get("top_p") is not None:
-            parameters["top_p"] = float(effective_ctx["top_p"])
-        if effective_ctx.get("max_tokens") is not None:
-            parameters["max_tokens"] = int(effective_ctx["max_tokens"])
-        if effective_ctx.get("top_k") is not None:
-            parameters["top_k"] = int(effective_ctx["top_k"])
-        if "additional_instructions" in effective_ctx:
+        if effective_parameters.get("temperature") is not None:
+            parameters["temperature"] = float(effective_parameters["temperature"])
+        if effective_parameters.get("top_p") is not None:
+            parameters["top_p"] = float(effective_parameters["top_p"])
+        if effective_parameters.get("max_tokens") is not None:
+            parameters["max_tokens"] = int(effective_parameters["max_tokens"])
+        if effective_parameters.get("top_k") is not None:
+            parameters["top_k"] = int(effective_parameters["top_k"])
+        if "additional_instructions" in effective_parameters:
             parameters["additional_instructions"] = str(
-                effective_ctx["additional_instructions"] or ""
+                effective_parameters["additional_instructions"] or ""
             )
 
         # Tag the active payload for downstream consumers (e.g. the

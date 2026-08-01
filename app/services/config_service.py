@@ -49,7 +49,7 @@ class ConfigService:
     @staticmethod
     def format_profile_dict(profile: dict[str, Any]) -> dict[str, Any]:
         """Format raw profile row into a frontend-friendly dictionary."""
-        ctx = profile.get("context") or {}
+        model_parameters = profile.get("model_parameters") or {}
         return {
             "id": profile["id"],
             "user_name": profile["user_name"],
@@ -58,7 +58,7 @@ class ConfigService:
             "theme": profile["theme"],
             "session_history": profile["session_history"],
             "providers_config": profile["providers_config"],
-            "context": ctx,
+            "model_parameters": model_parameters,
             "image_model": profile["image_model"],
             "created_at": profile["created_at"].isoformat()
             if profile.get("created_at")
@@ -66,18 +66,19 @@ class ConfigService:
             "updated_at": profile["updated_at"].isoformat()
             if profile.get("updated_at")
             else None,
-            "persona_preset": ctx.get("persona_preset"),
-            "persona_prompt": ctx.get("persona_prompt"),
-            "temperature": ctx.get("temperature"),
-            "top_p": ctx.get("top_p"),
-            "max_tokens": ctx.get("max_tokens"),
-            "top_k": ctx.get("top_k"),
-            "additional_instructions": ctx.get("additional_instructions") or "",
-            "presets": ctx.get("presets") or [],
-            "active_preset": ctx.get("active_preset"),
-            "history_limit": ctx.get("history_limit"),
-            "enable_reasoning": ctx.get("enable_reasoning"),
-            "enable_vision": ctx.get("enable_vision"),
+            "persona_preset": model_parameters.get("persona_preset"),
+            "persona_prompt": model_parameters.get("persona_prompt"),
+            "temperature": model_parameters.get("temperature"),
+            "top_p": model_parameters.get("top_p"),
+            "max_tokens": model_parameters.get("max_tokens"),
+            "top_k": model_parameters.get("top_k"),
+            "additional_instructions": model_parameters.get("additional_instructions")
+            or "",
+            "presets": model_parameters.get("presets") or [],
+            "active_preset": model_parameters.get("active_preset"),
+            "history_limit": model_parameters.get("history_limit"),
+            "enable_reasoning": model_parameters.get("enable_reasoning"),
+            "enable_vision": model_parameters.get("enable_vision"),
             "location_lat": profile.get("location_lat"),
             "location_lon": profile.get("location_lon"),
         }
