@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 const root = new URL("../../", import.meta.url);
 const files = [
+	"static/js/modules/tool-renderer/schemas.js",
+	"static/js/modules/tool-renderer/cards/weather.js",
 	"static/js/modules/store-renderer.js",
 	"static/js/modules/renderer/dom-patcher.js",
 	"static/js/modules/renderer/fence-lifecycle.js",

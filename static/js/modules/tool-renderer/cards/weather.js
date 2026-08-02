@@ -64,12 +64,16 @@ function renderWeatherCard(normalised) {
 		location_label,
 		daily,
 	} = normalised;
+	const displayLocation =
+		typeof location_label === "string" && location_label.trim()
+			? location_label.trim()
+			: "Configured location";
 	const windRow =
 		wind_kph === null || wind_kph === undefined
 			? ""
 			: `<div class="weather-card__metric"><span class="weather-card__metric-label">Wind</span><span class="weather-card__metric-value">${escapeHtml(Number(wind_kph).toFixed(1))} km/h</span></div>`;
 
-	return `<div class="tool-card tool-card--weather"><div class="weather-card"><div class="weather-card__header"><div><div class="weather-card__title">${escapeHtml(location_label || "Weather")}</div><div class="weather-card__condition">${escapeHtml(condition)}</div></div><div class="weather-card__icon" aria-hidden="true">${pickIcon(condition)}</div></div><div class="weather-card__hero"><div class="weather-card__temp">${escapeHtml(Number(temperature_c).toFixed(1))}°C</div><div class="weather-card__metrics"><div class="weather-card__metric"><span class="weather-card__metric-label">Humidity</span><span class="weather-card__metric-value">${escapeHtml(Number(humidity_pct).toFixed(0))}%</span></div>${windRow}</div></div>${renderDailyForecast(daily)}</div></div>`;
+	return `<div class="tool-card tool-card--weather"><div class="weather-card"><div class="weather-card__header"><div><div class="weather-card__title">${escapeHtml(displayLocation)}</div><div class="weather-card__condition">${escapeHtml(condition)}</div></div><div class="weather-card__icon" aria-hidden="true">${pickIcon(condition)}</div></div><div class="weather-card__hero"><div class="weather-card__temp">${escapeHtml(Number(temperature_c).toFixed(1))}°C</div><div class="weather-card__metrics"><div class="weather-card__metric"><span class="weather-card__metric-label">Humidity</span><span class="weather-card__metric-value">${escapeHtml(Number(humidity_pct).toFixed(0))}%</span></div>${windRow}</div></div>${renderDailyForecast(daily)}</div></div>`;
 }
 
 export { renderWeatherCard };

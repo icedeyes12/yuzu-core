@@ -11,6 +11,7 @@ from app.db import Database
 from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
 
 logger = logging.getLogger(__name__)
+_REVERSE_GEOCODING_URL = "https://nominatim.openstreetmap.org/reverse"
 
 
 class WeatherRequest(BaseModel):
@@ -133,6 +134,46 @@ async def _resolve_coordinates(
     return float(result["latitude"]), float(result["longitude"]), label or location
 
 
+async def _resolve_configured_location_label(
+    client: httpx.AsyncClient, latitude: float, longitude: float
+) -> str | None:
+    try:
+        response = await client.get(
+            _REVERSE_GEOCODING_URL,
+            params={
+                "lat": latitude,
+                "lon": longitude,
+                "format": "jsonv2",
+                "zoom": 10,
+                "addressdetails": 1,
+            },
+            headers={"User-Agent": "yuzu-companion/4.1"},
+        )
+        response.raise_for_status()
+        result = response.json()
+    except (httpx.HTTPError, ValueError, TypeError):
+        logger.warning("Configured weather location reverse geocoding failed")
+        return None
+
+    address = result.get("address") or {}
+    label = next(
+        (
+            address.get(field)
+            for field in (
+                "city",
+                "town",
+                "municipality",
+                "village",
+                "county",
+                "state",
+            )
+            if address.get(field)
+        ),
+        None,
+    )
+    return label or result.get("name") or None
+
+
 def _daily_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
     daily = data.get("daily") or {}
     keys = (
@@ -193,6 +234,10 @@ async def execute(
                 return error_result(
                     "Location missing. Set a location in settings or provide a city."
                 )
+            location_label = (
+                await _resolve_configured_location_label(client, latitude, longitude)
+                or location_label
+            )
 
         selected_date = _parse_date(request.date)
         days = max(request.days, 1)

@@ -123,7 +123,7 @@ export const ToolPayloadSchemas = {
 				"wind_kph",
 				current.wind_speed_10m ?? null,
 			),
-			location_label: optionalField(payload, "location_label", "Weather"),
+			location_label: optionalField(payload, "location_label", null),
 			requested_date: optionalField(payload, "requested_date", null),
 			daily: Array.isArray(daily) ? daily : [],
 			icon: optionalField(payload, "icon", null),

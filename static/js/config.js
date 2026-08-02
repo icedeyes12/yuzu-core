@@ -7,6 +7,7 @@ import {
 	getByokConfig,
 	getByokProvider,
 	getUserStorageKey,
+	maskApiKey,
 	writeByokConfig,
 } from "./client-storage.js";
 import { listProviders } from "./provider-registry.js";
@@ -17,10 +18,26 @@ import { renderLogo } from "./visual-registry.js";
 let appConfig = null;
 
 const PROVIDER_MODELS_CACHE_KEY = getUserStorageKey("provider_models");
+const maskedProviderKeys = new WeakMap();
 
 function setTextIfExists(id, value) {
 	const el = document.getElementById(id);
 	if (el) el.textContent = String(value ?? "");
+}
+
+function escapeHtml(value) {
+	if (value === null || value === undefined) return "";
+	return String(value).replace(
+		/[&<>"']/g,
+		(character) =>
+			({
+				"&": "&amp;",
+				"<": "&lt;",
+				">": "&gt;",
+				'"': "&quot;",
+				"'": "&#39;",
+			})[character],
+	);
 }
 
 function setValueIfExists(id, value) {
@@ -193,7 +210,7 @@ async function loadProviderSettings() {
 					<div class="form-group">
 						<label for="key-${provider}">API Key (Saved in browser)</label>
 						<div class="provider-input-row">
-							<input type="password" id="key-${provider}" class="provider-flex-input" placeholder="sk-..." autocomplete="off" value="${provKey}">
+							<input type="text" id="key-${provider}" class="provider-flex-input provider-key-input" placeholder="sk-..." autocomplete="off" value="${escapeHtml(maskApiKey(provKey))}">
 							<button class="btn btn-secondary btn-sm save-byok-btn" type="button" data-provider="${provider}">Save Key</button>
 						</div>
 					</div>
@@ -234,6 +251,7 @@ async function loadProviderSettings() {
 				isActive ? data.current_model || "" : "",
 			);
 			grid.appendChild(card);
+			setupMaskedKeyInput(card.querySelector(`#key-${provider}`), provKey);
 
 			// Add accordion toggle
 			const header = card.querySelector(".provider-header");
@@ -289,7 +307,9 @@ function saveBYOKForProvider(provider) {
 	const keyInput = document.getElementById(`key-${provider}`);
 	if (!keyInput) return;
 
-	const key = keyInput.value.trim();
+	const displayedValue = keyInput.value.trim();
+	const storedKey = maskedProviderKeys.get(keyInput) || "";
+	const key = displayedValue === maskApiKey(storedKey) ? storedKey : displayedValue;
 	const validationError = validateProviderKey(provider, key);
 	if (validationError) {
 		showError(validationError);
@@ -299,6 +319,8 @@ function saveBYOKForProvider(provider) {
 	const byok = getByokConfig();
 	const providerConfig = getByokProvider(provider);
 	providerConfig.api_key = key;
+	maskedProviderKeys.set(keyInput, key);
+	keyInput.value = maskApiKey(key);
 
 	if (provider === "yuzu_portal") {
 		delete providerConfig.base_url;
@@ -314,6 +336,14 @@ function saveBYOKForProvider(provider) {
 	}
 	showSuccess(`${provider} key saved in browser.`);
 	updateImageModelWarning(getValueIfExists("image-model"));
+}
+
+function setupMaskedKeyInput(input, storedKey) {
+	if (!input) return;
+	maskedProviderKeys.set(input, storedKey);
+	input.addEventListener("focus", () => {
+		input.select();
+	});
 }
 
 function readModelCatalog() {
