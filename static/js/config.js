@@ -49,6 +49,16 @@ function getProfileAdvancedSource(data) {
 	return data?.advanced || data?.profile || data || {};
 }
 
+function validateProviderKey(provider, value) {
+	if (provider === "custom_openai" || provider === "custom_anthropic") return null;
+	if (!value) return "API key cannot be empty.";
+	if (value.length < 8) return "The API key appears to be incomplete or invalid.";
+	if (/\.\.\.|\*\*\*|•••/.test(value)) {
+		return "The entered value looks like a masked API key.";
+	}
+	return null;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
 	console.log("Config page loaded - initializing...");
 	const loaded = await loadAppConfig();
@@ -279,9 +289,16 @@ function saveBYOKForProvider(provider) {
 	const keyInput = document.getElementById(`key-${provider}`);
 	if (!keyInput) return;
 
+	const key = keyInput.value.trim();
+	const validationError = validateProviderKey(provider, key);
+	if (validationError) {
+		showError(validationError);
+		return;
+	}
+
 	const byok = getByokConfig();
 	const providerConfig = getByokProvider(provider);
-	providerConfig.api_key = keyInput.value.trim();
+	providerConfig.api_key = key;
 
 	if (provider === "yuzu_portal") {
 		delete providerConfig.base_url;
