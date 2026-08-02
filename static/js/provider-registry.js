@@ -137,7 +137,7 @@ const providerDefinitions = [
 		accentColor: null,
 		badge: "official",
 		supportsDark: true,
-		custom: true,
+		custom: false,
 		experimental: false,
 		deprecated: false,
 	},
