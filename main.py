@@ -22,6 +22,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 from fastapi import HTTPException  # noqa: E402
 
 from app.api import api_router  # noqa: E402
+from app.api.endpoints.health import router as health_router  # noqa: E402
 from app.auth.session import SESSION_COOKIE_NAME, validate_session  # noqa: E402
 from app.core.logging_config import get_logger  # noqa: E402
 from app.db import Database, init_pg_tables_async  # noqa: E402
@@ -194,6 +195,7 @@ ensure_static_dirs()
 
 
 app.include_router(api_router, prefix="/api")
+app.include_router(health_router)
 
 # ---------------------------------------------------------------------------
 # Favicon
