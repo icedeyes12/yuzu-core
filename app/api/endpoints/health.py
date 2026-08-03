@@ -19,6 +19,11 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@router.head("/health", include_in_schema=False)
+async def health_head() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 @router.get(
     "/health/ready",
     response_model=HealthResponse,
