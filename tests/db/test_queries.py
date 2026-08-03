@@ -151,7 +151,7 @@ class TestMessageParsers:
 
     def test_parse_event_row(self):
         row = {"content": "connected", "timestamp": None}
-        assert parse_event_row(row) == {"content": "connected", "timestamp": "None"}
+        assert parse_event_row(row) == {"content": "connected", "timestamp": None}
 
     def test_format_conversation_summary_truncates(self):
         long = "x" * 250

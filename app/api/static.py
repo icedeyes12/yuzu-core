@@ -3,16 +3,21 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, Response
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
+
+from app.api.models import ERROR_RESPONSES
+from app.api.utils import get_current_user
 
 router = APIRouter(prefix="/static", tags=["static"])
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
-@router.get("/uploads/{filename}")
-async def serve_uploaded_image(filename: str):
+@router.get("/uploads/{filename}", response_model=None, responses=ERROR_RESPONSES)
+async def serve_uploaded_image(
+    filename: str, _user_id: str = Depends(get_current_user)
+):
     try:
         uploads_dir = (BASE_DIR / "static" / "uploads").resolve()
         file_path = (uploads_dir / filename).resolve()
@@ -28,8 +33,12 @@ async def serve_uploaded_image(filename: str):
         raise HTTPException(status_code=404, detail="Image not found")
 
 
-@router.get("/generated_images/{filename}")
-async def serve_generated_image(filename: str):
+@router.get(
+    "/generated_images/{filename}", response_model=None, responses=ERROR_RESPONSES
+)
+async def serve_generated_image(
+    filename: str, _user_id: str = Depends(get_current_user)
+):
     try:
         generated_dir = (BASE_DIR / "static" / "generated_images").resolve()
         file_path = (generated_dir / filename).resolve()
@@ -38,11 +47,7 @@ async def serve_generated_image(filename: str):
             raise HTTPException(status_code=404, detail="Image not found")
         if file_path.exists() and file_path.is_file():
             return FileResponse(file_path)
-        return Response(
-            content='<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1"><title>Image unavailable</title><rect width="1" height="1" fill="transparent"/></svg>',
-            media_type="image/svg+xml",
-            headers={"Cache-Control": "no-store"},
-        )
+        raise HTTPException(status_code=404, detail="Image not found")
     except HTTPException:
         raise
     except Exception:

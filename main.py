@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import os
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from psycopg import OperationalError
 
 # Import psycopg errors for exception handling
 from psycopg_pool import PoolTimeout
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -23,6 +27,12 @@ from fastapi import HTTPException  # noqa: E402
 
 from app.api import api_router  # noqa: E402
 from app.api.endpoints.health import router as health_router  # noqa: E402
+from app.api.errors import (  # noqa: E402
+    http_exception_handler,
+    problem_detail,
+    unhandled_exception_handler,
+    validation_exception_handler,
+)
 from app.auth.session import SESSION_COOKIE_NAME, validate_session  # noqa: E402
 from app.core.logging_config import get_logger  # noqa: E402
 from app.db import Database, init_pg_tables_async  # noqa: E402
@@ -31,6 +41,7 @@ from app.db.connection import (  # noqa: E402
     get_async_pool,
     get_sync_pool,
 )
+from app.metrics import metrics  # noqa: E402
 from app.services.session_service import SessionService  # noqa: E402, F401
 
 log = get_logger(__name__)
@@ -95,6 +106,8 @@ app = FastAPI(
     description="AI companion system with memory, multimodal, and multi-provider support",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
     # Disable default exception handlers for DB errors
     exception_handlers={  # pyright: ignore[reportArgumentType]
         PoolTimeout: None,  # Will be added below
@@ -106,6 +119,63 @@ app = FastAPI(
 trusted_hosts_env = os.environ.get("TRUSTED_HOSTS", "127.0.0.1")
 trusted_hosts = [h.strip() for h in trusted_hosts_env.split(",") if h.strip()]
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=trusted_hosts)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault(
+            "Referrer-Policy", "strict-origin-when-cross-origin"
+        )
+        response.headers.setdefault(
+            "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
+        )
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+        )
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    from uuid import uuid4
+
+    request.state.request_id = request.headers.get("x-request-id") or str(uuid4())
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request.state.request_id
+    return response
+
+
+@app.middleware("http")
+async def metrics_http_middleware(request: Request, call_next):
+    started = time.perf_counter()
+    metrics.request_started()
+    try:
+        response = await call_next(request)
+    except Exception:
+        metrics.request_finished(
+            request.method, request.url.path, 500, time.perf_counter() - started
+        )
+        raise
+    metrics.request_finished(
+        request.method,
+        request.url.path,
+        response.status_code,
+        time.perf_counter() - started,
+    )
+    return response
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics_endpoint() -> Response:
+    body, content_type = metrics.render()
+    return Response(content=body, headers={"Content-Type": content_type})
 
 
 # ---------------------------------------------------------------------------
@@ -134,42 +204,37 @@ def _render_offline_page() -> str:
 
 @app.exception_handler(PoolTimeout)
 async def pool_timeout_handler(request: Request, exc: PoolTimeout):
-    """Handle database pool timeout - show offline page."""
-    return HTMLResponse(content=_render_offline_page(), status_code=503)
+    return problem_detail(
+        503, "Service unavailable", "The database is temporarily unavailable.", request
+    )
 
 
 @app.exception_handler(OperationalError)
 async def operational_error_handler(request: Request, exc: OperationalError):
-    """Handle database connection errors - show offline page."""
-    return HTMLResponse(content=_render_offline_page(), status_code=503)
+    return problem_detail(
+        503, "Service unavailable", "The database is temporarily unavailable.", request
+    )
 
 
-@app.exception_handler(404)
-async def not_found_handler(request: Request, exc: Exception):
-    """Handle 404 Not Found - redirect to home gracefully."""
-    from fastapi.responses import JSONResponse, RedirectResponse
-
-    # Only redirect HTML requests
-    if request.headers.get("accept", "").find("text/html") >= 0:
-        return RedirectResponse(url="/", status_code=302)
-    return JSONResponse(content={"detail": "Not Found"}, status_code=404)
-
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # Mount static directories
 app.mount(
-    "/static",
-    StaticFiles(directory=os.path.join(BASE_DIR, "static")),
-    name="static",
+    "/static/assets",
+    StaticFiles(directory=os.path.join(BASE_DIR, "static/assets")),
+    name="assets",
 )
 app.mount(
-    "/uploads",
-    StaticFiles(directory=os.path.join(BASE_DIR, "static/uploads")),
-    name="uploads",
+    "/static/css",
+    StaticFiles(directory=os.path.join(BASE_DIR, "static/css")),
+    name="css",
 )
 app.mount(
-    "/generated_images",
-    StaticFiles(directory=os.path.join(BASE_DIR, "static/generated_images")),
-    name="generated_images",
+    "/static/js",
+    StaticFiles(directory=os.path.join(BASE_DIR, "static/js")),
+    name="js",
 )
 
 
@@ -194,7 +259,7 @@ ensure_static_dirs()
 # ---------------------------------------------------------------------------
 
 
-app.include_router(api_router, prefix="/api")
+app.include_router(api_router, prefix="/api/v1")
 app.include_router(health_router)
 
 # ---------------------------------------------------------------------------

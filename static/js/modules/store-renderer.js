@@ -204,7 +204,7 @@ export class DOMRenderer {
 					? "uploads"
 					: null;
 			if (!directory) return "";
-			url = `/api/static/${directory}/${encodeURIComponent(filename)}`;
+			url = `/api/v1/static/${directory}/${encodeURIComponent(filename)}`;
 		}
 		return `<img src="${escapeHtml(url)}" class="attachment-img" alt="Attachment" />`;
 	}

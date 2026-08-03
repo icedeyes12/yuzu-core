@@ -7,6 +7,7 @@ from urllib.parse import urlsplit, urlunsplit
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
+from app.api.models import ERROR_RESPONSES, AuthMeResponse, StatusResponse
 from app.auth.oauth import (
     OAUTH_STATE_COOKIE_NAME,
     build_auth_url,
@@ -63,7 +64,7 @@ def _rewrite_redirect_uri(request: Request, original_uri: str) -> str:
     return original_uri
 
 
-@router.get("/login")
+@router.get("/login", response_model=None, responses=ERROR_RESPONSES)
 async def login(request: Request, provider: str = "google"):
     config = get_provider(provider)
     if not config:
@@ -115,7 +116,7 @@ async def login(request: Request, provider: str = "google"):
     return response
 
 
-@router.get("/callback")
+@router.get("/callback", include_in_schema=False, response_model=None)
 async def callback(request: Request):
     code = request.query_params.get("code")
     state = request.query_params.get("state")
@@ -186,12 +187,11 @@ async def callback(request: Request):
     # Determine redirection target: if login originated from somewhere else (e.g. localhost:5000), redirect back to it
     redirect_target = "/chat"
     if origin:
-        try:
-            from urllib.parse import urljoin
-
-            redirect_target = urljoin(origin, "/chat")
-        except Exception:
-            pass
+        parsed_origin = urlsplit(origin)
+        if parsed_origin.scheme in {"http", "https"} and parsed_origin.netloc:
+            redirect_target = urlunsplit(
+                (parsed_origin.scheme, parsed_origin.netloc, "/chat", "", "")
+            )
 
     log.info(f"OAuth successful. Redirecting user to: {redirect_target}")
     response = RedirectResponse(url=redirect_target, status_code=302)
@@ -236,7 +236,7 @@ async def _map_identity_to_profile(
     return user_id
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=StatusResponse, responses=ERROR_RESPONSES)
 async def logout(request: Request):
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if token:
@@ -247,7 +247,7 @@ async def logout(request: Request):
     return response
 
 
-@router.get("/me")
+@router.get("/me", response_model=AuthMeResponse, responses=ERROR_RESPONSES)
 async def me(request: Request):
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if not token:

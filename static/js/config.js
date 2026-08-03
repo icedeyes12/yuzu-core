@@ -14,7 +14,7 @@ import { listProviders } from "./provider-registry.js";
 import { toggleSidebar } from "./sidebar.js";
 import { renderLogo } from "./visual-registry.js";
 
-// Global config state (populated from /api/config)
+// Global config state (populated from /api/v1/config)
 let appConfig = null;
 
 const PROVIDER_MODELS_CACHE_KEY = getUserStorageKey("provider_models");
@@ -88,7 +88,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Load application configuration from backend (SSOT)
 async function loadAppConfig() {
 	try {
-		const response = await fetch("/api/config", {
+		const response = await fetch("/api/v1/config", {
 			headers: { Accept: "application/json" },
 		});
 		const data = await readJsonResponse(response);
@@ -424,7 +424,7 @@ async function fetchModelsForProvider(provider) {
 		if (provider.startsWith("custom") && provConfig.base_url)
 			headers["X-Provider-BaseUrl"] = provConfig.base_url;
 
-		const response = await fetch(`/api/proxy/models/${provider}/refresh`, {
+		const response = await fetch(`/api/v1/proxy/models/${provider}/refresh`, {
 			method: "POST",
 			headers: { ...headers, Accept: "application/json" },
 		});
@@ -475,7 +475,7 @@ async function testProviderConnection(providerName) {
 			console.warn("Error attaching BYOK config for test:", e);
 		}
 
-		const response = await fetch("/api/providers/test_connection", {
+		const response = await fetch("/api/v1/providers/test_connection", {
 			method: "POST",
 			headers: headers,
 			body: JSON.stringify({ provider_name: providerName }),
@@ -710,7 +710,7 @@ async function saveImageModel() {
 
 	try {
 		const updates = { image_model: imageModel };
-		const response = await fetch("/api/update_profile", {
+		const response = await fetch("/api/v1/update_profile", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ updates }),
@@ -755,7 +755,7 @@ async function setProviderActive(providerName) {
 	}
 
 	try {
-		const response = await fetch("/api/providers/set_preferred", {
+		const response = await fetch("/api/v1/providers/set_preferred", {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -829,7 +829,7 @@ async function saveProfileSettings() {
 	saveBtn.disabled = true;
 
 	try {
-		const response = await fetch("/api/update_profile", {
+		const response = await fetch("/api/v1/update_profile", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -918,7 +918,7 @@ async function saveAdvancedSettings() {
 			enable_vision: getCheckedIfExists("adv-vision"),
 		};
 
-		const response = await fetch("/api/update_profile", {
+		const response = await fetch("/api/v1/update_profile", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ updates }),
@@ -956,7 +956,7 @@ async function clearChatHistory() {
 	clearBtn.disabled = true;
 
 	try {
-		const response = await fetch("/api/clear_chat", {
+		const response = await fetch("/api/v1/clear_chat", {
 			method: "POST",
 			headers: { Accept: "application/json" },
 		});
@@ -1049,7 +1049,7 @@ async function saveLocation() {
 	}
 
 	try {
-		const response = await fetch("/api/update_location", {
+		const response = await fetch("/api/v1/update_location", {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -1187,7 +1187,7 @@ async function loadGlobalKnowledge() {
 	const list = document.getElementById("global-knowledge-list");
 	if (!list) return;
 	try {
-		const response = await fetch("/api/global-knowledge", {
+		const response = await fetch("/api/v1/global-knowledge", {
 			headers: { Accept: "application/json" },
 		});
 		const data = await readJsonResponse(response);
@@ -1284,10 +1284,10 @@ async function saveKnowledgeEntry(event) {
 	try {
 		const response = await fetch(
 			id
-				? `/api/global-knowledge/${encodeURIComponent(id)}`
-				: "/api/global-knowledge",
+				? `/api/v1/global-knowledge/${encodeURIComponent(id)}`
+				: "/api/v1/global-knowledge",
 			{
-				method: id ? "PATCH" : "POST",
+				method: id ? "PUT" : "POST",
 				headers: {
 					"Content-Type": "application/json",
 					Accept: "application/json",
@@ -1311,7 +1311,7 @@ async function deleteKnowledgeEntry(id) {
 	if (!window.confirm("Delete this Global Knowledge entry?")) return;
 	try {
 		const response = await fetch(
-			`/api/global-knowledge/${encodeURIComponent(id)}`,
+			`/api/v1/global-knowledge/${encodeURIComponent(id)}`,
 			{ method: "DELETE", headers: { Accept: "application/json" } },
 		);
 		const data = await readJsonResponse(response);

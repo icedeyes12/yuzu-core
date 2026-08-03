@@ -54,3 +54,6 @@ black>=23.0.0
 pytest>=7.0.0
 # Type checking
 mypy>=1.0.0
+pytest-asyncio>=0.23.0
+# Mutation testing
+mutmut>=3.7.0

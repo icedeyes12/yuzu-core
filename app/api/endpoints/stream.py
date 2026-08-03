@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 
+from app.api.models import ERROR_RESPONSES, StreamStatusResponse, StreamSyncResponse
 from app.api.utils import get_current_user
 from app.core.logging_config import get_logger
 from app.services.stream_manager import StreamManager
@@ -11,7 +12,12 @@ log = get_logger(__name__)
 router = APIRouter(prefix="/stream", tags=["stream"])
 
 
-@router.get("/{session_id}/status")
+@router.get(
+    "/{session_id}/status",
+    include_in_schema=False,
+    response_model=StreamStatusResponse,
+    responses=ERROR_RESPONSES,
+)
 async def get_stream_status(
     session_id: str = Path(..., description="Session ID", min_length=1),
     _user_id: str = Depends(get_current_user),
@@ -41,7 +47,12 @@ async def get_stream_status(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/{session_id}/sync")
+@router.get(
+    "/{session_id}/sync",
+    include_in_schema=False,
+    response_model=StreamSyncResponse,
+    responses=ERROR_RESPONSES,
+)
 async def sync_stream_buffer(
     session_id: str = Path(..., description="Session ID", min_length=1),
     _user_id: str = Depends(get_current_user),

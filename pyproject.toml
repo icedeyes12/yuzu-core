@@ -57,8 +57,21 @@ ignore = [
 quote-style = "double"
 indent-style = "space"
 
-[tool.basedpyright]
-reportUnknownMemberType = "none"
-reportUnknownArgumentType = "none"
-reportUnknownVariableType = "none"
-reportAny = "none"
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+asyncio_mode = "auto"
+markers = [
+    "unit: isolated tests with fakes or mocks",
+    "contract: public API, schema, and serialization contracts",
+    "integration: tests using multiple real application components",
+    "db: tests requiring a real PostgreSQL database",
+    "e2e: end-to-end tests across process boundaries",
+    "slow: tests that are intentionally slower or network-dependent",
+    "regression: tests preserving a previously fixed behavior",
+]
+
+[tool.mutmut]
+source_paths = ["app/api", "app/core", "app/services", "app/tools"]
+test_command = "pytest -q -m 'unit or contract'"

@@ -24,7 +24,7 @@ async function _loadOlderMessages() {
 
 	try {
 		const res = await fetch(
-			`/api/chat_history/before?session_id=${encodeURIComponent(currentHistorySessionId)}&before_ts=${encodeURIComponent(beforeTs)}&limit=50`,
+			`/api/v1/chat_history/before?session_id=${encodeURIComponent(currentHistorySessionId)}&before_ts=${encodeURIComponent(beforeTs)}&limit=50`,
 			{ headers: { Accept: "application/json" } },
 		);
 		if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -75,7 +75,7 @@ export async function loadChatHistory(sessionId = null) {
 	try {
 		let data;
 		if (requestedSessionId) {
-			const switchRes = await fetch("/api/sessions/switch", {
+			const switchRes = await fetch("/api/v1/sessions/switch", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -88,7 +88,7 @@ export async function loadChatHistory(sessionId = null) {
 				throw new Error(`HTTP ${switchRes.status}: session switch failed`);
 			data = await switchRes.json();
 		} else {
-			const res = await fetch("/api/chat_history?limit=50", {
+			const res = await fetch("/api/v1/chat_history?limit=50", {
 				headers: { Accept: "application/json" },
 				signal: historyRequest.signal,
 			});

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Security and API
+
+- Added security response headers, request timeouts, request IDs, and bounded per-user streaming concurrency.
+- Added `/api/v1` routing, authenticated image serving, database readiness checks, and method-correct session/preset deletion routes.
+- Hardened BYOK parsing, provider URL validation, profile updates, file uploads, OAuth callback redirects, and LLM error status handling.
+
+---
+
 ## [4.0.0] - 2025-06-10
 
 ### Major Architectural Shift

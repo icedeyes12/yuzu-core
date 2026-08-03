@@ -150,7 +150,7 @@ export function renderMessageContent(rawText, _isUser = false) {
 			return rendered.replace(
 				/(<img[^>]+(?:src|data-src)=["'])(?:(?:https?:\/\/[^/]+)?(?:\/chat\/|\/))?(?:(?:\.\.\/)+)?static\/(generated_images|uploads)\/([^"']+)(["'])/g,
 				(_match, prefix, kind, filename, suffix) =>
-					`${prefix}/api/static/${kind}/${encodeURIComponent(filename)}${suffix}`,
+					`${prefix}/api/v1/static/${kind}/${encodeURIComponent(filename)}${suffix}`,
 			);
 		}
 

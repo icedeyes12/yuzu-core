@@ -33,7 +33,7 @@ export function safeImagePath(value) {
 	) {
 		return null;
 	}
-	return `/api/static/${directory}/${encodeURIComponent(filename)}`;
+	return `/api/v1/static/${directory}/${encodeURIComponent(filename)}`;
 }
 
 export function safeHttpUrl(value) {

@@ -16,9 +16,9 @@ import { handleSessionSwitch } from "./session-controller.js";
 (() => {
 	const _origFetch = window.fetch;
 	const _LLM_ENDPOINTS = [
-		"/api/send_message",
-		"/api/send_message_stream",
-		"/api/generate_image",
+		"/api/v1/send_message",
+		"/api/v1/send_message_stream",
+		"/api/v1/generate_image",
 	];
 
 	window.fetch = async function (input, init) {
@@ -42,7 +42,7 @@ import { handleSessionSwitch } from "./session-controller.js";
 
 		if (
 			(response.status === 401 || response.status === 403) &&
-			url.includes("/api/")
+			url.includes("/api/v1/")
 		) {
 			if (window.location.pathname !== "/login") {
 				window.location.href = "/login";
@@ -112,7 +112,7 @@ async function _checkAuthState() {
 	if (!authContent) return;
 
 	try {
-		const resp = await fetch("/api/auth/me", {
+		const resp = await fetch("/api/v1/auth/me", {
 			headers: { Accept: "application/json" },
 		});
 		if (!resp.ok) {
@@ -163,7 +163,7 @@ function _renderUnauthenticated(container) {
 }
 
 function loginWith(provider) {
-	window.location.href = `/api/auth/login?provider=${provider}`;
+	window.location.href = `/api/v1/auth/login?provider=${provider}`;
 }
 
 function clearUserScopedClientState() {
@@ -173,7 +173,7 @@ function clearUserScopedClientState() {
 async function handleLogout() {
 	clearUserScopedClientState();
 	try {
-		await fetch("/api/auth/logout", { method: "POST" });
+		await fetch("/api/v1/auth/logout", { method: "POST" });
 	} catch (_e) {
 		// Ignore error on logout
 	}
@@ -294,7 +294,7 @@ function loadSidebarSessions() {
 	sessionSection.classList.add("is-visible");
 	showSessionsSkeleton();
 
-	fetch("/api/sessions/list", {
+	fetch("/api/v1/sessions/list", {
 		headers: { Accept: "application/json" },
 	})
 		.then((response) => {
@@ -379,7 +379,7 @@ function renameSessionPrompt(sessionId, currentName) {
 }
 
 function renameSession(sessionId, newName) {
-	fetch("/api/sessions/rename", {
+	fetch("/api/v1/sessions/rename", {
 		method: "POST",
 		headers: { "Content-Type": "application/json", Accept: "application/json" },
 		body: JSON.stringify({ session_id: sessionId, name: newName }),
@@ -393,7 +393,7 @@ function renameSession(sessionId, newName) {
 				loadSidebarSessions();
 				const sessionNameElement = document.getElementById("sessionName");
 				if (sessionNameElement) {
-					fetch("/api/profile", { headers: { Accept: "application/json" } })
+					fetch("/api/v1/profile", { headers: { Accept: "application/json" } })
 						.then((response) => {
 							if (!response.ok) throw new Error(`HTTP ${response.status}`);
 							return response.json();
@@ -428,10 +428,9 @@ function deleteSessionPrompt(sessionId) {
 }
 
 function deleteSession(sessionId) {
-	fetch("/api/sessions/delete", {
-		method: "POST",
-		headers: { "Content-Type": "application/json", Accept: "application/json" },
-		body: JSON.stringify({ session_id: sessionId }),
+	fetch(`/api/v1/sessions/${encodeURIComponent(sessionId)}`, {
+		method: "DELETE",
+		headers: { Accept: "application/json" },
 	})
 		.then((response) => {
 			if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -451,7 +450,7 @@ function deleteSession(sessionId) {
 }
 
 function createNewSession() {
-	fetch("/api/sessions/create", {
+	fetch("/api/v1/sessions/create", {
 		method: "POST",
 		headers: { "Content-Type": "application/json", Accept: "application/json" },
 		body: JSON.stringify({ name: "New Chat" }),
