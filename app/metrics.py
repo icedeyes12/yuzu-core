@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import threading
 import os
+import threading
 from collections import defaultdict
 
 
@@ -56,4 +56,6 @@ class Metrics:
         return "\n".join(lines) + "\n", "text/plain; version=0.0.4; charset=utf-8"
 
 
-metrics = Metrics(enabled=os.environ.get("YUZU_METRICS_ENABLED", "false").lower() == "true")
+metrics = Metrics(
+    enabled=os.environ.get("YUZU_METRICS_ENABLED", "false").lower() == "true"
+)
