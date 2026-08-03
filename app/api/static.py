@@ -40,9 +40,10 @@ async def serve_uploaded_image(
 ):
     try:
         uploads_dir = (BASE_DIR / "static" / "uploads").resolve()
-        file_path = _safe_file_path(uploads_dir, filename)
+        allowed_files = {p.name: p for p in uploads_dir.iterdir() if p.is_file()}
+        file_path = allowed_files.get(filename)
 
-        if file_path.exists() and file_path.is_file():
+        if file_path is not None:
             return FileResponse(file_path)
         raise HTTPException(status_code=404, detail="Image not found")
     except HTTPException:
@@ -59,9 +60,10 @@ async def serve_generated_image(
 ):
     try:
         generated_dir = (BASE_DIR / "static" / "generated_images").resolve()
-        file_path = _safe_file_path(generated_dir, filename)
+        allowed_files = {p.name: p for p in generated_dir.iterdir() if p.is_file()}
+        file_path = allowed_files.get(filename)
 
-        if file_path.exists() and file_path.is_file():
+        if file_path is not None:
             return FileResponse(file_path)
         raise HTTPException(status_code=404, detail="Image not found")
     except HTTPException:
