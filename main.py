@@ -220,21 +220,23 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
-# Mount static directories
+
+class PublicStaticFiles(StaticFiles):
+    """Serve public assets without exposing private image directories."""
+
+    _PRIVATE_DIRECTORIES = {"uploads", "generated_images", "image_cache"}
+
+    async def get_response(self, path, scope):
+        if path.split("/", 1)[0] in self._PRIVATE_DIRECTORIES:
+            raise StarletteHTTPException(status_code=404)
+        return await super().get_response(path, scope)
+
+
+# Keep one canonical public mount: templates use url_for("static", path=...).
 app.mount(
-    "/static/assets",
-    StaticFiles(directory=os.path.join(BASE_DIR, "static/assets")),
-    name="assets",
-)
-app.mount(
-    "/static/css",
-    StaticFiles(directory=os.path.join(BASE_DIR, "static/css")),
-    name="css",
-)
-app.mount(
-    "/static/js",
-    StaticFiles(directory=os.path.join(BASE_DIR, "static/js")),
-    name="js",
+    "/static",
+    PublicStaticFiles(directory=os.path.join(BASE_DIR, "static")),
+    name="static",
 )
 
 
