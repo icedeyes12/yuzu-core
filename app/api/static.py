@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,20 +13,15 @@ router = APIRouter(prefix="/static", tags=["static"])
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
+FILENAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
 
 def _safe_file_path(base_dir: Path, filename: str) -> Path:
-    # Only allow direct filenames, not nested paths or traversal tokens
-    candidate_name = Path(filename)
-    if (
-        candidate_name.name != filename
-        or candidate_name.is_absolute()
-        or ".." in candidate_name.parts
-        or "/" in filename
-        or "\\" in filename
-    ):
+    # Only allow direct filenames (no path separators or traversal tokens)
+    if not filename or not FILENAME_RE.fullmatch(filename):
         raise HTTPException(status_code=404, detail="Image not found")
 
-    file_path = (base_dir / candidate_name).resolve()
+    file_path = (base_dir / filename).resolve()
     try:
         file_path.relative_to(base_dir)
     except ValueError:
