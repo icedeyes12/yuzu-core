@@ -21,7 +21,7 @@ export function safeImagePath(value) {
 	if (typeof value !== "string" || !value.trim()) return null;
 	const cleaned = value.trim().replace(/\\/g, "/");
 	const match = cleaned.match(
-		/^(?:\/?static\/)?(generated_images|uploads)\/([^/?#]+)$/,
+		/^(?:\/api\/v1\/static\/|\/?static\/)?(generated_images|uploads)\/([^/?#]+)$/,
 	);
 	if (!match) return null;
 	const [, directory, filename] = match;
