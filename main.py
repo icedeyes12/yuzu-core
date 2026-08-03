@@ -174,6 +174,8 @@ async def metrics_http_middleware(request: Request, call_next):
 
 @app.get("/metrics", include_in_schema=False)
 async def metrics_endpoint() -> Response:
+    if not metrics.enabled:
+        raise HTTPException(status_code=404, detail="Not found")
     body, content_type = metrics.render()
     return Response(content=body, headers={"Content-Type": content_type})
 

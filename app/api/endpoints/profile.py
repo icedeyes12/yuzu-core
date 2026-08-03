@@ -19,6 +19,7 @@ from app.api.models import (
     ProviderTestResponse,
     StatusResponse,
 )
+from app.api.rate_limits import rate_limit_user
 from app.api.utils import (
     extract_keyrings,
     get_current_user,
@@ -213,6 +214,7 @@ async def api_list_providers(user_id: str = Depends(get_current_user)):
 async def api_proxy_models(
     provider: str, request: Request, _user_id: str = Depends(get_current_user)
 ):
+    rate_limit_user(_user_id, 10, "proxy-models-user")
     try:
         ai_manager = await get_ai_manager()
         if provider not in ai_manager.get_available_providers():
@@ -273,6 +275,7 @@ async def api_proxy_models(
 async def api_refresh_provider_models(
     provider: str, request: Request, _user_id: str = Depends(get_current_user)
 ):
+    rate_limit_user(_user_id, 10, "proxy-models-user")
     ai_manager = await get_ai_manager()
     provider_instance = ai_manager.providers.get(provider)
     if provider_instance is None:
@@ -341,6 +344,7 @@ async def api_test_provider_connection(
     payload: ProviderTestRequest,
     _user_id: str = Depends(get_current_user),
 ):
+    rate_limit_user(_user_id, 5, "provider-test-user")
     try:
         keyrings = extract_keyrings(request)
         if keyrings:

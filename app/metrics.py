@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import threading
+import os
 from collections import defaultdict
 
 
 class Metrics:
-    def __init__(self) -> None:
+    def __init__(self, enabled: bool = True) -> None:
+        self.enabled = enabled
         self._lock = threading.Lock()
         self._requests = 0
         self._active = 0
@@ -28,6 +30,8 @@ class Metrics:
             self._statuses[(method, path, status)] += 1
 
     def render(self) -> tuple[str, str]:
+        if not self.enabled:
+            return "", "text/plain; version=0.0.4; charset=utf-8"
         lines = [
             "# HELP yuzu_http_requests_total Total HTTP requests.",
             "# TYPE yuzu_http_requests_total counter",
@@ -52,4 +56,4 @@ class Metrics:
         return "\n".join(lines) + "\n", "text/plain; version=0.0.4; charset=utf-8"
 
 
-metrics = Metrics()
+metrics = Metrics(enabled=os.environ.get("YUZU_METRICS_ENABLED", "false").lower() == "true")

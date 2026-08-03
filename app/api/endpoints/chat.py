@@ -12,6 +12,7 @@ from app.api.models import (
     OperationResponse,
     StreamMetadata,
 )
+from app.api.rate_limits import acquire_active_user, rate_limit_user, release_active
 from app.api.utils import (
     extract_keyrings,
     get_client_id,
@@ -88,10 +89,14 @@ async def api_send_message(
     payload: MessageRequest,
     user_id: str = Depends(get_current_user),
 ):
+    rate_limit_user(user_id, 10, "send-message-user")
     keyrings = extract_keyrings(request)
     if keyrings:
         set_request_keyrings(keyrings)
+    active_acquired = False
     try:
+        acquire_active_user(user_id, 1, "send-message-active")
+        active_acquired = True
         user_message = payload.message.strip()
         if not user_message:
             return MessageResponse(reply="Please type a message!")
@@ -125,6 +130,8 @@ async def api_send_message(
             detail="The AI provider failed to process the message",
         ) from e
     finally:
+        if active_acquired:
+            release_active(user_id, "send-message-active")
         if keyrings:
             clear_request_keyring()
 
@@ -147,6 +154,7 @@ async def api_send_message_stream(
     """Unified streaming endpoint for text and images."""
     acquired = False
     try:
+        rate_limit_user(user_id, 10, "send-message-stream-user")
         if not try_acquire_stream_slot(user_id):
             raise HTTPException(
                 status_code=429,
@@ -262,6 +270,7 @@ async def api_generate_image(
     payload: MessageRequest,
     user_id: str = Depends(get_current_user),
 ):
+    rate_limit_user(user_id, 3, "generate-image-user")
     keyrings = extract_keyrings(request)
     if keyrings:
         set_request_keyrings(keyrings)

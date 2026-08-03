@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.api.models import ERROR_RESPONSES, AuthMeResponse, StatusResponse
+from app.api.rate_limits import rate_limit_ip
 from app.auth.oauth import (
     OAUTH_STATE_COOKIE_NAME,
     build_auth_url,
@@ -66,6 +67,7 @@ def _rewrite_redirect_uri(request: Request, original_uri: str) -> str:
 
 @router.get("/login", response_model=None, responses=ERROR_RESPONSES)
 async def login(request: Request, provider: str = "google"):
+    rate_limit_ip(request, 10, "auth-login-ip")
     config = get_provider(provider)
     if not config:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
@@ -118,6 +120,7 @@ async def login(request: Request, provider: str = "google"):
 
 @router.get("/callback", include_in_schema=False, response_model=None)
 async def callback(request: Request):
+    rate_limit_ip(request, 30, "auth-callback-ip")
     code = request.query_params.get("code")
     state = request.query_params.get("state")
     if not code or not state:

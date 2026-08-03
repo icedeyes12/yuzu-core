@@ -79,6 +79,7 @@ def test_security_headers_and_metrics_are_exposed(monkeypatch) -> None:
         yield
 
     monkeypatch.setattr(app.router, "lifespan_context", no_startup)
+    monkeypatch.setattr("main.metrics.enabled", True)
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.get("/health")
         metrics = client.get("/metrics")
