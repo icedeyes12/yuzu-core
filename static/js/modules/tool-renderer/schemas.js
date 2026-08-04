@@ -132,6 +132,7 @@ export const ToolPayloadSchemas = {
 			schema_kind: "image",
 			image_path: requireField(payload, "image_path", "image"),
 			image_url: optionalField(payload, "image_url", null),
+			prompt: optionalField(payload, "prompt", ""),
 			alt: optionalField(payload, "alt", "Image"),
 			model: optionalField(payload, "model", null),
 		};

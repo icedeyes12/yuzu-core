@@ -12,7 +12,12 @@ import { safeImagePath } from "./tool-renderer/dom-utils.js";
  * @param {string|null} timestamp - Optional timestamp
  * @returns {HTMLElement} The message element
  */
-export function createMessageElement(role, content, timestamp = null) {
+export function createMessageElement(
+	role,
+	content,
+	timestamp = null,
+	{ suppressCopy = false } = {},
+) {
 	const msg = document.createElement("div");
 	msg.className = `message ${role}-message`;
 
@@ -58,17 +63,19 @@ export function createMessageElement(role, content, timestamp = null) {
 		: getCurrentTime24h();
 	footer.appendChild(timeDiv);
 
-	const copyBtn = document.createElement("button");
-	copyBtn.className = "copy-message-btn";
-	copyBtn.setAttribute("data-action", "copy-message");
-	copyBtn.setAttribute("data-message-content", content);
-	copyBtn.title = "Copy full message";
-	copyBtn.innerHTML =
-		renderRuntimeIcon("copy", {
-			size: 16,
-			strokeWidth: 2,
-		}) || "";
-	footer.appendChild(copyBtn);
+	if (role !== "tool" && !suppressCopy) {
+		const copyBtn = document.createElement("button");
+		copyBtn.className = "copy-message-btn";
+		copyBtn.setAttribute("data-action", "copy-message");
+		copyBtn.setAttribute("data-message-content", content);
+		copyBtn.title = "Copy full message";
+		copyBtn.innerHTML =
+			renderRuntimeIcon("copy", {
+				size: 16,
+				strokeWidth: 2,
+			}) || "";
+		footer.appendChild(copyBtn);
+	}
 
 	msg.appendChild(footer);
 
@@ -85,17 +92,48 @@ export function copyFullMessage(content) {
 	}
 }
 
-function handleCopyMessageClick(event) {
-	const button = event.target.closest('[data-action="copy-message"]');
-	if (!button) return;
-	event.preventDefault();
-	copyFullMessage(button.getAttribute("data-message-content") || "");
+function setCopyFeedback(button, label) {
 	button.classList.add("copied");
-	button.setAttribute("aria-label", "Message copied");
+	button.setAttribute("aria-label", label);
 	window.setTimeout(() => {
 		button.classList.remove("copied");
-		button.setAttribute("aria-label", "Copy message");
+		button.setAttribute(
+			"aria-label",
+			button.dataset.action === "copy-tool-output"
+				? "Copy terminal output"
+				: button.dataset.action === "copy-tool-prompt"
+					? "Copy image prompt"
+					: "Copy message",
+		);
 	}, 1200);
+}
+
+function handleCopyMessageClick(event) {
+	const button = event.target.closest(
+		'[data-action="copy-message"], [data-action="copy-tool-output"], [data-action="copy-tool-prompt"]',
+	);
+	if (!button || button.disabled) return;
+	event.preventDefault();
+	const isToolOutput = button.dataset.action === "copy-tool-output";
+	const isToolPrompt = button.dataset.action === "copy-tool-prompt";
+	const outputElement = isToolOutput
+		? button
+				.closest(".tool-card__output")
+				?.querySelector(".tool-card__pre code")
+		: isToolPrompt
+			? button
+					.closest(".image-card__prompt")
+					?.querySelector(".image-card__prompt-code code")
+			: null;
+	const content =
+		isToolOutput || isToolPrompt
+			? outputElement?.textContent || ""
+			: button.getAttribute("data-message-content") || "";
+	if (!navigator.clipboard?.writeText) return;
+	void navigator.clipboard.writeText(content).then(
+		() => setCopyFeedback(button, "Copied"),
+		() => {},
+	);
 }
 
 let copyBindingInitialized = false;

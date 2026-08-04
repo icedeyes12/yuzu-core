@@ -45,6 +45,8 @@ prompt-toolkit>=3.0.0
 # ----------
 # HTTP client used by providers and FastAPI TestClient
 httpx>=0.27.0
+# Starlette TestClient compatibility
+httpx2>=2.0.0
 # HTTP requests for AI providers and image downloads
 requests>=2.33.0
 

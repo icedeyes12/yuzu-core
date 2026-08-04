@@ -158,7 +158,9 @@ export class DOMRenderer {
 	}
 
 	_createMessageDOM(msg) {
-		const el = createMessageElement(msg.role, msg.content, msg.timestamp);
+		const el = createMessageElement(msg.role, msg.content, msg.timestamp, {
+			suppressCopy: hasToolCard(msg),
+		});
 		el.setAttribute("data-message-id", msg.id);
 		return el;
 	}
@@ -166,6 +168,11 @@ export class DOMRenderer {
 	_updateMessageDOM(el, msg) {
 		const contentContainer = el.querySelector(".message-content");
 		if (!contentContainer) return;
+		const shouldSuppressCopy = hasToolCard(msg);
+		const parentCopyButton = el.querySelector('[data-action="copy-message"]');
+		if (shouldSuppressCopy) {
+			parentCopyButton?.remove();
+		}
 		const messageHash = JSON.stringify([
 			msg.content || "",
 			msg.metadata?.isFrozen ?? false,
@@ -294,6 +301,12 @@ function escapeHtml(value) {
 		.replace(/>/g, "&gt;")
 		.replace(/"/g, "&quot;")
 		.replace(/'/g, "&#39;");
+}
+
+function hasToolCard(msg) {
+	return Boolean(
+		msg?.toolResponse || (msg?.role === "assistant" && msg.toolCalls?.length),
+	);
 }
 
 export const domRenderer = new DOMRenderer("chatContainer");

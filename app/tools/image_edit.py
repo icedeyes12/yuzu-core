@@ -193,6 +193,7 @@ async def execute(arguments, **kwargs) -> dict[str, Any]:
         return ok_result(
             {
                 "image_path": f"/api/v1/static/generated_images/{filename}",
+                "prompt": prompt,
                 "original_path": image_path,
                 "image_html": f'<img src="/api/v1/static/generated_images/{filename}" alt="Edited Image">',
                 "model": image_model,
