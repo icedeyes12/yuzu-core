@@ -147,7 +147,7 @@ async def _resolve_configured_location_label(
                 "zoom": 10,
                 "addressdetails": 1,
             },
-            headers={"User-Agent": "yuzu-companion/4.1"},
+            headers={"User-Agent": "yuzu-companion/4.2"},
         )
         response.raise_for_status()
         result = response.json()
