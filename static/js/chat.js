@@ -20,7 +20,7 @@ import {
 // ==================== SESSION NAME LOADING ====================
 async function loadCurrentSessionName() {
 	try {
-		const response = await fetch("/api/profile", {
+		const response = await fetch("/api/v1/profile", {
 			headers: { Accept: "application/json" },
 		});
 		if (!response.ok)
@@ -66,7 +66,7 @@ async function initializeChat() {
 
 		let sessionId = urlSessionId;
 		if (!sessionId) {
-			const profileResponse = await fetch("/api/profile", {
+			const profileResponse = await fetch("/api/v1/profile", {
 				headers: { Accept: "application/json" },
 			});
 			if (!profileResponse.ok)

@@ -26,7 +26,18 @@ If you insist on actually installing this, go read [INSTALL.md](INSTALL.md) for 
 
 But honestly, just ask ChatGPT. It will explain it better.
 
----
+## Continuous integration
+
+GitHub Actions runs the sequential quality pipeline in `.github/workflows/ci.yml`:
+
+1. `ruff format --check .`
+2. `ruff check .`
+3. `python -m compileall .`
+4. JavaScript syntax checks for `static/**/*.js`
+5. `bunx biome check static/`
+6. `pytest`
+
+CodeQL runs separately for Python and JavaScript/TypeScript in `.github/workflows/codeql.yml`.
 
 ## For the 3 People Actually Reading This
 

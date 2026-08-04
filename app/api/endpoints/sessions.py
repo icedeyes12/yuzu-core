@@ -1,8 +1,16 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from app.api.models import (
+    ERROR_RESPONSES,
+    SessionHistoryResponse,
+    SessionListResponse,
+    SessionMutationResponse,
+)
 from app.api.utils import get_client_id, get_current_user
 from app.core.logging_config import get_logger
 from app.db import (
@@ -41,16 +49,58 @@ class SessionDeleteRequest(BaseModel):
     session_id: str = Field(..., min_length=1, description="Session ID to delete")
 
 
-@router.get("/chat_history")
+async def _delete_session(session_id: str, user_id: str):
+    try:
+        if not session_id:
+            raise HTTPException(status_code=400, detail="session_id required")
+        success = await delete_session_async(session_id, user_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Session not found")
+        active_session = await get_active_session_async(user_id)
+        chat_history = (
+            await get_chat_history_async(
+                str(active_session["id"]), limit=50, recent=True, user_id=user_id
+            )
+            if active_session
+            else []
+        )
+        return {
+            "status": "success",
+            "active_session": active_session,
+            "chat_history": chat_history,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("Error deleting session: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@router.post("/sessions/delete", include_in_schema=False)
+async def api_delete_session_legacy(
+    request: SessionDeleteRequest, user_id: str = Depends(get_current_user)
+):
+    return await _delete_session(request.session_id, user_id)
+
+
+@router.delete(
+    "/sessions/{session_id}",
+    response_model=SessionMutationResponse,
+    responses=ERROR_RESPONSES,
+)
+async def api_delete_session(session_id: str, user_id: str = Depends(get_current_user)):
+    return await _delete_session(session_id, user_id)
+
+
+@router.get(
+    "/chat_history", response_model=SessionHistoryResponse, responses=ERROR_RESPONSES
+)
 async def api_get_chat_history(
     session_id: str | None = None,
-    limit: int | None = 50,
+    limit: int = Query(default=50, ge=1, le=1000),
     user_id: str = Depends(get_current_user),
 ):
-    """Get chat history for a specific session or the active session.
-    Defaults to the 50 most recent messages to avoid loading massive histories.
-    Pass limit=0 to load all (use with caution on large sessions).
-    """
+    """Get bounded chat history for a specific or active session."""
     try:
         effective_limit = limit if limit and limit > 0 else None
         active_session = None
@@ -83,14 +133,24 @@ async def api_get_chat_history(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/chat_history/before")
+@router.get(
+    "/chat_history/before",
+    response_model=SessionHistoryResponse,
+    responses=ERROR_RESPONSES,
+)
 async def api_get_chat_history_before(
     session_id: str,
     before_ts: str,
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=200),
     user_id: str = Depends(get_current_user),
 ):
     """Paginated upward scroll: return messages older than before_ts for a session."""
+    try:
+        datetime.fromisoformat(before_ts.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="before_ts must be ISO 8601"
+        ) from exc
     try:
         if limit <= 0 or limit > 200:
             limit = 50
@@ -110,7 +170,9 @@ async def api_get_chat_history_before(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/sessions/list")
+@router.get(
+    "/sessions/list", response_model=SessionListResponse, responses=ERROR_RESPONSES
+)
 async def api_list_sessions(user_id: str = Depends(get_current_user)):
     try:
         sessions = await get_all_sessions_async(user_id)
@@ -120,7 +182,11 @@ async def api_list_sessions(user_id: str = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/sessions/create")
+@router.post(
+    "/sessions/create",
+    response_model=SessionMutationResponse,
+    responses=ERROR_RESPONSES,
+)
 async def api_create_session(
     http_request: Request,
     request: SessionCreateRequest,
@@ -141,7 +207,11 @@ async def api_create_session(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/sessions/switch")
+@router.post(
+    "/sessions/switch",
+    response_model=SessionMutationResponse,
+    responses=ERROR_RESPONSES,
+)
 async def api_switch_session(
     request: SessionSwitchRequest,
     http_request: Request,
@@ -180,7 +250,11 @@ async def api_switch_session(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/sessions/rename")
+@router.post(
+    "/sessions/rename",
+    response_model=SessionMutationResponse,
+    responses=ERROR_RESPONSES,
+)
 async def api_rename_session(
     request: SessionRenameRequest, user_id: str = Depends(get_current_user)
 ):
@@ -201,40 +275,9 @@ async def api_rename_session(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/sessions/delete")
-async def api_delete_session(
-    request: SessionDeleteRequest, user_id: str = Depends(get_current_user)
-):
-    try:
-        if not request.session_id:
-            raise HTTPException(status_code=400, detail="session_id required")
-
-        success = await delete_session_async(request.session_id, user_id)
-
-        if success:
-            active_session = await get_active_session_async(user_id)
-            if active_session:
-                chat_history = await get_chat_history_async(
-                    str(active_session["id"]), limit=50, recent=True, user_id=user_id
-                )
-            else:
-                chat_history = []
-
-            return {
-                "status": "success",
-                "active_session": active_session,
-                "chat_history": chat_history,
-            }
-        else:
-            raise HTTPException(status_code=404, detail="Session not found")
-    except HTTPException:
-        raise
-    except Exception as e:
-        log.error("Error deleting session: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.post("/clear_chat")
+@router.post(
+    "/clear_chat", response_model=SessionMutationResponse, responses=ERROR_RESPONSES
+)
 async def api_clear_chat(
     request: Request,
     session_id: str | None = None,
@@ -255,7 +298,9 @@ async def api_clear_chat(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/end_session")
+@router.post(
+    "/end_session", response_model=SessionMutationResponse, responses=ERROR_RESPONSES
+)
 async def api_end_session(request: Request, user_id: str = Depends(get_current_user)):
     try:
         client_id = get_client_id(request)

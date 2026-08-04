@@ -1,5 +1,6 @@
 import { createMessageElement } from "./messages.js";
 import { chatStore } from "./store.js";
+import { safeImagePath } from "./tool-renderer/dom-utils.js";
 import "./fence-components.js";
 import { patchContentContainer } from "./renderer/dom-patcher.js";
 import {
@@ -157,7 +158,9 @@ export class DOMRenderer {
 	}
 
 	_createMessageDOM(msg) {
-		const el = createMessageElement(msg.role, msg.content, msg.timestamp);
+		const el = createMessageElement(msg.role, msg.content, msg.timestamp, {
+			suppressCopy: hasToolCard(msg),
+		});
 		el.setAttribute("data-message-id", msg.id);
 		return el;
 	}
@@ -165,6 +168,11 @@ export class DOMRenderer {
 	_updateMessageDOM(el, msg) {
 		const contentContainer = el.querySelector(".message-content");
 		if (!contentContainer) return;
+		const shouldSuppressCopy = hasToolCard(msg);
+		const parentCopyButton = el.querySelector('[data-action="copy-message"]');
+		if (shouldSuppressCopy) {
+			parentCopyButton?.remove();
+		}
 		const messageHash = JSON.stringify([
 			msg.content || "",
 			msg.metadata?.isFrozen ?? false,
@@ -192,20 +200,8 @@ export class DOMRenderer {
 	}
 
 	_renderAttachment(att) {
-		let url = att.url || att.path;
+		const url = safeImagePath(att?.url || att?.path);
 		if (!url) return "";
-		if (att.path && !att.url) {
-			const normalizedPath = att.path.replace(/\\/g, "/");
-			const filename = normalizedPath.split("/").pop();
-			if (!filename || filename.includes("..")) return "";
-			const directory = normalizedPath.includes("generated_images")
-				? "generated_images"
-				: normalizedPath.includes("uploads")
-					? "uploads"
-					: null;
-			if (!directory) return "";
-			url = `/api/static/${directory}/${encodeURIComponent(filename)}`;
-		}
 		return `<img src="${escapeHtml(url)}" class="attachment-img" alt="Attachment" />`;
 	}
 
@@ -305,6 +301,12 @@ function escapeHtml(value) {
 		.replace(/>/g, "&gt;")
 		.replace(/"/g, "&quot;")
 		.replace(/'/g, "&#39;");
+}
+
+function hasToolCard(msg) {
+	return Boolean(
+		msg?.toolResponse || (msg?.role === "assistant" && msg.toolCalls?.length),
+	);
 }
 
 export const domRenderer = new DOMRenderer("chatContainer");

@@ -6,10 +6,22 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.api.utils import get_client_id, get_current_user
+from app.api.models import (
+    ERROR_RESPONSES,
+    MessageResponse,
+    OperationResponse,
+    StreamMetadata,
+)
+from app.api.rate_limits import acquire_active_user, rate_limit_user, release_active
+from app.api.utils import (
+    extract_keyrings,
+    get_client_id,
+    get_current_user,
+    release_stream_slot,
+    try_acquire_stream_slot,
+)
 from app.core.context import (
     MissingProviderKeyError,
-    RequestKeyring,
     clear_request_keyring,
     set_request_keyrings,
 )
@@ -22,59 +34,72 @@ log = get_logger(__name__)
 router = APIRouter(tags=["chat"])
 
 
-def _extract_keyrings(request: Request) -> dict[str, RequestKeyring] | None:
-    """Read the grouped client-side BYOK configuration from the request."""
-    import base64
-    import json
-    import urllib.parse
-
-    byok_header = request.headers.get("X-BYOK-Config")
-    if not byok_header:
-        return None
-
-    try:
-        raw_json = urllib.parse.unquote(base64.b64decode(byok_header).decode("utf-8"))
-        byok_config = json.loads(raw_json)
-        providers = byok_config.get("providers", byok_config)
-        if not isinstance(providers, dict):
-            return {}
-
-        keyrings = {}
-        for provider, cfg in providers.items():
-            if not isinstance(cfg, dict):
-                continue
-            keyrings[provider] = RequestKeyring(
-                provider=provider,
-                key=cfg.get("api_key"),
-                base_url=(
-                    cfg.get("base_url") if provider.startswith("custom") else None
-                ),
-                model_id=cfg.get("model_id"),
-            )
-        return keyrings
-    except Exception as e:
-        log.error("Failed to parse X-BYOK-Config header: %s", e)
-        return None
-
-
 class MessageRequest(BaseModel):
     message: str = Field(..., min_length=1, description="User message text")
     interface: str = Field(default="web", description="Interface source identifier")
 
 
-@router.post("/send_message")
+_ALLOWED_UPLOAD_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+_MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+_MAX_UPLOAD_COUNT = 3
+
+
+def _validate_uploads(images: list[UploadFile]) -> None:
+    if len(images) > _MAX_UPLOAD_COUNT:
+        raise HTTPException(
+            status_code=413, detail="A maximum of 3 images may be uploaded"
+        )
+    for image in images:
+        if not image or not image.filename:
+            raise HTTPException(
+                status_code=422, detail="Each upload must have a filename"
+            )
+        if image.content_type not in _ALLOWED_UPLOAD_TYPES:
+            raise HTTPException(
+                status_code=415,
+                detail="Only JPEG, PNG, WebP, and GIF images are accepted",
+            )
+        filename = image.filename.replace("\\", "/")
+        if "\x00" in filename or filename.rsplit("/", 1)[-1] != filename:
+            raise HTTPException(status_code=422, detail="Invalid upload filename")
+
+
+async def _validate_upload_sizes(images: list[UploadFile]) -> None:
+    _validate_uploads(images)
+    for image in images:
+        content = await image.read(_MAX_UPLOAD_BYTES + 1)
+        await image.seek(0)
+        if len(content) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413, detail="Each image must be 10 MB or smaller"
+            )
+
+
+@router.post(
+    "/send_message",
+    response_model=MessageResponse,
+    responses={
+        401: {"description": "Authentication required"},
+        424: {"description": "Provider key required"},
+        502: {"description": "AI provider failure"},
+    },
+)
 async def api_send_message(
     request: Request,
     payload: MessageRequest,
     user_id: str = Depends(get_current_user),
 ):
-    keyrings = _extract_keyrings(request)
+    rate_limit_user(user_id, 10, "send-message-user")
+    keyrings = extract_keyrings(request)
     if keyrings:
         set_request_keyrings(keyrings)
+    active_acquired = False
     try:
+        acquire_active_user(user_id, 1, "send-message-active")
+        active_acquired = True
         user_message = payload.message.strip()
         if not user_message:
-            return {"reply": "Please type a message!"}
+            return MessageResponse(reply="Please type a message!")
 
         interface = payload.interface
         log.info("[%s] message: %s...", interface, user_message[:200])
@@ -84,7 +109,7 @@ async def api_send_message(
         )
 
         log.info("AI reply: %s", ai_reply)
-        return {"reply": ai_reply}
+        return MessageResponse(reply=ai_reply)
 
     except MissingProviderKeyError as e:
         log.warning("Missing provider key: %s", e)
@@ -96,15 +121,29 @@ async def api_send_message(
                 else f"No API key for {e.provider}. Set your key in Settings → Provider Keys."
             ),
         )
+    except HTTPException:
+        raise
     except Exception as e:
         log.error("Error in api_send_message: %s", type(e).__name__)
-        return {"reply": "Sorry, I encountered an error processing your message."}
+        raise HTTPException(
+            status_code=502,
+            detail="The AI provider failed to process the message",
+        ) from e
     finally:
+        if active_acquired:
+            release_active(user_id, "send-message-active")
         if keyrings:
             clear_request_keyring()
 
 
-@router.post("/send_message_stream")
+@router.post(
+    "/send_message_stream",
+    response_model=None,
+    responses={
+        200: {"description": "Server-sent events"},
+        **ERROR_RESPONSES,
+    },
+)
 async def api_send_message_stream(
     request: Request,
     message: str | None = Form(None),
@@ -113,7 +152,17 @@ async def api_send_message_stream(
     user_id: str = Depends(get_current_user),
 ):
     """Unified streaming endpoint for text and images."""
+    acquired = False
     try:
+        rate_limit_user(user_id, 10, "send-message-stream-user")
+        if not try_acquire_stream_slot(user_id):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many active streams for this user",
+                headers={"Retry-After": "5"},
+            )
+        acquired = True
+
         # Support both JSON (legacy/simple) and Form (unified/images)
         if request.headers.get("content-type", "").startswith("application/json"):
             try:
@@ -134,7 +183,8 @@ async def api_send_message_stream(
 
         log.info("[%s] streaming unified message: %s...", interface, user_message[:200])
 
-        keyrings = _extract_keyrings(request)
+        await _validate_upload_sizes(images)
+        keyrings = extract_keyrings(request)
 
         async def _keyring_scoped_stream():
             if keyrings:
@@ -164,50 +214,93 @@ async def api_send_message_stream(
                 )
                 yield f"data: {payload}\n\n"
             finally:
+                release_stream_slot(user_id)
                 if keyrings:
                     clear_request_keyring()
 
         return StreamingResponse(
             _keyring_scoped_stream(),
             media_type="text/event-stream",
+            headers={
+                "X-Stream-Heartbeat-Seconds": str(
+                    StreamMetadata().heartbeat_interval_seconds
+                ),
+                "X-Stream-Idle-Timeout-Seconds": str(
+                    StreamMetadata().idle_timeout_seconds
+                ),
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
         )
 
     except Exception as e:
+        if acquired:
+            release_stream_slot(user_id)
         log.error("Error in unified streaming: %s - %s", type(e).__name__, e)
 
         async def generate_error():
             yield 'data: {"type":"error","message":"Sorry, I encountered an error processing your message."}\n\n'
 
-        return StreamingResponse(generate_error(), media_type="text/event-stream")
+        return StreamingResponse(
+            generate_error(),
+            media_type="text/event-stream",
+            headers={
+                "X-Stream-Heartbeat-Seconds": str(
+                    StreamMetadata().heartbeat_interval_seconds
+                ),
+                "X-Stream-Idle-Timeout-Seconds": str(
+                    StreamMetadata().idle_timeout_seconds
+                ),
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
 
-@router.post("/generate_image")
+@router.post(
+    "/generate_image",
+    include_in_schema=False,
+    response_model=MessageResponse,
+    responses=ERROR_RESPONSES,
+)
 async def api_generate_image(
     request: Request,
     payload: MessageRequest,
     user_id: str = Depends(get_current_user),
 ):
-    keyrings = _extract_keyrings(request)
+    rate_limit_user(user_id, 3, "generate-image-user")
+    keyrings = extract_keyrings(request)
     if keyrings:
         set_request_keyrings(keyrings)
     try:
         prompt = payload.message.strip()
         if not prompt:
-            return {"reply": "Prompt required", "status": "error"}
+            return MessageResponse(reply="Prompt required", status="error")
 
         ai_reply = await ConversationService.process_user_message_async(
             f"/imagine {prompt}", interface="web", user_id=user_id
         )
-        return {"reply": ai_reply, "status": "success"}
+        return MessageResponse(reply=ai_reply, status="success")
+    except MissingProviderKeyError as e:
+        raise HTTPException(
+            status_code=424, detail=f"No API key for {e.provider}"
+        ) from e
     except Exception as e:
         log.error("Error generating image: %s", type(e).__name__)
-        return {"reply": "Failed to generate image", "status": "error"}
+        raise HTTPException(status_code=502, detail="Image generation failed") from e
     finally:
         if keyrings:
             clear_request_keyring()
 
 
-@router.post("/browser_unload")
+@router.post(
+    "/browser_unload",
+    include_in_schema=False,
+    response_model=OperationResponse,
+    responses=ERROR_RESPONSES,
+)
 async def api_browser_unload(
     request: Request, user_id: str = Depends(get_current_user)
 ):

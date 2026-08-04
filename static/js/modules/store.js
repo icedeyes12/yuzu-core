@@ -38,7 +38,7 @@ export class ConversationStore {
 	}
 
 	/**
-	 * Load full history (usually from /api/chat_history).
+	 * Load full history (usually from /api/v1/chat_history).
 	 * Replaces current state.
 	 * @param {string} sessionId
 	 * @param {Array} history

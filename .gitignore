@@ -1,62 +1,95 @@
-# Python
+# --- Environment & Secrets ---
+*.env
+*.key
+*.p12
+*.pem
+*.pfx
+.env.*
+.netrc
+.pgpass
+!.env.example
+
+# --- Python & Virtual Environments ---
+*$py.class
+*.py[cod]
+.venv/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Virtual env
+env/
 venv/
-.env/
 
-# SQLite
+# --- Dependencies & Package Managers ---
+.pnp.*
+.pnp/
+node_modules/
+
+# --- Build Outputs ---
+*.egg
+*.egg-info/
+*.whl
+build/
+dist/
+pip-wheel-metadata/
+
+# --- IDE & AI Tooling ---
+.aider*
+.gemini/
+.hermes/
+.idea/
+.vscode/
+copilot/
+
+# --- OS & Editor Temp Files ---
+*.pid
+*.swo
+*.swp
+*.temp
+*.tmp
+*~
+._*
+.DS_Store
+Desktop.ini
+Thumbs.db
+
+# --- Logs & Database ---
+*.backup
+*.bak
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
+*.decay_state.json
+*.dump
+*.log
 *.sqlite
+*.sqlite-shm
+*.sqlite-wal
 *.sqlite3
-
-# Backup & logs
+.yuzuki/
 backup/
 database_backups/
 debug_logs/
-*.log
-*.decay_state.json
 
-# Runtime generated assets
+# --- Test & Tool Caches ---
+.coverage
+.coverage.*
+.mutmut-cache/
+.pytest_cache/
+.ruff_cache/
+coverage.xml
+htmlcov/
+mutants/
+
+# --- Runtime Generated Assets ---
 app/static/
-static/uploads/
+static/generated/
 static/generated_images/
 static/image_cache/
-static/generated/
 static/media/
+static/uploads/
 
-# Secrets
-*.key
-*.env
-
-# OS
-.DS_Store
-Thumbs.db
-.pytest_cache/
-
-# tool artifacts
-tools/static/
-node_modules/
-app/schemas/
-
-
-copilot/
-.aider*
-*.tar
+# --- Archives & Compressed Files ---
 *.gz
+*.tar
 
-# Migration checkpoints
+# --- Migration & Runtime Checkpoints ---
 *_checkpoint.json
-
-
-*.sql
-
-# Python build artifacts
-*.egg-info/
-__pycache__/
-*.pyc
-.gemini/

@@ -22,13 +22,13 @@
       <p class="login-subtitle">Sign in to continue</p>
 
       <div class="login-buttons" role="group" aria-label="Sign-in options">
-        <a href="/api/auth/login?provider=google"
+        <a href="/api/v1/auth/login?provider=google"
            class="login-btn btn-google"
            aria-label="Sign in with Google">
           <img src="{{ url_for('static', path='assets/logos/providers/google.svg') }}" width="20" height="20" alt="" aria-hidden="true">
           Sign in with Google
         </a>
-        <a href="/api/auth/login?provider=github"
+        <a href="/api/v1/auth/login?provider=github"
            class="login-btn btn-github"
            aria-label="Sign in with GitHub">
           <img src="{{ url_for('static', path='assets/logos/providers/github.svg') }}" width="20" height="20" alt="" aria-hidden="true">
