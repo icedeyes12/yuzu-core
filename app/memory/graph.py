@@ -169,7 +169,16 @@ class GraphMemoryRepository:
         async with AsyncPgSession() as session:
             archived = await session.execute_returning(
                 SQL_GRAPH_NODE_ARCHIVE,
-                (canonical_node_id, node_id, user_id),
+                (
+                    user_id,
+                    canonical_node_id,
+                    node_id,
+                    canonical_node_id,
+                    node_id,
+                    user_id,
+                    canonical_node_id,
+                    node_id,
+                ),
             )
             if not archived:
                 return False

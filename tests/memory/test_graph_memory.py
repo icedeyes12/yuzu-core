@@ -6,6 +6,7 @@ from app.db.queries import (
     SCHEMA_DDL,
     SQL_GRAPH_EDGE_UPSERT,
     SQL_GRAPH_EVIDENCE_INSERT,
+    SQL_GRAPH_NODE_ARCHIVE,
     SQL_GRAPH_NODE_EXPAND,
     SQL_GRAPH_NODE_SEARCH_TEXT,
 )
@@ -28,6 +29,12 @@ def test_graph_queries_require_tenant_scope():
         in SQL_GRAPH_EDGE_UPSERT
     )
     assert "user_id" in SQL_GRAPH_EVIDENCE_INSERT
+
+
+def test_graph_archive_locks_canonical_and_candidate():
+    assert "ORDER BY id" in SQL_GRAPH_NODE_ARCHIVE
+    assert "FOR UPDATE" in SQL_GRAPH_NODE_ARCHIVE
+    assert SQL_GRAPH_NODE_ARCHIVE.count("status = 'active'") >= 3
 
 
 @pytest.mark.asyncio

@@ -481,11 +481,29 @@ LIMIT %s
 """
 
 SQL_GRAPH_NODE_ARCHIVE = """
-UPDATE memory_nodes
+WITH locked_nodes AS (
+    SELECT id, status
+    FROM memory_nodes
+    WHERE user_id = %s AND id IN (%s, %s)
+    ORDER BY id
+    FOR UPDATE
+)
+UPDATE memory_nodes AS candidate
 SET status = 'archived', valid_until = NOW(), supersedes_node_id = %s,
     updated_at = NOW()
-WHERE id = %s AND user_id = %s AND status = 'active' AND valid_until IS NULL
-RETURNING id
+WHERE candidate.id = %s
+  AND candidate.user_id = %s
+  AND candidate.status = 'active'
+  AND candidate.valid_until IS NULL
+  AND EXISTS (
+      SELECT 1 FROM locked_nodes
+      WHERE id = %s AND status = 'active'
+  )
+  AND EXISTS (
+      SELECT 1 FROM locked_nodes
+      WHERE id = %s AND status = 'active'
+  )
+RETURNING candidate.id
 """
 
 SQL_GRAPH_EVIDENCE_REASSIGN = """
