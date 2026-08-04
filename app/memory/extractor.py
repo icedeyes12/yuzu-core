@@ -11,6 +11,8 @@ __all__ = [
     "extract_batch_async",
     "normalize_extraction",
     "build_extraction_prompt",
+    "estimate_message_tokens",
+    "build_adaptive_batches",
 ]
 
 
@@ -78,6 +80,32 @@ _EXTRACTION_SCHEMA = {
 
 _EXTRACTION_SYSTEM_PROMPT = """Extract durable inferred memory from one conversation batch.
 Return one JSON object only with keys episodes and claims. Episodes are concise summaries of meaningful interactions. Claims are objective, user-specific facts that may remain useful across sessions. Do not extract assistant behavior, temporary task state, instructions, roleplay, emotional performance, or facts about the assistant. Do not invent. Every claim needs a contiguous message-index evidence range directly supporting it. Global Knowledge and application configuration are never memory claims. Prefer no claim over a weak inference."""
+
+_CHARS_PER_TOKEN = 4
+
+
+def estimate_message_tokens(message: dict[str, Any]) -> int:
+    """Cheap conservative estimate; avoids sending an unbounded backlog."""
+    return max(1, (len(_content_text(message)) + 3) // _CHARS_PER_TOKEN) + 8
+
+
+def build_adaptive_batches(
+    messages: list[dict[str, Any]], *, token_budget: int = 6000, max_messages: int = 100
+) -> list[list[dict[str, Any]]]:
+    """Split chronological messages on a token budget, keeping turns intact when possible."""
+    batches: list[list[dict[str, Any]]] = []
+    current: list[dict[str, Any]] = []
+    current_tokens = 0
+    for message in messages:
+        cost = estimate_message_tokens(message)
+        if current and (current_tokens + cost > token_budget or len(current) >= max_messages):
+            batches.append(current)
+            current, current_tokens = [], 0
+        current.append(message)
+        current_tokens += cost
+    if current:
+        batches.append(current)
+    return batches
 
 
 def _content_text(message: dict[str, Any]) -> str:

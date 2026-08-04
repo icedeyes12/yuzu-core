@@ -33,7 +33,7 @@ from app.db import (
     update_pipeline_state_async,
 )
 from app.memory.embedder import embed_text_async
-from app.memory.extractor import extract_batch_async
+from app.memory.extractor import build_adaptive_batches, estimate_message_tokens, extract_batch_async
 from app.memory.graph import GraphMemoryRepository
 
 __all__ = [
@@ -52,6 +52,9 @@ WINDOW_BASE = 40
 IDLE_WINDOW_BASE = 20
 IDLE_GATE_HOURS = 3.0
 BATCH_SIZE = 100
+MESSAGE_FETCH_LIMIT = 512
+EXTRACTION_TOKEN_BUDGET = 6000
+MAX_EXTRACTION_RETRIES = 3
 MAX_BATCHES_PER_WORKER = 5
 MAX_WORKER_RUNTIME_SECONDS = 300.0
 
@@ -184,7 +187,7 @@ async def should_trigger_segmentation_async(
         messages_after = await get_session_messages_after_id_async(
             session_id,
             last_message_id or "00000000-0000-0000-0000-000000000000",
-            limit=10000,
+            limit=MESSAGE_FETCH_LIMIT,
             user_id=user_id or "",
         )
         delta = sum(
@@ -290,7 +293,7 @@ async def run_memory_pipeline_async(
         if last_message_id:
             try:
                 all_messages = await get_session_messages_after_id_async(
-                    session_id, last_message_id, limit=10000, user_id=user_id
+                    session_id, last_message_id, limit=MESSAGE_FETCH_LIMIT, user_id=user_id
                 )
                 unsegmented = [
                     m for m in all_messages if m.get("role") in ("user", "assistant")
@@ -301,7 +304,7 @@ async def run_memory_pipeline_async(
                 )
                 # Fallback
                 all_messages = await get_session_messages_async(
-                    session_id, limit=10000, user_id=user_id
+                    session_id, limit=MESSAGE_FETCH_LIMIT, user_id=user_id
                 )
                 conversation_messages = [
                     m for m in all_messages if m.get("role") in ("user", "assistant")
@@ -310,7 +313,7 @@ async def run_memory_pipeline_async(
         else:
             # Initial state: use count-based
             all_messages = await get_session_messages_async(
-                session_id, limit=10000, user_id=user_id
+                session_id, limit=MESSAGE_FETCH_LIMIT, user_id=user_id
             )
             conversation_messages = [
                 m for m in all_messages if m.get("role") in ("user", "assistant")
@@ -330,15 +333,23 @@ async def run_memory_pipeline_async(
         unsegmented_count = len(unsegmented)
 
         original_unsegmented_count = unsegmented_count
-        if unsegmented_count > BATCH_SIZE:
-            logger.info(
-                "Session %s has %s messages; processing one worker batch of %s",
-                session_id,
-                unsegmented_count,
-                BATCH_SIZE,
-            )
-            unsegmented = unsegmented[:BATCH_SIZE]
-            unsegmented_count = BATCH_SIZE
+        batches = build_adaptive_batches(
+            unsegmented,
+            token_budget=EXTRACTION_TOKEN_BUDGET,
+            max_messages=BATCH_SIZE,
+        )
+        unsegmented = batches[0]
+        unsegmented_count = len(unsegmented)
+        estimated_tokens = sum(estimate_message_tokens(message) for message in unsegmented)
+        logger.info(
+            "memory batch session=%s messages=%s/%s tokens=%s range=%s..%s",
+            session_id,
+            unsegmented_count,
+            original_unsegmented_count,
+            estimated_tokens,
+            unsegmented[0].get("id") if unsegmented else None,
+            unsegmented[-1].get("id") if unsegmented else None,
+        )
 
         # Track how many we're actually processing
         processed_count = unsegmented_count
@@ -353,7 +364,43 @@ async def run_memory_pipeline_async(
                 "processed_messages": 0,
             }
 
-        extracted = await extract_memory_batch_async(unsegmented, profile=profile)
+        extracted = None
+        retry_batch = unsegmented
+        for retry_count in range(MAX_EXTRACTION_RETRIES):
+            started = time.monotonic()
+            try:
+                extracted = await extract_memory_batch_async(retry_batch, profile=profile)
+                logger.info(
+                    "memory extraction session=%s retry=%s elapsed_ms=%s extracted=%s/%s",
+                    session_id,
+                    retry_count,
+                    int((time.monotonic() - started) * 1000),
+                    len(extracted.get("episodes", [])),
+                    len(extracted.get("claims", [])),
+                )
+                unsegmented = retry_batch
+                break
+            except Exception as exc:
+                if retry_count + 1 >= MAX_EXTRACTION_RETRIES:
+                    logger.error(
+                        "memory extraction skipped session=%s retries=%s tokens=%s error=%s",
+                        session_id,
+                        retry_count + 1,
+                        sum(estimate_message_tokens(m) for m in retry_batch),
+                        type(exc).__name__,
+                    )
+                    return {"episodes": 0, "claims": 0, "llm_calls": retry_count + 1}
+                midpoint = max(1, len(retry_batch) // 2)
+                retry_batch = retry_batch[:midpoint]
+                logger.warning(
+                    "memory extraction retry session=%s retry=%s reduced_messages=%s error=%s",
+                    session_id,
+                    retry_count + 1,
+                    len(retry_batch),
+                    type(exc).__name__,
+                )
+        if extracted is None:
+            return {"episodes": 0, "claims": 0, "llm_calls": MAX_EXTRACTION_RETRIES}
         if not extracted["episodes"] and not extracted["claims"]:
             logger.debug("No durable memory extracted")
             if unsegmented:

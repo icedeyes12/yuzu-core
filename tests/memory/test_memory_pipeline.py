@@ -31,6 +31,14 @@ def test_vector_literal():
     assert vector_literal([0.1, 0.2]) == "[0.1,0.2]"
 
 
+def test_adaptive_batches_respect_token_budget():
+    from app.memory.extractor import build_adaptive_batches
+
+    messages = [{"role": "user", "content": "x" * 40}] * 5
+    batches = build_adaptive_batches(messages, token_budget=20, max_messages=100)
+    assert [len(batch) for batch in batches] == [1, 1, 1, 1, 1]
+
+
 def test_pipeline_fence_sql_is_atomic_and_tenant_scoped():
     assert "UPDATE chat_sessions" in SQL_PIPELINE_STATE_CLAIM
     assert "WHERE id = %s" in SQL_PIPELINE_STATE_CLAIM

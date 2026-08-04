@@ -136,7 +136,7 @@ async def retrieve_memory_async(
     session_id: str, query: str | None = None, user_id: str | None = None
 ) -> dict[str, Any]:
     static, dynamic = await retrieve_memories_combined_async(
-        session_id, query=query, static_limit=15, dynamic_limit=10, user_id=user_id
+        session_id, query=query, static_limit=8, dynamic_limit=4, user_id=user_id
     )
     return {"static": static, "dynamic": dynamic, "temporal_messages": []}
 
