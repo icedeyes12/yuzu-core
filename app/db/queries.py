@@ -746,7 +746,12 @@ SQL_SESSION_DEACTIVATE_FOR_USER = "UPDATE chat_sessions SET is_active = FALSE WH
 
 SQL_SESSION_ACTIVATE_ONE_SCOPED = "UPDATE chat_sessions SET is_active = TRUE, updated_at = %s WHERE id = %s AND user_id = %s AND deleted_at IS NULL RETURNING id"
 
-SQL_SESSION_RENAME_SCOPED = "UPDATE chat_sessions SET name = %s, updated_at = %s WHERE id = %s AND user_id = %s AND deleted_at IS NULL"
+SQL_SESSION_RENAME_SCOPED = """
+UPDATE chat_sessions
+SET name = %s, updated_at = %s
+WHERE id = %s AND user_id = %s AND deleted_at IS NULL
+RETURNING id
+"""
 
 SQL_SESSION_RENAME_PLACEHOLDER_SCOPED = """
 UPDATE chat_sessions

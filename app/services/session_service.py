@@ -116,7 +116,9 @@ class SessionService:
         if session_name not in (None, "", "New Chat"):
             return
 
-        msg_count = await Database.get_session_messages_count(session_id)
+        msg_count = await Database.get_session_messages_count(
+            session_id, user_id=user_id
+        )
         if msg_count < SessionService._AUTO_NAME_TRIGGER_COUNT:
             log.debug(
                 "auto_name: session %s has %d/%d messages, skipping",
@@ -142,11 +144,14 @@ class SessionService:
             )
             return
 
-        renamed = await Database.rename_session_if_placeholder(
-            session_id, name, user_id
-        )
+        renamed = await Database.rename_session_if_placeholder(session_id, name, user_id)
         if renamed:
             log.info("auto_name: renamed session %s to '%s'", session_id, name)
+        else:
+            log.info(
+                "auto_name: placeholder no longer available session=%s",
+                session_id,
+            )
 
     @staticmethod
     async def _auto_name_with_llm(
@@ -159,7 +164,9 @@ class SessionService:
         elif not configured.get("preferred_provider") or not configured.get("preferred_model"):
             return None
 
-        history = await Database.get_chat_history(session_id, limit=10, user_id=user_id)
+        history = await Database.get_chat_history(
+            session_id, limit=10, recent=True, user_id=user_id
+        )
         if not history:
             return None
 

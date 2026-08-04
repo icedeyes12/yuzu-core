@@ -228,11 +228,11 @@ async def switch_session_async(session_id: str, user_id: str) -> bool:
 
 async def rename_session_async(session_id: str, new_name: str, user_id: str) -> bool:
     try:
-        await pg_execute_async(
+        row = await pg_fetchone_async(
             SQL_SESSION_RENAME_SCOPED,
             (new_name, datetime.now(), session_id, user_id),
         )
-        return True
+        return row is not None
     except Exception as e:  # noqa: BLE001
         log.error("rename_session_async failed: %s", e)
         return False

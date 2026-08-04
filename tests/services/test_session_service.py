@@ -112,3 +112,41 @@ async def test_session_title_skips_without_portal_or_active_provider(monkeypatch
         clear_request_keyring()
 
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_auto_name_uses_tenant_scoped_count_and_atomic_rename(monkeypatch):
+    calls = []
+
+    async def count(session_id, *, user_id):
+        calls.append(("count", session_id, user_id))
+        return 10
+
+    async def profile(_user_id):
+        return {"providers_config": {}}
+
+    async def title(*_args, **_kwargs):
+        return "Stable title"
+
+    async def rename(session_id, name, user_id):
+        calls.append(("rename", session_id, name, user_id))
+        return True
+
+    monkeypatch.setattr(SessionService, "_auto_name_with_llm", title)
+    monkeypatch.setattr(SessionService, "_auto_name_from_history", title)
+    monkeypatch.setattr("app.services.session_service.Database.get_profile", profile)
+    monkeypatch.setattr(
+        "app.services.session_service.Database.get_session_messages_count", count
+    )
+    monkeypatch.setattr(
+        "app.services.session_service.Database.rename_session_if_placeholder", rename
+    )
+
+    await SessionService.auto_name_session_if_needed_async(
+        "session", {"name": "New Chat"}, user_id="user"
+    )
+
+    assert calls == [
+        ("count", "session", "user"),
+        ("rename", "session", "Stable title", "user"),
+    ]
