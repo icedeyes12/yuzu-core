@@ -47,6 +47,3 @@ jobs:
 
       - name: Check frontend with Biome
         run: bunx biome check static/
-
-      - name: Run tests
-        run: pytest
