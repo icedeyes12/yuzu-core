@@ -31,11 +31,12 @@ dependencies = [
 [project.scripts]
 yuzu = "cli.app:main"
 yuzu-server = "main:app"
+yuzu-validate = "scripts.remote_validation:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["app*", "cli*"]
-exclude = ["tests*", "scripts*"]
+include = ["app*", "cli*", "scripts*"]
+exclude = ["tests*"]
 
 [tool.ruff]
 target-version = "py312"
