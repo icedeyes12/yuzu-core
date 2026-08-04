@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yuzu-companion"
-version = "4.0.0"
+version = "4.1.0"
 description = "AI companion system with memory, multimodal, and multi-provider support"
 readme = "README.md"
 license = {text = "MIT"}
@@ -26,6 +26,7 @@ dependencies = [
     "prompt-toolkit>=3.0.0",
     "requests>=2.33.0",
     "httpx>=0.27.0",
+    "httpx2>=2.0.0",
 ]
 
 [project.scripts]
@@ -34,8 +35,8 @@ yuzu-server = "main:app"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["app*", "cli*"]
-exclude = ["tests*", "scripts*"]
+include = ["app*", "cli*", "scripts*"]
+exclude = ["tests*"]
 
 [tool.ruff]
 target-version = "py312"
@@ -57,8 +58,21 @@ ignore = [
 quote-style = "double"
 indent-style = "space"
 
-[tool.basedpyright]
-reportUnknownMemberType = "none"
-reportUnknownArgumentType = "none"
-reportUnknownVariableType = "none"
-reportAny = "none"
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+asyncio_mode = "auto"
+markers = [
+    "unit: isolated tests with fakes or mocks",
+    "contract: public API, schema, and serialization contracts",
+    "integration: tests using multiple real application components",
+    "db: tests requiring a real PostgreSQL database",
+    "e2e: end-to-end tests across process boundaries",
+    "slow: tests that are intentionally slower or network-dependent",
+    "regression: tests preserving a previously fixed behavior",
+]
+
+[tool.mutmut]
+source_paths = ["app/api", "app/core", "app/services", "app/tools"]
+test_command = "pytest -q -m 'unit or contract'"

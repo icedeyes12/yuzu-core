@@ -118,7 +118,7 @@ class SessionService:
         msg_count = await Database.get_session_messages_count(session_id)
         if msg_count < SessionService._AUTO_NAME_TRIGGER_COUNT:
             log.debug(
-                "auto_name: session %d has %d/%d messages, skipping",
+                "auto_name: session %s has %d/%d messages, skipping",
                 session_id,
                 msg_count,
                 SessionService._AUTO_NAME_TRIGGER_COUNT,
@@ -130,7 +130,7 @@ class SessionService:
             name = await SessionService._auto_name_from_history(session_id, user_id)
             if not name:
                 log.warning(
-                    "auto_name: history fallback failed for session %d", session_id
+                    "auto_name: history fallback failed for session %s", session_id
                 )
         if not name:
             log.info(
@@ -142,7 +142,7 @@ class SessionService:
             session_id, name, user_id
         )
         if renamed:
-            log.info("auto_name: renamed session %d to '%s'", session_id, name)
+            log.info("auto_name: renamed session %s to '%s'", session_id, name)
 
     @staticmethod
     def generate_connection_msg(

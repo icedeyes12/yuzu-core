@@ -196,7 +196,7 @@ export class MultimodalManager {
 				formData.append("images", blob);
 			});
 
-			const response = await fetch("/api/send_message_stream", {
+			const response = await fetch("/api/v1/send_message_stream", {
 				method: "POST",
 				headers: { Accept: "text/event-stream" },
 				body: formData,

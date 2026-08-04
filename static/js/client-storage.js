@@ -9,6 +9,12 @@ export const USER_THEME_STORAGE_KEY = storageNamespace
 	: "";
 export const DEFAULT_YUZU_PORTAL_BASE_URL = "http://localhost:20128/v1";
 
+export function maskApiKey(value) {
+	if (typeof value !== "string" || !value) return "";
+	if (value.length <= 8) return "*".repeat(value.length);
+	return `${value.slice(0, 8)}...${value.slice(-4)}`;
+}
+
 export function getUserStorageKey(suffix) {
 	return storageNamespace ? `${storageNamespace}_${suffix}` : "";
 }

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.api.utils import get_current_user
+from app.api.models import ERROR_RESPONSES, MemoryResponse
+from app.api.rate_limits import acquire_active_user, rate_limit_user, release_active
+from app.api.utils import extract_keyrings, get_current_user
 from app.core.logging_config import get_logger
 from app.db import Database
 from app.services.memory_service import MemoryService
@@ -13,15 +15,23 @@ log = get_logger(__name__)
 router = APIRouter(tags=["memory"])
 
 
-@router.post("/rebuild_structured_memory")
+@router.post(
+    "/rebuild_structured_memory",
+    include_in_schema=False,
+    response_model=MemoryResponse,
+    responses=ERROR_RESPONSES,
+)
 async def api_rebuild_structured_memory(
     request: Request, user_id: str = Depends(get_current_user)
 ):
     """Rebuild structured memory for the active session."""
-    from app.api.endpoints.chat import _extract_keyrings
+    rate_limit_user(user_id, 1, "memory-rebuild-user")
     from app.core.context import clear_request_keyring, set_request_keyrings
 
-    keyrings = _extract_keyrings(request)
+    keyrings = extract_keyrings(request)
+    active_acquired = False
+    acquire_active_user(user_id, 1, "memory-rebuild-active")
+    active_acquired = True
     if keyrings:
         set_request_keyrings(keyrings)
     try:
@@ -44,11 +54,18 @@ async def api_rebuild_structured_memory(
         log.error("Error rebuilding structured memory: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
     finally:
+        if active_acquired:
+            release_active(user_id, "memory-rebuild-active")
         if keyrings:
             clear_request_keyring()
 
 
-@router.get("/memory_stats")
+@router.get(
+    "/memory_stats",
+    include_in_schema=False,
+    response_model=MemoryResponse,
+    responses=ERROR_RESPONSES,
+)
 async def api_memory_stats(user_id: str = Depends(get_current_user)):
     """Return graph-memory counts for the current tenant."""
     try:

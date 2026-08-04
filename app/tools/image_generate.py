@@ -80,7 +80,8 @@ async def execute(arguments, **kwargs):
 
     return ok_result(
         {
-            "image_path": f"/static/generated_images/{filename}",
+            "image_path": f"/api/v1/static/generated_images/{filename}",
+            "prompt": prompt,
             "model": model,
             "provider": provider,
         },

@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt ruff
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Check Python formatting
+        run: ruff format --check .
+
+      - name: Check Python lint
+        run: ruff check .
+
+      - name: Compile tracked Python sources
+        run: git ls-files -z -- '*.py' | while IFS= read -r -d '' file; do test -f "$file" && python -m py_compile "$file"; done
+
+      - name: Check JavaScript syntax
+        run: find static -type f -name '*.js' -exec node --check {} +
+
+      - name: Check frontend with Biome
+        run: bunx biome check static/

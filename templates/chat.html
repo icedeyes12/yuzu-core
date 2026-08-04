@@ -20,12 +20,12 @@
   <link rel="stylesheet" href="{{ url_for('static', path='css/components/code-blocks.css') }}">
 
   <!-- Highlight.js CSS -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/tomorrow-night-blue.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', path='vendor/highlight.js/tomorrow-night-blue.min.css') }}">
 
   <!-- KaTeX for LaTeX rendering -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', path='vendor/katex/katex.min.css') }}">
+  <script src="{{ url_for('static', path='vendor/katex/katex.min.js') }}"></script>
+  <script src="{{ url_for('static', path='vendor/katex/auto-render.min.js') }}"></script>
   <script>
     (() => {
       const userId = document.querySelector('meta[name="user-id"]')?.content || "";
@@ -87,18 +87,18 @@
     </form>
   </div>
 
-  <!-- Load marked.js v18.0.2 for markdown rendering -->
-  <script src="https://cdn.jsdelivr.net/npm/marked@18.0.2/lib/marked.umd.js"></script>
+  <!-- Load marked.js v18.0.7 for markdown rendering -->
+  <script src="{{ url_for('static', path='vendor/marked/marked.umd.js') }}"></script>
   
   <!-- Load Mermaid.js v11.4.0 for diagram rendering -->
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.min.js"></script>
+  <script src="{{ url_for('static', path='vendor/mermaid/mermaid.min.js') }}"></script>
 
   <!-- Load Highlight.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/python.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/javascript.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/bash.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/json.min.js"></script>
+  <script src="{{ url_for('static', path='vendor/highlight.js/highlight.min.js') }}"></script>
+  <script src="{{ url_for('static', path='vendor/highlight.js/languages/python.min.js') }}"></script>
+  <script src="{{ url_for('static', path='vendor/highlight.js/languages/javascript.min.js') }}"></script>
+  <script src="{{ url_for('static', path='vendor/highlight.js/languages/bash.min.js') }}"></script>
+  <script src="{{ url_for('static', path='vendor/highlight.js/languages/json.min.js') }}"></script>
 
   <script type="module" src="{{ url_for('static', path='js/chat.js') }}"></script>
 </body>

@@ -931,6 +931,16 @@ SQL_MESSAGE_UPDATE_DECRYPTED = (
 )
 
 
+def _iso_timestamp(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat(timespec="milliseconds") + (
+            "Z" if value.tzinfo is None else ""
+        )
+    return str(value)
+
+
 def parse_message_row(row: DBRow) -> DBRow:
     """Convert a raw messages row into the public dict shape."""
     return {
@@ -944,7 +954,7 @@ def parse_message_row(row: DBRow) -> DBRow:
         "tool_calls": parse_json(row.get("tool_calls", "null")),
         "tool_call_id": row.get("tool_call_id"),
         "turn_id": row.get("turn_id"),
-        "timestamp": str(row.get("timestamp", "")),
+        "timestamp": _iso_timestamp(row.get("timestamp")),
     }
 
 
@@ -952,7 +962,7 @@ def parse_event_row(row: DBRow) -> DBRow:
     """Convert a raw event row (system messages list)."""
     return {
         "content": row.get("content", ""),
-        "timestamp": str(row.get("timestamp", "")),
+        "timestamp": _iso_timestamp(row.get("timestamp")),
     }
 
 

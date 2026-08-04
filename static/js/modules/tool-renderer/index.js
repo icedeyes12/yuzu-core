@@ -1,3 +1,8 @@
+import {
+	imageToolCardCapability,
+	noCopyToolCardCapability,
+	terminalToolCardCapability,
+} from "./capabilities.js";
 import { renderGenericCard } from "./cards/generic.js";
 import { renderImageCard } from "./cards/image.js";
 import { renderTerminalCard } from "./cards/terminal.js";
@@ -5,32 +10,56 @@ import { renderWeatherCard } from "./cards/weather.js";
 import { canonicalToolName, parseToolResult } from "./schemas.js";
 
 const TOOL_RENDERERS = {
-	exec: renderTerminalCard,
-	image: renderImageCard,
-	weather: renderWeatherCard,
+	exec: {
+		render: renderTerminalCard,
+		capability: terminalToolCardCapability,
+	},
+	image: {
+		render: renderImageCard,
+		capability: imageToolCardCapability,
+	},
+	weather: {
+		render: renderWeatherCard,
+		capability: noCopyToolCardCapability,
+	},
 };
 
 function renderToolResult({ name, data, call_id }) {
 	const parsed = parseToolResult({ name, data }, name);
 	const payload = parsed.normalised || {};
-	if (parsed.validationError) {
-		return renderGenericCard(
-			canonicalToolName(name),
-			{
-				ok: false,
-				error_message:
-					parsed.error || "Tool payload did not match the expected schema.",
-			},
-			data,
-		);
-	}
 	const renderer = TOOL_RENDERERS[parsed.schema_kind];
-	if (renderer) return renderer(payload, call_id);
-	return renderGenericCard(
-		canonicalToolName(name),
-		payload,
-		payload.fields || payload,
-	);
+	if (parsed.validationError) {
+		return {
+			html: renderGenericCard(
+				canonicalToolName(name),
+				{
+					ok: false,
+					error_message:
+						parsed.error || "Tool payload did not match the expected schema.",
+				},
+				data,
+			),
+			capability: noCopyToolCardCapability,
+		};
+	}
+	if (renderer) {
+		const capability = renderer.capability;
+		const copyableContent = capability.canCopy
+			? capability.getCopyableContent(payload)
+			: "";
+		return {
+			html: renderer.render(payload, call_id, { copyableContent }),
+			capability,
+		};
+	}
+	return {
+		html: renderGenericCard(
+			canonicalToolName(name),
+			payload,
+			payload.fields || payload,
+		),
+		capability: noCopyToolCardCapability,
+	};
 }
 
 export function renderToolEvent(eventType, data) {
@@ -51,7 +80,7 @@ export function renderToolResultEvent(data) {
 		data: data.data || {},
 		error: data.error || "",
 	};
-	const card = renderToolResult(payload);
+	const rendered = renderToolResult(payload);
 	const statusIcon = payload.ok ? "✓" : "!";
 	const statusClass = payload.ok
 		? "visual-status--success"
@@ -61,7 +90,11 @@ export function renderToolResultEvent(data) {
 		canonicalName === "exec"
 			? ""
 			: `<div class="tool-result__status ${statusClass}"><span class="visual-status__mark" aria-hidden="true">${statusIcon}</span><span>${escapeHtml(payload.name)}</span></div>`;
-	return `<div class="tool-result" data-tool-name="${escapeAttr(payload.name)}">${status}<div class="tool-result-content">${card}</div></div>`;
+	return `<div class="tool-result" data-tool-name="${escapeAttr(payload.name)}" data-can-copy="${rendered.capability.canCopy ? "true" : "false"}">${status}<div class="tool-result-content">${rendered.html}</div></div>`;
+}
+
+export function getToolCardCapability(schemaKind) {
+	return TOOL_RENDERERS[schemaKind]?.capability || noCopyToolCardCapability;
 }
 
 function escapeHtml(value) {
