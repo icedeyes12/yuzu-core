@@ -15,13 +15,13 @@ import time
 from datetime import datetime, timedelta
 from typing import Any
 
+from app.core.byok import YUZU_PORTAL, get_provider_key
 from app.core.context import (
     RequestKeyring,
     clear_request_keyring,
     get_request_keyrings,
     set_request_keyrings,
 )
-from app.core.byok import YUZU_PORTAL, get_provider_key
 from app.db import (
     Database,
     claim_pipeline_fence_async,
@@ -33,7 +33,11 @@ from app.db import (
     update_pipeline_state_async,
 )
 from app.memory.embedder import embed_texts_async
-from app.memory.extractor import build_adaptive_batches, estimate_message_tokens, extract_batch_async
+from app.memory.extractor import (
+    build_adaptive_batches,
+    estimate_message_tokens,
+    extract_batch_async,
+)
 from app.memory.graph import GraphMemoryRepository
 
 __all__ = [
@@ -322,7 +326,10 @@ async def run_memory_pipeline_async(
         if last_message_id:
             try:
                 all_messages = await get_session_messages_after_id_async(
-                    session_id, last_message_id, limit=MESSAGE_FETCH_LIMIT, user_id=user_id
+                    session_id,
+                    last_message_id,
+                    limit=MESSAGE_FETCH_LIMIT,
+                    user_id=user_id,
                 )
                 unsegmented = [
                     m for m in all_messages if m.get("role") in ("user", "assistant")
@@ -332,22 +339,28 @@ async def run_memory_pipeline_async(
                     f"ID-based query failed, falling back to count-based: {e}"
                 )
                 # Fallback
-                all_messages = await get_session_messages_async(
-                    session_id, limit=MESSAGE_FETCH_LIMIT, user_id=user_id
+                unsegmented = await get_session_messages_async(
+                    session_id,
+                    limit=MESSAGE_FETCH_LIMIT,
+                    offset=last_count,
+                    user_id=user_id,
                 )
-                conversation_messages = [
-                    m for m in all_messages if m.get("role") in ("user", "assistant")
+                all_messages = unsegmented
+                unsegmented = [
+                    m for m in unsegmented if m.get("role") in ("user", "assistant")
                 ]
-                unsegmented = conversation_messages[last_count:]
         else:
             # Initial state: use count-based
-            all_messages = await get_session_messages_async(
-                session_id, limit=MESSAGE_FETCH_LIMIT, user_id=user_id
+            unsegmented = await get_session_messages_async(
+                session_id,
+                limit=MESSAGE_FETCH_LIMIT,
+                offset=last_count,
+                user_id=user_id,
             )
-            conversation_messages = [
-                m for m in all_messages if m.get("role") in ("user", "assistant")
+            all_messages = unsegmented
+            unsegmented = [
+                m for m in unsegmented if m.get("role") in ("user", "assistant")
             ]
-            unsegmented = conversation_messages[last_count:]
 
         # Filter to conversation messages only. The ID path is already scoped
         # to the cursor; never reapply the old global count as an offset.
@@ -369,7 +382,9 @@ async def run_memory_pipeline_async(
         )
         unsegmented = batches[0]
         unsegmented_count = len(unsegmented)
-        estimated_tokens = sum(estimate_message_tokens(message) for message in unsegmented)
+        estimated_tokens = sum(
+            estimate_message_tokens(message) for message in unsegmented
+        )
         logger.info(
             "memory batch session=%s messages=%s/%s tokens=%s range=%s..%s",
             session_id,
@@ -428,10 +443,8 @@ async def run_memory_pipeline_async(
         claim_count = 0
         consolidation_candidates = 0
         consolidation_archived = 0
-        episode_ids: list[str] = []
-        embedding_texts = [
-            episode["summary"] for episode in extracted["episodes"]
-        ] + [
+        episode_ids: list[str | None] = []
+        embedding_texts = [episode["summary"] for episode in extracted["episodes"]] + [
             f"{claim['entity']} {claim['relation']} {claim['target']}"
             for claim in extracted["claims"]
         ]
@@ -443,13 +456,17 @@ async def run_memory_pipeline_async(
             len(embeddings),
         )
         episode_embeddings = embeddings[: len(extracted["episodes"])]
-        claim_embeddings = embeddings[len(extracted["episodes"]):]
+        claim_embeddings = embeddings[len(extracted["episodes"]) :]
         for episode_index, episode in enumerate(extracted["episodes"]):
             segment_messages = unsegmented[
                 episode["start_index"] : episode["end_index"]
             ]
             source_ids = [str(message.get("id")) for message in segment_messages]
-            embedding = episode_embeddings[episode_index] if episode_index < len(episode_embeddings) else None
+            embedding = (
+                episode_embeddings[episode_index]
+                if episode_index < len(episode_embeddings)
+                else None
+            )
             episode_row = await GraphMemoryRepository.create_episode(
                 user_id=user_id,
                 session_id=session_id,
@@ -461,8 +478,8 @@ async def run_memory_pipeline_async(
                 source_end_message_id=source_ids[-1] if source_ids else None,
             )
             episode_id = str(episode_row["id"]) if episode_row else None
+            episode_ids.append(episode_id)
             if episode_id:
-                episode_ids.append(episode_id)
                 episode_count += 1
 
         for claim_index, claim in enumerate(extracted["claims"]):
@@ -494,7 +511,9 @@ async def run_memory_pipeline_async(
                 user_id=user_id,
                 node_type="fact",
                 content=node_content,
-                embedding=claim_embeddings[claim_index] if claim_index < len(claim_embeddings) else None,
+                embedding=claim_embeddings[claim_index]
+                if claim_index < len(claim_embeddings)
+                else None,
                 confidence=claim["confidence"],
                 importance=0.7,
                 embedding_model="gemini-embedding-2-preview",
@@ -527,12 +546,11 @@ async def run_memory_pipeline_async(
                     )
                     consolidation_candidates += consolidation["candidates"]
                     consolidation_archived += consolidation["archived"]
-                except Exception as consolidation_error:
+                except Exception as exc:
                     logger.warning(
-                        "consolidation failed node_id=%s content=%s error=%s",
+                        "memory consolidation skipped node=%s error=%s",
                         node_id,
-                        node_content[:100],
-                        type(consolidation_error).__name__,
+                        type(exc).__name__,
                     )
 
                 related_claims = [
@@ -598,7 +616,7 @@ async def run_memory_pipeline_async(
         return {
             "episodes": episode_count,
             "claims": claim_count,
-            "llm_calls": 1,
+            "llm_calls": llm_calls,
             "processed_messages": processed_count,
             "consolidation_candidates": consolidation_candidates,
             "consolidation_archived": consolidation_archived,
@@ -631,7 +649,11 @@ async def _background_worker_async():
                 result = await run_memory_pipeline_async(
                     session_to_process, count, user_id=user_id
                 )
-                if time.monotonic() - started >= MAX_WORKER_RUNTIME_SECONDS:
+                processed_messages = result.get("processed_messages", 0)
+                if (
+                    processed_messages <= 0
+                    or time.monotonic() - started >= MAX_WORKER_RUNTIME_SECONDS
+                ):
                     break
                 state = await get_pipeline_state_async(session_to_process, user_id)
                 last_message_id = state.get("last_segmented_message_id")
@@ -668,7 +690,6 @@ async def enqueue_memory_pipeline_async(session_id: str, user_id: str) -> bool:
     """
     global _worker_task
 
-    profile = await Database.get_profile(user_id)
     if not get_provider_key(YUZU_PORTAL):
         logger.info("memory enqueue skipped: missing Yuzu Portal API key")
         return False
@@ -696,7 +717,6 @@ async def trigger_memory_pipeline_async(
 
     Returns True if pipeline was triggered.
     """
-    profile = await Database.get_profile(user_id)
     if not get_provider_key(YUZU_PORTAL):
         logger.info("memory job skipped: missing Yuzu Portal API key")
         return False

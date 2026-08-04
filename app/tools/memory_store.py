@@ -48,9 +48,8 @@ async def _classify_category_llm_async(fact: str, profile: dict[str, Any]) -> st
         from app.core.memory_llm import memory_llm_call
         from app.providers import get_ai_manager
 
-        manager = await get_ai_manager()
         response = await memory_llm_call(
-            manager,
+            await get_ai_manager(),
             messages=[
                 {
                     "role": "system",

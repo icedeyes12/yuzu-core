@@ -12,12 +12,12 @@ from app.db.queries import (
     SQL_GRAPH_NODE_ARCHIVE,
     SQL_GRAPH_NODE_BY_CONTENT,
     SQL_GRAPH_NODE_EXPAND,
-    SQL_GRAPH_NODE_SIMILAR_ACTIVE,
     SQL_GRAPH_NODE_INSERT,
     SQL_GRAPH_NODE_LIST,
     SQL_GRAPH_NODE_PROVENANCE,
     SQL_GRAPH_NODE_SEARCH_TEXT,
     SQL_GRAPH_NODE_SEARCH_VECTOR,
+    SQL_GRAPH_NODE_SIMILAR_ACTIVE,
 )
 
 
@@ -107,8 +107,13 @@ class GraphMemoryRepository:
 
     @staticmethod
     async def find_similar_active_nodes(
-        *, user_id: str, node_id: str, node_type: str, content: str,
-        threshold: float = 0.92, limit: int = 5
+        *,
+        user_id: str,
+        node_id: str,
+        node_type: str,
+        content: str,
+        threshold: float = 0.92,
+        limit: int = 5,
     ) -> list[dict[str, Any]]:
         return await pg_fetchall_async(
             SQL_GRAPH_NODE_SIMILAR_ACTIVE,
@@ -117,7 +122,11 @@ class GraphMemoryRepository:
 
     @staticmethod
     async def consolidate_node(
-        *, user_id: str, node_id: str, node_type: str, content: str,
+        *,
+        user_id: str,
+        node_id: str,
+        node_type: str,
+        content: str,
         threshold: float = 0.92,
     ) -> dict[str, int]:
         """Archive only same-relation overlaps; preserve evidence on canonical node."""
@@ -125,18 +134,27 @@ class GraphMemoryRepository:
         if len(parts) != 3:
             return {"candidates": 0, "archived": 0}
         entity, relation, target = parts
+        normalized_entity = entity.lower()
+        normalized_relation = relation.lower()
         candidates = await GraphMemoryRepository.find_similar_active_nodes(
-            user_id=user_id, node_id=node_id, node_type=node_type,
-            content=content, threshold=threshold,
+            user_id=user_id,
+            node_id=node_id,
+            node_type=node_type,
+            content=content,
+            threshold=threshold,
         )
         archived = 0
+        normalized_target = " ".join(target.lower().split())
         for candidate in candidates:
             candidate_parts = str(candidate.get("content", "")).split(" ", 2)
-            if len(candidate_parts) != 3 or candidate_parts[0] != entity or candidate_parts[1] != relation:
+            if (
+                len(candidate_parts) != 3
+                or candidate_parts[0].lower() != normalized_entity
+                or candidate_parts[1].lower() != normalized_relation
+            ):
                 continue
-            candidate_target = candidate_parts[2]
-            # Archive only when target text exactly matches (normalized)
-            if candidate_target.lower().strip() != target.lower().strip():
+            candidate_target = " ".join(candidate_parts[2].lower().split())
+            if not normalized_target or candidate_target != normalized_target:
                 continue
             if await GraphMemoryRepository.archive_node(
                 user_id=user_id, node_id=str(candidate["id"]), canonical_node_id=node_id

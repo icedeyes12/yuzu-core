@@ -98,23 +98,18 @@ def build_adaptive_batches(
     current_tokens = 0
     for message in messages:
         cost = estimate_message_tokens(message)
-        # Handle oversized individual messages
         if cost > token_budget:
-            # Flush current batch if non-empty
             if current:
                 batches.append(current)
                 current, current_tokens = [], 0
-            # Create truncated message that fits budget
-            content = _content_text(message)
-            # Reserve tokens for message overhead (role, metadata)
-            content_budget = token_budget - 8
-            char_budget = max(1, content_budget * _CHARS_PER_TOKEN)
-            truncated_content = content[:char_budget] if len(content) > char_budget else content
-            truncated_message = dict(message)
-            truncated_message["content"] = truncated_content
-            batches.append([truncated_message])
+            truncated = dict(message)
+            max_chars = max(1, (token_budget - 8) * _CHARS_PER_TOKEN)
+            truncated["content"] = _content_text(message)[:max_chars]
+            batches.append([truncated])
             continue
-        if current and (current_tokens + cost > token_budget or len(current) >= max_messages):
+        if current and (
+            current_tokens + cost > token_budget or len(current) >= max_messages
+        ):
             batches.append(current)
             current, current_tokens = [], 0
         current.append(message)

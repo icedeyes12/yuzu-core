@@ -874,6 +874,15 @@ WHERE session_id = %s AND user_id = %s
 ORDER BY timestamp ASC, id ASC
 """
 
+SQL_MESSAGE_SELECT_ASC_OFFSET_LIMIT = """
+SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
+FROM messages
+WHERE session_id = %s AND user_id = %s
+  AND role IN ('user', 'assistant')
+ORDER BY timestamp ASC, id ASC
+LIMIT %s OFFSET %s
+"""
+
 # Query messages after a specific ID (for memory pipeline ID-based tracking)
 SQL_MESSAGE_SELECT_AFTER_ID = """
 SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp

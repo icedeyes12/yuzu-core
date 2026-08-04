@@ -32,6 +32,7 @@ from app.db.queries import (
     SQL_MESSAGE_SELECT_AFTER_ID,
     SQL_MESSAGE_SELECT_ASC_ALL,
     SQL_MESSAGE_SELECT_ASC_LIMIT,
+    SQL_MESSAGE_SELECT_ASC_OFFSET_LIMIT,
     SQL_MESSAGE_SELECT_BEFORE_TS,
     SQL_MESSAGE_SELECT_CONTENT_BY_ID,
     SQL_MESSAGE_SELECT_DESC_LIMIT,
@@ -387,17 +388,29 @@ async def update_message_async(message_id: int, content: str) -> bool:
 
 
 async def get_session_messages_async(
-    session_id: str, limit: int = 100, order: str = "ASC", *, user_id: str
+    session_id: str,
+    limit: int = 100,
+    order: str = "ASC",
+    *,
+    user_id: str,
+    offset: int = 0,
 ) -> list[DBRow]:
     """Fetch messages for a session in chronological order.
 
     order: "ASC" (oldest first) or "DESC" (newest first).
     """
-    if order.upper() == "DESC":
+    if offset and order.upper() == "ASC":
+        query = SQL_MESSAGE_SELECT_ASC_OFFSET_LIMIT
+    elif order.upper() == "DESC":
         query = SQL_MESSAGE_SELECT_DESC_LIMIT
     else:
         query = SQL_MESSAGE_SELECT_ASC_LIMIT
-    rows = await pg_fetchall_async(query, (session_id, user_id, limit))
+    params = (
+        (session_id, user_id, limit, offset)
+        if offset and order.upper() == "ASC"
+        else (session_id, user_id, limit)
+    )
+    rows = await pg_fetchall_async(query, params)
     return [parse_message_row(r) for r in rows]
 
 

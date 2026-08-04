@@ -1,7 +1,6 @@
 import pytest
 
 from app.core.context import RequestKeyring, clear_request_keyring, set_request_keyrings
-
 from app.db.queries import (
     SCHEMA_DDL,
     SQL_GRAPH_NODE_EXPAND,
@@ -34,11 +33,25 @@ def test_vector_literal():
 
 
 def test_adaptive_batches_respect_token_budget():
-    from app.memory.extractor import build_adaptive_batches
+    from app.memory.extractor import build_adaptive_batches, estimate_message_tokens
 
     messages = [{"role": "user", "content": "x" * 40}] * 5
     batches = build_adaptive_batches(messages, token_budget=20, max_messages=100)
     assert [len(batch) for batch in batches] == [1, 1, 1, 1, 1]
+    assert all(
+        estimate_message_tokens(message) <= 20 for batch in batches for message in batch
+    )
+
+
+def test_adaptive_batches_truncate_oversized_message_without_mutating_source():
+    from app.memory.extractor import build_adaptive_batches, estimate_message_tokens
+
+    original = {"role": "user", "content": "x" * 200}
+    batches = build_adaptive_batches([original], token_budget=20)
+
+    assert len(batches) == 1
+    assert estimate_message_tokens(batches[0][0]) <= 20
+    assert original["content"] == "x" * 200
 
 
 def test_memory_disabled_without_configured_provider():
@@ -180,6 +193,37 @@ async def test_consolidation_archives_only_same_relation_overlap(monkeypatch):
     )
     assert result == {"candidates": 2, "archived": 1}
     assert archived == ["old"]
+
+
+@pytest.mark.asyncio
+async def test_consolidation_requires_exact_normalized_target(monkeypatch):
+    from app.memory.graph import GraphMemoryRepository
+
+    async def candidates(**kwargs):
+        return [
+            {"id": "negation", "content": "Bas likes not blue tea"},
+            {"id": "qualifier", "content": "Bas likes blue tea sometimes"},
+            {"id": "reordered", "content": "Bas likes tea blue"},
+            {"id": "same", "content": "Bas likes blue tea"},
+        ]
+
+    archived = []
+
+    async def archive(**kwargs):
+        archived.append(kwargs["node_id"])
+        return True
+
+    monkeypatch.setattr(GraphMemoryRepository, "find_similar_active_nodes", candidates)
+    monkeypatch.setattr(GraphMemoryRepository, "archive_node", archive)
+    result = await GraphMemoryRepository.consolidate_node(
+        user_id="u",
+        node_id="new",
+        node_type="fact",
+        content="Bas likes blue tea",
+    )
+
+    assert result == {"candidates": 4, "archived": 1}
+    assert archived == ["same"]
 
 
 @pytest.mark.asyncio

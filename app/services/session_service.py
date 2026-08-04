@@ -144,7 +144,9 @@ class SessionService:
             )
             return
 
-        renamed = await Database.rename_session_if_placeholder(session_id, name, user_id)
+        renamed = await Database.rename_session_if_placeholder(
+            session_id, name, user_id
+        )
         if renamed:
             log.info("auto_name: renamed session=%s outcome=success", session_id)
         else:
@@ -161,7 +163,9 @@ class SessionService:
         if get_provider_key(YUZU_PORTAL):
             configured["preferred_provider"] = YUZU_PORTAL
             configured["preferred_model"] = "yuzuki"
-        elif not configured.get("preferred_provider") or not configured.get("preferred_model"):
+        elif not configured.get("preferred_provider") or not configured.get(
+            "preferred_model"
+        ):
             return None
 
         history = await Database.get_chat_history(

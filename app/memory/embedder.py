@@ -39,7 +39,12 @@ async def _get_client(profile: dict | None = None) -> httpx.AsyncClient | None:
 
 
 async def embed_texts_async(
-    texts, model=None, dimensions=None, encoding_format="float", timeout=30, profile=None
+    texts,
+    model=None,
+    dimensions=None,
+    encoding_format="float",
+    timeout=30,
+    profile=None,
 ):
     client = await _get_client(profile)
     if client is None:
