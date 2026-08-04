@@ -8,8 +8,11 @@ from app.db.queries import (
     SQL_GRAPH_EDGE_UPSERT,
     SQL_GRAPH_EPISODE_INSERT,
     SQL_GRAPH_EVIDENCE_INSERT,
+    SQL_GRAPH_EVIDENCE_REASSIGN,
+    SQL_GRAPH_NODE_ARCHIVE,
     SQL_GRAPH_NODE_BY_CONTENT,
     SQL_GRAPH_NODE_EXPAND,
+    SQL_GRAPH_NODE_SIMILAR_ACTIVE,
     SQL_GRAPH_NODE_INSERT,
     SQL_GRAPH_NODE_LIST,
     SQL_GRAPH_NODE_PROVENANCE,
@@ -101,6 +104,64 @@ class GraphMemoryRepository:
                 embedding_dimensions,
             ),
         )
+
+    @staticmethod
+    async def find_similar_active_nodes(
+        *, user_id: str, node_id: str, node_type: str, content: str,
+        threshold: float = 0.92, limit: int = 5
+    ) -> list[dict[str, Any]]:
+        return await pg_fetchall_async(
+            SQL_GRAPH_NODE_SIMILAR_ACTIVE,
+            (content, user_id, node_id, node_type, content, threshold, limit),
+        )
+
+    @staticmethod
+    async def consolidate_node(
+        *, user_id: str, node_id: str, node_type: str, content: str,
+        threshold: float = 0.92,
+    ) -> dict[str, int]:
+        """Archive only same-relation overlaps; preserve evidence on canonical node."""
+        parts = content.split(" ", 2)
+        if len(parts) != 3:
+            return {"candidates": 0, "archived": 0}
+        entity, relation, target = parts
+        candidates = await GraphMemoryRepository.find_similar_active_nodes(
+            user_id=user_id, node_id=node_id, node_type=node_type,
+            content=content, threshold=threshold,
+        )
+        archived = 0
+        target_words = set(target.lower().split())
+        for candidate in candidates:
+            candidate_parts = str(candidate.get("content", "")).split(" ", 2)
+            if len(candidate_parts) != 3 or candidate_parts[0] != entity or candidate_parts[1] != relation:
+                continue
+            candidate_words = set(candidate_parts[2].lower().split())
+            if not target_words or not (
+                target_words <= candidate_words or candidate_words <= target_words
+            ):
+                continue
+            if await GraphMemoryRepository.archive_node(
+                user_id=user_id, node_id=str(candidate["id"]), canonical_node_id=node_id
+            ):
+                archived += 1
+        return {"candidates": len(candidates), "archived": archived}
+
+    @staticmethod
+    async def archive_node(
+        *, user_id: str, node_id: str, canonical_node_id: str
+    ) -> bool:
+        async with AsyncPgSession() as session:
+            archived = await session.execute_returning(
+                SQL_GRAPH_NODE_ARCHIVE,
+                (canonical_node_id, node_id, user_id),
+            )
+            if not archived:
+                return False
+            await session.execute(
+                SQL_GRAPH_EVIDENCE_REASSIGN,
+                (canonical_node_id, user_id, node_id),
+            )
+            return True
 
     @staticmethod
     async def add_edge(

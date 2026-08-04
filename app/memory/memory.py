@@ -15,13 +15,13 @@ import time
 from datetime import datetime, timedelta
 from typing import Any
 
-from app.core.byok import YUZU_PORTAL, get_provider_key
 from app.core.context import (
     RequestKeyring,
     clear_request_keyring,
     get_request_keyrings,
     set_request_keyrings,
 )
+from app.core.byok import YUZU_PORTAL, get_provider_key
 from app.db import (
     Database,
     claim_pipeline_fence_async,
@@ -32,7 +32,7 @@ from app.db import (
     get_session_messages_async,
     update_pipeline_state_async,
 )
-from app.memory.embedder import embed_text_async
+from app.memory.embedder import embed_texts_async
 from app.memory.extractor import build_adaptive_batches, estimate_message_tokens, extract_batch_async
 from app.memory.graph import GraphMemoryRepository
 
@@ -258,6 +258,34 @@ async def extract_memory_batch_async(
     return await extract_batch_async(messages, profile=profile)
 
 
+async def _extract_with_retries_async(
+    messages: list[dict[str, Any]], profile: dict[str, Any] | None = None
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], int]:
+    retry_batch = messages
+    for retry_count in range(MAX_EXTRACTION_RETRIES):
+        try:
+            extracted = await extract_memory_batch_async(retry_batch, profile=profile)
+            return extracted, retry_batch, retry_count + 1
+        except Exception as exc:
+            if retry_count + 1 >= MAX_EXTRACTION_RETRIES:
+                logger.error(
+                    "memory extraction skipped retries=%s tokens=%s error=%s",
+                    retry_count + 1,
+                    sum(estimate_message_tokens(m) for m in retry_batch),
+                    type(exc).__name__,
+                )
+                return None, retry_batch, retry_count + 1
+            midpoint = max(1, len(retry_batch) // 2)
+            retry_batch = retry_batch[:midpoint]
+            logger.warning(
+                "memory extraction retry=%s reduced_messages=%s error=%s",
+                retry_count + 1,
+                len(retry_batch),
+                type(exc).__name__,
+            )
+    return None, retry_batch, MAX_EXTRACTION_RETRIES
+
+
 # ── Main pipeline runner ───────────────────────────────────────────────────────
 
 
@@ -275,12 +303,13 @@ async def run_memory_pipeline_async(
     Returns summary: {episodes: n, claims: n, llm_calls: n}
     """
     try:
+        profile = await Database.get_profile(user_id)
         if not get_provider_key(YUZU_PORTAL):
-            logger.warning("Memory module disabled: Missing Yuzu Portal API key")
+            logger.info("memory disabled: missing Yuzu Portal API key")
             return {"episodes": 0, "claims": 0, "llm_calls": 0, "processed_messages": 0}
 
-        logger.info(f"Starting for session {session_id}, count={message_count}")
-        profile = await Database.get_profile(user_id)
+        logger.info("memory enabled via Yuzu Portal")
+        logger.info("Starting for session %s, count=%s", session_id, message_count)
 
         # Get current state for tracking
         state = await get_pipeline_state_async(session_id, user_id)
@@ -364,43 +393,28 @@ async def run_memory_pipeline_async(
                 "processed_messages": 0,
             }
 
-        extracted = None
-        retry_batch = unsegmented
-        for retry_count in range(MAX_EXTRACTION_RETRIES):
-            started = time.monotonic()
-            try:
-                extracted = await extract_memory_batch_async(retry_batch, profile=profile)
-                logger.info(
-                    "memory extraction session=%s retry=%s elapsed_ms=%s extracted=%s/%s",
-                    session_id,
-                    retry_count,
-                    int((time.monotonic() - started) * 1000),
-                    len(extracted.get("episodes", [])),
-                    len(extracted.get("claims", [])),
-                )
-                unsegmented = retry_batch
-                break
-            except Exception as exc:
-                if retry_count + 1 >= MAX_EXTRACTION_RETRIES:
-                    logger.error(
-                        "memory extraction skipped session=%s retries=%s tokens=%s error=%s",
-                        session_id,
-                        retry_count + 1,
-                        sum(estimate_message_tokens(m) for m in retry_batch),
-                        type(exc).__name__,
-                    )
-                    return {"episodes": 0, "claims": 0, "llm_calls": retry_count + 1}
-                midpoint = max(1, len(retry_batch) // 2)
-                retry_batch = retry_batch[:midpoint]
-                logger.warning(
-                    "memory extraction retry session=%s retry=%s reduced_messages=%s error=%s",
-                    session_id,
-                    retry_count + 1,
-                    len(retry_batch),
-                    type(exc).__name__,
-                )
+        started = time.monotonic()
+        extracted, unsegmented, llm_calls = await _extract_with_retries_async(
+            unsegmented, profile=profile
+        )
         if extracted is None:
-            return {"episodes": 0, "claims": 0, "llm_calls": MAX_EXTRACTION_RETRIES}
+            logger.error(
+                "memory extraction failed session=%s retries=%s elapsed_ms=%s checkpoint_preserved=true",
+                session_id,
+                llm_calls,
+                int((time.monotonic() - started) * 1000),
+            )
+            return {"episodes": 0, "claims": 0, "llm_calls": llm_calls}
+        processed_count = len(unsegmented)
+        logger.info(
+            "memory extraction session=%s retries=%s elapsed_ms=%s extracted=%s/%s processed_messages=%s",
+            session_id,
+            llm_calls,
+            int((time.monotonic() - started) * 1000),
+            len(extracted.get("episodes", [])),
+            len(extracted.get("claims", [])),
+            processed_count,
+        )
         if not extracted["episodes"] and not extracted["claims"]:
             logger.debug("No durable memory extracted")
             if unsegmented:
@@ -412,13 +426,30 @@ async def run_memory_pipeline_async(
 
         episode_count = 0
         claim_count = 0
+        consolidation_candidates = 0
+        consolidation_archived = 0
         episode_ids: list[str] = []
-        for episode in extracted["episodes"]:
+        embedding_texts = [
+            episode["summary"] for episode in extracted["episodes"]
+        ] + [
+            f"{claim['entity']} {claim['relation']} {claim['target']}"
+            for claim in extracted["claims"]
+        ]
+        embeddings = await embed_texts_async(embedding_texts, profile=profile)
+        logger.info(
+            "memory batch embeddings provider=%s requested=%s returned=%s",
+            YUZU_PORTAL,
+            len(embedding_texts),
+            len(embeddings),
+        )
+        episode_embeddings = embeddings[: len(extracted["episodes"])]
+        claim_embeddings = embeddings[len(extracted["episodes"]):]
+        for episode_index, episode in enumerate(extracted["episodes"]):
             segment_messages = unsegmented[
                 episode["start_index"] : episode["end_index"]
             ]
             source_ids = [str(message.get("id")) for message in segment_messages]
-            embedding = await embed_text_async(episode["summary"])
+            embedding = episode_embeddings[episode_index] if episode_index < len(episode_embeddings) else None
             episode_row = await GraphMemoryRepository.create_episode(
                 user_id=user_id,
                 session_id=session_id,
@@ -434,7 +465,7 @@ async def run_memory_pipeline_async(
                 episode_ids.append(episode_id)
                 episode_count += 1
 
-        for claim in extracted["claims"]:
+        for claim_index, claim in enumerate(extracted["claims"]):
             episode_id = next(
                 (
                     episode_ids[index]
@@ -463,7 +494,7 @@ async def run_memory_pipeline_async(
                 user_id=user_id,
                 node_type="fact",
                 content=node_content,
-                embedding=await embed_text_async(node_content),
+                embedding=claim_embeddings[claim_index] if claim_index < len(claim_embeddings) else None,
                 confidence=claim["confidence"],
                 importance=0.7,
                 embedding_model="gemini-embedding-2-preview",
@@ -487,6 +518,14 @@ async def run_memory_pipeline_async(
                         message_ids=evidence_message_ids,
                     )
                 claim_count += 1
+                consolidation = await GraphMemoryRepository.consolidate_node(
+                    user_id=user_id,
+                    node_id=node_id,
+                    node_type="fact",
+                    content=node_content,
+                )
+                consolidation_candidates += consolidation["candidates"]
+                consolidation_archived += consolidation["archived"]
 
                 related_claims = [
                     other
@@ -521,9 +560,13 @@ async def run_memory_pipeline_async(
                         )
 
         logger.info(
-            "Single-pass memory extraction: episodes=%s claims=%s",
+            "memory extraction complete episodes=%s claims=%s consolidation_candidates=%s consolidation_archived=%s llm_calls=%s elapsed_ms=%s",
             episode_count,
             claim_count,
+            consolidation_candidates,
+            consolidation_archived,
+            llm_calls,
+            int((time.monotonic() - started) * 1000),
         )
 
         # Mark done with the last processed message ID
@@ -549,6 +592,8 @@ async def run_memory_pipeline_async(
             "claims": claim_count,
             "llm_calls": 1,
             "processed_messages": processed_count,
+            "consolidation_candidates": consolidation_candidates,
+            "consolidation_archived": consolidation_archived,
         }
     finally:
         await _clear_fence_async(session_id, user_id=user_id)
@@ -614,9 +659,14 @@ async def _background_worker_async():
 async def enqueue_memory_pipeline_async(session_id: str, user_id: str) -> bool:
     """Enqueue a session for background memory pipeline processing.
 
-    Non-blocking — returns immediately.
+    Non-blocking — returns immediately. Disabled memory never starts a worker.
     """
     global _worker_task
+
+    profile = await Database.get_profile(user_id)
+    if not get_provider_key(YUZU_PORTAL):
+        logger.info("memory enqueue skipped: missing Yuzu Portal API key")
+        return False
 
     queue_key = (session_id, user_id)
     if queue_key in _queued_sessions:
@@ -641,6 +691,11 @@ async def trigger_memory_pipeline_async(
 
     Returns True if pipeline was triggered.
     """
+    profile = await Database.get_profile(user_id)
+    if not get_provider_key(YUZU_PORTAL):
+        logger.info("memory job skipped: missing Yuzu Portal API key")
+        return False
+
     should_trigger, _ = await should_trigger_segmentation_async(
         session_id, current_count, user_id=user_id
     )

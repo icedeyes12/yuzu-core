@@ -5,12 +5,8 @@ import logging
 
 import httpx
 
-from app.core.byok import (
-    DEFAULT_YUZU_PORTAL_BASE_URL,
-    YUZU_PORTAL,
-    get_provider_base_url,
-    get_provider_key,
-)
+from app.core.byok import DEFAULT_YUZU_PORTAL_BASE_URL, YUZU_PORTAL
+from app.core.context import get_request_keyring
 from app.providers.base import _rate_limit_provider
 
 DEFAULT_MODEL = "gemini/gemini-embedding-2-preview"
@@ -18,12 +14,21 @@ EMBEDDING_DIM = 1536
 logger = logging.getLogger(__name__)
 
 
-async def _get_client() -> httpx.AsyncClient | None:
-    api_key = get_provider_key(YUZU_PORTAL)
+async def _get_client(profile: dict | None = None) -> httpx.AsyncClient | None:
+    del profile
+    keyring = get_request_keyring(YUZU_PORTAL)
+    api_key = keyring.key.strip() if keyring and keyring.key else None
     if not api_key:
-        logger.warning("Memory module disabled: Missing Yuzu Portal API key")
+        logger.info(
+            "memory embeddings disabled provider=%s",
+            YUZU_PORTAL,
+        )
         return None
-    base_url = get_provider_base_url(YUZU_PORTAL) or DEFAULT_YUZU_PORTAL_BASE_URL
+    base_url = (
+        keyring.base_url.strip().rstrip("/")
+        if keyring and keyring.base_url
+        else DEFAULT_YUZU_PORTAL_BASE_URL
+    )
     return httpx.AsyncClient(
         headers={
             "Authorization": f"Bearer {api_key}",
@@ -34,9 +39,9 @@ async def _get_client() -> httpx.AsyncClient | None:
 
 
 async def embed_texts_async(
-    texts, model=None, dimensions=None, encoding_format="float", timeout=30
+    texts, model=None, dimensions=None, encoding_format="float", timeout=30, profile=None
 ):
-    client = await _get_client()
+    client = await _get_client(profile)
     if client is None:
         return []
 

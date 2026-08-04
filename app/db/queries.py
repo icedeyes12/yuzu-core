@@ -466,6 +466,33 @@ FROM memory_nodes
 WHERE user_id = %s AND content = %s AND status = 'active' AND valid_until IS NULL
 LIMIT 1
 """
+
+SQL_GRAPH_NODE_SIMILAR_ACTIVE = """
+SELECT id, user_id, node_type, content, confidence, importance, status,
+       valid_from, valid_until, supersedes_node_id, embedding_model,
+       embedding_dimensions, created_at, updated_at, last_accessed_at,
+       similarity(content, %s) AS score
+FROM memory_nodes
+WHERE user_id = %s AND id <> %s AND node_type = %s
+  AND status = 'active' AND valid_until IS NULL
+  AND similarity(content, %s) >= %s
+ORDER BY score DESC, created_at ASC
+LIMIT %s
+"""
+
+SQL_GRAPH_NODE_ARCHIVE = """
+UPDATE memory_nodes
+SET status = 'archived', valid_until = NOW(), supersedes_node_id = %s,
+    updated_at = NOW()
+WHERE id = %s AND user_id = %s AND status = 'active' AND valid_until IS NULL
+RETURNING id
+"""
+
+SQL_GRAPH_EVIDENCE_REASSIGN = """
+UPDATE memory_evidence
+SET node_id = %s
+WHERE user_id = %s AND node_id = %s
+"""
 SQL_GRAPH_NODE_LIST = """
 SELECT id, user_id, node_type, content, confidence, importance, status, valid_from,
        valid_until, supersedes_node_id, embedding_model, embedding_dimensions,
@@ -1318,6 +1345,9 @@ __all__ = [
     "SQL_GRAPH_EPISODE_INSERT",
     "SQL_GRAPH_NODE_INSERT",
     "SQL_GRAPH_NODE_BY_CONTENT",
+    "SQL_GRAPH_NODE_SIMILAR_ACTIVE",
+    "SQL_GRAPH_NODE_ARCHIVE",
+    "SQL_GRAPH_EVIDENCE_REASSIGN",
     "SQL_GRAPH_NODE_LIST",
     "SQL_GRAPH_NODE_PROVENANCE",
     "SQL_GRAPH_EDGE_UPSERT",

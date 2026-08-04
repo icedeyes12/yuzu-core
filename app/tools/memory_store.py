@@ -80,6 +80,15 @@ async def execute(arguments, **kwargs):
             "/memory_store",
             partner_name,
         )
+    from app.core.byok import YUZU_PORTAL, get_provider_key
+
+    if not get_provider_key(YUZU_PORTAL):
+        return error_result(
+            "Memory is unavailable until a Yuzu Portal API key is configured",
+            TOOL_DEFINITION,
+            "/memory_store",
+            partner_name,
+        )
     if len(fact) < 5:
         return error_result(
             "Fact too short (min 5 chars)",
@@ -103,7 +112,7 @@ async def execute(arguments, **kwargs):
         from app.memory.embedder import embed_text_async
         from app.memory.graph import GraphMemoryRepository
 
-        embedding = await embed_text_async(content, timeout=30)
+        embedding = await embed_text_async(content, timeout=30, profile=profile)
         node = await GraphMemoryRepository.get_or_create_node(
             user_id=user_id,
             node_type=category.lower(),

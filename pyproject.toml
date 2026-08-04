@@ -62,6 +62,9 @@ indent-style = "space"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-ra"
+filterwarnings = [
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:starlette.exceptions.StarletteDeprecationWarning",
+]
 asyncio_mode = "auto"
 markers = [
     "unit: isolated tests with fakes or mocks",

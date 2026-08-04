@@ -187,8 +187,14 @@ async def _retrieve_memories_async(
     static_limit: int,
     dynamic_limit: int,
     user_id: str,
+    profile: dict[str, Any] | None = None,
 ) -> tuple[list[int], str, str]:
     """Combined retrieval with single embedding call (async)."""
+    from app.core.byok import YUZU_PORTAL, get_provider_key
+
+    if not get_provider_key(YUZU_PORTAL):
+        log.info("memory retrieval disabled: missing Yuzu Portal API key")
+        return [], "", ""
     try:
         from app.memory.retrieval import (
             _format_dynamic_context,
@@ -475,7 +481,12 @@ async def _build_sections_async(
     )
 
     _static_ids, static_context, dynamic_context = await _retrieve_memories_async(
-        session_id, user_message, static_limit=5, dynamic_limit=3, user_id=user_id
+        session_id,
+        user_message,
+        static_limit=5,
+        dynamic_limit=3,
+        user_id=user_id,
+        profile=profile,
     )
     memory_block = (f"\n\n{static_context}" if static_context else "") + dynamic_context
     knowledge_block = await _global_knowledge_block_async(user_id)

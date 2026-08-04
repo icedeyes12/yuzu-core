@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from app.core.byok import YUZU_PORTAL, get_provider_key
 from app.core.logging_config import get_logger
 from app.db import Database
 
@@ -125,7 +126,10 @@ class SessionService:
             )
             return
 
-        name: str | None = None
+        profile = await Database.get_profile(user_id) or {}
+        name: str | None = await SessionService._auto_name_with_llm(
+            session_id, profile, user_id
+        )
         if not name:
             name = await SessionService._auto_name_from_history(session_id, user_id)
             if not name:
@@ -143,6 +147,50 @@ class SessionService:
         )
         if renamed:
             log.info("auto_name: renamed session %s to '%s'", session_id, name)
+
+    @staticmethod
+    async def _auto_name_with_llm(
+        session_id: str, profile: dict[str, Any], user_id: str
+    ) -> str | None:
+        configured = dict(profile.get("providers_config") or {})
+        if get_provider_key(YUZU_PORTAL):
+            configured["preferred_provider"] = YUZU_PORTAL
+            configured["preferred_model"] = "yuzuki"
+        elif not configured.get("preferred_provider") or not configured.get("preferred_model"):
+            return None
+
+        history = await Database.get_chat_history(session_id, limit=10, user_id=user_id)
+        if not history:
+            return None
+
+        try:
+            from app.providers import get_ai_manager
+
+            manager = await get_ai_manager()
+            response = await manager._internal_llm_call(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Return only a concise session title, 2-6 words.",
+                    },
+                    {
+                        "role": "user",
+                        "content": "\n".join(
+                            str(message.get("content", ""))
+                            for message in history
+                            if message.get("role") in {"user", "assistant"}
+                        ),
+                    },
+                ],
+                source="session_title",
+                profile={**profile, "providers_config": configured},
+                timeout=15,
+            )
+            title = " ".join(str(response or "").split())
+            return title[:80].rstrip() or None
+        except Exception as exc:
+            log.info("auto_name: LLM title skipped: %s", type(exc).__name__)
+            return None
 
     @staticmethod
     def generate_connection_msg(

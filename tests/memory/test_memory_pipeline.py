@@ -1,5 +1,7 @@
 import pytest
 
+from app.core.context import RequestKeyring, clear_request_keyring, set_request_keyrings
+
 from app.db.queries import (
     SCHEMA_DDL,
     SQL_GRAPH_NODE_EXPAND,
@@ -37,6 +39,38 @@ def test_adaptive_batches_respect_token_budget():
     messages = [{"role": "user", "content": "x" * 40}] * 5
     batches = build_adaptive_batches(messages, token_budget=20, max_messages=100)
     assert [len(batch) for batch in batches] == [1, 1, 1, 1, 1]
+
+
+def test_memory_disabled_without_configured_provider():
+    clear_request_keyring()
+    from app.core.byok import YUZU_PORTAL, get_provider_key
+
+    assert get_provider_key(YUZU_PORTAL) is None
+
+
+def test_memory_requires_yuzu_portal_key():
+    set_request_keyrings({"custom": RequestKeyring(provider="custom", key="secret")})
+    try:
+        from app.core.byok import YUZU_PORTAL, get_provider_key
+
+        assert get_provider_key(YUZU_PORTAL) is None
+    finally:
+        clear_request_keyring()
+
+
+def test_memory_key_is_independent_of_active_conversation_provider():
+    from app.core.byok import YUZU_PORTAL, get_provider_key
+
+    set_request_keyrings(
+        {
+            "openrouter": RequestKeyring(provider="openrouter", key="chat-key"),
+            YUZU_PORTAL: RequestKeyring(provider=YUZU_PORTAL, key="portal-key"),
+        }
+    )
+    try:
+        assert get_provider_key(YUZU_PORTAL) == "portal-key"
+    finally:
+        clear_request_keyring()
 
 
 def test_pipeline_fence_sql_is_atomic_and_tenant_scoped():
@@ -85,9 +119,93 @@ async def test_scheduler_thresholds(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_batch_embedding_request(monkeypatch):
+    from app.memory import memory
+
+    requested = []
+
+    async def embed(texts, **kwargs):
+        requested.append(texts)
+        return [[0.1] for _ in texts]
+
+    monkeypatch.setattr(memory, "embed_texts_async", embed)
+    result = await memory.embed_texts_async(["episode", "fact"])
+    assert requested == [["episode", "fact"]]
+    assert len(result) == 2
+
+
+@pytest.mark.asyncio
+async def test_retry_helper_preserves_progress_on_failure(monkeypatch):
+    from app.memory import memory
+
+    calls = []
+
+    async def fail(_messages, profile=None):
+        calls.append(1)
+        raise RuntimeError("overflow")
+
+    monkeypatch.setattr(memory, "extract_memory_batch_async", fail)
+    extracted, processed, retries = await memory._extract_with_retries_async(
+        [{"role": "user", "content": "x"}] * 4
+    )
+    assert extracted is None
+    assert processed
+    assert retries == memory.MAX_EXTRACTION_RETRIES
+    assert len(calls) == memory.MAX_EXTRACTION_RETRIES
+
+
+@pytest.mark.asyncio
+async def test_consolidation_archives_only_same_relation_overlap(monkeypatch):
+    from app.memory.graph import GraphMemoryRepository
+
+    async def candidates(**kwargs):
+        return [
+            {"id": "old", "content": "Bas likes blue tea"},
+            {"id": "conflict", "content": "Bas likes coffee"},
+        ]
+
+    archived = []
+
+    async def archive(**kwargs):
+        archived.append(kwargs["node_id"])
+        return True
+
+    monkeypatch.setattr(GraphMemoryRepository, "find_similar_active_nodes", candidates)
+    monkeypatch.setattr(GraphMemoryRepository, "archive_node", archive)
+    result = await GraphMemoryRepository.consolidate_node(
+        user_id="u",
+        node_id="new",
+        node_type="fact",
+        content="Bas likes blue tea",
+    )
+    assert result == {"candidates": 2, "archived": 1}
+    assert archived == ["old"]
+
+
+@pytest.mark.asyncio
+async def test_enqueue_skips_when_memory_disabled(monkeypatch):
+    from app.memory import memory
+
+    async def profile(_user_id):
+        return {"providers_config": {"memory_provider": "missing"}}
+
+    monkeypatch.setattr(memory.Database, "get_profile", profile)
+    assert await memory.trigger_memory_pipeline_async("s", 40, "u") is False
+
+
+@pytest.mark.asyncio
 async def test_enqueue_deduplicates_session(monkeypatch):
     from app.memory import memory
 
+    async def profile(_user_id):
+        return {}
+
+    monkeypatch.setattr(memory.Database, "get_profile", profile)
+    monkeypatch.setattr(
+        memory,
+        "get_provider_key",
+        lambda provider: "portal-key" if provider == "yuzu_portal" else None,
+    )
     memory._queued_sessions.clear()
     memory._worker_task = None
     created = []
