@@ -6,22 +6,54 @@ from pathlib import Path
 
 import pytest
 
-# Ensure the project root is on sys.path so `import app...` works without an
-# install step. This mirrors how main.py and web.py are launched.
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
-# ── Multi-tenant isolation test fixtures ──────────────────────────────────
-# Tests that exercise tenant-scoped database code inject a valid UUID string.
+@pytest.fixture
+def user_id() -> str:
+    return str(uuid.uuid4())
 
 
 @pytest.fixture
-def user_id() -> str:
-    """Fresh UUID4 string simulating an authenticated tenant.
+def api_client():
+    from fastapi.testclient import TestClient
 
-    Generated per-test so no two tests share a tenant identity — mirrors the
-    isolation invariant the backend now enforces.
-    """
-    return str(uuid.uuid4())
+    from main import app
+
+    with TestClient(app) as client:
+        yield client
+
+
+def pytest_collection_modifyitems(items):
+    import pytest
+
+    domain_markers = {
+        "api": "contract",
+        "contracts": "contract",
+        "cli": "unit",
+        "db": "db",
+        "integration": "integration",
+        "e2e": "e2e",
+        "frontend": "contract",
+        "memory": "unit",
+        "providers": "unit",
+        "regression": "contract",
+        "runtime": "integration",
+        "services": "unit",
+        "tools": "unit",
+    }
+    for item in items:
+        domain = item.path.parts[-2] if len(item.path.parts) >= 2 else ""
+        marker = domain_markers.get(domain)
+        if marker:
+            item.add_marker(getattr(pytest.mark, marker))
+        if "live_models" in item.nodeid:
+            item.add_marker(pytest.mark.slow)
+        if item.nodeid.endswith(
+            "test_startup_bootstrap.py::test_lifespan_bootstraps_schema_before_serving"
+        ):
+            item.add_marker(pytest.mark.integration)
+            item.add_marker(pytest.mark.e2e)
+            item.add_marker(pytest.mark.slow)

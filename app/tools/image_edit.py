@@ -192,9 +192,10 @@ async def execute(arguments, **kwargs) -> dict[str, Any]:
         full_command = f"/image_edit {prompt}"
         return ok_result(
             {
-                "image_path": f"/static/generated_images/{filename}",
+                "image_path": f"/api/v1/static/generated_images/{filename}",
+                "prompt": prompt,
                 "original_path": image_path,
-                "image_html": f'<img src="/static/generated_images/{filename}" alt="Edited Image">',
+                "image_html": f'<img src="/api/v1/static/generated_images/{filename}" alt="Edited Image">',
                 "model": image_model,
             },
             TOOL_DEFINITION,

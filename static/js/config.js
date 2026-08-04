@@ -7,20 +7,37 @@ import {
 	getByokConfig,
 	getByokProvider,
 	getUserStorageKey,
+	maskApiKey,
 	writeByokConfig,
 } from "./client-storage.js";
 import { listProviders } from "./provider-registry.js";
 import { toggleSidebar } from "./sidebar.js";
 import { renderLogo } from "./visual-registry.js";
 
-// Global config state (populated from /api/config)
+// Global config state (populated from /api/v1/config)
 let appConfig = null;
 
 const PROVIDER_MODELS_CACHE_KEY = getUserStorageKey("provider_models");
+const maskedProviderKeys = new WeakMap();
 
 function setTextIfExists(id, value) {
 	const el = document.getElementById(id);
 	if (el) el.textContent = String(value ?? "");
+}
+
+function escapeHtml(value) {
+	if (value === null || value === undefined) return "";
+	return String(value).replace(
+		/[&<>"']/g,
+		(character) =>
+			({
+				"&": "&amp;",
+				"<": "&lt;",
+				">": "&gt;",
+				'"': "&quot;",
+				"'": "&#39;",
+			})[character],
+	);
 }
 
 function setValueIfExists(id, value) {
@@ -49,6 +66,16 @@ function getProfileAdvancedSource(data) {
 	return data?.advanced || data?.profile || data || {};
 }
 
+function validateProviderKey(provider, value) {
+	if (provider === "custom_openai" || provider === "custom_anthropic") return null;
+	if (!value) return "API key cannot be empty.";
+	if (value.length < 8) return "The API key appears to be incomplete or invalid.";
+	if (/\.\.\.|\*\*\*|•••/.test(value)) {
+		return "The entered value looks like a masked API key.";
+	}
+	return null;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
 	console.log("Config page loaded - initializing...");
 	const loaded = await loadAppConfig();
@@ -61,7 +88,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Load application configuration from backend (SSOT)
 async function loadAppConfig() {
 	try {
-		const response = await fetch("/api/config", {
+		const response = await fetch("/api/v1/config", {
 			headers: { Accept: "application/json" },
 		});
 		const data = await readJsonResponse(response);
@@ -183,7 +210,7 @@ async function loadProviderSettings() {
 					<div class="form-group">
 						<label for="key-${provider}">API Key (Saved in browser)</label>
 						<div class="provider-input-row">
-							<input type="password" id="key-${provider}" class="provider-flex-input" placeholder="sk-..." autocomplete="off" value="${provKey}">
+							<input type="text" id="key-${provider}" class="provider-flex-input provider-key-input" placeholder="sk-..." autocomplete="off" value="${escapeHtml(maskApiKey(provKey))}">
 							<button class="btn btn-secondary btn-sm save-byok-btn" type="button" data-provider="${provider}">Save Key</button>
 						</div>
 					</div>
@@ -224,6 +251,7 @@ async function loadProviderSettings() {
 				isActive ? data.current_model || "" : "",
 			);
 			grid.appendChild(card);
+			setupMaskedKeyInput(card.querySelector(`#key-${provider}`), provKey);
 
 			// Add accordion toggle
 			const header = card.querySelector(".provider-header");
@@ -279,9 +307,20 @@ function saveBYOKForProvider(provider) {
 	const keyInput = document.getElementById(`key-${provider}`);
 	if (!keyInput) return;
 
+	const displayedValue = keyInput.value.trim();
+	const storedKey = maskedProviderKeys.get(keyInput) || "";
+	const key = displayedValue === maskApiKey(storedKey) ? storedKey : displayedValue;
+	const validationError = validateProviderKey(provider, key);
+	if (validationError) {
+		showError(validationError);
+		return;
+	}
+
 	const byok = getByokConfig();
 	const providerConfig = getByokProvider(provider);
-	providerConfig.api_key = keyInput.value.trim();
+	providerConfig.api_key = key;
+	maskedProviderKeys.set(keyInput, key);
+	keyInput.value = maskApiKey(key);
 
 	if (provider === "yuzu_portal") {
 		delete providerConfig.base_url;
@@ -297,6 +336,14 @@ function saveBYOKForProvider(provider) {
 	}
 	showSuccess(`${provider} key saved in browser.`);
 	updateImageModelWarning(getValueIfExists("image-model"));
+}
+
+function setupMaskedKeyInput(input, storedKey) {
+	if (!input) return;
+	maskedProviderKeys.set(input, storedKey);
+	input.addEventListener("focus", () => {
+		input.select();
+	});
 }
 
 function readModelCatalog() {
@@ -377,7 +424,7 @@ async function fetchModelsForProvider(provider) {
 		if (provider.startsWith("custom") && provConfig.base_url)
 			headers["X-Provider-BaseUrl"] = provConfig.base_url;
 
-		const response = await fetch(`/api/proxy/models/${provider}/refresh`, {
+		const response = await fetch(`/api/v1/proxy/models/${provider}/refresh`, {
 			method: "POST",
 			headers: { ...headers, Accept: "application/json" },
 		});
@@ -428,7 +475,7 @@ async function testProviderConnection(providerName) {
 			console.warn("Error attaching BYOK config for test:", e);
 		}
 
-		const response = await fetch("/api/providers/test_connection", {
+		const response = await fetch("/api/v1/providers/test_connection", {
 			method: "POST",
 			headers: headers,
 			body: JSON.stringify({ provider_name: providerName }),
@@ -663,7 +710,7 @@ async function saveImageModel() {
 
 	try {
 		const updates = { image_model: imageModel };
-		const response = await fetch("/api/update_profile", {
+		const response = await fetch("/api/v1/update_profile", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ updates }),
@@ -708,7 +755,7 @@ async function setProviderActive(providerName) {
 	}
 
 	try {
-		const response = await fetch("/api/providers/set_preferred", {
+		const response = await fetch("/api/v1/providers/set_preferred", {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -782,7 +829,7 @@ async function saveProfileSettings() {
 	saveBtn.disabled = true;
 
 	try {
-		const response = await fetch("/api/update_profile", {
+		const response = await fetch("/api/v1/update_profile", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -871,7 +918,7 @@ async function saveAdvancedSettings() {
 			enable_vision: getCheckedIfExists("adv-vision"),
 		};
 
-		const response = await fetch("/api/update_profile", {
+		const response = await fetch("/api/v1/update_profile", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ updates }),
@@ -909,7 +956,7 @@ async function clearChatHistory() {
 	clearBtn.disabled = true;
 
 	try {
-		const response = await fetch("/api/clear_chat", {
+		const response = await fetch("/api/v1/clear_chat", {
 			method: "POST",
 			headers: { Accept: "application/json" },
 		});
@@ -1002,7 +1049,7 @@ async function saveLocation() {
 	}
 
 	try {
-		const response = await fetch("/api/update_location", {
+		const response = await fetch("/api/v1/update_location", {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -1140,7 +1187,7 @@ async function loadGlobalKnowledge() {
 	const list = document.getElementById("global-knowledge-list");
 	if (!list) return;
 	try {
-		const response = await fetch("/api/global-knowledge", {
+		const response = await fetch("/api/v1/global-knowledge", {
 			headers: { Accept: "application/json" },
 		});
 		const data = await readJsonResponse(response);
@@ -1237,10 +1284,10 @@ async function saveKnowledgeEntry(event) {
 	try {
 		const response = await fetch(
 			id
-				? `/api/global-knowledge/${encodeURIComponent(id)}`
-				: "/api/global-knowledge",
+				? `/api/v1/global-knowledge/${encodeURIComponent(id)}`
+				: "/api/v1/global-knowledge",
 			{
-				method: id ? "PATCH" : "POST",
+				method: id ? "PUT" : "POST",
 				headers: {
 					"Content-Type": "application/json",
 					Accept: "application/json",
@@ -1264,7 +1311,7 @@ async function deleteKnowledgeEntry(id) {
 	if (!window.confirm("Delete this Global Knowledge entry?")) return;
 	try {
 		const response = await fetch(
-			`/api/global-knowledge/${encodeURIComponent(id)}`,
+			`/api/v1/global-knowledge/${encodeURIComponent(id)}`,
 			{ method: "DELETE", headers: { Accept: "application/json" } },
 		);
 		const data = await readJsonResponse(response);

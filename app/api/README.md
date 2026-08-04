@@ -1,121 +1,20 @@
 # API Routing Package
 
-FastAPI APIRouter package for yuzu-companion web interface.
+FastAPI API package for the Yuzu Companion web interface. HTTP API endpoints are served under `/api/v1`; `/health` and `/health/ready` remain unversioned for infrastructure probes.
 
-## Structure
+## Current contract
 
-```
-app/api/
-├── __init__.py    # Package init, exposes api_router
-└── routes.py      # All /api/* endpoints
-```
+- `POST /api/v1/send_message` — synchronous message handling
+- `POST /api/v1/send_message_stream` — authenticated SSE message handling
+- `GET /api/v1/profile` and `POST /api/v1/update_profile` — profile read/update
+- `GET /api/v1/chat_history` — authenticated history, with `limit` constrained to 1–1000
+- `GET /api/v1/chat_history/before` — ISO-8601 cursor pagination
+- `DELETE /api/v1/sessions/{session_id}` — delete a session
+- `DELETE /api/v1/presets/{name}` — delete a preset
+- `PUT /api/v1/global-knowledge/{entry_id}` — replace a knowledge entry
+- `GET /health` — liveness probe
+- `GET /health/ready` — readiness probe with a PostgreSQL `SELECT 1` check
 
-## Usage
+Uploaded and generated images are served only through authenticated `/api/v1/static/...` routes. BYOK configuration remains client-side and is sent in the bounded `X-BYOK-Config` header; provider base URLs must be public HTTPS hosts.
 
-In `web.py`:
-
-```python
-from app.api import api_router
-
-app = FastAPI()
-app.include_router(api_router, prefix="/api")
-```
-
-## Endpoints
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/config` | GET | Frontend SSOT for vision models |
-| `/api/send_message` | POST | Synchronous message handling |
-| `/api/send_message_stream` | POST | Streaming message handling |
-| `/api/get_profile` | GET | Profile data |
-| `/api/update_profile` | POST | Update profile settings |
-| `/api/providers` | GET | List available providers |
-| `/api/providers/switch` | POST | Switch provider/model |
-| `/api/providers/test` | POST | Test provider connectivity |
-| `/api/sessions` | GET | List all sessions |
-| `/api/sessions/create` | POST | Create new session |
-| `/api/sessions/switch` | POST | Switch active session |
-| `/api/sessions/rename` | POST | Rename session |
-| `/api/sessions/delete` | POST | Delete session |
-| `/api/memory_stats` | GET | Memory statistics |
-| `/api/api_keys` | GET | List API keys |
-| `/api/api_keys/add` | POST | Add API key |
-| `/api/api_keys/delete` | POST | Delete API key |
-| `/api/upload_image` | POST | Upload image |
-| `/api/generated_images/{filename}` | GET | Serve generated image |
-
-## `/api/config` — Frontend SSOT
-
-Returns dynamic configuration for the frontend, eliminating hardcoded values in JavaScript.
-
-**Response:**
-
-```json
-{
-  "status": "success",
-  "vision": {
-    "models_by_provider": {
-      "chutes": [
-        "Qwen/Qwen3.5-397B-A17B-TEE",
-        "moonshotai/Kimi-K2.5-TEE",
-        "moonshotai/Kimi-K2.6-TEE",
-        "Qwen/Qwen3-VL-235B-A22B-Instruct"
-      ],
-      "openrouter": ["moonshotai/kimi-k2.5"]
-    },
-    "current_provider": "chutes",
-    "current_model": "Qwen/Qwen3.5-397B-A17B-TEE"
-  }
-}
-```
-
-The frontend (`static/js/config.js`) fetches this on page load and populates the global `appConfig` variable.
-
-## Session Tracking
-
-Web session tracking is shared between `web.py` and `routes.py` via:
-
-```python
-# In routes.py
-_web_session_tracker: Dict[str, bool] = {}
-
-
-def set_session_tracker(tracker: Dict[str, bool]):
-    global _web_session_tracker
-    _web_session_tracker = tracker
-```
-
-```python
-# In web.py
-from app.api.routes import set_session_tracker
-
-_web_session_tracker: Dict[str, bool] = {}
-set_session_tracker(_web_session_tracker)
-```
-
-This allows HTML routes in `web.py` and API routes in `routes.py` to share session state.
-
-## Pydantic Models
-
-Request/response validation uses Pydantic models defined in `routes.py`:
-
-- `MessageRequest`
-- `StreamMessageRequest`
-- `ApiKeyRequest`
-- `ChutesKeyRequest`
-- `SessionCreateRequest`
-- `SessionSwitchRequest`
-- `SessionRenameRequest`
-- `SessionDeleteRequest`
-- `ProviderSetRequest`
-- `ProviderTestRequest`
-- `LocationUpdateRequest`
-- `GlobalKnowledgeUpdateRequest`
-
-## Architecture Notes
-
-- All endpoints are async (`async def`)
-- Database operations use `app/db_pg_models_async.py`
-- Business logic remains unchanged from original `web.py`
-- No circular imports: `routes.py` imports from `app/`, not vice versa
+The old POST deletion routes remain hidden compatibility aliases and are not included in the OpenAPI schema.

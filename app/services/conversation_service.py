@@ -4,8 +4,8 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
-from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import UploadFile
 
@@ -77,7 +77,11 @@ class ConversationService:
         q = buffer.subscribe()
         try:
             while True:
-                chunk = await q.get()
+                try:
+                    chunk = await asyncio.wait_for(q.get(), timeout=15)
+                except TimeoutError:
+                    yield ": heartbeat\n\n"
+                    continue
                 if chunk is None:
                     done_event = json.dumps({"type": "done", "turn_id": buffer.turn_id})
                     yield f"data: {done_event}\n\n"
@@ -110,19 +114,16 @@ class ConversationService:
         if not images:
             return []
 
-        uploads_dir = Path("static/uploads")
+        uploads_dir = (
+            Path(__file__).resolve().parent.parent.parent / "static" / "uploads"
+        )
         uploads_dir.mkdir(parents=True, exist_ok=True)
 
-        for i, image_file in enumerate(images):
+        for image_file in images:
             if image_file and image_file.filename:
                 try:
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    # Clean filename
-                    safe_filename = "".join(
-                        c if c.isalnum() or c in "._-" else "_"
-                        for c in image_file.filename
-                    )
-                    filepath = uploads_dir / f"{timestamp}_{i}_{safe_filename}"
+                    extension = Path(image_file.filename).suffix.lower()
+                    filepath = uploads_dir / f"{uuid4().hex}{extension}"
 
                     content = await image_file.read()
                     _ = filepath.write_bytes(content)

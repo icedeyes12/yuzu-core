@@ -1,25 +1,45 @@
 from __future__ import annotations
 
-import os
+import re
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, Response
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
+
+from app.api.models import ERROR_RESPONSES
+from app.api.utils import get_current_user
 
 router = APIRouter(prefix="/static", tags=["static"])
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
+FILENAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
-@router.get("/uploads/{filename}")
-async def serve_uploaded_image(filename: str):
+
+def _safe_file_path(base_dir: Path, filename: str) -> Path:
+    # Only allow direct filenames (no path separators or traversal tokens)
+    if not filename or not FILENAME_RE.fullmatch(filename):
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    file_path = (base_dir / filename).resolve()
+    try:
+        file_path.relative_to(base_dir)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    return file_path
+
+
+@router.get("/uploads/{filename}", response_model=None, responses=ERROR_RESPONSES)
+async def serve_uploaded_image(
+    filename: str, _user_id: str = Depends(get_current_user)
+):
     try:
         uploads_dir = (BASE_DIR / "static" / "uploads").resolve()
-        file_path = (uploads_dir / filename).resolve()
+        allowed_files = {p.name: p for p in uploads_dir.iterdir() if p.is_file()}
+        file_path = allowed_files.get(filename)
 
-        if not str(file_path).startswith(str(uploads_dir) + os.sep):
-            raise HTTPException(status_code=404, detail="Image not found")
-        if file_path.exists() and file_path.is_file():
+        if file_path is not None:
             return FileResponse(file_path)
         raise HTTPException(status_code=404, detail="Image not found")
     except HTTPException:
@@ -28,21 +48,20 @@ async def serve_uploaded_image(filename: str):
         raise HTTPException(status_code=404, detail="Image not found")
 
 
-@router.get("/generated_images/{filename}")
-async def serve_generated_image(filename: str):
+@router.get(
+    "/generated_images/{filename}", response_model=None, responses=ERROR_RESPONSES
+)
+async def serve_generated_image(
+    filename: str, _user_id: str = Depends(get_current_user)
+):
     try:
         generated_dir = (BASE_DIR / "static" / "generated_images").resolve()
-        file_path = (generated_dir / filename).resolve()
+        allowed_files = {p.name: p for p in generated_dir.iterdir() if p.is_file()}
+        file_path = allowed_files.get(filename)
 
-        if not str(file_path).startswith(str(generated_dir) + os.sep):
-            raise HTTPException(status_code=404, detail="Image not found")
-        if file_path.exists() and file_path.is_file():
+        if file_path is not None:
             return FileResponse(file_path)
-        return Response(
-            content='<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1"><title>Image unavailable</title><rect width="1" height="1" fill="transparent"/></svg>',
-            media_type="image/svg+xml",
-            headers={"Cache-Control": "no-store"},
-        )
+        raise HTTPException(status_code=404, detail="Image not found")
     except HTTPException:
         raise
     except Exception:

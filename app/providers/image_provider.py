@@ -34,6 +34,12 @@ CHUTES_MODELS = {
 
 PORTAL_MODELS = {"ag/gemini-3.1-flash-image", "gemini/gemini-2.5-flash-image"}
 
+IMAGE_MODEL_ALIASES = {
+    "z_turbo": "z-image-turbo",
+    "qwen_image": "qwen-image",
+    "qwen_image_edit": "qwen-image-edit",
+}
+
 
 IMAGE_MODEL_PROVIDERS = {
     **{model: CHUTES for model in CHUTES_MODELS},
@@ -77,12 +83,14 @@ def _chutes_payload(
             "negative_prompt": "",
             "num_inference_steps": 30,
         }
+    if image_bytes is None:
+        raise ValueError("image_bytes is required for qwen-image-edit")
     return {
         "prompt": prompt,
         "seed": 42,
         "width": 1024,
         "height": 1024,
-        "image_b64s": [base64.b64encode(image_bytes or b"").decode("ascii")],
+        "image_b64s": [base64.b64encode(image_bytes).decode("ascii")],
         "true_cfg_scale": 1,
         "negative_prompt": "",
         "num_inference_steps": 4,
@@ -131,7 +139,7 @@ async def request_image(
     prompt: str,
     image_bytes: bytes | None = None,
 ) -> tuple[bytes | None, str, str | None]:
-    model = model.strip()
+    model = IMAGE_MODEL_ALIASES.get(model.strip(), model.strip())
     provider = _provider_for_model(model)
     if provider not in {CHUTES, YUZU_PORTAL}:
         return (

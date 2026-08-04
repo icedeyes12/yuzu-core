@@ -56,6 +56,33 @@ function optionalField(payload, field, fallback) {
 	return fallback;
 }
 
+function parseExecOutput(value) {
+	const text = value === null || value === undefined ? "" : String(value);
+	const exitMatch = text.match(/Exit Code:\s*(-?\d+)/i);
+	const durationMatch = text.match(/Duration:\s*([\d.]+)\s*ms/i);
+	const stdoutMarker = text.match(
+		/\[STDOUT\]\s*([\s\S]*?)(?:\s*\[STDERR\]\s*([\s\S]*))?$/i,
+	);
+	const clean = (part) => {
+		const normalized = String(part || "").trim();
+		return normalized === "(empty)" ? "" : normalized;
+	};
+	if (!stdoutMarker) {
+		return {
+			stdout: clean(text),
+			stderr: "",
+			exit_code: exitMatch ? Number(exitMatch[1]) : 0,
+			duration_ms: durationMatch ? Number(durationMatch[1]) : 0,
+		};
+	}
+	return {
+		stdout: clean(stdoutMarker[1]),
+		stderr: clean(stdoutMarker[2]),
+		exit_code: exitMatch ? Number(exitMatch[1]) : 0,
+		duration_ms: durationMatch ? Number(durationMatch[1]) : 0,
+	};
+}
+
 /**
  * Validators return a normalised payload (with safe fallbacks) instead of
  * throwing. The UI MUST call these on every tool result before rendering.
@@ -73,16 +100,29 @@ export const ToolPayloadSchemas = {
 
 	exec(payload) {
 		expectObject(payload, "exec");
-		const command = requireField(payload, "command", "exec");
-		const output = optionalField(payload, "output", "");
+		const formatted = optionalField(
+			payload,
+			"output",
+			optionalField(payload, "error", ""),
+		);
+		const parsed = parseExecOutput(formatted);
+		const command = optionalField(
+			payload,
+			"command",
+			optionalField(payload, "code_snippet", "Execution"),
+		);
 		return {
 			schema_kind: "exec",
 			command,
-			stdout: optionalField(payload, "stdout", output),
-			stderr: optionalField(payload, "stderr", ""),
-			exit_code: optionalField(payload, "exit_code", 0),
-			duration_ms: optionalField(payload, "duration_ms", 0),
-			language: optionalField(payload, "language", null),
+			stdout: optionalField(payload, "stdout", parsed.stdout),
+			stderr: optionalField(payload, "stderr", parsed.stderr),
+			exit_code: optionalField(payload, "exit_code", parsed.exit_code),
+			duration_ms: optionalField(payload, "duration_ms", parsed.duration_ms),
+			language: optionalField(
+				payload,
+				"language",
+				payload.code_snippet ? "python" : null,
+			),
 		};
 	},
 
@@ -92,6 +132,7 @@ export const ToolPayloadSchemas = {
 			schema_kind: "image",
 			image_path: requireField(payload, "image_path", "image"),
 			image_url: optionalField(payload, "image_url", null),
+			prompt: optionalField(payload, "prompt", ""),
 			alt: optionalField(payload, "alt", "Image"),
 			model: optionalField(payload, "model", null),
 		};
@@ -123,7 +164,7 @@ export const ToolPayloadSchemas = {
 				"wind_kph",
 				current.wind_speed_10m ?? null,
 			),
-			location_label: optionalField(payload, "location_label", "Weather"),
+			location_label: optionalField(payload, "location_label", null),
 			requested_date: optionalField(payload, "requested_date", null),
 			daily: Array.isArray(daily) ? daily : [],
 			icon: optionalField(payload, "icon", null),

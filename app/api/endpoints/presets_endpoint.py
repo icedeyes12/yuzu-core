@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field
 
+from app.api.models import ERROR_RESPONSES, PresetResponse
 from app.api.utils import get_current_user
 from app.core.logging_config import get_logger
 from app.core.presets import (
@@ -51,7 +52,7 @@ async def _save_model_parameters(
     _ = await update_profile_async({"model_parameters": model_parameters}, user_id)
 
 
-@router.get("/presets/list")
+@router.get("/presets/list", response_model=PresetResponse, responses=ERROR_RESPONSES)
 async def api_list_presets(user_id: str = Depends(get_current_user)):
     model_parameters = await _load_model_parameters(user_id)
     return {
@@ -60,7 +61,9 @@ async def api_list_presets(user_id: str = Depends(get_current_user)):
     }
 
 
-@router.post("/presets/upsert")
+@router.post(
+    "/presets/upsert", response_model=PresetResponse, responses=ERROR_RESPONSES
+)
 async def api_upsert_preset(
     request: PresetUpsertRequest, user_id: str = Depends(get_current_user)
 ):
@@ -84,7 +87,9 @@ async def api_upsert_preset(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/presets/activate")
+@router.post(
+    "/presets/activate", response_model=PresetResponse, responses=ERROR_RESPONSES
+)
 async def api_activate_preset(
     request: PresetActivateRequest, user_id: str = Depends(get_current_user)
 ):
@@ -104,21 +109,29 @@ async def api_activate_preset(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/presets/delete")
-async def api_delete_preset(
+async def _delete_preset(name: str, user_id: str) -> dict[str, object]:
+    model_parameters = await _load_model_parameters(user_id)
+    presets, removed = delete_preset_helper(model_parameters, name)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Preset not found")
+    model_parameters = sync_top_level_with_active(model_parameters)
+    model_parameters["presets"] = presets
+    await _save_model_parameters(model_parameters, user_id)
+    return {"status": "success", "presets": presets}
+
+
+@router.post("/presets/delete", include_in_schema=False)
+async def api_delete_preset_legacy(
     request: PresetDeleteRequest, user_id: str = Depends(get_current_user)
 ):
-    try:
-        model_parameters = await _load_model_parameters(user_id)
-        presets, removed = delete_preset_helper(model_parameters, request.name)
-        if not removed:
-            raise HTTPException(status_code=404, detail="Preset not found")
-        model_parameters = sync_top_level_with_active(model_parameters)
-        model_parameters["presets"] = presets
-        await _save_model_parameters(model_parameters, user_id)
-        return {"status": "success", "presets": presets}
-    except HTTPException:
-        raise
-    except Exception as exc:
-        log.error("delete_preset failed: %s", exc)
-        raise HTTPException(status_code=500, detail="Internal server error")
+    return await _delete_preset(request.name, user_id)
+
+
+@router.delete(
+    "/presets/{name}", response_model=PresetResponse, responses=ERROR_RESPONSES
+)
+async def api_delete_preset(
+    name: str = Path(..., min_length=1, max_length=64),
+    user_id: str = Depends(get_current_user),
+):
+    return await _delete_preset(name, user_id)
