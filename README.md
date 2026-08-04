@@ -26,67 +26,18 @@ If you insist on actually installing this, go read [INSTALL.md](INSTALL.md) for 
 
 But honestly, just ask ChatGPT. It will explain it better.
 
-## Remote frontend validation
+## Continuous integration
 
-Termux runs the local gates first, then syncs the current working tree to Zo
-Computer over the configured SSH alias `2`. No Git operation or automatic
-commit is involved; the local workspace remains authoritative.
-
-```bash
-yuzu-validate
-# or
-python -m scripts.remote_validation
-```
-
-Pipeline is fail-fast.
-
-Termux:
+GitHub Actions runs the sequential quality pipeline in `.github/workflows/ci.yml`:
 
 1. `ruff format --check .`
 2. `ruff check .`
-3. Local `python -m compileall .`
-4. Remote `git status --porcelain` preflight
-5. Stop if the remote working tree is dirty
-6. Detect the local Git branch
-7. SSH to Zo Computer
-8. Remote `git fetch --all --prune`
-9. Remote `git checkout -B <branch> origin/<branch>`
-10. `rsync` over SSH to `/home/workspace/yuzu-companion`
-11. Remote conditional `bun install --frozen-lockfile`
-12. Remote `node --check` for every `static/**/*.js`
-13. Remote `bunx biome check static/`
-14. Remote `pytest`
+3. `python -m compileall .`
+4. JavaScript syntax checks for `static/**/*.js`
+5. `bunx biome check static/`
+6. `pytest`
 
-Native Linux:
-
-1. `ruff format --check .`
-2. `ruff check .`
-3. Local `python -m compileall .`
-4. Conditional local `bun install --frozen-lockfile`
-5. Local `node --check` for every `static/**/*.js`
-6. Local `bunx biome check static/`
-7. Local `pytest`
-
-Before sync, the remote working tree is checked because Zo may contain active
-Hermes or builtin-agent work. A dirty remote checkout stops the pipeline before
-fetch, checkout, rsync, or validators. No reset, stash, stash pop, or global
-Git config mutation is performed. The branch preparation uses `fetch` plus
-checkout, never `git pull`; rsync then makes the local working tree
-authoritative. Excluded from sync: `.git/`,
-`.venv/`, `__pycache__/`, `.ruff_cache/`, `node_modules/`, `.pytest_cache/`.
-When `rsync` is unavailable, the command falls back to a streamed `tar`
-archive over SSH. Every command's stdout and stderr is returned.
-
-Example output:
-
-```text
-All checks passed!
-3 passed in 0.19s
-sent 42.1K bytes  received 1.2K bytes
-Checked 87 files in 0.31s
-```
-
----
+CodeQL runs separately for Python and JavaScript/TypeScript in `.github/workflows/codeql.yml`.
 
 ## For the 3 People Actually Reading This
 

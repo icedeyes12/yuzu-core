@@ -31,7 +31,6 @@ dependencies = [
 [project.scripts]
 yuzu = "cli.app:main"
 yuzu-server = "main:app"
-yuzu-validate = "scripts.remote_validation:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

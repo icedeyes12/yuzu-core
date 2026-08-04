@@ -18,11 +18,25 @@ for (const value of [
 	"/api/v1/static/generated_images/../secret.png",
 	"/api/v1/static/generated_images/not-an-image.txt",
 	"/api/v1/static/generated_images/",
-	]) {
-	assert.equal(safeImagePath(value), null, `expected unsafe image path: ${value}`);
+]) {
+	assert.equal(
+		safeImagePath(value),
+		null,
+		`expected unsafe image path: ${value}`,
+	);
 }
 
 assert.equal(
 	safeImagePath("/api/v1/static/generated_images/generated.png"),
 	"/api/v1/static/generated_images/generated.png",
+);
+assert.equal(
+	safeImagePath(
+		"/storage/emulated/0/projects/yuzu-companion/static/uploads/upload.jpg",
+	),
+	"/api/v1/static/uploads/upload.jpg",
+);
+assert.equal(
+	safeImagePath("/api/v1/static/uploads/upload-name.jpg"),
+	"/api/v1/static/uploads/upload-name.jpg",
 );

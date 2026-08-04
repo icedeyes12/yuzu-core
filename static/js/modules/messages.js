@@ -3,6 +3,7 @@
 
 import { renderRuntimeIcon } from "../runtime-icon-renderer.js";
 import { findMessageById } from "./state.js";
+import { safeImagePath } from "./tool-renderer/dom-utils.js";
 
 /**
  * Create a message element with proper structure.
@@ -148,9 +149,9 @@ export function renderMessageContent(rawText, _isUser = false) {
 			window.__yuzuMarkdownMetrics.parseDurationMs +=
 				performance.now() - startedAt;
 			return rendered.replace(
-				/(<img[^>]+(?:src|data-src)=["'])(?:(?:https?:\/\/[^/]+)?(?:\/chat\/|\/))?(?:(?:\.\.\/)+)?static\/(generated_images|uploads)\/([^"']+)(["'])/g,
-				(_match, prefix, kind, filename, suffix) =>
-					`${prefix}/api/v1/static/${kind}/${encodeURIComponent(filename)}${suffix}`,
+				/(<img\b[^>]*\bsrc=["'])([^"']+)(["'])/gi,
+				(_match, prefix, source, suffix) =>
+					`${prefix}${safeImagePath(source) || source}${suffix}`,
 			);
 		}
 

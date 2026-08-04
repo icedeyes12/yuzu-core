@@ -1,5 +1,6 @@
 import { createMessageElement } from "./messages.js";
 import { chatStore } from "./store.js";
+import { safeImagePath } from "./tool-renderer/dom-utils.js";
 import "./fence-components.js";
 import { patchContentContainer } from "./renderer/dom-patcher.js";
 import {
@@ -192,20 +193,8 @@ export class DOMRenderer {
 	}
 
 	_renderAttachment(att) {
-		let url = att.url || att.path;
+		const url = safeImagePath(att?.url || att?.path);
 		if (!url) return "";
-		if (att.path && !att.url) {
-			const normalizedPath = att.path.replace(/\\/g, "/");
-			const filename = normalizedPath.split("/").pop();
-			if (!filename || filename.includes("..")) return "";
-			const directory = normalizedPath.includes("generated_images")
-				? "generated_images"
-				: normalizedPath.includes("uploads")
-					? "uploads"
-					: null;
-			if (!directory) return "";
-			url = `/api/v1/static/${directory}/${encodeURIComponent(filename)}`;
-		}
 		return `<img src="${escapeHtml(url)}" class="attachment-img" alt="Attachment" />`;
 	}
 
