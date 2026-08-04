@@ -130,15 +130,13 @@ class GraphMemoryRepository:
             content=content, threshold=threshold,
         )
         archived = 0
-        target_words = set(target.lower().split())
         for candidate in candidates:
             candidate_parts = str(candidate.get("content", "")).split(" ", 2)
             if len(candidate_parts) != 3 or candidate_parts[0] != entity or candidate_parts[1] != relation:
                 continue
-            candidate_words = set(candidate_parts[2].lower().split())
-            if not target_words or not (
-                target_words <= candidate_words or candidate_words <= target_words
-            ):
+            candidate_target = candidate_parts[2]
+            # Archive only when target text exactly matches (normalized)
+            if candidate_target.lower().strip() != target.lower().strip():
                 continue
             if await GraphMemoryRepository.archive_node(
                 user_id=user_id, node_id=str(candidate["id"]), canonical_node_id=node_id

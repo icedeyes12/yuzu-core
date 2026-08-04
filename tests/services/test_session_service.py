@@ -150,3 +150,41 @@ async def test_auto_name_uses_tenant_scoped_count_and_atomic_rename(monkeypatch)
         ("count", "session", "user"),
         ("rename", "session", "Stable title", "user"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_auto_name_does_not_leak_session_name_to_logs(monkeypatch, caplog):
+    """Test that generated session names are not logged to prevent data leakage."""
+    async def count(session_id, *, user_id):
+        return 10
+
+    async def profile(_user_id):
+        return {"providers_config": {}}
+
+    sensitive_title = "My Secret Project Discussion"
+
+    async def title(*_args, **_kwargs):
+        return sensitive_title
+
+    async def rename(session_id, name, user_id):
+        return True
+
+    monkeypatch.setattr(SessionService, "_auto_name_with_llm", title)
+    monkeypatch.setattr(SessionService, "_auto_name_from_history", title)
+    monkeypatch.setattr("app.services.session_service.Database.get_profile", profile)
+    monkeypatch.setattr(
+        "app.services.session_service.Database.get_session_messages_count", count
+    )
+    monkeypatch.setattr(
+        "app.services.session_service.Database.rename_session_if_placeholder", rename
+    )
+
+    await SessionService.auto_name_session_if_needed_async(
+        "test-session-id", {"name": "New Chat"}, user_id="test-user"
+    )
+
+    # Verify the title is NOT in any log messages
+    log_output = caplog.text
+    assert sensitive_title not in log_output
+    # Verify the session ID IS in the log (for debugging)
+    assert "test-session-id" in log_output

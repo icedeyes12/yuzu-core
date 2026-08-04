@@ -146,7 +146,7 @@ class SessionService:
 
         renamed = await Database.rename_session_if_placeholder(session_id, name, user_id)
         if renamed:
-            log.info("auto_name: renamed session %s to '%s'", session_id, name)
+            log.info("auto_name: renamed session=%s outcome=success", session_id)
         else:
             log.info(
                 "auto_name: placeholder no longer available session=%s",

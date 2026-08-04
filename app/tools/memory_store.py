@@ -45,10 +45,12 @@ TOOL_DEFINITION = ToolDefinition(
 async def _classify_category_llm_async(fact: str, profile: dict[str, Any]) -> str:
     """Classify a fact into one graph node category."""
     try:
+        from app.core.memory_llm import memory_llm_call
         from app.providers import get_ai_manager
 
         manager = await get_ai_manager()
-        response = await manager._internal_llm_call(
+        response = await memory_llm_call(
+            manager,
             messages=[
                 {
                     "role": "system",

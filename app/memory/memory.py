@@ -422,7 +422,7 @@ async def run_memory_pipeline_async(
                 await mark_segmentation_done_async(
                     session_id, last_msg.get("id", 0), processed_count, user_id=user_id
                 )
-            return {"episodes": 0, "claims": 0, "llm_calls": 1}
+            return {"episodes": 0, "claims": 0, "llm_calls": llm_calls}
 
         episode_count = 0
         claim_count = 0
@@ -518,14 +518,22 @@ async def run_memory_pipeline_async(
                         message_ids=evidence_message_ids,
                     )
                 claim_count += 1
-                consolidation = await GraphMemoryRepository.consolidate_node(
-                    user_id=user_id,
-                    node_id=node_id,
-                    node_type="fact",
-                    content=node_content,
-                )
-                consolidation_candidates += consolidation["candidates"]
-                consolidation_archived += consolidation["archived"]
+                try:
+                    consolidation = await GraphMemoryRepository.consolidate_node(
+                        user_id=user_id,
+                        node_id=node_id,
+                        node_type="fact",
+                        content=node_content,
+                    )
+                    consolidation_candidates += consolidation["candidates"]
+                    consolidation_archived += consolidation["archived"]
+                except Exception as consolidation_error:
+                    logger.warning(
+                        "consolidation failed node_id=%s content=%s error=%s",
+                        node_id,
+                        node_content[:100],
+                        type(consolidation_error).__name__,
+                    )
 
                 related_claims = [
                     other
@@ -623,10 +631,7 @@ async def _background_worker_async():
                 result = await run_memory_pipeline_async(
                     session_to_process, count, user_id=user_id
                 )
-                if (
-                    result.get("processed_messages", 0) < BATCH_SIZE
-                    or time.monotonic() - started >= MAX_WORKER_RUNTIME_SECONDS
-                ):
+                if time.monotonic() - started >= MAX_WORKER_RUNTIME_SECONDS:
                     break
                 state = await get_pipeline_state_async(session_to_process, user_id)
                 last_message_id = state.get("last_segmented_message_id")
