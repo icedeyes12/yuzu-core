@@ -127,9 +127,13 @@ details.tool-call-indicator > summary {
 
 .tool-card__title {
 	min-width: 0;
+	flex: 0 1 auto;
 	font-weight: 650;
-	overflow-wrap: anywhere;
-	word-break: break-word;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	overflow-wrap: normal;
+	word-break: normal;
 }
 
 .tool-card__meta {
