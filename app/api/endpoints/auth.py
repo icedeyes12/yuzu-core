@@ -46,23 +46,34 @@ def _require_env(name: str) -> str:
     return val.strip()
 
 
-def _rewrite_redirect_uri(request: Request, original_uri: str) -> str:
-    """Rewrites localhost callback URI to public domain using forwarded headers."""
-    forwarded_host = request.headers.get("x-forwarded-host")
-    forwarded_proto = request.headers.get("x-forwarded-proto", "http")
+_OAUTH_CALLBACK_PATH = "/api/v1/auth/callback"
 
+
+def _rewrite_redirect_uri(request: Request, original_uri: str) -> str:
+    """Build the registered callback for the origin used by this request."""
+    configured_origins = {
+        origin.strip().rstrip("/")
+        for origin in os.environ.get("OAUTH_REDIRECT_ORIGINS", "").split(",")
+        if origin.strip()
+    }
+    forwarded_host = request.headers.get("x-forwarded-host")
+    forwarded_proto = request.headers.get("x-forwarded-proto")
     if forwarded_host:
-        parsed = urlsplit(original_uri)
-        return urlunsplit(
-            (
-                forwarded_proto,
-                forwarded_host,
-                parsed.path,
-                parsed.query,
-                parsed.fragment,
-            )
-        )
-    return original_uri
+        scheme = (forwarded_proto or "https").split(",", 1)[0].strip()
+        host = forwarded_host.split(",", 1)[0].strip()
+    else:
+        scheme = request.url.scheme
+        host = request.url.netloc
+
+    candidate_origin = f"{scheme}://{host}".rstrip("/")
+    parsed = urlsplit(original_uri)
+    original_origin = urlunsplit((parsed.scheme, parsed.netloc, "", "", "")).rstrip(
+        "/"
+    )
+    if configured_origins and candidate_origin not in configured_origins:
+        candidate_origin = original_origin
+
+    return f"{candidate_origin}{_OAUTH_CALLBACK_PATH}"
 
 
 @router.get("/login", response_model=None, responses=ERROR_RESPONSES)
