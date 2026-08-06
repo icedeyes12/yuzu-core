@@ -1,6 +1,5 @@
 # Archive
 
-This directory contains retired roadmaps, superseded decisions, and historical specs.
+This directory contains historical material that is no longer a source of truth: completed audits, one-time reports, retired specifications, and superseded plans.
 
-We do not delete old plans; we move them here for historical context.
-Files here should not be used to guide current development.
+Archived documents are preserved for provenance only. Current implementation guidance belongs in the active references listed by [`docs/README.md`](../README.md).

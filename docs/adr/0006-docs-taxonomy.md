@@ -1,30 +1,32 @@
-# ADR 0001: Documentation taxonomy (roadmap / adr / specs / scratch / archive)
+# ADR 0006: Documentation taxonomy
 
-Status: Accepted
-Date: 2026-08-06
+- Status: Accepted
+- Date: 2026-08-06
 
 ## Context
 
-Ad-hoc plan files were scattering across whatever working directory the agent
-happened to be in (`~/`, repo root, random paths). The rise of remote agents
-(Hermes, Codex, ChatGPT drafts) made this worse: multiple authors, no SSOT.
+Documentation, plans, reports, and drafts had been mixed together. That made it unclear which files described the current implementation and encouraged duplicate documents.
 
 ## Decision
 
-`docs/` is the single source of truth. Standard subfolders:
+`docs/` is the documentation source of truth. Its maintained structure is:
 
-- `docs/roadmap/` — living multi-version roadmaps
-- `docs/adr/` — Architecture Decision Records (decisions that are settled)
-- `docs/specs/` — features actively being built
-- `docs/scratch/` — raw drafts, free to mutate; not facts
-- `docs/archive/` — retired roadmaps / superseded decisions
+- `docs/architecture/` — system topology and ownership boundaries
+- `docs/backend/` — backend behavior, HTTP, streaming, and tools
+- `docs/database/` — persistence and schema invariants
+- `docs/frontend/` — browser ownership and event contracts
+- `docs/memory/` — graph memory behavior
+- `docs/adr/` — immutable architectural decisions
+- `docs/roadmap/` — future work only
+- `docs/specs/` — active feature specifications only
+- `docs/scratch/` — disposable drafts, never a source of truth
+- `docs/archive/` — historical reports and superseded documents
 
-Existing top-level .md files in `docs/` are left as-is (legacy); new content
-must use the subfolders above. No new plan files in the repo root or in the
-agent's `pwd`.
+`docs/README.md` is the index. Existing documents must be updated, merged, archived, or deleted before adding another document for the same concept.
 
 ## Consequences
 
-- Agents (Hermes, Codex, humans) have exactly one place to look for plans.
-- `docs/scratch/` absorbs early-stage ideas without polluting the repo root.
-- Archiving is explicit: move a file, don't delete it.
+- Each concept has one maintained owner.
+- Historical material is separated from active guidance.
+- Scratch content cannot silently become implementation authority.
+- Documentation work includes an audit of links and implementation drift.

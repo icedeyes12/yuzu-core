@@ -1,9 +1,5 @@
-# Scratch / Drafts
+# Scratch
 
-This directory is a sandbox for raw ideas, rough drafts, and early planning.
+`scratch/` contains disposable drafts and exploratory notes. It is not a source of truth and active documentation must never depend on it.
 
-**Rules:**
-- Files here are explicitly *not* facts.
-- Agents should not treat these files as established project constraints.
-- Safe to mutate, rewrite, or delete without consequence.
-- When an idea solidifies, it moves to `specs/`, `adr/`, or `roadmap/`.
+Delete drafts that are no longer useful. Promote a settled idea by updating an existing active document, ADR, spec, or roadmap; do not copy the same text into multiple places.

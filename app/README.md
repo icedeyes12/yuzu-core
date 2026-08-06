@@ -140,17 +140,17 @@ Composes the routers exported by each `app/api/endpoints/*` module into a single
 
 | Module | Prefix | Purpose |
 | --- | --- | --- |
-| `auth.py` | `/api/auth` | Login, logout, session cookie |
-| `chat.py` | `/api/chat` | Synchronous + streaming message handling |
-| `memory.py` | `/api/memory` | Graph memory stats and rebuild |
-| `presets_endpoint.py` | `/api/presets` | Preset CRUD + active switching |
-| `profile.py` | `/api/profile` | Profile read + update (settings, providers, advanced params) |
-| `sessions.py` | `/api/sessions` | Session CRUD + auto-rename |
-| `stream.py` | `/api/stream` | Stream state recovery for reconnecting clients |
+| `auth.py` | `/api/v1/auth` | Login, logout, and session identity |
+| `chat.py` | `/api/v1` | Message generation, streaming, images, and unload |
+| `memory.py` | `/api/v1/memory` | Graph memory stats and rebuild |
+| `presets_endpoint.py` | `/api/v1/presets` | Preset CRUD and active switching |
+| `profile.py` | `/api/v1/profile` | Profile read and update |
+| `sessions.py` | `/api/v1/sessions` and `/api/v1/chat_history` | Session CRUD and history |
+| `stream.py` | `/api/v1/stream` | Stream state recovery for reconnecting clients |
 
-`/api/config` (served by `ConfigService.get_frontend_config`) is the frontend SSOT for provider/vision model lists — eliminates hardcoded model lists in `static/js/config.js`.
+`/api/v1/config` (served by `ConfigService.get_frontend_config`) is the frontend source for provider and vision model lists.
 
-The streaming endpoints (`/api/chat/stream`, `/api/profile`) support state reattachment: when a background stream is still active, they surface the live `StreamBuffer` content so the UI can recover after a disconnect or reload without losing the partial assistant response.
+`/api/v1/send_message_stream` supports state reattachment through `StreamBuffer` when a background stream is still active, allowing the UI to recover partial output after a disconnect or reload.
 
 ---
 
@@ -372,7 +372,7 @@ The pipeline runs asynchronously in batches. Retrieval is tenant-scoped, uses ex
 | `extractor.py` | One structured extraction pass per eligible batch |
 | `graph.py` | PostgreSQL graph persistence, provenance, and bounded expansion |
 | `retrieval.py` | Graph retrieval and prompt-shaped formatting |
-| `embedder.py` | Chutes embedding client (`EMBEDDING_DIM=4096`) |
+| `embedder.py` | Yuzu Portal embedding client (`gemini/gemini-embedding-2-preview`, dimension `1536`) |
 | `tools/memory_store.py` | Explicit tool-driven inferred node creation |
 | `tools/memory_search.py` | Graph search tool |
 
@@ -527,8 +527,8 @@ memory during the request lifecycle.
 
 - **Frontend Storage:** API keys are stored securely in the browser's
   `localStorage` (`yuzu_byok_config`).
-- **Transmission:** Keys are injected dynamically via the `X-Provider-Key`
-  and `X-Provider-BaseUrl` HTTP headers.
+- **Transmission:** The browser sends the bounded `X-BYOK-Config` request
+  header; the backend resolves it into a request-scoped keyring.
 - **Backend Role:** The backend resolves these headers into a transient
   `LLMContext` object via `app/core/context.py`'s request keyring, ensuring
   zero persistent secret storage in the database.
@@ -551,7 +551,7 @@ sequenceDiagram
     participant T as app/tools/registry.py
     participant DB as PostgreSQL
 
-    U->>API: POST /api/chat/stream
+    U->>API: POST /api/v1/send_message_stream
     API->>O: handle_user_message_streaming
     O->>O: _dedupe_image_paths(cached, image_paths)
     O->>DB: persist user message + image_paths

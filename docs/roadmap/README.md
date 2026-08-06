@@ -1,10 +1,7 @@
-# Living Roadmaps
+# Roadmaps
 
-Living architecture roadmaps for Yuzu Companion. Latest: **v4.3** —
-see `v4.3-roadmap.md`.
+Roadmaps describe future work only. They must not be used as evidence that a feature already exists.
 
-Rules:
-- Root of repo and `docs/` root are NOT for new plan files.
-- Use this directory for multi-version plans; smaller in-flight specs live
-  in `docs/specs/`; raw drafts in `docs/scratch/`; decisions in `docs/adr/`;
-  retired versions in `docs/archive/`.
+- [Yuzu Companion v4.3 roadmap](v4.3-roadmap.md)
+
+When roadmap work ships, update the appropriate active reference and remove the completed detail from the roadmap. Archive a superseded roadmap under `docs/archive/` when it still has historical value.

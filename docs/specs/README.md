@@ -1,11 +1,7 @@
-# Feature Specs
+# Feature specifications
 
-This directory contains technical specifications for features actively being built or planned.
+This directory is for active feature specifications: intended behavior, contracts, and boundaries for work that is not yet the baseline implementation.
 
-Unlike ADRs (which capture *decisions* and *why*), Specs capture the *how*:
-- API contracts
-- Data structures
-- Component responsibilities
-- Step-by-step logic
-
-When a feature ships and its behavior becomes the baseline, its spec is either archived or folded into the main architecture docs.
+- A spec is not a roadmap and must not claim that an unimplemented feature exists.
+- When a feature becomes the baseline, fold its stable behavior into the relevant active reference and archive or delete the spec.
+- Keep one spec per feature. Update an existing spec instead of creating a duplicate.
