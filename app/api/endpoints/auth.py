@@ -67,9 +67,7 @@ def _rewrite_redirect_uri(request: Request, original_uri: str) -> str:
 
     candidate_origin = f"{scheme}://{host}".rstrip("/")
     parsed = urlsplit(original_uri)
-    original_origin = urlunsplit((parsed.scheme, parsed.netloc, "", "", "")).rstrip(
-        "/"
-    )
+    original_origin = urlunsplit((parsed.scheme, parsed.netloc, "", "", "")).rstrip("/")
     if configured_origins and candidate_origin not in configured_origins:
         candidate_origin = original_origin
 
