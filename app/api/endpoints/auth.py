@@ -41,7 +41,7 @@ def _require_env(name: str) -> str:
     """Retrieve mandatory environment variable or raise 500."""
     val = os.environ.get(name)
     if not val:
-        log.error(f"Missing required environment variable: {name}")
+        log.error("Missing required environment variable")
         raise HTTPException(status_code=500, detail="Server configuration error")
     return val.strip()
 
