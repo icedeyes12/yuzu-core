@@ -44,10 +44,10 @@ cli/app.py       Inline async REPL, prompt_toolkit, dan rich rendering
 cli/client.py    Async HTTP client dan parser structured SSE events
                  token, tool_call, tool_result, done
 
-/api/v1/send_message_stream   Streaming chat endpoint
-/api/v1/sessions/list          Daftar session
-/api/v1/sessions/switch        Pindah session
-/api/v1/chat_history            Muat history percakapan
+/api/send_message_stream   Streaming chat endpoint
+/api/sessions/list          Daftar session
+/api/sessions/switch        Pindah session
+/api/chat_history            Muat history percakapan
 ```
 
 CLI hanya menggunakan endpoint yang sudah tersedia. Tidak ada perubahan pada direktori `app/`.

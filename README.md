@@ -27,6 +27,7 @@ Yuzu Companion is a private AI companion application with persistent conversatio
 python -m venv .venv
 . .venv/bin/activate
 python -m pip install -r requirements.txt
+python -m pip install .
 cp .env.example .env
 ```
 
