@@ -54,6 +54,56 @@ def test_adaptive_batches_truncate_oversized_message_without_mutating_source():
     assert original["content"] == "x" * 200
 
 
+def test_memory_cursor_query_counts_only_conversational_messages():
+    from app.db.queries import SQL_MESSAGE_SELECT_AFTER_ID
+
+    assert "role IN ('user', 'assistant')" in SQL_MESSAGE_SELECT_AFTER_ID
+
+
+@pytest.mark.asyncio
+async def test_legacy_count_checkpoint_reads_beyond_fetch_cap(monkeypatch):
+    from app.memory import memory
+
+    calls = []
+
+    async def messages(
+        session_id,
+        limit=100,
+        order="ASC",
+        *,
+        user_id,
+        offset=0,
+        conversational_only=False,
+    ):
+        calls.append(
+            {
+                "session_id": session_id,
+                "limit": limit,
+                "order": order,
+                "user_id": user_id,
+                "offset": offset,
+                "conversational_only": conversational_only,
+            }
+        )
+        return [{"id": index, "role": "user"} for index in range(700)]
+
+    monkeypatch.setattr(memory, "get_session_messages_async", messages)
+
+    result = await memory._get_messages_after_count_async("session", 512, "user")
+
+    assert len(result) == 188
+    assert calls == [
+        {
+            "session_id": "session",
+            "limit": None,
+            "order": "ASC",
+            "user_id": "user",
+            "offset": 0,
+            "conversational_only": True,
+        }
+    ]
+
+
 def test_memory_disabled_without_configured_provider():
     clear_request_keyring()
     from app.core.byok import YUZU_PORTAL, get_provider_key

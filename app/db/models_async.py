@@ -35,6 +35,7 @@ from app.db.queries import (
     SQL_MESSAGE_SELECT_ASC_OFFSET_LIMIT,
     SQL_MESSAGE_SELECT_BEFORE_TS,
     SQL_MESSAGE_SELECT_CONTENT_BY_ID,
+    SQL_MESSAGE_SELECT_CONVERSATIONAL_ASC_ALL,
     SQL_MESSAGE_SELECT_DESC_LIMIT,
     SQL_MESSAGE_SELECT_ENCRYPTED,
     SQL_MESSAGE_UPDATE,
@@ -389,24 +390,29 @@ async def update_message_async(message_id: int, content: str) -> bool:
 
 async def get_session_messages_async(
     session_id: str,
-    limit: int = 100,
+    limit: int | None = 100,
     order: str = "ASC",
     *,
     user_id: str,
     offset: int = 0,
+    conversational_only: bool = False,
 ) -> list[DBRow]:
     """Fetch messages for a session in chronological order.
 
     order: "ASC" (oldest first) or "DESC" (newest first).
     """
-    if offset and order.upper() == "ASC":
+    if conversational_only and order.upper() == "ASC":
+        query = SQL_MESSAGE_SELECT_CONVERSATIONAL_ASC_ALL
+    elif offset and order.upper() == "ASC":
         query = SQL_MESSAGE_SELECT_ASC_OFFSET_LIMIT
     elif order.upper() == "DESC":
         query = SQL_MESSAGE_SELECT_DESC_LIMIT
     else:
         query = SQL_MESSAGE_SELECT_ASC_LIMIT
     params = (
-        (session_id, user_id, limit, offset)
+        (session_id, user_id)
+        if conversational_only and order.upper() == "ASC"
+        else (session_id, user_id, limit, offset)
         if offset and order.upper() == "ASC"
         else (session_id, user_id, limit)
     )

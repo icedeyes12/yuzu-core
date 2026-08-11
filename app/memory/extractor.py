@@ -103,7 +103,7 @@ def build_adaptive_batches(
                 batches.append(current)
                 current, current_tokens = [], 0
             truncated = dict(message)
-            max_chars = max(1, (token_budget - 8) * _CHARS_PER_TOKEN)
+            max_chars = max(1, (token_budget - 8) * _CHARS_PER_TOKEN - 3)
             truncated["content"] = _content_text(message)[:max_chars]
             batches.append([truncated])
             continue

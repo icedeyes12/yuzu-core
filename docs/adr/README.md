@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-ADRs record architectural decisions and their rationale, including proposed, accepted, rejected, and superseded statuses. Accepted ADRs are immutable. If a decision changes, add a new ADR that explicitly supersedes the earlier one.
+ADRs record architectural decisions and their rationale. Accepted ADRs are immutable. If a decision changes, add a new ADR that explicitly supersedes the earlier one.
 
 - [0001 — Reusable API response contract](0001-response-contract.md)
 - [0002 — RFC 9457 errors](0002-rfc9457-errors.md)

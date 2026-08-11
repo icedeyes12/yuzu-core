@@ -61,7 +61,7 @@ graph LR
 
 ## Directory Structure
 
-```
+```text
 app/
 ├── api/
 │   ├── endpoints/              # FastAPI routers (auth, chat, memory, profile, sessions, stream, presets_endpoint)
@@ -128,17 +128,7 @@ Terminal interface using Rich + prompt_toolkit. Registered as the `yuzu` console
 
 ## API Routing
 
-### `file app/api/__init__.py`
-
-Package init that exposes `api_router` for registration in `main.py`.
-
-### `file app/api/main.py`
-
-Composes the routers exported by each `app/api/endpoints/*` module into a single `api_router`.
-
-### Routers in `app/api/endpoints/`
-
-The API routers export versioned endpoints under `/api/v1` including auth, chat (message generation and streaming), sessions, profile, memory, presets, and stream recovery. See [`docs/backend/README.md`](../docs/backend/README.md) for the complete route reference.
+`app/api/` owns HTTP routing, authentication dependencies, validation, and error serialization. The canonical route inventory and stream contract live in [`docs/backend/`](../docs/backend/); this package guide intentionally does not duplicate them.
 
 ---
 
@@ -338,7 +328,7 @@ flowchart LR
     J --> K[LLM response]
 ```
 
-The pipeline runs asynchronously in batches. Retrieval is tenant-scoped, uses exact pgvector search when embeddings are available, falls back to trigram text search, and returns bounded graph expansion. Each retrieved node has explicit confidence, importance, validity, status, and provenance. Graph quality is maintained separately by the Memory Guardian skill.
+The pipeline runs asynchronously in batches. See [`docs/memory/`](../docs/memory/) for the current extraction, retrieval, embedding, and provenance contract.
 
 ### Ownership
 
@@ -360,7 +350,7 @@ The pipeline runs asynchronously in batches. Retrieval is tenant-scoped, uses ex
 | `extractor.py` | One structured extraction pass per eligible batch |
 | `graph.py` | PostgreSQL graph persistence, provenance, and bounded expansion |
 | `retrieval.py` | Graph retrieval and prompt-shaped formatting |
-| `embedder.py` | Embedding client for vector search (see [`docs/memory/README.md`](../docs/memory/README.md)) |
+| `embedder.py` | Yuzu Portal embedding client (`gemini/gemini-embedding-2-preview`, dimension `1536`) |
 | `tools/memory_store.py` | Explicit tool-driven inferred node creation |
 | `tools/memory_search.py` | Graph search tool |
 
@@ -509,13 +499,13 @@ On session start:
 
 ### API Key Management (BYOK Architecture)
 
-Yuzu Companion uses request-scoped BYOK. API keys live only in browser `localStorage` and are sent via the `X-BYOK-Config` header for request-scoped resolution. The backend never persists secrets. See [`docs/backend/README.md`](../docs/backend/README.md) for implementation details.
+BYOK ownership and request-scoped key handling are documented in [`docs/backend/`](../docs/backend/) and [`docs/architecture/`](../docs/architecture/). The implementation remains in `app/core/context.py` and the API request utilities.
 
 ---
 
 ## Workflow: Message Processing
 
-User messages flow through `app/services/orchestrator.py`, which coordinates persistence, memory retrieval, prompt assembly, provider dispatch, tool execution, and streaming. The orchestrator owns the canonical execution loop. See [`docs/backend/README.md`](../docs/backend/README.md) for streaming contract details and [`docs/memory/README.md`](../docs/memory/README.md) for graph extraction flow.
+The canonical message and streaming workflow is maintained in [`docs/backend/`](../docs/backend/). `app/services/orchestrator.py` remains the single owner of execution coordination; this package guide does not duplicate the sequence diagram.
 
 ---
 

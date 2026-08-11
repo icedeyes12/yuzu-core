@@ -892,6 +892,14 @@ WHERE session_id = %s AND user_id = %s
 ORDER BY timestamp ASC, id ASC
 """
 
+SQL_MESSAGE_SELECT_CONVERSATIONAL_ASC_ALL = """
+SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
+FROM messages
+WHERE session_id = %s AND user_id = %s
+  AND role IN ('user', 'assistant')
+ORDER BY timestamp ASC, id ASC
+"""
+
 SQL_MESSAGE_SELECT_ASC_OFFSET_LIMIT = """
 SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
@@ -906,6 +914,7 @@ SQL_MESSAGE_SELECT_AFTER_ID = """
 SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s AND user_id = %s AND id > %s
+  AND role IN ('user', 'assistant')
 ORDER BY id ASC
 LIMIT %s
 """
@@ -1351,6 +1360,7 @@ __all__ = [
     "SQL_MESSAGE_INSERT",
     "SQL_MESSAGE_SELECT_ASC_LIMIT",
     "SQL_MESSAGE_SELECT_ASC_ALL",
+    "SQL_MESSAGE_SELECT_CONVERSATIONAL_ASC_ALL",
     "SQL_MESSAGE_SELECT_AFTER_ID",
     "SQL_MESSAGE_SELECT_BEFORE_TS",
     "SQL_MESSAGE_DELETE_FOR_SESSION",

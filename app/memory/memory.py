@@ -148,6 +148,26 @@ async def _get_session_idle_hours_async(
         return None
 
 
+async def _get_messages_after_count_async(
+    session_id: str, last_count: int, user_id: str
+) -> list[dict[str, Any]]:
+    if last_count >= MESSAGE_FETCH_LIMIT:
+        messages = await get_session_messages_async(
+            session_id,
+            limit=None,
+            order="ASC",
+            conversational_only=True,
+            user_id=user_id,
+        )
+        return messages[last_count:]
+    return await get_session_messages_async(
+        session_id,
+        limit=MESSAGE_FETCH_LIMIT,
+        offset=last_count,
+        user_id=user_id,
+    )
+
+
 async def _has_eligible_backlog_async(
     session_id: str, remaining_count: int, user_id: str
 ) -> bool:
@@ -194,11 +214,7 @@ async def should_trigger_segmentation_async(
             limit=MESSAGE_FETCH_LIMIT,
             user_id=user_id or "",
         )
-        delta = sum(
-            1
-            for message in messages_after
-            if message.get("role") in ("user", "assistant")
-        )
+        delta = len(messages_after)
     except Exception as exc:
         logger.warning("Cursor delta query failed; using count fallback: %s", exc)
         last_count = state.get("last_segmented_count", 0) or 0
@@ -325,49 +341,40 @@ async def run_memory_pipeline_async(
         # ID-based query: fetch messages AFTER the last processed message ID
         if last_message_id:
             try:
-                all_messages = await get_session_messages_after_id_async(
+                unsegmented = await get_session_messages_after_id_async(
                     session_id,
                     last_message_id,
                     limit=MESSAGE_FETCH_LIMIT,
                     user_id=user_id,
                 )
-                unsegmented = [
-                    m for m in all_messages if m.get("role") in ("user", "assistant")
-                ]
-            except Exception as e:
+            except Exception as exc:
                 logger.warning(
-                    f"ID-based query failed, falling back to count-based: {e}"
+                    "ID-based query failed, falling back to count-based: %s",
+                    type(exc).__name__,
                 )
-                # Fallback
+                unsegmented = await _get_messages_after_count_async(
+                    session_id, last_count, user_id
+                )
+        else:
+            if last_count >= MESSAGE_FETCH_LIMIT:
                 unsegmented = await get_session_messages_async(
                     session_id,
-                    limit=MESSAGE_FETCH_LIMIT,
-                    offset=last_count,
+                    limit=None,
+                    order="ASC",
+                    conversational_only=True,
                     user_id=user_id,
                 )
-                all_messages = unsegmented
-                unsegmented = [
-                    m for m in unsegmented if m.get("role") in ("user", "assistant")
-                ]
-        else:
-            # Initial state: use count-based
-            unsegmented = await get_session_messages_async(
-                session_id,
-                limit=MESSAGE_FETCH_LIMIT,
-                offset=last_count,
-                user_id=user_id,
-            )
-            all_messages = unsegmented
-            unsegmented = [
-                m for m in unsegmented if m.get("role") in ("user", "assistant")
-            ]
+                unsegmented = unsegmented[last_count:]
+            else:
+                unsegmented = await _get_messages_after_count_async(
+                    session_id, last_count, user_id
+                )
 
-        # Filter to conversation messages only. The ID path is already scoped
-        # to the cursor; never reapply the old global count as an offset.
-        if not isinstance(unsegmented, list):
-            unsegmented = [
-                m for m in all_messages if m.get("role") in ("user", "assistant")
-            ]
+        unsegmented = [
+            message
+            for message in unsegmented
+            if message.get("role") in ("user", "assistant")
+        ]
 
         if not unsegmented:
             return {"episodes": 0, "claims": 0, "llm_calls": 0}
@@ -380,6 +387,8 @@ async def run_memory_pipeline_async(
             token_budget=EXTRACTION_TOKEN_BUDGET,
             max_messages=BATCH_SIZE,
         )
+        if not batches:
+            return {"episodes": 0, "claims": 0, "llm_calls": 0}
         unsegmented = batches[0]
         unsegmented_count = len(unsegmented)
         estimated_tokens = sum(
@@ -399,8 +408,11 @@ async def run_memory_pipeline_async(
         processed_count = unsegmented_count
         # ───────────────────────────────────────────────────────────────────────
 
-        if unsegmented_count < IDLE_WINDOW_BASE:
-            logger.debug("Only %s unsegmented messages; skipping", unsegmented_count)
+        if original_unsegmented_count < IDLE_WINDOW_BASE:
+            logger.debug(
+                "Only %s unsegmented messages; skipping",
+                original_unsegmented_count,
+            )
             return {
                 "episodes": 0,
                 "claims": 0,
@@ -437,7 +449,12 @@ async def run_memory_pipeline_async(
                 await mark_segmentation_done_async(
                     session_id, last_msg.get("id", 0), processed_count, user_id=user_id
                 )
-            return {"episodes": 0, "claims": 0, "llm_calls": llm_calls}
+            return {
+                "episodes": 0,
+                "claims": 0,
+                "llm_calls": llm_calls,
+                "processed_messages": processed_count,
+            }
 
         episode_count = 0
         claim_count = 0
@@ -448,7 +465,14 @@ async def run_memory_pipeline_async(
             f"{claim['entity']} {claim['relation']} {claim['target']}"
             for claim in extracted["claims"]
         ]
-        embeddings = await embed_texts_async(embedding_texts, profile=profile)
+        try:
+            embeddings = await embed_texts_async(embedding_texts, profile=profile)
+        except Exception as exc:
+            logger.warning(
+                "memory embeddings unavailable; continuing without embeddings error=%s",
+                type(exc).__name__,
+            )
+            embeddings = []
         logger.info(
             "memory batch embeddings provider=%s requested=%s returned=%s",
             YUZU_PORTAL,
@@ -666,11 +690,7 @@ async def _background_worker_async():
                     limit=BATCH_SIZE + 1,
                     user_id=user_id,
                 )
-                remaining_count = sum(
-                    1
-                    for message in remaining
-                    if message.get("role") in ("user", "assistant")
-                )
+                remaining_count = len(remaining)
                 if not await _has_eligible_backlog_async(
                     session_to_process, remaining_count, user_id
                 ):
