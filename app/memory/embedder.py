@@ -14,7 +14,9 @@ EMBEDDING_DIM = 1536
 logger = logging.getLogger(__name__)
 
 
-def _parse_embedding_data(data: list[dict], expected_count: int, expected_dim: int = EMBEDDING_DIM) -> list[list[float]]:
+def _parse_embedding_data(
+    data: list[dict], expected_count: int, expected_dim: int = EMBEDDING_DIM
+) -> list[list[float]]:
     if len(data) != expected_count:
         raise ValueError(
             f"Embedding count mismatch: got {len(data)}, expected {expected_count}"
