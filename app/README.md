@@ -407,11 +407,11 @@ flowchart TD
 
 ### `file app/core/encryption.py`
 
-ChaCha20-Poly1305 encryption for API keys at rest:
+ChaCha20-Poly1305 encryption for message content at rest:
 
-- **API keys**: Always encrypted
-- **Messages**: Encryption disabled by default (configurable)
-- Key derivation from master key in `encryption.key`
+- **Message content**: Optionally encrypted in DB (`content_encrypted` flag)
+- **API keys**: NOT stored — supplied per-request via BYOK header, never persisted
+- Key loaded from `encryption.key` binary file (auto-generated on first run, back it up)
 - Fallback to sentinel on decryption failure
 
 ---
