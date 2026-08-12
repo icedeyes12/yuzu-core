@@ -26,6 +26,28 @@ def test_episode_message_provenance_is_foreign_key_backed():
     assert "FOREIGN KEY (source_end_message_id) REFERENCES messages(id)" in schema
     assert "ADD CONSTRAINT episodes_source_start_message_fk" in schema
     assert "ADD CONSTRAINT episodes_source_end_message_fk" in schema
+    assert "SET source_start_message_id = NULL" in schema
+    assert "SET source_end_message_id = NULL" in schema
+
+
+@pytest.mark.asyncio
+async def test_mark_segmentation_done_advances_legacy_count_from_checkpoint(monkeypatch):
+    from app.memory import memory
+
+    updates = []
+
+    async def state(_session_id, _user_id):
+        return {"last_segmented_count": 512}
+
+    async def update(_session_id, payload, *, user_id):
+        updates.append((payload, user_id))
+
+    monkeypatch.setattr(memory, "get_pipeline_state_async", state)
+    monkeypatch.setattr(memory, "update_pipeline_state_async", update)
+
+    await memory.mark_segmentation_done_async("session", "message", 7, user_id="user")
+
+    assert updates[0][0]["last_segmented_count"] == 519
 
 
 def test_graph_queries_are_tenant_scoped():
@@ -103,7 +125,9 @@ async def test_legacy_count_checkpoint_reads_beyond_fetch_cap(monkeypatch):
                 "conversational_only": conversational_only,
             }
         )
-        return [{"id": index, "role": "user"} for index in range(700)]
+        start = offset
+        stop = min(offset + (limit or 700), 700)
+        return [{"id": index, "role": "user"} for index in range(start, stop)]
 
     monkeypatch.setattr(memory, "get_session_messages_async", messages)
 
@@ -113,10 +137,10 @@ async def test_legacy_count_checkpoint_reads_beyond_fetch_cap(monkeypatch):
     assert calls == [
         {
             "session_id": "session",
-            "limit": None,
+            "limit": memory.MESSAGE_FETCH_LIMIT,
             "order": "ASC",
             "user_id": "user",
-            "offset": 0,
+            "offset": 512,
             "conversational_only": True,
         }
     ]

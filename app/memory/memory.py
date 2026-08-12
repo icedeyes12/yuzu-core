@@ -152,19 +152,11 @@ async def _get_session_idle_hours_async(
 async def _get_messages_after_count_async(
     session_id: str, last_count: int, user_id: str
 ) -> list[dict[str, Any]]:
-    if last_count >= MESSAGE_FETCH_LIMIT:
-        messages = await get_session_messages_async(
-            session_id,
-            limit=None,
-            order="ASC",
-            conversational_only=True,
-            user_id=user_id,
-        )
-        return messages[last_count:]
     return await get_session_messages_async(
         session_id,
         limit=MESSAGE_FETCH_LIMIT,
-        offset=last_count,
+        offset=max(0, last_count),
+        conversational_only=True,
         user_id=user_id,
     )
 
@@ -255,10 +247,10 @@ async def mark_segmentation_done_async(
         last_message_id: ID of the last processed message (preferred)
         processed_count: Number of messages processed in this run
     """
-    actual_total = await get_message_count_async(session_id, user_id=user_id)
-
+    state = await get_pipeline_state_async(session_id, user_id)
+    previous_count = state.get("last_segmented_count", 0) or 0
     state_update = {
-        "last_segmented_count": actual_total,  # Keep for compatibility
+        "last_segmented_count": previous_count + max(0, processed_count),
         "last_segmented_at": datetime.now().isoformat(),
     }
 
@@ -357,19 +349,9 @@ async def run_memory_pipeline_async(
                     session_id, last_count, user_id
                 )
         else:
-            if last_count >= MESSAGE_FETCH_LIMIT:
-                unsegmented = await get_session_messages_async(
-                    session_id,
-                    limit=None,
-                    order="ASC",
-                    conversational_only=True,
-                    user_id=user_id,
-                )
-                unsegmented = unsegmented[last_count:]
-            else:
-                unsegmented = await _get_messages_after_count_async(
-                    session_id, last_count, user_id
-                )
+            unsegmented = await _get_messages_after_count_async(
+                session_id, last_count, user_id
+            )
 
         unsegmented = [
             message

@@ -364,6 +364,33 @@ SCHEMA_DDL: tuple[str, ...] = (
            WHERE table_schema = 'public' AND table_name = 'episodes'
              AND column_name IN ('source_start_message_id', 'source_end_message_id')
              AND udt_name = 'uuid'
+         ) = 2 THEN
+        UPDATE episodes
+        SET source_start_message_id = NULL
+        WHERE source_start_message_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM messages
+            WHERE messages.id = episodes.source_start_message_id
+          );
+        UPDATE episodes
+        SET source_end_message_id = NULL
+        WHERE source_end_message_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM messages
+            WHERE messages.id = episodes.source_end_message_id
+          );
+      END IF;
+    END $$;
+    """,
+    """
+    DO $$ BEGIN
+      IF to_regclass('public.episodes') IS NOT NULL
+         AND to_regclass('public.messages') IS NOT NULL
+         AND (
+           SELECT COUNT(*) FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = 'episodes'
+             AND column_name IN ('source_start_message_id', 'source_end_message_id')
+             AND udt_name = 'uuid'
          ) = 2
          AND NOT EXISTS (
            SELECT 1 FROM pg_constraint

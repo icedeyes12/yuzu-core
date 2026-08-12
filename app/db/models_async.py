@@ -401,16 +401,18 @@ async def get_session_messages_async(
 
     order: "ASC" (oldest first) or "DESC" (newest first).
     """
-    if conversational_only and order.upper() == "ASC":
-        query = SQL_MESSAGE_SELECT_CONVERSATIONAL_ASC_ALL
-    elif offset and order.upper() == "ASC":
+    if conversational_only and order.upper() == "ASC" and limit is not None:
         query = SQL_MESSAGE_SELECT_ASC_OFFSET_LIMIT
+    elif conversational_only and order.upper() == "ASC":
+        query = SQL_MESSAGE_SELECT_CONVERSATIONAL_ASC_ALL
     elif order.upper() == "DESC":
         query = SQL_MESSAGE_SELECT_DESC_LIMIT
     else:
         query = SQL_MESSAGE_SELECT_ASC_LIMIT
     params = (
-        (session_id, user_id)
+        (session_id, user_id, limit, offset)
+        if conversational_only and order.upper() == "ASC" and limit is not None
+        else (session_id, user_id)
         if conversational_only and order.upper() == "ASC"
         else (session_id, user_id, limit, offset)
         if offset and order.upper() == "ASC"
