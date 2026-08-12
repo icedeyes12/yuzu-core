@@ -14,6 +14,23 @@ EMBEDDING_DIM = 1536
 logger = logging.getLogger(__name__)
 
 
+def _parse_embedding_data(data: list[dict], expected_count: int) -> list[list[float]]:
+    if len(data) != expected_count:
+        raise ValueError(
+            f"Embedding count mismatch: got {len(data)}, expected {expected_count}"
+        )
+    try:
+        ordered = sorted(data, key=lambda item: item["index"])
+        if [item["index"] for item in ordered] != list(range(expected_count)):
+            raise ValueError("Embedding indexes are incomplete or duplicated")
+        results = [item["embedding"] for item in ordered]
+    except (KeyError, TypeError) as exc:
+        raise ValueError("Embedding response indexes are invalid") from exc
+    if any(len(embedding) != EMBEDDING_DIM for embedding in results):
+        raise ValueError("Embedding dimension mismatch")
+    return results
+
+
 async def _get_client(profile: dict | None = None) -> httpx.AsyncClient | None:
     del profile
     keyring = get_request_keyring(YUZU_PORTAL)
@@ -72,12 +89,8 @@ async def embed_texts_async(
                     "/embeddings", json=payload, timeout=timeout
                 )
             response.raise_for_status()
-            results = [item["embedding"] for item in response.json().get("data", [])]
-            if results and len(results[0]) != EMBEDDING_DIM:
-                raise ValueError(
-                    f"Embedding dim mismatch: got {len(results[0])}, expected {EMBEDDING_DIM}"
-                )
-            return results
+            data = response.json().get("data", [])
+            return _parse_embedding_data(data, len(texts))
         except httpx.TimeoutException as exc:
             raise TimeoutError(f"Embedding request timed out after {timeout}s") from exc
 

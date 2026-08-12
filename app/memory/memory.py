@@ -316,11 +316,11 @@ async def run_memory_pipeline_async(
     Returns summary: {episodes: n, claims: n, llm_calls: n}
     """
     try:
-        profile = await Database.get_profile(user_id)
         if not get_provider_key(YUZU_PORTAL):
             logger.info("memory disabled: missing Yuzu Portal API key")
             return {"episodes": 0, "claims": 0, "llm_calls": 0, "processed_messages": 0}
 
+        profile = await Database.get_profile(user_id)
         logger.info("memory enabled via Yuzu Portal")
         logger.info("Starting for session %s, count=%s", session_id, message_count)
 

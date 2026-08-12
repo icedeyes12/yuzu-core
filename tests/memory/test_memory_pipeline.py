@@ -86,6 +86,29 @@ def test_adaptive_batches_truncate_oversized_message_without_mutating_source():
     assert original["content"] == "x" * 200
 
 
+def test_embedding_response_is_sorted_by_index():
+    from app.memory.embedder import _parse_embedding_data
+
+    vector = [0.0] * 1536
+    result = _parse_embedding_data(
+        [{"index": 1, "embedding": vector}, {"index": 0, "embedding": vector}],
+        2,
+    )
+
+    assert len(result) == 2
+
+
+def test_embedding_response_count_mismatch_is_rejected():
+    from app.memory.embedder import _parse_embedding_data
+
+    try:
+        _parse_embedding_data([], 1)
+    except ValueError as exc:
+        assert "count mismatch" in str(exc)
+    else:
+        raise AssertionError("expected embedding count mismatch")
+
+
 def test_memory_cursor_query_counts_only_conversational_messages():
     from app.db.queries import SQL_MESSAGE_SELECT_AFTER_ID
 
