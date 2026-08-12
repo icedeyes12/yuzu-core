@@ -14,7 +14,7 @@ EMBEDDING_DIM = 1536
 logger = logging.getLogger(__name__)
 
 
-def _parse_embedding_data(data: list[dict], expected_count: int) -> list[list[float]]:
+def _parse_embedding_data(data: list[dict], expected_count: int, expected_dim: int = EMBEDDING_DIM) -> list[list[float]]:
     if len(data) != expected_count:
         raise ValueError(
             f"Embedding count mismatch: got {len(data)}, expected {expected_count}"
@@ -26,7 +26,7 @@ def _parse_embedding_data(data: list[dict], expected_count: int) -> list[list[fl
         results = [item["embedding"] for item in ordered]
     except (KeyError, TypeError) as exc:
         raise ValueError("Embedding response indexes are invalid") from exc
-    if any(len(embedding) != EMBEDDING_DIM for embedding in results):
+    if any(len(embedding) != expected_dim for embedding in results):
         raise ValueError("Embedding dimension mismatch")
     return results
 
@@ -90,7 +90,7 @@ async def embed_texts_async(
                 )
             response.raise_for_status()
             data = response.json().get("data", [])
-            return _parse_embedding_data(data, len(texts))
+            return _parse_embedding_data(data, len(texts), payload["dimensions"])
         except httpx.TimeoutException as exc:
             raise TimeoutError(f"Embedding request timed out after {timeout}s") from exc
 

@@ -45,4 +45,5 @@ fi
 
 # 4. Start Yuzu Backend
 echo "[App] Starting Yuzu Companion server..."
+cd "$SCRIPT_DIR"
 exec python main.py

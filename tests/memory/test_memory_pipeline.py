@@ -89,13 +89,16 @@ def test_adaptive_batches_truncate_oversized_message_without_mutating_source():
 def test_embedding_response_is_sorted_by_index():
     from app.memory.embedder import _parse_embedding_data
 
-    vector = [0.0] * 1536
+    vector_0 = [0.0] * 1535 + [1.0]
+    vector_1 = [0.0] * 1535 + [2.0]
     result = _parse_embedding_data(
-        [{"index": 1, "embedding": vector}, {"index": 0, "embedding": vector}],
+        [{"index": 1, "embedding": vector_1}, {"index": 0, "embedding": vector_0}],
         2,
     )
 
     assert len(result) == 2
+    assert result[0] == vector_0
+    assert result[1] == vector_1
 
 
 def test_embedding_response_count_mismatch_is_rejected():
