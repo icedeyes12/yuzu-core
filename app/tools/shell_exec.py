@@ -109,7 +109,7 @@ async def execute(
     Returns:
         {"ok": True/False, "data": {...}}
     """
-    partner_name = await _get_partner_name_async()
+    partner_name = await _get_partner_name_async(user_id) if user_id else "Yuzu"
     command = arguments.get("command", "").strip()
 
     if not command:
