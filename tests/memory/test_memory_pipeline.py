@@ -31,7 +31,9 @@ def test_episode_message_provenance_is_foreign_key_backed():
 
 
 @pytest.mark.asyncio
-async def test_mark_segmentation_done_advances_legacy_count_from_checkpoint(monkeypatch):
+async def test_mark_segmentation_done_advances_legacy_count_from_checkpoint(
+    monkeypatch,
+):
     from app.memory import memory
 
     updates = []
