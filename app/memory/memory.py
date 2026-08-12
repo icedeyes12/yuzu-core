@@ -43,6 +43,7 @@ from app.memory.graph import GraphMemoryRepository
 __all__ = [
     "trigger_memory_pipeline_async",
     "enqueue_memory_pipeline_async",
+    "recover_memory_pipeline_async",
     "run_memory_pipeline_async",
     "extract_memory_batch_async",
     "should_trigger_segmentation_async",
@@ -728,6 +729,29 @@ async def enqueue_memory_pipeline_async(session_id: str, user_id: str) -> bool:
         _queued_sessions.discard(queue_key)
         raise
     return True
+
+
+async def recover_memory_pipeline_async(session_id: str, user_id: str) -> bool:
+    """(｡•̀ᴗ-)✧"""
+    if not user_id or not get_provider_key(YUZU_PORTAL):
+        return False
+
+    state = await get_pipeline_state_async(session_id, user_id)
+    if not state.get("in_progress_fence_count"):
+        return False
+
+    cursor = state.get("last_segmented_message_id")
+    if isinstance(cursor, int):
+        cursor = "00000000-0000-0000-0000-000000000000"
+    pending = await get_session_messages_after_id_async(
+        session_id,
+        cursor or "00000000-0000-0000-0000-000000000000",
+        limit=1,
+        user_id=user_id,
+    )
+    if not any(message.get("role") in ("user", "assistant") for message in pending):
+        return False
+    return await enqueue_memory_pipeline_async(session_id, user_id)
 
 
 async def trigger_memory_pipeline_async(

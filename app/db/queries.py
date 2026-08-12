@@ -217,6 +217,10 @@ SCHEMA_DDL: tuple[str, ...] = (
         source_end_message_id UUID,
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         archived_at TIMESTAMP NULL,
+        CONSTRAINT episodes_source_start_message_fk
+            FOREIGN KEY (source_start_message_id) REFERENCES messages(id) ON DELETE SET NULL,
+        CONSTRAINT episodes_source_end_message_fk
+            FOREIGN KEY (source_end_message_id) REFERENCES messages(id) ON DELETE SET NULL,
         FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE,
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     )
@@ -349,6 +353,44 @@ SCHEMA_DDL: tuple[str, ...] = (
         ALTER COLUMN source_start_message_id TYPE UUID USING source_start_message_id::text::uuid,
         ALTER COLUMN source_end_message_id TYPE UUID USING source_end_message_id::text::uuid;
     EXCEPTION WHEN undefined_table OR undefined_column OR datatype_mismatch THEN NULL;
+    END $$;
+    """,
+    """
+    DO $$ BEGIN
+      IF to_regclass('public.episodes') IS NOT NULL
+         AND to_regclass('public.messages') IS NOT NULL
+         AND (
+           SELECT COUNT(*) FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = 'episodes'
+             AND column_name IN ('source_start_message_id', 'source_end_message_id')
+             AND udt_name = 'uuid'
+         ) = 2
+         AND NOT EXISTS (
+           SELECT 1 FROM pg_constraint
+           WHERE conname = 'episodes_source_start_message_fk'
+             AND conrelid = 'public.episodes'::regclass
+         ) THEN
+        ALTER TABLE episodes
+          ADD CONSTRAINT episodes_source_start_message_fk
+          FOREIGN KEY (source_start_message_id) REFERENCES messages(id) ON DELETE SET NULL;
+      END IF;
+      IF to_regclass('public.episodes') IS NOT NULL
+         AND to_regclass('public.messages') IS NOT NULL
+         AND (
+           SELECT COUNT(*) FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = 'episodes'
+             AND column_name IN ('source_start_message_id', 'source_end_message_id')
+             AND udt_name = 'uuid'
+         ) = 2
+         AND NOT EXISTS (
+           SELECT 1 FROM pg_constraint
+           WHERE conname = 'episodes_source_end_message_fk'
+             AND conrelid = 'public.episodes'::regclass
+         ) THEN
+        ALTER TABLE episodes
+          ADD CONSTRAINT episodes_source_end_message_fk
+          FOREIGN KEY (source_end_message_id) REFERENCES messages(id) ON DELETE SET NULL;
+      END IF;
     END $$;
     """,
     """

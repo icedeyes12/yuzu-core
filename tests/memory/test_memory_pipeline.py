@@ -20,6 +20,14 @@ def test_graph_schema_is_the_memory_storage_owner():
     assert "DROP TABLE IF EXISTS semantic_facts" in schema
 
 
+def test_episode_message_provenance_is_foreign_key_backed():
+    schema = "\n".join(SCHEMA_DDL)
+    assert "FOREIGN KEY (source_start_message_id) REFERENCES messages(id)" in schema
+    assert "FOREIGN KEY (source_end_message_id) REFERENCES messages(id)" in schema
+    assert "ADD CONSTRAINT episodes_source_start_message_fk" in schema
+    assert "ADD CONSTRAINT episodes_source_end_message_fk" in schema
+
+
 def test_graph_queries_are_tenant_scoped():
     assert "user_id = %s" in SQL_GRAPH_NODE_SEARCH_TEXT
     assert "user_id = %s" in SQL_GRAPH_NODE_SEARCH_VECTOR
@@ -58,6 +66,16 @@ def test_memory_cursor_query_counts_only_conversational_messages():
     from app.db.queries import SQL_MESSAGE_SELECT_AFTER_ID
 
     assert "role IN ('user', 'assistant')" in SQL_MESSAGE_SELECT_AFTER_ID
+    assert "id > %s" in SQL_MESSAGE_SELECT_AFTER_ID
+    assert "ORDER BY id ASC" in SQL_MESSAGE_SELECT_AFTER_ID
+
+
+def test_message_cursor_contract_uses_uuidv7_ids():
+    from app.db.queries import SCHEMA_DDL
+
+    schema = "\n".join(SCHEMA_DDL)
+    assert "CREATE OR REPLACE FUNCTION generate_uuidv7()" in schema
+    assert "id UUID NOT NULL DEFAULT generate_uuidv7() PRIMARY KEY" in schema
 
 
 @pytest.mark.asyncio
@@ -318,3 +336,36 @@ async def test_enqueue_deduplicates_session(monkeypatch):
     assert await memory.enqueue_memory_pipeline_async("s", "u") is True
     assert await memory.enqueue_memory_pipeline_async("s", "u") is False
     memory._queued_sessions.clear()
+
+
+@pytest.mark.asyncio
+async def test_recover_memory_pipeline_requeues_persisted_fence(monkeypatch):
+    from app.memory import memory
+
+    monkeypatch.setattr(memory, "get_provider_key", lambda _provider: "portal-key")
+    monkeypatch.setattr(
+        memory,
+        "get_pipeline_state_async",
+        lambda _session_id, _user_id: _state(),
+    )
+    monkeypatch.setattr(
+        memory,
+        "get_session_messages_after_id_async",
+        lambda *_args, **_kwargs: _messages(),
+    )
+    queued = []
+
+    async def enqueue(session_id, user_id):
+        queued.append((session_id, user_id))
+        return True
+
+    monkeypatch.setattr(memory, "enqueue_memory_pipeline_async", enqueue)
+
+    async def _state():
+        return {"in_progress_fence_count": 40, "last_segmented_message_id": "cursor"}
+
+    async def _messages():
+        return [{"role": "user", "id": "next"}]
+
+    assert await memory.recover_memory_pipeline_async("s", "u") is True
+    assert queued == [("s", "u")]
