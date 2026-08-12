@@ -27,7 +27,6 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 from fastapi import HTTPException  # noqa: E402
 
 from app.api import api_router  # noqa: E402
-from app.api.endpoints import auth as auth_endpoint  # noqa: E402
 from app.api.endpoints.health import router as health_router  # noqa: E402
 from app.api.errors import (  # noqa: E402
     http_exception_handler,
@@ -275,8 +274,6 @@ ensure_static_dirs()
 
 
 app.include_router(api_router, prefix="/api/v1")
-# Keep OAuth callbacks compatible with existing provider registrations.
-app.include_router(auth_endpoint.router, prefix="/api")
 app.include_router(health_router)
 
 # ---------------------------------------------------------------------------

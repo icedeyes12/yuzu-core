@@ -8,6 +8,7 @@ from app.db.queries import (
     SQL_GRAPH_EVIDENCE_INSERT,
     SQL_GRAPH_NODE_ARCHIVE,
     SQL_GRAPH_NODE_EXPAND,
+    SQL_GRAPH_NODE_INSERT,
     SQL_GRAPH_NODE_SEARCH_TEXT,
 )
 
@@ -29,6 +30,20 @@ def test_graph_queries_require_tenant_scope():
         in SQL_GRAPH_EDGE_UPSERT
     )
     assert "user_id" in SQL_GRAPH_EVIDENCE_INSERT
+    assert "ON CONFLICT (user_id, content)" in SQL_GRAPH_NODE_INSERT
+    assert "WHERE status = 'active' AND valid_until IS NULL" in SQL_GRAPH_NODE_INSERT
+
+
+def test_graph_node_creation_is_atomic_and_deduplicated():
+    schema = "\n".join(SCHEMA_DDL)
+    assert "CREATE UNIQUE INDEX IF NOT EXISTS uq_memory_nodes_active_content" in schema
+    assert (
+        "ON CONFLICT (user_id, content) WHERE status = 'active' AND valid_until IS NULL"
+        in SQL_GRAPH_NODE_INSERT
+    )
+    assert (
+        "COALESCE(memory_nodes.embedding, EXCLUDED.embedding)" in SQL_GRAPH_NODE_INSERT
+    )
 
 
 def test_graph_archive_locks_canonical_and_candidate():

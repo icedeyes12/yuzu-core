@@ -349,10 +349,24 @@ SCHEMA_DDL: tuple[str, ...] = (
     """,
     """
     DO $$ BEGIN
-      ALTER TABLE episodes
-        ALTER COLUMN source_start_message_id TYPE UUID USING source_start_message_id::text::uuid,
-        ALTER COLUMN source_end_message_id TYPE UUID USING source_end_message_id::text::uuid;
-    EXCEPTION WHEN undefined_table OR undefined_column OR datatype_mismatch THEN NULL;
+      IF to_regclass('public.episodes') IS NOT NULL THEN
+        ALTER TABLE episodes
+          ALTER COLUMN source_start_message_id TYPE UUID
+          USING CASE
+            WHEN source_start_message_id IS NULL OR btrim(source_start_message_id::text) = '' THEN NULL
+            WHEN source_start_message_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+              THEN source_start_message_id::text::uuid
+            ELSE NULL
+          END,
+          ALTER COLUMN source_end_message_id TYPE UUID
+          USING CASE
+            WHEN source_end_message_id IS NULL OR btrim(source_end_message_id::text) = '' THEN NULL
+            WHEN source_end_message_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+              THEN source_end_message_id::text::uuid
+            ELSE NULL
+          END;
+      END IF;
+    EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;
     END $$;
     """,
     """
@@ -463,6 +477,7 @@ SCHEMA_DDL: tuple[str, ...] = (
     EXCEPTION WHEN duplicate_column THEN NULL;
     END $$;
     """,
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_memory_nodes_active_content ON memory_nodes (user_id, content) WHERE status = 'active' AND valid_until IS NULL",
 )
 
 SQL_PROFILE_UNCLAIMED_LOOKUP = """
@@ -521,7 +536,13 @@ SQL_GRAPH_NODE_INSERT = """
 INSERT INTO memory_nodes
     (user_id, node_type, content, embedding, confidence, importance, status,
      valid_from, valid_until, supersedes_node_id, embedding_model, embedding_dimensions)
-VALUES (%s, %s, %s, %s::vector, %s, %s, %s, %s, %s, %s, %s, %s)
+VALUES (%s, %s, %s, %s::vector, %s, %s, 'active', %s, NULL, %s, %s, %s)
+ON CONFLICT (user_id, content) WHERE status = 'active' AND valid_until IS NULL
+DO UPDATE SET
+    embedding = COALESCE(memory_nodes.embedding, EXCLUDED.embedding),
+    embedding_model = COALESCE(memory_nodes.embedding_model, EXCLUDED.embedding_model),
+    embedding_dimensions = COALESCE(memory_nodes.embedding_dimensions, EXCLUDED.embedding_dimensions),
+    updated_at = NOW()
 RETURNING id, user_id, node_type, content, embedding, confidence, importance, status,
           valid_from, valid_until, supersedes_node_id, embedding_model,
           embedding_dimensions, created_at, updated_at, last_accessed_at

@@ -147,3 +147,10 @@ def test_auth_url_contains_exact_callback() -> None:
     assert query["redirect_uri"] == [
         "https://companion.yuzuki.space/api/v1/auth/callback"
     ]
+
+
+def test_registered_oauth_routes_match_callback_path():
+    from app.api.endpoints import auth
+
+    assert any(route.path == "/auth/login" for route in auth.router.routes)
+    assert any(route.path == "/auth/callback" for route in auth.router.routes)
