@@ -52,6 +52,32 @@ def test_graph_archive_locks_canonical_and_candidate():
     assert SQL_GRAPH_NODE_ARCHIVE.count("status = 'active'") >= 3
 
 
+def test_graph_schema_deduplicates_before_unique_constraint():
+    """Test that duplicate active nodes are archived before unique index creation."""
+    schema = "\n".join(SCHEMA_DDL)
+
+    # Verify deduplication migration exists
+    assert "FOR dup IN" in schema
+    assert "GROUP BY user_id, content" in schema
+    assert "HAVING COUNT(*) > 1" in schema
+
+    # Verify it archives duplicates (keeps earliest, archives rest)
+    assert "ARRAY_AGG(id ORDER BY id)" in schema
+    assert "status = 'archived'" in schema
+    assert "valid_until = NOW()" in schema
+
+    # Verify it reassigns evidence from archived duplicates to canonical node
+    assert "UPDATE memory_evidence" in schema
+    assert "SET node_id = canonical_id" in schema
+
+    # Verify migration runs before unique index creation (order matters for upgrade-safety)
+    dedup_idx = schema.find("FOR dup IN")
+    index_idx = schema.find("CREATE UNIQUE INDEX IF NOT EXISTS uq_memory_nodes_active_content")
+    assert dedup_idx > 0, "Deduplication migration not found"
+    assert index_idx > 0, "Unique index creation not found"
+    assert dedup_idx < index_idx, "Deduplication must run before unique index creation"
+
+
 @pytest.mark.asyncio
 async def test_consolidate_node_preserves_negations(monkeypatch):
     """Test that negated facts are NOT archived as duplicates."""

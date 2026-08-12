@@ -477,6 +477,29 @@ SCHEMA_DDL: tuple[str, ...] = (
     EXCEPTION WHEN duplicate_column THEN NULL;
     END $$;
     """,
+    """
+    DO $$
+    DECLARE
+      dup RECORD;
+      canonical_id UUID;
+    BEGIN
+      FOR dup IN
+        SELECT user_id, content, ARRAY_AGG(id ORDER BY id) AS ids
+        FROM memory_nodes
+        WHERE status = 'active' AND valid_until IS NULL
+        GROUP BY user_id, content
+        HAVING COUNT(*) > 1
+      LOOP
+        canonical_id := dup.ids[1];
+        UPDATE memory_nodes
+        SET status = 'archived', valid_until = NOW()
+        WHERE id = ANY(dup.ids[2:]) AND user_id = dup.user_id;
+        UPDATE memory_evidence
+        SET node_id = canonical_id
+        WHERE node_id = ANY(dup.ids[2:]) AND user_id = dup.user_id;
+      END LOOP;
+    END $$;
+    """,
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_memory_nodes_active_content ON memory_nodes (user_id, content) WHERE status = 'active' AND valid_until IS NULL",
 )
 

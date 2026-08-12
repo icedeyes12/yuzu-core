@@ -99,16 +99,7 @@ async def execute(
     tool_name: str = "terminal",
     user_id: str | None = None,
 ) -> dict[str, Any]:
-    """Execute a bash command (async).
-
-    Args:
-        arguments: {"command": "ls -la"}
-        session_id: Optional session ID for context
-        tool_name: Tool name for dispatch (default: "bash")
-
-    Returns:
-        {"ok": True/False, "data": {...}}
-    """
+    """ฅ^•ﻌ•^ฅ"""
     partner_name = await _get_partner_name_async(user_id) if user_id else "Yuzu"
     command = arguments.get("command", "").strip()
 
