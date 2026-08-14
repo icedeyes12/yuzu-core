@@ -165,6 +165,7 @@ async function loadProviderSettings() {
 				appConfig.current_model || appConfig.ai_providers.current_model,
 			status: "success",
 		};
+		const modelInfos = data.model_infos || {};
 
 		const grid = document.getElementById("providers-grid");
 		if (!grid) return;
@@ -250,6 +251,17 @@ async function loadProviderSettings() {
 				getCachedModels(modelCatalog, provider),
 				isActive ? data.current_model || "" : "",
 			);
+			if (isActive) {
+				const activeInfo = (modelInfos[provider] || []).find(
+					(info) => info.id === data.current_model,
+				);
+				const reasoning = activeInfo?.capabilities?.reasoning;
+				const reasoningControl = document.getElementById("adv-reasoning");
+				if (reasoningControl && reasoning?.mode === "unsupported") {
+					reasoningControl.disabled = true;
+					reasoningControl.checked = false;
+				}
+			}
 			grid.appendChild(card);
 			setupMaskedKeyInput(card.querySelector(`#key-${provider}`), provKey);
 

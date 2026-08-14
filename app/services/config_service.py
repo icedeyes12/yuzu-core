@@ -26,6 +26,7 @@ class ConfigService:
             "all_models": await ai_manager.get_all_models(),
             "current_provider": providers_config.get("preferred_provider"),
             "current_model": providers_config.get("preferred_model"),
+            "model_infos": await ai_manager.get_all_model_infos(),
         }
 
     @staticmethod
@@ -40,6 +41,7 @@ class ConfigService:
             "all_models": ai_providers["all_models"],
             "current_provider": ai_providers["current_provider"],
             "current_model": ai_providers["current_model"],
+            "model_infos": ai_providers["model_infos"],
         }
 
     @staticmethod

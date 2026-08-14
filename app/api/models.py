@@ -71,6 +71,7 @@ class ProviderListResponse(ApiModel):
     all_models: dict[str, Any] | list[Any] = {}
     current_provider: str | None = None
     current_model: str | None = None
+    model_infos: dict[str, list[dict[str, Any]]] = {}
 
 
 class ModelsResponse(ApiModel):

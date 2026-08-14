@@ -171,10 +171,17 @@ class ChutesProvider(AIProvider):
                 )
             if resp.status_code == 200:
                 data = resp.json()
-                ids = [m.get("id") for m in data.get("data", []) if m.get("id")]
+                metadata = [m for m in data.get("data", []) if isinstance(m, dict)]
+                self.set_model_metadata(metadata)
+                ids = [
+                    model_id
+                    for m in metadata
+                    if isinstance(model_id := m.get("id"), str) and model_id
+                ]
                 if ids:
                     self._models_cache_data = sorted(set(ids))
                     self._models_cache_at = now
+                    self.available_models = self._models_cache_data
                     return self._models_cache_data
         except MissingProviderKeyError:
             raise

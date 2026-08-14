@@ -187,6 +187,7 @@ async def api_list_providers(user_id: str = Depends(get_current_user)):
         ai_manager = await get_ai_manager()
         available_providers = ai_manager.get_available_providers()
         all_models = await ai_manager.get_all_models()
+        model_infos = await ai_manager.get_all_model_infos()
 
         profile = await Database.get_profile(user_id)
         providers_config = profile.get("providers_config", {})
@@ -199,6 +200,7 @@ async def api_list_providers(user_id: str = Depends(get_current_user)):
             "all_models": all_models,
             "current_provider": current_provider,
             "current_model": current_model,
+            "model_infos": model_infos,
         }
     except Exception as e:
         log.error("Error listing providers: %s", e)

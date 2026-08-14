@@ -7,6 +7,7 @@ import time
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from app.core.capabilities import omit_images, request_needs_vision
 from app.core.llm_context import LLMContext
 from app.core.logging_config import get_logger
 from app.db import Database
@@ -65,7 +66,18 @@ async def _send_to_provider(
     """Single LLM dispatch with timing log. Returns (text, raw_response)."""
     _ = ctx.require_configured()
     ai_manager = await get_ai_manager()
-    schemas = _unique_tool_schemas()
+    model_info = ai_manager.get_model_info(ctx.provider or "", ctx.model or "")
+    schemas = (
+        _unique_tool_schemas()
+        if model_info is None or model_info.capabilities.function_call != "unsupported"
+        else []
+    )
+    if (
+        model_info
+        and model_info.capabilities.vision == "unsupported"
+        and request_needs_vision(messages)
+    ):
+        messages = omit_images(messages)
 
     # Phase 1: structured payload audit log (non-stream path)
     if any(
@@ -172,7 +184,18 @@ async def _stream_from_provider(
     ai_manager = await get_ai_manager()
 
     # Generate tool schemas
-    tools = _unique_tool_schemas()
+    model_info = ai_manager.get_model_info(ctx.provider or "", ctx.model or "")
+    tools = (
+        _unique_tool_schemas()
+        if model_info is None or model_info.capabilities.function_call != "unsupported"
+        else []
+    )
+    if (
+        model_info
+        and model_info.capabilities.vision == "unsupported"
+        and request_needs_vision(messages)
+    ):
+        messages = omit_images(messages)
 
     # Phase 1: structured payload audit log (stream path)
     if any(

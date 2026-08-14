@@ -7,6 +7,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
+from app.core.capabilities import ModelCapabilities, ModelInfo
 from app.core.context import (
     MissingProviderKeyError,
 )
@@ -238,6 +239,7 @@ class AIProvider:
         self.config: dict[str, Any] = config or {}
         self.is_available: bool = True
         self._last_raw_response: dict[str, Any] | None = None
+        self.model_infos: dict[str, ModelInfo] = {}
         self.capabilities: ProviderCapabilities = (
             ProviderCapabilities()
         )  # Subclasses override
@@ -254,6 +256,35 @@ class AIProvider:
 
     async def get_models(self) -> list[str]:
         raise NotImplementedError
+
+    def get_model_info(self, model: str) -> ModelInfo:
+        return self.model_infos.get(
+            model,
+            ModelInfo(
+                provider=self.name,
+                id=model,
+                capabilities=ModelCapabilities(
+                    function_call="unknown",
+                    vision="unknown",
+                ),
+                source="unknown",
+            ),
+        )
+
+    def set_model_metadata(self, metadata: list[dict[str, Any]]) -> None:
+        from app.core.capabilities import normalize_model_metadata
+
+        self.model_infos = {
+            info.id: info
+            for item in metadata
+            if (
+                info := normalize_model_metadata(
+                    self.name,
+                    item,
+                )
+            )
+            is not None
+        }
 
     async def send_message(
         self,
@@ -420,6 +451,20 @@ class AIProviderManager:
                 model for model in models if isinstance(model, str) and model
             ]
         return all_models
+
+    async def get_all_model_infos(self) -> dict[str, list[dict[str, Any]]]:
+        return {
+            provider_name: [
+                provider.get_model_info(model).to_dict()
+                for model in await provider.get_models()
+                if isinstance(model, str) and model
+            ]
+            for provider_name, provider in self.providers.items()
+        }
+
+    def get_model_info(self, provider_name: str, model: str) -> ModelInfo | None:
+        provider = self.providers.get(provider_name)
+        return provider.get_model_info(model) if provider else None
 
     async def send_message(
         self, ctx: LLMContext, messages: list[dict[str, Any]], **kwargs

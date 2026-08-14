@@ -64,6 +64,11 @@ class OpenAIProvider(AIProvider):
                 "stream": stream,
             }
 
+        effort = kwargs.get("reasoning_effort")
+        reasoning = self.get_model_info(model).capabilities.reasoning
+        if reasoning.mode == "effort" and effort in reasoning.levels:
+            payload["reasoning_effort"] = effort
+
         tools = kwargs.get("tools")
         if tools and not is_reasoning:
             payload["tools"] = tools

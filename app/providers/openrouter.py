@@ -58,11 +58,13 @@ class OpenRouterProvider(AIProvider):
                 if resp.status_code != 200:
                     return []
                 data = resp.json()
-            return [
-                model_id
-                for m in (data.get("data") or [])
-                if isinstance(m, dict) and isinstance(model_id := m.get("id"), str)
+            metadata = [m for m in (data.get("data") or []) if isinstance(m, dict)]
+            self.set_model_metadata(metadata)
+            models = [
+                model_id for m in metadata if isinstance(model_id := m.get("id"), str)
             ]
+            self.available_models = models
+            return models
         except MissingProviderKeyError:
             raise
         except Exception:
