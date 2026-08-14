@@ -491,9 +491,54 @@ SCHEMA_DDL: tuple[str, ...] = (
         HAVING COUNT(*) > 1
       LOOP
         canonical_id := dup.ids[1];
+        -- Process memory_edges before archiving duplicates
+        -- Remap source endpoints to canonical node
+        UPDATE memory_edges
+        SET from_node_id = canonical_id
+        WHERE from_node_id = ANY(dup.ids[2:]) AND user_id = dup.user_id;
+        -- Remap target endpoints to canonical node
+        UPDATE memory_edges
+        SET to_node_id = canonical_id
+        WHERE to_node_id = ANY(dup.ids[2:]) AND user_id = dup.user_id;
+        -- Delete self-loops created by remapping
+        DELETE FROM memory_edges
+        WHERE from_node_id = to_node_id AND user_id = dup.user_id
+          AND (from_node_id = canonical_id OR to_node_id = canonical_id);
+        -- Resolve unique-edge conflicts: keep highest confidence, transfer evidence
+        WITH conflicts AS (
+          SELECT user_id, from_node_id, to_node_id, edge_type,
+                 ARRAY_AGG(id ORDER BY confidence DESC, created_at ASC) AS edge_ids
+          FROM memory_edges
+          WHERE user_id = dup.user_id
+            AND (from_node_id = canonical_id OR to_node_id = canonical_id)
+          GROUP BY user_id, from_node_id, to_node_id, edge_type
+          HAVING COUNT(*) > 1
+        )
+        UPDATE memory_evidence
+        SET edge_id = conflicts.edge_ids[1]
+        FROM conflicts
+        WHERE memory_evidence.edge_id = ANY(conflicts.edge_ids[2:])
+          AND memory_evidence.user_id = dup.user_id;
+        -- Delete duplicate edges after transferring evidence
+        WITH conflicts AS (
+          SELECT user_id, from_node_id, to_node_id, edge_type,
+                 ARRAY_AGG(id ORDER BY confidence DESC, created_at ASC) AS edge_ids
+          FROM memory_edges
+          WHERE user_id = dup.user_id
+            AND (from_node_id = canonical_id OR to_node_id = canonical_id)
+          GROUP BY user_id, from_node_id, to_node_id, edge_type
+          HAVING COUNT(*) > 1
+        )
+        DELETE FROM memory_edges
+        WHERE id IN (
+          SELECT UNNEST(edge_ids[2:])
+          FROM conflicts
+        );
+        -- Archive duplicate nodes
         UPDATE memory_nodes
         SET status = 'archived', valid_until = NOW()
         WHERE id = ANY(dup.ids[2:]) AND user_id = dup.user_id;
+        -- Transfer node evidence to canonical node
         UPDATE memory_evidence
         SET node_id = canonical_id
         WHERE node_id = ANY(dup.ids[2:]) AND user_id = dup.user_id;

@@ -8,9 +8,14 @@ import { isProcessingMessage, setIsProcessingMessage } from "./state.js";
 import { chatStore } from "./store.js";
 
 function waitForPaint() {
-	return new Promise((resolve) =>
-		requestAnimationFrame(() => requestAnimationFrame(resolve)),
-	);
+	return new Promise((resolve) => {
+		if (typeof requestAnimationFrame !== "undefined") {
+			requestAnimationFrame(() => requestAnimationFrame(resolve));
+		} else {
+			// Two-step setTimeout fallback when requestAnimationFrame is unavailable
+			setTimeout(() => setTimeout(resolve, 0), 0);
+		}
+	});
 }
 
 /**
