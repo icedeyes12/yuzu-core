@@ -18,6 +18,7 @@ class LLMContext:
     model: str | None
     api_key: str | None = None
     base_url: str | None = None
+    chat_session_id: str | None = None
     parameters: dict[str, Any] = field(default_factory=dict)
 
     @classmethod

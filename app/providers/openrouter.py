@@ -106,6 +106,8 @@ class OpenRouterProvider(AIProvider):
             "typical_p": typical_p,
             "stream": stream,
         }
+        if ctx.chat_session_id:
+            payload["session_id"] = ctx.chat_session_id
 
         tools = kwargs.get("tools")
         if tools:

@@ -36,6 +36,15 @@ The API uses RFC 9457-style `application/problem+json` error responses from `app
 
 Current provider modules are OpenRouter, OpenAI, Anthropic, Google, Grok, Groq, Cerebras, DeepSeek, Chutes, Yuzu Portal, Custom OpenAI, and Custom Anthropic. Capability flags live in `app/providers/base.py` and are overridden per provider. Chutes and OpenRouter currently opt into structured system content and vision; Anthropic and Custom Anthropic deliberately use the text system path. Other providers inherit the base defaults unless their module overrides a flag.
 
+### Session correlation
+
+`chat_sessions.id` is the internal stable chat identity. The orchestrator passes it into `LLMContext.chat_session_id` for every non-streaming and streaming generation pass, including tool-loop passes, retries, and fallback attempts. Provider adapters do not receive a new session ID per request.
+
+OpenRouter is the only provider-specific session integration currently implemented. Its documented Chat Completions `session_id` request field receives the Yuzu `chat_sessions.id`; OpenRouter documents this as request grouping, sticky routing, and observability grouping. Other providers receive no speculative session field. OpenRouter response `id`/generation IDs remain provider request identities, not Yuzu chat-session IDs.
+
+Provider registration is not proof of live functionality. Without provider credentials and network access, adapters are classified as implemented but unverified unless covered by local payload/unit tests.
+
+
 ## Streaming
 
 `POST /api/v1/send_message_stream` returns SSE. The service emits `token`, `tool_call`, `tool_result`, and terminal `done` events, plus comment heartbeats while waiting. `StreamBuffer` accumulates active output in RAM, while the orchestrator persists user, tool, and assistant records. The buffer removes itself after completion or failure. Clients must ignore SSE comment heartbeats and handle reconnect/termination paths.

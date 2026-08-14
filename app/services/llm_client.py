@@ -143,6 +143,7 @@ async def generate_ai_response(
 
     ctx = LLMContext.from_profile(profile).require_configured()
     assert ctx.provider is not None and ctx.model is not None
+    ctx.chat_session_id = session_id
 
     messages = await build_messages(
         profile,
@@ -229,6 +230,7 @@ async def generate_ai_response_streaming(
 
     ctx = LLMContext.from_profile(profile).require_configured()
     assert ctx.provider is not None and ctx.model is not None
+    ctx.chat_session_id = session_id
 
     messages = await build_messages(
         profile,
