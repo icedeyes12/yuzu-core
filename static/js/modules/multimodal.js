@@ -7,6 +7,12 @@ import { router } from "./router.js";
 import { isProcessingMessage, setIsProcessingMessage } from "./state.js";
 import { chatStore } from "./store.js";
 
+function waitForPaint() {
+	return new Promise((resolve) =>
+		requestAnimationFrame(() => requestAnimationFrame(resolve)),
+	);
+}
+
 /**
  * MultimodalManager handles chat modes, image upload, and streaming.
  */
@@ -189,6 +195,7 @@ export class MultimodalManager {
 			chatStore.beginAssistantMessage();
 			abortController = new AbortController();
 			eventRouter.registerStream(sessionId, abortController);
+			await waitForPaint();
 
 			const formData = new FormData();
 			formData.append("message", message);

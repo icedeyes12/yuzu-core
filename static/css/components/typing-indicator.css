@@ -11,6 +11,15 @@
 	margin: 0;
 }
 
+.message--typing {
+	animation: none;
+}
+
+.message--typing .typing-indicator {
+	animation: none;
+	opacity: 1;
+}
+
 .typing-indicator span {
 	width: 8px;
 	height: 8px;

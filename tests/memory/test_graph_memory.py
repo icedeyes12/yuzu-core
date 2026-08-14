@@ -72,7 +72,9 @@ def test_graph_schema_deduplicates_before_unique_constraint():
 
     # Verify migration runs before unique index creation (order matters for upgrade-safety)
     dedup_idx = schema.find("FOR dup IN")
-    index_idx = schema.find("CREATE UNIQUE INDEX IF NOT EXISTS uq_memory_nodes_active_content")
+    index_idx = schema.find(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_memory_nodes_active_content"
+    )
     assert dedup_idx > 0, "Deduplication migration not found"
     assert index_idx > 0, "Unique index creation not found"
     assert dedup_idx < index_idx, "Deduplication must run before unique index creation"
