@@ -62,6 +62,27 @@ function getNumberIfExists(id, fallback = 0) {
 	return Number.isFinite(num) ? num : fallback;
 }
 
+function getActiveModelInfo() {
+	const provider = appConfig?.current_provider || appConfig?.ai_providers?.current_provider;
+	const model = appConfig?.current_model || appConfig?.ai_providers?.current_model;
+	return (appConfig?.model_infos?.[provider] || []).find((info) => info.id === model) || null;
+}
+
+function applyActiveModelCapabilities() {
+	const capabilities = getActiveModelInfo()?.capabilities || {};
+	const reasoning = capabilities.reasoning || {};
+	const reasoningControl = document.getElementById("adv-reasoning");
+	const visionControl = document.getElementById("adv-vision");
+	if (reasoningControl) {
+		reasoningControl.disabled = reasoning.mode === "unsupported";
+		if (reasoningControl.disabled) reasoningControl.checked = false;
+	}
+	if (visionControl) {
+		visionControl.disabled = capabilities.vision === "unsupported";
+		if (visionControl.disabled) visionControl.checked = false;
+	}
+}
+
 function getProfileAdvancedSource(data) {
 	return data?.advanced || data?.profile || data || {};
 }
@@ -251,17 +272,7 @@ async function loadProviderSettings() {
 				getCachedModels(modelCatalog, provider),
 				isActive ? data.current_model || "" : "",
 			);
-			if (isActive) {
-				const activeInfo = (modelInfos[provider] || []).find(
-					(info) => info.id === data.current_model,
-				);
-				const reasoning = activeInfo?.capabilities?.reasoning;
-				const reasoningControl = document.getElementById("adv-reasoning");
-				if (reasoningControl && reasoning?.mode === "unsupported") {
-					reasoningControl.disabled = true;
-					reasoningControl.checked = false;
-				}
-			}
+			if (isActive) applyActiveModelCapabilities();
 			grid.appendChild(card);
 			setupMaskedKeyInput(card.querySelector(`#key-${provider}`), provKey);
 
@@ -455,6 +466,11 @@ async function fetchModelsForProvider(provider) {
 			setCachedModels(catalog, provider, models);
 			saveModelCatalog(catalog);
 			if (select) populateModelSelect(select, models, previous);
+			if (Array.isArray(data.model_infos)) {
+				appConfig.model_infos = appConfig.model_infos || {};
+				appConfig.model_infos[provider] = data.model_infos;
+				applyActiveModelCapabilities();
+			}
 			showSuccess(`Models loaded for ${provider}.`);
 		} else {
 			showError(`Failed to fetch models: ${data.message || "Unknown error"}`);

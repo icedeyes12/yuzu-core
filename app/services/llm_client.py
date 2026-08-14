@@ -7,7 +7,13 @@ import time
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from app.core.capabilities import omit_images, request_needs_vision
+from app.core.capabilities import (
+    ModelCapabilities,
+    RequestRequirements,
+    omit_images,
+    request_needs_vision,
+    resolve_effective_capabilities,
+)
 from app.core.llm_context import LLMContext
 from app.core.logging_config import get_logger
 from app.db import Database
@@ -43,6 +49,29 @@ def _unique_tool_schemas(**kwargs) -> list[dict[str, Any]]:
     return get_tool_schemas(**kwargs)
 
 
+def _resolve_request_payload(
+    messages: list[dict[str, Any]],
+    model_info,
+    provider_allows_tools: bool,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """(｡•̀ᴗ-)✧"""
+    tools = _unique_tool_schemas()
+    requirements = RequestRequirements(
+        needs_vision=request_needs_vision(messages),
+        needs_function_call=bool(tools),
+    )
+    capabilities = resolve_effective_capabilities(
+        model_info.capabilities if model_info else ModelCapabilities(),
+        requirements,
+        provider_allows_tools=provider_allows_tools,
+    )
+    if not capabilities.tools_included:
+        tools = []
+    if not capabilities.images_included:
+        messages = omit_images(messages)
+    return messages, tools
+
+
 # ---------------------------------------------------------------------------
 # Direct /imagine handling (used by both response variants)
 # ---------------------------------------------------------------------------
@@ -67,17 +96,10 @@ async def _send_to_provider(
     _ = ctx.require_configured()
     ai_manager = await get_ai_manager()
     model_info = ai_manager.get_model_info(ctx.provider or "", ctx.model or "")
-    schemas = (
-        _unique_tool_schemas()
-        if model_info is None or model_info.capabilities.function_call != "unsupported"
-        else []
+    provider_allows_tools = ai_manager.provider_supports_tools(ctx.provider or "")
+    messages, schemas = _resolve_request_payload(
+        messages, model_info, provider_allows_tools
     )
-    if (
-        model_info
-        and model_info.capabilities.vision == "unsupported"
-        and request_needs_vision(messages)
-    ):
-        messages = omit_images(messages)
 
     # Phase 1: structured payload audit log (non-stream path)
     if any(
@@ -185,17 +207,10 @@ async def _stream_from_provider(
 
     # Generate tool schemas
     model_info = ai_manager.get_model_info(ctx.provider or "", ctx.model or "")
-    tools = (
-        _unique_tool_schemas()
-        if model_info is None or model_info.capabilities.function_call != "unsupported"
-        else []
+    provider_allows_tools = ai_manager.provider_supports_tools(ctx.provider or "")
+    messages, tools = _resolve_request_payload(
+        messages, model_info, provider_allows_tools
     )
-    if (
-        model_info
-        and model_info.capabilities.vision == "unsupported"
-        and request_needs_vision(messages)
-    ):
-        messages = omit_images(messages)
 
     # Phase 1: structured payload audit log (stream path)
     if any(

@@ -32,9 +32,19 @@ The API uses RFC 9457-style `application/problem+json` error responses from `app
 
 ## Services and providers
 
-`ConversationService` is the transport-independent boundary for message processing and image uploads. `orchestrator.py` owns the canonical execution loop; `llm_client.py` builds requests and dispatches to `AIProviderManager`.
+`ConversationService` is the transport-independent boundary for message processing and image uploads. `orchestrator.py` owns the canonical execution loop; `llm_client.py` resolves request requirements against model metadata, then builds requests and dispatches to `AIProviderManager`.
 
-Current provider modules are OpenRouter, OpenAI, Anthropic, Google, Grok, Groq, Cerebras, DeepSeek, Chutes, Yuzu Portal, Custom OpenAI, and Custom Anthropic. Capability flags live in `app/providers/base.py` and are overridden per provider. Chutes and OpenRouter currently opt into structured system content and vision; Anthropic and Custom Anthropic deliberately use the text system path. Other providers inherit the base defaults unless their module overrides a flag.
+Current provider modules are OpenRouter, OpenAI, Anthropic, Google, Grok, Groq, Cerebras, DeepSeek, Chutes, Yuzu Portal, Custom OpenAI, and Custom Anthropic. Provider transport flags live in `app/providers/base.py`; model capabilities live in `app/core/capabilities.py`. Discovery normalizes provider `/models` metadata into `ModelInfo` and exposes `models` plus `model_infos` through config, provider-list, proxy, and refresh responses. Missing capability metadata remains `unknown`.
+
+Capability lifecycle:
+
+```text
+provider /models -> normalize_model_metadata() -> provider.model_infos
+  -> ConfigService/API model_infos -> browser appConfig.model_infos
+  -> llm_client request requirements -> effective request -> provider adapter
+```
+
+`ModelInfo` is an in-memory discovery cache. PostgreSQL persists selected provider/model and user generation settings, not raw model metadata. This is intentional: metadata is re-discovered rather than treated as a durable tenant cache. `RequestRequirements` and `EffectiveCapabilities` keep declared model facts separate from per-request inclusion decisions. Streaming and non-streaming dispatch use the same resolver.
 
 ### Session correlation
 

@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 
+from app.core.capabilities import ModelCapabilities, ModelInfo, ReasoningCapability
 from app.core.context import MissingProviderKeyError
 from app.core.llm_context import LLMContext
 from app.providers.base import AIProvider, ProviderCapabilities
@@ -30,6 +31,22 @@ class OpenAIProvider(AIProvider):
     async def get_models(self) -> list[str]:
         return self.available_models
 
+    def get_model_info(self, model: str) -> ModelInfo:
+        info = super().get_model_info(model)
+        if info.source != "unknown":
+            return info
+        if model.startswith(("o1", "o3", "o4")):
+            return ModelInfo(
+                provider=self.name,
+                id=model,
+                capabilities=ModelCapabilities(
+                    function_call="unsupported",
+                    reasoning=ReasoningCapability("effort", ("low", "medium", "high")),
+                ),
+                source="inferred",
+            )
+        return info
+
     def _prepare_payload(
         self, ctx: LLMContext, messages: list[dict[str, Any]], stream: bool, **kwargs
     ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -46,7 +63,9 @@ class OpenAIProvider(AIProvider):
         # o1/o3/o4 reasoning models don't support system prompt or temperature
         model = ctx.model
         assert model is not None
-        is_reasoning = any(model.startswith(p) for p in ("o1", "o3", "o4"))
+        is_reasoning = (
+            self.get_model_info(model).capabilities.reasoning.mode != "unknown"
+        )
         if is_reasoning:
             messages = [m for m in messages if m.get("role") != "system"]
             payload: dict[str, Any] = {

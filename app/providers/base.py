@@ -344,7 +344,7 @@ class AIProvider:
             return False
 
     def supports_vision(self, model: str) -> bool:
-        return self.capabilities.supports_vision
+        return self.get_model_info(model).capabilities.vision == "supported"
 
     def format_vision_message(self, user_message: str) -> list[dict[str, Any]]:
         return multimodal_tools.format_vision_message(user_message, self.name)

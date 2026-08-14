@@ -25,6 +25,7 @@ class ModelCapabilities:
     text_input: SupportState = "supported"
     vision: SupportState = "unknown"
     function_call: SupportState = "unknown"
+    structured_output: SupportState = "unknown"
     reasoning: ReasoningCapability = field(default_factory=ReasoningCapability)
     image_generation: SupportState = "unknown"
 
@@ -33,9 +34,42 @@ class ModelCapabilities:
             "text_input": self.text_input,
             "vision": self.vision,
             "function_call": self.function_call,
+            "structured_output": self.structured_output,
             "reasoning": self.reasoning.to_dict(),
             "image_generation": self.image_generation,
         }
+
+
+@dataclass(frozen=True)
+class ModelLimits:
+    """(｡•̀ᴗ-)✧"""
+
+    context_window: int | None = None
+    max_output_tokens: int | None = None
+
+    def to_dict(self) -> dict[str, int | None]:
+        return {
+            "context_window": self.context_window,
+            "max_output_tokens": self.max_output_tokens,
+        }
+
+
+@dataclass(frozen=True)
+class RequestRequirements:
+    """(｡•̀ᴗ-)✧"""
+
+    needs_vision: bool = False
+    needs_function_call: bool = False
+
+
+@dataclass(frozen=True)
+class EffectiveCapabilities:
+    """(｡•̀ᴗ-)✧"""
+
+    vision: SupportState
+    function_call: SupportState
+    images_included: bool
+    tools_included: bool
 
 
 @dataclass(frozen=True)
@@ -45,6 +79,7 @@ class ModelInfo:
     provider: str
     id: str
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
+    limits: ModelLimits = field(default_factory=ModelLimits)
     source: Literal["declared", "inferred", "unknown"] = "unknown"
 
     def to_dict(self) -> dict[str, Any]:
@@ -52,6 +87,7 @@ class ModelInfo:
             "provider": self.provider,
             "id": self.id,
             "capabilities": self.capabilities.to_dict(),
+            "limits": self.limits.to_dict(),
             "source": self.source,
         }
 
@@ -99,22 +135,71 @@ def normalize_model_metadata(
     elif provider_tools is not None:
         function_call = _state(provider_tools)
 
+    output_modalities = metadata.get("output_modalities")
+    if not isinstance(output_modalities, list):
+        output_modalities = architecture.get("output_modalities")
+    if not isinstance(output_modalities, list):
+        output_modalities = []
+
     reasoning = ReasoningCapability()
     if "reasoning_effort" in supported_parameters:
         reasoning = ReasoningCapability("effort", ("low", "medium", "high"))
     elif "reasoning" in supported_parameters:
         reasoning = ReasoningCapability("toggle")
 
-    source = "declared" if architecture or supported_parameters else "inferred"
+    structured_output: SupportState = "unknown"
+    if (
+        "response_format" in supported_parameters
+        or "structured_outputs" in supported_parameters
+    ):
+        structured_output = "supported"
+
+    context_window = metadata.get("context_length") or metadata.get("context_window")
+    max_output_tokens = metadata.get("max_output") or metadata.get("max_output_tokens")
+    limits = ModelLimits(
+        context_window=context_window if isinstance(context_window, int) else None,
+        max_output_tokens=max_output_tokens
+        if isinstance(max_output_tokens, int)
+        else None,
+    )
+    source = (
+        "declared"
+        if architecture or supported_parameters or limits != ModelLimits()
+        else "unknown"
+    )
     return ModelInfo(
         provider=provider,
         id=model_id,
         capabilities=ModelCapabilities(
             vision=vision,
             function_call=function_call,
+            structured_output=structured_output,
             reasoning=reasoning,
+            image_generation=(
+                "supported" if "image" in output_modalities else "unknown"
+            ),
         ),
+        limits=limits,
         source=source,
+    )
+
+
+def resolve_effective_capabilities(
+    declared: ModelCapabilities,
+    requirements: RequestRequirements,
+    *,
+    provider_allows_tools: bool = False,
+) -> EffectiveCapabilities:
+    """(｡•̀ᴗ-)✧"""
+    function_call = declared.function_call
+    tools_included = function_call != "unsupported" and (
+        function_call != "unknown" or provider_allows_tools
+    )
+    return EffectiveCapabilities(
+        vision=declared.vision,
+        function_call=function_call,
+        images_included=not requirements.needs_vision or declared.vision == "supported",
+        tools_included=not requirements.needs_function_call or tools_included,
     )
 
 

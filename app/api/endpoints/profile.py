@@ -242,6 +242,7 @@ async def api_proxy_models(
                 base_dir = validated_base_url
             url = f"{base_dir}/models"
 
+        provider_instance = ai_manager.providers[provider]
         if url:
             headers = {}
             if api_key:
@@ -251,11 +252,26 @@ async def api_proxy_models(
                     resp = await client.get(url, headers=headers, timeout=10.0)
                     if resp.status_code == 200:
                         data = resp.json()
+                        metadata = [
+                            item
+                            for item in data.get("data", [])
+                            if isinstance(item, dict)
+                        ]
+                        provider_instance.set_model_metadata(metadata)
                         models = [
-                            m.get("id") for m in data.get("data", []) if m.get("id")
+                            model_id
+                            for item in metadata
+                            if isinstance(model_id := item.get("id"), str) and model_id
                         ]
                         if models:
-                            return {"status": "success", "models": models}
+                            return {
+                                "status": "success",
+                                "models": models,
+                                "model_infos": [
+                                    provider_instance.get_model_info(model).to_dict()
+                                    for model in models
+                                ],
+                            }
             except Exception as e:
                 log.warning("Failed to fetch models from %s: %s", url, e)
 
@@ -307,7 +323,13 @@ async def api_refresh_provider_models(
         models = sorted({model for model in models if isinstance(model, str) and model})
         if not models:
             raise HTTPException(status_code=502, detail="Provider returned no models")
-        return {"status": "success", "models": models}
+        return {
+            "status": "success",
+            "models": models,
+            "model_infos": [
+                provider_instance.get_model_info(model).to_dict() for model in models
+            ],
+        }
     except HTTPException:
         raise
     except Exception as e:

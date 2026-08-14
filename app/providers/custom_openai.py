@@ -56,7 +56,15 @@ class CustomOpenAIProvider(AIProvider):
                 resp = await client.get(url, headers=headers, timeout=10.0)
                 if resp.status_code == 200:
                     data = resp.json()
-                    models = [m.get("id") for m in data.get("data", []) if m.get("id")]
+                    metadata = [
+                        item for item in data.get("data", []) if isinstance(item, dict)
+                    ]
+                    self.set_model_metadata(metadata)
+                    models = [
+                        model_id
+                        for item in metadata
+                        if isinstance(model_id := item.get("id"), str) and model_id
+                    ]
                     if models:
                         return models
         except MissingProviderKeyError:

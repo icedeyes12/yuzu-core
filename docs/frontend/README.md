@@ -19,6 +19,7 @@ Conversation state must not be updated by bypassing the store. `DOMRenderer` is 
 | Responsibility | Owner |
 |---|---|
 | Page bootstrap and cross-module coordination | `static/js/chat.js`, `home.js`, `config.js`, `about.js` |
+| Selected model capability state | `static/js/chat.js` → `MultimodalManager`, `static/js/config.js` |
 | Conversation state | `static/js/modules/store.js` (`ConversationStore`) |
 | Conversation DOM | `static/js/modules/store-renderer.js` (`DOMRenderer`) |
 | Message structure/Markdown | `static/js/modules/messages.js` |
@@ -33,6 +34,7 @@ Conversation state must not be updated by bypassing the store. `DOMRenderer` is 
 | Tool payload validation | `static/js/modules/tool-renderer/schemas.js` |
 | Tool cards | `static/js/modules/tool-renderer/` |
 | Provider identity metadata | `static/js/provider-registry.js` |
+| Model capability state | `static/js/config.js` (`appConfig.model_infos`) |
 | Provider identity facade | `static/js/visual-registry.js` |
 | Badge metadata and rendering | `static/js/badge-registry.js` |
 | Runtime-generated icons | `static/js/runtime-icon-renderer.js` |

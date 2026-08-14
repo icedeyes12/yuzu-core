@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 
+from app.core.capabilities import ModelCapabilities, ModelInfo, ReasoningCapability
 from app.core.context import MissingProviderKeyError
 from app.core.llm_context import LLMContext
 from app.providers.base import AIProvider, ProviderCapabilities
@@ -28,6 +29,22 @@ class DeepSeekProvider(AIProvider):
 
     async def get_models(self) -> list[str]:
         return self.available_models
+
+    def get_model_info(self, model: str) -> ModelInfo:
+        info = super().get_model_info(model)
+        if info.source != "unknown":
+            return info
+        if model == "deepseek-reasoner":
+            return ModelInfo(
+                provider=self.name,
+                id=model,
+                capabilities=ModelCapabilities(
+                    function_call="unsupported",
+                    reasoning=ReasoningCapability("toggle"),
+                ),
+                source="inferred",
+            )
+        return info
 
     def _prepare_payload(
         self, ctx: LLMContext, messages: list[dict[str, Any]], stream: bool, **kwargs
@@ -52,7 +69,11 @@ class DeepSeekProvider(AIProvider):
         }
 
         tools = kwargs.get("tools")
-        if tools and ctx.model != "deepseek-reasoner":
+        if (
+            tools
+            and self.get_model_info(ctx.model or "").capabilities.function_call
+            != "unsupported"
+        ):
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
 

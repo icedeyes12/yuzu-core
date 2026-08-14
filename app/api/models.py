@@ -77,6 +77,7 @@ class ProviderListResponse(ApiModel):
 class ModelsResponse(ApiModel):
     status: str
     models: list[str] = []
+    model_infos: list[dict[str, Any]] = []
     message: str | None = None
 
 

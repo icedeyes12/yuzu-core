@@ -82,8 +82,17 @@ async function initializeChat() {
 			chatStore.setError("No active conversation is available.");
 		}
 
-		// Initialize multimodal
-		const multimodal = new MultimodalManager();
+		// Initialize multimodal from the same canonical model metadata as config.
+		const configResponse = await fetch("/api/v1/config", {
+			headers: { Accept: "application/json" },
+		});
+		const config = configResponse.ok ? await configResponse.json() : {};
+		const provider = config.current_provider || config.ai_providers?.current_provider;
+		const model = config.current_model || config.ai_providers?.current_model;
+		const modelInfo = (config.model_infos?.[provider] || []).find(
+			(info) => info.id === model,
+		);
+		const multimodal = new MultimodalManager(modelInfo);
 		multimodal.init();
 
 		// Auto-focus input on initial load

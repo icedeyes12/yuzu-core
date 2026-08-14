@@ -36,10 +36,36 @@ class CustomAnthropicProvider(AIProvider):
     async def fetch_live_models(
         self, api_key: str | None = None, base_url: str | None = None
     ) -> list[str]:
-        # For custom providers, we don't have a static list.
-        # But we must return something to pass the "models > 0" check,
-        # or we could implement a real fetch. We will just return a placeholder.
-        return ["custom-anthropic-1", "custom-anthropic-2"]
+        if not base_url:
+            return []
+        return await self._fetch_models(base_url, api_key)
+
+    async def _fetch_models(self, base_url: str, api_key: str | None) -> list[str]:
+        url = base_url.rstrip("/")
+        if url.endswith("/messages"):
+            url = url[: -len("/messages")]
+        url = f"{url}/models"
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=headers, timeout=10.0)
+            if response.status_code != 200:
+                return []
+            metadata = [
+                item
+                for item in response.json().get("data", [])
+                if isinstance(item, dict)
+            ]
+            self.set_model_metadata(metadata)
+            return sorted(
+                {
+                    model_id
+                    for item in metadata
+                    if isinstance(model_id := item.get("id"), str) and model_id
+                }
+            )
+        except (MissingProviderKeyError, httpx.HTTPError, ValueError):
+            return []
 
     async def get_models(self) -> list[str]:
         return await self.fetch_live_models()
