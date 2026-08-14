@@ -87,7 +87,8 @@ async function initializeChat() {
 			headers: { Accept: "application/json" },
 		});
 		const config = configResponse.ok ? await configResponse.json() : {};
-		const provider = config.current_provider || config.ai_providers?.current_provider;
+		const provider =
+			config.current_provider || config.ai_providers?.current_provider;
 		const model = config.current_model || config.ai_providers?.current_model;
 		const modelInfo = (config.model_infos?.[provider] || []).find(
 			(info) => info.id === model,

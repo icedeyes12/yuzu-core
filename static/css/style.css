@@ -48,10 +48,24 @@ body {
 	word-break: break-word;
 }
 
-:is(.card, .config-section, .brain-box, .tool-execution, .agentic-status-bar,
-	.message, .message-bubble, .message-content, .tool-card, .generic-card,
-	.tool-result, .tool-result-content, .action-content, .system-action-block,
-	details, summary) {
+:is(
+	.card,
+	.config-section,
+	.brain-box,
+	.tool-execution,
+	.agentic-status-bar,
+	.message,
+	.message-bubble,
+	.message-content,
+	.tool-card,
+	.generic-card,
+	.tool-result,
+	.tool-result-content,
+	.action-content,
+	.system-action-block,
+	details,
+	summary
+) {
 	min-width: 0;
 	max-width: 100%;
 	overflow-wrap: anywhere;

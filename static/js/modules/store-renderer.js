@@ -250,17 +250,17 @@ export class DOMRenderer {
 			this.activeTypingIndicator = null;
 		}
 		if (isGenerating && !this.activeTypingIndicator) {
-				this.activeTypingIndicator = document.createElement("div");
-				this.activeTypingIndicator.className = "typing-indicator";
-				this.activeTypingIndicator.setAttribute(
-					"aria-label",
-					"Assistant is typing",
-				);
-				this.activeTypingIndicator.innerHTML =
-					"<span></span><span></span><span></span>";
-				this.container.appendChild(this.activeTypingIndicator);
-				scrollToBottom();
-				return;
+			this.activeTypingIndicator = document.createElement("div");
+			this.activeTypingIndicator.className = "typing-indicator";
+			this.activeTypingIndicator.setAttribute(
+				"aria-label",
+				"Assistant is typing",
+			);
+			this.activeTypingIndicator.innerHTML =
+				"<span></span><span></span><span></span>";
+			this.container.appendChild(this.activeTypingIndicator);
+			scrollToBottom();
+			return;
 		}
 		if (!isGenerating && this.activeTypingIndicator) {
 			this.activeTypingIndicator.remove();

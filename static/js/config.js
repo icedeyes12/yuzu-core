@@ -63,9 +63,15 @@ function getNumberIfExists(id, fallback = 0) {
 }
 
 function getActiveModelInfo() {
-	const provider = appConfig?.current_provider || appConfig?.ai_providers?.current_provider;
-	const model = appConfig?.current_model || appConfig?.ai_providers?.current_model;
-	return (appConfig?.model_infos?.[provider] || []).find((info) => info.id === model) || null;
+	const provider =
+		appConfig?.current_provider || appConfig?.ai_providers?.current_provider;
+	const model =
+		appConfig?.current_model || appConfig?.ai_providers?.current_model;
+	return (
+		(appConfig?.model_infos?.[provider] || []).find(
+			(info) => info.id === model,
+		) || null
+	);
 }
 
 function applyActiveModelCapabilities() {
@@ -88,9 +94,11 @@ function getProfileAdvancedSource(data) {
 }
 
 function validateProviderKey(provider, value) {
-	if (provider === "custom_openai" || provider === "custom_anthropic") return null;
+	if (provider === "custom_openai" || provider === "custom_anthropic")
+		return null;
 	if (!value) return "API key cannot be empty.";
-	if (value.length < 8) return "The API key appears to be incomplete or invalid.";
+	if (value.length < 8)
+		return "The API key appears to be incomplete or invalid.";
 	if (/\.\.\.|\*\*\*|•••/.test(value)) {
 		return "The entered value looks like a masked API key.";
 	}
@@ -186,8 +194,6 @@ async function loadProviderSettings() {
 				appConfig.current_model || appConfig.ai_providers.current_model,
 			status: "success",
 		};
-		const modelInfos = data.model_infos || {};
-
 		const grid = document.getElementById("providers-grid");
 		if (!grid) return;
 		grid.innerHTML = "";
@@ -332,7 +338,8 @@ function saveBYOKForProvider(provider) {
 
 	const displayedValue = keyInput.value.trim();
 	const storedKey = maskedProviderKeys.get(keyInput) || "";
-	const key = displayedValue === maskApiKey(storedKey) ? storedKey : displayedValue;
+	const key =
+		displayedValue === maskApiKey(storedKey) ? storedKey : displayedValue;
 	const validationError = validateProviderKey(provider, key);
 	if (validationError) {
 		showError(validationError);

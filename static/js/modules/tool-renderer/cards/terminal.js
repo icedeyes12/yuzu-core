@@ -5,7 +5,11 @@
 import { renderRuntimeIcon } from "../../../runtime-icon-renderer.js";
 import { escapeHtml } from "../dom-utils.js";
 
-function renderTerminalCard(normalised, _callId, { copyableContent = "" } = {}) {
+function renderTerminalCard(
+	normalised,
+	_callId,
+	{ copyableContent = "" } = {},
+) {
 	const {
 		command = "",
 		stdout = "",
