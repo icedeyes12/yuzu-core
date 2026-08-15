@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import os
 import re
-import subprocess
 from typing import Any
 
+from psycopg import Error as PgError
+from psycopg.errors import QueryCanceled
+
 from app.core.logging_config import get_logger
+from app.db.connection import PgSession
 from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
 
 log = get_logger(__name__)
@@ -42,43 +44,6 @@ TOOL_DEFINITION = ToolDefinition(
         ),
     ],
 )
-
-
-def _get_db_connection_params() -> dict[str, str]:
-    return {
-        "host": os.environ.get("PGHOST", os.environ.get("PG_HOST", "localhost")),
-        "port": os.environ.get("PGPORT", os.environ.get("PG_PORT", "5432")),
-        "dbname": os.environ.get("PGDATABASE", os.environ.get("PG_DBNAME", "yuzu")),
-        "user": os.environ.get("PGUSER", os.environ.get("PG_USER", "postgres")),
-        "password": os.environ.get("PGPASSWORD", os.environ.get("PG_PASSWORD", "")),
-    }
-
-
-def _build_psql_command(query: str, write_mode: bool = False) -> list[str]:
-    params = _get_db_connection_params()
-
-    cmd = [
-        "psql",
-        "-h",
-        params["host"],
-        "-p",
-        params["port"],
-        "-U",
-        params["user"],
-        "-d",
-        params["dbname"],
-        "-t",
-        "-A",
-        "-F,",
-        "-X",
-        "-c",
-        query,
-    ]
-
-    if params["password"]:
-        os.environ["PGPASSWORD"] = params["password"]
-
-    return cmd
 
 
 def _is_write_query(query: str) -> bool:
@@ -142,6 +107,29 @@ def _format_table(
     return "\n".join(lines)
 
 
+def _run_query(query: str) -> tuple[list[dict[str, Any]], list[str]]:
+    """Execute *query* on the shared connection pool.
+
+    Returns (rows, columns). Values are stringified so the result stays
+    JSON-serializable for tool events; writes without a result set yield a
+    single "result" row carrying the command tag (e.g. "INSERT 0 1").
+    """
+    with PgSession() as session:
+        session.execute(f"SET LOCAL statement_timeout = {QUERY_TIMEOUT * 1000}")
+        with session.conn.cursor() as cur:
+            cur.execute(query)
+            status = cur.statusmessage
+            if cur.description is None:
+                rows = [{"result": status}] if status else []
+                return rows, ["result"]
+            columns = [d.name for d in cur.description]
+            rows = [
+                {col: ("" if v is None else str(v)) for col, v in row.items()}
+                for row in cur.fetchall()
+            ]
+            return rows, columns
+
+
 def execute(
     arguments: dict[str, Any], session_id: str | None = None, tool_name: str = "sql"
 ) -> dict[str, Any]:
@@ -174,41 +162,7 @@ def execute(
         )
 
     try:
-        cmd = _build_psql_command(query, write_mode)
-
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=QUERY_TIMEOUT,
-        )
-
-        stdout = result.stdout.strip()
-        stderr = result.stderr.strip()
-        exit_code = result.returncode
-
-        if exit_code != 0:
-            return error_result(
-                f"Query failed: {stderr}",
-                TOOL_DEFINITION,
-                query[:100],
-            )
-
-        rows = []
-        columns = []
-
-        if stdout:
-            lines = [line for line in stdout.split("\n") if line.strip()]
-            if lines:
-                first_values = lines[0].split(",")
-                if len(first_values) > 1:
-                    columns = [f"col{i}" for i in range(len(first_values))]
-                    for line in lines:
-                        values = line.split(",")
-                        rows.append({col: val for col, val in zip(columns, values)})
-                else:
-                    columns = ["result"]
-                    rows = [{"result": line} for line in lines]
+        rows, columns = _run_query(query)
 
         table_md = _format_table(rows, columns)
 
@@ -228,15 +182,15 @@ def execute(
             "Yuzu",
         )
 
-    except subprocess.TimeoutExpired:
+    except QueryCanceled:
         return error_result(
             f"Query timed out after {QUERY_TIMEOUT}s",
             TOOL_DEFINITION,
             query[:100],
         )
-    except FileNotFoundError:
+    except PgError as e:
         return error_result(
-            "psql not found. Please install postgresql-client.",
+            f"Query failed: {e}",
             TOOL_DEFINITION,
             query[:100],
         )
