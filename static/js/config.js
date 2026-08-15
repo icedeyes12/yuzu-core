@@ -332,9 +332,9 @@ async function loadProviderSettings() {
 	}
 }
 
-function saveBYOKForProvider(provider) {
+function saveBYOKForProvider(provider, notify = true) {
 	const keyInput = document.getElementById(`key-${provider}`);
-	if (!keyInput) return;
+	if (!keyInput) return false;
 
 	const displayedValue = keyInput.value.trim();
 	const storedKey = maskedProviderKeys.get(keyInput) || "";
@@ -343,7 +343,7 @@ function saveBYOKForProvider(provider) {
 	const validationError = validateProviderKey(provider, key);
 	if (validationError) {
 		showError(validationError);
-		return;
+		return false;
 	}
 
 	const byok = getByokConfig();
@@ -362,10 +362,11 @@ function saveBYOKForProvider(provider) {
 	byok.providers[provider] = providerConfig;
 	if (!writeByokConfig(byok)) {
 		showError("User scope is unavailable; provider key was not saved.");
-		return;
+		return false;
 	}
-	showSuccess(`${provider} key saved in browser.`);
+	if (notify) showSuccess(`${provider} key saved in browser.`);
 	updateImageModelWarning(getValueIfExists("image-model"));
+	return true;
 }
 
 function setupMaskedKeyInput(input, storedKey) {
@@ -495,6 +496,7 @@ async function fetchModelsForProvider(provider) {
 
 // Test provider connection
 async function testProviderConnection(providerName) {
+	if (!saveBYOKForProvider(providerName, false)) return;
 	const statusElement = document.getElementById("connection-status");
 	if (!statusElement) return;
 	statusElement.textContent = "Testing...";

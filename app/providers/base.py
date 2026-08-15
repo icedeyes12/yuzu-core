@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
@@ -337,9 +338,14 @@ class AIProvider:
         return []
 
     async def test_connection(self) -> bool:
+        """(｡•̀ᴗ-)✧"""
         try:
-            models = await self.get_models()
-            return len(models) > 0
+            fetcher = getattr(self, "fetch_live_models", None)
+            if callable(fetcher):
+                result = fetcher()
+                models = await result if inspect.isawaitable(result) else result
+                return bool(models)
+            return bool(await self.get_models())
         except Exception:
             return False
 

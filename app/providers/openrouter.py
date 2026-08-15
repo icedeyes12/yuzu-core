@@ -32,7 +32,7 @@ class OpenRouterProvider(AIProvider):
     async def get_models(self) -> list[str]:
         return self.available_models
 
-    async def fetch_live_models(self) -> list[str]:
+    async def fetch_live_models(self, api_key: str | None = None) -> list[str]:
         """Fetch the canonical model list from OpenRouter's /models endpoint.
 
         Fetch models only when the caller provides a request-scoped key.
@@ -41,12 +41,12 @@ class OpenRouterProvider(AIProvider):
             import httpx
 
             url = "https://openrouter.ai/api/v1/models"
-            key = None
+            key = api_key
             try:
                 from app.core.context import get_request_keyring
 
                 keyring = get_request_keyring("openrouter")
-                if keyring and keyring.key:
+                if not key and keyring and keyring.key:
                     key = keyring.key
             except MissingProviderKeyError:
                 raise
