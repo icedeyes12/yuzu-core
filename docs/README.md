@@ -8,8 +8,10 @@
 |---|---|---|
 | Product intent | [`product.md`](product.md) | Product hierarchy and interface principles |
 | System architecture | [`architecture/`](architecture/) | Runtime topology and backend/frontend boundaries |
-| Backend | [`backend/`](backend/) | Entry points, HTTP routes, providers, streaming, and native tools |
+| API contract | [`api/`](api/) | Shared HTTP/SSE contract between the frontend and backend |
+| Backend | [`backend/`](backend/) | Entry points, providers, streaming, and native tools |
 | Frontend | [`frontend/`](frontend/) | Vanilla JS/CSS ownership and event contracts |
+| SPA | [`../web/README.md`](../web/README.md) | Vite SPA ownership; consumes the API contract |
 | Database | [`database/`](database/) | PostgreSQL schema and tenant invariants |
 | Memory | [`memory/`](memory/) | Graph extraction, retrieval, and maintenance boundary |
 | Architecture decisions | [`adr/`](adr/) | Immutable accepted decisions |

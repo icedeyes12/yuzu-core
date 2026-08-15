@@ -42,7 +42,7 @@ Conversation state must not be updated by bypassing the store. `DOMRenderer` is 
 
 ## Event contract
 
-The backend stream sends JSON SSE data events with `type` values including `token`, `tool_call`, `tool_result`, `error`, and `done`. `event-router.js` validates the event shape, tracks turn IDs and pending tool calls, and dispatches store mutations. Tool result payloads are normalized by `validateToolPayload()` in `schemas.js`; invalid payloads render a safe generic card.
+The backend stream sends JSON SSE data events with `type` values including `token`, `tool_call`, `tool_result`, `error`, and `done`. The exact shapes and the rest of the shared HTTP contract are documented once in [`../api/contract.md`](../api/contract.md) — the authoritative boundary. `event-router.js` validates the event shape, tracks turn IDs and pending tool calls, and dispatches store mutations. Tool result payloads are normalized by `validateToolPayload()` in `schemas.js`; invalid payloads render a safe generic card. The Vite SPA in [`../../web/`](../../web/) consumes the same contract through `web/src/modules/event-router.js` and `apiFetch.js`.
 
 ## Visual identity rules
 

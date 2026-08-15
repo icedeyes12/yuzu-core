@@ -27,22 +27,17 @@ Browser
 - The backend owns database access, provider calls, streaming, memory, tool dispatch, auth, and private image storage.
 - Local single-origin mode: the backend serves the built SPA from `web/dist` as static files. No Cloudflare required.
 
-## Current boundary inventory (verified against code)
+## Current boundary (verified against code)
 
-### Already decoupled (runtime-fetched)
+The interactive surface already runs on the API with cookie auth (`yuzu_session`). The exact routes, request headers, BYOK encoding, error format, and SSE event types are the shared contract between the two deployable units — documented once in [`../api/contract.md`](../api/contract.md), which is authoritative and supersedes any endpoint list in this spec. Key facts that shape the migration:
 
-The interactive surface already runs on the API with cookie auth (`yuzu_session`):
+- `GET /api/v1/config` is the single source of truth for provider/model/capability state; `provider-registry.js` is static branding only.
+- Chat/streaming (`send_message_stream`) uses SSE parsed client-side with fetch `ReadableStream`; `event-router.js` validates event shapes.
+- `GET /api/v1/auth/me` bootstraps the SPA's per-user storage namespace.
+- Private images are authenticated `/api/v1/static/...` routes; `safeImagePath()` rewrites message image paths to them.
+- Health/metrics are unversioned and backend-owned (not SPA concerns).
 
-- **Config/provider/model discovery:** `GET /api/v1/config`, `GET /api/v1/providers/list`, `GET /api/v1/proxy/models/{provider}` and `/refresh` (with `X-Provider-Key` / `X-Provider-BaseUrl` headers), `POST /api/v1/providers/set_preferred`, `POST /api/v1/providers/test_connection`. `model_infos` capability metadata is server-discovered and consumed from the API; `provider-registry.js` is static branding only.
-- **Chat/streaming:** `POST /api/v1/send_message_stream` (multipart form with text + images, or JSON) returns SSE parsed client-side with fetch `ReadableStream`; `event-router.js` validates event shapes. Non-streaming `POST /api/v1/send_message`, image generation, `browser_unload`.
-- **Sessions:** list/create/switch/rename/delete, `chat_history`, `chat_history/before` (pagination cursor), `clear_chat`, `end_session`.
-- **Auth:** `GET /api/v1/auth/login?provider=google|github` (OAuth redirect), `/callback` (redirects back to the referer origin — already cross-origin capable), `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`.
-- **Profile:** `GET/POST /api/v1/profile`, `/update_profile`, `/update_location`, `global-knowledge` CRUD, presets.
-- **Stream recovery:** `GET /api/v1/stream/{session_id}/status` and `/sync`.
-- **Private images:** authenticated `GET /api/v1/static/uploads/{filename}` and `/generated_images/{filename}`. `safeImagePath()` in `tool-renderer/dom-utils.js` rewrites message image paths to these routes.
-- **Health/metrics:** unversioned `/health`, `/health/ready`, `/metrics` (backend-owned; not SPA concerns).
-
-### Server-rendered coupling to sever
+### Server-rendered coupling to remove
 
 | Coupling | Where | SPA replacement |
 |---|---|---|
@@ -113,7 +108,9 @@ Port pages in risk order: login → home/about → config → chat/sidebar/sessi
 
 ## Related references
 
+- [`../api/contract.md`](../api/contract.md) — the shared API contract (authoritative boundary)
 - [`../architecture/`](../architecture/)
 - [`../backend/`](../backend/)
-- [`../web/`](../web/)
+- [`../frontend/`](../frontend/)
+- [`../../web/README.md`](../../web/README.md)
 - [`../README.md`](../README.md)

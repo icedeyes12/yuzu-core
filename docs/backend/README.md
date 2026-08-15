@@ -12,23 +12,9 @@
 
 FastAPI startup creates the psycopg pools, runs `init_pg_tables_async()`, checks PostgreSQL, and stores pools on application state. Shutdown closes the async pool.
 
-## HTTP routes
+## HTTP contract
 
-`main.py` mounts `app.api.api_router` at `/api/v1`. The OAuth router is additionally mounted at `/api` for callback compatibility. Health probes stay unversioned.
-
-| Group | Representative paths |
-|---|---|
-| Auth | `/api/v1/auth/login`, `/api/v1/auth/logout`, `/api/v1/auth/me`; callback compatibility also exists at `/api/auth/callback` |
-| Chat | `/api/v1/send_message`, `/api/v1/send_message_stream`, `/api/v1/generate_image`, `/api/v1/browser_unload` |
-| Sessions | `/api/v1/chat_history`, `/api/v1/chat_history/before`, `/api/v1/sessions/list`, `/api/v1/sessions/create`, `/api/v1/sessions/switch`, `/api/v1/sessions/rename`, `/api/v1/sessions/{session_id}` |
-| Profile/config | `/api/v1/config`, `/api/v1/profile`, `/api/v1/providers/*`, `/api/v1/global-knowledge*` |
-| Presets | `/api/v1/presets/list`, `/api/v1/presets/upsert`, `/api/v1/presets/activate`, `/api/v1/presets/{name}` |
-| Stream recovery | `/api/v1/stream/{session_id}/status`, `/api/v1/stream/{session_id}/sync` |
-| Images | Authenticated `/api/v1/static/uploads/{filename}` and `/api/v1/static/generated_images/{filename}` |
-| Health | `GET/HEAD /health`, `GET /health/ready` |
-| Metrics | `/metrics` when metrics are enabled; otherwise 404 |
-
-The API uses RFC 9457-style `application/problem+json` error responses from `app/api/errors.py`. Hidden POST deletion routes remain compatibility aliases and are excluded from OpenAPI.
+`main.py` mounts `app.api.api_router` at `/api/v1`. The OAuth router is additionally mounted at `/api` for callback compatibility. Health probes stay unversioned. The full route surface, request headers (including `X-BYOK-Config`), BYOK encoding, SSE event types, and the RFC 9457 error format are the shared contract documented once in [`../api/contract.md`](../api/contract.md) — that document is authoritative and this README does not duplicate it. Hidden POST deletion routes remain compatibility aliases and are excluded from OpenAPI.
 
 ## Services and providers
 
@@ -61,7 +47,7 @@ Provider registration is not proof of live functionality. Without provider crede
 
 ## Configuration and secrets
 
-The browser stores BYOK configuration under `yuzu_byok_config` and sends it in the bounded `X-BYOK-Config` header. The backend decodes it into request-scoped keyrings. Custom provider base URLs must be public HTTPS hosts. Do not reintroduce server-side API-key persistence.
+The browser stores BYOK configuration per user in `localStorage` (`user_{user_id}_api_keys`) and sends it in the bounded `X-BYOK-Config` header (encoding and limits: [`../api/contract.md`](../api/contract.md)). The backend decodes it into request-scoped keyrings. Custom provider base URLs must be public HTTPS hosts. Do not reintroduce server-side API-key persistence.
 
 ## Validation commands
 
@@ -69,8 +55,9 @@ The browser stores BYOK configuration under `yuzu_byok_config` and sends it in t
 ruff format --check .
 ruff check .
 find static -type f -name '*.js' -exec node --check {} +
-bunx biome check static/
+bunx biome check static/ web/src/
 pytest
+for file in tests/frontend/*.mjs; do node "$file"; done
 ```
 
 The exact CI workflow is `.github/workflows/ci.yml`; inspect it before changing this list.
