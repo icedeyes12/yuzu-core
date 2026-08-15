@@ -18,7 +18,7 @@ Consumers: [`../backend/README.md`](../backend/README.md) (backend-side reading)
 
 - **Session cookie** `yuzu_session` (HttpOnly). Attributes: `Secure` from `COOKIE_SECURE` (default true), `SameSite` from `COOKIE_SAMESITE` (default `lax`). Cross-site SPA deployments set `COOKIE_SAMESITE=none` together with `COOKIE_SECURE=true`; local single-origin mode keeps the defaults.
 - **Boot identity:** `GET /api/v1/auth/me` → `AuthMeResponse` (`user_id`, `email`, `user_name`, `avatar_url`). The SPA resolves its storage namespace (`user_{user_id}_*`) from `user_id` instead of a server-rendered meta tag.
-- **OAuth:** `GET /api/v1/auth/login?provider=google|github` redirects to the provider; `/api/v1/auth/callback` exchanges the code, sets the session cookie, and redirects back to the referer origin (cross-origin capable). `POST /api/v1/auth/logout` clears the cookie.
+- **OAuth:** `GET /api/v1/auth/login?provider=google|github` redirects to the provider; `GET /api/v1/auth/callback` (hidden from OpenAPI) exchanges the code, sets the session cookie, and redirects back to the referer origin (cross-origin capable). `POST /api/v1/auth/logout` clears the cookie.
 - **401/403** on any `/api/v1` route redirects the SPA to `/login` (the `apiFetch` auth gate).
 
 ## Request headers
@@ -62,17 +62,18 @@ Non-streaming `POST /api/v1/send_message` returns `MessageResponse` (`reply`, `s
 
 | Group | Paths | Notes |
 |---|---|---|
-| Auth | `/api/v1/auth/login`, `/api/v1/auth/callback`, `/api/v1/auth/logout`, `/api/v1/auth/me` | OAuth callback compatibility also mounted at `/api/auth/callback`. |
+| Auth | `/api/v1/auth/login`, `/api/v1/auth/callback`, `/api/v1/auth/logout`, `/api/v1/auth/me` | The callback is hidden from OpenAPI; it lives only at `/api/v1/auth/callback`. |
 | Chat | `/api/v1/send_message`, `/api/v1/send_message_stream`, `/api/v1/generate_image`, `/api/v1/browser_unload` | Stream uses the SSE contract above. |
-| Sessions | `/api/v1/chat_history`, `/api/v1/chat_history/before` (ISO-8601 cursor pagination), `/api/v1/sessions/list`, `/create`, `/switch`, `/rename`, `/delete`, `/api/v1/sessions/{session_id}` | `chat_history/before` supports `has_more`/cursor paging. |
+| Sessions | `/api/v1/chat_history`, `/api/v1/chat_history/before` (ISO-8601 cursor pagination), `/api/v1/sessions/list`, `/create`, `/switch`, `/rename`, `/delete`, `/api/v1/sessions/{session_id}`, `/api/v1/clear_chat`, `/api/v1/end_session` | `chat_history/before` supports `has_more`/cursor paging; `clear_chat` clears the active session; `end_session` ends the active client session. |
 | Profile/config | `/api/v1/config`, `/api/v1/profile`, `/api/v1/update_profile`, `/api/v1/update_location`, `/api/v1/global-knowledge*` (list/create/update/delete) | `GET /api/v1/config` is the single source of truth: `profile`, `ai_providers`, `all_models`, `model_infos`, `current_provider`, `current_model`. |
 | Providers | `/api/v1/providers/list`, `/api/v1/providers/set_preferred`, `/api/v1/providers/test_connection`, `/api/v1/proxy/models/{provider}` and `/refresh` | Discovery requires `X-Provider-Key` (and `X-Provider-BaseUrl` for custom providers); `model_infos` carries capability/limits metadata. |
+| Memory | `/api/v1/memory_stats`, `/api/v1/rebuild_structured_memory` | Graph-memory tenant stats and explicit rebuild; both hidden from OpenAPI. |
 | Presets | `/api/v1/presets/list`, `/api/v1/presets/upsert`, `/api/v1/presets/activate`, `/api/v1/presets/{name}` | Active preset resolution drives generation parameters. |
 | Stream recovery | `/api/v1/stream/{session_id}/status`, `/api/v1/stream/{session_id}/sync` | Reconcile client state with the server-side stream buffer. |
 | Private images | `/api/v1/static/uploads/{filename}`, `/api/v1/static/generated_images/{filename}` | Authenticated; never served by a public mount. Clients rewrite message image paths via `safeImagePath()`. |
 | Health/metrics | `GET/HEAD /health`, `GET /health/ready`, `/metrics` | Unversioned infrastructure probes; not SPA concerns. |
 
-Hidden POST deletion routes remain compatibility aliases and are excluded from OpenAPI.
+Routes marked `include_in_schema=False` are excluded from OpenAPI but are live: the POST compatibility aliases for deletions, the `/proxy/models/*` discovery routes, `/providers/test_connection`, `/generate_image`, `/browser_unload`, the `/stream/*` recovery routes, `/memory_stats` + `/rebuild_structured_memory`, and the OAuth callback. `GET /openapi.json` lists only the schema-visible subset. There is no separate `/api/auth/*` mount — the callback lives only at `/api/v1/auth/callback`.
 
 ## Serving modes
 

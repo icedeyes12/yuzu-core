@@ -14,7 +14,7 @@ FastAPI startup creates the psycopg pools, runs `init_pg_tables_async()`, checks
 
 ## HTTP contract
 
-`main.py` mounts `app.api.api_router` at `/api/v1`. The OAuth router is additionally mounted at `/api` for callback compatibility. Health probes stay unversioned. The full route surface, request headers (including `X-BYOK-Config`), BYOK encoding, SSE event types, and the RFC 9457 error format are the shared contract documented once in [`../api/contract.md`](../api/contract.md) — that document is authoritative and this README does not duplicate it. Hidden POST deletion routes remain compatibility aliases and are excluded from OpenAPI.
+`main.py` mounts `app.api.api_router` at `/api/v1` and the health router unversioned. Health probes stay unversioned. The full route surface, request headers (including `X-BYOK-Config`), BYOK encoding, SSE event types, and the RFC 9457 error format are the shared contract documented once in [`../api/contract.md`](../api/contract.md) — that document is authoritative and this README does not duplicate it. Hidden POST deletion routes remain compatibility aliases and are excluded from OpenAPI.
 
 ## Services and providers
 

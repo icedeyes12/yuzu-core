@@ -8,5 +8,6 @@ ADRs record architectural decisions and their rationale. Accepted ADRs are immut
 - [0004 — Prometheus metrics](0004-metrics.md)
 - [0005 — SSE hardening](0005-sse-hardening.md)
 - [0006 — Documentation taxonomy](0006-docs-taxonomy.md)
+- [0007 — Split the web UI into a Vite SPA and an API-only backend](0007-frontend-backend-split.md)
 
 **Status values:** Proposed, Accepted, Rejected, Superseded.
