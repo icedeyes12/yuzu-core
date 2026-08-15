@@ -1,6 +1,7 @@
 import { buildFenceHTML } from "../fence-registry.js";
 import { renderMessageContent } from "../messages.js";
 import { renderToolResultEvent } from "../tool-renderer/index.js";
+import { escapeHtml } from "../tool-renderer/dom-utils.js";
 
 export function installMarkedFenceRenderer() {
 	if (!window.marked || window._fenceRendererInstalled) return;
@@ -101,11 +102,3 @@ function replaceOuterDiv(html, marker, replacement) {
 	return html;
 }
 
-function escapeHtml(value) {
-	return String(value ?? "")
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&#39;");
-}

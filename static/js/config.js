@@ -13,6 +13,7 @@ import {
 import { listProviders } from "./provider-registry.js";
 import { toggleSidebar } from "./sidebar.js";
 import { renderLogo } from "./visual-registry.js";
+import { escapeHtml } from "./modules/tool-renderer/dom-utils.js";
 
 // Global config state (populated from /api/v1/config)
 let appConfig = null;
@@ -23,21 +24,6 @@ const maskedProviderKeys = new WeakMap();
 function setTextIfExists(id, value) {
 	const el = document.getElementById(id);
 	if (el) el.textContent = String(value ?? "");
-}
-
-function escapeHtml(value) {
-	if (value === null || value === undefined) return "";
-	return String(value).replace(
-		/[&<>"']/g,
-		(character) =>
-			({
-				"&": "&amp;",
-				"<": "&lt;",
-				">": "&gt;",
-				'"': "&quot;",
-				"'": "&#39;",
-			})[character],
-	);
 }
 
 function setValueIfExists(id, value) {
@@ -1138,12 +1124,6 @@ function showNotification(message, type = "info") {
 	existingNotifications.forEach((notification) => {
 		notification.remove();
 	});
-
-	const escapeHtml = (text) => {
-		const div = document.createElement("div");
-		div.textContent = text;
-		return div.innerHTML;
-	};
 
 	const notification = document.createElement("div");
 	notification.className = `config-notification ${type}`;

@@ -1,6 +1,6 @@
 import { createMessageElement } from "./messages.js";
 import { chatStore } from "./store.js";
-import { safeImagePath } from "./tool-renderer/dom-utils.js";
+import { escapeHtml, safeImagePath } from "./tool-renderer/dom-utils.js";
 import "./fence-components.js";
 import { patchContentContainer } from "./renderer/dom-patcher.js";
 import {
@@ -282,15 +282,6 @@ export class DOMRenderer {
 		}
 		this.activeError.textContent = error;
 	}
-}
-
-function escapeHtml(value) {
-	return String(value ?? "")
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&#39;");
 }
 
 function hasToolCard(msg) {

@@ -6,12 +6,7 @@ import {
 	listProviders,
 	ProviderRegistry,
 } from "./provider-registry.js";
-
-function escapeHtml(value) {
-	const node = document.createElement("span");
-	node.textContent = String(value ?? "");
-	return node.innerHTML;
-}
+import { escapeHtml } from "./modules/tool-renderer/dom-utils.js";
 
 export function renderLogo(provider, size = "default") {
 	const identity = provider || ProviderRegistry.fallback;

@@ -1,5 +1,5 @@
 // FILE: static/js/modules/tool-renderer/dom-utils.js
-// DESCRIPTION: Tiny DOM helpers shared by the card renderers.
+// DESCRIPTION: Shared DOM/text helpers — canonical escapeHtml lives here.
 
 export function escapeHtml(value) {
 	if (value === null || value === undefined) return "";

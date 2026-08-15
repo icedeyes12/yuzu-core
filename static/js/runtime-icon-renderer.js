@@ -1,4 +1,6 @@
 /* Generic UI icon definitions. Icons are data; callers own DOM insertion. */
+import { escapeHtml } from "./modules/tool-renderer/dom-utils.js";
+
 function createRuntimeIconRenderer() {
 	const iconDefinitions = Object.freeze({
 		chat: '<path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/>',
@@ -32,12 +34,6 @@ function createRuntimeIconRenderer() {
 		"weather-snow":
 			'<path d="M12 3v18M4.22 6.22l15.56 11.56M19.78 6.22 4.22 17.78M5 12h14"/>',
 	});
-
-	function escapeHtml(value) {
-		const node = document.createElement("span");
-		node.textContent = String(value ?? "");
-		return node.innerHTML;
-	}
 
 	function get(name) {
 		return iconDefinitions[name] || null;

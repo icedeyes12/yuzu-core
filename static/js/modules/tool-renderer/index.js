@@ -8,6 +8,7 @@ import { renderImageCard } from "./cards/image.js";
 import { renderTerminalCard } from "./cards/terminal.js";
 import { renderWeatherCard } from "./cards/weather.js";
 import { canonicalToolName, parseToolResult } from "./schemas.js";
+import { escapeHtml } from "./dom-utils.js";
 
 const TOOL_RENDERERS = {
 	exec: {
@@ -83,7 +84,7 @@ export function renderToolEvent(eventType, data) {
 	if (eventType === "tool_call") {
 		const name = data?.name || "unknown";
 		const callId = data?.id || "";
-		return `<details class="tool-call-indicator" data-call-id="${escapeAttr(callId)}"><summary><span class="visual-status visual-status--info"><span class="visual-status__mark" aria-hidden="true">i</span><span>Calling ${escapeHtml(name)}…</span></span></summary><pre>Waiting for result…</pre></details>`;
+		return `<details class="tool-call-indicator" data-call-id="${escapeHtml(callId)}"><summary><span class="visual-status visual-status--info"><span class="visual-status__mark" aria-hidden="true">i</span><span>Calling ${escapeHtml(name)}…</span></span></summary><pre>Waiting for result…</pre></details>`;
 	}
 	return eventType === "tool_result" ? renderToolResultEvent(data) : "";
 }
@@ -107,22 +108,9 @@ export function renderToolResultEvent(data) {
 		canonicalName === "exec"
 			? ""
 			: `<div class="tool-result__status ${statusClass}"><span class="visual-status__mark" aria-hidden="true">${statusIcon}</span><span>${escapeHtml(payload.name)}</span></div>`;
-	return `<div class="tool-result" data-tool-name="${escapeAttr(payload.name)}" data-can-copy="${rendered.capability.canCopy ? "true" : "false"}">${status}<div class="tool-result-content">${rendered.html}</div></div>`;
+	return `<div class="tool-result" data-tool-name="${escapeHtml(payload.name)}" data-can-copy="${rendered.capability.canCopy ? "true" : "false"}">${status}<div class="tool-result-content">${rendered.html}</div></div>`;
 }
 
 export function getToolCardCapability(schemaKind) {
 	return TOOL_RENDERERS[schemaKind]?.capability || noCopyToolCardCapability;
-}
-
-function escapeHtml(value) {
-	return String(value ?? "")
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&#39;");
-}
-
-function escapeAttr(value) {
-	return escapeHtml(value);
 }

@@ -1,5 +1,7 @@
 /* Badge labels and presentation data. */
 
+import { escapeHtml } from "./modules/tool-renderer/dom-utils.js";
+
 const badgeLabels = Object.freeze({
 	official: "Official",
 	community: "Community",
@@ -9,12 +11,6 @@ const badgeLabels = Object.freeze({
 	preview: "Preview",
 	unknown: "Unknown",
 });
-
-function escapeHtml(value) {
-	const node = document.createElement("span");
-	node.textContent = String(value ?? "");
-	return node.innerHTML;
-}
 
 export function getLabel(badge) {
 	return badgeLabels[badge] || badgeLabels.unknown;
