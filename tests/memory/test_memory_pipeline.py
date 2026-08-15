@@ -421,3 +421,282 @@ async def test_recover_memory_pipeline_requeues_persisted_fence(monkeypatch):
 
     assert await memory.recover_memory_pipeline_async("s", "u") is True
     assert queued == [("s", "u")]
+
+
+# ── run_memory_pipeline_async ────────────────────────────────────────────────
+
+
+def _conversational_messages(count: int) -> list[dict]:
+    return [
+        {
+            "id": f"m{i}",
+            "role": "user" if i % 2 == 0 else "assistant",
+            "content": f"msg {i}",
+        }
+        for i in range(count)
+    ]
+
+
+@pytest.fixture
+def pipeline_fakes(monkeypatch):
+    """Patch all pipeline dependencies with controllable fakes."""
+    from app.memory import memory
+
+    class Fakes:
+        def __init__(self):
+            self.provider_key = "test-key"
+            self.state = {
+                "last_segmented_message_id": "m0",
+                "last_segmented_count": 1,
+            }
+            self.messages_after_id: list[dict] = []
+            self.messages_after_count: list[dict] = []
+            self.extract_result: tuple[dict | None, int] = (None, 1)
+            self.extraction_called = 0
+            self.marked_done: list[tuple[str | None, int]] = []
+            self.fence_cleared = 0
+            self.graph_calls: list[tuple[str, dict]] = []
+            self.node_ids = iter([f"n-{i}" for i in range(10)])
+
+    fakes = Fakes()
+
+    async def get_profile(user_id):
+        return {"id": user_id}
+
+    async def get_state(_session_id, user_id):
+        return fakes.state
+
+    async def after_id(_session_id, _last_id, limit, user_id):
+        return fakes.messages_after_id[:limit]
+
+    async def after_count(_session_id, _last_count, user_id):
+        return fakes.messages_after_count
+
+    async def extract(unsegmented, profile=None):
+        fakes.extraction_called += 1
+        extracted, llm_calls = fakes.extract_result
+        return extracted, unsegmented, llm_calls
+
+    async def embed(texts, profile=None):
+        return [[0.1]] * len(texts)
+
+    async def mark_done(_session_id, last_id, count, *, user_id):
+        fakes.marked_done.append((last_id, count))
+
+    async def clear_fence(_session_id, user_id=None):
+        fakes.fence_cleared += 1
+
+    async def create_episode(**kwargs):
+        fakes.graph_calls.append(("create_episode", kwargs))
+        return {"id": "ep-1"}
+
+    async def get_or_create_node(**kwargs):
+        fakes.graph_calls.append(("get_or_create_node", kwargs))
+        return {"id": next(fakes.node_ids)}
+
+    async def consolidate_node(**kwargs):
+        fakes.graph_calls.append(("consolidate_node", kwargs))
+        return {"candidates": 1, "archived": 0}
+
+    async def add_edge(**kwargs):
+        fakes.graph_calls.append(("add_edge", kwargs))
+        return {"id": "edge-1"}
+
+    async def add_evidence(**kwargs):
+        fakes.graph_calls.append(("add_evidence", kwargs))
+        return {"id": "ev-1"}
+
+    monkeypatch.setattr(memory, "get_provider_key", lambda _name: fakes.provider_key)
+    monkeypatch.setattr(memory.Database, "get_profile", get_profile)
+    monkeypatch.setattr(memory, "get_pipeline_state_async", get_state)
+    monkeypatch.setattr(memory, "get_session_messages_after_id_async", after_id)
+    monkeypatch.setattr(memory, "_get_messages_after_count_async", after_count)
+    monkeypatch.setattr(memory, "_extract_with_retries_async", extract)
+    monkeypatch.setattr(memory, "embed_texts_async", embed)
+    monkeypatch.setattr(memory, "mark_segmentation_done_async", mark_done)
+    monkeypatch.setattr(memory, "_clear_fence_async", clear_fence)
+    monkeypatch.setattr(memory.GraphMemoryRepository, "create_episode", create_episode)
+    monkeypatch.setattr(
+        memory.GraphMemoryRepository, "get_or_create_node", get_or_create_node
+    )
+    monkeypatch.setattr(
+        memory.GraphMemoryRepository, "consolidate_node", consolidate_node
+    )
+    monkeypatch.setattr(memory.GraphMemoryRepository, "add_edge", add_edge)
+    monkeypatch.setattr(memory.GraphMemoryRepository, "add_evidence", add_evidence)
+    return fakes
+
+
+@pytest.mark.asyncio
+async def test_pipeline_returns_disabled_summary_without_portal_key(pipeline_fakes):
+    from app.memory import memory
+
+    pipeline_fakes.provider_key = None
+
+    result = await memory.run_memory_pipeline_async("sess", 30, "user")
+
+    assert result == {
+        "episodes": 0,
+        "claims": 0,
+        "llm_calls": 0,
+        "processed_messages": 0,
+    }
+    assert pipeline_fakes.extraction_called == 0
+    assert pipeline_fakes.fence_cleared == 1
+
+
+@pytest.mark.asyncio
+async def test_pipeline_no_unsegmented_messages_returns_zero_summary(pipeline_fakes):
+    from app.memory import memory
+
+    pipeline_fakes.messages_after_id = []
+
+    result = await memory.run_memory_pipeline_async("sess", 0, "user")
+
+    assert result == {"episodes": 0, "claims": 0, "llm_calls": 0}
+    assert pipeline_fakes.extraction_called == 0
+    assert pipeline_fakes.marked_done == []
+
+
+@pytest.mark.asyncio
+async def test_pipeline_skips_small_backlog_without_extraction(pipeline_fakes):
+    from app.memory import memory
+
+    # No cursor yet -> count-based fetch path
+    pipeline_fakes.state["last_segmented_message_id"] = None
+    pipeline_fakes.messages_after_count = _conversational_messages(10)
+
+    result = await memory.run_memory_pipeline_async("sess", 10, "user")
+
+    assert result["processed_messages"] == 0
+    assert result["llm_calls"] == 0
+    assert pipeline_fakes.extraction_called == 0
+    assert pipeline_fakes.marked_done == []
+
+
+@pytest.mark.asyncio
+async def test_pipeline_extraction_failure_preserves_checkpoint(pipeline_fakes):
+    from app.memory import memory
+
+    pipeline_fakes.messages_after_id = _conversational_messages(30)
+    pipeline_fakes.extract_result = (None, 3)
+
+    result = await memory.run_memory_pipeline_async("sess", 30, "user")
+
+    assert result == {"episodes": 0, "claims": 0, "llm_calls": 3}
+    assert pipeline_fakes.extraction_called == 1
+    assert pipeline_fakes.marked_done == []
+    assert pipeline_fakes.graph_calls == []
+
+
+@pytest.mark.asyncio
+async def test_pipeline_no_durable_memory_still_advances_checkpoint(pipeline_fakes):
+    from app.memory import memory
+
+    pipeline_fakes.messages_after_id = _conversational_messages(30)
+    pipeline_fakes.extract_result = ({"episodes": [], "claims": []}, 1)
+
+    result = await memory.run_memory_pipeline_async("sess", 30, "user")
+
+    assert result == {
+        "episodes": 0,
+        "claims": 0,
+        "llm_calls": 1,
+        "processed_messages": 30,
+    }
+    assert pipeline_fakes.marked_done == [("m29", 30)]
+    assert pipeline_fakes.graph_calls == []
+
+
+@pytest.mark.asyncio
+async def test_pipeline_full_run_persists_and_advances_checkpoint(pipeline_fakes):
+    from app.memory import memory
+
+    pipeline_fakes.messages_after_id = _conversational_messages(30)
+    pipeline_fakes.extract_result = (
+        {
+            "episodes": [
+                {
+                    "title": "t",
+                    "summary": "s",
+                    "importance": 0.8,
+                    "start_index": 0,
+                    "end_index": 2,
+                }
+            ],
+            "claims": [
+                {
+                    "entity": "e1",
+                    "relation": "r",
+                    "target": "t1",
+                    "confidence": 0.9,
+                    "evidence_start_index": 0,
+                    "evidence_end_index": 2,
+                },
+                {
+                    "entity": "e2",
+                    "relation": "r",
+                    "target": "t2",
+                    "confidence": 0.8,
+                    "evidence_start_index": 0,
+                    "evidence_end_index": 2,
+                },
+            ],
+        },
+        1,
+    )
+
+    result = await memory.run_memory_pipeline_async("sess", 30, "user")
+
+    assert result == {
+        "episodes": 1,
+        "claims": 2,
+        "llm_calls": 1,
+        "processed_messages": 30,
+        "consolidation_candidates": 2,
+        "consolidation_archived": 0,
+    }
+    assert pipeline_fakes.marked_done == [("m29", 30)]
+
+    call_names = [name for name, _ in pipeline_fakes.graph_calls]
+    assert call_names.count("create_episode") == 1
+    assert call_names.count("get_or_create_node") == 4  # 2 claims + 2 related
+    assert call_names.count("consolidate_node") == 2
+    assert call_names.count("add_evidence") == 2
+    assert call_names.count("add_edge") == 2
+
+    # every graph write is tenant-scoped and episode rows carry the session
+    assert all(kwargs["user_id"] == "user" for _, kwargs in pipeline_fakes.graph_calls)
+    episode_call = pipeline_fakes.graph_calls[0][1]
+    assert episode_call["session_id"] == "sess"
+    assert episode_call["source_start_message_id"] == "m0"
+    assert episode_call["source_end_message_id"] == "m1"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_filters_non_conversational_messages(pipeline_fakes):
+    from app.memory import memory
+
+    mixed = _conversational_messages(30)
+    mixed.append({"id": "tool-1", "role": "tool", "content": "result"})
+    mixed.append({"id": "sys-1", "role": "system", "content": "sys"})
+    pipeline_fakes.messages_after_id = mixed
+    pipeline_fakes.extract_result = ({"episodes": [], "claims": []}, 1)
+
+    result = await memory.run_memory_pipeline_async("sess", 30, "user")
+
+    assert result["processed_messages"] == 30
+    assert pipeline_fakes.marked_done == [("m29", 30)]
+
+
+def test_select_first_batch_keeps_original_count_and_is_empty_safe():
+    from app.memory.memory import _select_first_batch
+
+    messages = [{"role": "user", "content": "x"}] * 5
+    batch, original_count = _select_first_batch(messages)
+    assert batch == messages
+    assert original_count == 5
+
+    batch, original_count = _select_first_batch([])
+    assert batch == []
+    assert original_count == 0

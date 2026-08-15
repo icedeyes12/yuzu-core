@@ -199,16 +199,17 @@ classDiagram
     }
 
     AIProvider <|-- ChutesProvider
-    AIProvider <|-- OpenRouterProvider
     AIProvider <|-- AnthropicProvider
-    AIProvider <|-- OpenAIProvider
-    AIProvider <|-- CerebrasProvider
-    AIProvider <|-- DeepSeekProvider
+    AnthropicProvider <|-- CustomAnthropicProvider
+    AIProvider <|-- OpenAICompatibleProvider
+    OpenAICompatibleProvider <|-- OpenAIProvider
+    OpenAICompatibleProvider <|-- OpenRouterProvider
+    OpenAICompatibleProvider <|-- DeepSeekProvider
+    OpenAICompatibleProvider <|-- GrokProvider
+    OpenAICompatibleProvider <|-- GroqProvider
+    OpenAICompatibleProvider <|-- CustomOpenAIProvider
+    OpenAICompatibleProvider <|-- CerebrasProvider
     AIProvider <|-- GoogleProvider
-    AIProvider <|-- GrokProvider
-    AIProvider <|-- GroqProvider
-    AIProvider <|-- CustomAnthropicProvider
-    AIProvider <|-- CustomOpenAIProvider
     AIProviderManager --> AIProvider
 ```
 

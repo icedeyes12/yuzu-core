@@ -15,15 +15,21 @@ from app.tools.schemas import StreamToolEvent
 logger = logging.getLogger(__name__)
 
 
-class CustomOpenAIProvider(AIProvider):
-    def __init__(self, config: dict[str, Any] | None = None):
-        super().__init__("custom_openai", config)
+class OpenAICompatibleProvider(AIProvider):
+    """Shared base for providers speaking the OpenAI chat-completions protocol."""
+
+    log_prefix: str = "OpenAI"
+    default_timeout: float = 180.0
+
+    def __init__(self, name: str, config: dict[str, Any] | None = None):
+        super().__init__(name, config)
         self.base_url: str = "https://api.openai.com/v1/chat/completions"
         self.capabilities: ProviderCapabilities = ProviderCapabilities(
             supports_native_fc=True,
             supports_streaming_fc=True,
             supports_tool_call_parsing=True,
         )
+        self.available_models: list[str] = []
 
     def _resolve_url(self, ctx: LLMContext) -> str:
         """Ensure the URL ends with /chat/completions."""
@@ -37,8 +43,6 @@ class CustomOpenAIProvider(AIProvider):
     ) -> list[str]:
         if not base_url:
             return []
-
-        import httpx
 
         url = base_url.rstrip("/")
         if "/chat/completions" in url:
@@ -75,7 +79,7 @@ class CustomOpenAIProvider(AIProvider):
         return []
 
     async def get_models(self) -> list[str]:
-        return await self.fetch_live_models()
+        return self.available_models
 
     def _prepare_payload(
         self, ctx: LLMContext, messages: list[dict[str, Any]], stream: bool, **kwargs
@@ -121,22 +125,32 @@ class CustomOpenAIProvider(AIProvider):
                     base,
                     headers=headers,
                     json=payload,
-                    timeout=kwargs.get("timeout", 180),
+                    timeout=kwargs.get("timeout", self.default_timeout),
                 )
             if response.status_code == 200:
                 result = response.json()
                 self._last_raw_response = result
                 content = result["choices"][0]["message"].get("content", "") or ""
                 return content.strip()
+            handled = self._handle_http_error(response.status_code, response.text)
+            if handled is not None:
+                return handled
             logger.warning(
-                "[CustomOpenAI] %s: %s", response.status_code, response.text[:300]
+                "[%s] %s: %s",
+                self.log_prefix,
+                response.status_code,
+                response.text[:300],
             )
             return None
         except MissingProviderKeyError:
             raise
         except Exception as e:
-            logger.error("[CustomOpenAI] send_message error: %s", e)
+            logger.error("[%s] send_message error: %s", self.log_prefix, e)
             return None
+
+    def _handle_http_error(self, status_code: int, body: str) -> str | None:
+        """Return a user-facing message for a non-200 response, or None to fall back to logging."""
+        return None
 
     async def send_message_raw(
         self,
@@ -153,20 +167,23 @@ class CustomOpenAIProvider(AIProvider):
                     base,
                     headers=headers,
                     json=payload,
-                    timeout=kwargs.get("timeout", 180),
+                    timeout=kwargs.get("timeout", self.default_timeout),
                 )
             if response.status_code == 200:
                 result = response.json()
                 self._last_raw_response = result
                 return result
             logger.warning(
-                "[CustomOpenAI] raw %s: %s", response.status_code, response.text[:300]
+                "[%s] raw %s: %s",
+                self.log_prefix,
+                response.status_code,
+                response.text[:300],
             )
             return None
         except MissingProviderKeyError:
             raise
         except Exception as e:
-            logger.error("[CustomOpenAI] send_message_raw error: %s", e)
+            logger.error("[%s] send_message_raw error: %s", self.log_prefix, e)
             return None
 
     async def _send_message_streaming_impl(
@@ -192,12 +209,13 @@ class CustomOpenAIProvider(AIProvider):
                     base,
                     headers=headers,
                     json=payload,
-                    timeout=kwargs.get("timeout", 180),
+                    timeout=kwargs.get("timeout", self.default_timeout),
                 ) as response:
                     if response.status_code != 200:
                         body = await response.aread()
                         logger.warning(
-                            "[CustomOpenAI] stream %s: %s",
+                            "[%s] stream %s: %s",
+                            self.log_prefix,
                             response.status_code,
                             body[:300],
                         )
@@ -275,7 +293,9 @@ class CustomOpenAIProvider(AIProvider):
             raise
 
         except Exception as e:
-            logger.error("[CustomOpenAI] streaming error: %s", repr(e), exc_info=True)
+            logger.error(
+                "[%s] streaming error: %s", self.log_prefix, repr(e), exc_info=True
+            )
             yield f"Error: {type(e).__name__} - {e}"
 
     def parse_tool_calls(self, raw_response) -> list[dict[str, Any]]:
@@ -298,3 +318,16 @@ class CustomOpenAIProvider(AIProvider):
             raise
         except Exception:
             return []
+
+
+class CustomOpenAIProvider(OpenAICompatibleProvider):
+    log_prefix: str = "CustomOpenAI"
+
+    def __init__(self, config: dict[str, Any] | None = None):
+        super().__init__("custom_openai", config)
+
+    async def get_models(self) -> list[str]:
+        return await self.fetch_live_models()
+
+
+__all__ = ["OpenAICompatibleProvider", "CustomOpenAIProvider"]
