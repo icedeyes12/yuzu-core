@@ -21,6 +21,8 @@ venv/
 .pnp.*
 .pnp/
 node_modules/
+web/node_modules/
+web/dist/
 
 # --- Build Outputs ---
 *.egg
