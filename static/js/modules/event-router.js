@@ -34,6 +34,8 @@ export class EventRouter {
 		this.controllers.set(sessionId, controller);
 		if (turnId) this.activeTurnIds.set(sessionId, turnId);
 		chatStore.startGeneration();
+		// Paint the indicator before the request can finish synchronously.
+		domRenderer.flushPendingRender();
 	}
 
 	/**
