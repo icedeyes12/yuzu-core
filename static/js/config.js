@@ -10,10 +10,10 @@ import {
 	maskApiKey,
 	writeByokConfig,
 } from "./client-storage.js";
+import { escapeHtml } from "./modules/tool-renderer/dom-utils.js";
 import { listProviders } from "./provider-registry.js";
 import { toggleSidebar } from "./sidebar.js";
 import { renderLogo } from "./visual-registry.js";
-import { escapeHtml } from "./modules/tool-renderer/dom-utils.js";
 
 // Global config state (populated from /api/v1/config)
 let appConfig = null;

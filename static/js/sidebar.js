@@ -9,8 +9,8 @@ import {
 import { eventRouter } from "./modules/event-router.js";
 import { router } from "./modules/router.js";
 import { chatStore } from "./modules/store.js";
-import { renderRuntimeIcon } from "./runtime-icon-renderer.js";
 import { escapeHtml } from "./modules/tool-renderer/dom-utils.js";
+import { renderRuntimeIcon } from "./runtime-icon-renderer.js";
 import { handleSessionSwitch } from "./session-controller.js";
 
 // === GLOBAL FETCH INTERCEPTOR (auth gate + Phase 3 BYOK) ===

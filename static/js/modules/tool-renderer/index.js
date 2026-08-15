@@ -7,8 +7,8 @@ import { renderGenericCard } from "./cards/generic.js";
 import { renderImageCard } from "./cards/image.js";
 import { renderTerminalCard } from "./cards/terminal.js";
 import { renderWeatherCard } from "./cards/weather.js";
-import { canonicalToolName, parseToolResult } from "./schemas.js";
 import { escapeHtml } from "./dom-utils.js";
+import { canonicalToolName, parseToolResult } from "./schemas.js";
 
 const TOOL_RENDERERS = {
 	exec: {

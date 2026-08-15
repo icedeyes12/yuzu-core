@@ -1,7 +1,7 @@
 import { buildFenceHTML } from "../fence-registry.js";
 import { renderMessageContent } from "../messages.js";
-import { renderToolResultEvent } from "../tool-renderer/index.js";
 import { escapeHtml } from "../tool-renderer/dom-utils.js";
+import { renderToolResultEvent } from "../tool-renderer/index.js";
 
 export function installMarkedFenceRenderer() {
 	if (!window.marked || window._fenceRendererInstalled) return;
@@ -101,4 +101,3 @@ function replaceOuterDiv(html, marker, replacement) {
 	}
 	return html;
 }
-

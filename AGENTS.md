@@ -62,7 +62,7 @@ Compact routing index for code and documentation work. Code and executable confi
 ruff format --check .
 ruff check .
 find static -type f -name '*.js' -exec node --check {} +
-bunx biome check static/
+bunx @biomejs/biome check static/
 pytest
 ```
 
