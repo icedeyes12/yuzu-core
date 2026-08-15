@@ -56,6 +56,9 @@ function renderDailyForecast(rows) {
 }
 
 function renderWeatherCard(normalised) {
+	if (normalised.status === "location_required") {
+		return `<div class="tool-card tool-card--weather"><div class="weather-card"><div class="weather-card__title">Weather location belum dikonfigurasi.</div><button type="button" class="button" data-action="open-settings">Configure location</button></div></div>`;
+	}
 	const {
 		temperature_c,
 		condition,
@@ -73,7 +76,9 @@ function renderWeatherCard(normalised) {
 			? ""
 			: `<div class="weather-card__metric"><span class="weather-card__metric-label">Wind</span><span class="weather-card__metric-value">${escapeHtml(Number(wind_kph).toFixed(1))} km/h</span></div>`;
 
-	return `<div class="tool-card tool-card--weather"><div class="weather-card"><div class="weather-card__header"><div><div class="weather-card__title">${escapeHtml(displayLocation)}</div><div class="weather-card__condition">${escapeHtml(condition)}</div></div><div class="weather-card__icon" aria-hidden="true">${pickIcon(condition)}</div></div><div class="weather-card__hero"><div class="weather-card__temp">${escapeHtml(Number(temperature_c).toFixed(1))}°C</div><div class="weather-card__metrics"><div class="weather-card__metric"><span class="weather-card__metric-label">Humidity</span><span class="weather-card__metric-value">${escapeHtml(Number(humidity_pct).toFixed(0))}%</span></div>${windRow}</div></div>${renderDailyForecast(daily)}</div></div>`;
+	const temperature = displayValue(temperature_c, "°C");
+	const humidity = displayValue(humidity_pct, "%");
+	return `<div class="tool-card tool-card--weather"><div class="weather-card"><div class="weather-card__header"><div><div class="weather-card__title">${escapeHtml(displayLocation)}</div><div class="weather-card__condition">${escapeHtml(condition)}</div></div><div class="weather-card__icon" aria-hidden="true">${pickIcon(condition)}</div></div><div class="weather-card__hero"><div class="weather-card__temp">${escapeHtml(temperature)}</div><div class="weather-card__metrics"><div class="weather-card__metric"><span class="weather-card__metric-label">Humidity</span><span class="weather-card__metric-value">${escapeHtml(humidity)}</span></div>${windRow}</div></div>${renderDailyForecast(daily)}</div></div>`;
 }
 
 export { renderWeatherCard };

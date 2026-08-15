@@ -16,6 +16,7 @@ from app.core.capabilities import (
 )
 from app.core.llm_context import LLMContext
 from app.core.logging_config import get_logger
+from app.core.request_context import ClientContext
 from app.db import Database
 from app.providers import get_ai_manager
 from app.providers.openai_protocol import validate_chat_completion_response
@@ -165,6 +166,7 @@ async def generate_ai_response(
     session_id: str | None = None,
     *,
     user_id: str,
+    client_context: ClientContext | None = None,
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single (text, raw_response) AI generation pass.
 
@@ -185,6 +187,7 @@ async def generate_ai_response(
         interface,
         user_message,
         user_id,
+        client_context,
     )
 
     text, raw = await _send_to_provider(
@@ -255,6 +258,7 @@ async def generate_ai_response_streaming(
     session_id: str | None = None,
     *,
     user_id: str,
+    client_context: ClientContext | None = None,
 ) -> AsyncGenerator[str | StreamToolEvent, None]:
     """Stream a response from the configured provider chunk by chunk.
 
@@ -276,6 +280,7 @@ async def generate_ai_response_streaming(
         interface,
         user_message,
         user_id,
+        client_context,
     )
 
     async for chunk in _stream_from_provider(

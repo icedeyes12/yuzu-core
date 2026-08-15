@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from fastapi import UploadFile
 
+from app.core.request_context import ClientContext
 from app.db import Database
 from app.services.orchestrator import handle_user_message
 from app.services.stream_manager import StreamManager
@@ -26,12 +27,20 @@ class ConversationService:
 
     @staticmethod
     async def process_user_message_async(
-        message: str, interface: str = "web", user_id: str | None = None
+        message: str,
+        interface: str = "web",
+        user_id: str | None = None,
+        client_context: ClientContext | None = None,
     ) -> str:
         """Process a simple text message (non-streaming, async)."""
         if not user_id:
             raise ValueError("user_id is required")
-        return await handle_user_message(message, interface=interface, user_id=user_id)
+        return await handle_user_message(
+            message,
+            interface=interface,
+            user_id=user_id,
+            client_context=client_context,
+        )
 
     @staticmethod
     async def get_stream_generator(
@@ -39,6 +48,7 @@ class ConversationService:
         interface: str = "web",
         images: list[UploadFile] | None = None,
         user_id: str | None = None,
+        client_context: ClientContext | None = None,
     ) -> AsyncIterator[str]:
         """
         Start a streaming message response (async).
@@ -72,6 +82,7 @@ class ConversationService:
             interface=interface,
             attachments=attachments,  # Pass paths for vision context
             user_id=user_id,
+            client_context=client_context,
         )
 
         q = buffer.subscribe()

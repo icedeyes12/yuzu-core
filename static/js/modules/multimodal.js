@@ -205,13 +205,23 @@ export class MultimodalManager {
 
 			const formData = new FormData();
 			formData.append("message", message);
+			const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+			const now = new Date();
+			const offsetMinutes = -now.getTimezoneOffset();
+			const sign = offsetMinutes >= 0 ? "+" : "-";
+			const offset = `${sign}${String(Math.floor(Math.abs(offsetMinutes) / 60)).padStart(2, "0")}:${String(Math.abs(offsetMinutes) % 60).padStart(2, "0")}`;
+			const clientLocalTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}.${String(now.getMilliseconds()).padStart(3, "0")}${offset}`;
 			images.forEach((blob) => {
 				formData.append("images", blob);
 			});
 
 			const response = await fetch("/api/v1/send_message_stream", {
 				method: "POST",
-				headers: { Accept: "text/event-stream" },
+				headers: {
+					Accept: "text/event-stream",
+					"X-Client-Timezone": clientTimezone,
+					"X-Client-Local-Time": clientLocalTime,
+				},
 				body: formData,
 				signal: abortController.signal,
 			});

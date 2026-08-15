@@ -13,6 +13,7 @@ from typing import Any
 from app.core.llm_context import LLMContext
 from app.core.logging_config import get_logger
 from app.core.multimodal import multimodal_tools
+from app.core.request_context import ClientContext
 from app.core.stream_fence import StreamFence
 from app.db import Database
 from app.memory.retrieval import _clear_embedding_cache
@@ -464,7 +465,11 @@ async def _finalize_and_persist_async(
 
 
 async def handle_user_message(
-    user_message: str, interface: str = "terminal", *, user_id: str
+    user_message: str,
+    interface: str = "terminal",
+    *,
+    user_id: str,
+    client_context: ClientContext | None = None,
 ) -> str:
     """Process a user message end-to-end and return the assistant reply (async)."""
     profile = await Database.get_profile(user_id)
@@ -491,7 +496,12 @@ async def handle_user_message(
         msg_for_pass = user_message if loop_count == 1 else ""
 
         generated_text, raw_api_response = await generate_ai_response(
-            profile, msg_for_pass, interface, session_id, user_id=user_id
+            profile,
+            msg_for_pass,
+            interface,
+            session_id,
+            user_id=user_id,
+            client_context=client_context,
         )
         text_response = generated_text or ""
 
@@ -562,6 +572,7 @@ async def handle_user_message_streaming(
     attachments: list[str] | None = None,
     *,
     user_id: str,
+    client_context: ClientContext | None = None,
 ) -> AsyncIterator[str | StreamToolEvent]:
     """Streaming entrypoint (async) with fence protection.
 
@@ -623,6 +634,7 @@ async def handle_user_message_streaming(
                 interface,
                 session_id,
                 user_id=user_id,
+                client_context=client_context,
             ):
                 if chunk:
                     if abort_check and abort_check():

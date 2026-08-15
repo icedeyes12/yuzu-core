@@ -140,6 +140,9 @@ export const ToolPayloadSchemas = {
 
 	weather(payload) {
 		expectObject(payload, "weather");
+		if (payload.status === "location_required") {
+			return { schema_kind: "weather", status: "location_required", location: null };
+		}
 		const current = payload.current || {};
 		const daily = optionalField(payload, "daily", []);
 		return {
@@ -147,7 +150,7 @@ export const ToolPayloadSchemas = {
 			temperature_c: optionalField(
 				payload,
 				"temperature_c",
-				current.temperature_2m ?? 0,
+				current.temperature_2m ?? null,
 			),
 			condition: optionalField(
 				payload,
@@ -157,7 +160,7 @@ export const ToolPayloadSchemas = {
 			humidity_pct: optionalField(
 				payload,
 				"humidity_pct",
-				current.relative_humidity_2m ?? 0,
+				current.relative_humidity_2m ?? null,
 			),
 			wind_kph: optionalField(
 				payload,

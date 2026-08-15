@@ -18,6 +18,16 @@ MAX_BYTES = 2 * 1024 * 1024
 TIMEOUT = 90
 
 
+def _network_error_category(exc: Exception) -> str:
+    if isinstance(exc, httpx.TimeoutException):
+        return "timeout"
+    if isinstance(exc, httpx.HTTPStatusError):
+        return "upstream_http_error"
+    if isinstance(exc, httpx.RequestError):
+        return "network_error"
+    return "tool_execution_error"
+
+
 TOOL_DEFINITION = ToolDefinition(
     name="http_request",
     description="Make HTTP requests to public HTTPS endpoints. "
@@ -127,6 +137,7 @@ async def execute(
             TOOL_DEFINITION,
             f"/request {args_str}",
             partner_name,
+            category="validation_error",
         )
 
     try:
@@ -134,6 +145,21 @@ async def execute(
             resp = await client.request(
                 method, url, timeout=TIMEOUT, follow_redirects=True
             )
+
+            if resp.is_error:
+                return error_result(
+                    f"Upstream returned HTTP {resp.status_code}",
+                    TOOL_DEFINITION,
+                    full_command,
+                    partner_name,
+                    category="upstream_http_error",
+                    data={
+                        "schema_kind": "http",
+                        "url": url,
+                        "method": method,
+                        "status_code": resp.status_code,
+                    },
+                )
 
             content = b""
             async for chunk in resp.aiter_bytes(8192):
@@ -163,6 +189,10 @@ async def execute(
 
                 return ok_result(
                     {
+                        "schema_kind": "http",
+                        "url": url,
+                        "method": method,
+                        "status_code": resp.status_code,
                         "type": "image",
                         "path": web_path,
                         "content_type": content_type,
@@ -181,6 +211,10 @@ async def execute(
 
             return ok_result(
                 {
+                    "schema_kind": "http",
+                    "url": url,
+                    "method": method,
+                    "status_code": resp.status_code,
                     "type": "text",
                     "content": "\n".join(lines),
                     "content_type": content_type,
@@ -193,10 +227,20 @@ async def execute(
             )
 
     except Exception as e:
-        logger.warning(f"[request_tools] Exception during HTTP request: {e}")
+        category = _network_error_category(e)
+        logger.warning(
+            "[request_tools] HTTP failure category=%s type=%s url=%s: %s",
+            category,
+            type(e).__name__,
+            url,
+            e,
+            exc_info=True,
+        )
         return error_result(
-            "Request failed. Please check the URL or try again later.",
+            f"Request failed ({category}). Please try again later.",
             TOOL_DEFINITION,
             full_command,
             partner_name,
+            category=category,
+            data={"schema_kind": "http", "url": url, "method": method},
         )

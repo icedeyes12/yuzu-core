@@ -14,6 +14,7 @@ from PIL import Image
 from app.core.logging_config import get_logger
 from app.core.personality import PERSONALITIES
 from app.core.presets import resolve_active_preset_payload
+from app.core.request_context import ClientContext
 from app.db import Database
 
 log = get_logger(__name__)
@@ -324,10 +325,16 @@ async def build_messages(
     interface: str,
     user_message: str | None,
     user_id: str,
+    client_context: ClientContext | None = None,
 ) -> list[dict[str, Any]]:
     """Build the single ordered personality prompt pipeline and chat messages."""
     sections = await _build_sections_async(
-        profile, session_id, interface, user_message, user_id
+        profile,
+        session_id,
+        interface,
+        user_message,
+        user_id,
+        client_context,
     )
     system_content = "\n\n".join(
         sections[key]
@@ -455,11 +462,14 @@ async def _build_sections_async(
     interface: str,
     user_message: str | None,
     user_id: str,
+    client_context: ClientContext | None = None,
 ) -> PromptSections:
     """Gather prompt sections as plain strings for structured composition."""
-    from datetime import datetime as _dt
-
-    current_time = _dt.now().strftime("%A, %Y-%m-%d %H:%M:%S")
+    client_lines = (client_context or ClientContext()).prompt_lines()
+    time_block = (
+        "\n".join(client_lines)
+        or "- Client time unavailable; do not infer it from server time."
+    )
     character_profile = profile.get("character_profile") or ""
     personality_preset = profile.get("personality_preset") or "helpful"
     personality_custom = profile.get("personality_custom") or ""
@@ -499,7 +509,7 @@ async def _build_sections_async(
 - Do not reveal internal metadata.
 - Do not concatenate untrusted strings into commands.
 - OS: Termux (Android aarch64); use `$PREFIX` for binaries.
-- Current time: {current_time}
+{time_block}
 - Interface: {_interface_block(interface)}
 - Session metadata: {await _session_events_block_async(session_id, user_id)}
 - Global knowledge: {knowledge_block}

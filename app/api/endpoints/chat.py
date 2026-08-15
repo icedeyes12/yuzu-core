@@ -26,6 +26,11 @@ from app.core.context import (
     set_request_keyrings,
 )
 from app.core.logging_config import get_logger
+from app.core.request_context import (
+    ClientContext,
+    clear_client_context,
+    set_client_context,
+)
 from app.services.conversation_service import ConversationService
 from app.services.session_service import SessionService
 
@@ -90,6 +95,12 @@ async def api_send_message(
     user_id: str = Depends(get_current_user),
 ):
     rate_limit_user(user_id, 10, "send-message-user")
+    set_client_context(
+        ClientContext(
+            timezone=request.headers.get("X-Client-Timezone"),
+            local_time=request.headers.get("X-Client-Local-Time"),
+        )
+    )
     keyrings = extract_keyrings(request)
     if keyrings:
         set_request_keyrings(keyrings)
@@ -134,6 +145,7 @@ async def api_send_message(
             release_active(user_id, "send-message-active")
         if keyrings:
             clear_request_keyring()
+        clear_client_context()
 
 
 @router.post(
@@ -187,6 +199,10 @@ async def api_send_message_stream(
         keyrings = extract_keyrings(request)
 
         async def _keyring_scoped_stream():
+            context = ClientContext(
+                timezone=request.headers.get("X-Client-Timezone"),
+                local_time=request.headers.get("X-Client-Local-Time"),
+            )
             if keyrings:
                 set_request_keyrings(keyrings)
             try:
@@ -195,6 +211,7 @@ async def api_send_message_stream(
                     interface=interface,
                     images=images,
                     user_id=user_id,
+                    client_context=context,
                 ):
                     yield chunk
             except MissingProviderKeyError as e:
@@ -293,6 +310,7 @@ async def api_generate_image(
     finally:
         if keyrings:
             clear_request_keyring()
+        clear_client_context()
 
 
 @router.post(
