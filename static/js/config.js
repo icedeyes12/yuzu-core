@@ -436,6 +436,13 @@ function invalidateModelCache(provider) {
 	const catalog = readModelCatalog();
 	delete catalog[provider];
 	saveModelCatalog(catalog);
+	if (appConfig?.model_infos) delete appConfig.model_infos[provider];
+	const select = document.getElementById(`model-${provider}`);
+	if (select) populateModelSelect(select, [], "");
+	if (appConfig?.current_provider === provider) {
+		appConfig.current_model = "";
+		applyActiveModelCapabilities();
+	}
 }
 
 async function fetchModelsForProvider(provider) {
@@ -807,6 +814,9 @@ async function setProviderActive(providerName) {
 		const result = await readJsonResponse(response);
 
 		if (response.ok && result.status === "success") {
+			appConfig.current_provider = providerName;
+			appConfig.current_model = modelName;
+			applyActiveModelCapabilities();
 			showSuccess(`${providerName} set as active!`);
 			setTextIfExists("current-provider", `${providerName}/${modelName}`);
 

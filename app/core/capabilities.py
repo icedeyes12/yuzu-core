@@ -144,7 +144,12 @@ def normalize_model_metadata(
         vision = _state(provider_vision)
 
     function_call: SupportState = "unknown"
-    if supported_parameters:
+    declared_function_call = metadata.get("function_calling")
+    if declared_function_call is False:
+        function_call = "unsupported"
+    elif declared_function_call is True:
+        function_call = "supported"
+    elif supported_parameters:
         function_call = (
             "supported"
             if any(p in supported_parameters for p in ("tools", "tool_choice"))
@@ -163,7 +168,12 @@ def normalize_model_metadata(
     )
 
     reasoning = ReasoningCapability()
-    if "reasoning_effort" in supported_parameters:
+    declared_reasoning_mode = metadata.get("reasoning_mode")
+    if declared_reasoning_mode == "provider-specific":
+        reasoning = ReasoningCapability("provider-specific")
+    elif declared_reasoning_mode == "unsupported":
+        reasoning = ReasoningCapability("unsupported")
+    elif "reasoning_effort" in supported_parameters:
         reasoning = ReasoningCapability("effort", ("low", "medium", "high"))
     elif "reasoning" in supported_parameters:
         reasoning = ReasoningCapability("toggle")

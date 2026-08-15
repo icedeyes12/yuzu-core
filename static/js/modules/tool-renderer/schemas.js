@@ -141,7 +141,11 @@ export const ToolPayloadSchemas = {
 	weather(payload) {
 		expectObject(payload, "weather");
 		if (payload.status === "location_required") {
-			return { schema_kind: "weather", status: "location_required", location: null };
+			return {
+				schema_kind: "weather",
+				status: "location_required",
+				location: null,
+			};
 		}
 		const current = payload.current || {};
 		const daily = optionalField(payload, "daily", []);

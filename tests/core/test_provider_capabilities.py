@@ -1,6 +1,11 @@
-from app.core.capabilities import ModelCapabilities, ReasoningCapability
+from app.core.capabilities import (
+    ModelCapabilities,
+    ReasoningCapability,
+    normalize_model_metadata,
+)
 from app.providers.deepseek import DeepSeekProvider
 from app.providers.google import _normalize_google_model
+from app.providers.mistral import _normalize_mistral_model
 from app.providers.openai import OpenAIProvider
 
 
@@ -26,6 +31,34 @@ def test_google_native_model_id_is_unchanged_when_already_unprefixed():
     normalized = _normalize_google_model({"name": "gemini-2.5-flash"})
     assert normalized is not None
     assert normalized["id"] == "gemini-2.5-flash"
+
+
+def test_mistral_native_metadata_maps_declared_capabilities():
+    metadata = _normalize_mistral_model(
+        {
+            "id": "mistral-medium-2505",
+            "max_context_length": 131072,
+            "capabilities": {
+                "vision": True,
+                "function_calling": True,
+                "reasoning": False,
+            },
+        }
+    )
+
+    assert metadata == {
+        "id": "mistral-medium-2505",
+        "context_length": 131072,
+        "input_modalities": ["text", "image"],
+        "supported_parameters": ["tools", "tool_choice"],
+        "reasoning_mode": "unsupported",
+    }
+    info = normalize_model_metadata("mistral", metadata)
+    assert info is not None
+    assert info.capabilities.vision == "supported"
+    assert info.capabilities.function_call == "supported"
+    assert info.capabilities.reasoning.mode == "unsupported"
+    assert info.limits.context_window == 131072
 
 
 def test_openai_reasoning_model_uses_provider_boundary_inference():

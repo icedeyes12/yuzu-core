@@ -309,6 +309,7 @@ async def api_refresh_provider_models(
     try:
         import inspect
 
+        provider_instance.clear_model_metadata()
         kwargs = {}
         sig = inspect.signature(fetcher)
         if "api_key" in sig.parameters:

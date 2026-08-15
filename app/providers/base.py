@@ -272,6 +272,12 @@ class AIProvider:
             ),
         )
 
+    def clear_model_metadata(self) -> None:
+        """(｡•̀ᴗ-)✧"""
+        self.model_infos.clear()
+        if hasattr(self, "available_models"):
+            self.available_models = []
+
     def set_model_metadata(self, metadata: list[dict[str, Any]]) -> None:
         from app.core.capabilities import normalize_model_metadata
 

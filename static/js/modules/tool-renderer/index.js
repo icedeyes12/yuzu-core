@@ -28,12 +28,19 @@ function renderToolResult({ name, data, call_id, ok, error }) {
 	const parsed = parseToolResult({ name, data, ok, error }, name);
 	const payload = parsed.normalised || {};
 	const renderer = TOOL_RENDERERS[parsed.schema_kind];
-	if (parsed.ok === false && parsed.error && payload.status !== "location_required") {
+	if (
+		parsed.ok === false &&
+		parsed.error &&
+		payload.status !== "location_required"
+	) {
 		return {
 			html: renderGenericCard(
 				canonicalToolName(name),
 				{ ok: false, error_message: parsed.error },
-				{ error_category: data.error_category || "tool_execution_error", error: parsed.error },
+				{
+					error_category: data.error_category || "tool_execution_error",
+					error: parsed.error,
+				},
 			),
 			capability: noCopyToolCardCapability,
 		};
