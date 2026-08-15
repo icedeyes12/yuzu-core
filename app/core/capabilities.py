@@ -4,7 +4,14 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 SupportState = Literal["supported", "unsupported", "unknown"]
-ReasoningMode = Literal["unsupported", "toggle", "effort", "unknown"]
+ReasoningMode = Literal[
+    "unsupported",
+    "toggle",
+    "effort",
+    "budget",
+    "provider-specific",
+    "unknown",
+]
 
 
 @dataclass(frozen=True)
@@ -23,6 +30,8 @@ class ModelCapabilities:
     """(｡•̀ᴗ-)✧"""
 
     text_input: SupportState = "supported"
+    input_modalities: tuple[str, ...] = ()
+    output_modalities: tuple[str, ...] = ()
     vision: SupportState = "unknown"
     function_call: SupportState = "unknown"
     structured_output: SupportState = "unknown"
@@ -32,6 +41,8 @@ class ModelCapabilities:
     def to_dict(self) -> dict[str, Any]:
         return {
             "text_input": self.text_input,
+            "input_modalities": list(self.input_modalities),
+            "output_modalities": list(self.output_modalities),
             "vision": self.vision,
             "function_call": self.function_call,
             "structured_output": self.structured_output,
@@ -114,13 +125,20 @@ def normalize_model_metadata(
 
     architecture = metadata.get("architecture")
     architecture = architecture if isinstance(architecture, dict) else {}
-    input_modalities = architecture.get("input_modalities")
+    input_modalities = metadata.get("input_modalities")
+    if not isinstance(input_modalities, list):
+        input_modalities = architecture.get("input_modalities")
+    if not isinstance(input_modalities, list):
+        input_modalities = []
+    input_modalities = tuple(
+        modality for modality in input_modalities if isinstance(modality, str)
+    )
     supported_parameters = metadata.get("supported_parameters")
     if not isinstance(supported_parameters, list):
         supported_parameters = []
 
     vision: SupportState = "unknown"
-    if isinstance(input_modalities, list):
+    if input_modalities:
         vision = "supported" if "image" in input_modalities else "unsupported"
     elif provider_vision is not None:
         vision = _state(provider_vision)
@@ -140,6 +158,9 @@ def normalize_model_metadata(
         output_modalities = architecture.get("output_modalities")
     if not isinstance(output_modalities, list):
         output_modalities = []
+    output_modalities = tuple(
+        modality for modality in output_modalities if isinstance(modality, str)
+    )
 
     reasoning = ReasoningCapability()
     if "reasoning_effort" in supported_parameters:
@@ -164,13 +185,21 @@ def normalize_model_metadata(
     )
     source = (
         "declared"
-        if architecture or supported_parameters or limits != ModelLimits()
+        if (
+            architecture
+            or input_modalities
+            or output_modalities
+            or supported_parameters
+            or limits != ModelLimits()
+        )
         else "unknown"
     )
     return ModelInfo(
         provider=provider,
         id=model_id,
         capabilities=ModelCapabilities(
+            input_modalities=input_modalities,
+            output_modalities=output_modalities,
             vision=vision,
             function_call=function_call,
             structured_output=structured_output,
@@ -181,6 +210,60 @@ def normalize_model_metadata(
         ),
         limits=limits,
         source=source,
+    )
+
+
+def merge_model_info(declared: ModelInfo, inferred: ModelInfo) -> ModelInfo:
+    """(｡•̀ᴗ-)✧"""
+    declared_caps = declared.capabilities
+    inferred_caps = inferred.capabilities
+    capabilities = ModelCapabilities(
+        text_input=(
+            declared_caps.text_input
+            if declared_caps.text_input != "unknown"
+            else inferred_caps.text_input
+        ),
+        input_modalities=declared_caps.input_modalities
+        or inferred_caps.input_modalities,
+        output_modalities=declared_caps.output_modalities
+        or inferred_caps.output_modalities,
+        vision=(
+            declared_caps.vision
+            if declared_caps.vision != "unknown"
+            else inferred_caps.vision
+        ),
+        function_call=(
+            declared_caps.function_call
+            if declared_caps.function_call != "unknown"
+            else inferred_caps.function_call
+        ),
+        structured_output=(
+            declared_caps.structured_output
+            if declared_caps.structured_output != "unknown"
+            else inferred_caps.structured_output
+        ),
+        reasoning=(
+            declared_caps.reasoning
+            if declared_caps.reasoning.mode != "unknown"
+            else inferred_caps.reasoning
+        ),
+        image_generation=(
+            declared_caps.image_generation
+            if declared_caps.image_generation != "unknown"
+            else inferred_caps.image_generation
+        ),
+    )
+    limits = ModelLimits(
+        context_window=declared.limits.context_window or inferred.limits.context_window,
+        max_output_tokens=declared.limits.max_output_tokens
+        or inferred.limits.max_output_tokens,
+    )
+    return ModelInfo(
+        provider=declared.provider,
+        id=declared.id,
+        capabilities=capabilities,
+        limits=limits,
+        source="declared",
     )
 
 

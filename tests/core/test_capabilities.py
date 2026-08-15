@@ -26,6 +26,7 @@ def test_openrouter_metadata_normalizes_modalities_and_tools():
         provider="openrouter",
         id="vision-model",
         capabilities=ModelCapabilities(
+            input_modalities=("text", "image"),
             vision="supported",
             function_call="supported",
             reasoning=ReasoningCapability("effort", ("low", "medium", "high")),
@@ -41,6 +42,40 @@ def test_missing_metadata_stays_unknown():
     assert info.capabilities.vision == "unknown"
     assert info.capabilities.function_call == "unknown"
     assert info.capabilities.reasoning.mode == "unknown"
+
+
+def test_top_level_modalities_are_preserved():
+    info = normalize_model_metadata(
+        "chutes",
+        {
+            "id": "qwen",
+            "input_modalities": ["text", "image"],
+            "output_modalities": ["text"],
+            "context_length": 40960,
+        },
+    )
+
+    assert info is not None
+    assert info.capabilities.input_modalities == ("text", "image")
+    assert info.capabilities.output_modalities == ("text",)
+    assert info.capabilities.vision == "supported"
+    assert info.limits.context_window == 40960
+    assert info.source == "declared"
+
+
+def test_top_level_modalities_take_precedence_over_architecture():
+    info = normalize_model_metadata(
+        "provider",
+        {
+            "id": "conflict",
+            "input_modalities": ["text"],
+            "architecture": {"input_modalities": ["text", "image"]},
+        },
+    )
+
+    assert info is not None
+    assert info.capabilities.input_modalities == ("text",)
+    assert info.capabilities.vision == "unsupported"
 
 
 def test_model_fallback_does_not_inherit_provider_capabilities():

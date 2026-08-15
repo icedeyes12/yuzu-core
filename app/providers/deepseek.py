@@ -7,7 +7,12 @@ from typing import Any
 
 import httpx
 
-from app.core.capabilities import ModelCapabilities, ModelInfo, ReasoningCapability
+from app.core.capabilities import (
+    ModelCapabilities,
+    ModelInfo,
+    ReasoningCapability,
+    merge_model_info,
+)
 from app.core.context import MissingProviderKeyError
 from app.core.llm_context import LLMContext
 from app.providers.base import AIProvider, ProviderCapabilities
@@ -32,10 +37,8 @@ class DeepSeekProvider(AIProvider):
 
     def get_model_info(self, model: str) -> ModelInfo:
         info = super().get_model_info(model)
-        if info.source != "unknown":
-            return info
         if model == "deepseek-reasoner":
-            return ModelInfo(
+            inferred = ModelInfo(
                 provider=self.name,
                 id=model,
                 capabilities=ModelCapabilities(
@@ -44,6 +47,9 @@ class DeepSeekProvider(AIProvider):
                 ),
                 source="inferred",
             )
+            if info.source != "unknown":
+                return merge_model_info(info, inferred)
+            return inferred
         return info
 
     def _prepare_payload(

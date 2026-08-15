@@ -34,7 +34,7 @@ The API uses RFC 9457-style `application/problem+json` error responses from `app
 
 `ConversationService` is the transport-independent boundary for message processing and image uploads. `orchestrator.py` owns the canonical execution loop; `llm_client.py` resolves request requirements against model metadata, then builds requests and dispatches to `AIProviderManager`.
 
-Current provider modules are OpenRouter, OpenAI, Anthropic, Google, Grok, Groq, Cerebras, DeepSeek, Chutes, Yuzu Portal, Custom OpenAI, and Custom Anthropic. Provider transport flags live in `app/providers/base.py`; model capabilities live in `app/core/capabilities.py`. Discovery normalizes provider `/models` metadata into `ModelInfo` and exposes `models` plus `model_infos` through config, provider-list, proxy, and refresh responses. Missing capability metadata remains `unknown`.
+Current provider modules are OpenRouter, OpenAI, Anthropic, Google, Grok, Groq, Cerebras, DeepSeek, Chutes, Yuzu Portal, Custom OpenAI, and Custom Anthropic. Provider transport flags live in `app/providers/base.py`; model capabilities live in `app/core/capabilities.py`. Discovery normalizes provider `/models` metadata into `ModelInfo` and exposes `models` plus `model_infos` through config, provider-list, proxy, and refresh responses. OpenRouter/compatible metadata accepts both top-level and `architecture` modality arrays. Google refresh uses native `/v1beta/models` metadata for model IDs and token limits; native thinking semantics remain `unknown` unless explicitly declared. Partial declared metadata is merged with provider-specific inference per field; explicit declared values win, while missing fields remain eligible for inference. Missing capability metadata remains `unknown`.
 
 Capability lifecycle:
 
