@@ -90,6 +90,7 @@ static/uploads/
 # --- Archives & Compressed Files ---
 *.gz
 *.tar
+docs/archive/*.md
 
 # --- Migration & Runtime Checkpoints ---
 *_checkpoint.json
