@@ -23,6 +23,7 @@ from app.api.utils import (
     get_current_user,
     validate_external_https_url,
 )
+from app.core.context import keyring_scope
 from app.core.logging_config import get_logger
 from app.db import (
     Database,
@@ -308,13 +309,7 @@ async def api_test_provider_connection(
 ):
     rate_limit_user(_user_id, 5, "provider-test-user")
     try:
-        keyrings = extract_keyrings(request)
-        if keyrings:
-            from app.core.context import clear_request_keyring, set_request_keyrings
-
-            set_request_keyrings(keyrings)
-
-        try:
+        async with keyring_scope(extract_keyrings(request)):
             ai_manager = await get_ai_manager()
             provider = ai_manager.providers.get(payload.provider_name)
             if not provider:
@@ -329,9 +324,6 @@ async def api_test_provider_connection(
                 "connected": is_connected,
                 "message": f"{payload.provider_name}: {'Connected' if is_connected else 'Connection failed'}",
             }
-        finally:
-            if keyrings:
-                clear_request_keyring()
     except Exception as e:
         log.error("Error testing provider connection: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

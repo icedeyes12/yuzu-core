@@ -20,11 +20,7 @@ from app.api.utils import (
     release_stream_slot,
     try_acquire_stream_slot,
 )
-from app.core.context import (
-    MissingProviderKeyError,
-    clear_request_keyring,
-    set_request_keyrings,
-)
+from app.core.context import MissingProviderKeyError, keyring_scope
 from app.core.logging_config import get_logger
 from app.core.request_context import (
     ClientContext,
@@ -101,26 +97,24 @@ async def api_send_message(
             local_time=request.headers.get("X-Client-Local-Time"),
         )
     )
-    keyrings = extract_keyrings(request)
-    if keyrings:
-        set_request_keyrings(keyrings)
     active_acquired = False
     try:
-        acquire_active_user(user_id, 1, "send-message-active")
-        active_acquired = True
-        user_message = payload.message.strip()
-        if not user_message:
-            return MessageResponse(reply="Please type a message!")
+        async with keyring_scope(extract_keyrings(request)):
+            acquire_active_user(user_id, 1, "send-message-active")
+            active_acquired = True
+            user_message = payload.message.strip()
+            if not user_message:
+                return MessageResponse(reply="Please type a message!")
 
-        interface = payload.interface
-        log.info("[%s] message: %s...", interface, user_message[:200])
+            interface = payload.interface
+            log.info("[%s] message: %s...", interface, user_message[:200])
 
-        ai_reply = await ConversationService.process_user_message_async(
-            user_message, interface=interface, user_id=user_id
-        )
+            ai_reply = await ConversationService.process_user_message_async(
+                user_message, interface=interface, user_id=user_id
+            )
 
-        log.info("AI reply: %s", ai_reply)
-        return MessageResponse(reply=ai_reply)
+            log.info("AI reply: %s", ai_reply)
+            return MessageResponse(reply=ai_reply)
 
     except MissingProviderKeyError as e:
         log.warning("Missing provider key: %s", e)
@@ -143,8 +137,6 @@ async def api_send_message(
     finally:
         if active_acquired:
             release_active(user_id, "send-message-active")
-        if keyrings:
-            clear_request_keyring()
         clear_client_context()
 
 
@@ -203,17 +195,16 @@ async def api_send_message_stream(
                 timezone=request.headers.get("X-Client-Timezone"),
                 local_time=request.headers.get("X-Client-Local-Time"),
             )
-            if keyrings:
-                set_request_keyrings(keyrings)
             try:
-                async for chunk in ConversationService.get_stream_generator(
-                    user_message,
-                    interface=interface,
-                    images=images,
-                    user_id=user_id,
-                    client_context=context,
-                ):
-                    yield chunk
+                async with keyring_scope(keyrings):
+                    async for chunk in ConversationService.get_stream_generator(
+                        user_message,
+                        interface=interface,
+                        images=images,
+                        user_id=user_id,
+                        client_context=context,
+                    ):
+                        yield chunk
             except MissingProviderKeyError as e:
                 log.warning("Missing provider key in stream: %s", e)
                 message = (
@@ -232,8 +223,6 @@ async def api_send_message_stream(
                 yield f"data: {payload}\n\n"
             finally:
                 release_stream_slot(user_id)
-                if keyrings:
-                    clear_request_keyring()
 
         return StreamingResponse(
             _keyring_scoped_stream(),
@@ -289,17 +278,16 @@ async def api_generate_image(
 ):
     rate_limit_user(user_id, 3, "generate-image-user")
     keyrings = extract_keyrings(request)
-    if keyrings:
-        set_request_keyrings(keyrings)
     try:
-        prompt = payload.message.strip()
-        if not prompt:
-            return MessageResponse(reply="Prompt required", status="error")
+        async with keyring_scope(keyrings):
+            prompt = payload.message.strip()
+            if not prompt:
+                return MessageResponse(reply="Prompt required", status="error")
 
-        ai_reply = await ConversationService.process_user_message_async(
-            f"/imagine {prompt}", interface="web", user_id=user_id
-        )
-        return MessageResponse(reply=ai_reply, status="success")
+            ai_reply = await ConversationService.process_user_message_async(
+                f"/imagine {prompt}", interface="web", user_id=user_id
+            )
+            return MessageResponse(reply=ai_reply, status="success")
     except MissingProviderKeyError as e:
         raise HTTPException(
             status_code=424, detail=f"No API key for {e.provider}"
@@ -308,8 +296,6 @@ async def api_generate_image(
         log.error("Error generating image: %s", type(e).__name__)
         raise HTTPException(status_code=502, detail="Image generation failed") from e
     finally:
-        if keyrings:
-            clear_request_keyring()
         clear_client_context()
 
 

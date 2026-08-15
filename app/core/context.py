@@ -6,6 +6,8 @@
 #
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 
@@ -60,3 +62,17 @@ def get_request_keyrings() -> dict[str, RequestKeyring]:
 def clear_request_keyring() -> None:
     """Unbind the keyring — call in finally to prevent cross-request leakage."""
     _ = _keyring_ctx.set({})
+
+
+@asynccontextmanager
+async def keyring_scope(
+    keyrings: dict[str, RequestKeyring] | None,
+) -> AsyncIterator[None]:
+    """Bind *keyrings* for the block, clearing them on exit (request plane)."""
+    if keyrings:
+        set_request_keyrings(keyrings)
+    try:
+        yield
+    finally:
+        if keyrings:
+            clear_request_keyring()
