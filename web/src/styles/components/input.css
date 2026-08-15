@@ -1,0 +1,95 @@
+/* FILE: static/css/components/input.css */
+/* DESCRIPTION: Chat input area styling */
+
+/* ==================== INPUT AREA ==================== */
+.input-area {
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	z-index: 100;
+	display: flex;
+	align-items: flex-end;
+	gap: var(--space-2);
+	padding: var(--space-3) max(var(--space-4), calc((100vw - 900px) / 2));
+	padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+	background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+	box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.12);
+	border-top: 1px solid var(--border-normal);
+	backdrop-filter: var(--backdrop-blur);
+}
+
+#messageInput {
+	flex: 1;
+	min-height: 42px;
+	max-height: 400px;
+	padding: var(--space-2) var(--space-4);
+	border: 2px solid var(--border-normal);
+	border-radius: var(--radius-xl);
+	background: var(--surface-subtle);
+	color: var(--text-primary);
+	font-size: 0.95rem;
+	font-family: inherit;
+	resize: none;
+	overflow-y: auto;
+}
+
+#messageInput:focus {
+	outline: none;
+	border-color: var(--accent);
+}
+
+#sendButton {
+	min-width: 42px;
+	height: 42px;
+	border-radius: var(--radius-full);
+	background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+	color: white;
+	border: none;
+	cursor: pointer;
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-shadow: var(--shadow-md);
+	transition:
+		transform var(--transition-fast),
+		box-shadow var(--transition-fast);
+}
+
+#sendButton svg {
+	margin-right: 2px;
+	margin-top: 2px;
+}
+
+#sendButton:hover {
+	transform: scale(1.05) translateY(-1px);
+	box-shadow: var(--shadow-md);
+}
+
+#sendButton:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+	transform: none;
+}
+
+#sendButton.stop-mode {
+	background: #dc3545;
+	animation: pulse-stop 1.5s var(--motion-easing-standard)
+		var(--motion-repeat-loop);
+}
+
+#sendButton.stop-mode:hover {
+	background: #c82333;
+	transform: scale(1.05);
+}
+
+@keyframes pulse-stop {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+	}
+	50% {
+		box-shadow: 0 0 0 8px rgba(220, 53, 69, 0);
+	}
+}

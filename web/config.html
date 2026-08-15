@@ -1,0 +1,280 @@
+<!-- SPA config entry: provider/model discovery, BYOK keys, profile, advanced
+     settings, image model, location, and Global Knowledge. Logic lives in
+     src/pages/config.js; the identity/provider values are fetched from the API
+     on boot (no server-rendered profile values). -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Configure your Yuzu Companion — providers, identity, and advanced settings.">
+  <title>Configuration | Yuzu Companion</title>
+  <link rel="stylesheet" href="/src/styles/style.css">
+  <link rel="stylesheet" href="/src/styles/config.css">
+  <link rel="stylesheet" href="/src/styles/sidebar.css">
+  <link rel="stylesheet" href="/src/styles/theme.css">
+  <link rel="stylesheet" href="/src/styles/components/visual-language.css">
+  <script>
+    (() => {
+      const theme = localStorage.getItem("theme") || "stellar-night-suisei";
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+</head>
+<body class="config-body page-frame" data-page="config">
+  <div id="sidebarRoot"></div>
+
+  <div class="page-layout">
+    <header class="config-header page-header">
+      <div class="page-header__inner">
+        <button
+          class="hamburger-menu hamburger"
+          id="hamburgerMenu"
+          data-action="toggle-sidebar"
+          aria-label="Open navigation sidebar"
+          aria-expanded="false"
+          aria-controls="mainSidebar"
+          type="button">
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+        </button>
+        <div class="header-title">
+          <h1>Configuration</h1>
+          <p>Customize your Yuzu Companion experience</p>
+        </div>
+      </div>
+    </header>
+
+    <main class="config-content page-content" aria-label="Configuration settings">
+      <section class="config-section" aria-labelledby="identity-heading">
+        <h2 id="identity-heading">Identity Settings</h2>
+        <form id="identity-form" novalidate>
+          <fieldset>
+            <legend class="sr-only">User and companion identity</legend>
+
+            <div class="form-group">
+              <label for="display-name">Your Name</label>
+              <input type="text" id="display-name" name="display-name" placeholder="How should the AI call you?" autocomplete="given-name">
+            </div>
+
+            <div class="form-group">
+              <label for="partner-name">Assistant Name</label>
+              <input type="text" id="partner-name" name="partner-name" placeholder="Name of your AI companion">
+            </div>
+
+            <div class="form-group">
+              <label for="affection-level">Affection Level</label>
+              <input type="range" id="affection-level" name="affection" min="0" max="100" value="0" aria-describedby="affection-value">
+              <output id="affection-value" for="affection-level">0</output>
+            </div>
+
+            <div class="form-group">
+              <label for="personality-preset">Personality</label>
+              <select id="personality-preset" name="personality-preset" class="form-select">
+                <option value="helpful">Helpful &amp; Friendly</option>
+                <option value="concise">Concise Assistant</option>
+                <option value="technical">Technical Expert</option>
+                <option value="creative">Creative Assistant</option>
+                <option value="teacher">Patient Teacher</option>
+                <option value="kawaii">Kawaii AI</option>
+                <option value="catgirl">Neko-chan</option>
+                <option value="pirate">Pirate Captain</option>
+                <option value="shakespeare">Shakespearean</option>
+                <option value="surfer">Surfer Dude</option>
+                <option value="noir">Noir Detective</option>
+                <option value="uwu">UwU Assistant</option>
+                <option value="philosopher">Philosopher</option>
+                <option value="hype">Hype Bro</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+
+            <div class="form-group" id="custom-personality-group" hidden>
+              <label for="personality-custom">Custom Personality</label>
+              <textarea id="personality-custom" name="personality-custom" rows="4" placeholder="Enter the personality exactly as it should be used..."></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="character-profile">Character Profile</label>
+              <textarea id="character-profile" name="character-profile" rows="4" placeholder="Describe the character profile exactly as it should be used..."></textarea>
+            </div>
+          </fieldset>
+          <button id="save-profile" type="button" class="btn btn-primary">Save Identity Settings</button>
+        </form>
+      </section>
+
+      <section class="config-section" aria-labelledby="provider-heading">
+        <h2 id="provider-heading">Provider Settings</h2>
+        <p class="section-description">Pick your active provider and model, then test the connection.</p>
+
+        <div class="provider-status">
+          <p><strong>Current provider:</strong> <span id="current-provider">Not set</span></p>
+          <p><strong>Connection status:</strong> <span id="connection-status">Idle</span></p>
+          <div id="active-model-capabilities" class="model-capability-summary" aria-live="polite"></div>
+        </div>
+
+        <!-- biome-ignore lint/a11y/useSemanticElements: ported markup; provider cards are appended by config.js -->
+        <div class="providers-grid" id="providers-grid" role="list" aria-label="Provider list"></div>
+      </section>
+
+      <section class="config-section" aria-labelledby="media-heading">
+        <h2 id="media-heading">Media Models</h2>
+        <p class="section-description">Choose the image generation model. Vision uses the active text provider and model automatically when an attachment is present.</p>
+
+        <div class="provider-status">
+          <p><strong>Current image model:</strong> <span id="current-image-model">Not set</span></p>
+        </div>
+
+        <div class="form-group">
+          <label for="image-model">Image model</label>
+          <select id="image-model" class="form-select"></select>
+          <p id="image-model-warning" class="form-hint" role="status" hidden></p>
+        </div>
+        <div class="config-actions">
+          <button id="save-image-model" type="button" class="btn btn-primary">Save Image Model</button>
+        </div>
+
+        <div class="form-group">
+          <!-- biome-ignore lint/a11y/noLabelWithoutControl: static heading row paired with the hint paragraph below -->
+          <label>Memory status</label>
+          <p class="form-hint">Background extraction runs asynchronously in message batches. Manual memory mutation is disabled during architecture recovery.</p>
+        </div>
+      </section>
+
+      <section class="config-section" aria-labelledby="memory-heading">
+        <h2 id="memory-heading">Memory &amp; Knowledge</h2>
+        <p class="section-description">Memory extraction runs asynchronously. Global Knowledge is explicit user-managed context injected into every prompt.</p>
+
+        <div id="global-knowledge-list" class="knowledge-list" aria-live="polite"></div>
+
+        <form id="global-knowledge-form" class="knowledge-form" novalidate>
+          <input type="hidden" id="knowledge-entry-id">
+          <input type="hidden" id="knowledge-entry-sort-order" value="0">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="knowledge-category">Category</label>
+              <input type="text" id="knowledge-category" maxlength="255" required placeholder="Identity, Preference, Project">
+            </div>
+            <div class="form-group knowledge-enabled-group">
+              <label for="knowledge-enabled">Enabled</label>
+              <input type="checkbox" id="knowledge-enabled" checked>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="knowledge-content">Content</label>
+            <textarea id="knowledge-content" rows="3" maxlength="10000" required placeholder="A fact you explicitly want Yuzu to remember"></textarea>
+          </div>
+          <div class="config-actions">
+            <button id="save-knowledge-entry" type="submit" class="btn btn-primary">Add entry</button>
+            <button id="cancel-knowledge-edit" type="button" class="btn btn-secondary" hidden>Cancel</button>
+          </div>
+        </form>
+        <p id="knowledge-status" class="form-hint" role="status"></p>
+      </section>
+
+      <section class="config-section" aria-labelledby="advanced-heading">
+        <h2 id="advanced-heading">Advanced Settings</h2>
+        <p class="section-description">Tune generation settings and feature toggles.</p>
+
+        <form id="advanced-form" novalidate>
+          <fieldset>
+            <legend class="sr-only">Generation parameters</legend>
+
+            <div class="form-group">
+              <label for="adv-temperature">
+                Temperature: <output id="val-temperature" for="adv-temperature">Not configured</output>
+              </label>
+              <input type="number" id="adv-temperature" name="temperature" min="0.0" max="2.0" step="0.1" aria-describedby="temperature-hint">
+              <span id="temperature-hint" class="form-hint">Controls randomness. Lower = more deterministic.</span>
+            </div>
+
+            <div class="form-group">
+              <label for="adv-top-p">
+                Top P: <output id="val-top-p" for="adv-top-p">Not configured</output>
+              </label>
+              <input type="number" id="adv-top-p" name="top_p" min="0.0" max="1.0" step="0.05" aria-describedby="top-p-hint">
+              <span id="top-p-hint" class="form-hint">Nucleus sampling threshold.</span>
+            </div>
+
+            <div class="form-group">
+              <label for="adv-top-k">
+                Top K: <output id="val-top-k" for="adv-top-k">Not configured</output>
+              </label>
+              <input type="number" id="adv-top-k" name="top_k" min="1" max="100" step="1" aria-describedby="top-k-hint">
+              <span id="top-k-hint" class="form-hint">Sample from the K most likely next tokens. Lower = more focused.</span>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="sr-only">Token and history limits</legend>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="adv-max-tokens">Max Tokens</label>
+                <input type="number" id="adv-max-tokens" name="max_tokens" min="1" max="128000">
+              </div>
+              <div class="form-group">
+                <label for="adv-history-limit">History Limit (Turns)</label>
+                <input type="number" id="adv-history-limit" name="history_limit" min="1" max="100">
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Post-History Instructions</legend>
+            <div class="form-group">
+              <label for="adv-additional-instructions">Additional Instructions</label>
+              <textarea id="adv-additional-instructions" name="additional_instructions" rows="4" placeholder="Instructions added after chat history..."></textarea>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="sr-only">Feature toggles</legend>
+            <div class="toggle-row">
+              <label class="toggle-label" for="adv-reasoning">
+                <input type="checkbox" id="adv-reasoning" name="enable_reasoning">
+                <span>Enable Reasoning</span>
+              </label>
+              <label class="toggle-label" for="adv-vision">
+                <input type="checkbox" id="adv-vision" name="enable_vision">
+                <span>Enable Vision</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="config-actions">
+            <button id="save-advanced-settings" type="button" class="btn btn-primary">Save Advanced Settings</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="config-section" aria-labelledby="location-heading">
+        <h2 id="location-heading">Location</h2>
+        <p class="section-description">Optional location context used by location-aware features.</p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="location-lat">Latitude</label>
+            <input type="number" id="location-lat" step="0.000001" placeholder="-6.200000">
+          </div>
+          <div class="form-group">
+            <label for="location-lon">Longitude</label>
+            <input type="number" id="location-lon" step="0.000001" placeholder="106.816666">
+          </div>
+        </div>
+
+        <div class="config-actions">
+          <button id="save-location" type="button" class="btn btn-primary">Save Location</button>
+          <button type="button" class="btn btn-secondary" id="use-current-location">Use Current Location</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="home-footer app-footer">
+      <a href="/about.html" class="footer-link">©2026 hkkm project</a> | built with love
+    </footer>
+  </div>
+
+  <script type="module" src="/src/pages/config.js"></script>
+</body>
+</html>

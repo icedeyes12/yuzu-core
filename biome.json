@@ -6,7 +6,10 @@
       "!static/vendor/**",
       "!node_modules/**",
       "!dist/**",
-      "!build/**"
+      "!build/**",
+      "!web/node_modules/**",
+      "!web/dist/**",
+      "!.venv"
     ]
   }
 }

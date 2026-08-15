@@ -1,0 +1,70 @@
+/* FILE: static/css/chat.css */
+/* DESCRIPTION: Chat interface styling - imports all component stylesheets */
+
+/* ==================== COMPONENT IMPORTS ==================== */
+@import url("./components/header.css");
+@import url("./components/messages.css");
+@import url("./components/code-blocks.css");
+@import url("./components/input.css");
+@import url("./components/scroll-button.css");
+@import url("./components/multimodal.css");
+@import url("./components/html-preview.css");
+@import url("./components/typing-indicator.css");
+@import url("./components/skeleton.css");
+@import url("./components/responsive.css");
+@import url("./components/utilities.css");
+
+/* ==================== BASE STYLES ==================== */
+html,
+body {
+	height: 100%;
+	margin: 0;
+	padding: 0;
+	overflow: hidden;
+	background: var(--surface);
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+body {
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+}
+
+.chat-layout {
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+	overflow: hidden;
+}
+
+.chat-container {
+	padding-bottom: 7rem;
+	flex: 1 1 auto;
+	min-height: 0;
+	min-width: 0;
+	max-width: 100%;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+.input-area {
+	left: 0;
+	right: 0;
+	padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+}
+
+.scroll-to-bottom-btn {
+	position: fixed;
+	right: max(var(--space-4), env(safe-area-inset-right));
+	bottom: 7.5rem;
+	z-index: 40;
+}
+
+/* When the sidebar opens, keep the chat surface from feeling frozen */
+.chat-layout > .chat-container {
+	overflow-y: auto;
+	overflow-x: hidden;
+	overflow-anchor: none;
+}

@@ -27,11 +27,14 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
       - name: Install Python dependencies
         run: python -m pip install -r requirements.txt ruff
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Install root frontend tooling
+        run: npm ci
 
       - name: Check Python formatting
         run: ruff format --check .
@@ -42,8 +45,97 @@ jobs:
       - name: Compile tracked Python sources
         run: git ls-files -z -- '*.py' | while IFS= read -r -d '' file; do test -f "$file" && python -m py_compile "$file"; done
 
-      - name: Check JavaScript syntax
+      - name: Run backend tests
+        run: python -m pytest
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: web
+        run: npm run build
+
+      - name: Check legacy JavaScript syntax
         run: find static -type f -name '*.js' -exec node --check {} +
 
+      - name: Check frontend JavaScript syntax
+        working-directory: web
+        run: find src -type f -name '*.js' -exec node --check {} +
+
       - name: Check frontend with Biome
-        run: bunx biome check static/
+        run: bunx biome check static/ web/src/
+
+      - name: Run frontend smoke tests
+        run: for file in tests/frontend/*.mjs; do node "$file"; done
+
+  frontend-e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: yuzuki
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d yuzuki"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGDATABASE: yuzuki
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Install root frontend tooling
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install chromium
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: web
+        run: npm run build
+
+      - name: Start backend in SPA mode
+        env:
+          SERVE_WEB_UI: "true"
+          SERVE_SPA: "true"
+          COOKIE_SECURE: "false"
+          COOKIE_SAMESITE: lax
+        run: |
+          python -m uvicorn main:app --host 127.0.0.1 --port 5000 --log-level warning &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:5000/health > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:5000/health > /dev/null
+
+      - name: Run config page E2E
+        run: node tests/frontend/e2e/config-page-e2e.mjs

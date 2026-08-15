@@ -206,7 +206,9 @@ async def create_session_async(name: str = "New Chat", *, user_id: str) -> str |
             row = await s.execute_returning(
                 SQL_SESSION_INSERT, (user_id, name, False, 0, now, now)
             )
-            return row.get("id") if row else None
+            # psycopg returns UUID objects; normalize to str to match the
+            # declared return type and API response models.
+            return str(row.get("id")) if row and row.get("id") else None
     except Exception as e:  # noqa: BLE001
         log.error("create_session_async failed: %s", e)
         return None

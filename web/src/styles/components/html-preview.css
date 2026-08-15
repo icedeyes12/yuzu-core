@@ -1,0 +1,306 @@
+/* FILE: static/css/components/html-preview.css */
+/* DESCRIPTION: HTML preview modal and console panel styling */
+
+/* ==================== HTML PREVIEW CONTAINER ==================== */
+.html-preview-container {
+	margin: var(--space-4) 0;
+	border: 1px solid var(--border-normal);
+	border-radius: var(--radius-md);
+	overflow: hidden;
+	background: var(--surface-subtle);
+}
+
+.html-preview-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 0.5rem 1rem;
+	background: rgba(0, 0, 0, 0.2);
+	border-bottom: 1px solid var(--border-normal);
+}
+
+.html-preview-label {
+	font-size: 0.75rem;
+	color: var(--text-secondary);
+	text-transform: uppercase;
+	font-weight: 600;
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.html-preview-label svg {
+	width: 14px;
+	height: 14px;
+}
+
+.preview-btn {
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	padding: 0.3rem 0.7rem;
+	background: var(--accent);
+	color: white;
+	border: none;
+	border-radius: 6px;
+	font-size: 0.8rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.preview-btn:hover {
+	background: var(--accent);
+	transform: scale(1.02);
+}
+
+.preview-btn.active {
+	background: var(--accent-support);
+}
+
+.preview-btn svg {
+	width: 14px;
+	height: 14px;
+}
+
+.preview-iframe {
+	width: 100%;
+	height: 70vh;
+	min-height: 300px;
+	max-height: calc(100vh - 200px);
+	border: none;
+	border-radius: 0 0 8px 8px;
+	background: white;
+	display: block;
+	overflow: auto;
+	flex: 1;
+}
+
+.preview-placeholder {
+	padding: 1rem 1rem 0.8rem;
+	color: var(--text-secondary);
+	font-size: 0.85rem;
+	font-style: italic;
+}
+
+.preview-error {
+	padding: 1rem;
+	color: var(--status-danger);
+	font-size: 0.85rem;
+}
+
+/* ==================== HTML PREVIEW MODAL ==================== */
+#html-preview-modal {
+	display: none;
+	position: fixed;
+	inset: 0;
+	z-index: 9999;
+	align-items: center;
+	justify-content: center;
+}
+
+#html-preview-modal.active {
+	display: flex;
+}
+
+.html-modal-backdrop {
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.6);
+	backdrop-filter: blur(4px);
+}
+
+.html-modal-content {
+	position: relative;
+	width: min(95vw, 900px);
+	height: 85vh;
+	max-height: 80vh;
+	background: var(--surface);
+	border: 1px solid var(--border-normal);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-xl);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.html-modal-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: var(--space-3) var(--space-4);
+	border-bottom: 1px solid var(--border-normal);
+	background: rgba(0, 0, 0, 0.2);
+	flex-shrink: 0;
+}
+
+.html-modal-title {
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--text-primary);
+}
+
+.html-modal-close {
+	background: transparent;
+	border: none;
+	color: var(--text-secondary);
+	cursor: pointer;
+	padding: 4px;
+	border-radius: 4px;
+	display: flex;
+	align-items: center;
+}
+
+.html-modal-close:hover {
+	color: var(--text-primary);
+	background: rgba(255, 255, 255, 0.1);
+}
+
+.html-modal-body {
+	flex: 1;
+	overflow: hidden;
+	background: #fff;
+	min-height: 300px;
+	max-height: 60vh;
+}
+
+.html-modal-body iframe {
+	width: 100%;
+	height: 100%;
+	border: none;
+	background: #fff;
+}
+
+.html-modal-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-1);
+}
+
+.html-modal-btn {
+	background: transparent;
+	border: 1px solid var(--border-normal);
+	border-radius: var(--radius-sm);
+	color: var(--text-secondary);
+	cursor: pointer;
+	padding: var(--space-2);
+	display: flex;
+	align-items: center;
+}
+
+.html-modal-btn:hover {
+	background: rgba(255, 255, 255, 0.1);
+	color: var(--text-primary);
+	border-color: var(--text-secondary);
+}
+
+.html-modal-btn.active {
+	background: rgba(255, 105, 180, 0.2);
+	color: var(--accent);
+	border-color: var(--accent);
+}
+
+/* Fullscreen mode */
+#html-preview-modal.fullscreen .html-modal-content {
+	width: 100vw;
+	height: 100vh;
+	max-width: 100vw;
+	max-height: 100vh;
+	border-radius: 0;
+	margin: 0;
+}
+
+#html-preview-modal.fullscreen .preview-iframe {
+	height: 100vh;
+	max-height: 100vh;
+}
+
+.preview-body-light {
+	background: var(--surface);
+}
+
+.preview-body-dark iframe {
+	background: var(--surface);
+}
+
+/* ==================== CONSOLE PANEL ==================== */
+.console-panel {
+	border-top: 1px solid var(--border-normal);
+	background: var(--surface);
+	max-height: 100px;
+	overflow-y: auto;
+	font-family: "Hack", "Fira Code", "Consolas", monospace;
+	font-size: 11px;
+	line-height: 1.5;
+	display: none;
+	flex-shrink: 0;
+}
+
+.console-panel.visible {
+	display: block;
+}
+
+.console-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 4px 8px;
+	background: var(--surface-raised);
+	border-bottom: 1px solid var(--border-normal);
+	position: sticky;
+	top: 0;
+}
+
+.console-header span {
+	font-size: 10px;
+	color: var(--text-secondary);
+	font-family: sans-serif;
+	text-transform: uppercase;
+	font-weight: 600;
+}
+
+.console-clear {
+	background: none;
+	border: none;
+	color: var(--text-secondary);
+	cursor: pointer;
+	font-size: 10px;
+	padding: 2px 6px;
+	border-radius: 4px;
+}
+
+.console-clear:hover {
+	background: var(--surface-subtle);
+	color: var(--text-primary);
+}
+
+.console-line {
+	padding: 2px 8px;
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+.console-line.log {
+	color: var(--text-primary);
+}
+
+.console-line.warn {
+	color: var(--accent-subtle);
+	background: rgba(210, 153, 34, 0.1);
+}
+
+.console-line.error {
+	color: var(--status-danger);
+	background: rgba(248, 81, 73, 0.1);
+}
+
+.console-line.info {
+	color: var(--accent);
+}
+
+.console-empty {
+	padding: 8px;
+	color: var(--text-secondary);
+	font-style: italic;
+	font-family: sans-serif;
+	font-size: 11px;
+}

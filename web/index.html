@@ -1,0 +1,81 @@
+<!-- SPA home entry. Sidebar chrome is injected by src/components/sidebar.js
+     into #sidebarRoot; page logic lives in src/pages/home.js. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Yuzu Companion — a private, persistent digital entity.">
+  <title>Yuzu | Companion</title>
+  <link rel="stylesheet" href="/src/styles/style.css">
+  <link rel="stylesheet" href="/src/styles/sidebar.css">
+  <link rel="stylesheet" href="/src/styles/theme.css">
+  <link rel="stylesheet" href="/src/styles/components/visual-language.css">
+  <link rel="stylesheet" href="/src/styles/home.css">
+  <script>
+    (() => {
+      const theme = localStorage.getItem("theme") || "stellar-night-suisei";
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+</head>
+<body class="home-body page-frame" data-page="home">
+  <div id="sidebarRoot"></div>
+
+  <div class="page-layout">
+    <header class="home-header page-header">
+      <div class="page-header__inner">
+        <button
+          class="hamburger-menu hamburger"
+          id="hamburgerMenu"
+          data-action="toggle-sidebar"
+          aria-label="Open navigation sidebar"
+          aria-expanded="false"
+          aria-controls="mainSidebar"
+          type="button">
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+        </button>
+        <div class="header-title">
+          <span class="home-wordmark">Yuzu</span>
+          <span class="home-presence">private companion</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="home-content page-content" aria-label="Yuzu entry point">
+      <section class="home-intro" aria-labelledby="home-intro-heading">
+        <p class="eyebrow" id="homeGreeting">Welcome back</p>
+        <h1 id="home-intro-heading">Your conversation is waiting.</h1>
+        <p class="home-intro-copy" id="homeIntroCopy">Whenever you are ready. No setup required.</p>
+        <a href="/chat.html" class="home-primary-action">
+          <span>Open conversation</span>
+          <span aria-hidden="true">→</span>
+        </a>
+      </section>
+
+      <nav class="home-secondary-nav" aria-label="Secondary navigation">
+        <a href="/config.html" class="home-secondary-link">
+          <span class="home-secondary-link__icon" aria-hidden="true">
+            <span aria-hidden="true">⚙</span>
+          </span>
+          <span><strong>Configuration</strong><small>Adjust how Yuzu behaves</small></span>
+          <span class="home-secondary-link__arrow" aria-hidden="true">→</span>
+        </a>
+        <a href="/about.html" class="home-secondary-link">
+          <span class="home-secondary-link__icon" aria-hidden="true">?</span>
+          <span><strong>About Yuzu</strong><small>The reason this exists</small></span>
+          <span class="home-secondary-link__arrow" aria-hidden="true">→</span>
+        </a>
+      </nav>
+    </main>
+
+    <footer class="home-footer app-footer">
+      <a href="/about.html" class="footer-link">©2026 hkkm project</a> | built with love
+    </footer>
+  </div>
+
+  <script type="module" src="/src/pages/home.js"></script>
+</body>
+</html>

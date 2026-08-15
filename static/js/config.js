@@ -1442,7 +1442,11 @@ async function deleteKnowledgeEntry(id) {
 			{ method: "DELETE", headers: { Accept: "application/json" } },
 		);
 		const data = await readJsonResponse(response);
-		if (!response.ok || data.status !== "success") {
+		// DELETE returns 204 with an empty body; treat that as success.
+		const emptyOk =
+			response.status === 204 ||
+			(data && typeof data === "object" && Object.keys(data).length === 0);
+		if (!response.ok || (!emptyOk && data.status !== "success")) {
 			throw new Error(getApiError(data, response.status));
 		}
 		await loadGlobalKnowledge();

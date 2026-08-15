@@ -57,5 +57,5 @@ flowchart TB
 - [`../backend/`](../backend/)
 - [`../database/`](../database/)
 - [`../memory/`](../memory/)
-- [`../frontend/`](../frontend/)
+- [`../web/`](../web/)
 - [`../../AGENTS.md`](../../AGENTS.md)

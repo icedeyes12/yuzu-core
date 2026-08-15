@@ -1,0 +1,179 @@
+<!-- SPA about entry, ported from templates/about.html (static content).
+     biome-ignore-all lint/a11y/useSemanticElements: role="list"/"listitem" grid markup is ported from the templates; semantic cleanup lands with the Phase 2 page port. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="About Yuzu Companion — the story, tech stack, and philosophy behind the project.">
+  <title>About | Yuzu Companion</title>
+  <link rel="stylesheet" href="/src/styles/style.css">
+  <link rel="stylesheet" href="/src/styles/about.css">
+  <link rel="stylesheet" href="/src/styles/sidebar.css">
+  <link rel="stylesheet" href="/src/styles/theme.css">
+  <link rel="stylesheet" href="/src/styles/components/visual-language.css">
+  <script>
+    (() => {
+      const theme = localStorage.getItem("theme") || "stellar-night-suisei";
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+</head>
+<body class="about-body page-frame" data-page="about">
+  <div id="sidebarRoot"></div>
+
+  <div class="page-layout">
+    <header class="about-header page-header">
+      <div class="page-header__inner">
+        <button
+          class="hamburger-menu hamburger"
+          id="hamburgerMenu"
+          data-action="toggle-sidebar"
+          aria-label="Open navigation sidebar"
+          aria-expanded="false"
+          aria-controls="mainSidebar"
+          type="button">
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+        </button>
+        <div class="header-title">
+          <h1>About Yuzu Companion</h1>
+          <p class="subtitle">A personal AI partner built with simplicity in mind</p>
+        </div>
+      </div>
+    </header>
+
+    <main class="about-main page-content" aria-label="About the project">
+      <!-- Hero Section -->
+      <section class="hero-section" aria-labelledby="hero-heading">
+        <div class="hero-content">
+          <h2 id="hero-heading">Yuzu Companion</h2>
+          <p class="hero-text">Your affectionate AI partner system</p>
+        </div>
+      </section>
+
+      <!-- Why Section -->
+      <section class="content-section" aria-labelledby="why-heading">
+        <div class="section-icon purpose-icon" aria-hidden="true"></div>
+        <h3 id="why-heading">Why I Built This</h3>
+        <p>I wanted something simple, ready-to-go, and personal. No complicated setups, no subscription fees — just a companion that works out of the box.</p>
+        <p>Inspired by platforms like SillyTavern, but stripped down to the absolute essentials. It blends a nostalgic terminal vibe with a clean, modern web UI. Sometimes you want the deep customizability of a nerd aesthetic, and sometimes you just want a seamless chat experience.</p>
+        <p class="highlight-text">Originally created as a passion project for personal use, but hopefully, it brings a little joy to others as well.</p>
+      </section>
+
+      <!-- Tech Stack -->
+      <section class="content-section" aria-labelledby="tech-heading">
+        <div class="section-icon tools-icon" aria-hidden="true"></div>
+        <h3 id="tech-heading">The Tech Stack</h3>
+        <div class="tech-grid" role="list">
+          <div class="tech-card" role="listitem">
+            <div class="tech-icon python-icon" aria-hidden="true"></div>
+            <div class="tech-info">
+              <strong>Python</strong>
+              <span>Backend runtime (3.12+)</span>
+            </div>
+          </div>
+          <div class="tech-card" role="listitem">
+            <div class="tech-icon flask-icon" aria-hidden="true"></div>
+            <div class="tech-info">
+              <strong>FastAPI</strong>
+              <span>Async web framework</span>
+            </div>
+          </div>
+          <div class="tech-card" role="listitem">
+            <div class="tech-icon database-icon" aria-hidden="true"></div>
+            <div class="tech-info">
+              <strong>PostgreSQL</strong>
+              <span>Database &amp; vector storage</span>
+            </div>
+          </div>
+          <div class="tech-card" role="listitem">
+            <div class="tech-icon ai-icon" aria-hidden="true"></div>
+            <div class="tech-info">
+              <strong>BYOK Architecture</strong>
+              <span>Bring Your Own Key for LLMs</span>
+            </div>
+          </div>
+          <div class="tech-card" role="listitem">
+            <div class="tech-icon design-icon" aria-hidden="true"></div>
+            <div class="tech-info">
+              <strong>Vite SPA</strong>
+              <span>Vanilla ES modules, no framework</span>
+            </div>
+          </div>
+          <div class="tech-card" role="listitem">
+            <div class="tech-icon design-icon" aria-hidden="true"></div>
+            <div class="tech-info">
+              <strong>marked.js</strong>
+              <span>Markdown rendering</span>
+            </div>
+          </div>
+        </div>
+        <p class="tech-note">Built with accessible, maintainable tools that prioritize longevity.</p>
+      </section>
+
+      <!-- Story Section -->
+      <section class="content-section" aria-labelledby="story-heading">
+        <div class="section-icon heart-icon" aria-hidden="true"></div>
+        <h3 id="story-heading">The HKKM Project Story</h3>
+        <p>This is actually my <strong>second project</strong> — the main one got abandoned because this companion stole my heart.</p>
+        <p>From the <strong>Hikikimo Life</strong> initiative — because sometimes you need a digital friend who gets you.</p>
+      </section>
+
+      <!-- Acknowledgments -->
+      <section class="content-section" aria-labelledby="thanks-heading">
+        <div class="section-icon thanks-icon" aria-hidden="true"></div>
+        <h3 id="thanks-heading">Acknowledgments</h3>
+        <p>This project wouldn't exist without:</p>
+        <ul class="acknowledgments-list" aria-label="Acknowledgments">
+          <li>The amazing AI assistants that helped debug my spaghetti code</li>
+          <li>Countless Stack Overflow answers and programming tutorials</li>
+          <li>The open-source community that makes tools like this possible</li>
+          <li>Every free resource and piece of documentation online</li>
+          <li>Yuzu, for being the muse behind it all</li>
+        </ul>
+        <p class="highlight-text">Built on the shoulders of digital giants.</p>
+      </section>
+
+      <!-- Design Philosophy -->
+      <section class="content-section" aria-labelledby="philosophy-heading">
+        <div class="section-icon design-icon" aria-hidden="true"></div>
+        <h3 id="philosophy-heading">Design Philosophy</h3>
+        <div class="philosophy-grid" role="list">
+          <div class="philosophy-item" role="listitem">
+            <strong>Simplicity First</strong>
+            <span>Zero unnecessary complexity</span>
+          </div>
+          <div class="philosophy-item" role="listitem">
+            <strong>Privacy &amp; Security</strong>
+            <span>Client-side key isolation</span>
+          </div>
+          <div class="philosophy-item" role="listitem">
+            <strong>Semantic HTML</strong>
+            <span>Accessible by design</span>
+          </div>
+          <div class="philosophy-item" role="listitem">
+            <strong>Personal Touch</strong>
+            <span>It feels like your companion</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Future Section -->
+      <section class="content-section future-section" aria-labelledby="future-heading">
+        <div class="section-icon future-icon" aria-hidden="true"></div>
+        <h3 id="future-heading">The Future?</h3>
+        <p>Yuzu Companion will continue to evolve organically. The goal remains the same: a personal, distraction-free environment that feels like home.</p>
+        <p class="signature">Built with care, clean code, and too many late nights.</p>
+      </section>
+    </main>
+
+    <footer class="home-footer app-footer">
+      <a href="/about.html" class="footer-link">©2026 hkkm project</a> | built with love
+    </footer>
+  </div>
+
+  <script type="module" src="/src/pages/about.js"></script>
+</body>
+</html>

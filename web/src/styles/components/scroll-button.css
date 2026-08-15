@@ -1,0 +1,34 @@
+/* ==================== SCROLL TO BOTTOM BUTTON ==================== */
+.scroll-to-bottom-btn {
+	position: fixed;
+	right: var(--space-4);
+	z-index: 1000;
+	width: 2.75rem;
+	height: 2.75rem;
+	border-radius: var(--radius-full);
+	background: var(--accent);
+	color: white;
+	border: none;
+	cursor: pointer;
+	box-shadow: var(--shadow-md);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition:
+		opacity var(--transition-slow),
+		visibility var(--transition-slow),
+		transform var(--motion-normal) var(--motion-easing-emphasized);
+	/* Dynamic positioning - calculated by JavaScript based on input area height */
+	bottom: 100px;
+}
+
+.scroll-to-bottom-btn:hover {
+	transform: scale(1.05);
+	box-shadow: var(--shadow-lg);
+}
+
+.scroll-to-bottom-btn.hidden {
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+}
