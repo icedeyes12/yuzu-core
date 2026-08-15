@@ -258,6 +258,22 @@ class AIProvider:
     async def get_models(self) -> list[str]:
         raise NotImplementedError
 
+    async def discover_models(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> list[str]:
+        """(｡•̀ᴗ-)✧"""
+        fetcher = getattr(self, "fetch_live_models", None)
+        if not callable(fetcher):
+            return await self.get_models()
+        parameters = inspect.signature(fetcher).parameters
+        kwargs = {
+            key: value
+            for key, value in {"api_key": api_key, "base_url": base_url}.items()
+            if key in parameters
+        }
+        result = fetcher(**kwargs)
+        return await result if inspect.isawaitable(result) else result
+
     def get_model_info(self, model: str) -> ModelInfo:
         return self.model_infos.get(
             model,
@@ -346,12 +362,7 @@ class AIProvider:
     async def test_connection(self) -> bool:
         """(｡•̀ᴗ-)✧"""
         try:
-            fetcher = getattr(self, "fetch_live_models", None)
-            if callable(fetcher):
-                result = fetcher()
-                models = await result if inspect.isawaitable(result) else result
-                return bool(models)
-            return bool(await self.get_models())
+            return bool(await self.discover_models())
         except Exception:
             return False
 
@@ -453,6 +464,26 @@ class AIProviderManager:
         if provider_name in self.providers:
             return await self.providers[provider_name].get_models()
         return []
+
+    async def discover_provider_models(
+        self,
+        provider_name: str,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+    ) -> tuple[list[str], list[dict[str, Any]]]:
+        """(｡•̀ᴗ-)✧"""
+        provider = self.providers.get(provider_name)
+        if provider is None:
+            raise KeyError(provider_name)
+        models = sorted(
+            {
+                model
+                for model in await provider.discover_models(api_key, base_url)
+                if model
+            }
+        )
+        return models, [provider.get_model_info(model).to_dict() for model in models]
 
     async def get_all_models(self) -> dict[str, list[str]]:
         """(｡•̀ᴗ-)✧"""

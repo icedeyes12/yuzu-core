@@ -261,6 +261,29 @@ input[type="range"]::-moz-range-thumb {
 	margin: 0.3rem 0;
 }
 
+.model-capability-summary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35rem 0.6rem;
+	margin-top: 0.65rem;
+	color: var(--text-muted);
+	font-size: 0.82rem;
+}
+
+.model-capability-summary__title {
+	flex-basis: 100%;
+	color: var(--text-primary);
+	font-weight: 600;
+}
+
+.model-capability-summary__item {
+	white-space: nowrap;
+}
+
+.model-capability-summary__state {
+	font-weight: 700;
+}
+
 .status-connected {
 	color: var(--status-success);
 	font-weight: 600;

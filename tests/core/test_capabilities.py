@@ -156,3 +156,41 @@ def test_metadata_normalizes_structured_output_image_generation_and_limits():
     assert info.capabilities.image_generation == "supported"
     assert info.limits.context_window == 128000
     assert info.limits.max_output_tokens == 4096
+
+
+def test_metadata_normalizes_provider_catalog_capabilities_and_limits():
+    info = normalize_model_metadata(
+        "provider",
+        {
+            "id": "catalog-model",
+            "capabilities": {
+                "vision": True,
+                "tools": True,
+                "reasoning": True,
+            },
+            "limits": {
+                "max_context_length": 131072,
+                "max_completion_tokens": 40960,
+            },
+        },
+    )
+
+    assert info is not None
+    assert info.capabilities.vision == "supported"
+    assert info.capabilities.function_call == "supported"
+    assert info.capabilities.reasoning.mode == "toggle"
+    assert info.limits.context_window == 131072
+    assert info.limits.max_output_tokens == 40960
+
+
+def test_metadata_declared_capabilities_override_transport_fallbacks():
+    info = normalize_model_metadata(
+        "provider",
+        {"id": "declared", "capabilities": {"vision": False, "tools": False}},
+        provider_vision=True,
+        provider_tools=True,
+    )
+
+    assert info is not None
+    assert info.capabilities.vision == "unsupported"
+    assert info.capabilities.function_call == "unsupported"

@@ -74,6 +74,72 @@ function getActiveModelInfo() {
 	);
 }
 
+function setActiveConfig(provider, model) {
+	if (!appConfig) return;
+	appConfig.current_provider = provider;
+	appConfig.current_model = model;
+	if (appConfig.ai_providers) {
+		appConfig.ai_providers.current_provider = provider;
+		appConfig.ai_providers.current_model = model;
+	}
+}
+
+function getModelInfo(provider, model) {
+	return (
+		(appConfig?.model_infos?.[provider] || []).find(
+			(info) => info.id === model,
+		) || null
+	);
+}
+
+function capabilityMark(value) {
+	return value === "supported" ? "✓" : value === "unsupported" ? "—" : "?";
+}
+
+function renderCapabilitySummary(info) {
+	const capabilities = info?.capabilities || {};
+	const reasoning = capabilities.reasoning?.mode || "unknown";
+	const limits = info?.limits || {};
+	const value = (name, state) =>
+		`<span class="model-capability-summary__item"><span class="model-capability-summary__state" aria-label="${state}">${capabilityMark(state)}</span> ${name}</span>`;
+	const limit = (name, number) =>
+		`<span class="model-capability-summary__item">${name}: ${Number.isInteger(number) ? number.toLocaleString() : "?"}</span>`;
+
+	if (!info) {
+		return '<span class="model-capability-summary__title">Model capabilities: ?</span>';
+	}
+	return [
+		`<span class="model-capability-summary__title">${info.id} capabilities</span>`,
+		value("Vision", capabilities.vision),
+		value("Tools", capabilities.function_call),
+		value("Structured output", capabilities.structured_output),
+		value(
+			"Reasoning",
+			reasoning === "unknown"
+				? "unknown"
+				: reasoning === "unsupported"
+					? "unsupported"
+					: "supported",
+		),
+		value("Image generation", capabilities.image_generation),
+		limit("Context", limits.context_window),
+		limit("Max output", limits.max_output_tokens),
+	].join("");
+}
+
+function updateCapabilitySummary(provider, model, target) {
+	if (target)
+		target.innerHTML = renderCapabilitySummary(getModelInfo(provider, model));
+	const activeProvider =
+		appConfig?.current_provider || appConfig?.ai_providers?.current_provider;
+	const activeModel =
+		appConfig?.current_model || appConfig?.ai_providers?.current_model;
+	const active = document.getElementById("active-model-capabilities");
+	if (active && provider === activeProvider && model === activeModel) {
+		active.innerHTML = renderCapabilitySummary(getModelInfo(provider, model));
+	}
+}
+
 function applyActiveModelCapabilities() {
 	const capabilities = getActiveModelInfo()?.capabilities || {};
 	const reasoning = capabilities.reasoning || {};
@@ -278,7 +344,22 @@ async function loadProviderSettings() {
 				getCachedModels(modelCatalog, provider),
 				isActive ? data.current_model || "" : "",
 			);
-			if (isActive) applyActiveModelCapabilities();
+			const modelSelect = card.querySelector(`#model-${provider}`);
+			const capabilitySummary = document.createElement("div");
+			capabilitySummary.className = "model-capability-summary";
+			modelSelect.closest(".form-group")?.appendChild(capabilitySummary);
+			updateCapabilitySummary(provider, modelSelect.value, capabilitySummary);
+			modelSelect.addEventListener("change", () =>
+				updateCapabilitySummary(provider, modelSelect.value, capabilitySummary),
+			);
+			if (isActive) {
+				applyActiveModelCapabilities();
+				updateCapabilitySummary(
+					provider,
+					modelSelect.value,
+					document.getElementById("active-model-capabilities"),
+				);
+			}
 			grid.appendChild(card);
 			setupMaskedKeyInput(card.querySelector(`#key-${provider}`), provKey);
 
@@ -441,6 +522,9 @@ function invalidateModelCache(provider) {
 	if (select) populateModelSelect(select, [], "");
 	if (appConfig?.current_provider === provider) {
 		appConfig.current_model = "";
+		if (appConfig.ai_providers) appConfig.ai_providers.current_model = "";
+		const active = document.getElementById("active-model-capabilities");
+		if (active) active.innerHTML = renderCapabilitySummary(null);
 		applyActiveModelCapabilities();
 	}
 }
@@ -459,7 +543,7 @@ async function fetchModelsForProvider(provider) {
 
 		const headers = {};
 		if (provConfig.api_key) headers["X-Provider-Key"] = provConfig.api_key;
-		if (provider.startsWith("custom") && provConfig.base_url)
+		if (provConfig.base_url)
 			headers["X-Provider-BaseUrl"] = provConfig.base_url;
 
 		const response = await fetch(`/api/v1/proxy/models/${provider}/refresh`, {
@@ -484,7 +568,19 @@ async function fetchModelsForProvider(provider) {
 			if (Array.isArray(data.model_infos)) {
 				appConfig.model_infos = appConfig.model_infos || {};
 				appConfig.model_infos[provider] = data.model_infos;
+				const modelSelect = document.getElementById(`model-${provider}`);
+				const summary = modelSelect
+					?.closest(".form-group")
+					?.querySelector(".model-capability-summary");
+				updateCapabilitySummary(provider, modelSelect?.value || "", summary);
 				applyActiveModelCapabilities();
+				if (provider === appConfig.current_provider) {
+					updateCapabilitySummary(
+						provider,
+						appConfig.current_model,
+						document.getElementById("active-model-capabilities"),
+					);
+				}
 			}
 			showSuccess(`Models loaded for ${provider}.`);
 		} else {
@@ -814,8 +910,12 @@ async function setProviderActive(providerName) {
 		const result = await readJsonResponse(response);
 
 		if (response.ok && result.status === "success") {
-			appConfig.current_provider = providerName;
-			appConfig.current_model = modelName;
+			setActiveConfig(providerName, modelName);
+			updateCapabilitySummary(
+				providerName,
+				modelName,
+				document.getElementById("active-model-capabilities"),
+			);
 			applyActiveModelCapabilities();
 			showSuccess(`${providerName} set as active!`);
 			setTextIfExists("current-provider", `${providerName}/${modelName}`);

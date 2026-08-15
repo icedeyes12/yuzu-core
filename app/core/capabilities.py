@@ -123,11 +123,20 @@ def normalize_model_metadata(
     if not isinstance(model_id, str) or not model_id:
         return None
 
+    declared_capabilities = metadata.get("capabilities")
+    declared_capabilities = (
+        declared_capabilities if isinstance(declared_capabilities, dict) else {}
+    )
     architecture = metadata.get("architecture")
     architecture = architecture if isinstance(architecture, dict) else {}
     input_modalities = metadata.get("input_modalities")
     if not isinstance(input_modalities, list):
         input_modalities = architecture.get("input_modalities")
+    if not isinstance(input_modalities, list):
+        if declared_capabilities.get("vision") is True:
+            input_modalities = ["text", "image"]
+        elif declared_capabilities.get("vision") is False:
+            input_modalities = ["text"]
     if not isinstance(input_modalities, list):
         input_modalities = []
     input_modalities = tuple(
@@ -145,6 +154,10 @@ def normalize_model_metadata(
 
     function_call: SupportState = "unknown"
     declared_function_call = metadata.get("function_calling")
+    if declared_function_call is None:
+        declared_function_call = declared_capabilities.get("function_calling")
+    if declared_function_call is None:
+        declared_function_call = declared_capabilities.get("tools")
     if declared_function_call is False:
         function_call = "unsupported"
     elif declared_function_call is True:
@@ -161,6 +174,11 @@ def normalize_model_metadata(
     output_modalities = metadata.get("output_modalities")
     if not isinstance(output_modalities, list):
         output_modalities = architecture.get("output_modalities")
+    if (
+        not isinstance(output_modalities, list)
+        and declared_capabilities.get("imageOutput") is True
+    ):
+        output_modalities = ["text", "image"]
     if not isinstance(output_modalities, list):
         output_modalities = []
     output_modalities = tuple(
@@ -169,10 +187,22 @@ def normalize_model_metadata(
 
     reasoning = ReasoningCapability()
     declared_reasoning_mode = metadata.get("reasoning_mode")
+    if (
+        declared_reasoning_mode is None
+        and declared_capabilities.get("reasoning") is False
+    ):
+        declared_reasoning_mode = "unsupported"
+    elif (
+        declared_reasoning_mode is None
+        and declared_capabilities.get("reasoning") is True
+    ):
+        declared_reasoning_mode = "toggle"
     if declared_reasoning_mode == "provider-specific":
         reasoning = ReasoningCapability("provider-specific")
     elif declared_reasoning_mode == "unsupported":
         reasoning = ReasoningCapability("unsupported")
+    elif declared_reasoning_mode == "toggle":
+        reasoning = ReasoningCapability("toggle")
     elif "reasoning_effort" in supported_parameters:
         reasoning = ReasoningCapability("effort", ("low", "medium", "high"))
     elif "reasoning" in supported_parameters:
@@ -185,8 +215,22 @@ def normalize_model_metadata(
     ):
         structured_output = "supported"
 
-    context_window = metadata.get("context_length") or metadata.get("context_window")
-    max_output_tokens = metadata.get("max_output") or metadata.get("max_output_tokens")
+    limits_metadata = metadata.get("limits")
+    limits_metadata = limits_metadata if isinstance(limits_metadata, dict) else {}
+    context_window = (
+        metadata.get("context_length")
+        or metadata.get("context_window")
+        or metadata.get("max_context_length")
+        or limits_metadata.get("max_context_length")
+        or declared_capabilities.get("contextWindow")
+    )
+    max_output_tokens = (
+        metadata.get("max_output")
+        or metadata.get("max_output_tokens")
+        or metadata.get("max_completion_tokens")
+        or limits_metadata.get("max_completion_tokens")
+        or declared_capabilities.get("maxOutput")
+    )
     limits = ModelLimits(
         context_window=context_window if isinstance(context_window, int) else None,
         max_output_tokens=max_output_tokens
@@ -201,6 +245,7 @@ def normalize_model_metadata(
             or output_modalities
             or supported_parameters
             or limits != ModelLimits()
+            or declared_capabilities
         )
         else "unknown"
     )
