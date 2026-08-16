@@ -12,6 +12,7 @@ from app.api.models import (
     SessionMutationResponse,
 )
 from app.api.utils import get_client_id, get_current_user
+from app.core.ids import typed_id_to_uuid
 from app.core.logging_config import get_logger
 from app.db import (
     Database,
@@ -53,7 +54,8 @@ async def _delete_session(session_id: str, user_id: str):
     try:
         if not session_id:
             raise HTTPException(status_code=400, detail="session_id required")
-        success = await delete_session_async(session_id, user_id)
+        raw_session_id = typed_id_to_uuid(session_id)
+        success = await delete_session_async(raw_session_id, user_id)
         if not success:
             raise HTTPException(status_code=404, detail="Session not found")
         active_session = await get_active_session_async(user_id)
@@ -105,8 +107,9 @@ async def api_get_chat_history(
         effective_limit = limit if limit and limit > 0 else None
         active_session = None
         if session_id:
+            raw_session_id = typed_id_to_uuid(session_id)
             chat_history = await get_chat_history_async(
-                session_id=session_id,
+                session_id=raw_session_id,
                 limit=effective_limit,
                 recent=True,
                 user_id=user_id,
@@ -154,8 +157,9 @@ async def api_get_chat_history_before(
     try:
         if limit <= 0 or limit > 200:
             limit = 50
+        raw_session_id = typed_id_to_uuid(session_id)
         chat_history = await get_chat_history_before_ts_async(
-            session_id=session_id,
+            session_id=raw_session_id,
             before_ts=before_ts,
             limit=limit,
             user_id=user_id,
@@ -221,7 +225,8 @@ async def api_switch_session(
         if not request.session_id:
             raise HTTPException(status_code=400, detail="session_id required")
 
-        switched = await switch_session_async(request.session_id, user_id)
+        raw_session_id = typed_id_to_uuid(request.session_id)
+        switched = await switch_session_async(raw_session_id, user_id)
         if not switched:
             raise HTTPException(status_code=404, detail="Session not found")
 
@@ -233,7 +238,7 @@ async def api_switch_session(
         SessionService.mark_client_connected(client_id)
 
         chat_history = await get_chat_history_async(
-            session_id=request.session_id, limit=50, recent=True, user_id=user_id
+            session_id=raw_session_id, limit=50, recent=True, user_id=user_id
         )
 
         return {
@@ -262,7 +267,8 @@ async def api_rename_session(
         if not request.session_id or not request.name:
             raise HTTPException(status_code=400, detail="session_id and name required")
 
-        success = await rename_session_async(request.session_id, request.name, user_id)
+        raw_session_id = typed_id_to_uuid(request.session_id)
+        success = await rename_session_async(raw_session_id, request.name, user_id)
 
         if success:
             return {"status": "success"}
@@ -286,9 +292,11 @@ async def api_clear_chat(
     try:
         if not session_id:
             active_session = await get_active_session_async(user_id)
-            session_id = str(active_session["id"])
+            raw_session_id = str(active_session["id"])
+        else:
+            raw_session_id = typed_id_to_uuid(session_id)
 
-        _ = await clear_session_messages_async(session_id, user_id=user_id)
+        _ = await clear_session_messages_async(raw_session_id, user_id=user_id)
 
         client_id = get_client_id(request)
         SessionService.clear_client_session(client_id)
