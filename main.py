@@ -126,7 +126,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         """
         Add standard security headers to the response when they are not already set.
-        
+
         Returns:
             Response: The response with security headers applied.
         """
