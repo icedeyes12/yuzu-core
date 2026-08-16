@@ -62,6 +62,11 @@ function _setupScrollListener(chatContainer) {
 	});
 }
 
+/**
+ * Loads chat history for the requested session or the default active session.
+ * @param {string|null} [sessionId=null] - The session identifier to load.
+ * @return {boolean} `true` if the history loads successfully, `false` otherwise.
+ */
 export async function loadChatHistory(sessionId = null) {
 	const chatContainer = document.getElementById("chatContainer");
 	if (!chatContainer) return false;
@@ -115,8 +120,7 @@ export async function loadChatHistory(sessionId = null) {
 		olderMessagesLoaded = 0;
 		isLoadingOlder = false;
 
-		// Update active session name in header from the sidebar's session list,
-		// if available (the chat history/switch responses don't include a name).
+		// Update active session name in header from the sidebar entry, if loaded.
 		const sessionNameEl = document.getElementById("sessionName");
 		if (sessionNameEl) {
 			const sidebarItem = document.querySelector(

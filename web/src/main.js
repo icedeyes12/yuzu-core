@@ -1,15 +1,12 @@
 import { mountSidebar } from "./components/sidebar.js";
-import { bootstrapAuth } from "./modules/authBootstrap.js";
 import { redirectToLogin } from "./modules/apiFetch.js";
+import { bootstrapAuth } from "./modules/authBootstrap.js";
 import { applySavedTheme } from "./modules/theme.js";
 
 /**
- * Shared page boot: mount the shell (sidebar), apply the theme (un-namespaced
- * fallback first, user-scoped key after /me resolves), then bootstrap the
- * session via GET /api/v1/auth/me. Unauthenticated visitors are redirected to
- * the login page by the auth gate.
- * @param {{ page?: string }} [options]
- * @returns {Promise<object|null>} The /me payload, or null when unauthenticated.
+ * Initializes the shared page shell, applies the saved theme, and bootstraps authentication.
+ * @param {{ page?: string }} [options] - Optional page identifier applied to the document body.
+ * @returns {Promise<object|null>} The authenticated user payload, or `null` when unauthenticated or authentication fails.
  */
 export async function bootApp({ page } = {}) {
 	if (page) document.body.dataset.page = page;
