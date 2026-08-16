@@ -20,8 +20,9 @@ async function renderGreeting() {
 }
 
 async function init() {
-	await bootApp({ page: "home" });
-	void renderGreeting();
+	const me = await bootApp({ page: "home" });
+	if (!me) return;
+	await loadProfile();
 }
 
 init();

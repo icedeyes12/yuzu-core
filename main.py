@@ -133,10 +133,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault(
             "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
         )
-        response.headers.setdefault(
-            "Content-Security-Policy",
-            "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
-        )
         return response
 
 
@@ -266,8 +262,31 @@ async def operational_error_handler(request: Request, exc: OperationalError):
     )
 
 
+@app.exception_handler(StarletteHTTPException)
+async def custom_starlette_http_exception_handler(request: Request, exc: Exception):
+    starlette_exc = (
+        exc
+        if isinstance(exc, StarletteHTTPException)
+        else StarletteHTTPException(status_code=500, detail=str(exc))
+    )
+    response = await http_exception_handler(request, starlette_exc)
+    origin = request.headers.get("origin")
+    cors_cfg = _cors_config()
+    allowed_origins = cors_cfg.get("allow_origins")
+    if (
+        isinstance(allowed_origins, list)
+        and origin
+        and (origin in allowed_origins or "*" in allowed_origins)
+    ):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
+
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(
+    StarletteHTTPException, custom_starlette_http_exception_handler
+)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 

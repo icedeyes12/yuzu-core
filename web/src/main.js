@@ -17,13 +17,14 @@ export async function bootApp({ page } = {}) {
 	applySavedTheme();
 
 	try {
-		const me = await bootstrapAuth();
+		const me = await bootstrapAuth({ redirectOnUnauthorized: true });
 		// Re-apply once the user-scoped theme key is known (fixes first-paint
 		// flash for non-default themes).
 		if (me) applySavedTheme();
 		return me;
 	} catch (error) {
 		console.error("[boot] Auth bootstrap failed:", error);
+		redirectToLogin();
 		return null;
 	}
 }

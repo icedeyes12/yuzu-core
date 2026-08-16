@@ -10,20 +10,20 @@ const LLM_ENDPOINTS = [
 	"/api/v1/generate_image",
 ];
 
-// Clean login route: the backend SPA mode serves /login, the Vite dev server
-// maps it to login.html via the fallback, and a static host rewrites it.
-const LOGIN_URL = "/login";
+// Clean login route: the login UI is inside the SPA itself (/login or /login.html)
+const LOGIN_URL = "/login.html";
 
 export function apiUrl(path) {
-	return `${API_BASE}${path}`;
+	const cleanPath = path.startsWith("/") ? path : `/${path}`;
+	return `${API_BASE}${cleanPath}`;
 }
 
 export function getLoginUrl() {
-	return `${API_BASE}${LOGIN_URL}`;
+	return LOGIN_URL;
 }
 
 export function redirectToLogin() {
-	if (window.location.pathname !== LOGIN_URL) {
+	if (window.location.pathname !== LOGIN_URL && window.location.pathname !== "/login") {
 		window.location.assign(getLoginUrl());
 	}
 }
@@ -37,10 +37,22 @@ export function redirectToLogin() {
  * @returns {Promise<Response>}
  */
 export async function apiFetch(input, init = {}) {
-	const url = typeof input === "string" ? input : input.url;
+	let targetUrl;
+	if (typeof input === "string") {
+		targetUrl = input.startsWith("http://") || input.startsWith("https://")
+			? input
+			: apiUrl(input);
+	} else if (input instanceof URL) {
+		targetUrl = input.toString();
+	} else if (input instanceof Request) {
+		targetUrl = input.url;
+	} else {
+		targetUrl = String(input);
+	}
+
 	const headers = new Headers(init.headers || {});
 
-	if (LLM_ENDPOINTS.some((endpoint) => url.includes(endpoint))) {
+	if (LLM_ENDPOINTS.some((endpoint) => targetUrl.includes(endpoint))) {
 		try {
 			const encoded = encodeByokConfig();
 			if (encoded) {
@@ -51,7 +63,7 @@ export async function apiFetch(input, init = {}) {
 		}
 	}
 
-	const response = await fetch(url, {
+	const response = await fetch(targetUrl, {
 		...init,
 		headers,
 		credentials: "include",
@@ -59,7 +71,7 @@ export async function apiFetch(input, init = {}) {
 
 	if (
 		(response.status === 401 || response.status === 403) &&
-		url.includes("/api/v1/")
+		targetUrl.includes("/api/v1/")
 	) {
 		redirectToLogin();
 	}

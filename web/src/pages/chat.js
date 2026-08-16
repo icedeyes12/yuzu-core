@@ -106,7 +106,8 @@ async function initializeChat() {
 }
 
 async function init() {
-	await bootApp({ page: "chat" });
+	const me = await bootApp({ page: "chat" });
+	if (!me) return; // User unauthenticated, bootApp already triggers redirect to /login
 	await initializeChat();
 }
 

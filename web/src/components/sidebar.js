@@ -1,4 +1,5 @@
-import { apiFetch, apiUrl, getLoginUrl } from "../modules/apiFetch.js";
+import { apiFetch, apiUrl } from "../modules/apiFetch.js";
+import { loginUrl } from "../modules/links.js";
 import { bootstrapAuth, getCachedMe } from "../modules/authBootstrap.js";
 import { clearUserScopedStorage } from "../modules/clientStorage.js";
 import { eventRouter } from "../modules/event-router.js";
@@ -272,7 +273,7 @@ async function handleLogout() {
 	} catch {
 		// Ignore errors on logout; the session cookie is cleared on the server.
 	}
-	window.location.assign(getLoginUrl());
+	window.location.assign(loginUrl());
 }
 
 function showNotification(message, type = "info") {

@@ -28,10 +28,9 @@ export function applySavedTheme() {
 }
 
 export function persistTheme(theme) {
+	localStorage.setItem("theme", theme);
 	const userKey = getUserThemeStorageKey();
 	if (userKey) {
 		localStorage.setItem(userKey, theme);
-	} else {
-		localStorage.setItem("theme", theme);
 	}
 }

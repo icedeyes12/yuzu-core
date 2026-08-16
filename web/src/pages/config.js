@@ -166,7 +166,8 @@ function validateProviderKey(provider, value) {
 }
 
 async function init() {
-	await bootApp({ page: "config" });
+	const me = await bootApp({ page: "config" });
+	if (!me) return;
 	console.log("Config page loaded - initializing...");
 	const loaded = await loadAppConfig();
 	if (!loaded) return;
