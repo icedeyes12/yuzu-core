@@ -57,15 +57,23 @@ export async function apiFetch(input, init = {}) {
 
 	const headers = new Headers(init.headers || {});
 
-	if (LLM_ENDPOINTS.some((endpoint) => targetUrl.includes(endpoint))) {
-		try {
+	// Restrict BYOK header injection to same-origin LLM endpoints
+	try {
+		const url = new URL(targetUrl);
+		const apiOrigin = API_BASE ? new URL(API_BASE).origin : window.location.origin;
+		const isSameOrigin = url.origin === apiOrigin;
+		const isLlmEndpoint = LLM_ENDPOINTS.some(
+			(endpoint) => url.pathname === endpoint,
+		);
+
+		if (isSameOrigin && isLlmEndpoint) {
 			const encoded = encodeByokConfig();
 			if (encoded) {
 				headers.set("X-BYOK-Config", encoded);
 			}
-		} catch {
-			// BYOK settings are optional; continue without them.
 		}
+	} catch {
+		// BYOK settings are optional; continue without them.
 	}
 
 	const response = await fetch(targetUrl, {

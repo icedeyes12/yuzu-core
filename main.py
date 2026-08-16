@@ -282,12 +282,12 @@ async def operational_error_handler(request: Request, exc: OperationalError):
 async def custom_starlette_http_exception_handler(request: Request, exc: Exception):
     """
     Handle HTTP exceptions and apply CORS headers for allowed request origins.
-    
+
     Parameters:
         request (Request): The incoming HTTP request.
         exc (Exception): The exception being handled. Non-Starlette exceptions are
             represented as internal server errors.
-    
+
     Returns:
         Response: An HTTP error response with CORS headers when the request origin
         is allowed.
@@ -306,7 +306,8 @@ async def custom_starlette_http_exception_handler(request: Request, exc: Excepti
         and (origin in allowed_origins or "*" in allowed_origins)
     ):
         response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
+        if CORS_CONFIG.get("allow_credentials"):
+            response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
 

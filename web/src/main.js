@@ -22,7 +22,9 @@ export async function bootApp({ page } = {}) {
 		return me;
 	} catch (error) {
 		console.error("[boot] Auth bootstrap failed:", error);
-		redirectToLogin();
+		// Show error for service/network failures; bootstrapAuth already
+		// handles 401/403 with redirectToLogin when redirectOnUnauthorized=true
+		alert(`Failed to load session: ${error.message}`);
 		return null;
 	}
 }
