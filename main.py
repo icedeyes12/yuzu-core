@@ -161,10 +161,10 @@ SERVE_SPA = _env_flag("SERVE_SPA", False)
 def _cors_config() -> dict[str, object]:
     """
     Build the CORS configuration from the configured allowed origins.
-    
+
     Returns:
-    	dict[str, object]: CORS settings derived from `CORS_ORIGINS`, or the default
-    		configuration for `https://yuzuki.space` when no origins are configured.
+        dict[str, object]: CORS settings derived from `CORS_ORIGINS`, or the default
+                configuration for `https://yuzuki.space` when no origins are configured.
     """
     origins = [
         o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()
@@ -269,9 +269,9 @@ async def pool_timeout_handler(request: Request, exc: PoolTimeout):
 async def operational_error_handler(request: Request, exc: OperationalError):
     """
     Create a service-unavailable response for a database operational error.
-    
+
     Returns:
-    	Response: A 503 problem-detail response indicating that the database is temporarily unavailable.
+        Response: A 503 problem-detail response indicating that the database is temporarily unavailable.
     """
     return problem_detail(
         503, "Service unavailable", "The database is temporarily unavailable.", request
