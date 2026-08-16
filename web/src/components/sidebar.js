@@ -258,6 +258,9 @@ function renderUnauthenticated(container) {
 	`;
 }
 
+/**
+ * Renders the authenticated or unauthenticated account section.
+ */
 async function renderAuthSection() {
 	const authContent = document.getElementById("authContent");
 	if (!authContent) return;

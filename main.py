@@ -159,7 +159,13 @@ SERVE_SPA = _env_flag("SERVE_SPA", False)
 # CORS: env-driven for the future cross-origin SPA deployment. When CORS_ORIGINS
 # is unset the legacy same-origin policy is preserved exactly.
 def _cors_config() -> dict[str, object]:
-    """ฅ^•ﻌ•^ฅ"""
+    """
+    Build the CORS configuration from the configured allowed origins.
+    
+    Returns:
+    	dict[str, object]: CORS settings derived from `CORS_ORIGINS`, or the default
+    		configuration for `https://yuzuki.space` when no origins are configured.
+    """
     origins = [
         o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()
     ]
@@ -261,11 +267,8 @@ async def pool_timeout_handler(request: Request, exc: PoolTimeout):
 
 @app.exception_handler(OperationalError)
 async def operational_error_handler(request: Request, exc: OperationalError):
-    """Return a service-unavailable response for database operational errors.
-    
-    Parameters:
-    	request (Request): The request associated with the error.
-    	exc (OperationalError): The database operational error.
+    """
+    Create a service-unavailable response for a database operational error.
     
     Returns:
     	Response: A 503 problem-detail response indicating that the database is temporarily unavailable.
@@ -278,14 +281,16 @@ async def operational_error_handler(request: Request, exc: OperationalError):
 @app.exception_handler(StarletteHTTPException)
 async def custom_starlette_http_exception_handler(request: Request, exc: Exception):
     """
-    Handle Starlette HTTP exceptions and add CORS headers for allowed origins.
+    Handle HTTP exceptions and apply CORS headers for allowed request origins.
     
     Parameters:
         request (Request): The incoming HTTP request.
-        exc (Exception): The exception to convert into an HTTP response.
+        exc (Exception): The exception being handled. Non-Starlette exceptions are
+            represented as internal server errors.
     
     Returns:
-        The HTTP exception response, including CORS headers when the request origin is allowed.
+        Response: An HTTP error response with CORS headers when the request origin
+        is allowed.
     """
     starlette_exc = (
         exc

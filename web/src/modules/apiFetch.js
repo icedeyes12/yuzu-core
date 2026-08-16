@@ -35,7 +35,7 @@ export function redirectToLogin() {
 
 /**
  * Fetch a request with session credentials and optional BYOK configuration for LLM endpoints.
- * Redirects to the login page when an API v1 request receives an authentication failure.
+ * Redirects to the login page when an API v1 request receives a 401 or 403 response.
  * @param {string|URL|Request} input - The request URL or input.
  * @param {RequestInit} [init] - Request options.
  * @returns {Promise<Response>} The fetch response.

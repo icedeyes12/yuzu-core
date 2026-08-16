@@ -149,6 +149,11 @@ function applyActiveModelCapabilities() {
 	}
 }
 
+/**
+ * Retrieves advanced profile settings from the provided data.
+ * @param {Object} data - The profile data containing advanced or profile settings.
+ * @return {Object} The advanced settings, profile settings, original data, or an empty object.
+ */
 function getProfileAdvancedSource(data) {
 	return data?.advanced || data?.profile || data || {};
 }

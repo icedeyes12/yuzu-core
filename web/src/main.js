@@ -6,7 +6,7 @@ import { applySavedTheme } from "./modules/theme.js";
 /**
  * Initializes the shared page shell, applies the saved theme, and bootstraps authentication.
  * @param {{ page?: string }} [options] - Optional page identifier applied to the document body.
- * @returns {Promise<object|null>} The authenticated user payload, or `null` when unauthenticated or authentication fails.
+ * @returns {Promise<object|null>} The authenticated user payload, or `null` if authentication fails.
  */
 export async function bootApp({ page } = {}) {
 	if (page) document.body.dataset.page = page;

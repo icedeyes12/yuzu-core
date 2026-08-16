@@ -18,6 +18,10 @@ export function getSavedTheme() {
 	);
 }
 
+/**
+ * Applies a theme to the document root and body.
+ * @param {string} theme - The theme identifier to apply.
+ */
 export function applyTheme(theme) {
 	document.documentElement.setAttribute("data-theme", theme);
 	document.body.setAttribute("data-theme", theme);

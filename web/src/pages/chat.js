@@ -19,7 +19,9 @@ import {
 	initializeChatSession,
 } from "../modules/session-controller.js";
 
-// ==================== SESSION NAME LOADING ====================
+/**
+ * Loads the current session and partner names into the chat interface.
+ */
 async function loadCurrentSessionName() {
 	try {
 		const response = await apiFetch("/api/v1/profile", {

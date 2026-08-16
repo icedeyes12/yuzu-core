@@ -45,6 +45,10 @@ async function _loadOlderMessages() {
 	}
 }
 
+/**
+ * Attach a throttled scroll listener that loads older messages near the top of the chat container.
+ * @param {HTMLElement} chatContainer - The container whose scroll position triggers pagination.
+ */
 function _setupScrollListener(chatContainer) {
 	if (scrollListenerAttached) return;
 	scrollListenerAttached = true;
@@ -65,7 +69,7 @@ function _setupScrollListener(chatContainer) {
 /**
  * Loads chat history for the requested session or the default active session.
  * @param {string|null} [sessionId=null] - The session identifier to load.
- * @return {boolean} `true` if the history loads successfully, `false` otherwise.
+ * @return {Promise<boolean>} `true` if the history loads successfully, `false` otherwise.
  */
 export async function loadChatHistory(sessionId = null) {
 	const chatContainer = document.getElementById("chatContainer");
