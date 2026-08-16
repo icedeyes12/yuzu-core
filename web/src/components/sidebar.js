@@ -271,6 +271,9 @@ async function renderAuthSection() {
 	}
 }
 
+/**
+ * Signs the user out, clears user-scoped storage, and redirects to the login page.
+ */
 async function handleLogout() {
 	clearUserScopedStorage();
 	try {
@@ -281,6 +284,11 @@ async function handleLogout() {
 	window.location.assign(loginUrl());
 }
 
+/**
+ * Displays a temporary session notification.
+ * @param {string} message - The notification message.
+ * @param {string} [type="info"] - The notification style type.
+ */
 function showNotification(message, type = "info") {
 	const existing = document.querySelector(".session-notification");
 	if (existing) existing.remove();

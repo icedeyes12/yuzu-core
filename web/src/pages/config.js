@@ -153,6 +153,12 @@ function getProfileAdvancedSource(data) {
 	return data?.advanced || data?.profile || data || {};
 }
 
+/**
+ * Validates an API key for a provider.
+ * @param {string} provider - The provider identifier.
+ * @param {string} value - The API key to validate.
+ * @return {string|null} An error message when the key is invalid, or `null` when it is valid.
+ */
 function validateProviderKey(provider, value) {
 	if (provider === "custom_openai" || provider === "custom_anthropic")
 		return null;
@@ -165,6 +171,9 @@ function validateProviderKey(provider, value) {
 	return null;
 }
 
+/**
+ * Initializes the configuration page after authentication and configuration loading succeed.
+ */
 async function init() {
 	const me = await bootApp({ page: "config" });
 	if (!me) return;

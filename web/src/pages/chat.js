@@ -45,7 +45,9 @@ async function loadCurrentSessionName() {
 	}
 }
 
-// ==================== INITIALIZATION ====================
+/**
+ * Initialize the chat interface and active conversation.
+ */
 async function initializeChat() {
 	if (document.body.dataset.yuzuChatInitialized === "true") return;
 	document.body.dataset.yuzuChatInitialized = "true";
@@ -105,6 +107,9 @@ async function initializeChat() {
 	}
 }
 
+/**
+ * Boots the chat page and initializes it for authenticated users.
+ */
 async function init() {
 	const me = await bootApp({ page: "chat" });
 	if (!me) return; // User unauthenticated, bootApp already triggers redirect to /login

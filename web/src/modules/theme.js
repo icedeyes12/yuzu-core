@@ -23,10 +23,17 @@ export function applyTheme(theme) {
 	document.body.setAttribute("data-theme", theme);
 }
 
+/**
+ * Applies the user's saved theme to the document.
+ */
 export function applySavedTheme() {
 	applyTheme(getSavedTheme());
 }
 
+/**
+ * Saves a theme for general and, when available, user-specific use.
+ * @param {string} theme - The theme to save.
+ */
 export function persistTheme(theme) {
 	localStorage.setItem("theme", theme);
 	const userKey = getUserThemeStorageKey();

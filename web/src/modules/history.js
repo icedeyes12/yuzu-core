@@ -62,6 +62,11 @@ function _setupScrollListener(chatContainer) {
 	});
 }
 
+/**
+ * Loads chat history for the requested session or the default active session.
+ * @param {string|null} [sessionId=null] - The session identifier to load.
+ * @return {boolean} `true` if the history loads successfully, `false` otherwise.
+ */
 export async function loadChatHistory(sessionId = null) {
 	const chatContainer = document.getElementById("chatContainer");
 	if (!chatContainer) return false;
