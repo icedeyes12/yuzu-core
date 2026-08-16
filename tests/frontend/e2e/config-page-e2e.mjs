@@ -121,7 +121,7 @@ try {
 	);
 	assert.match(
 		await page.textContent("#current-provider"),
-		new RegExp(`${PROVIDER}/${TEST_MODEL.replaceAll("/", "/")}`),
+		new RegExp(`${PROVIDER}/${TEST_MODEL.replaceAll("/", "\\/")}`),
 		"current-provider should show chutes/<model>",
 	);
 	const cfgAfterSelect = await getConfig(context);
