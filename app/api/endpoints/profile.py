@@ -24,10 +24,10 @@ from app.api.utils import (
     validate_external_https_url,
 )
 from app.core.context import keyring_scope
+from app.core.ids import typed_id_to_uuid
 from app.core.logging_config import get_logger
 from app.db import (
     Database,
-    get_active_session_async,
     get_chat_history_async,
     get_profile_async,
     update_profile_async,
@@ -113,9 +113,10 @@ async def api_get_profile(
     try:
         profile = await get_profile_async(user_id)
         if session_id is None:
-            active_session = await get_active_session_async(user_id)
+            active_session = await Database.get_active_session(user_id)
         else:
-            active_session = {"id": session_id}
+            raw_session_id = typed_id_to_uuid(session_id)
+            active_session = {"id": raw_session_id}
         session_id = str(active_session["id"])
         chat_history = await get_chat_history_async(
             session_id=session_id, limit=50, recent=True, user_id=user_id

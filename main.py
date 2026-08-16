@@ -124,6 +124,12 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=trusted_hosts)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        """
+        Add standard security headers to the response when they are not already set.
+
+        Returns:
+            Response: The response with security headers applied.
+        """
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
@@ -132,10 +138,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
         response.headers.setdefault(
             "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
-        )
-        response.headers.setdefault(
-            "Content-Security-Policy",
-            "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
         )
         return response
 
@@ -160,7 +162,13 @@ SERVE_SPA = _env_flag("SERVE_SPA", False)
 # CORS: env-driven for the future cross-origin SPA deployment. When CORS_ORIGINS
 # is unset the legacy same-origin policy is preserved exactly.
 def _cors_config() -> dict[str, object]:
-    """ฅ^•ﻌ•^ฅ"""
+    """
+    Build the CORS configuration from the configured allowed origins.
+
+    Returns:
+        dict[str, object]: CORS settings derived from `CORS_ORIGINS`, or the default
+                configuration for `https://yuzuki.space` when no origins are configured.
+    """
     origins = [
         o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()
     ]
@@ -187,7 +195,8 @@ def _cors_config() -> dict[str, object]:
     }
 
 
-app.add_middleware(CORSMiddleware, **_cors_config())
+CORS_CONFIG = _cors_config()
+app.add_middleware(CORSMiddleware, **CORS_CONFIG)
 
 
 @app.middleware("http")
@@ -261,13 +270,54 @@ async def pool_timeout_handler(request: Request, exc: PoolTimeout):
 
 @app.exception_handler(OperationalError)
 async def operational_error_handler(request: Request, exc: OperationalError):
+    """
+    Create a service-unavailable response for a database operational error.
+
+    Returns:
+        Response: A 503 problem-detail response indicating that the database is temporarily unavailable.
+    """
     return problem_detail(
         503, "Service unavailable", "The database is temporarily unavailable.", request
     )
 
 
+@app.exception_handler(StarletteHTTPException)
+async def custom_starlette_http_exception_handler(request: Request, exc: Exception):
+    """
+    Handle HTTP exceptions and apply CORS headers for allowed request origins.
+
+    Parameters:
+        request (Request): The incoming HTTP request.
+        exc (Exception): The exception being handled. Non-Starlette exceptions are
+            represented as internal server errors.
+
+    Returns:
+        Response: An HTTP error response with CORS headers when the request origin
+        is allowed.
+    """
+    starlette_exc = (
+        exc
+        if isinstance(exc, StarletteHTTPException)
+        else StarletteHTTPException(status_code=500, detail=str(exc))
+    )
+    response = await http_exception_handler(request, starlette_exc)
+    origin = request.headers.get("origin")
+    allowed_origins = CORS_CONFIG.get("allow_origins")
+    if (
+        isinstance(allowed_origins, list)
+        and origin
+        and (origin in allowed_origins or "*" in allowed_origins)
+    ):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        if CORS_CONFIG.get("allow_credentials"):
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
+
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(
+    StarletteHTTPException, custom_starlette_http_exception_handler
+)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 
