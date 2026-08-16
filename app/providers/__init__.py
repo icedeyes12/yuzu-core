@@ -15,6 +15,8 @@ from app.providers.deepseek import DeepSeekProvider
 from app.providers.google import GoogleProvider
 from app.providers.grok import GrokProvider
 from app.providers.groq import GroqProvider
+from app.providers.mistral import MistralProvider
+from app.providers.nvidia_nim import NvidiaNimProvider
 from app.providers.openai import OpenAIProvider
 from app.providers.openrouter import OpenRouterProvider
 from app.providers.yuzu_portal import YuzuPortalProvider
@@ -65,6 +67,14 @@ async def load_all_providers(manager: AIProviderManager):
     google = GoogleProvider()
     await google.initialize()
     manager.register_provider("google", google)
+
+    mistral = MistralProvider()
+    await mistral.initialize()
+    manager.register_provider("mistral", mistral)
+
+    nvidia_nim = NvidiaNimProvider()
+    await nvidia_nim.initialize()
+    manager.register_provider("nvidia_nim", nvidia_nim)
 
     yuzu_portal = YuzuPortalProvider()
     await yuzu_portal.initialize()

@@ -16,24 +16,42 @@ _env_path = Path(__file__).resolve().parent.parent.parent / ".env"
 if _env_path.exists():
     _ = load_dotenv(_env_path)
 
-# PostgreSQL connection parameters
-DB_HOST = os.getenv("DB_HOST", os.getenv("PGHOST", "localhost"))
-DB_PORT = int(os.getenv("DB_PORT", os.getenv("PGPORT", "5432")))
-DB_NAME = os.getenv("DB_NAME", os.getenv("PGDATABASE", "yuzu"))
-DB_USER = os.getenv("DB_USER", os.getenv("PGUSER", "postgres"))
-DB_PASSWORD = os.getenv("DB_PASSWORD", os.getenv("PGPASSWORD", ""))
-
 log = get_logger(__name__)
 
 type DBRow = dict[str, Any]
 type DBParams = tuple[Any, ...] | list[Any] | dict[str, Any] | None
 
+
 # ── Connection settings (env-driven) ──────────────────────────────────────────
-_PG_HOST = os.getenv("PGHOST", os.getenv("PG_HOST", ""))
-_PG_PORT = os.getenv("PGPORT", os.getenv("PG_PORT", ""))
-_PG_DBNAME = os.getenv("PGDATABASE", os.getenv("PG_DBNAME", ""))
-_PG_USER = os.getenv("PGUSER", os.getenv("PG_USER", ""))
-_PG_PASSWORD = os.getenv("PGPASSWORD", os.getenv("PG_PASSWORD", ""))
+# Single source of truth for PostgreSQL connection settings. Resolution order
+# per field: DB_* (legacy) -> PG* -> PG_* -> built-in default.
+def db_settings() -> dict[str, str]:
+    """Return PostgreSQL connection settings resolved from the environment."""
+    return {
+        "host": os.getenv(
+            "DB_HOST", os.getenv("PGHOST", os.getenv("PG_HOST", "localhost"))
+        ),
+        "port": os.getenv("DB_PORT", os.getenv("PGPORT", os.getenv("PG_PORT", "5432"))),
+        "dbname": os.getenv(
+            "DB_NAME", os.getenv("PGDATABASE", os.getenv("PG_DBNAME", "yuzu"))
+        ),
+        "user": os.getenv(
+            "DB_USER", os.getenv("PGUSER", os.getenv("PG_USER", "postgres"))
+        ),
+        "password": os.getenv(
+            "DB_PASSWORD", os.getenv("PGPASSWORD", os.getenv("PG_PASSWORD", ""))
+        ),
+    }
+
+
+# Legacy convenience constants (DB_*), consumed by app.config.application.
+_db = db_settings()
+DB_HOST = _db["host"]
+DB_PORT = int(_db["port"])
+DB_NAME = _db["dbname"]
+DB_USER = _db["user"]
+DB_PASSWORD = _db["password"]
+
 _MIN_CONN = 1
 _MAX_CONN = 10
 
@@ -48,14 +66,16 @@ def vector_sql(val: list[float] | None) -> str | None:
 
 # ── DSN builder ──────────────────────────────────────────────────────────────
 def _build_dsn() -> str:
-    if not all([_PG_HOST, _PG_PORT, _PG_DBNAME, _PG_USER]):
+    params = db_settings()
+    if not all([params["host"], params["port"], params["dbname"], params["user"]]):
         raise RuntimeError(
-            "PostgreSQL connection requires PGHOST, PGPORT, PGDATABASE, PGUSER "
-            "env vars. Set them before starting the application."
+            "PostgreSQL connection requires DB_HOST/PGHOST, DB_PORT/PGPORT, "
+            "DB_NAME/PGDATABASE, DB_USER/PGUSER env vars (or their PG_* aliases). "
+            "Set them before starting the application."
         )
     return (
-        f"host={_PG_HOST} port={_PG_PORT} dbname={_PG_DBNAME} "
-        f"user={_PG_USER} password={_PG_PASSWORD}"
+        f"host={params['host']} port={params['port']} dbname={params['dbname']} "
+        f"user={params['user']} password={params['password']}"
     )
 
 
@@ -74,7 +94,13 @@ def get_sync_pool() -> ConnectionPool:
             max_size=_MAX_CONN,
             kwargs={"row_factory": dict_row},
         )
-        log.info("sync pool created: %s:%s/%s", _PG_HOST, _PG_PORT, _PG_DBNAME)
+        params = db_settings()
+        log.info(
+            "sync pool created: %s:%s/%s",
+            params["host"],
+            params["port"],
+            params["dbname"],
+        )
     return _sync_pool
 
 
@@ -90,7 +116,13 @@ async def get_async_pool() -> AsyncConnectionPool:
             open=False,
         )
         await _async_pool.open()
-        log.info("async pool created: %s:%s/%s", _PG_HOST, _PG_PORT, _PG_DBNAME)
+        params = db_settings()
+        log.info(
+            "async pool created: %s:%s/%s",
+            params["host"],
+            params["port"],
+            params["dbname"],
+        )
     return _async_pool
 
 
@@ -356,4 +388,6 @@ __all__ = [
     "pg_scalar_async",
     # pgvector helper
     "vector_sql",
+    # Connection settings
+    "db_settings",
 ]

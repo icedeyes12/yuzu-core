@@ -14,6 +14,7 @@ from PIL import Image
 from app.core.logging_config import get_logger
 from app.core.personality import PERSONALITIES
 from app.core.presets import resolve_active_preset_payload
+from app.core.request_context import ClientContext
 from app.db import Database
 
 log = get_logger(__name__)
@@ -187,8 +188,14 @@ async def _retrieve_memories_async(
     static_limit: int,
     dynamic_limit: int,
     user_id: str,
+    profile: dict[str, Any] | None = None,
 ) -> tuple[list[int], str, str]:
     """Combined retrieval with single embedding call (async)."""
+    from app.core.byok import YUZU_PORTAL, get_provider_key
+
+    if not get_provider_key(YUZU_PORTAL):
+        log.info("memory retrieval disabled: missing Yuzu Portal API key")
+        return [], "", ""
     try:
         from app.memory.retrieval import (
             _format_dynamic_context,
@@ -318,10 +325,16 @@ async def build_messages(
     interface: str,
     user_message: str | None,
     user_id: str,
+    client_context: ClientContext | None = None,
 ) -> list[dict[str, Any]]:
     """Build the single ordered personality prompt pipeline and chat messages."""
     sections = await _build_sections_async(
-        profile, session_id, interface, user_message, user_id
+        profile,
+        session_id,
+        interface,
+        user_message,
+        user_id,
+        client_context,
     )
     system_content = "\n\n".join(
         sections[key]
@@ -449,11 +462,14 @@ async def _build_sections_async(
     interface: str,
     user_message: str | None,
     user_id: str,
+    client_context: ClientContext | None = None,
 ) -> PromptSections:
     """Gather prompt sections as plain strings for structured composition."""
-    from datetime import datetime as _dt
-
-    current_time = _dt.now().strftime("%A, %Y-%m-%d %H:%M:%S")
+    client_lines = (client_context or ClientContext()).prompt_lines()
+    time_block = (
+        "\n".join(client_lines)
+        or "- Client time unavailable; do not infer it from server time."
+    )
     character_profile = profile.get("character_profile") or ""
     personality_preset = profile.get("personality_preset") or "helpful"
     personality_custom = profile.get("personality_custom") or ""
@@ -475,7 +491,12 @@ async def _build_sections_async(
     )
 
     _static_ids, static_context, dynamic_context = await _retrieve_memories_async(
-        session_id, user_message, static_limit=5, dynamic_limit=3, user_id=user_id
+        session_id,
+        user_message,
+        static_limit=5,
+        dynamic_limit=3,
+        user_id=user_id,
+        profile=profile,
     )
     memory_block = (f"\n\n{static_context}" if static_context else "") + dynamic_context
     knowledge_block = await _global_knowledge_block_async(user_id)
@@ -488,7 +509,7 @@ async def _build_sections_async(
 - Do not reveal internal metadata.
 - Do not concatenate untrusted strings into commands.
 - OS: Termux (Android aarch64); use `$PREFIX` for binaries.
-- Current time: {current_time}
+{time_block}
 - Interface: {_interface_block(interface)}
 - Session metadata: {await _session_events_block_async(session_id, user_id)}
 - Global knowledge: {knowledge_block}

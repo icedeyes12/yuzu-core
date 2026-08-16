@@ -1,94 +1,69 @@
 # Yuzu Companion — Agent Operating Guide
 
-Compact routing index for AI code generation. Reflects the current state of
-the repository at HEAD of `dev`.
+Compact routing index for code and documentation work. Code and executable configuration are authoritative; documentation must describe the current implementation, not planned behavior.
 
-## Core Tech Stack & Environment
+## Runtime and structure
 
-- **Language / Runtime:** Python 3.12+
-- **Web framework:** FastAPI + Uvicorn (`main.py` is the ASGI entry point;
-  `cli/app.py` is the terminal entry point registered as `yuzu` console script)
-- **Database:** PostgreSQL with the `pgcrypto`, `vector` (pgvector), and `pg_trgm` extensions
-- **DB adapter:** `psycopg[binary,pool]` v3 (raw SQL — no ORM)
-- **Schema DDL:** `app/db/queries.py` (`SCHEMA_DDL` tuple) — single source of
-  truth. UUIDv7 primary keys for profiles, sessions, messages, and graph memory
-  records. All tenant-scoped tables carry `user_id UUID NOT NULL REFERENCES
-  profiles(id) ON DELETE CASCADE`.
-- **Graph memory:** `episodes`, `memory_nodes`, `memory_edges`,
-  `memory_evidence`, and `global_knowledge_entries`; raw history remains in
-  `messages`.
-- **Embeddings:** Chutes graph embeddings; `EMBEDDING_DIM = 1536`
-- **Memory maintenance:** graph integrity/provenance checks via the standalone
-  `Skills/memory-guardian` skill; no runtime decay or legacy fact-review queue
-- **Encryption:** ChaCha20-Poly1305 (`pycryptodome`) for API keys
-- **Python linting:** `ruff check .` and `ruff format --check .`
-- **Templates:** Jinja2 + vanilla JS / CSS in `templates/` and `static/`
+- **Runtime:** Python 3.12+, FastAPI, Uvicorn; `main.py` is the ASGI entry point.
+- **CLI:** `cli/app.py` is an inline Rich/prompt-toolkit REPL registered as `yuzu`.
+- **Database:** PostgreSQL through psycopg v3 pools and raw SQL. Required extensions are `pgcrypto`, `vector`, and `pg_trgm`.
+- **Schema authority:** `app/db/queries.py` owns `SCHEMA_DDL`, SQL constants, row parsers, and schema bootstrap statements.
+- **Web UI:** Jinja2 templates with vanilla JavaScript and CSS under `templates/` and `static/`.
+- **Graph memory:** `episodes`, `memory_nodes`, `memory_edges`, and `memory_evidence`; raw conversation remains in `messages`.
+- **Embeddings:** Yuzu Portal request-scoped embedding calls use `gemini/gemini-embedding-2-preview` with dimension `1536`.
 
-## Architectural Compass
+## Architectural compass
 
-### Backend (`app/`)
+- `main.py` owns application lifespan, page routes, the public static mount, `/api/v1` router registration, and unversioned health/metrics routes.
+- `app/api/` owns HTTP transport, authentication dependencies, request validation, response models, and error serialization.
+- `app/services/orchestrator.py` is the canonical message execution path for streaming and non-streaming requests. Its orchestration loop is bounded by `_MAX_ORCHESTRATION_LOOPS = 4`.
+- `app/services/llm_client.py` builds provider requests and dispatches through `AIProviderManager`.
+- `app/providers/` owns external AI API clients and `ProviderCapabilities` declarations.
+- `app/core/` owns shared runtime context, BYOK handling, configuration, encryption, logging, presets, and multimodal helpers.
+- `app/tools/registry.py` is the only production tool-dispatch path. Tools return structured data and do not format Markdown or HTML.
+- `app/services/stream_manager.py` owns active stream buffers, subscriber lifecycle, cancellation, and cleanup. Do not add another streaming stack.
+- `app/memory/` owns asynchronous extraction, graph persistence, retrieval, embeddings, and provenance.
+- `app/db/` owns pooled access and the `Database` facade. Tenant-scoped reads and writes must carry `user_id`.
+- `static/js/modules/store.js` owns conversation state; `static/js/modules/store-renderer.js` owns conversation DOM. Do not bypass either with direct message insertion.
 
-- `app/services/orchestrator.py` — single entry point for user messages. Streaming +
-  non-streaming paths. Owns image dedup, vision routing, and the canonical
-  execution loop (max 4 iterations).
-- `app/services/llm_client.py` — payload construction + provider dispatch (streaming
-  and non-streaming). Calls `build_messages()` and passes
-  `**ctx.parameters` to providers.
-- `app/services/prompt_service.py` — system prompt assembly and the
-  `build_messages(profile, session_id, interface, user_message, user_id, ...)`
-  function. Structured content-array path is selected when the provider
-  reports `supports_structured_system_content=True`.
-- `app/providers/` — one file per provider (`base.py`, `chutes.py`,
-  `openrouter.py`, `anthropic.py`, `openai.py`, `cerebras.py`,
-  `deepseek.py`, `google.py`, `grok.py`, `groq.py`, `custom_anthropic.py`,
-  `custom_openai.py`). All declare a `ProviderCapabilities` instance.
-- `app/core/llm_context.py` — runtime SSOT dataclass assembled from profile,
-  BYOK keyring, and the active preset payload. Holds the resolved
-  `parameters` dict.
-- `app/core/presets.py` — preset CRUD + `resolve_active_preset_payload()`
-  used as the only source of runtime generation parameters when a preset is
-  active.
-- `app/db/queries.py` — SQL constants, `SCHEMA_DDL`, row parsers, encryption
-  helpers. **All SQL lives here** — do not inline schema drift into business
-  logic.
-- `app/memory/memory.py` — background graph pipeline, batching, and segmentation.
-- `app/memory/extractor.py` — structured batch extraction.
-- `app/memory/graph.py` — graph persistence, provenance, and bounded expansion.
-- `app/memory/retrieval.py` — tenant-scoped vector/trigram graph retrieval.
-- `app/memory/embedder.py` — graph embedding client (`EMBEDDING_DIM=1536`).
-- **Strict Separation of Concerns:** Providers MUST live in `app/providers/`; `app/tools/` is ONLY for function-calling schemas and structured dispatch; shared utilities belong in `app/core/`; business logic and orchestration belong in `app/services/`.
-- **CLI:** `cli/` is an inline REPL built with `rich` and `prompt_toolkit`. Never rebuild it as a full-screen TUI or introduce Textual.
-- `app/tools/registry.py` — canonical tool dispatch via `ToolEvent` /
-  `ToolResultEvent`. `execute_tool_event()` is the production execution path.
-- `app/tools/schemas.py` — `ToolEvent`, `ToolResultEvent`, `StreamToolEvent`
-  dataclasses.
-- `app/core/multimodal.py` — `MultimodalTools` class: image caching, base64
-  encoding, vision model detection, `format_vision_message()`.
-- `app/services/` — `SessionService`, `MemoryService`, `ChatService`,
-  `ConfigService` — orchestration glue for the API layer.
-- `app/services/stream_manager.py` — `StreamBuffer`: in-RAM chunk accumulation,
-  single DB write on completion, self-cleanup after persistence.
-- `app/legacy_markup.py` — strip-only helpers for archived XML-style
-  `<command>` / `<tool>` blocks. **Not** an execution path.
-- `app/api/endpoints/` — FastAPI routers: `auth.py`, `chat.py`, `memory.py`,
-  `presets_endpoint.py`, `profile.py`, `sessions.py`, `stream.py`.
+## Non-negotiable invariants
 
-## Rules of Engagement (The "Constitution")
+1. Native provider `tool_calls` are the only live tool protocol. Legacy markup is cleanup-only.
+2. All tenant-scoped database operations filter by `user_id`; graph retrieval must preserve this boundary.
+3. Active preset resolution is the runtime source for generation parameters when a preset is active.
+4. Provider keys use browser BYOK storage (`yuzu_byok_config`) and the bounded `X-BYOK-Config` request header. Do not recreate an `api_keys` persistence path.
+5. Uploaded and generated images are served through authenticated `/api/v1/static/...` routes; the public `/static` mount must not expose private image directories.
+6. Image attachments are deduplicated before persistence and again during multimodal prompt construction.
+7. Do not put provider HTTP calls in `app/tools/`, SQL/DDL in service code, or UI presentation in backend tool results.
+8. Keep migrations additive unless an explicitly approved migration requires otherwise. Inspect the live schema and relevant tests before changing persistence.
+9. Do not introduce `asyncio.run()` inside the async request path or create parallel ownership abstractions for existing state.
+10. For Python source edits, public module/class/function docstrings contain exactly one kaomoji and no human-readable prose, per repository rules.
 
-1. **Strict Runtime Data Boundaries.** Backend tools (`app/tools/`) must return purely structured data via Pydantic schema validation. Backend must NEVER format Markdown, HTML, or UI-centric presentation logic. Tool results are cleanly serialized objects.
-2. **Centralized Frontend Runtime Validation.** All tools payloads reaching the client (via SSE or API fetch) MUST pass through `validator.js` (`validateToolResult()`). Renderers consume normalized objects only. UI code must not contain try-catch patching logic for broken backend strings.
-3. **No Private/Location Data Leak to LLM.** User location (`lat`/`lon`) is strictly stored in the PostgreSQL `profiles` table. It is NOT injected into the system prompt. LLMs must call the `weather` tool which securely resolves coordinates from the database during execution.
-4. **Native function calling is the only production tool protocol.** `ToolEvent` / `ToolResultEvent` flow through `app/tools/registry.py`. Legacy XML-style markup is cleanup-only.
-5. **All SQL lives in `app/db/queries.py`.** No inline DDL or schema drift in business logic. Migrations are additive only.
-6. **Tenant isolation is mandatory.** Every read/write against a `user_id`-scoped table must filter by `user_id`. Graph memory abstractions (`app/memory/graph.py`, `app/memory/retrieval.py`, and `app/db/models_async.py`) must preserve this boundary.
-7. **Runtime parameters come from the active preset.** `LLMContext.from_profile` calls `resolve_active_preset_payload()` and uses that as the only source of `temperature`, `top_p`, `top_k`, `max_tokens`, and `additional_instructions` when a preset is active. Loose top-level context values are ignored in that case to keep the runtime payload reproducible.
-8. **Structured system content is capability-gated.** When a provider's `ProviderCapabilities.supports_structured_system_content` is `True`, `build_messages` emits the system message as a content array (persona, metadata, memory, knowledge, instructions). Otherwise it falls back to legacy single-string assembly, but still appends `additional_instructions` as a second system message.
-9. **Image deduplication is layered.**
-   - `app/services/orchestrator.py` `_dedupe_image_paths` merges `cached_images` and `image_paths` by `os.path.realpath`, preserving first-occurrence order.
-   - `app/services/prompt_service.py` `_build_multimodal_message` keeps a `seen` set so the same file referenced via different path forms cannot produce duplicate `image_url` blocks.
-   - `app/core/multimodal.py` `format_vision_message` keeps a parallel `seen` set as defense-in-depth.
-10. **Stream ownership lives in `app/services/stream_manager.py`.** Do not add parallel streaming stacks. The orchestrator yields, `StreamBuffer` writes to DB once on completion.
-11. **Vision routing is provider-via-`AIProviderManager.format_vision_message`.** `app/core/multimodal.py` is the home of vision model detection and image cache; the orchestrator delegates through the base provider.
-12. **Frontend Architecture.** `ConversationStore` owns the state. `DOMRenderer` owns the DOM. Do not bypass the store with direct `innerHTML` appends.
-13. **Slider drag-threshold is required.** All `<input type="range">` elements must be wrapped with `attachSliderGuard(slider)` so vertical scroll does not move the slider. The guard activates on horizontal movement after a 6px touch-slop threshold and ignores minor vertical drift.
-14. **API keys never persist server-side.** BYOK architecture: keys live only in browser `localStorage` (`yuzu_byok_config`) and arrive via `X-Provider-Key` / `X-Provider-BaseUrl` headers. The retired `api_keys` table must not be recreated.
+## Documentation governance
+
+`docs/README.md` is the documentation index and audit record. Follow these rules:
+
+- Read existing documentation before creating anything. Update the authoritative document first.
+- Do not create a new Markdown file when an existing authoritative document can be updated; create one only when no appropriate location exists.
+- Keep one authoritative document per concept. Merge duplicates; do not create parallel explanations.
+- Documentation must be verified against current code, tests, routes, schemas, and configuration. If code and docs disagree, code wins and the docs are corrected.
+- Keep active documentation concise and linked from `docs/README.md`.
+- Move completed reports, superseded architecture, and historical plans to `docs/archive/` when they have historical value.
+- Delete obsolete, duplicate, speculative, or empty documents with no historical value. Do not preserve material “just in case.”
+- `docs/scratch/` is disposable and never a source of truth. Production documentation must not depend on it.
+- Roadmaps describe future outcomes and constraints only. Do not use them as implementation reports or current architecture references.
+- ADRs are immutable after acceptance. If a decision changes, add a new ADR that explicitly supersedes the old one; only correct an existing ADR when it is factually malformed.
+- Package-local `README.md` files document local ownership and link to, rather than duplicate, the active references in `docs/`.
+- Before delivery, run link/reference checks appropriate to the changed docs and inspect `git diff --check`.
+
+## Validation commands
+
+```bash
+ruff format --check .
+ruff check .
+find static -type f -name '*.js' -exec node --check {} +
+bunx @biomejs/biome check static/
+pytest
+```
+
+Run the smallest relevant checks during iteration, then the full applicable set before commit or push. Never claim runtime behavior was verified when PostgreSQL or an external provider was unavailable.

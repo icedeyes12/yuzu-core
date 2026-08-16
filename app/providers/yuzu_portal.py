@@ -51,13 +51,14 @@ class YuzuPortalProvider(CustomOpenAIProvider):
                 timeout=10,
             )
         response.raise_for_status()
+        metadata = [
+            item for item in response.json().get("data", []) if isinstance(item, dict)
+        ]
+        self.set_model_metadata(metadata)
         models = sorted(
-            {
-                item["id"]
-                for item in response.json().get("data", [])
-                if isinstance(item, dict) and isinstance(item.get("id"), str)
-            }
+            {item["id"] for item in metadata if isinstance(item.get("id"), str)}
         )
         self._models_cache_data = models
         self._models_cache_at = now
+        self.available_models = models
         return models

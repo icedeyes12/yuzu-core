@@ -1,0 +1,561 @@
+/* FILE: static/css/components/messages.css */
+/* DESCRIPTION: Chat container, message bubbles, and markdown content styling */
+
+/* ==================== CHAT CONTAINER ==================== */
+.chat-container {
+	flex: 1;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: 4.75rem max(var(--space-4), calc((100vw - 900px) / 2)) 7rem;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+	background: var(--surface);
+	-webkit-overflow-scrolling: touch;
+	box-sizing: border-box;
+}
+
+/* ==================== MESSAGES ==================== */
+.message {
+	position: relative;
+	animation: fadeIn var(--transition-slow);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	width: min(100%, 900px);
+	max-width: 100%;
+	min-width: 0;
+	margin: 0 auto;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+/* === USER MESSAGES === */
+.message.user-message {
+	align-self: flex-end;
+	width: min(100%, 68%);
+	max-width: 520px;
+	margin-left: auto;
+	background: transparent;
+	border: none;
+	padding: 0;
+}
+
+.user-message .message-bubble {
+	background: var(--surface-message-user);
+	color: var(--text-primary);
+	border-radius: var(--radius-lg);
+	border-bottom-right-radius: var(--radius-sm);
+	padding: var(--space-3) var(--space-4);
+	box-shadow: none;
+	word-wrap: break-word;
+	overflow-wrap: break-word;
+}
+
+.message-footer--user {
+	justify-content: flex-end;
+	margin-top: 0.25rem;
+	padding: 0 0.25rem;
+}
+
+/* === ASSISTANT MESSAGES === */
+.message.assistant-message {
+	align-self: flex-start;
+	width: min(100%, 900px);
+	background: transparent;
+	border: none;
+	padding: 0;
+}
+
+.assistant-message .message-bubble {
+	background: transparent;
+	color: var(--text-primary);
+	border: none;
+	border-radius: 0;
+	padding: var(--space-3) 0;
+	word-wrap: break-word;
+	overflow-wrap: break-word;
+}
+
+/* === TOOL AND SYSTEM MESSAGES === */
+.message.tool-message,
+.message.event_log-message {
+	align-self: stretch;
+	margin: 0 auto;
+	background: transparent;
+	border: none;
+	padding: 0;
+	opacity: 0.8;
+}
+
+.tool-message .message-bubble,
+.event_log-message .message-bubble {
+	background: var(--surface-code);
+	border: 1px dashed var(--border-normal);
+	border-radius: var(--radius-md);
+	padding: var(--space-2);
+	font-family: var(--font-mono);
+	font-size: 0.85rem;
+	max-width: 100%;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+/* Headers inside bubbles (for Tool/System events) */
+.message-header {
+	font-size: 0.75rem;
+	color: var(--text-muted);
+	margin-bottom: 0.5rem;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	border-bottom: 1px dashed var(--border-normal);
+	padding-bottom: 0.25rem;
+}
+
+.message-content {
+	color: var(--text-primary);
+	contain: layout style;
+	contain-intrinsic-size: auto 48px;
+	line-height: 1.6;
+	font-size: 0.95rem;
+	max-width: 100%;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+.timestamp {
+	font-size: 0.7rem;
+	color: var(--text-secondary);
+	opacity: 0.7;
+}
+
+.message-footer {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-top: var(--space-1);
+	gap: var(--space-2);
+}
+
+.message-footer--assistant {
+	justify-content: flex-start;
+}
+
+.message-footer--user {
+	justify-content: flex-end;
+}
+
+.message-footer--tool,
+.message-footer--event_log {
+	justify-content: center;
+}
+
+/* Copy full message button */
+.copy-message-btn {
+	background: transparent;
+	border: 0;
+	border-radius: var(--radius-sm);
+	padding: 0.35rem;
+	cursor: pointer;
+	opacity: 0;
+	color: var(--text-muted);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.message:hover .copy-message-btn,
+.copy-message-btn:focus-visible {
+	opacity: 1;
+}
+
+.copy-message-btn:hover {
+	background: var(--accent);
+	color: white;
+	border-color: var(--accent);
+}
+
+.copy-message-btn.copied {
+	background: var(--accent-support);
+	color: white;
+	border-color: var(--accent-support);
+}
+
+/* ==================== MARKDOWN CONTENT ==================== */
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4,
+.message-content h5,
+.message-content h6 {
+	color: var(--text-primary);
+	margin: 1rem 0 0.5rem;
+	font-weight: 600;
+}
+
+.message-content h1 {
+	font-size: 1.8rem;
+}
+.message-content h2 {
+	font-size: 1.5rem;
+}
+.message-content h3 {
+	font-size: 1.3rem;
+}
+.message-content h4 {
+	font-size: 1.1rem;
+}
+.message-content h5 {
+	font-size: 1rem;
+}
+.message-content h6 {
+	font-size: 0.9rem;
+}
+
+.message-content p {
+	margin: 0.5rem 0;
+}
+
+.message-content ul,
+.message-content ol {
+	margin: 0.5rem 0;
+	padding-left: 1.5rem;
+}
+
+.message-content li {
+	margin: 0.3rem 0;
+}
+
+.message-content blockquote {
+	border-left: 4px solid var(--accent);
+	margin: 0.8rem 0;
+	padding: 0.5rem 1rem;
+	background: var(--surface-subtle);
+	border-radius: 4px;
+	font-style: italic;
+}
+
+/* Callout blocks */
+.message-content .callout {
+	border-left: 4px solid;
+	padding: 0.6rem 0.8rem;
+	border-radius: 6px;
+	margin: 0.6rem 0;
+	font-style: normal;
+}
+
+.message-content .callout-note {
+	border-color: var(--accent);
+	background: rgba(106, 169, 255, 0.08);
+}
+
+.message-content .callout-info {
+	border-color: var(--accent);
+	background: rgba(106, 169, 255, 0.08);
+}
+
+.message-content .callout-tip {
+	border-color: var(--accent-support);
+	background: rgba(76, 175, 80, 0.08);
+}
+
+.message-content .callout-warning {
+	border-color: var(--accent-subtle);
+	background: rgba(255, 179, 71, 0.08);
+}
+
+.message-content .callout-caution {
+	border-color: var(--status-danger);
+	background: rgba(255, 107, 107, 0.08);
+}
+
+.message-content .callout-important {
+	border-color: var(--accent);
+	background: rgba(155, 89, 182, 0.08);
+}
+
+/* Table container */
+.message-content .table-container {
+	overflow-x: auto;
+	margin: 0.8rem 0;
+	border-radius: 6px;
+	border: 1px solid var(--border-normal);
+	background: var(--surface-subtle);
+	min-width: 0;
+	max-width: 100%;
+}
+
+.table-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 0.5rem 1rem;
+	background: rgba(0, 0, 0, 0.2);
+	border-bottom: 1px solid var(--border-normal);
+}
+
+.table-label {
+	font-size: 0.75rem;
+	color: var(--text-secondary);
+	text-transform: uppercase;
+	font-weight: 600;
+}
+
+.copy-table-btn {
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	background: transparent;
+	border: 1px solid var(--border-normal);
+	border-radius: 4px;
+	padding: 0.3rem 0.6rem;
+	font-size: 0.75rem;
+	color: var(--text-primary);
+	cursor: pointer;
+}
+
+.copy-table-btn:hover {
+	background: var(--accent);
+	color: white;
+	border-color: var(--accent);
+}
+
+.copy-table-btn.copied {
+	background: var(--accent-support);
+	color: white;
+	border-color: var(--accent-support);
+}
+
+.message-content .table-container table {
+	margin: 0;
+	border: none;
+	border-radius: 0;
+	width: 100%;
+	display: table;
+}
+
+.message-content th,
+.message-content td {
+	border: 1px solid var(--border-normal);
+	padding: 0.5rem;
+	text-align: left;
+}
+
+.message-content th {
+	background: var(--surface-subtle);
+	font-weight: 600;
+}
+
+.message-content details {
+	margin: 0.8rem 0;
+	padding: 0.5rem;
+	border: 1px solid var(--border-normal);
+	border-radius: 6px;
+	background: var(--surface-subtle);
+	max-width: 100%;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+.message-content .tool-result {
+	margin-top: var(--space-2);
+	margin-bottom: var(--space-2);
+	padding-left: 0;
+	border-left: 0;
+}
+
+.message-content .tool-card {
+	margin-top: var(--space-2);
+	margin-bottom: var(--space-2);
+}
+
+.message-content summary {
+	cursor: pointer;
+	font-weight: 600;
+	padding: 0.3rem;
+}
+
+.message-content img,
+.markdown-image {
+	max-width: 100%;
+	height: auto;
+	border-radius: 8px;
+	margin: 0.8rem 0;
+	display: block;
+}
+
+.image-error {
+	padding: 1rem;
+	margin: 0.8rem 0;
+	border-radius: 8px;
+	background: rgba(255, 69, 58, 0.1);
+	border: 1px solid rgba(255, 69, 58, 0.3);
+	color: var(--status-danger);
+	font-size: 0.9rem;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.render-error {
+	margin: 0.5rem 0;
+	padding: 0.75rem;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 69, 58, 0.3);
+	background: rgba(255, 69, 58, 0.1);
+	color: var(--text-primary);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+/* ==================== SYSTEM ACTION BLOCKS ==================== */
+/* Seamless, mobile-friendly containers for command and tool blocks */
+
+.system-action-block {
+	background: rgba(255, 255, 255, 0.03);
+	border: 1px solid var(--border-message-ai);
+	border-radius: 12px;
+	margin: 8px 0;
+	overflow: hidden;
+}
+
+.command-block {
+	border-left: 3px solid var(--accent-subtle);
+}
+
+.tool-result-block {
+	border-left: 3px solid var(--accent);
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+	display: block;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+.action-header {
+	display: flex;
+	align-items: center;
+	padding: 8px 12px;
+	background: rgba(0, 0, 0, 0.2);
+	font-size: 0.8rem;
+	color: var(--text-muted);
+	font-family: sans-serif;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	cursor: pointer;
+	user-select: none;
+}
+
+.action-content {
+	padding: 12px;
+	font-size: 0.85rem;
+	max-width: 100%;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+	color: var(--text-primary);
+	line-height: 1.5;
+}
+
+.code-font {
+	font-family: "JetBrains Mono", "Fira Code", "Consolas", "Monaco", monospace;
+}
+
+/* Remove default focus outlines on summary */
+.system-action-block summary {
+	outline: none;
+}
+
+.system-action-block summary::-webkit-details-marker {
+	display: none;
+}
+
+.system-action-block summary::marker {
+	display: none;
+}
+
+.system-action-block summary:focus {
+	outline: none;
+}
+
+/* Hover state for tool result header */
+.tool-result-block summary:hover {
+	background: rgba(255, 255, 255, 0.05);
+}
+
+/* Open state border */
+.system-action-block[open] summary {
+	border-bottom: 1px solid var(--border-message-ai);
+}
+
+/* Native tool block styles rendered by store-renderer.js */
+.tools-container {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin: 0.5rem 0;
+}
+
+.tool-call-block {
+	background: var(--surface-code);
+	border-left: 3px solid var(--accent);
+	border-radius: 4px;
+	padding: 0.5rem;
+	max-width: 100%;
+	min-width: 0;
+	font-size: 0.85rem;
+	opacity: 0.9;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+.tool-header {
+	font-weight: 600;
+	color: var(--text-primary);
+	margin-bottom: 0.25rem;
+}
+
+.tool-body pre {
+	margin: 0;
+	padding: 0;
+	max-width: 100%;
+	min-width: 0;
+	background: transparent;
+	border: none;
+	white-space: pre-wrap;
+	overflow-x: auto;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+/* FC6: Native tool event indicators */
+.tool-call-indicator {
+	margin: 0.5em 0;
+	border-left: 3px solid var(--accent);
+	padding-left: 0.75em;
+	opacity: 0.85;
+}
+.tool-call-indicator summary {
+	cursor: pointer;
+	font-size: 0.85em;
+	color: var(--text-muted);
+}
+.tool-result summary {
+	cursor: pointer;
+	font-size: 0.85em;
+	font-weight: 600;
+}
+.tool-result-content {
+	margin-top: 0.5em;
+	padding: 0.5em;
+	max-width: 100%;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}

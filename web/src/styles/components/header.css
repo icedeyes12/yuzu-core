@@ -1,0 +1,105 @@
+/* FILE: static/css/components/header.css */
+/* DESCRIPTION: Chat header with hamburger, title, and affection display */
+
+/* ==================== HEADER ==================== */
+.chat-header {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 100;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: var(--space-3);
+	padding: max(var(--space-3), env(safe-area-inset-top))
+		max(var(--space-4), calc((100vw - 900px) / 2));
+	background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+	border-bottom: 1px solid var(--border-normal);
+	backdrop-filter: var(--backdrop-blur);
+	min-height: 4rem;
+}
+
+.header-content {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.hamburger-menu {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-around;
+	width: 2.25rem;
+	height: 2.25rem;
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	padding: var(--space-2);
+	margin-right: var(--space-2);
+}
+
+.hamburger {
+	position: static;
+	flex-shrink: 0;
+}
+
+.hamburger-menu span {
+	width: 100%;
+	height: 3px;
+	background: var(--text-primary);
+	border-radius: 10px;
+}
+
+.header-left {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+}
+
+.header-title {
+	flex: 1;
+	min-width: 0;
+}
+
+.partner-name {
+	font-size: 1.1rem;
+	font-weight: 700;
+	color: var(--text-primary);
+	margin: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.session-name {
+	font-size: 0.75rem;
+	color: var(--text-secondary);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ==================== AFFECTION DISPLAY ==================== */
+.affection-display {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	min-width: 0;
+	color: var(--text-secondary);
+}
+
+.affection-icon {
+	width: 17px;
+	height: 17px;
+	opacity: 0.72;
+	background:
+		url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ff69b4"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>')
+		center / contain no-repeat;
+}
+
+.affection-value {
+	font-size: 0.72rem;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-secondary);
+}

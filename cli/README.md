@@ -43,12 +43,10 @@ Panah atas/bawah digunakan untuk mengakses history input terminal.
 cli/app.py       Inline async REPL, prompt_toolkit, dan rich rendering
 cli/client.py    Async HTTP client dan parser structured SSE events
                  token, tool_call, tool_result, done
-
-/api/send_message_stream   Streaming chat endpoint
-/api/sessions/list         Daftar session
-/api/sessions/switch       Pindah session
-/api/chat_history          Muat history percakapan
 ```
+
+Endpoint yang dipakai CLI adalah route versioned yang dijelaskan di
+[`docs/backend/`](../docs/backend/).
 
 CLI hanya menggunakan endpoint yang sudah tersedia. Tidak ada perubahan pada direktori `app/`.
 

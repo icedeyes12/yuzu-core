@@ -4,6 +4,7 @@ import logging
 import threading
 from typing import Any
 
+from app.core.byok import YUZU_PORTAL, get_provider_key
 from app.memory.embedder import embed_text, embed_text_async
 from app.memory.graph import GraphMemoryRepository
 
@@ -78,6 +79,9 @@ async def retrieve_memories_combined_async(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if not user_id:
         raise ValueError("retrieve_memories_combined_async: user_id is required")
+    if not get_provider_key(YUZU_PORTAL):
+        logger.info("memory retrieval disabled: missing Yuzu Portal API key")
+        return [], []
 
     nodes: list[dict[str, Any]] = []
     if query:
@@ -136,7 +140,7 @@ async def retrieve_memory_async(
     session_id: str, query: str | None = None, user_id: str | None = None
 ) -> dict[str, Any]:
     static, dynamic = await retrieve_memories_combined_async(
-        session_id, query=query, static_limit=15, dynamic_limit=10, user_id=user_id
+        session_id, query=query, static_limit=8, dynamic_limit=4, user_id=user_id
     )
     return {"static": static, "dynamic": dynamic, "temporal_messages": []}
 

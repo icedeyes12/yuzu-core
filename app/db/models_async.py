@@ -32,8 +32,10 @@ from app.db.queries import (
     SQL_MESSAGE_SELECT_AFTER_ID,
     SQL_MESSAGE_SELECT_ASC_ALL,
     SQL_MESSAGE_SELECT_ASC_LIMIT,
+    SQL_MESSAGE_SELECT_ASC_OFFSET_LIMIT,
     SQL_MESSAGE_SELECT_BEFORE_TS,
     SQL_MESSAGE_SELECT_CONTENT_BY_ID,
+    SQL_MESSAGE_SELECT_CONVERSATIONAL_ASC_ALL,
     SQL_MESSAGE_SELECT_DESC_LIMIT,
     SQL_MESSAGE_SELECT_ENCRYPTED,
     SQL_MESSAGE_UPDATE,
@@ -204,7 +206,9 @@ async def create_session_async(name: str = "New Chat", *, user_id: str) -> str |
             row = await s.execute_returning(
                 SQL_SESSION_INSERT, (user_id, name, False, 0, now, now)
             )
-            return row.get("id") if row else None
+            # psycopg returns UUID objects; normalize to str to match the
+            # declared return type and API response models.
+            return str(row.get("id")) if row and row.get("id") else None
     except Exception as e:  # noqa: BLE001
         log.error("create_session_async failed: %s", e)
         return None
@@ -228,11 +232,11 @@ async def switch_session_async(session_id: str, user_id: str) -> bool:
 
 async def rename_session_async(session_id: str, new_name: str, user_id: str) -> bool:
     try:
-        await pg_execute_async(
+        row = await pg_fetchone_async(
             SQL_SESSION_RENAME_SCOPED,
             (new_name, datetime.now(), session_id, user_id),
         )
-        return True
+        return row is not None
     except Exception as e:  # noqa: BLE001
         log.error("rename_session_async failed: %s", e)
         return False
@@ -387,17 +391,36 @@ async def update_message_async(message_id: int, content: str) -> bool:
 
 
 async def get_session_messages_async(
-    session_id: str, limit: int = 100, order: str = "ASC", *, user_id: str
+    session_id: str,
+    limit: int | None = 100,
+    order: str = "ASC",
+    *,
+    user_id: str,
+    offset: int = 0,
+    conversational_only: bool = False,
 ) -> list[DBRow]:
     """Fetch messages for a session in chronological order.
 
     order: "ASC" (oldest first) or "DESC" (newest first).
     """
-    if order.upper() == "DESC":
+    if conversational_only and order.upper() == "ASC" and limit is not None:
+        query = SQL_MESSAGE_SELECT_ASC_OFFSET_LIMIT
+    elif conversational_only and order.upper() == "ASC":
+        query = SQL_MESSAGE_SELECT_CONVERSATIONAL_ASC_ALL
+    elif order.upper() == "DESC":
         query = SQL_MESSAGE_SELECT_DESC_LIMIT
     else:
         query = SQL_MESSAGE_SELECT_ASC_LIMIT
-    rows = await pg_fetchall_async(query, (session_id, user_id, limit))
+    params = (
+        (session_id, user_id, limit, offset)
+        if conversational_only and order.upper() == "ASC" and limit is not None
+        else (session_id, user_id)
+        if conversational_only and order.upper() == "ASC"
+        else (session_id, user_id, limit, offset)
+        if offset and order.upper() == "ASC"
+        else (session_id, user_id, limit)
+    )
+    rows = await pg_fetchall_async(query, params)
     return [parse_message_row(r) for r in rows]
 
 

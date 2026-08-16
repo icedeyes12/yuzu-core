@@ -9,6 +9,7 @@ import {
 import { eventRouter } from "./modules/event-router.js";
 import { router } from "./modules/router.js";
 import { chatStore } from "./modules/store.js";
+import { escapeHtml } from "./modules/tool-renderer/dom-utils.js";
 import { renderRuntimeIcon } from "./runtime-icon-renderer.js";
 import { handleSessionSwitch } from "./session-controller.js";
 
@@ -138,14 +139,14 @@ function _renderAuthenticated(container, data) {
 		avatarUrl && /^(https?:|data:)/i.test(avatarUrl) ? avatarUrl : "";
 	const avatarHtml = safeAvatarUrl
 		? `<img class="auth-user-avatar" src="${safeAvatarUrl}" alt="avatar" referrerpolicy="no-referrer" />`
-		: `<div class="auth-user-avatar auth-avatar-placeholder">${_escapeHtml((showName[0] || "?").toUpperCase())}</div>`;
+		: `<div class="auth-user-avatar auth-avatar-placeholder">${escapeHtml((showName[0] || "?").toUpperCase())}</div>`;
 	container.innerHTML = `
 		<div class="auth-user">
 			<div class="auth-user-info">
 				${avatarHtml}
 				<div class="auth-user-meta">
-					<div class="auth-user-name" title="${_escapeHtml(showName)}">${_escapeHtml(showName)}</div>
-					<div class="auth-user-email" title="${_escapeHtml(email)}">${_escapeHtml(email || "")}</div>
+					<div class="auth-user-name" title="${escapeHtml(showName)}">${escapeHtml(showName)}</div>
+					<div class="auth-user-email" title="${escapeHtml(email)}">${escapeHtml(email || "")}</div>
 				</div>
 			</div>
 			<button class="auth-logout-btn" data-action="logout">Sign Out</button>
@@ -530,12 +531,6 @@ function _setSessionSwitchingVisual(_sessionId, isLoading) {
 	} else {
 		sessionsList.classList.remove("switching-active");
 	}
-}
-
-function _escapeHtml(text) {
-	const div = document.createElement("div");
-	div.textContent = String(text ?? "");
-	return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
 }
 
 function formatSessionDate(dateString) {

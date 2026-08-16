@@ -1,0 +1,315 @@
+/* ==================== CODE BLOCKS ==================== */
+.code-block-container {
+	margin: 1rem 0;
+	border-radius: 8px;
+	overflow: hidden;
+	background: var(--surface-code);
+	border: 1px solid var(--border-normal);
+}
+
+.code-block-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 0.75rem;
+	min-width: 0;
+	flex-wrap: wrap;
+	padding: 0.5rem 1rem;
+	background: var(--surface-code);
+	border-bottom: 1px solid var(--border-normal);
+}
+
+.code-language {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+	font-size: 0.75rem;
+	color: var(--text-secondary);
+	text-transform: uppercase;
+	font-weight: 600;
+}
+
+.copy-code-btn {
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	background: transparent;
+	border: 1px solid var(--border-normal);
+	border-radius: 4px;
+	padding: 0.3rem 0.6rem;
+	font-size: 0.75rem;
+	color: var(--text-primary);
+	cursor: pointer;
+}
+
+.copy-code-btn:hover {
+	background: var(--accent);
+	color: white;
+	border-color: var(--accent);
+}
+
+.copy-code-btn.copied {
+	background: var(--accent-support);
+	color: white;
+	border-color: var(--accent-support);
+}
+
+.code-block-container pre {
+	margin: 0;
+	padding: 1rem;
+	overflow-x: auto;
+	background: transparent;
+}
+
+.code-block-container code {
+	font-family: var(--font-mono);
+	font-size: 0.9rem;
+	line-height: var(--line-height-copy);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+/* ==================== FENCE BLOCK SYSTEM ==================== */
+
+/* Base container for all fence block types */
+.fence-block {
+	margin: 0.75rem 0;
+	border-radius: 8px;
+	overflow: hidden;
+	border: 1px solid var(--border-normal);
+	background: var(--surface-code);
+}
+
+/* Pending/buffered: loading shimmer while fence is still streaming */
+.fence-block--pending {
+	min-height: 120px;
+	contain: layout paint;
+	contain-intrinsic-size: auto 180px;
+	background: var(--surface-code);
+	border: 1px solid var(--border-normal);
+	border-radius: 8px;
+	margin: 0.75rem 0;
+	position: relative;
+	overflow: hidden;
+}
+
+.fence-block--pending::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		90deg,
+		transparent 0%,
+		rgba(255, 255, 255, 0.04) 40%,
+		rgba(255, 255, 255, 0.08) 50%,
+		rgba(255, 255, 255, 0.04) 60%,
+		transparent 100%
+	);
+	background-size: 200% 100%;
+	animation: fence-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes fence-shimmer {
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
+}
+
+/* ── Header ── */
+.fence-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 0.75rem;
+	min-width: 0;
+	flex-wrap: wrap;
+	padding: 0.4rem 0.75rem;
+	background: rgba(0, 0, 0, 0.25);
+	border-bottom: 1px solid var(--border-normal);
+	min-height: 36px;
+}
+
+.fence-lang-badge {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--text-secondary);
+}
+
+.fence-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.fence-action-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	padding: 0.25rem 0.55rem;
+	font-size: 0.72rem;
+	font-weight: 500;
+	color: var(--text-secondary);
+	background: transparent;
+	border: 1px solid var(--border-normal);
+	border-radius: 4px;
+	cursor: pointer;
+	white-space: nowrap;
+	transition:
+		background 0.15s,
+		color 0.15s,
+		border-color 0.15s;
+}
+
+.fence-action-btn:hover {
+	background: var(--surface-raised, rgba(255, 255, 255, 0.06));
+	color: var(--text-primary);
+	border-color: var(--text-secondary);
+}
+
+.fence-action-btn--active {
+	background: rgba(138, 109, 233, 0.15);
+	color: var(--accent);
+	border-color: var(--accent);
+}
+
+/* ── Default code block ── */
+.fence-block--code pre {
+	margin: 0;
+	padding: 0.9rem 1rem;
+	overflow-x: auto;
+	background: transparent;
+}
+
+.fence-block--code code {
+	font-family: var(--font-mono);
+	font-size: 0.875rem;
+	line-height: 1.55;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+/* ── Mermaid ── */
+.fence-block--mermaid .fence-mermaid-body {
+	padding: 1rem;
+	contain: layout paint;
+	contain-intrinsic-size: auto 180px;
+	overflow-x: auto;
+	min-height: 120px;
+	display: flex;
+	justify-content: center;
+	align-items: flex-start;
+}
+
+.fence-mermaid-diagram {
+	max-width: 100%;
+	min-height: 120px;
+	display: grid;
+	place-items: center;
+}
+
+.fence-mermaid-diagram[data-fence-render-state="pending"]::before,
+.fence-mermaid-diagram[data-fence-render-state="rendering"]::before {
+	content: "Rendering diagram…";
+	color: var(--text-secondary);
+	font-size: 0.8rem;
+	min-height: 120px;
+	display: grid;
+	place-items: center;
+	animation: fence-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes fence-pulse {
+	0%,
+	100% {
+		opacity: 0.45;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
+.fence-mermaid-source {
+	margin: 0;
+	padding: 0;
+	width: 100%;
+	background: transparent;
+}
+
+.fence-mermaid-source code {
+	font-family: var(--font-mono);
+	font-size: 0.85rem;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+/* ── HTML Preview ── */
+.fence-block--html-preview .fence-html-body {
+	background: #fff;
+	contain: layout paint;
+	contain-intrinsic-size: auto 420px;
+	position: relative;
+	min-height: 380px;
+	overflow: hidden;
+}
+
+.fence-html-loading {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	color: #666;
+	font-size: 0.85rem;
+	background: #fff;
+	z-index: 1;
+	animation: fence-pulse 1.2s ease-in-out infinite;
+}
+
+.fence-html-iframe {
+	width: 100%;
+	min-height: 380px;
+	height: 380px;
+	border: none;
+	display: block;
+}
+
+.fence-html-source-block {
+	margin: 0;
+	padding: 0;
+	min-height: 380px;
+}
+
+.fence-html-source-block[hidden],
+.fence-html-iframe[hidden],
+.fence-html-loading[hidden] {
+	display: none;
+}
+
+/* ── Inspect / Raw Code flat layout ── */
+.fence-raw-code {
+	margin: 0;
+	padding: 0.9rem 1rem;
+	background: var(--surface-code);
+	border-radius: 0 0 8px 8px;
+	overflow-x: auto;
+}
+
+.fence-raw-code code {
+	font-family: var(--font-mono);
+	font-size: 0.85rem;
+	line-height: 1.55;
+	background: transparent;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}

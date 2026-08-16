@@ -7,6 +7,7 @@ import logging
 import time
 from typing import Any
 
+from app.core.request_context import ClientContext
 from app.core.stream_fence import StreamFence
 from app.services.orchestrator import (
     handle_user_message_streaming,
@@ -32,12 +33,14 @@ class StreamBuffer:
         interface: str = "web",
         attachments: list[str] | None = None,
         user_id: str | None = None,
+        client_context: ClientContext | None = None,
     ):
         self.session_id: str = session_id
         self.user_message: str = user_message
         self.interface: str = interface
         self.attachments: list[str] = attachments or []
         self.user_id: str | None = user_id
+        self.client_context = client_context
 
         self.full_content: str = ""
         self.queues: list[asyncio.Queue[Any]] = []
@@ -70,6 +73,7 @@ class StreamBuffer:
                 session_id=self.session_id,
                 attachments=self.attachments,
                 user_id=self.user_id,
+                client_context=self.client_context,
             )
 
             # No filter - pass through all chunks directly
@@ -262,6 +266,7 @@ class StreamManager:
         interface: str = "web",
         attachments: list[str] | None = None,
         user_id: str | None = None,
+        client_context: ClientContext | None = None,
     ) -> StreamBuffer:
         """Start a new stream or return an existing one."""
         async with cls._lock:
@@ -279,6 +284,7 @@ class StreamManager:
                 interface,
                 attachments,
                 user_id,
+                client_context,
             )
             cls._streams[session_id] = stream
 

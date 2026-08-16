@@ -147,7 +147,7 @@ async def _resolve_configured_location_label(
                 "zoom": 10,
                 "addressdetails": 1,
             },
-            headers={"User-Agent": "yuzu-companion/4.1"},
+            headers={"User-Agent": "yuzu-companion/4.2"},
         )
         response.raise_for_status()
         result = response.json()
@@ -232,7 +232,14 @@ async def execute(
             longitude = profile.get("location_lon")
             if latitude is None or longitude is None:
                 return error_result(
-                    "Location missing. Set a location in settings or provide a city."
+                    "Weather location is not configured.",
+                    TOOL_WEATHER,
+                    category="configuration_error",
+                    data={
+                        "schema_kind": "weather",
+                        "status": "location_required",
+                        "location": None,
+                    },
                 )
             location_label = (
                 await _resolve_configured_location_label(client, latitude, longitude)

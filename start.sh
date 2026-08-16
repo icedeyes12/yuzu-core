@@ -33,6 +33,17 @@ else
     fi
 fi
 
-# 3. Start Yuzu Backend
+# 3. Activate venv if present
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/.venv/bin/activate" ]; then
+    source "$SCRIPT_DIR/.venv/bin/activate"
+    echo "[Venv] Activated .venv."
+elif [ -f "$SCRIPT_DIR/venv/bin/activate" ]; then
+    source "$SCRIPT_DIR/venv/bin/activate"
+    echo "[Venv] Activated venv."
+fi
+
+# 4. Start Yuzu Backend
 echo "[App] Starting Yuzu Companion server..."
+cd "$SCRIPT_DIR"
 exec python main.py

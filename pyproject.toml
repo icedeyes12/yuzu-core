@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yuzu-companion"
-version = "4.1.0"
+version = "4.2.0"
 description = "AI companion system with memory, multimodal, and multi-provider support"
 readme = "README.md"
 license = {text = "MIT"}
@@ -16,6 +16,8 @@ dependencies = [
     "psycopg[binary,pool]>=3.1",
     "pycryptodome>=3.20.0",
     "python-dotenv>=1.0.0",
+    "PyJWT>=2.13.0",
+    "Pillow>=12.3.0",
     "fsrs>=6.3.1",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
@@ -29,9 +31,18 @@ dependencies = [
     "httpx2>=2.0.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
 [project.scripts]
 yuzu = "cli.app:main"
 yuzu-server = "main:app"
+
+[tool.setuptools]
+py-modules = ["main"]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -62,6 +73,9 @@ indent-style = "space"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-ra"
+filterwarnings = [
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:starlette.exceptions.StarletteDeprecationWarning",
+]
 asyncio_mode = "auto"
 markers = [
     "unit: isolated tests with fakes or mocks",

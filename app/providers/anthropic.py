@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 class AnthropicProvider(AIProvider):
+    log_prefix: str = "Anthropic"
+
     def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("anthropic", config)
         self.base_url: str = "https://api.anthropic.com/v1/messages"
@@ -29,6 +31,47 @@ class AnthropicProvider(AIProvider):
             supports_structured_system_content=False,
         )
         self.available_models: list[str] = []
+
+    def _resolve_url(self, ctx: LLMContext) -> str:
+        """Ensure the URL ends with /messages."""
+        url = (ctx.base_url or self.base_url).rstrip("/")
+        if not url.endswith("/messages"):
+            url += "/messages"
+        return url
+
+    async def fetch_live_models(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> list[str]:
+        if not base_url:
+            return []
+        return await self._fetch_models(base_url, api_key)
+
+    async def _fetch_models(self, base_url: str, api_key: str | None) -> list[str]:
+        url = base_url.rstrip("/")
+        if url.endswith("/messages"):
+            url = url[: -len("/messages")]
+        url = f"{url}/models"
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=headers, timeout=10.0)
+            if response.status_code != 200:
+                return []
+            metadata = [
+                item
+                for item in response.json().get("data", [])
+                if isinstance(item, dict)
+            ]
+            self.set_model_metadata(metadata)
+            return sorted(
+                {
+                    model_id
+                    for item in metadata
+                    if isinstance(model_id := item.get("id"), str) and model_id
+                }
+            )
+        except (MissingProviderKeyError, httpx.HTTPError, ValueError):
+            return []
 
     async def get_models(self) -> list[str]:
         return self.available_models
@@ -112,7 +155,7 @@ class AnthropicProvider(AIProvider):
     ) -> str | None:
         try:
             headers, payload = self._prepare_payload(ctx, messages, False, **kwargs)
-            base = ctx.base_url or self.base_url
+            base = self._resolve_url(ctx)
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     base,
@@ -130,13 +173,16 @@ class AnthropicProvider(AIProvider):
                         text += block.get("text", "")
                 return text.strip()
             logger.warning(
-                "[Anthropic] %s: %s", response.status_code, response.text[:300]
+                "[%s] %s: %s",
+                self.log_prefix,
+                response.status_code,
+                response.text[:300],
             )
             return None
         except MissingProviderKeyError:
             raise
         except Exception as e:
-            logger.error("[Anthropic] send_message error: %s", e)
+            logger.error("[%s] send_message error: %s", self.log_prefix, e)
             return None
 
     async def send_message_raw(
@@ -148,7 +194,7 @@ class AnthropicProvider(AIProvider):
     ) -> dict[str, Any] | None:
         try:
             headers, payload = self._prepare_payload(ctx, messages, False, **kwargs)
-            base = ctx.base_url or self.base_url
+            base = self._resolve_url(ctx)
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     base,
@@ -162,13 +208,16 @@ class AnthropicProvider(AIProvider):
                 # Convert back to OpenAI format for caller compatibility
                 return self._convert_response_to_openai(result)
             logger.warning(
-                "[Anthropic] raw %s: %s", response.status_code, response.text[:300]
+                "[%s] raw %s: %s",
+                self.log_prefix,
+                response.status_code,
+                response.text[:300],
             )
             return None
         except MissingProviderKeyError:
             raise
         except Exception as e:
-            logger.error("[Anthropic] send_message_raw error: %s", e)
+            logger.error("[%s] send_message_raw error: %s", self.log_prefix, e)
             return None
 
     def _convert_response_to_openai(self, anth_res: dict[str, Any]) -> dict[str, Any]:
@@ -208,7 +257,7 @@ class AnthropicProvider(AIProvider):
             if suppress_tools:
                 payload.pop("tools", None)
 
-            base = ctx.base_url or self.base_url
+            base = self._resolve_url(ctx)
 
             async with httpx.AsyncClient() as client:
                 async with client.stream(
@@ -221,7 +270,8 @@ class AnthropicProvider(AIProvider):
                     if response.status_code != 200:
                         body = await response.aread()
                         logger.warning(
-                            "[Anthropic] stream %s: %s",
+                            "[%s] stream %s: %s",
+                            self.log_prefix,
                             response.status_code,
                             body[:300],
                         )
@@ -288,7 +338,9 @@ class AnthropicProvider(AIProvider):
             raise
 
         except Exception as e:
-            logger.error("[Anthropic] streaming error: %s", repr(e), exc_info=True)
+            logger.error(
+                "[%s] streaming error: %s", self.log_prefix, repr(e), exc_info=True
+            )
             yield f"Error: {type(e).__name__} - {e}"
 
     def parse_tool_calls(self, raw_response) -> list[dict[str, Any]]:

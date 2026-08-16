@@ -8,6 +8,7 @@ from app.db import Database
 from app.db.connection import pg_fetchall_async
 from app.memory.memory import (
     _is_fence_active_async,
+    recover_memory_pipeline_async,
     run_memory_pipeline_async,
     trigger_memory_pipeline_async,
 )
@@ -39,6 +40,10 @@ class MemoryService:
             return
 
         if await _is_fence_active_async(session_id, user_id=user_id):
+            try:
+                _ = await recover_memory_pipeline_async(session_id, user_id)
+            except Exception as exc:
+                logger.info("Memory recovery skipped: %s", type(exc).__name__)
             return
         try:
             _ = await MemoryService.trigger_pipeline_async(session_id, user_id)

@@ -18,6 +18,7 @@ class LLMContext:
     model: str | None
     api_key: str | None = None
     base_url: str | None = None
+    chat_session_id: str | None = None
     parameters: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -73,6 +74,10 @@ class LLMContext:
             parameters["max_tokens"] = int(effective_parameters["max_tokens"])
         if effective_parameters.get("top_k") is not None:
             parameters["top_k"] = int(effective_parameters["top_k"])
+        if effective_parameters.get("reasoning_effort") is not None:
+            parameters["reasoning_effort"] = str(
+                effective_parameters["reasoning_effort"]
+            )
         if "additional_instructions" in effective_parameters:
             parameters["additional_instructions"] = str(
                 effective_parameters["additional_instructions"] or ""

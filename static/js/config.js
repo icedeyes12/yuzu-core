@@ -10,6 +10,7 @@ import {
 	maskApiKey,
 	writeByokConfig,
 } from "./client-storage.js";
+import { escapeHtml } from "./modules/tool-renderer/dom-utils.js";
 import { listProviders } from "./provider-registry.js";
 import { toggleSidebar } from "./sidebar.js";
 import { renderLogo } from "./visual-registry.js";
@@ -23,21 +24,6 @@ const maskedProviderKeys = new WeakMap();
 function setTextIfExists(id, value) {
 	const el = document.getElementById(id);
 	if (el) el.textContent = String(value ?? "");
-}
-
-function escapeHtml(value) {
-	if (value === null || value === undefined) return "";
-	return String(value).replace(
-		/[&<>"']/g,
-		(character) =>
-			({
-				"&": "&amp;",
-				"<": "&lt;",
-				">": "&gt;",
-				'"': "&quot;",
-				"'": "&#39;",
-			})[character],
-	);
 }
 
 function setValueIfExists(id, value) {
@@ -62,14 +48,109 @@ function getNumberIfExists(id, fallback = 0) {
 	return Number.isFinite(num) ? num : fallback;
 }
 
+function getActiveModelInfo() {
+	const provider =
+		appConfig?.current_provider || appConfig?.ai_providers?.current_provider;
+	const model =
+		appConfig?.current_model || appConfig?.ai_providers?.current_model;
+	return (
+		(appConfig?.model_infos?.[provider] || []).find(
+			(info) => info.id === model,
+		) || null
+	);
+}
+
+function setActiveConfig(provider, model) {
+	if (!appConfig) return;
+	appConfig.current_provider = provider;
+	appConfig.current_model = model;
+	if (appConfig.ai_providers) {
+		appConfig.ai_providers.current_provider = provider;
+		appConfig.ai_providers.current_model = model;
+	}
+}
+
+function getModelInfo(provider, model) {
+	return (
+		(appConfig?.model_infos?.[provider] || []).find(
+			(info) => info.id === model,
+		) || null
+	);
+}
+
+function capabilityMark(value) {
+	return value === "supported" ? "✓" : value === "unsupported" ? "—" : "?";
+}
+
+function renderCapabilitySummary(info) {
+	const capabilities = info?.capabilities || {};
+	const reasoning = capabilities.reasoning?.mode || "unknown";
+	const limits = info?.limits || {};
+	const value = (name, state) =>
+		`<span class="model-capability-summary__item"><span class="model-capability-summary__state" aria-label="${state}">${capabilityMark(state)}</span> ${name}</span>`;
+	const limit = (name, number) =>
+		`<span class="model-capability-summary__item">${name}: ${Number.isInteger(number) ? number.toLocaleString() : "?"}</span>`;
+
+	if (!info) {
+		return '<span class="model-capability-summary__title">Model capabilities: ?</span>';
+	}
+	return [
+		`<span class="model-capability-summary__title">${info.id} capabilities</span>`,
+		value("Vision", capabilities.vision),
+		value("Tools", capabilities.function_call),
+		value("Structured output", capabilities.structured_output),
+		value(
+			"Reasoning",
+			reasoning === "unknown"
+				? "unknown"
+				: reasoning === "unsupported"
+					? "unsupported"
+					: "supported",
+		),
+		value("Image generation", capabilities.image_generation),
+		limit("Context", limits.context_window),
+		limit("Max output", limits.max_output_tokens),
+	].join("");
+}
+
+function updateCapabilitySummary(provider, model, target) {
+	if (target)
+		target.innerHTML = renderCapabilitySummary(getModelInfo(provider, model));
+	const activeProvider =
+		appConfig?.current_provider || appConfig?.ai_providers?.current_provider;
+	const activeModel =
+		appConfig?.current_model || appConfig?.ai_providers?.current_model;
+	const active = document.getElementById("active-model-capabilities");
+	if (active && provider === activeProvider && model === activeModel) {
+		active.innerHTML = renderCapabilitySummary(getModelInfo(provider, model));
+	}
+}
+
+function applyActiveModelCapabilities() {
+	const capabilities = getActiveModelInfo()?.capabilities || {};
+	const reasoning = capabilities.reasoning || {};
+	const reasoningControl = document.getElementById("adv-reasoning");
+	const visionControl = document.getElementById("adv-vision");
+	if (reasoningControl) {
+		reasoningControl.disabled = reasoning.mode === "unsupported";
+		if (reasoningControl.disabled) reasoningControl.checked = false;
+	}
+	if (visionControl) {
+		visionControl.disabled = capabilities.vision === "unsupported";
+		if (visionControl.disabled) visionControl.checked = false;
+	}
+}
+
 function getProfileAdvancedSource(data) {
 	return data?.advanced || data?.profile || data || {};
 }
 
 function validateProviderKey(provider, value) {
-	if (provider === "custom_openai" || provider === "custom_anthropic") return null;
+	if (provider === "custom_openai" || provider === "custom_anthropic")
+		return null;
 	if (!value) return "API key cannot be empty.";
-	if (value.length < 8) return "The API key appears to be incomplete or invalid.";
+	if (value.length < 8)
+		return "The API key appears to be incomplete or invalid.";
 	if (/\.\.\.|\*\*\*|•••/.test(value)) {
 		return "The entered value looks like a masked API key.";
 	}
@@ -165,7 +246,6 @@ async function loadProviderSettings() {
 				appConfig.current_model || appConfig.ai_providers.current_model,
 			status: "success",
 		};
-
 		const grid = document.getElementById("providers-grid");
 		if (!grid) return;
 		grid.innerHTML = "";
@@ -250,6 +330,22 @@ async function loadProviderSettings() {
 				getCachedModels(modelCatalog, provider),
 				isActive ? data.current_model || "" : "",
 			);
+			const modelSelect = card.querySelector(`#model-${provider}`);
+			const capabilitySummary = document.createElement("div");
+			capabilitySummary.className = "model-capability-summary";
+			modelSelect.closest(".form-group")?.appendChild(capabilitySummary);
+			updateCapabilitySummary(provider, modelSelect.value, capabilitySummary);
+			modelSelect.addEventListener("change", () =>
+				updateCapabilitySummary(provider, modelSelect.value, capabilitySummary),
+			);
+			if (isActive) {
+				applyActiveModelCapabilities();
+				updateCapabilitySummary(
+					provider,
+					modelSelect.value,
+					document.getElementById("active-model-capabilities"),
+				);
+			}
 			grid.appendChild(card);
 			setupMaskedKeyInput(card.querySelector(`#key-${provider}`), provKey);
 
@@ -303,17 +399,18 @@ async function loadProviderSettings() {
 	}
 }
 
-function saveBYOKForProvider(provider) {
+function saveBYOKForProvider(provider, notify = true) {
 	const keyInput = document.getElementById(`key-${provider}`);
-	if (!keyInput) return;
+	if (!keyInput) return false;
 
 	const displayedValue = keyInput.value.trim();
 	const storedKey = maskedProviderKeys.get(keyInput) || "";
-	const key = displayedValue === maskApiKey(storedKey) ? storedKey : displayedValue;
+	const key =
+		displayedValue === maskApiKey(storedKey) ? storedKey : displayedValue;
 	const validationError = validateProviderKey(provider, key);
 	if (validationError) {
 		showError(validationError);
-		return;
+		return false;
 	}
 
 	const byok = getByokConfig();
@@ -332,10 +429,11 @@ function saveBYOKForProvider(provider) {
 	byok.providers[provider] = providerConfig;
 	if (!writeByokConfig(byok)) {
 		showError("User scope is unavailable; provider key was not saved.");
-		return;
+		return false;
 	}
-	showSuccess(`${provider} key saved in browser.`);
+	if (notify) showSuccess(`${provider} key saved in browser.`);
 	updateImageModelWarning(getValueIfExists("image-model"));
+	return true;
 }
 
 function setupMaskedKeyInput(input, storedKey) {
@@ -405,6 +503,16 @@ function invalidateModelCache(provider) {
 	const catalog = readModelCatalog();
 	delete catalog[provider];
 	saveModelCatalog(catalog);
+	if (appConfig?.model_infos) delete appConfig.model_infos[provider];
+	const select = document.getElementById(`model-${provider}`);
+	if (select) populateModelSelect(select, [], "");
+	if (appConfig?.current_provider === provider) {
+		appConfig.current_model = "";
+		if (appConfig.ai_providers) appConfig.ai_providers.current_model = "";
+		const active = document.getElementById("active-model-capabilities");
+		if (active) active.innerHTML = renderCapabilitySummary(null);
+		applyActiveModelCapabilities();
+	}
 }
 
 async function fetchModelsForProvider(provider) {
@@ -421,7 +529,7 @@ async function fetchModelsForProvider(provider) {
 
 		const headers = {};
 		if (provConfig.api_key) headers["X-Provider-Key"] = provConfig.api_key;
-		if (provider.startsWith("custom") && provConfig.base_url)
+		if (provConfig.base_url)
 			headers["X-Provider-BaseUrl"] = provConfig.base_url;
 
 		const response = await fetch(`/api/v1/proxy/models/${provider}/refresh`, {
@@ -443,6 +551,23 @@ async function fetchModelsForProvider(provider) {
 			setCachedModels(catalog, provider, models);
 			saveModelCatalog(catalog);
 			if (select) populateModelSelect(select, models, previous);
+			if (Array.isArray(data.model_infos)) {
+				appConfig.model_infos = appConfig.model_infos || {};
+				appConfig.model_infos[provider] = data.model_infos;
+				const modelSelect = document.getElementById(`model-${provider}`);
+				const summary = modelSelect
+					?.closest(".form-group")
+					?.querySelector(".model-capability-summary");
+				updateCapabilitySummary(provider, modelSelect?.value || "", summary);
+				applyActiveModelCapabilities();
+				if (provider === appConfig.current_provider) {
+					updateCapabilitySummary(
+						provider,
+						appConfig.current_model,
+						document.getElementById("active-model-capabilities"),
+					);
+				}
+			}
 			showSuccess(`Models loaded for ${provider}.`);
 		} else {
 			showError(`Failed to fetch models: ${data.message || "Unknown error"}`);
@@ -460,6 +585,7 @@ async function fetchModelsForProvider(provider) {
 
 // Test provider connection
 async function testProviderConnection(providerName) {
+	if (!saveBYOKForProvider(providerName, false)) return;
 	const statusElement = document.getElementById("connection-status");
 	if (!statusElement) return;
 	statusElement.textContent = "Testing...";
@@ -770,6 +896,13 @@ async function setProviderActive(providerName) {
 		const result = await readJsonResponse(response);
 
 		if (response.ok && result.status === "success") {
+			setActiveConfig(providerName, modelName);
+			updateCapabilitySummary(
+				providerName,
+				modelName,
+				document.getElementById("active-model-capabilities"),
+			);
+			applyActiveModelCapabilities();
 			showSuccess(`${providerName} set as active!`);
 			setTextIfExists("current-provider", `${providerName}/${modelName}`);
 
@@ -991,12 +1124,6 @@ function showNotification(message, type = "info") {
 	existingNotifications.forEach((notification) => {
 		notification.remove();
 	});
-
-	const escapeHtml = (text) => {
-		const div = document.createElement("div");
-		div.textContent = text;
-		return div.innerHTML;
-	};
 
 	const notification = document.createElement("div");
 	notification.className = `config-notification ${type}`;
@@ -1315,7 +1442,11 @@ async function deleteKnowledgeEntry(id) {
 			{ method: "DELETE", headers: { Accept: "application/json" } },
 		);
 		const data = await readJsonResponse(response);
-		if (!response.ok || data.status !== "success") {
+		// DELETE returns 204 with an empty body; treat that as success.
+		const emptyOk =
+			response.status === 204 ||
+			(data && typeof data === "object" && Object.keys(data).length === 0);
+		if (!response.ok || (!emptyOk && data.status !== "success")) {
 			throw new Error(getApiError(data, response.status));
 		}
 		await loadGlobalKnowledge();

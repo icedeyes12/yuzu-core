@@ -46,23 +46,32 @@ def _require_env(name: str) -> str:
     return val.strip()
 
 
-def _rewrite_redirect_uri(request: Request, original_uri: str) -> str:
-    """Rewrites localhost callback URI to public domain using forwarded headers."""
-    forwarded_host = request.headers.get("x-forwarded-host")
-    forwarded_proto = request.headers.get("x-forwarded-proto", "http")
+_OAUTH_CALLBACK_PATH = "/api/v1/auth/callback"
 
+
+def _rewrite_redirect_uri(request: Request, original_uri: str) -> str:
+    """Build the registered callback for the origin used by this request."""
+    configured_origins = {
+        origin.strip().rstrip("/")
+        for origin in os.environ.get("OAUTH_REDIRECT_ORIGINS", "").split(",")
+        if origin.strip()
+    }
+    forwarded_host = request.headers.get("x-forwarded-host")
+    forwarded_proto = request.headers.get("x-forwarded-proto")
     if forwarded_host:
-        parsed = urlsplit(original_uri)
-        return urlunsplit(
-            (
-                forwarded_proto,
-                forwarded_host,
-                parsed.path,
-                parsed.query,
-                parsed.fragment,
-            )
-        )
-    return original_uri
+        scheme = (forwarded_proto or "https").split(",", 1)[0].strip()
+        host = forwarded_host.split(",", 1)[0].strip()
+    else:
+        scheme = request.url.scheme
+        host = request.url.netloc
+
+    candidate_origin = f"{scheme}://{host}".rstrip("/")
+    parsed = urlsplit(original_uri)
+    original_origin = urlunsplit((parsed.scheme, parsed.netloc, "", "", "")).rstrip("/")
+    if configured_origins and candidate_origin not in configured_origins:
+        candidate_origin = original_origin
+
+    return f"{candidate_origin}{_OAUTH_CALLBACK_PATH}"
 
 
 @router.get("/login", response_model=None, responses=ERROR_RESPONSES)
@@ -131,9 +140,9 @@ async def callback(request: Request):
     session_secret = _require_env("SESSION_SECRET")
 
     log.info(
-        "OAuth Callback: query_state='%s', state_cookie='%s', request_cookies=%s",
-        state,
-        state_cookie,
+        "OAuth Callback: state_present=%s, state_cookie_present=%s, request_cookie_names=%s",
+        bool(state),
+        bool(state_cookie),
         list(request.cookies.keys()),
     )
 
@@ -142,16 +151,12 @@ async def callback(request: Request):
         raise HTTPException(status_code=400, detail="State mismatch")
 
     if state_cookie != state:
-        log.error(
-            "OAuth State mismatch: cookie '%s' does not match query '%s'",
-            state_cookie,
-            state,
-        )
+        log.error("OAuth State mismatch: cookie and query state differ")
         raise HTTPException(status_code=400, detail="State mismatch")
 
     verified = verify_state(state, session_secret)
     if not verified:
-        log.error("OAuth State invalid or expired: state='%s'", state)
+        log.error("OAuth State invalid or expired")
         raise HTTPException(status_code=400, detail="Invalid or expired state")
 
     provider_name, code_verifier, origin = verified

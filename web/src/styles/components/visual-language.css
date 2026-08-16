@@ -1,0 +1,171 @@
+/* Visual language: identity placeholders, badges, and status visuals stay separate from UI icons. */
+
+.provider-identity-placeholder,
+.provider-identity-placeholder--small {
+	display: inline-grid;
+	place-items: center;
+	flex: 0 0 auto;
+	border: 1px solid var(--border-normal);
+	border-radius: var(--radius-md);
+	background: var(--surface-subtle);
+	color: var(--provider-accent, var(--text-secondary));
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	line-height: 1;
+	text-transform: uppercase;
+}
+
+.provider-identity-placeholder {
+	width: 2rem;
+	height: 2rem;
+}
+
+.provider-identity-placeholder--small {
+	width: 1.25rem;
+	height: 1.25rem;
+	border-radius: var(--radius-sm);
+	font-size: 0.55rem;
+}
+
+.provider-identity {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.provider-identity__name {
+	color: var(--text-primary);
+}
+
+.provider-title {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	flex-wrap: wrap;
+}
+
+.provider-title__name {
+	color: var(--text-primary);
+}
+
+.provider-identity-logo {
+	width: 1.25rem;
+	height: 1.25rem;
+	flex: 0 0 auto;
+	object-fit: contain;
+}
+
+.provider-badge,
+.provider-identity-badge {
+	display: inline-flex;
+	align-items: center;
+	min-height: 1.25rem;
+	border: 1px solid currentColor;
+	border-radius: var(--radius-sm);
+	padding: 0 var(--space-2);
+	background: var(--surface-subtle);
+	color: var(--text-secondary);
+	font-size: 0.65rem;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	line-height: 1;
+	text-transform: uppercase;
+}
+
+.provider-identity-badge--official,
+.provider-badge--official {
+	color: var(--status-success);
+}
+
+.provider-identity-badge--community,
+.provider-identity-badge--preview,
+.provider-badge--community,
+.provider-badge--experimental {
+	color: var(--status-info);
+}
+
+.provider-identity-badge--custom,
+.provider-identity-badge--local,
+.provider-badge--custom {
+	color: var(--accent);
+}
+
+.provider-identity-badge--local {
+	color: var(--accent);
+}
+
+.provider-identity-badge--deprecated,
+.provider-badge--deprecated {
+	color: var(--status-danger);
+}
+
+.provider-identity-badge--unknown {
+	color: var(--text-muted);
+}
+
+.provider-family {
+	display: block;
+	margin-top: var(--space-1);
+	color: var(--text-muted);
+	font-size: 0.75rem;
+	font-weight: 500;
+}
+
+.visual-status {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.visual-status__mark {
+	display: inline-grid;
+	place-items: center;
+	width: 1.1em;
+	height: 1.1em;
+	border-radius: 50%;
+	font-size: 0.7em;
+	font-weight: 800;
+	line-height: 1;
+}
+
+.visual-status--success .visual-status__mark {
+	background: var(--status-success);
+	color: var(--text-inverse);
+}
+
+.visual-status--danger .visual-status__mark {
+	background: var(--status-danger);
+	color: var(--text-inverse);
+}
+
+.visual-status--info .visual-status__mark {
+	background: var(--accent);
+	color: var(--text-inverse);
+}
+
+.visual-icon {
+	display: inline-grid;
+	place-items: center;
+	min-width: 1.1em;
+	height: 1.1em;
+	font-family: var(--font-mono);
+	font-size: 0.85em;
+	font-weight: 800;
+	line-height: 1;
+}
+
+.visual-icon--tool {
+	color: var(--accent);
+}
+
+.visual-icon--terminal {
+	color: var(--text-secondary);
+}
+
+.tool-card__icon,
+.generic-card__icon,
+.weather-card__icon,
+.weather-card__day-icon {
+	font-family: var(--font-sans);
+}

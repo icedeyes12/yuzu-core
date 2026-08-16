@@ -1,0 +1,47 @@
+<!-- SPA login entry. Provider links get their API href from src/pages/login.js. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Sign in to Yuzu Companion — your AI companion app.">
+  <title>Login | Yuzu Companion</title>
+  <link rel="stylesheet" href="/src/styles/style.css">
+  <link rel="stylesheet" href="/src/styles/theme.css">
+  <link rel="stylesheet" href="/src/styles/login.css">
+  <script>
+    (() => {
+      const theme = localStorage.getItem("theme") || "stellar-night-suisei";
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+</head>
+<body class="login-body">
+  <main class="login-page page-frame" aria-label="Sign in">
+    <section class="login-container" aria-labelledby="login-heading">
+      <h1 class="login-title" id="login-heading">Yuzu Companion</h1>
+      <p class="login-subtitle">Sign in to continue</p>
+
+      <!-- biome-ignore lint/a11y/useSemanticElements: role="group" is the intended button-group pattern (ported markup) -->
+      <div class="login-buttons" role="group" aria-label="Sign-in options">
+        <a href="/api/v1/auth/login?provider=google"
+           data-auth-provider="google"
+           class="login-btn btn-google"
+           aria-label="Sign in with Google">
+          <img src="/assets/logos/providers/google.svg" width="20" height="20" alt="" aria-hidden="true">
+          Sign in with Google
+        </a>
+        <a href="/api/v1/auth/login?provider=github"
+           data-auth-provider="github"
+           class="login-btn btn-github"
+           aria-label="Sign in with GitHub">
+          <img src="/assets/logos/providers/github.svg" width="20" height="20" alt="" aria-hidden="true">
+          Sign in with GitHub
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/pages/login.js"></script>
+</body>
+</html>

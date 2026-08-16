@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -25,6 +23,7 @@ from app.api.utils import (
     get_current_user,
     validate_external_https_url,
 )
+from app.core.context import keyring_scope
 from app.core.logging_config import get_logger
 from app.db import (
     Database,
@@ -187,6 +186,7 @@ async def api_list_providers(user_id: str = Depends(get_current_user)):
         ai_manager = await get_ai_manager()
         available_providers = ai_manager.get_available_providers()
         all_models = await ai_manager.get_all_models()
+        model_infos = await ai_manager.get_all_model_infos()
 
         profile = await Database.get_profile(user_id)
         providers_config = profile.get("providers_config", {})
@@ -199,6 +199,7 @@ async def api_list_providers(user_id: str = Depends(get_current_user)):
             "all_models": all_models,
             "current_provider": current_provider,
             "current_model": current_model,
+            "model_infos": model_infos,
         }
     except Exception as e:
         log.error("Error listing providers: %s", e)
@@ -219,45 +220,15 @@ async def api_proxy_models(
         ai_manager = await get_ai_manager()
         if provider not in ai_manager.get_available_providers():
             raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
-
-        api_key = request.headers.get("X-Provider-Key")
         base_url = request.headers.get("X-Provider-BaseUrl")
-
-        url = ""
-        if provider == "openrouter":
-            url = "https://openrouter.ai/api/v1/models"
-        elif provider == "openai":
-            url = "https://api.openai.com/v1/models"
-        elif provider.startswith("custom") and base_url:
-            validated_base_url = validate_external_https_url(base_url)
-            if "/chat/completions" in validated_base_url:
-                base_dir = validated_base_url.split("/chat/completions")[0]
-            elif "/v1/messages" in validated_base_url:
-                base_dir = validated_base_url.split("/v1/messages")[0]
-            elif validated_base_url.endswith("/v1"):
-                base_dir = validated_base_url
-            else:
-                base_dir = validated_base_url
-            url = f"{base_dir}/models"
-
-        if url:
-            headers = {}
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
-            try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.get(url, headers=headers, timeout=10.0)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        models = [
-                            m.get("id") for m in data.get("data", []) if m.get("id")
-                        ]
-                        if models:
-                            return {"status": "success", "models": models}
-            except Exception as e:
-                log.warning("Failed to fetch models from %s: %s", url, e)
-
-        return {"status": "error", "message": "Could not fetch models"}
+        if base_url:
+            base_url = validate_external_https_url(base_url)
+        models, model_infos = await ai_manager.discover_provider_models(
+            provider,
+            api_key=request.headers.get("X-Provider-Key"),
+            base_url=base_url,
+        )
+        return {"status": "success", "models": models, "model_infos": model_infos}
 
     except HTTPException:
         raise
@@ -281,31 +252,23 @@ async def api_refresh_provider_models(
     if provider_instance is None:
         raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
 
-    fetcher = getattr(provider_instance, "fetch_live_models", None)
-    if not callable(fetcher):
-        raise HTTPException(
-            status_code=409,
-            detail=f"Provider '{provider}' does not support live model refresh",
-        )
-
     try:
-        import inspect
-
-        kwargs = {}
-        sig = inspect.signature(fetcher)
-        if "api_key" in sig.parameters:
-            kwargs["api_key"] = request.headers.get("X-Provider-Key")
-        if "base_url" in sig.parameters and provider.startswith("custom"):
-            kwargs["base_url"] = validate_external_https_url(
-                request.headers.get("X-Provider-BaseUrl")
-            )
-
-        fetch_models = cast(Callable[..., Awaitable[list[str]]], fetcher)
-        models = await fetch_models(**kwargs)
-        models = sorted({model for model in models if isinstance(model, str) and model})
+        provider_instance.clear_model_metadata()
+        base_url = request.headers.get("X-Provider-BaseUrl")
+        if base_url:
+            base_url = validate_external_https_url(base_url)
+        models, model_infos = await ai_manager.discover_provider_models(
+            provider,
+            api_key=request.headers.get("X-Provider-Key"),
+            base_url=base_url,
+        )
         if not models:
             raise HTTPException(status_code=502, detail="Provider returned no models")
-        return {"status": "success", "models": models}
+        return {
+            "status": "success",
+            "models": models,
+            "model_infos": model_infos,
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -346,13 +309,7 @@ async def api_test_provider_connection(
 ):
     rate_limit_user(_user_id, 5, "provider-test-user")
     try:
-        keyrings = extract_keyrings(request)
-        if keyrings:
-            from app.core.context import clear_request_keyring, set_request_keyrings
-
-            set_request_keyrings(keyrings)
-
-        try:
+        async with keyring_scope(extract_keyrings(request)):
             ai_manager = await get_ai_manager()
             provider = ai_manager.providers.get(payload.provider_name)
             if not provider:
@@ -367,9 +324,6 @@ async def api_test_provider_connection(
                 "connected": is_connected,
                 "message": f"{payload.provider_name}: {'Connected' if is_connected else 'Connection failed'}",
             }
-        finally:
-            if keyrings:
-                clear_request_keyring()
     except Exception as e:
         log.error("Error testing provider connection: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

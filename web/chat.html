@@ -1,0 +1,81 @@
+<!-- SPA chat entry (shell). Phase 2 wires the ConversationStore -> DOMRenderer
+     pipeline and event-router SSE normalization into #chatContainer. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Chat with your AI companion.">
+  <title>Chat | Yuzu Companion</title>
+
+  <link rel="stylesheet" href="/src/styles/style.css">
+  <link rel="stylesheet" href="/src/styles/chat.css">
+  <link rel="stylesheet" href="/src/styles/marked.css">
+  <link rel="stylesheet" href="/src/styles/sidebar.css">
+  <link rel="stylesheet" href="/src/styles/theme.css">
+  <link rel="stylesheet" href="/src/styles/components/visual-language.css">
+  <link rel="stylesheet" href="/src/styles/components/tool-cards.css">
+  <link rel="stylesheet" href="/src/styles/components/code-blocks.css">
+  <script>
+    (() => {
+      const theme = localStorage.getItem("theme") || "stellar-night-suisei";
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+</head>
+<body data-page="chat">
+  <div id="sidebarRoot"></div>
+
+  <div class="page-layout chat-layout">
+    <header class="chat-header header-content">
+      <button
+        class="hamburger-menu hamburger"
+        id="hamburgerMenu"
+        data-action="toggle-sidebar"
+        aria-expanded="false"
+        aria-controls="mainSidebar"
+        type="button"
+        aria-label="Open conversations and settings">
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+      </button>
+
+      <div class="header-left header-title">
+        <h1 class="partner-name" id="partnerName">Yuzu</h1>
+        <div class="session-name" id="sessionName" aria-live="polite"></div>
+      </div>
+
+      <!-- biome-ignore lint/a11y/useAriaPropsSupportedByRole: affection readout is ported markup; populated by the Phase 2 chat port -->
+      <div class="affection-display" data-affection-level="0" aria-label="Affection level">
+        <span class="affection-icon" aria-hidden="true"></span>
+        <span class="affection-value" aria-hidden="true"></span>
+      </div>
+    </header>
+
+    <main class="chat-container" id="chatContainer" aria-label="Chat messages" aria-live="polite">
+      <!-- Messages rendered here by the Phase 2 chat port -->
+    </main>
+
+    <button id="scrollToBottomBtn" class="scroll-to-bottom-btn hidden" type="button" aria-label="Scroll to latest message">
+      <img src="/assets/icons/arrow-down.svg" width="24" height="24" alt="" aria-hidden="true">
+    </button>
+
+    <form class="input-area" id="chatForm" aria-label="Send a message">
+      <label for="messageInput" class="sr-only">Message input</label>
+      <textarea
+        id="messageInput"
+        name="message"
+        placeholder="Type your message..."
+        rows="1"
+        aria-label="Type your message"
+        autocomplete="off"></textarea>
+      <button id="sendButton" type="submit" aria-label="Send message" class="btn-icon">
+        <img src="/assets/icons/send.svg" width="20" height="20" alt="" aria-hidden="true">
+      </button>
+    </form>
+  </div>
+
+  <script type="module" src="/src/pages/chat.js"></script>
+</body>
+</html>

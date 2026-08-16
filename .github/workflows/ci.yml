@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  quality:
+  validation:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -27,11 +27,14 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
       - name: Install Python dependencies
         run: python -m pip install -r requirements.txt ruff
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Install root frontend tooling
+        run: npm ci
 
       - name: Check Python formatting
         run: ruff format --check .
@@ -39,11 +42,23 @@ jobs:
       - name: Check Python lint
         run: ruff check .
 
-      - name: Compile tracked Python sources
-        run: git ls-files -z -- '*.py' | while IFS= read -r -d '' file; do test -f "$file" && python -m py_compile "$file"; done
+      - name: Compile Python sources
+        run: python -m compileall -q .
 
-      - name: Check JavaScript syntax
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: web
+        run: npm run build
+
+      - name: Check legacy JavaScript syntax
         run: find static -type f -name '*.js' -exec node --check {} +
 
+      - name: Check frontend JavaScript syntax
+        working-directory: web
+        run: find src -type f -name '*.js' -exec node --check {} +
+
       - name: Check frontend with Biome
-        run: bunx biome check static/
+        run: bunx @biomejs/biome check static/ web/src/

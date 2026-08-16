@@ -32,13 +32,18 @@ from app.db import (
     get_session_messages_async,
     update_pipeline_state_async,
 )
-from app.memory.embedder import embed_text_async
-from app.memory.extractor import extract_batch_async
+from app.memory.embedder import embed_texts_async
+from app.memory.extractor import (
+    build_adaptive_batches,
+    estimate_message_tokens,
+    extract_batch_async,
+)
 from app.memory.graph import GraphMemoryRepository
 
 __all__ = [
     "trigger_memory_pipeline_async",
     "enqueue_memory_pipeline_async",
+    "recover_memory_pipeline_async",
     "run_memory_pipeline_async",
     "extract_memory_batch_async",
     "should_trigger_segmentation_async",
@@ -52,6 +57,9 @@ WINDOW_BASE = 40
 IDLE_WINDOW_BASE = 20
 IDLE_GATE_HOURS = 3.0
 BATCH_SIZE = 100
+MESSAGE_FETCH_LIMIT = 512
+EXTRACTION_TOKEN_BUDGET = 6000
+MAX_EXTRACTION_RETRIES = 3
 MAX_BATCHES_PER_WORKER = 5
 MAX_WORKER_RUNTIME_SECONDS = 300.0
 
@@ -141,6 +149,18 @@ async def _get_session_idle_hours_async(
         return None
 
 
+async def _get_messages_after_count_async(
+    session_id: str, last_count: int, user_id: str
+) -> list[dict[str, Any]]:
+    return await get_session_messages_async(
+        session_id,
+        limit=MESSAGE_FETCH_LIMIT,
+        offset=max(0, last_count),
+        conversational_only=True,
+        user_id=user_id,
+    )
+
+
 async def _has_eligible_backlog_async(
     session_id: str, remaining_count: int, user_id: str
 ) -> bool:
@@ -184,14 +204,10 @@ async def should_trigger_segmentation_async(
         messages_after = await get_session_messages_after_id_async(
             session_id,
             last_message_id or "00000000-0000-0000-0000-000000000000",
-            limit=10000,
+            limit=MESSAGE_FETCH_LIMIT,
             user_id=user_id or "",
         )
-        delta = sum(
-            1
-            for message in messages_after
-            if message.get("role") in ("user", "assistant")
-        )
+        delta = len(messages_after)
     except Exception as exc:
         logger.warning("Cursor delta query failed; using count fallback: %s", exc)
         last_count = state.get("last_segmented_count", 0) or 0
@@ -231,10 +247,10 @@ async def mark_segmentation_done_async(
         last_message_id: ID of the last processed message (preferred)
         processed_count: Number of messages processed in this run
     """
-    actual_total = await get_message_count_async(session_id, user_id=user_id)
-
+    state = await get_pipeline_state_async(session_id, user_id)
+    previous_count = state.get("last_segmented_count", 0) or 0
     state_update = {
-        "last_segmented_count": actual_total,  # Keep for compatibility
+        "last_segmented_count": previous_count + max(0, processed_count),
         "last_segmented_at": datetime.now().isoformat(),
     }
 
@@ -255,7 +271,295 @@ async def extract_memory_batch_async(
     return await extract_batch_async(messages, profile=profile)
 
 
+async def _extract_with_retries_async(
+    messages: list[dict[str, Any]], profile: dict[str, Any] | None = None
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], int]:
+    retry_batch = messages
+    for retry_count in range(MAX_EXTRACTION_RETRIES):
+        try:
+            extracted = await extract_memory_batch_async(retry_batch, profile=profile)
+            return extracted, retry_batch, retry_count + 1
+        except Exception as exc:
+            if retry_count + 1 >= MAX_EXTRACTION_RETRIES:
+                logger.error(
+                    "memory extraction skipped retries=%s tokens=%s error=%s",
+                    retry_count + 1,
+                    sum(estimate_message_tokens(m) for m in retry_batch),
+                    type(exc).__name__,
+                )
+                return None, retry_batch, retry_count + 1
+            midpoint = max(1, len(retry_batch) // 2)
+            retry_batch = retry_batch[:midpoint]
+            logger.warning(
+                "memory extraction retry=%s reduced_messages=%s error=%s",
+                retry_count + 1,
+                len(retry_batch),
+                type(exc).__name__,
+            )
+    return None, retry_batch, MAX_EXTRACTION_RETRIES
+
+
 # ── Main pipeline runner ───────────────────────────────────────────────────────
+
+
+async def _fetch_unsegmented_messages_async(
+    session_id: str, user_id: str, state: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Fetch messages after the last segmented message ID, with count fallback."""
+    last_message_id = state.get("last_segmented_message_id")
+    if isinstance(last_message_id, int):
+        last_message_id = "00000000-0000-0000-0000-000000000000"
+    last_count = state.get("last_segmented_count", 0) or 0
+
+    if last_message_id:
+        try:
+            unsegmented = await get_session_messages_after_id_async(
+                session_id,
+                last_message_id,
+                limit=MESSAGE_FETCH_LIMIT,
+                user_id=user_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "ID-based query failed, falling back to count-based: %s",
+                type(exc).__name__,
+            )
+            unsegmented = await _get_messages_after_count_async(
+                session_id, last_count, user_id
+            )
+    else:
+        unsegmented = await _get_messages_after_count_async(
+            session_id, last_count, user_id
+        )
+
+    return [
+        message
+        for message in unsegmented
+        if message.get("role") in ("user", "assistant")
+    ]
+
+
+def _select_first_batch(
+    unsegmented: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int]:
+    """Pick the first adaptive batch, remembering the original backlog count."""
+    original_count = len(unsegmented)
+    batches = build_adaptive_batches(
+        unsegmented,
+        token_budget=EXTRACTION_TOKEN_BUDGET,
+        max_messages=BATCH_SIZE,
+    )
+    return (batches[0] if batches else []), original_count
+
+
+def _log_memory_batch(
+    session_id: str,
+    unsegmented: list[dict[str, Any]],
+    original_count: int,
+) -> None:
+    """Log the batch size, token estimate, and message ID range."""
+    estimated_tokens = sum(estimate_message_tokens(message) for message in unsegmented)
+    logger.info(
+        "memory batch session=%s messages=%s/%s tokens=%s range=%s..%s",
+        session_id,
+        len(unsegmented),
+        original_count,
+        estimated_tokens,
+        unsegmented[0].get("id") if unsegmented else None,
+        unsegmented[-1].get("id") if unsegmented else None,
+    )
+
+
+async def _embed_extracted_async(
+    episodes: list[dict[str, Any]],
+    claims: list[dict[str, Any]],
+    profile: dict[str, Any] | None,
+) -> tuple[list[Any], list[Any]]:
+    """Embed episode summaries and claim triples, returning per-type vectors."""
+    embedding_texts = [episode["summary"] for episode in episodes] + [
+        f"{claim['entity']} {claim['relation']} {claim['target']}" for claim in claims
+    ]
+    try:
+        embeddings = await embed_texts_async(embedding_texts, profile=profile)
+    except Exception as exc:
+        logger.warning(
+            "memory embeddings unavailable; continuing without embeddings error=%s",
+            type(exc).__name__,
+        )
+        embeddings = []
+    logger.info(
+        "memory batch embeddings provider=%s requested=%s returned=%s",
+        YUZU_PORTAL,
+        len(embedding_texts),
+        len(embeddings),
+    )
+    return embeddings[: len(episodes)], embeddings[len(episodes) :]
+
+
+async def _persist_episodes_async(
+    *,
+    user_id: str,
+    session_id: str,
+    episodes: list[dict[str, Any]],
+    unsegmented: list[dict[str, Any]],
+    embeddings: list[Any],
+) -> tuple[list[str | None], int]:
+    """Persist extracted episodes, returning (episode_ids, episode_count)."""
+    episode_ids: list[str | None] = []
+    episode_count = 0
+    for episode_index, episode in enumerate(episodes):
+        segment_messages = unsegmented[episode["start_index"] : episode["end_index"]]
+        source_ids = [str(message.get("id")) for message in segment_messages]
+        embedding = (
+            embeddings[episode_index] if episode_index < len(embeddings) else None
+        )
+        episode_row = await GraphMemoryRepository.create_episode(
+            user_id=user_id,
+            session_id=session_id,
+            title=episode["title"],
+            summary=episode["summary"],
+            embedding=embedding,
+            importance=episode["importance"],
+            source_start_message_id=source_ids[0] if source_ids else None,
+            source_end_message_id=source_ids[-1] if source_ids else None,
+        )
+        episode_id = str(episode_row["id"]) if episode_row else None
+        episode_ids.append(episode_id)
+        if episode_id:
+            episode_count += 1
+    return episode_ids, episode_count
+
+
+async def _persist_claims_async(
+    *,
+    user_id: str,
+    claims: list[dict[str, Any]],
+    episodes: list[dict[str, Any]],
+    unsegmented: list[dict[str, Any]],
+    embeddings: list[Any],
+    episode_ids: list[str | None],
+) -> tuple[int, int, int]:
+    """Persist claim fact nodes with evidence, consolidation, and related edges."""
+    claim_count = 0
+    consolidation_candidates = 0
+    consolidation_archived = 0
+    for claim_index, claim in enumerate(claims):
+        episode_id = next(
+            (
+                episode_ids[index]
+                for index, episode in enumerate(episodes)
+                if episode["start_index"]
+                <= claim["evidence_start_index"]
+                < episode["end_index"]
+                and index < len(episode_ids)
+            ),
+            None,
+        )
+        metadata = {
+            "confidence": claim["confidence"],
+            "evidence_message_ids": [
+                str(unsegmented[index].get("id"))
+                for index in range(
+                    claim["evidence_start_index"],
+                    min(claim["evidence_end_index"], len(unsegmented)),
+                )
+            ],
+        }
+        if episode_id is not None:
+            metadata["source_episodic_ids"] = [episode_id]
+        node_content = f"{claim['entity']} {claim['relation']} {claim['target']}"
+        node_row = await GraphMemoryRepository.get_or_create_node(
+            user_id=user_id,
+            node_type="fact",
+            content=node_content,
+            embedding=embeddings[claim_index]
+            if claim_index < len(embeddings)
+            else None,
+            confidence=claim["confidence"],
+            importance=0.7,
+            embedding_model="gemini-embedding-2-preview",
+            embedding_dimensions=1536,
+        )
+        if node_row:
+            node_id = str(node_row["id"])
+            if episode_id:
+                evidence_message_ids = metadata.get("evidence_message_ids", [])
+                if not isinstance(evidence_message_ids, list):
+                    evidence_message_ids = []
+                evidence_message_ids = [
+                    item
+                    for item in evidence_message_ids
+                    if isinstance(item, (str, int))
+                ]
+                _ = await GraphMemoryRepository.add_evidence(
+                    user_id=user_id,
+                    node_id=node_id,
+                    episode_id=episode_id,
+                    message_ids=evidence_message_ids,
+                )
+            claim_count += 1
+            try:
+                consolidation = await GraphMemoryRepository.consolidate_node(
+                    user_id=user_id,
+                    node_id=node_id,
+                    node_type="fact",
+                    content=node_content,
+                )
+                consolidation_candidates += consolidation["candidates"]
+                consolidation_archived += consolidation["archived"]
+            except Exception as exc:
+                logger.warning(
+                    "memory consolidation skipped node=%s error=%s",
+                    node_id,
+                    type(exc).__name__,
+                )
+
+            related_claims = [
+                other
+                for other in claims
+                if other is not claim
+                and other["evidence_start_index"] == claim["evidence_start_index"]
+            ]
+            for related_claim in related_claims:
+                related_content = (
+                    f"{related_claim['entity']} {related_claim['relation']} "
+                    f"{related_claim['target']}"
+                )
+                related_node = await GraphMemoryRepository.get_or_create_node(
+                    user_id=user_id,
+                    node_type="fact",
+                    content=related_content,
+                    embedding=None,
+                    confidence=related_claim["confidence"],
+                    importance=0.7,
+                    embedding_model=None,
+                    embedding_dimensions=None,
+                )
+                if related_node and str(related_node["id"]) != node_id:
+                    _ = await GraphMemoryRepository.add_edge(
+                        user_id=user_id,
+                        from_node_id=node_id,
+                        to_node_id=str(related_node["id"]),
+                        edge_type="related_to",
+                        confidence=min(
+                            claim["confidence"], related_claim["confidence"]
+                        ),
+                    )
+    return claim_count, consolidation_candidates, consolidation_archived
+
+
+async def _mark_batch_done_async(
+    session_id: str,
+    user_id: str,
+    unsegmented: list[dict[str, Any]],
+    processed_count: int,
+) -> None:
+    """Advance the segmentation checkpoint to the last processed message."""
+    last_msg = unsegmented[-1] if unsegmented else None
+    last_processed_id = str(last_msg.get("id")) if last_msg else None
+    await mark_segmentation_done_async(
+        session_id, last_processed_id, processed_count, user_id=user_id
+    )
 
 
 async def run_memory_pipeline_async(
@@ -264,7 +568,7 @@ async def run_memory_pipeline_async(
     """Run the full memory pipeline for a session.
 
     Steps:
-      1. Get unsegmented messages after last_segmented_message_id
+      1. Fetch unsegmented messages after last_segmented_message_id
       2. Extract episodes and claims in one LLM call
       3. Persist episodes, claims, and provenance
       4. Clear fence and mark done with message ID
@@ -273,79 +577,31 @@ async def run_memory_pipeline_async(
     """
     try:
         if not get_provider_key(YUZU_PORTAL):
-            logger.warning("Memory module disabled: Missing Yuzu Portal API key")
+            logger.info("memory disabled: missing Yuzu Portal API key")
             return {"episodes": 0, "claims": 0, "llm_calls": 0, "processed_messages": 0}
 
-        logger.info(f"Starting for session {session_id}, count={message_count}")
         profile = await Database.get_profile(user_id)
+        logger.info("memory enabled via Yuzu Portal")
+        logger.info("Starting for session %s, count=%s", session_id, message_count)
 
-        # Get current state for tracking
+        # Fetch and shape the batch
         state = await get_pipeline_state_async(session_id, user_id)
-        last_message_id = state.get("last_segmented_message_id")
-        if isinstance(last_message_id, int):
-            last_message_id = "00000000-0000-0000-0000-000000000000"
-        last_count = state.get("last_segmented_count", 0) or 0
-
-        # ID-based query: fetch messages AFTER the last processed message ID
-        if last_message_id:
-            try:
-                all_messages = await get_session_messages_after_id_async(
-                    session_id, last_message_id, limit=10000, user_id=user_id
-                )
-                unsegmented = [
-                    m for m in all_messages if m.get("role") in ("user", "assistant")
-                ]
-            except Exception as e:
-                logger.warning(
-                    f"ID-based query failed, falling back to count-based: {e}"
-                )
-                # Fallback
-                all_messages = await get_session_messages_async(
-                    session_id, limit=10000, user_id=user_id
-                )
-                conversation_messages = [
-                    m for m in all_messages if m.get("role") in ("user", "assistant")
-                ]
-                unsegmented = conversation_messages[last_count:]
-        else:
-            # Initial state: use count-based
-            all_messages = await get_session_messages_async(
-                session_id, limit=10000, user_id=user_id
-            )
-            conversation_messages = [
-                m for m in all_messages if m.get("role") in ("user", "assistant")
-            ]
-            unsegmented = conversation_messages[last_count:]
-
-        # Filter to conversation messages only. The ID path is already scoped
-        # to the cursor; never reapply the old global count as an offset.
-        if not isinstance(unsegmented, list):
-            unsegmented = [
-                m for m in all_messages if m.get("role") in ("user", "assistant")
-            ]
-
+        unsegmented = await _fetch_unsegmented_messages_async(
+            session_id, user_id, state
+        )
         if not unsegmented:
             return {"episodes": 0, "claims": 0, "llm_calls": 0}
 
-        unsegmented_count = len(unsegmented)
+        unsegmented, original_unsegmented_count = _select_first_batch(unsegmented)
+        if not unsegmented:
+            return {"episodes": 0, "claims": 0, "llm_calls": 0}
+        _log_memory_batch(session_id, unsegmented, original_unsegmented_count)
 
-        original_unsegmented_count = unsegmented_count
-        if unsegmented_count > BATCH_SIZE:
-            logger.info(
-                "Session %s has %s messages; processing one worker batch of %s",
-                session_id,
-                unsegmented_count,
-                BATCH_SIZE,
+        if original_unsegmented_count < IDLE_WINDOW_BASE:
+            logger.debug(
+                "Only %s unsegmented messages; skipping",
+                original_unsegmented_count,
             )
-            unsegmented = unsegmented[:BATCH_SIZE]
-            unsegmented_count = BATCH_SIZE
-
-        # Track how many we're actually processing
-        processed_count = unsegmented_count
-        # ───────────────────────────────────────────────────────────────────────
-
-        if unsegmented_count < IDLE_WINDOW_BASE:
-            logger.debug("Only %s unsegmented messages; skipping", unsegmented_count)
             return {
                 "episodes": 0,
                 "claims": 0,
@@ -353,141 +609,77 @@ async def run_memory_pipeline_async(
                 "processed_messages": 0,
             }
 
-        extracted = await extract_memory_batch_async(unsegmented, profile=profile)
+        # Extract episodes and claims, retrying with a halved batch on failure
+        started = time.monotonic()
+        extracted, unsegmented, llm_calls = await _extract_with_retries_async(
+            unsegmented, profile=profile
+        )
+        if extracted is None:
+            logger.error(
+                "memory extraction failed session=%s retries=%s elapsed_ms=%s checkpoint_preserved=true",
+                session_id,
+                llm_calls,
+                int((time.monotonic() - started) * 1000),
+            )
+            return {"episodes": 0, "claims": 0, "llm_calls": llm_calls}
+        processed_count = len(unsegmented)
+        logger.info(
+            "memory extraction session=%s retries=%s elapsed_ms=%s extracted=%s/%s processed_messages=%s",
+            session_id,
+            llm_calls,
+            int((time.monotonic() - started) * 1000),
+            len(extracted.get("episodes", [])),
+            len(extracted.get("claims", [])),
+            processed_count,
+        )
         if not extracted["episodes"] and not extracted["claims"]:
             logger.debug("No durable memory extracted")
-            if unsegmented:
-                last_msg = unsegmented[-1]
-                await mark_segmentation_done_async(
-                    session_id, last_msg.get("id", 0), processed_count, user_id=user_id
-                )
-            return {"episodes": 0, "claims": 0, "llm_calls": 1}
-
-        episode_count = 0
-        claim_count = 0
-        episode_ids: list[str] = []
-        for episode in extracted["episodes"]:
-            segment_messages = unsegmented[
-                episode["start_index"] : episode["end_index"]
-            ]
-            source_ids = [str(message.get("id")) for message in segment_messages]
-            embedding = await embed_text_async(episode["summary"])
-            episode_row = await GraphMemoryRepository.create_episode(
-                user_id=user_id,
-                session_id=session_id,
-                title=episode["title"],
-                summary=episode["summary"],
-                embedding=embedding,
-                importance=episode["importance"],
-                source_start_message_id=source_ids[0] if source_ids else None,
-                source_end_message_id=source_ids[-1] if source_ids else None,
+            await _mark_batch_done_async(
+                session_id, user_id, unsegmented, processed_count
             )
-            episode_id = str(episode_row["id"]) if episode_row else None
-            if episode_id:
-                episode_ids.append(episode_id)
-                episode_count += 1
-
-        for claim in extracted["claims"]:
-            episode_id = next(
-                (
-                    episode_ids[index]
-                    for index, episode in enumerate(extracted["episodes"])
-                    if episode["start_index"]
-                    <= claim["evidence_start_index"]
-                    < episode["end_index"]
-                    and index < len(episode_ids)
-                ),
-                None,
-            )
-            metadata = {
-                "confidence": claim["confidence"],
-                "evidence_message_ids": [
-                    str(unsegmented[index].get("id"))
-                    for index in range(
-                        claim["evidence_start_index"],
-                        min(claim["evidence_end_index"], len(unsegmented)),
-                    )
-                ],
+            return {
+                "episodes": 0,
+                "claims": 0,
+                "llm_calls": llm_calls,
+                "processed_messages": processed_count,
             }
-            if episode_id is not None:
-                metadata["source_episodic_ids"] = [episode_id]
-            node_content = f"{claim['entity']} {claim['relation']} {claim['target']}"
-            node_row = await GraphMemoryRepository.get_or_create_node(
-                user_id=user_id,
-                node_type="fact",
-                content=node_content,
-                embedding=await embed_text_async(node_content),
-                confidence=claim["confidence"],
-                importance=0.7,
-                embedding_model="gemini-embedding-2-preview",
-                embedding_dimensions=1536,
-            )
-            if node_row:
-                node_id = str(node_row["id"])
-                if episode_id:
-                    evidence_message_ids = metadata.get("evidence_message_ids", [])
-                    if not isinstance(evidence_message_ids, list):
-                        evidence_message_ids = []
-                    evidence_message_ids = [
-                        item
-                        for item in evidence_message_ids
-                        if isinstance(item, (str, int))
-                    ]
-                    _ = await GraphMemoryRepository.add_evidence(
-                        user_id=user_id,
-                        node_id=node_id,
-                        episode_id=episode_id,
-                        message_ids=evidence_message_ids,
-                    )
-                claim_count += 1
 
-                related_claims = [
-                    other
-                    for other in extracted["claims"]
-                    if other is not claim
-                    and other["evidence_start_index"] == claim["evidence_start_index"]
-                ]
-                for related_claim in related_claims:
-                    related_content = (
-                        f"{related_claim['entity']} {related_claim['relation']} "
-                        f"{related_claim['target']}"
-                    )
-                    related_node = await GraphMemoryRepository.get_or_create_node(
-                        user_id=user_id,
-                        node_type="fact",
-                        content=related_content,
-                        embedding=None,
-                        confidence=related_claim["confidence"],
-                        importance=0.7,
-                        embedding_model=None,
-                        embedding_dimensions=None,
-                    )
-                    if related_node and str(related_node["id"]) != node_id:
-                        _ = await GraphMemoryRepository.add_edge(
-                            user_id=user_id,
-                            from_node_id=node_id,
-                            to_node_id=str(related_node["id"]),
-                            edge_type="related_to",
-                            confidence=min(
-                                claim["confidence"], related_claim["confidence"]
-                            ),
-                        )
+        # Embed, then persist episodes and claims to the graph
+        episode_embeddings, claim_embeddings = await _embed_extracted_async(
+            extracted["episodes"], extracted["claims"], profile
+        )
+        episode_ids, episode_count = await _persist_episodes_async(
+            user_id=user_id,
+            session_id=session_id,
+            episodes=extracted["episodes"],
+            unsegmented=unsegmented,
+            embeddings=episode_embeddings,
+        )
+        (
+            claim_count,
+            consolidation_candidates,
+            consolidation_archived,
+        ) = await _persist_claims_async(
+            user_id=user_id,
+            claims=extracted["claims"],
+            episodes=extracted["episodes"],
+            unsegmented=unsegmented,
+            embeddings=claim_embeddings,
+            episode_ids=episode_ids,
+        )
 
         logger.info(
-            "Single-pass memory extraction: episodes=%s claims=%s",
+            "memory extraction complete episodes=%s claims=%s consolidation_candidates=%s consolidation_archived=%s llm_calls=%s elapsed_ms=%s",
             episode_count,
             claim_count,
+            consolidation_candidates,
+            consolidation_archived,
+            llm_calls,
+            int((time.monotonic() - started) * 1000),
         )
 
         # Mark done with the last processed message ID
-        last_processed_msg = unsegmented[-1] if unsegmented else None
-        last_processed_id = (
-            str(last_processed_msg.get("id")) if last_processed_msg else None
-        )
-
-        await mark_segmentation_done_async(
-            session_id, last_processed_id, processed_count, user_id=user_id
-        )
+        await _mark_batch_done_async(session_id, user_id, unsegmented, processed_count)
 
         # Log if there are remaining messages to process
         remaining = original_unsegmented_count - processed_count
@@ -500,8 +692,10 @@ async def run_memory_pipeline_async(
         return {
             "episodes": episode_count,
             "claims": claim_count,
-            "llm_calls": 1,
+            "llm_calls": llm_calls,
             "processed_messages": processed_count,
+            "consolidation_candidates": consolidation_candidates,
+            "consolidation_archived": consolidation_archived,
         }
     finally:
         await _clear_fence_async(session_id, user_id=user_id)
@@ -531,8 +725,9 @@ async def _background_worker_async():
                 result = await run_memory_pipeline_async(
                     session_to_process, count, user_id=user_id
                 )
+                processed_messages = result.get("processed_messages", 0)
                 if (
-                    result.get("processed_messages", 0) < BATCH_SIZE
+                    processed_messages <= 0
                     or time.monotonic() - started >= MAX_WORKER_RUNTIME_SECONDS
                 ):
                     break
@@ -547,11 +742,7 @@ async def _background_worker_async():
                     limit=BATCH_SIZE + 1,
                     user_id=user_id,
                 )
-                remaining_count = sum(
-                    1
-                    for message in remaining
-                    if message.get("role") in ("user", "assistant")
-                )
+                remaining_count = len(remaining)
                 if not await _has_eligible_backlog_async(
                     session_to_process, remaining_count, user_id
                 ):
@@ -567,9 +758,13 @@ async def _background_worker_async():
 async def enqueue_memory_pipeline_async(session_id: str, user_id: str) -> bool:
     """Enqueue a session for background memory pipeline processing.
 
-    Non-blocking — returns immediately.
+    Non-blocking — returns immediately. Disabled memory never starts a worker.
     """
     global _worker_task
+
+    if not get_provider_key(YUZU_PORTAL):
+        logger.info("memory enqueue skipped: missing Yuzu Portal API key")
+        return False
 
     queue_key = (session_id, user_id)
     if queue_key in _queued_sessions:
@@ -587,6 +782,29 @@ async def enqueue_memory_pipeline_async(session_id: str, user_id: str) -> bool:
     return True
 
 
+async def recover_memory_pipeline_async(session_id: str, user_id: str) -> bool:
+    """(｡•̀ᴗ-)✧"""
+    if not user_id or not get_provider_key(YUZU_PORTAL):
+        return False
+
+    state = await get_pipeline_state_async(session_id, user_id)
+    if not state.get("in_progress_fence_count"):
+        return False
+
+    cursor = state.get("last_segmented_message_id")
+    if isinstance(cursor, int):
+        cursor = "00000000-0000-0000-0000-000000000000"
+    pending = await get_session_messages_after_id_async(
+        session_id,
+        cursor or "00000000-0000-0000-0000-000000000000",
+        limit=1,
+        user_id=user_id,
+    )
+    if not any(message.get("role") in ("user", "assistant") for message in pending):
+        return False
+    return await enqueue_memory_pipeline_async(session_id, user_id)
+
+
 async def trigger_memory_pipeline_async(
     session_id: str, current_count: int, user_id: str
 ) -> bool:
@@ -594,6 +812,10 @@ async def trigger_memory_pipeline_async(
 
     Returns True if pipeline was triggered.
     """
+    if not get_provider_key(YUZU_PORTAL):
+        logger.info("memory job skipped: missing Yuzu Portal API key")
+        return False
+
     should_trigger, _ = await should_trigger_segmentation_async(
         session_id, current_count, user_id=user_id
     )

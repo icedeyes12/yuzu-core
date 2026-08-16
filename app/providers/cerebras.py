@@ -1,159 +1,30 @@
 from __future__ import annotations
 
-import logging
-from collections.abc import AsyncGenerator
 from typing import Any
 
-import httpx
-
-from app.core.context import MissingProviderKeyError
 from app.core.llm_context import LLMContext
-from app.providers.base import AIProvider, ProviderCapabilities
-from app.tools.schemas import StreamToolEvent
-
-logger = logging.getLogger(__name__)
+from app.providers.base import ProviderCapabilities
+from app.providers.custom_openai import OpenAICompatibleProvider
 
 
-class CerebrasProvider(AIProvider):
+class CerebrasProvider(OpenAICompatibleProvider):
+    log_prefix: str = "Cerebras"
+    default_timeout: float = 120.0
+
     def __init__(self, config: dict[str, Any] | None = None):
         super().__init__("cerebras", config)
         self.base_url: str = "https://api.cerebras.ai/v1/chat/completions"
-        self.capabilities: ProviderCapabilities = ProviderCapabilities(
-            supports_native_fc=False,  # Cerebras API doesn't expose FC yet
+        # Cerebras API doesn't expose function calling yet
+        self.capabilities = ProviderCapabilities(
+            supports_native_fc=False,
             supports_streaming_fc=False,
             supports_tool_call_parsing=False,
         )
-        self.available_models: list[str] = []
 
-    async def get_models(self) -> list[str]:
-        return self.available_models
-
-    async def send_message(
-        self,
-        ctx: LLMContext,
-        messages: list[dict[str, Any]],
-        source: str = "llm",
-        **kwargs,
-    ) -> str | None:
-
-        try:
-            messages = self._normalize_messages(messages)
-            temperature = kwargs.get("temperature")
-            max_tokens = kwargs.get("max_tokens")
-            top_p = kwargs.get("top_p")
-            top_k = kwargs.get("top_k")
-            typical_p = kwargs.get("typical_p")
-
-            headers = {
-                "Authorization": f"Bearer {self._require_api_key(ctx)}",
-                "Content-Type": "application/json",
-            }
-
-            payload = {
-                "model": ctx.model,
-                "messages": messages,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "top_p": top_p,
-                "top_k": top_k,
-                "typical_p": typical_p,
-                "stream": False,
-            }
-
-            logger.debug(
-                f"[Cerebras] {ctx.model} | new_msg=1 | max_tokens={max_tokens or 'unlimited'}"
-            )
-
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    ctx.base_url or self.base_url,
-                    headers=headers,
-                    json=payload,
-                    timeout=kwargs.get("timeout", 120),
-                )
-
-            if response.status_code == 200:
-                result = response.json()
-                return result["choices"][0]["message"]["content"].strip()
-            return None
-        except MissingProviderKeyError:
-            raise
-        except Exception:
-            return None
-
-    async def _send_message_streaming_impl(
-        self,
-        ctx: LLMContext,
-        messages: list[dict[str, Any]],
-        source: str = "llm",
-        **kwargs,
-    ) -> AsyncGenerator[str | StreamToolEvent, None]:
-
-        try:
-            messages = self._normalize_messages(messages)
-            temperature = kwargs.get("temperature")
-            max_tokens = kwargs.get("max_tokens")
-            top_p = kwargs.get("top_p")
-            top_k = kwargs.get("top_k")
-            typical_p = kwargs.get("typical_p")
-
-            headers = {
-                "Authorization": f"Bearer {self._require_api_key(ctx)}",
-                "Content-Type": "application/json",
-            }
-
-            payload = {
-                "model": ctx.model,
-                "messages": messages,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "top_p": top_p,
-                "top_k": top_k,
-                "typical_p": typical_p,
-                "stream": True,
-            }
-
-            async with httpx.AsyncClient() as client:
-                async with client.stream(
-                    "POST",
-                    ctx.base_url or self.base_url,
-                    headers=headers,
-                    json=payload,
-                    timeout=kwargs.get("timeout", 120),
-                ) as response:
-                    if response.status_code == 200:
-                        import json
-
-                        async for line in response.aiter_lines():
-                            if line and line.startswith("data: "):
-                                if line == "data: [DONE]":
-                                    break
-                                try:
-                                    json_data = json.loads(line[6:])
-                                    if (
-                                        "choices" in json_data
-                                        and len(json_data["choices"]) > 0
-                                    ):
-                                        delta = json_data["choices"][0].get("delta", {})
-                                        if "content" in delta and delta["content"]:
-                                            yield delta["content"]
-                                except (json.JSONDecodeError, KeyError):
-                                    continue
-                    else:
-                        _ = await response.aread()
-                        logger.warning(
-                            "[%s] HTTP %d for model %s: %s",
-                            self.name,
-                            response.status_code,
-                            ctx.model,
-                            response.text[:200],
-                        )
-                        yield f"\n[System] API returned HTTP {response.status_code}. Please try again."
-        except MissingProviderKeyError:
-            raise
-        except Exception as e:
-            logger.error("Cerebras streaming error: %s", repr(e), exc_info=True)
-            error_msg = str(e)
-            if not error_msg:
-                error_msg = repr(e)
-            yield f"Error: {type(e).__name__} - {error_msg}"
+    def _prepare_payload(
+        self, ctx: LLMContext, messages: list[dict[str, Any]], stream: bool, **kwargs
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        headers, payload = super()._prepare_payload(ctx, messages, stream, **kwargs)
+        payload["top_k"] = kwargs.get("top_k")
+        payload["typical_p"] = kwargs.get("typical_p")
+        return headers, payload

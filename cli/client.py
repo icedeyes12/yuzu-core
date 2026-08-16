@@ -55,7 +55,7 @@ class YuzuClient:
             return False
 
     async def list_sessions(self) -> list[dict[str, object]]:
-        response = await self.client.get("/api/sessions/list")
+        response = await self.client.get("/api/v1/sessions/list")
         response.raise_for_status()
         data = response.json()
         sessions = data.get("sessions", [])
@@ -63,14 +63,14 @@ class YuzuClient:
 
     async def switch_session(self, session_id: int | str) -> None:
         response = await self.client.post(
-            "/api/sessions/switch", json={"session_id": str(session_id)}
+            "/api/v1/sessions/switch", json={"session_id": str(session_id)}
         )
         response.raise_for_status()
 
     async def stream_message(self, message: str) -> AsyncIterator[StreamEvent]:
         async with self.client.stream(
             "POST",
-            "/api/send_message_stream",
+            "/api/v1/send_message_stream",
             json={"message": message, "interface": "cli"},
             headers={"Accept": "text/event-stream"},
         ) as response:
@@ -117,7 +117,7 @@ class YuzuClient:
         self, session_id: int | str, limit: int = 50
     ) -> list[dict[str, object]]:
         response = await self.client.get(
-            "/api/chat_history", params={"session_id": session_id, "limit": limit}
+            "/api/v1/chat_history", params={"session_id": session_id, "limit": limit}
         )
         response.raise_for_status()
         data = response.json()

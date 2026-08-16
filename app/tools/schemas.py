@@ -230,12 +230,19 @@ def error_result(
     tool_def: ToolDefinition | None = None,
     full_command: str = "",
     partner_name: str = "Yuzu",
+    *,
+    category: str = "tool_execution_error",
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Construct an error tool result payload."""
+    payload = {"error": message, "error_category": category}
+    if data:
+        payload.update(data)
     return {
         "ok": False,
         "error": message,
-        "data": {"error": message},
+        "error_category": category,
+        "data": payload,
     }
 
 

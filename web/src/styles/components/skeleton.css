@@ -1,0 +1,114 @@
+/* FILE: static/css/components/skeleton.css */
+/* DESCRIPTION: Skeleton loading animations for chat and sidebar */
+
+/* ==================== SKELETON BASE ==================== */
+.skeleton {
+	background: linear-gradient(
+		90deg,
+		var(--surface-raised) 25%,
+		var(--surface-hover) 50%,
+		var(--surface-raised) 75%
+	);
+	background-size: 200% 100%;
+	animation: skeleton-shimmer 1.5s var(--motion-easing-standard)
+		var(--motion-repeat-loop);
+	border-radius: var(--radius-md);
+}
+
+@keyframes skeleton-shimmer {
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
+}
+
+/* ==================== CHAT SKELETON ==================== */
+.skeleton-message {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	padding: 0.8rem 1rem;
+	border-radius: 12px;
+	background: var(--surface-message-ai);
+	border: 1px solid var(--border-message-ai);
+	animation: fadeIn var(--motion-slow) var(--motion-easing-standard);
+}
+
+.skeleton-message.user {
+	align-self: flex-end;
+	background: var(--surface-message-user);
+	border: 1px solid var(--border-message-user);
+}
+
+.skeleton-avatar {
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+}
+
+.skeleton-text {
+	height: 14px;
+	border-radius: var(--radius-sm);
+}
+
+.skeleton-text.short {
+	width: 60%;
+}
+
+.skeleton-text.medium {
+	width: 80%;
+}
+
+.skeleton-text.long {
+	width: 95%;
+}
+
+/* ==================== SIDEBAR SKELETON ==================== */
+.skeleton-sidebar-item {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.75rem 1rem;
+	border-radius: var(--radius-md);
+	background: var(--surface-raised);
+	margin-bottom: 0.5rem;
+}
+
+.skeleton-sidebar-icon {
+	width: 24px;
+	height: 24px;
+	border-radius: var(--radius-sm);
+}
+
+.skeleton-sidebar-text {
+	flex: 1;
+	height: 12px;
+	border-radius: var(--radius-sm);
+}
+
+.skeleton-sidebar-meta {
+	width: 60px;
+	height: 10px;
+	border-radius: var(--radius-sm);
+}
+
+/* ==================== SKELETON VARIANTS ==================== */
+.skeleton-code {
+	height: 100px;
+	border-radius: var(--radius-md);
+	margin: 0.5rem 0;
+}
+
+.skeleton-image {
+	height: 200px;
+	border-radius: var(--radius-md);
+	margin: 0.5rem 0;
+}
+
+.skeleton-name {
+	width: 80px;
+	height: 16px;
+	border-radius: var(--radius-sm);
+}

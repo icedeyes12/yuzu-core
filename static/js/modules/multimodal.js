@@ -7,12 +7,24 @@ import { router } from "./router.js";
 import { isProcessingMessage, setIsProcessingMessage } from "./state.js";
 import { chatStore } from "./store.js";
 
+function waitForPaint() {
+	return new Promise((resolve) => {
+		if (typeof requestAnimationFrame !== "undefined") {
+			requestAnimationFrame(() => requestAnimationFrame(resolve));
+		} else {
+			// Two-step setTimeout fallback when requestAnimationFrame is unavailable
+			setTimeout(() => setTimeout(resolve, 0), 0);
+		}
+	});
+}
+
 /**
  * MultimodalManager handles chat modes, image upload, and streaming.
  */
 export class MultimodalManager {
-	constructor() {
+	constructor(modelInfo = null) {
 		this.currentMode = "chat";
+		this.modelInfo = modelInfo;
 		this.visualMode = false;
 		this.selectedImages = [];
 		this.isDropdownOpen = false;
@@ -189,16 +201,27 @@ export class MultimodalManager {
 			chatStore.beginAssistantMessage();
 			abortController = new AbortController();
 			eventRouter.registerStream(sessionId, abortController);
+			await waitForPaint();
 
 			const formData = new FormData();
 			formData.append("message", message);
+			const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+			const now = new Date();
+			const offsetMinutes = -now.getTimezoneOffset();
+			const sign = offsetMinutes >= 0 ? "+" : "-";
+			const offset = `${sign}${String(Math.floor(Math.abs(offsetMinutes) / 60)).padStart(2, "0")}:${String(Math.abs(offsetMinutes) % 60).padStart(2, "0")}`;
+			const clientLocalTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}.${String(now.getMilliseconds()).padStart(3, "0")}${offset}`;
 			images.forEach((blob) => {
 				formData.append("images", blob);
 			});
 
 			const response = await fetch("/api/v1/send_message_stream", {
 				method: "POST",
-				headers: { Accept: "text/event-stream" },
+				headers: {
+					Accept: "text/event-stream",
+					"X-Client-Timezone": clientTimezone,
+					"X-Client-Local-Time": clientLocalTime,
+				},
 				body: formData,
 				signal: abortController.signal,
 			});
@@ -334,6 +357,10 @@ export class MultimodalManager {
 		}
 	}
 
+	canUse(capability) {
+		return this.modelInfo?.capabilities?.[capability] !== "unsupported";
+	}
+
 	getCurrentTime() {
 		const now = new Date();
 		return `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
@@ -377,22 +404,22 @@ export class MultimodalManager {
                         <div class="option-description">Normal chat</div>
                     </div>
                 </div>
-                <div class="multimodal-option ${this.currentMode === "generate" ? "active" : ""}" data-mode="generate">
+                <div class="multimodal-option ${this.currentMode === "generate" ? "active" : ""} ${this.canUse("image_generation") ? "" : "disabled"}" data-mode="generate" aria-disabled="${!this.canUse("image_generation")}">
                     <div class="option-icon">${this.getSVGIcon("generate")}</div>
                     <div class="option-content">
                         <div class="option-text">Generate Image</div>
-                        <div class="option-description">Create images with AI</div>
+                        <div class="option-description">${this.canUse("image_generation") ? "Create images with AI" : "Current model does not declare image generation"}</div>
                     </div>
                 </div>
-                <div class="multimodal-option ${this.currentMode === "image" ? "active" : ""}" data-mode="image">
+                <div class="multimodal-option ${this.currentMode === "image" ? "active" : ""} ${this.canUse("vision") ? "" : "disabled"}" data-mode="image" aria-disabled="${!this.canUse("vision")}">
                     <div class="option-icon">${this.getSVGIcon("image")}</div>
                     <div class="option-content">
                         <div class="option-text">Upload Image</div>
-                        <div class="option-description">Upload + analyze images</div>
+                        <div class="option-description">${this.canUse("vision") ? "Upload + analyze images" : "Current model does not declare vision"}</div>
                     </div>
                 </div>
                 ${
-									this.currentMode === "image"
+									this.currentMode === "image" && this.canUse("vision")
 										? `
                 <div class="image-upload-area">
                     <div class="upload-placeholder">
@@ -420,7 +447,7 @@ export class MultimodalManager {
 			if (!action) return;
 			switch (action.dataset.multimodalAction) {
 				case "open-file-picker":
-					this.openFilePicker();
+					if (this.canUse("vision")) this.openFilePicker();
 					break;
 				case "remove-image":
 					this.removeImage(Number(action.dataset.imageIndex));
@@ -435,6 +462,8 @@ export class MultimodalManager {
 			.forEach((option) => {
 				option.addEventListener("click", () => {
 					const mode = option.dataset.mode;
+					if (mode === "image" && !this.canUse("vision")) return;
+					if (mode === "generate" && !this.canUse("image_generation")) return;
 					this.switchMode(mode);
 					this.closeDropdown();
 				});

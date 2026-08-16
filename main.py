@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -142,6 +143,53 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 app.add_middleware(SecurityHeadersMiddleware)
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    """ฅ^•ﻌ•^ฅ"""
+    return os.environ.get(name, "true" if default else "false").lower() == "true"
+
+
+SERVE_WEB_UI = _env_flag("SERVE_WEB_UI", True)
+
+# Local single-origin SPA mode: when SERVE_WEB_UI is true and SERVE_SPA is set,
+# the page routes serve the built SPA from web/dist instead of the Jinja
+# templates. Default keeps the current Jinja UI; SERVE_SPA has no effect in
+# API-only mode (SERVE_WEB_UI=false).
+SERVE_SPA = _env_flag("SERVE_SPA", False)
+
+
+# CORS: env-driven for the future cross-origin SPA deployment. When CORS_ORIGINS
+# is unset the legacy same-origin policy is preserved exactly.
+def _cors_config() -> dict[str, object]:
+    """ฅ^•ﻌ•^ฅ"""
+    origins = [
+        o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()
+    ]
+    if origins:
+        return {
+            "allow_origins": origins,
+            "allow_credentials": True,
+            "allow_methods": ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE"],
+            "allow_headers": [
+                "Accept",
+                "Content-Type",
+                "X-BYOK-Config",
+                "X-Provider-Key",
+                "X-Provider-BaseUrl",
+                "X-Client-Timezone",
+                "X-Client-Local-Time",
+            ],
+        }
+    return {
+        "allow_origins": ["https://yuzuki.space"],
+        "allow_credentials": False,
+        "allow_methods": ["GET", "HEAD", "OPTIONS"],
+        "allow_headers": ["Accept", "Content-Type"],
+    }
+
+
+app.add_middleware(CORSMiddleware, **_cors_config())
+
+
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
     from uuid import uuid4
@@ -234,16 +282,16 @@ class PublicStaticFiles(StaticFiles):
         return await super().get_response(path, scope)
 
 
-# Keep one canonical public mount: templates use url_for("static", path=...).
-app.mount(
-    "/static",
-    PublicStaticFiles(directory=os.path.join(BASE_DIR, "static")),
-    name="static",
-)
+if SERVE_WEB_UI and not SERVE_SPA:
+    # Keep one canonical public mount: templates use url_for("static", path=...).
+    app.mount(
+        "/static",
+        PublicStaticFiles(directory=os.path.join(BASE_DIR, "static")),
+        name="static",
+    )
 
-
-# Jinja2 templates
-templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+    # Jinja2 templates
+    templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 
 def ensure_static_dirs():
@@ -271,116 +319,172 @@ app.include_router(health_router)
 # ---------------------------------------------------------------------------
 
 
-@app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
-    return FileResponse(os.path.join(BASE_DIR, "static", "favicon.ico"))
+if SERVE_WEB_UI and not SERVE_SPA:
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon():
+        return FileResponse(os.path.join(BASE_DIR, "static", "favicon.ico"))
 
 
 # ---------------------------------------------------------------------------
 # HTML Page Routes
+# Jinja mode (SERVE_WEB_UI=true, SERVE_SPA=false) is the default and serves the
+# server-rendered pages; SPA mode (SERVE_SPA=true) serves the built web/
+# frontend instead. API-only mode (SERVE_WEB_UI=false) omits both.
 # ---------------------------------------------------------------------------
 
 
-async def get_user_for_html(request: Request):
-    """Dependency for HTML routes that redirects to /login if unauthenticated."""
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if not token:
-        raise HTTPException(status_code=302, headers={"Location": "/login"})
-    user_id = await validate_session(token)
-    if not user_id:
-        raise HTTPException(status_code=302, headers={"Location": "/login"})
-    return user_id
+if SERVE_WEB_UI and not SERVE_SPA:
 
-
-@app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
-    from fastapi.responses import RedirectResponse
-
-    from app.auth.session import SESSION_COOKIE_NAME, validate_session
-
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if token:
+    async def get_user_for_html(request: Request):
+        """Dependency for HTML routes that redirects to /login if unauthenticated."""
+        token = request.cookies.get(SESSION_COOKIE_NAME)
+        if not token:
+            raise HTTPException(status_code=302, headers={"Location": "/login"})
         user_id = await validate_session(token)
-        if user_id:
-            return RedirectResponse(url="/chat", status_code=302)
-    return templates.TemplateResponse(
-        request=request,
-        name="login.html",
-        context={},
+        if not user_id:
+            raise HTTPException(status_code=302, headers={"Location": "/login"})
+        return user_id
+
+    @app.get("/login", response_class=HTMLResponse)
+    async def login_page(request: Request):
+        from fastapi.responses import RedirectResponse
+
+        from app.auth.session import SESSION_COOKIE_NAME, validate_session
+
+        token = request.cookies.get(SESSION_COOKIE_NAME)
+        if token:
+            user_id = await validate_session(token)
+            if user_id:
+                return RedirectResponse(url="/chat", status_code=302)
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={},
+        )
+
+    @app.get("/", response_class=HTMLResponse)
+    async def home(request: Request, user_id: str = Depends(get_user_for_html)):
+        profile = await Database.get_profile(user_id)
+        return templates.TemplateResponse(
+            request=request,
+            name="index.html",
+            context={"profile": profile, "user_id": user_id, "current_page": "home"},
+        )
+
+    @app.get("/chat", response_class=HTMLResponse)
+    async def chat_redirect(
+        request: Request, user_id: str = Depends(get_user_for_html)
+    ):
+        from fastapi.responses import RedirectResponse
+
+        sessions = await Database.get_all_sessions(user_id=user_id)
+        if not sessions:
+            session_id = await Database.create_session(
+                "New Conversation", user_id=user_id
+            )
+        else:
+            session_id = sessions[0]["id"]
+        return RedirectResponse(url=f"/chat/{session_id}", status_code=302)
+
+    @app.get("/chat/{session_id}", response_class=HTMLResponse)
+    async def chat_page(
+        session_id: str, request: Request, user_id: str = Depends(get_user_for_html)
+    ):
+        profile = await Database.get_profile(user_id)
+        return templates.TemplateResponse(
+            request=request,
+            name="chat.html",
+            context={"profile": profile, "user_id": user_id, "current_page": "chat"},
+        )
+
+    @app.get("/config", response_class=HTMLResponse)
+    async def config_page(request: Request, user_id: str = Depends(get_user_for_html)):
+        profile = await Database.get_profile(user_id)
+        return templates.TemplateResponse(
+            request=request,
+            name="config.html",
+            context={"profile": profile, "user_id": user_id, "current_page": "config"},
+        )
+
+    @app.get("/about", response_class=HTMLResponse)
+    async def about_page(request: Request, user_id: str = Depends(get_user_for_html)):
+        profile = await Database.get_profile(user_id)
+        return templates.TemplateResponse(
+            request=request,
+            name="about.html",
+            context={"profile": profile, "user_id": user_id, "current_page": "about"},
+        )
+
+    @app.get("/static/html/sidebar.html", response_class=HTMLResponse)
+    async def serve_sidebar():
+        sidebar_path = os.path.join(BASE_DIR, "templates", "sidebar.html")
+        if os.path.exists(sidebar_path):
+            with open(sidebar_path) as f:
+                return HTMLResponse(f.read())
+
+        fallback = """<div class="sidebar" id="mainSidebar">
+            <div class="sidebar-header"><h2>Yuzu Companion</h2></div>
+            <div class="sidebar-content">
+                <a href="/">Home</a>
+                <a href="/chat">Chat</a>
+                <a href="/config">Config</a>
+                <a href="/about">About</a>
+            </div>
+        </div>"""
+        return HTMLResponse(fallback)
+
+
+# ---------------------------------------------------------------------------
+# SPA Page Routes (SERVE_WEB_UI=true + SERVE_SPA=true)
+# ---------------------------------------------------------------------------
+
+
+if SERVE_WEB_UI and SERVE_SPA:
+    SPA_DIST_DIR = os.environ.get("SPA_DIST_DIR", os.path.join(BASE_DIR, "web", "dist"))
+    if not os.path.isdir(os.path.join(SPA_DIST_DIR, "assets")):
+        raise RuntimeError(
+            "SERVE_SPA=true requires a built SPA: run `npm --prefix web run build` "
+            "so web/dist exists before starting the server (or set SPA_DIST_DIR)."
+        )
+
+    app.mount(
+        "/assets",
+        StaticFiles(directory=os.path.join(SPA_DIST_DIR, "assets")),
+        name="spa-assets",
     )
 
+    def _spa_entry(html_name: str) -> FileResponse:
+        """ฅ^•ﻌ•^ฅ"""
+        return FileResponse(os.path.join(SPA_DIST_DIR, html_name))
 
-@app.get("/", response_class=HTMLResponse)
-async def home(request: Request, user_id: str = Depends(get_user_for_html)):
-    profile = await Database.get_profile(user_id)
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={"profile": profile, "user_id": user_id, "current_page": "home"},
-    )
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def spa_favicon():
+        return FileResponse(os.path.join(SPA_DIST_DIR, "favicon.ico"))
 
+    @app.get("/", response_class=HTMLResponse)
+    async def spa_home():
+        return _spa_entry("index.html")
 
-@app.get("/chat", response_class=HTMLResponse)
-async def chat_redirect(request: Request, user_id: str = Depends(get_user_for_html)):
-    from fastapi.responses import RedirectResponse
+    @app.get("/login", response_class=HTMLResponse)
+    async def spa_login():
+        return _spa_entry("login.html")
 
-    sessions = await Database.get_all_sessions(user_id=user_id)
-    if not sessions:
-        session_id = await Database.create_session("New Conversation", user_id=user_id)
-    else:
-        session_id = sessions[0]["id"]
-    return RedirectResponse(url=f"/chat/{session_id}", status_code=302)
+    @app.get("/chat", response_class=HTMLResponse)
+    async def spa_chat():
+        return _spa_entry("chat.html")
 
+    @app.get("/chat/{session_id}", response_class=HTMLResponse)
+    async def spa_chat_session(session_id: str):
+        return _spa_entry("chat.html")
 
-@app.get("/chat/{session_id}", response_class=HTMLResponse)
-async def chat_page(
-    session_id: str, request: Request, user_id: str = Depends(get_user_for_html)
-):
-    profile = await Database.get_profile(user_id)
-    return templates.TemplateResponse(
-        request=request,
-        name="chat.html",
-        context={"profile": profile, "user_id": user_id, "current_page": "chat"},
-    )
+    @app.get("/config", response_class=HTMLResponse)
+    async def spa_config():
+        return _spa_entry("config.html")
 
-
-@app.get("/config", response_class=HTMLResponse)
-async def config_page(request: Request, user_id: str = Depends(get_user_for_html)):
-    profile = await Database.get_profile(user_id)
-    return templates.TemplateResponse(
-        request=request,
-        name="config.html",
-        context={"profile": profile, "user_id": user_id, "current_page": "config"},
-    )
-
-
-@app.get("/about", response_class=HTMLResponse)
-async def about_page(request: Request, user_id: str = Depends(get_user_for_html)):
-    profile = await Database.get_profile(user_id)
-    return templates.TemplateResponse(
-        request=request,
-        name="about.html",
-        context={"profile": profile, "user_id": user_id, "current_page": "about"},
-    )
-
-
-@app.get("/static/html/sidebar.html", response_class=HTMLResponse)
-async def serve_sidebar():
-    sidebar_path = os.path.join(BASE_DIR, "templates", "sidebar.html")
-    if os.path.exists(sidebar_path):
-        with open(sidebar_path) as f:
-            return HTMLResponse(f.read())
-
-    fallback = """<div class="sidebar" id="mainSidebar">
-        <div class="sidebar-header"><h2>Yuzu Companion</h2></div>
-        <div class="sidebar-content">
-            <a href="/">Home</a>
-            <a href="/chat">Chat</a>
-            <a href="/config">Config</a>
-            <a href="/about">About</a>
-        </div>
-    </div>"""
-    return HTMLResponse(fallback)
+    @app.get("/about", response_class=HTMLResponse)
+    async def spa_about():
+        return _spa_entry("about.html")
 
 
 # ---------------------------------------------------------------------------

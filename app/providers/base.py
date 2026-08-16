@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
+from app.core.capabilities import ModelCapabilities, ModelInfo
 from app.core.context import (
     MissingProviderKeyError,
 )
@@ -238,6 +240,7 @@ class AIProvider:
         self.config: dict[str, Any] = config or {}
         self.is_available: bool = True
         self._last_raw_response: dict[str, Any] | None = None
+        self.model_infos: dict[str, ModelInfo] = {}
         self.capabilities: ProviderCapabilities = (
             ProviderCapabilities()
         )  # Subclasses override
@@ -254,6 +257,57 @@ class AIProvider:
 
     async def get_models(self) -> list[str]:
         raise NotImplementedError
+
+    async def discover_models(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> list[str]:
+        """(｡•̀ᴗ-)✧"""
+        fetcher = getattr(self, "fetch_live_models", None)
+        if not callable(fetcher):
+            return await self.get_models()
+        parameters = inspect.signature(fetcher).parameters
+        kwargs = {
+            key: value
+            for key, value in {"api_key": api_key, "base_url": base_url}.items()
+            if key in parameters
+        }
+        result = fetcher(**kwargs)
+        return await result if inspect.isawaitable(result) else result
+
+    def get_model_info(self, model: str) -> ModelInfo:
+        return self.model_infos.get(
+            model,
+            ModelInfo(
+                provider=self.name,
+                id=model,
+                capabilities=ModelCapabilities(
+                    function_call="unknown",
+                    vision="unknown",
+                ),
+                source="unknown",
+            ),
+        )
+
+    def clear_model_metadata(self) -> None:
+        """(｡•̀ᴗ-)✧"""
+        self.model_infos.clear()
+        if hasattr(self, "available_models"):
+            self.available_models = []
+
+    def set_model_metadata(self, metadata: list[dict[str, Any]]) -> None:
+        from app.core.capabilities import normalize_model_metadata
+
+        self.model_infos = {
+            info.id: info
+            for item in metadata
+            if (
+                info := normalize_model_metadata(
+                    self.name,
+                    item,
+                )
+            )
+            is not None
+        }
 
     async def send_message(
         self,
@@ -306,14 +360,14 @@ class AIProvider:
         return []
 
     async def test_connection(self) -> bool:
+        """(｡•̀ᴗ-)✧"""
         try:
-            models = await self.get_models()
-            return len(models) > 0
+            return bool(await self.discover_models())
         except Exception:
             return False
 
     def supports_vision(self, model: str) -> bool:
-        return self.capabilities.supports_vision
+        return self.get_model_info(model).capabilities.vision == "supported"
 
     def format_vision_message(self, user_message: str) -> list[dict[str, Any]]:
         return multimodal_tools.format_vision_message(user_message, self.name)
@@ -411,6 +465,26 @@ class AIProviderManager:
             return await self.providers[provider_name].get_models()
         return []
 
+    async def discover_provider_models(
+        self,
+        provider_name: str,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+    ) -> tuple[list[str], list[dict[str, Any]]]:
+        """(｡•̀ᴗ-)✧"""
+        provider = self.providers.get(provider_name)
+        if provider is None:
+            raise KeyError(provider_name)
+        models = sorted(
+            {
+                model
+                for model in await provider.discover_models(api_key, base_url)
+                if model
+            }
+        )
+        return models, [provider.get_model_info(model).to_dict() for model in models]
+
     async def get_all_models(self) -> dict[str, list[str]]:
         """(｡•̀ᴗ-)✧"""
         all_models: dict[str, list[str]] = {}
@@ -420,6 +494,20 @@ class AIProviderManager:
                 model for model in models if isinstance(model, str) and model
             ]
         return all_models
+
+    async def get_all_model_infos(self) -> dict[str, list[dict[str, Any]]]:
+        return {
+            provider_name: [
+                provider.get_model_info(model).to_dict()
+                for model in await provider.get_models()
+                if isinstance(model, str) and model
+            ]
+            for provider_name, provider in self.providers.items()
+        }
+
+    def get_model_info(self, provider_name: str, model: str) -> ModelInfo | None:
+        provider = self.providers.get(provider_name)
+        return provider.get_model_info(model) if provider else None
 
     async def send_message(
         self, ctx: LLMContext, messages: list[dict[str, Any]], **kwargs

@@ -15,6 +15,15 @@ _SESSION_MAX_AGE = SESSION_TTL_DAYS * 24 * 60 * 60
 
 _COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
 
+_SAMESITE_VALUES = {"lax", "strict", "none"}
+
+_COOKIE_SAMESITE = os.environ.get("COOKIE_SAMESITE", "lax").lower()
+if _COOKIE_SAMESITE not in _SAMESITE_VALUES:
+    log.warning(
+        "Invalid COOKIE_SAMESITE=%r ignored; falling back to lax", _COOKIE_SAMESITE
+    )
+    _COOKIE_SAMESITE = "lax"
+
 
 def generate_token() -> str:
     return secrets.token_urlsafe(32)
@@ -47,10 +56,17 @@ def set_session_cookie(response, token: str) -> None:
         max_age=_SESSION_MAX_AGE,
         httponly=True,
         secure=_COOKIE_SECURE,
-        samesite="lax",
+        samesite=_COOKIE_SAMESITE,
         path="/",
     )
 
 
 def clear_session_cookie(response) -> None:
-    response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
+    # Mirror the configured attributes so the deletion cookie matches the
+    # original (important for SameSite=None + Secure cross-site sessions).
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        path="/",
+        secure=_COOKIE_SECURE,
+        samesite=_COOKIE_SAMESITE,
+    )

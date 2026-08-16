@@ -1,12 +1,16 @@
 {
   "name": "yuzu-companion",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "private": true,
   "type": "module",
   "dependencies": {
     "highlight.js": "^11.11.1",
     "katex": "^0.16.47",
     "marked": "^18.0.7",
-    "mermaid": "^11.16.1"
+    "mermaid": "^11.16.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.8",
+    "playwright": "^1.62.1"
   }
 }

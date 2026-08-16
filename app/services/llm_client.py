@@ -7,8 +7,16 @@ import time
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from app.core.capabilities import (
+    ModelCapabilities,
+    RequestRequirements,
+    omit_images,
+    request_needs_vision,
+    resolve_effective_capabilities,
+)
 from app.core.llm_context import LLMContext
 from app.core.logging_config import get_logger
+from app.core.request_context import ClientContext
 from app.db import Database
 from app.providers import get_ai_manager
 from app.providers.openai_protocol import validate_chat_completion_response
@@ -42,6 +50,29 @@ def _unique_tool_schemas(**kwargs) -> list[dict[str, Any]]:
     return get_tool_schemas(**kwargs)
 
 
+def _resolve_request_payload(
+    messages: list[dict[str, Any]],
+    model_info,
+    provider_allows_tools: bool,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """(｡•̀ᴗ-)✧"""
+    tools = _unique_tool_schemas()
+    requirements = RequestRequirements(
+        needs_vision=request_needs_vision(messages),
+        needs_function_call=bool(tools),
+    )
+    capabilities = resolve_effective_capabilities(
+        model_info.capabilities if model_info else ModelCapabilities(),
+        requirements,
+        provider_allows_tools=provider_allows_tools,
+    )
+    if not capabilities.tools_included:
+        tools = []
+    if not capabilities.images_included:
+        messages = omit_images(messages)
+    return messages, tools
+
+
 # ---------------------------------------------------------------------------
 # Direct /imagine handling (used by both response variants)
 # ---------------------------------------------------------------------------
@@ -65,7 +96,11 @@ async def _send_to_provider(
     """Single LLM dispatch with timing log. Returns (text, raw_response)."""
     _ = ctx.require_configured()
     ai_manager = await get_ai_manager()
-    schemas = _unique_tool_schemas()
+    model_info = ai_manager.get_model_info(ctx.provider or "", ctx.model or "")
+    provider_allows_tools = ai_manager.provider_supports_tools(ctx.provider or "")
+    messages, schemas = _resolve_request_payload(
+        messages, model_info, provider_allows_tools
+    )
 
     # Phase 1: structured payload audit log (non-stream path)
     if any(
@@ -131,6 +166,7 @@ async def generate_ai_response(
     session_id: str | None = None,
     *,
     user_id: str,
+    client_context: ClientContext | None = None,
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single (text, raw_response) AI generation pass.
 
@@ -143,6 +179,7 @@ async def generate_ai_response(
 
     ctx = LLMContext.from_profile(profile).require_configured()
     assert ctx.provider is not None and ctx.model is not None
+    ctx.chat_session_id = session_id
 
     messages = await build_messages(
         profile,
@@ -150,6 +187,7 @@ async def generate_ai_response(
         interface,
         user_message,
         user_id,
+        client_context,
     )
 
     text, raw = await _send_to_provider(
@@ -171,7 +209,11 @@ async def _stream_from_provider(
     ai_manager = await get_ai_manager()
 
     # Generate tool schemas
-    tools = _unique_tool_schemas()
+    model_info = ai_manager.get_model_info(ctx.provider or "", ctx.model or "")
+    provider_allows_tools = ai_manager.provider_supports_tools(ctx.provider or "")
+    messages, tools = _resolve_request_payload(
+        messages, model_info, provider_allows_tools
+    )
 
     # Phase 1: structured payload audit log (stream path)
     if any(
@@ -216,6 +258,7 @@ async def generate_ai_response_streaming(
     session_id: str | None = None,
     *,
     user_id: str,
+    client_context: ClientContext | None = None,
 ) -> AsyncGenerator[str | StreamToolEvent, None]:
     """Stream a response from the configured provider chunk by chunk.
 
@@ -229,6 +272,7 @@ async def generate_ai_response_streaming(
 
     ctx = LLMContext.from_profile(profile).require_configured()
     assert ctx.provider is not None and ctx.model is not None
+    ctx.chat_session_id = session_id
 
     messages = await build_messages(
         profile,
@@ -236,6 +280,7 @@ async def generate_ai_response_streaming(
         interface,
         user_message,
         user_id,
+        client_context,
     )
 
     async for chunk in _stream_from_provider(

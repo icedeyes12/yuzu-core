@@ -1,17 +1,12 @@
 /* Stable facade for presentation consumers; identity concerns live in focused registries. */
 
 import { render as renderBadge } from "./badge-registry.js";
+import { escapeHtml } from "./modules/tool-renderer/dom-utils.js";
 import {
 	getProvider,
 	listProviders,
 	ProviderRegistry,
 } from "./provider-registry.js";
-
-function escapeHtml(value) {
-	const node = document.createElement("span");
-	node.textContent = String(value ?? "");
-	return node.innerHTML;
-}
 
 export function renderLogo(provider, size = "default") {
 	const identity = provider || ProviderRegistry.fallback;

@@ -61,7 +61,7 @@ graph LR
 
 ## Directory Structure
 
-```
+```text
 app/
 ├── api/
 │   ├── endpoints/              # FastAPI routers (auth, chat, memory, profile, sessions, stream, presets_endpoint)
@@ -128,29 +128,7 @@ Terminal interface using Rich + prompt_toolkit. Registered as the `yuzu` console
 
 ## API Routing
 
-### `file app/api/__init__.py`
-
-Package init that exposes `api_router` for registration in `main.py`.
-
-### `file app/api/main.py`
-
-Composes the routers exported by each `app/api/endpoints/*` module into a single `api_router`.
-
-### Routers in `app/api/endpoints/`
-
-| Module | Prefix | Purpose |
-| --- | --- | --- |
-| `auth.py` | `/api/auth` | Login, logout, session cookie |
-| `chat.py` | `/api/chat` | Synchronous + streaming message handling |
-| `memory.py` | `/api/memory` | Graph memory stats and rebuild |
-| `presets_endpoint.py` | `/api/presets` | Preset CRUD + active switching |
-| `profile.py` | `/api/profile` | Profile read + update (settings, providers, advanced params) |
-| `sessions.py` | `/api/sessions` | Session CRUD + auto-rename |
-| `stream.py` | `/api/stream` | Stream state recovery for reconnecting clients |
-
-`/api/config` (served by `ConfigService.get_frontend_config`) is the frontend SSOT for provider/vision model lists — eliminates hardcoded model lists in `static/js/config.js`.
-
-The streaming endpoints (`/api/chat/stream`, `/api/profile`) support state reattachment: when a background stream is still active, they surface the live `StreamBuffer` content so the UI can recover after a disconnect or reload without losing the partial assistant response.
+`app/api/` owns HTTP routing, authentication dependencies, validation, and error serialization. The canonical route inventory and stream contract live in [`docs/backend/`](../docs/backend/); this package guide intentionally does not duplicate them.
 
 ---
 
@@ -221,16 +199,17 @@ classDiagram
     }
 
     AIProvider <|-- ChutesProvider
-    AIProvider <|-- OpenRouterProvider
     AIProvider <|-- AnthropicProvider
-    AIProvider <|-- OpenAIProvider
-    AIProvider <|-- CerebrasProvider
-    AIProvider <|-- DeepSeekProvider
+    AnthropicProvider <|-- CustomAnthropicProvider
+    AIProvider <|-- OpenAICompatibleProvider
+    OpenAICompatibleProvider <|-- OpenAIProvider
+    OpenAICompatibleProvider <|-- OpenRouterProvider
+    OpenAICompatibleProvider <|-- DeepSeekProvider
+    OpenAICompatibleProvider <|-- GrokProvider
+    OpenAICompatibleProvider <|-- GroqProvider
+    OpenAICompatibleProvider <|-- CustomOpenAIProvider
+    OpenAICompatibleProvider <|-- CerebrasProvider
     AIProvider <|-- GoogleProvider
-    AIProvider <|-- GrokProvider
-    AIProvider <|-- GroqProvider
-    AIProvider <|-- CustomAnthropicProvider
-    AIProvider <|-- CustomOpenAIProvider
     AIProviderManager --> AIProvider
 ```
 
@@ -350,7 +329,7 @@ flowchart LR
     J --> K[LLM response]
 ```
 
-The pipeline runs asynchronously in batches. Retrieval is tenant-scoped, uses exact pgvector search when embeddings are available, falls back to trigram text search, and returns bounded graph expansion. Each retrieved node has explicit confidence, importance, validity, status, and provenance. Graph quality is maintained separately by the Memory Guardian skill.
+The pipeline runs asynchronously in batches. See [`docs/memory/`](../docs/memory/) for the current extraction, retrieval, embedding, and provenance contract.
 
 ### Ownership
 
@@ -372,7 +351,7 @@ The pipeline runs asynchronously in batches. Retrieval is tenant-scoped, uses ex
 | `extractor.py` | One structured extraction pass per eligible batch |
 | `graph.py` | PostgreSQL graph persistence, provenance, and bounded expansion |
 | `retrieval.py` | Graph retrieval and prompt-shaped formatting |
-| `embedder.py` | Chutes embedding client (`EMBEDDING_DIM=4096`) |
+| `embedder.py` | Yuzu Portal embedding client (`gemini/gemini-embedding-2-preview`, dimension `1536`) |
 | `tools/memory_store.py` | Explicit tool-driven inferred node creation |
 | `tools/memory_search.py` | Graph search tool |
 
@@ -429,11 +408,11 @@ flowchart TD
 
 ### `file app/core/encryption.py`
 
-ChaCha20-Poly1305 encryption for API keys at rest:
+ChaCha20-Poly1305 encryption for message content at rest:
 
-- **API keys**: Always encrypted
-- **Messages**: Encryption disabled by default (configurable)
-- Key derivation from master key in `encryption.key`
+- **Message content**: Optionally encrypted in DB (`content_encrypted` flag)
+- **API keys**: NOT stored — supplied per-request via BYOK header, never persisted
+- Key loaded from `encryption.key` binary file (auto-generated on first run, back it up)
 - Fallback to sentinel on decryption failure
 
 ---
@@ -521,59 +500,13 @@ On session start:
 
 ### API Key Management (BYOK Architecture)
 
-Yuzu Companion employs a strict Bring Your Own Key (BYOK) architecture.
-The server does NOT act as a password manager. Credentials only live in
-memory during the request lifecycle.
-
-- **Frontend Storage:** API keys are stored securely in the browser's
-  `localStorage` (`yuzu_byok_config`).
-- **Transmission:** Keys are injected dynamically via the `X-Provider-Key`
-  and `X-Provider-BaseUrl` HTTP headers.
-- **Backend Role:** The backend resolves these headers into a transient
-  `LLMContext` object via `app/core/context.py`'s request keyring, ensuring
-  zero persistent secret storage in the database.
-- **Legacy:** The `api_keys` table has been destructively removed to comply
-  with this security model (see `migrations/step_3_1_purge_api_keys.sql`).
+BYOK ownership and request-scoped key handling are documented in [`docs/backend/`](../docs/backend/) and [`docs/architecture/`](../docs/architecture/). The implementation remains in `app/core/context.py` and the API request utilities.
 
 ---
 
 ## Workflow: Message Processing
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant API as app/api/endpoints/chat.py
-    participant O as app/services/orchestrator.py
-    participant M as app/memory/retrieval.py
-    participant P as app/services/prompt_service.py
-    participant L as app/services/llm_client.py
-    participant PV as Provider
-    participant T as app/tools/registry.py
-    participant DB as PostgreSQL
-
-    U->>API: POST /api/chat/stream
-    API->>O: handle_user_message_streaming
-    O->>O: _dedupe_image_paths(cached, image_paths)
-    O->>DB: persist user message + image_paths
-    O->>P: build_messages(profile, session_id, user_id, ...)
-    P->>M: retrieve_for_context (user_id-scoped)
-    M-->>P: hybrid context
-    P-->>O: messages list (structured or legacy)
-    O->>L: generate_ai_response_streaming
-    L->>PV: chat completions (with tool schemas)
-    PV-->>L: chunks + tool_call events
-    L-->>O: streamed chunks
-    O->>T: execute_tool_event (if tool_calls)
-    T-->>O: ToolResultEvent
-    O->>L: recursive loop pass
-    L->>PV: chat completions (with tool results)
-    PV-->>L: final chunks
-    L-->>O: final response
-    O->>DB: persist assistant message
-    O->>M: trigger_memory_pipeline_async (throttled)
-    O-->>API: streamed chunks
-    API-->>U: SSE response
-```
+The canonical message and streaming workflow is maintained in [`docs/backend/`](../docs/backend/). `app/services/orchestrator.py` remains the single owner of execution coordination; this package guide does not duplicate the sequence diagram.
 
 ---
 

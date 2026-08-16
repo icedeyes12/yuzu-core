@@ -7,12 +7,26 @@ from typing import Any
 
 import httpx
 
-from app.core.context import MissingProviderKeyError
+from app.core.context import MissingProviderKeyError, get_request_keyring
 from app.core.llm_context import LLMContext
 from app.providers.base import AIProvider, ProviderCapabilities
 from app.tools.schemas import StreamToolEvent
 
+GOOGLE_MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+
 logger = logging.getLogger(__name__)
+
+
+def _normalize_google_model(record: dict[str, Any]) -> dict[str, Any] | None:
+    """(｡•̀ᴗ-)✧"""
+    model_id = record.get("name", "")
+    if not isinstance(model_id, str) or not model_id:
+        return None
+    return {
+        "id": model_id.removeprefix("models/"),
+        "context_length": record.get("inputTokenLimit"),
+        "max_output_tokens": record.get("outputTokenLimit"),
+    }
 
 
 class GoogleProvider(AIProvider):
@@ -29,6 +43,29 @@ class GoogleProvider(AIProvider):
         self.available_models: list[str] = []
 
     async def get_models(self) -> list[str]:
+        return self.available_models
+
+    async def fetch_live_models(self, api_key: str | None = None) -> list[str]:
+        keyring = get_request_keyring("google")
+        api_key = api_key or (keyring.key if keyring else None)
+        if not api_key:
+            raise MissingProviderKeyError("google")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                GOOGLE_MODELS_URL,
+                params={"key": api_key},
+                timeout=10.0,
+            )
+        response.raise_for_status()
+        records = response.json().get("models", [])
+        metadata = [
+            normalized
+            for record in records
+            if isinstance(record, dict)
+            and (normalized := _normalize_google_model(record)) is not None
+        ]
+        self.set_model_metadata(metadata)
+        self.available_models = [item["id"] for item in metadata]
         return self.available_models
 
     def _prepare_payload(

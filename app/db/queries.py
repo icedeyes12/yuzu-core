@@ -217,6 +217,10 @@ SCHEMA_DDL: tuple[str, ...] = (
         source_end_message_id UUID,
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         archived_at TIMESTAMP NULL,
+        CONSTRAINT episodes_source_start_message_fk
+            FOREIGN KEY (source_start_message_id) REFERENCES messages(id) ON DELETE SET NULL,
+        CONSTRAINT episodes_source_end_message_fk
+            FOREIGN KEY (source_end_message_id) REFERENCES messages(id) ON DELETE SET NULL,
         FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE,
         FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     )
@@ -345,10 +349,89 @@ SCHEMA_DDL: tuple[str, ...] = (
     """,
     """
     DO $$ BEGIN
-      ALTER TABLE episodes
-        ALTER COLUMN source_start_message_id TYPE UUID USING source_start_message_id::text::uuid,
-        ALTER COLUMN source_end_message_id TYPE UUID USING source_end_message_id::text::uuid;
-    EXCEPTION WHEN undefined_table OR undefined_column OR datatype_mismatch THEN NULL;
+      IF to_regclass('public.episodes') IS NOT NULL THEN
+        ALTER TABLE episodes
+          ALTER COLUMN source_start_message_id TYPE UUID
+          USING CASE
+            WHEN source_start_message_id IS NULL OR btrim(source_start_message_id::text) = '' THEN NULL
+            WHEN source_start_message_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+              THEN source_start_message_id::text::uuid
+            ELSE NULL
+          END,
+          ALTER COLUMN source_end_message_id TYPE UUID
+          USING CASE
+            WHEN source_end_message_id IS NULL OR btrim(source_end_message_id::text) = '' THEN NULL
+            WHEN source_end_message_id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+              THEN source_end_message_id::text::uuid
+            ELSE NULL
+          END;
+      END IF;
+    EXCEPTION WHEN undefined_table OR undefined_column THEN NULL;
+    END $$;
+    """,
+    """
+    DO $$ BEGIN
+      IF to_regclass('public.episodes') IS NOT NULL
+         AND to_regclass('public.messages') IS NOT NULL
+         AND (
+           SELECT COUNT(*) FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = 'episodes'
+             AND column_name IN ('source_start_message_id', 'source_end_message_id')
+             AND udt_name = 'uuid'
+         ) = 2 THEN
+        UPDATE episodes
+        SET source_start_message_id = NULL
+        WHERE source_start_message_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM messages
+            WHERE messages.id = episodes.source_start_message_id
+          );
+        UPDATE episodes
+        SET source_end_message_id = NULL
+        WHERE source_end_message_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM messages
+            WHERE messages.id = episodes.source_end_message_id
+          );
+      END IF;
+    END $$;
+    """,
+    """
+    DO $$ BEGIN
+      IF to_regclass('public.episodes') IS NOT NULL
+         AND to_regclass('public.messages') IS NOT NULL
+         AND (
+           SELECT COUNT(*) FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = 'episodes'
+             AND column_name IN ('source_start_message_id', 'source_end_message_id')
+             AND udt_name = 'uuid'
+         ) = 2
+         AND NOT EXISTS (
+           SELECT 1 FROM pg_constraint
+           WHERE conname = 'episodes_source_start_message_fk'
+             AND conrelid = 'public.episodes'::regclass
+         ) THEN
+        ALTER TABLE episodes
+          ADD CONSTRAINT episodes_source_start_message_fk
+          FOREIGN KEY (source_start_message_id) REFERENCES messages(id) ON DELETE SET NULL;
+      END IF;
+      IF to_regclass('public.episodes') IS NOT NULL
+         AND to_regclass('public.messages') IS NOT NULL
+         AND (
+           SELECT COUNT(*) FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = 'episodes'
+             AND column_name IN ('source_start_message_id', 'source_end_message_id')
+             AND udt_name = 'uuid'
+         ) = 2
+         AND NOT EXISTS (
+           SELECT 1 FROM pg_constraint
+           WHERE conname = 'episodes_source_end_message_fk'
+             AND conrelid = 'public.episodes'::regclass
+         ) THEN
+        ALTER TABLE episodes
+          ADD CONSTRAINT episodes_source_end_message_fk
+          FOREIGN KEY (source_end_message_id) REFERENCES messages(id) ON DELETE SET NULL;
+      END IF;
     END $$;
     """,
     """
@@ -394,6 +477,75 @@ SCHEMA_DDL: tuple[str, ...] = (
     EXCEPTION WHEN duplicate_column THEN NULL;
     END $$;
     """,
+    """
+    DO $$
+    DECLARE
+      dup RECORD;
+      canonical_id UUID;
+    BEGIN
+      FOR dup IN
+        SELECT user_id, content, ARRAY_AGG(id ORDER BY id) AS ids
+        FROM memory_nodes
+        WHERE status = 'active' AND valid_until IS NULL
+        GROUP BY user_id, content
+        HAVING COUNT(*) > 1
+      LOOP
+        canonical_id := dup.ids[1];
+        -- Process memory_edges before archiving duplicates
+        -- Remap source endpoints to canonical node
+        UPDATE memory_edges
+        SET from_node_id = canonical_id
+        WHERE from_node_id = ANY(dup.ids[2:]) AND user_id = dup.user_id;
+        -- Remap target endpoints to canonical node
+        UPDATE memory_edges
+        SET to_node_id = canonical_id
+        WHERE to_node_id = ANY(dup.ids[2:]) AND user_id = dup.user_id;
+        -- Delete self-loops created by remapping
+        DELETE FROM memory_edges
+        WHERE from_node_id = to_node_id AND user_id = dup.user_id
+          AND (from_node_id = canonical_id OR to_node_id = canonical_id);
+        -- Resolve unique-edge conflicts: keep highest confidence, transfer evidence
+        WITH conflicts AS (
+          SELECT user_id, from_node_id, to_node_id, edge_type,
+                 ARRAY_AGG(id ORDER BY confidence DESC, created_at ASC) AS edge_ids
+          FROM memory_edges
+          WHERE user_id = dup.user_id
+            AND (from_node_id = canonical_id OR to_node_id = canonical_id)
+          GROUP BY user_id, from_node_id, to_node_id, edge_type
+          HAVING COUNT(*) > 1
+        )
+        UPDATE memory_evidence
+        SET edge_id = conflicts.edge_ids[1]
+        FROM conflicts
+        WHERE memory_evidence.edge_id = ANY(conflicts.edge_ids[2:])
+          AND memory_evidence.user_id = dup.user_id;
+        -- Delete duplicate edges after transferring evidence
+        WITH conflicts AS (
+          SELECT user_id, from_node_id, to_node_id, edge_type,
+                 ARRAY_AGG(id ORDER BY confidence DESC, created_at ASC) AS edge_ids
+          FROM memory_edges
+          WHERE user_id = dup.user_id
+            AND (from_node_id = canonical_id OR to_node_id = canonical_id)
+          GROUP BY user_id, from_node_id, to_node_id, edge_type
+          HAVING COUNT(*) > 1
+        )
+        DELETE FROM memory_edges
+        WHERE id IN (
+          SELECT UNNEST(edge_ids[2:])
+          FROM conflicts
+        );
+        -- Archive duplicate nodes
+        UPDATE memory_nodes
+        SET status = 'archived', valid_until = NOW()
+        WHERE id = ANY(dup.ids[2:]) AND user_id = dup.user_id;
+        -- Transfer node evidence to canonical node
+        UPDATE memory_evidence
+        SET node_id = canonical_id
+        WHERE node_id = ANY(dup.ids[2:]) AND user_id = dup.user_id;
+      END LOOP;
+    END $$;
+    """,
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_memory_nodes_active_content ON memory_nodes (user_id, content) WHERE status = 'active' AND valid_until IS NULL",
 )
 
 SQL_PROFILE_UNCLAIMED_LOOKUP = """
@@ -452,7 +604,13 @@ SQL_GRAPH_NODE_INSERT = """
 INSERT INTO memory_nodes
     (user_id, node_type, content, embedding, confidence, importance, status,
      valid_from, valid_until, supersedes_node_id, embedding_model, embedding_dimensions)
-VALUES (%s, %s, %s, %s::vector, %s, %s, %s, %s, %s, %s, %s, %s)
+VALUES (%s, %s, %s, %s::vector, %s, %s, 'active', %s, NULL, %s, %s, %s)
+ON CONFLICT (user_id, content) WHERE status = 'active' AND valid_until IS NULL
+DO UPDATE SET
+    embedding = COALESCE(memory_nodes.embedding, EXCLUDED.embedding),
+    embedding_model = COALESCE(memory_nodes.embedding_model, EXCLUDED.embedding_model),
+    embedding_dimensions = COALESCE(memory_nodes.embedding_dimensions, EXCLUDED.embedding_dimensions),
+    updated_at = NOW()
 RETURNING id, user_id, node_type, content, embedding, confidence, importance, status,
           valid_from, valid_until, supersedes_node_id, embedding_model,
           embedding_dimensions, created_at, updated_at, last_accessed_at
@@ -465,6 +623,51 @@ SELECT id, user_id, node_type, content, embedding, confidence, importance, statu
 FROM memory_nodes
 WHERE user_id = %s AND content = %s AND status = 'active' AND valid_until IS NULL
 LIMIT 1
+"""
+
+SQL_GRAPH_NODE_SIMILAR_ACTIVE = """
+SELECT id, user_id, node_type, content, confidence, importance, status,
+       valid_from, valid_until, supersedes_node_id, embedding_model,
+       embedding_dimensions, created_at, updated_at, last_accessed_at,
+       similarity(content, %s) AS score
+FROM memory_nodes
+WHERE user_id = %s AND id <> %s AND node_type = %s
+  AND status = 'active' AND valid_until IS NULL
+  AND similarity(content, %s) >= %s
+ORDER BY score DESC, created_at ASC
+LIMIT %s
+"""
+
+SQL_GRAPH_NODE_ARCHIVE = """
+WITH locked_nodes AS (
+    SELECT id, status
+    FROM memory_nodes
+    WHERE user_id = %s AND id IN (%s, %s)
+    ORDER BY id
+    FOR UPDATE
+)
+UPDATE memory_nodes AS candidate
+SET status = 'archived', valid_until = NOW(), supersedes_node_id = %s,
+    updated_at = NOW()
+WHERE candidate.id = %s
+  AND candidate.user_id = %s
+  AND candidate.status = 'active'
+  AND candidate.valid_until IS NULL
+  AND EXISTS (
+      SELECT 1 FROM locked_nodes
+      WHERE id = %s AND status = 'active'
+  )
+  AND EXISTS (
+      SELECT 1 FROM locked_nodes
+      WHERE id = %s AND status = 'active'
+  )
+RETURNING candidate.id
+"""
+
+SQL_GRAPH_EVIDENCE_REASSIGN = """
+UPDATE memory_evidence
+SET node_id = %s
+WHERE user_id = %s AND node_id = %s
 """
 SQL_GRAPH_NODE_LIST = """
 SELECT id, user_id, node_type, content, confidence, importance, status, valid_from,
@@ -719,7 +922,12 @@ SQL_SESSION_DEACTIVATE_FOR_USER = "UPDATE chat_sessions SET is_active = FALSE WH
 
 SQL_SESSION_ACTIVATE_ONE_SCOPED = "UPDATE chat_sessions SET is_active = TRUE, updated_at = %s WHERE id = %s AND user_id = %s AND deleted_at IS NULL RETURNING id"
 
-SQL_SESSION_RENAME_SCOPED = "UPDATE chat_sessions SET name = %s, updated_at = %s WHERE id = %s AND user_id = %s AND deleted_at IS NULL"
+SQL_SESSION_RENAME_SCOPED = """
+UPDATE chat_sessions
+SET name = %s, updated_at = %s
+WHERE id = %s AND user_id = %s AND deleted_at IS NULL
+RETURNING id
+"""
 
 SQL_SESSION_RENAME_PLACEHOLDER_SCOPED = """
 UPDATE chat_sessions
@@ -842,11 +1050,29 @@ WHERE session_id = %s AND user_id = %s
 ORDER BY timestamp ASC, id ASC
 """
 
+SQL_MESSAGE_SELECT_CONVERSATIONAL_ASC_ALL = """
+SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
+FROM messages
+WHERE session_id = %s AND user_id = %s
+  AND role IN ('user', 'assistant')
+ORDER BY timestamp ASC, id ASC
+"""
+
+SQL_MESSAGE_SELECT_ASC_OFFSET_LIMIT = """
+SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
+FROM messages
+WHERE session_id = %s AND user_id = %s
+  AND role IN ('user', 'assistant')
+ORDER BY timestamp ASC, id ASC
+LIMIT %s OFFSET %s
+"""
+
 # Query messages after a specific ID (for memory pipeline ID-based tracking)
 SQL_MESSAGE_SELECT_AFTER_ID = """
 SELECT id, session_id, role, content, attachments, tool_calls, tool_call_id, turn_id, timestamp
 FROM messages
 WHERE session_id = %s AND user_id = %s AND id > %s
+  AND role IN ('user', 'assistant')
 ORDER BY id ASC
 LIMIT %s
 """
@@ -1292,6 +1518,7 @@ __all__ = [
     "SQL_MESSAGE_INSERT",
     "SQL_MESSAGE_SELECT_ASC_LIMIT",
     "SQL_MESSAGE_SELECT_ASC_ALL",
+    "SQL_MESSAGE_SELECT_CONVERSATIONAL_ASC_ALL",
     "SQL_MESSAGE_SELECT_AFTER_ID",
     "SQL_MESSAGE_SELECT_BEFORE_TS",
     "SQL_MESSAGE_DELETE_FOR_SESSION",
@@ -1318,6 +1545,9 @@ __all__ = [
     "SQL_GRAPH_EPISODE_INSERT",
     "SQL_GRAPH_NODE_INSERT",
     "SQL_GRAPH_NODE_BY_CONTENT",
+    "SQL_GRAPH_NODE_SIMILAR_ACTIVE",
+    "SQL_GRAPH_NODE_ARCHIVE",
+    "SQL_GRAPH_EVIDENCE_REASSIGN",
     "SQL_GRAPH_NODE_LIST",
     "SQL_GRAPH_NODE_PROVENANCE",
     "SQL_GRAPH_EDGE_UPSERT",

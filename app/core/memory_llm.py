@@ -5,6 +5,9 @@ import logging
 import time
 from typing import Any, Protocol
 
+from app.core.byok import YUZU_PORTAL
+from app.core.context import get_request_keyring
+
 
 class MemoryLLMManager(Protocol):
     async def _internal_llm_call(
@@ -42,6 +45,26 @@ async def memory_llm_call(
     if elapsed < _MEMORY_LLM_DELAY:
         await asyncio.sleep(_MEMORY_LLM_DELAY - elapsed)
 
+    profile = kwargs.get("profile") or {}
+    keyring = get_request_keyring(YUZU_PORTAL)
+    if not keyring or not keyring.key or not keyring.key.strip():
+        logger.info(
+            "[MEMORY_LLM] disabled provider=%s model=%s",
+            YUZU_PORTAL,
+            "yuzuki",
+        )
+        return None
+    runtime_profile = dict(profile)
+    provider_config = dict(runtime_profile.get("providers_config") or {})
+    provider_config["preferred_provider"] = YUZU_PORTAL
+    provider_config["preferred_model"] = "yuzuki"
+    runtime_profile["providers_config"] = provider_config
+    kwargs["profile"] = runtime_profile
+    logger.info(
+        "[MEMORY_LLM] enabled provider=%s model=%s",
+        YUZU_PORTAL,
+        "yuzuki",
+    )
     try:
         result = await ai_manager._internal_llm_call(
             messages, source="memory_pipeline", **kwargs

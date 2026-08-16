@@ -1,85 +1,105 @@
-# \[PROJECT: HKKM - Yuzu Companion\]
+# Yuzu Companion
 
----
+Yuzu Companion is a private AI companion application with persistent conversation history, graph-backed memory, multimodal input, native provider function calling, and web and terminal clients.
 
-## What Even Is This?
+## Runtime at a glance
 
-Honestly, what are you looking for here? This is just another AI project.
+- **Backend:** Python 3.12+, FastAPI, Uvicorn
+- **Persistence:** PostgreSQL through psycopg v3, with pgvector and pg_trgm
+- **Web UI:** Jinja2 templates with vanilla JavaScript and CSS
+- **CLI:** Rich + prompt-toolkit inline REPL using HTTP/SSE
+- **Providers:** OpenRouter, OpenAI, Anthropic, Google, Grok, Groq, Cerebras, DeepSeek, Chutes, Yuzu Portal, and custom OpenAI/Anthropic-compatible endpoints
+- **Memory:** asynchronous graph extraction into episodes, nodes, edges, and evidence
+- **Tool protocol:** native provider function calling through `app/tools/registry.py`
 
-You know what's more interesting? Mending scroll [**Fesnuk**](https://www.facebook.com/groups/programmerhandal/). Or maybe some cat videos on YouTube.
+## Quick start
 
-Seriously, go scroll some social media. This code isn't going to entertain you like that latest meme trend.
+### Prerequisites
 
----
+- Python 3.12 or newer
+- PostgreSQL with `pgcrypto`, `pgvector`, and `pg_trgm`
+- Node.js 22 and Bun for the frontend checks
+- Provider credentials and OAuth credentials as needed
 
-## No Really, What Does It Do?
+### Install
 
-It's an AI companion. It talks. It remembers things. Sometimes it generates images.
+```bash
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m pip install .
+cp .env.example .env
+```
 
-But let's be real - you're probably just here because you're bored. Might as well go watch some TikTok.
+Fill `.env` with PostgreSQL, encryption, session, provider, and OAuth values. Never commit `.env` or real secrets.
 
----
+### Run
 
-## Installation
+```bash
+python main.py
+```
 
-If you insist on actually installing this, go read [INSTALL.md](INSTALL.md) for instructions.
+The server listens on `http://127.0.0.1:5000` by default. The console entry point is also available after installation:
 
-But honestly, just ask ChatGPT. It will explain it better.
+```bash
+yuzu-server
+```
 
-## Continuous integration
+The CLI is a separate client of the backend:
 
-GitHub Actions runs the sequential quality pipeline in `.github/workflows/ci.yml`:
+```bash
+yuzu
+# Optional backend override
+YUZU_BACKEND_URL=http://127.0.0.1:5000 yuzu
+```
 
-1. `ruff format --check .`
-2. `ruff check .`
-3. `python -m compileall .`
-4. JavaScript syntax checks for `static/**/*.js`
-5. `bunx biome check static/`
-6. `pytest`
+## Repository map
 
-CodeQL runs separately for Python and JavaScript/TypeScript in `.github/workflows/codeql.yml`.
+```text
+main.py                 FastAPI application and HTML routes
+app/api/                Versioned HTTP routers and API contracts
+app/services/           Orchestration and application workflows
+app/providers/          External AI provider clients
+app/core/               Shared runtime, security, configuration, and multimodal helpers
+app/db/                 psycopg pools, facade, queries, and schema bootstrap
+app/memory/             Graph extraction, persistence, and retrieval
+app/tools/              Native tool definitions and central dispatch
+cli/                    HTTP/SSE terminal REPL
+static/                 Browser JavaScript, CSS, and vendored runtime assets
+templates/              Jinja2 pages and partials
+docs/                   Maintained architecture and operational documentation
+tests/                  Unit, contract, integration, regression, and frontend checks
+```
 
-## For the 3 People Actually Reading This
+## Documentation
 
-If you're still here, congratulations on your attention span. This is an intimate AI companion system with:
+Start at [`docs/README.md`](docs/README.md). It defines the documentation taxonomy and maintenance rules. Active technical references are organized under `docs/architecture/`, `docs/backend/`, `docs/database/`, `docs/memory/`, and `docs/frontend/`.
 
-- Emotional bonding protocols
-- Multimodal interaction (text + images)
-- Session-based memory
-- Encrypted conversations
-- Web and terminal interfaces
+The root `AGENTS.md` is the development operating guide. It includes the documentation governance rules that agents must follow.
 
-But honestly, you could have just asked ChatGPT to explain it.
+## Quality checks
 
----
+Run the checks used by CI before submitting changes:
 
-## Disclaimer
+```bash
+ruff format --check .
+ruff check .
+find static -type f -name '*.js' -exec node --check {} +
+bunx biome check static/
+pytest
+```
 
-All code is AI-generated. The developer just pressed some buttons and prayed.
+CodeQL scans Python and JavaScript/TypeScript in a separate workflow.
 
-Now go away and do something more productive. Like scrolling through memes.
+## Security
 
----
+- Provider keys use request-scoped browser BYOK data and are not stored server-side.
+- Tenant-scoped database operations must carry `user_id`.
+- Uploaded and generated images are served through authenticated API routes.
+- Do not expose secrets in logs or commits.
 
-## Author
+See [`SECURITY.md`](SECURITY.md) for vulnerability reporting and [`CONTRIBUTING.md`](CONTRIBUTING.md) for contribution workflow.
 
-### Project Lead
+## License
 
-- [Bani Baskara](https://github.com/icedeyes12/)
-
-### Team
-
-- [Aihara](https://github.com/icedeyes12/yuzu-companion)
-- [Claude](https://www.anthropic.com/)
-- [DeepSeek](https://www.deepseek.com/)
-- [Gemini](https://gemini.google.com/)
-- [GitHub Copilot](https://github.com/copilot)
-- [GPT](https://chatgpt.com/)
-- [Hermes](https://hermes-agent.nousresearch.com/)
-- [KiloCode](https://kilocode.ai/)
-- [Moonshot ai](https://www.moonshot.cn/)
-- [Qwen](https://github.com/QwenLM/Qwen3-Coder)
-
----
-
-©2025-2026 \[HKKM project\](https://guthib.com/icedeyes12/) | Built with love 💕
+MIT. See [`LICENSE`](LICENSE).

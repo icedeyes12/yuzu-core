@@ -5,12 +5,8 @@ import logging
 
 import httpx
 
-from app.core.byok import (
-    DEFAULT_YUZU_PORTAL_BASE_URL,
-    YUZU_PORTAL,
-    get_provider_base_url,
-    get_provider_key,
-)
+from app.core.byok import DEFAULT_YUZU_PORTAL_BASE_URL, YUZU_PORTAL
+from app.core.context import get_request_keyring
 from app.providers.base import _rate_limit_provider
 
 DEFAULT_MODEL = "gemini/gemini-embedding-2-preview"
@@ -18,12 +14,40 @@ EMBEDDING_DIM = 1536
 logger = logging.getLogger(__name__)
 
 
-async def _get_client() -> httpx.AsyncClient | None:
-    api_key = get_provider_key(YUZU_PORTAL)
+def _parse_embedding_data(
+    data: list[dict], expected_count: int, expected_dim: int = EMBEDDING_DIM
+) -> list[list[float]]:
+    if len(data) != expected_count:
+        raise ValueError(
+            f"Embedding count mismatch: got {len(data)}, expected {expected_count}"
+        )
+    try:
+        ordered = sorted(data, key=lambda item: item["index"])
+        if [item["index"] for item in ordered] != list(range(expected_count)):
+            raise ValueError("Embedding indexes are incomplete or duplicated")
+        results = [item["embedding"] for item in ordered]
+    except (KeyError, TypeError) as exc:
+        raise ValueError("Embedding response indexes are invalid") from exc
+    if any(len(embedding) != expected_dim for embedding in results):
+        raise ValueError("Embedding dimension mismatch")
+    return results
+
+
+async def _get_client(profile: dict | None = None) -> httpx.AsyncClient | None:
+    del profile
+    keyring = get_request_keyring(YUZU_PORTAL)
+    api_key = keyring.key.strip() if keyring and keyring.key else None
     if not api_key:
-        logger.warning("Memory module disabled: Missing Yuzu Portal API key")
+        logger.info(
+            "memory embeddings disabled provider=%s",
+            YUZU_PORTAL,
+        )
         return None
-    base_url = get_provider_base_url(YUZU_PORTAL) or DEFAULT_YUZU_PORTAL_BASE_URL
+    base_url = (
+        keyring.base_url.strip().rstrip("/")
+        if keyring and keyring.base_url
+        else DEFAULT_YUZU_PORTAL_BASE_URL
+    )
     return httpx.AsyncClient(
         headers={
             "Authorization": f"Bearer {api_key}",
@@ -34,9 +58,14 @@ async def _get_client() -> httpx.AsyncClient | None:
 
 
 async def embed_texts_async(
-    texts, model=None, dimensions=None, encoding_format="float", timeout=30
+    texts,
+    model=None,
+    dimensions=None,
+    encoding_format="float",
+    timeout=30,
+    profile=None,
 ):
-    client = await _get_client()
+    client = await _get_client(profile)
     if client is None:
         return []
 
@@ -62,12 +91,8 @@ async def embed_texts_async(
                     "/embeddings", json=payload, timeout=timeout
                 )
             response.raise_for_status()
-            results = [item["embedding"] for item in response.json().get("data", [])]
-            if results and len(results[0]) != EMBEDDING_DIM:
-                raise ValueError(
-                    f"Embedding dim mismatch: got {len(results[0])}, expected {EMBEDDING_DIM}"
-                )
-            return results
+            data = response.json().get("data", [])
+            return _parse_embedding_data(data, len(texts), payload["dimensions"])
         except httpx.TimeoutException as exc:
             raise TimeoutError(f"Embedding request timed out after {timeout}s") from exc
 
