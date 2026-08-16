@@ -28,40 +28,35 @@ jobs:
           port: 8022
           script: |
             set -e
-            echo "==> Deploying yuzu-core on appliance..."
+            echo "==> Deploying yuzu-core on appliance via PRoot Debian..."
             
-            # 1. Update source code
-            cd ~/home/workspace/yuzu-core || cd /root/home/workspace/yuzu-core || cd ~/yuzu-core
-            git fetch origin master
-            git reset --hard origin/master
-            
-            # 2. Sync dependencies via uv
-            if command -v uv >/dev/null 2>&1; then
-              uv sync --frozen || uv sync
-            else
-              .venv/bin/pip install -r requirements.txt --quiet
-            fi
-            
-            # 3. Restart FastAPI service
-            echo "==> Restarting FastAPI service..."
-            if command -v supervisorctl >/dev/null 2>&1 && [ -S /var/run/supervisor.sock ]; then
-              supervisorctl restart fastapi
-            else
+            proot-distro login debian -- bash -c '
+              set -e
+              cd /root/home/workspace/yuzu-core
+              git fetch origin master
+              git reset --hard origin/master
+              
+              if command -v uv >/dev/null 2>&1; then
+                uv sync --frozen || uv sync
+              else
+                .venv/bin/pip install -r requirements.txt --quiet
+              fi
+              
+              echo "==> Restarting FastAPI service..."
               pkill -f "uvicorn main:app" 2>/dev/null || true
               sleep 1
               nohup .venv/bin/python3 -m uvicorn main:app --host 127.0.0.1 --port 5000 --workers 1 > /var/log/fastapi.log 2>&1 &
-            fi
-            
-            # 4. Healthcheck validation
-            echo "==> Validating health endpoint..."
-            sleep 4
-            for i in $(seq 1 10); do
-              if curl -s -f http://127.0.0.1:5000/health >/dev/null; then
-                echo "[OK] Deployment succeeded! Health check passed."
-                exit 0
-              fi
-              sleep 1
-            done
-            
-            echo "[ERROR] Health check failed after deployment!"
-            exit 1
+              
+              echo "==> Validating health endpoint..."
+              sleep 4
+              for i in $(seq 1 10); do
+                if curl -s -f http://127.0.0.1:5000/health >/dev/null; then
+                  echo "[OK] Deployment succeeded! Health check passed."
+                  exit 0
+                fi
+                sleep 1
+              done
+              
+              echo "[ERROR] Health check failed after deployment!"
+              exit 1
+            '
