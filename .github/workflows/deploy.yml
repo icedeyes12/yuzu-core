@@ -36,8 +36,9 @@ jobs:
               git fetch origin master
               git reset --hard origin/master
               
+              export UV_LINK_MODE=copy
               if command -v uv >/dev/null 2>&1; then
-                uv sync --frozen || uv sync
+                uv pip install -r requirements.txt --quiet || .venv/bin/pip install -r requirements.txt --quiet
               else
                 .venv/bin/pip install -r requirements.txt --quiet
               fi
