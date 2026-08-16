@@ -77,9 +77,9 @@ def test_serve_web_ui_false_hides_html_routes_and_public_static(
         ):
             assert hidden not in paths
         assert "/health" in paths
-        assert "/api/v1/profile" in paths
+        assert "/v1/profile" in paths
         # Authenticated private-image routes stay; the public /static mount goes.
-        assert "/api/v1/static/uploads/{filename}" in paths
+        assert "/v1/static/uploads/{filename}" in paths
         assert not any(
             getattr(r, "path", None) == "/static" for r in reloaded.app.routes
         )

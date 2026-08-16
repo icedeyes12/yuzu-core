@@ -361,7 +361,8 @@ ensure_static_dirs()
 # ---------------------------------------------------------------------------
 
 
-app.include_router(api_router, prefix="/api/v1")
+app.include_router(api_router, prefix="/v1")
+app.include_router(api_router, prefix="/api/v1", include_in_schema=False)
 app.include_router(health_router)
 
 # ---------------------------------------------------------------------------

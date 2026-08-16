@@ -109,7 +109,7 @@ def test_versioned_api_and_openapi_are_available_without_legacy_prefix(
     assert openapi.status_code == 200
     schema = openapi.json()
     assert "/api/v1/health" not in schema["paths"]
-    assert "/api/v1/profile" in schema["paths"]
+    assert "/v1/profile" in schema["paths"]
     assert legacy.status_code == 404
 
 

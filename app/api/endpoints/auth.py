@@ -46,7 +46,7 @@ def _require_env(name: str) -> str:
     return val.strip()
 
 
-_OAUTH_CALLBACK_PATH = "/api/v1/auth/callback"
+_OAUTH_CALLBACK_PATH = "/v1/auth/callback"
 
 
 def _rewrite_redirect_uri(request: Request, original_uri: str) -> str:
