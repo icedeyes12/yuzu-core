@@ -1,7 +1,7 @@
 import { bootApp } from "../main.js";
 import { apiFetch } from "../modules/apiFetch.js";
 
-async function renderGreeting() {
+async function _renderGreeting() {
 	const response = await apiFetch("/api/v1/profile", {
 		headers: { Accept: "application/json" },
 	});

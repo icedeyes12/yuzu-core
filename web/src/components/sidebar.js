@@ -1,9 +1,14 @@
 import { apiFetch, apiUrl } from "../modules/apiFetch.js";
-import { loginUrl } from "../modules/links.js";
 import { bootstrapAuth, getCachedMe } from "../modules/authBootstrap.js";
 import { clearUserScopedStorage } from "../modules/clientStorage.js";
 import { eventRouter } from "../modules/event-router.js";
-import { aboutUrl, chatUrl, configUrl, homeUrl } from "../modules/links.js";
+import {
+	aboutUrl,
+	chatUrl,
+	configUrl,
+	homeUrl,
+	loginUrl,
+} from "../modules/links.js";
 import { router } from "../modules/router.js";
 import { handleSessionSwitch } from "../modules/session-controller.js";
 import { chatStore } from "../modules/store.js";

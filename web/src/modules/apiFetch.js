@@ -23,7 +23,10 @@ export function getLoginUrl() {
 }
 
 export function redirectToLogin() {
-	if (window.location.pathname !== LOGIN_URL && window.location.pathname !== "/login") {
+	if (
+		window.location.pathname !== LOGIN_URL &&
+		window.location.pathname !== "/login"
+	) {
 		window.location.assign(getLoginUrl());
 	}
 }
@@ -39,9 +42,10 @@ export function redirectToLogin() {
 export async function apiFetch(input, init = {}) {
 	let targetUrl;
 	if (typeof input === "string") {
-		targetUrl = input.startsWith("http://") || input.startsWith("https://")
-			? input
-			: apiUrl(input);
+		targetUrl =
+			input.startsWith("http://") || input.startsWith("https://")
+				? input
+				: apiUrl(input);
 	} else if (input instanceof URL) {
 		targetUrl = input.toString();
 	} else if (input instanceof Request) {

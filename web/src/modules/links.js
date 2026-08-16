@@ -4,7 +4,9 @@
 // the same paths, so one URL scheme works in dev, local single-origin, and the
 // Phase 4 static-host deployment.
 export function chatUrl(sessionId) {
-	return sessionId ? `/chat.html?session=${encodeURIComponent(sessionId)}` : "/chat.html";
+	return sessionId
+		? `/chat.html?session=${encodeURIComponent(sessionId)}`
+		: "/chat.html";
 }
 
 export function homeUrl() {
