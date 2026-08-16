@@ -11,32 +11,27 @@ const LLM_ENDPOINTS = [
 	"/api/v1/generate_image",
 ];
 
-// Clean login paths: the login UI is inside the SPA itself, served at either
-// the built /login.html entry or the server-rendered /login route.
-const LOGIN_PATHS = [loginUrl(), "/login"];
-
-export function getLoginUrl() {
-	return loginUrl();
-}
-
-export function redirectToLogin() {
-	if (!LOGIN_PATHS.includes(window.location.pathname)) {
-		window.location.assign(loginUrl());
-	}
-}
-
 export function apiUrl(path) {
 	const cleanPath = path.startsWith("/") ? path : `/${path}`;
 	return `${API_BASE}${cleanPath}`;
 }
 
-function resolveRequestUrl(input) {
-	if (typeof input === "string") {
-		return /^https?:\/\//.test(input) ? input : apiUrl(input);
+// Clean login route: /login.html is the SPA route, /login is the Jinja route
+// served by the backend when SERVE_SPA is disabled.
+export function redirectToLogin() {
+	if (
+		window.location.pathname !== loginUrl() &&
+		window.location.pathname !== "/login"
+	) {
+		window.location.assign(loginUrl());
 	}
-	if (input instanceof URL) return input.toString();
+}
+
+function resolveTargetUrl(input) {
 	if (input instanceof Request) return input.url;
-	return String(input);
+	if (input instanceof URL) return input.toString();
+	const path = String(input);
+	return /^https?:\/\//.test(path) ? path : apiUrl(path);
 }
 
 /**
@@ -48,7 +43,7 @@ function resolveRequestUrl(input) {
  * @returns {Promise<Response>}
  */
 export async function apiFetch(input, init = {}) {
-	const targetUrl = resolveRequestUrl(input);
+	const targetUrl = resolveTargetUrl(input);
 	const headers = new Headers(init.headers || {});
 
 	if (LLM_ENDPOINTS.some((endpoint) => targetUrl.includes(endpoint))) {

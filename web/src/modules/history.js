@@ -115,14 +115,16 @@ export async function loadChatHistory(sessionId = null) {
 		olderMessagesLoaded = 0;
 		isLoadingOlder = false;
 
-		// Update active session name in header from the matching sidebar entry.
+		// Update active session name in header from the sidebar's session list,
+		// if available (the chat history/switch responses don't include a name).
 		const sessionNameEl = document.getElementById("sessionName");
 		if (sessionNameEl) {
 			const sidebarItem = document.querySelector(
 				`.sidebar-session-item[data-session-id="${currentHistorySessionId}"] .sidebar-session-name`,
 			);
-			const activeName = sidebarItem?.textContent.trim();
-			if (activeName) sessionNameEl.textContent = activeName;
+			if (sidebarItem?.textContent.trim()) {
+				sessionNameEl.textContent = sidebarItem.textContent.trim();
+			}
 		}
 
 		chatStore.loadHistory(

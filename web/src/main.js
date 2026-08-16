@@ -1,6 +1,6 @@
 import { mountSidebar } from "./components/sidebar.js";
-import { redirectToLogin } from "./modules/apiFetch.js";
 import { bootstrapAuth } from "./modules/authBootstrap.js";
+import { redirectToLogin } from "./modules/apiFetch.js";
 import { applySavedTheme } from "./modules/theme.js";
 
 /**
