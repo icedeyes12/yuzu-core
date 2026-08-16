@@ -1,4 +1,5 @@
 import { encodeByokConfig } from "./clientStorage.js";
+import { loginUrl } from "./links.js";
 
 // Same-origin when the backend serves the built SPA; cross-origin when the
 // SPA is deployed to a static host (set VITE_API_BASE at build time).
@@ -10,61 +11,44 @@ const LLM_ENDPOINTS = [
 	"/api/v1/generate_image",
 ];
 
-// Clean login route: the login UI is inside the SPA itself (/login or /login.html)
-const LOGIN_URL = "/login.html";
+// Clean login paths: the login UI is inside the SPA itself, served at either
+// the built /login.html entry or the server-rendered /login route.
+const LOGIN_PATHS = [loginUrl(), "/login"];
 
-/**
- * Builds an API URL from a path.
- * @param {string} path - The API path, with or without a leading slash.
- * @return {string} The URL formed by combining the API base with the normalized path.
- */
+export function getLoginUrl() {
+	return loginUrl();
+}
+
+export function redirectToLogin() {
+	if (!LOGIN_PATHS.includes(window.location.pathname)) {
+		window.location.assign(loginUrl());
+	}
+}
+
 export function apiUrl(path) {
 	const cleanPath = path.startsWith("/") ? path : `/${path}`;
 	return `${API_BASE}${cleanPath}`;
 }
 
-/**
- * Gets the login page URL.
- * @return {string} The login page URL.
- */
-export function getLoginUrl() {
-	return LOGIN_URL;
-}
-
-/**
- * Redirects the current page to the login page when it is not already a login route.
- */
-export function redirectToLogin() {
-	if (
-		window.location.pathname !== LOGIN_URL &&
-		window.location.pathname !== "/login"
-	) {
-		window.location.assign(getLoginUrl());
+function resolveRequestUrl(input) {
+	if (typeof input === "string") {
+		return /^https?:\/\//.test(input) ? input : apiUrl(input);
 	}
+	if (input instanceof URL) return input.toString();
+	if (input instanceof Request) return input.url;
+	return String(input);
 }
 
 /**
- * Fetch a request with session credentials and optional BYOK configuration for LLM endpoints.
- * Redirects to the login page when an API v1 request receives an authentication failure.
- * @param {string|URL|Request} input - The request URL or input.
- * @param {RequestInit} [init] - Request options.
- * @returns {Promise<Response>} The fetch response.
+ * Fetch wrapper for the API: credentials are always included (session cookie),
+ * the BYOK config header is injected on LLM endpoints, and a 401/403 on an
+ * /api/v1 request redirects to the login page (the auth gate).
+ * @param {string|URL|Request} input
+ * @param {RequestInit} [init]
+ * @returns {Promise<Response>}
  */
 export async function apiFetch(input, init = {}) {
-	let targetUrl;
-	if (typeof input === "string") {
-		targetUrl =
-			input.startsWith("http://") || input.startsWith("https://")
-				? input
-				: apiUrl(input);
-	} else if (input instanceof URL) {
-		targetUrl = input.toString();
-	} else if (input instanceof Request) {
-		targetUrl = input.url;
-	} else {
-		targetUrl = String(input);
-	}
-
+	const targetUrl = resolveRequestUrl(input);
 	const headers = new Headers(init.headers || {});
 
 	if (LLM_ENDPOINTS.some((endpoint) => targetUrl.includes(endpoint))) {

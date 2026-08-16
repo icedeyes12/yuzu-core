@@ -62,11 +62,6 @@ function _setupScrollListener(chatContainer) {
 	});
 }
 
-/**
- * Loads chat history for the requested session or the default active session.
- * @param {string|null} [sessionId=null] - The session identifier to load.
- * @return {boolean} `true` if the history loads successfully, `false` otherwise.
- */
 export async function loadChatHistory(sessionId = null) {
 	const chatContainer = document.getElementById("chatContainer");
 	if (!chatContainer) return false;
@@ -120,23 +115,14 @@ export async function loadChatHistory(sessionId = null) {
 		olderMessagesLoaded = 0;
 		isLoadingOlder = false;
 
-		// Update active session name in header if present
+		// Update active session name in header from the matching sidebar entry.
 		const sessionNameEl = document.getElementById("sessionName");
 		if (sessionNameEl) {
-			const activeName =
-				data.active_session?.name ||
-				(data.active_session_id ? data.active_session_name : null);
-			if (activeName) {
-				sessionNameEl.textContent = activeName;
-			} else {
-				// Lookup from sidebar session item if available
-				const sidebarItem = document.querySelector(
-					`.sidebar-session-item[data-id="${currentHistorySessionId}"] .sidebar-session-name`,
-				);
-				if (sidebarItem?.textContent.trim()) {
-					sessionNameEl.textContent = sidebarItem.textContent.trim();
-				}
-			}
+			const sidebarItem = document.querySelector(
+				`.sidebar-session-item[data-session-id="${currentHistorySessionId}"] .sidebar-session-name`,
+			);
+			const activeName = sidebarItem?.textContent.trim();
+			if (activeName) sessionNameEl.textContent = activeName;
 		}
 
 		chatStore.loadHistory(

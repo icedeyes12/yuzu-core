@@ -124,9 +124,6 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=trusted_hosts)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        """
-        Add standard security headers to the response.
-        """
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
@@ -260,38 +257,16 @@ async def pool_timeout_handler(request: Request, exc: PoolTimeout):
 
 @app.exception_handler(OperationalError)
 async def operational_error_handler(request: Request, exc: OperationalError):
-    """Return a service-unavailable response for database operational errors.
-    
-    Parameters:
-    	request (Request): The request associated with the error.
-    	exc (OperationalError): The database operational error.
-    
-    Returns:
-    	Response: A 503 problem-detail response indicating that the database is temporarily unavailable.
-    """
     return problem_detail(
         503, "Service unavailable", "The database is temporarily unavailable.", request
     )
 
 
 @app.exception_handler(StarletteHTTPException)
-async def custom_starlette_http_exception_handler(request: Request, exc: Exception):
-    """
-    Handle Starlette HTTP exceptions and add CORS headers for allowed origins.
-    
-    Parameters:
-        request (Request): The incoming HTTP request.
-        exc (Exception): The exception to convert into an HTTP response.
-    
-    Returns:
-        The HTTP exception response, including CORS headers when the request origin is allowed.
-    """
-    starlette_exc = (
-        exc
-        if isinstance(exc, StarletteHTTPException)
-        else StarletteHTTPException(status_code=500, detail=str(exc))
-    )
-    response = await http_exception_handler(request, starlette_exc)
+async def custom_starlette_http_exception_handler(
+    request: Request, exc: StarletteHTTPException
+):
+    response = await http_exception_handler(request, exc)
     origin = request.headers.get("origin")
     cors_cfg = _cors_config()
     allowed_origins = cors_cfg.get("allow_origins")

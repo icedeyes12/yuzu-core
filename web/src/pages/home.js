@@ -1,10 +1,7 @@
 import { bootApp } from "../main.js";
 import { apiFetch } from "../modules/apiFetch.js";
 
-/**
- * Renders the user's name and partner name in the home page greeting elements.
- */
-async function _renderGreeting() {
+async function renderGreeting() {
 	const response = await apiFetch("/api/v1/profile", {
 		headers: { Accept: "application/json" },
 	});
@@ -22,15 +19,10 @@ async function _renderGreeting() {
 	}
 }
 
-/**
- * Initializes the home page for the current user.
- *
- * Exits when no user is available; otherwise loads the user's profile.
- */
 async function init() {
 	const me = await bootApp({ page: "home" });
 	if (!me) return;
-	await loadProfile();
+	await renderGreeting();
 }
 
 init();
