@@ -134,6 +134,9 @@ function updateCapabilitySummary(provider, model, target) {
 	}
 }
 
+/**
+ * Updates reasoning and vision controls to reflect the active model's capabilities.
+ */
 function applyActiveModelCapabilities() {
 	const capabilities = getActiveModelInfo()?.capabilities || {};
 	const reasoning = capabilities.reasoning || {};
@@ -150,9 +153,9 @@ function applyActiveModelCapabilities() {
 }
 
 /**
- * Retrieves advanced profile settings from the provided data.
- * @param {Object} data - The profile data containing advanced or profile settings.
- * @return {Object} The advanced settings, profile settings, original data, or an empty object.
+ * Selects the available source for a profile's advanced settings.
+ * @param {Object} data - Profile data containing advanced or profile settings.
+ * @return {Object} The advanced settings, profile settings, original data, or an empty object, in that order of preference.
  */
 function getProfileAdvancedSource(data) {
 	return data?.advanced || data?.profile || data || {};

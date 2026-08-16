@@ -249,6 +249,10 @@ function renderAuthenticated(container, data) {
 	`;
 }
 
+/**
+ * Renders sign-in options for unauthenticated users.
+ * @param {HTMLElement} container - The element where the sign-in options are inserted.
+ */
 function renderUnauthenticated(container) {
 	container.innerHTML = `
 		<div class="auth-login-buttons">

@@ -125,7 +125,10 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=trusted_hosts)
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         """
-        Add standard security headers to the response.
+        Add standard security headers to the response when they are not already set.
+        
+        Returns:
+            Response: The response with security headers applied.
         """
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")

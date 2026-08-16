@@ -10,6 +10,10 @@ let historyRequest = null;
 let historyRequestSequence = 0;
 let scrollListenerAttached = false;
 
+/**
+ * Loads older messages for the active chat session when additional history is available.
+ * @throws {Error} If the history request returns an unsuccessful response.
+ */
 async function _loadOlderMessages() {
 	if (isLoadingOlder || !chatStore.hasMoreOlder || !currentHistorySessionId)
 		return;

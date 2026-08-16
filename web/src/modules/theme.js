@@ -4,7 +4,10 @@ export const DEFAULT_THEME = "stellar-night-suisei";
 
 // The user-scoped theme key is authoritative once /me resolves; before that we
 // fall back to the un-namespaced "theme" key or the document attribute so the
-// first paint is not a flash of the default theme.
+/**
+ * Retrieves the saved theme for the current user or the available fallback theme.
+ * @returns {string} The user-specific theme, generic saved theme, document theme, or default theme.
+ */
 export function getSavedTheme() {
 	const userKey = getUserThemeStorageKey();
 	if (userKey) {
