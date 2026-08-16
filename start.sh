@@ -51,7 +51,13 @@ subprocess.Popen([
 fi
 
 # 3. Check/Start Cloudflared Tunnel
-if pgrep -f "cloudflared tunnel.*yuzu-companion" >/dev/null 2>&1; then
+if [ -f "/root/.cloudflared/config.yml" ]; then
+    cf_running_check="cloudflared.*--config.*config.yml"
+else
+    cf_running_check="cloudflared tunnel.*yuzu-companion"
+fi
+
+if pgrep -f "$cf_running_check" >/dev/null 2>&1; then
     echo "[Tunnel] Cloudflared tunnel is already running."
 else
     echo "[Tunnel] Starting cloudflared tunnel in background..."
@@ -61,7 +67,7 @@ else
     elif [ -f "/root/.cloudflared/config.yml" ]; then
         nohup "$cloudflared_bin" tunnel --config /root/.cloudflared/config.yml run > /var/log/cloudflared.log 2>&1 &
         sleep 3
-        if pgrep -f "cloudflared tunnel.*yuzu-companion" >/dev/null 2>&1; then
+        if pgrep -f "$cf_running_check" >/dev/null 2>&1; then
             echo "[Tunnel] Cloudflared tunnel started successfully."
         else
             echo "[WARNING] Cloudflared tunnel failed to start."
@@ -69,7 +75,7 @@ else
     else
         nohup "$cloudflared_bin" tunnel run yuzu-companion > /dev/null 2>&1 &
         sleep 3
-        if pgrep -f "cloudflared tunnel.*yuzu-companion" >/dev/null 2>&1; then
+        if pgrep -f "$cf_running_check" >/dev/null 2>&1; then
             echo "[Tunnel] Cloudflared tunnel started successfully."
         else
             echo "[WARNING] Cloudflared tunnel failed to start."

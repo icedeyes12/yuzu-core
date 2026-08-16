@@ -59,11 +59,11 @@ export async function apiFetch(input, init = {}) {
 
 	// Restrict BYOK header injection to same-origin LLM endpoints
 	try {
-		const url = new URL(targetUrl);
-		const apiOrigin = API_BASE
-			? new URL(API_BASE).origin
+		const url = new URL(targetUrl, window.location.origin);
+		const baseOrigin = API_BASE
+			? new URL(API_BASE, window.location.origin).origin
 			: window.location.origin;
-		const isSameOrigin = url.origin === apiOrigin;
+		const isSameOrigin = url.origin === baseOrigin;
 		const isLlmEndpoint = LLM_ENDPOINTS.some(
 			(endpoint) => url.pathname === endpoint,
 		);
@@ -84,11 +84,20 @@ export async function apiFetch(input, init = {}) {
 		credentials: "include",
 	});
 
-	if (
-		(response.status === 401 || response.status === 403) &&
-		targetUrl.includes("/api/v1/")
-	) {
-		redirectToLogin();
+	if (response.status === 401 || response.status === 403) {
+		try {
+			const url = new URL(targetUrl, window.location.origin);
+			const baseOrigin = API_BASE
+				? new URL(API_BASE, window.location.origin).origin
+				: window.location.origin;
+			if (url.origin === baseOrigin && url.pathname.includes("/api/v1/")) {
+				redirectToLogin();
+			}
+		} catch {
+			if (targetUrl.includes("/api/v1/")) {
+				redirectToLogin();
+			}
+		}
 	}
 
 	return response;

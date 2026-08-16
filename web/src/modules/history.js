@@ -124,7 +124,7 @@ export async function loadChatHistory(sessionId = null) {
 		olderMessagesLoaded = 0;
 		isLoadingOlder = false;
 
-		// Update active session name in header from the sidebar entry, if loaded.
+		// Update active session name in header from the sidebar entry, or fallback.
 		const sessionNameEl = document.getElementById("sessionName");
 		if (sessionNameEl) {
 			const sidebarItem = document.querySelector(
@@ -132,6 +132,8 @@ export async function loadChatHistory(sessionId = null) {
 			);
 			if (sidebarItem?.textContent.trim()) {
 				sessionNameEl.textContent = sidebarItem.textContent.trim();
+			} else {
+				sessionNameEl.textContent = "Current Chat";
 			}
 		}
 
