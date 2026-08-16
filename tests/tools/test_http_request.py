@@ -18,8 +18,15 @@ def test_network_error_is_categorized_and_keeps_http_shape(monkeypatch):
         async def request(self, *_args, **_kwargs):
             raise httpx.ConnectError("All connection attempts failed")
 
+    from app.db import Database
+
     monkeypatch.setattr(http_request.httpx, "AsyncClient", FailingClient)
     monkeypatch.setattr(http_request, "is_safe_public_url", lambda _url: (True, ""))
+
+    async def fake_get_profile(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(Database, "get_profile", fake_get_profile)
 
     result = asyncio.run(
         http_request.execute({"url": "https://example.com", "method": "GET"})
