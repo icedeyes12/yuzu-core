@@ -116,51 +116,6 @@ app = FastAPI(
     },
 )
 
-# Trust proxy headers (e.g. X-Forwarded-Proto, X-Forwarded-For) from reverse proxies like Cloudflare
-trusted_hosts_env = os.environ.get("TRUSTED_HOSTS", "127.0.0.1")
-trusted_hosts = [h.strip() for h in trusted_hosts_env.split(",") if h.strip()]
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=trusted_hosts)
-
-
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        """
-        Add standard security headers to the response when they are not already set.
-
-        Returns:
-            Response: The response with security headers applied.
-        """
-        response = await call_next(request)
-        response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-Frame-Options", "DENY")
-        response.headers.setdefault(
-            "Referrer-Policy", "strict-origin-when-cross-origin"
-        )
-        response.headers.setdefault(
-            "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
-        )
-        return response
-
-
-app.add_middleware(SecurityHeadersMiddleware)
-
-
-def _env_flag(name: str, default: bool) -> bool:
-    """ฅ^•ﻌ•^ฅ"""
-    return os.environ.get(name, "true" if default else "false").lower() == "true"
-
-
-SERVE_WEB_UI = _env_flag("SERVE_WEB_UI", True)
-
-# Local single-origin SPA mode: when SERVE_WEB_UI is true and SERVE_SPA is set,
-# the page routes serve the built SPA from web/dist instead of the Jinja
-# templates. Default keeps the current Jinja UI; SERVE_SPA has no effect in
-# API-only mode (SERVE_WEB_UI=false).
-SERVE_SPA = _env_flag("SERVE_SPA", False)
-
-
-# CORS: env-driven for the future cross-origin SPA deployment. When CORS_ORIGINS
-# is unset the legacy same-origin policy is preserved exactly.
 def _cors_config() -> dict[str, object]:
     """
     Build the CORS configuration from the configured allowed origins.
@@ -192,8 +147,53 @@ def _cors_config() -> dict[str, object]:
     }
 
 
+# Trust proxy headers (e.g. X-Forwarded-Proto, X-Forwarded-For) from reverse proxies like Cloudflare
+trusted_hosts_env = os.environ.get("TRUSTED_HOSTS", "*")
+trusted_hosts = [h.strip() for h in trusted_hosts_env.split(",") if h.strip()]
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=trusted_hosts)
+
+
 CORS_CONFIG = _cors_config()
 app.add_middleware(CORSMiddleware, **CORS_CONFIG)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        """
+        Add standard security headers to the response when they are not already set.
+
+        Returns:
+            Response: The response with security headers applied.
+        """
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault(
+            "Referrer-Policy", "strict-origin-when-cross-origin"
+        )
+        response.headers.setdefault(
+            "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
+        )
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    """ฅ^•ﻌ•^ฅ"""
+    return os.environ.get(name, "true" if default else "false").lower() == "true"
+
+
+SERVE_WEB_UI = _env_flag("SERVE_WEB_UI", True)
+
+# Local single-origin SPA mode: when SERVE_WEB_UI is true and SERVE_SPA is set,
+# the page routes serve the built SPA from web/dist instead of the Jinja
+# templates. Default keeps the current Jinja UI; SERVE_SPA has no effect in
+# API-only mode (SERVE_WEB_UI=false).
+SERVE_SPA = _env_flag("SERVE_SPA", False)
 
 
 @app.middleware("http")
