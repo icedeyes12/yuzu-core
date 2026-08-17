@@ -172,26 +172,35 @@ def _cors_config() -> dict[str, object]:
     origins = [
         o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()
     ]
-    if origins:
-        return {
-            "allow_origins": origins,
-            "allow_credentials": True,
-            "allow_methods": ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE"],
-            "allow_headers": [
-                "Accept",
-                "Content-Type",
-                "X-BYOK-Config",
-                "X-Provider-Key",
-                "X-Provider-BaseUrl",
-                "X-Client-Timezone",
-                "X-Client-Local-Time",
-            ],
-        }
+    default_origins = [
+        "https://chat.yuzuki.space",
+        "https://yuzuki.space",
+        "https://api.yuzuki.space",
+        "http://localhost:5000",
+        "http://127.0.0.1:5000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+    allow_origins = origins if origins else default_origins
+
     return {
-        "allow_origins": ["https://yuzuki.space"],
-        "allow_credentials": False,
-        "allow_methods": ["GET", "HEAD", "OPTIONS"],
-        "allow_headers": ["Accept", "Content-Type"],
+        "allow_origins": allow_origins,
+        "allow_credentials": True,
+        "allow_methods": ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH"],
+        "allow_headers": [
+            "Accept",
+            "Accept-Language",
+            "Content-Language",
+            "Content-Type",
+            "Authorization",
+            "X-Requested-With",
+            "X-BYOK-Config",
+            "X-Provider-Key",
+            "X-Provider-BaseUrl",
+            "X-Client-Timezone",
+            "X-Client-Local-Time",
+            "X-Request-ID",
+        ],
     }
 
 
