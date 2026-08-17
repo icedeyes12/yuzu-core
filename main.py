@@ -166,11 +166,12 @@ def _cors_config() -> dict[str, object]:
     Build the CORS configuration from the configured allowed origins.
 
     Returns:
-        dict[str, object]: CORS settings derived from `CORS_ORIGINS`, or the default
-                configuration for `https://yuzuki.space` when no origins are configured.
+        dict[str, object]: CORS settings derived from `CORS_ORIGINS`, or default cross-origin
+                origins including chat.yuzuki.space when no origins are configured.
     """
+    origins_env = os.environ.get("CORS_ORIGINS", "")
     origins = [
-        o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()
+        o.strip() for o in origins_env.split(",") if o.strip()
     ]
     default_origins = [
         "https://chat.yuzuki.space",
@@ -186,21 +187,8 @@ def _cors_config() -> dict[str, object]:
     return {
         "allow_origins": allow_origins,
         "allow_credentials": True,
-        "allow_methods": ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH"],
-        "allow_headers": [
-            "Accept",
-            "Accept-Language",
-            "Content-Language",
-            "Content-Type",
-            "Authorization",
-            "X-Requested-With",
-            "X-BYOK-Config",
-            "X-Provider-Key",
-            "X-Provider-BaseUrl",
-            "X-Client-Timezone",
-            "X-Client-Local-Time",
-            "X-Request-ID",
-        ],
+        "allow_methods": ["*"],
+        "allow_headers": ["*"],
     }
 
 

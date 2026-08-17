@@ -26,8 +26,7 @@ def test_cors_config_default_preserves_legacy_policy(
     assert "https://chat.yuzuki.space" in cfg["allow_origins"]
     assert "https://yuzuki.space" in cfg["allow_origins"]
     assert cfg["allow_credentials"] is True
-    assert "Authorization" in cfg["allow_headers"]
-    assert "Accept" in cfg["allow_headers"]
+    assert cfg["allow_headers"] == ["*"]
 
 
 def test_cors_config_origins_enable_credentials_and_byok_headers(
@@ -42,16 +41,8 @@ def test_cors_config_origins_enable_credentials_and_byok_headers(
         "https://dev.example.com",
     ]
     assert cfg["allow_credentials"] is True
-    assert "POST" in cfg["allow_methods"]
-    assert "DELETE" in cfg["allow_methods"]
-    for header in (
-        "X-BYOK-Config",
-        "X-Provider-Key",
-        "X-Provider-BaseUrl",
-        "X-Client-Timezone",
-        "X-Client-Local-Time",
-    ):
-        assert header in cfg["allow_headers"]
+    assert cfg["allow_methods"] == ["*"]
+    assert cfg["allow_headers"] == ["*"]
 
 
 def test_serve_web_ui_false_hides_html_routes_and_public_static(
