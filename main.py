@@ -116,6 +116,7 @@ app = FastAPI(
     },
 )
 
+
 def _cors_config() -> dict[str, object]:
     """
     Build the CORS configuration from the configured allowed origins.
@@ -125,9 +126,7 @@ def _cors_config() -> dict[str, object]:
                 origins including chat.yuzuki.space when no origins are configured.
     """
     origins_env = os.environ.get("CORS_ORIGINS", "")
-    origins = [
-        o.strip() for o in origins_env.split(",") if o.strip()
-    ]
+    origins = [o.strip() for o in origins_env.split(",") if o.strip()]
     default_origins = [
         "https://chat.yuzuki.space",
         "https://yuzuki.space",
