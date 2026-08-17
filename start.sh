@@ -3,14 +3,16 @@
 # Exit on error
 set -e
 
-echo "=== Yuzu Companion Starter ==="
+echo "=== Yuzu Core Starter ==="
 
 # 1. Check/Start PostgreSQL (Support PRoot Debian & Native Termux)
-if pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
-    echo "[DB] PostgreSQL is already running."
+PGPORT="${PGPORT:-5432}"
+PGHOST="${PGHOST:-127.0.0.1}"
+
+if pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
+    echo "[DB] PostgreSQL is already running on $PGHOST:$PGPORT."
 else
     echo "[DB] PostgreSQL is not running. Starting..."
-    # Clean stale PID file only after confirming PostgreSQL is stopped
     if [ -f "/var/lib/postgresql/18/main/postmaster.pid" ]; then
         rm -f /var/lib/postgresql/18/main/postmaster.pid
     fi
@@ -37,7 +39,7 @@ subprocess.Popen([
     
     pg_ready=0
     for i in $(seq 1 20); do
-        if pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
+        if pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
             echo "[DB] PostgreSQL is ready!"
             pg_ready=1
             break
@@ -50,40 +52,7 @@ subprocess.Popen([
     fi
 fi
 
-# 3. Check/Start Cloudflared Tunnel
-if [ -f "/root/.cloudflared/config.yml" ]; then
-    cf_running_check="cloudflared.*--config.*config.yml"
-else
-    cf_running_check="cloudflared tunnel.*yuzu-companion"
-fi
-
-if pgrep -f "$cf_running_check" >/dev/null 2>&1; then
-    echo "[Tunnel] Cloudflared tunnel is already running."
-else
-    echo "[Tunnel] Starting cloudflared tunnel in background..."
-    cloudflared_bin=$(command -v cloudflared)
-    if [ -z "$cloudflared_bin" ]; then
-        echo "[WARNING] cloudflared executable not found in PATH."
-    elif [ -f "/root/.cloudflared/config.yml" ]; then
-        nohup "$cloudflared_bin" tunnel --config /root/.cloudflared/config.yml run > /var/log/cloudflared.log 2>&1 &
-        sleep 3
-        if pgrep -f "$cf_running_check" >/dev/null 2>&1; then
-            echo "[Tunnel] Cloudflared tunnel started successfully."
-        else
-            echo "[WARNING] Cloudflared tunnel failed to start."
-        fi
-    else
-        nohup "$cloudflared_bin" tunnel run yuzu-companion > /dev/null 2>&1 &
-        sleep 3
-        if pgrep -f "$cf_running_check" >/dev/null 2>&1; then
-            echo "[Tunnel] Cloudflared tunnel started successfully."
-        else
-            echo "[WARNING] Cloudflared tunnel failed to start."
-        fi
-    fi
-fi
-
-# 4. Activate venv if present
+# 2. Activate virtualenv if present
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/.venv/bin/activate" ]; then
     source "$SCRIPT_DIR/.venv/bin/activate"
@@ -93,7 +62,7 @@ elif [ -f "$SCRIPT_DIR/venv/bin/activate" ]; then
     echo "[Venv] Activated venv."
 fi
 
-# 5. Start Yuzu Backend
-echo "[App] Starting Yuzu Companion server..."
+# 3. Start Yuzu Backend
+echo "[App] Starting Yuzu Core API server..."
 cd "$SCRIPT_DIR"
 exec python main.py
