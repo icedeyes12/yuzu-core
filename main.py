@@ -198,6 +198,8 @@ SERVE_SPA = _env_flag("SERVE_SPA", False)
 
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)
     from uuid import uuid4
 
     request.state.request_id = request.headers.get("x-request-id") or str(uuid4())
@@ -208,6 +210,8 @@ async def request_id_middleware(request: Request, call_next):
 
 @app.middleware("http")
 async def metrics_http_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)
     started = time.perf_counter()
     metrics.request_started()
     try:
