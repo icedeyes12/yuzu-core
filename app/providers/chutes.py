@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 
+from app.core.byok import get_request_keyring
 from app.core.context import MissingProviderKeyError
 from app.core.llm_context import LLMContext
 from app.core.multimodal import multimodal_tools
@@ -162,12 +163,18 @@ class ChutesProvider(AIProvider):
         ):
             return self._models_cache_data
         try:
-            headers = {}
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
+            key = api_key
+            try:
+                keyring = get_request_keyring("chutes")
+                if not key and keyring and keyring.key:
+                    key = keyring.key
+            except Exception:  # noqa: BLE001
+                pass
+
+            headers = {"Authorization": f"Bearer {key}"} if key else {}
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
-                    self.api_models_url, headers=headers, timeout=5.0
+                    self.api_models_url, headers=headers, timeout=6.0
                 )
             if resp.status_code == 200:
                 data = resp.json()
@@ -183,8 +190,6 @@ class ChutesProvider(AIProvider):
                     self._models_cache_at = now
                     self.available_models = self._models_cache_data
                     return self._models_cache_data
-        except MissingProviderKeyError:
-            raise
         except Exception:
             pass
         return self.available_models

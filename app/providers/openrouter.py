@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from app.core.context import MissingProviderKeyError, get_request_keyring
+from app.core.context import get_request_keyring
 from app.core.llm_context import LLMContext
 from app.core.multimodal import multimodal_tools
 from app.providers.base import ProviderCapabilities
@@ -28,7 +28,7 @@ class OpenRouterProvider(OpenAICompatibleProvider):
     async def fetch_live_models(self, api_key: str | None = None) -> list[str]:
         """Fetch the canonical model list from OpenRouter's /models endpoint.
 
-        Fetch models only when the caller provides a request-scoped key.
+        OpenRouter supports public model discovery without requiring an API key.
         """
         try:
             url = "https://openrouter.ai/api/v1/models"
@@ -37,27 +37,25 @@ class OpenRouterProvider(OpenAICompatibleProvider):
                 keyring = get_request_keyring("openrouter")
                 if not key and keyring and keyring.key:
                     key = keyring.key
-            except MissingProviderKeyError:
-                raise
             except Exception:  # noqa: BLE001
                 pass
             headers = {"Authorization": f"Bearer {key}"} if key else {}
             async with httpx.AsyncClient() as client:
                 resp = await client.get(url, headers=headers, timeout=8.0)
                 if resp.status_code != 200:
-                    return []
+                    return self.available_models
                 data = resp.json()
             metadata = [m for m in (data.get("data") or []) if isinstance(m, dict)]
             self.set_model_metadata(metadata)
             models = [
                 model_id for m in metadata if isinstance(model_id := m.get("id"), str)
             ]
-            self.available_models = models
-            return models
-        except MissingProviderKeyError:
-            raise
+            if models:
+                self.available_models = models
+                return models
         except Exception:
-            return []
+            pass
+        return self.available_models
 
     def _prepare_payload(
         self, ctx: LLMContext, messages: list[dict[str, Any]], stream: bool, **kwargs
