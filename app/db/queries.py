@@ -324,6 +324,7 @@ SCHEMA_DDL: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at)",
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_deleted ON chat_sessions(deleted_at)",
     "CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON chat_sessions(user_id)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_chat_sessions_active_user ON chat_sessions(user_id) WHERE is_active = TRUE AND deleted_at IS NULL",
     "CREATE INDEX IF NOT EXISTS idx_global_knowledge_entries_user ON global_knowledge_entries(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_global_knowledge_entries_order ON global_knowledge_entries(user_id, sort_order, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_global_knowledge_entries_enabled ON global_knowledge_entries(user_id, enabled)",

@@ -87,7 +87,14 @@ async def init_pg_tables_async() -> None:
     """(｡•̀ᴗ-)✧"""
     async with AsyncPgSession() as s:
         for statement in SCHEMA_DDL:
-            await s.execute(statement)
+            try:
+                await s.execute(statement)
+            except Exception as e:
+                # Log and tolerate optional extension absence (e.g. pgvector on unsupported builds)
+                if "vector" in statement and "does not exist" in str(e).lower():
+                    log.warning("pgvector extension not installed in PostgreSQL cluster; semantic search will be disabled.")
+                    continue
+                raise
     log.info("PostgreSQL tables initialized (async)")
 
 
@@ -217,6 +224,11 @@ async def create_session_async(name: str = "New Chat", *, user_id: str) -> str |
 async def switch_session_async(session_id: str, user_id: str) -> bool:
     try:
         async with AsyncPgSession() as s:
+            # Row-level lock to serialize concurrent session activation requests per user
+            await s.execute(
+                "SELECT id FROM chat_sessions WHERE user_id = %s FOR UPDATE",
+                (user_id,),
+            )
             await s.execute(SQL_SESSION_DEACTIVATE_FOR_USER, (user_id,))
             activated = await s.execute_returning(
                 SQL_SESSION_ACTIVATE_ONE_SCOPED,

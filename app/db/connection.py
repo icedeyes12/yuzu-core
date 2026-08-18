@@ -54,6 +54,9 @@ DB_PASSWORD = _db["password"]
 
 _MIN_CONN = 1
 _MAX_CONN = 10
+_POOL_TIMEOUT = 5.0
+_POOL_MAX_WAITING = 20
+_POOL_MAX_IDLE = 300.0
 
 
 # ── Vector literal formatting (pgvector uses square brackets) ───────────────
@@ -92,6 +95,10 @@ def get_sync_pool() -> ConnectionPool:
             conninfo=_build_dsn(),
             min_size=_MIN_CONN,
             max_size=_MAX_CONN,
+            timeout=_POOL_TIMEOUT,
+            max_waiting=_POOL_MAX_WAITING,
+            max_idle=_POOL_MAX_IDLE,
+            check=ConnectionPool.check_connection,
             kwargs={"row_factory": dict_row},
         )
         params = db_settings()
@@ -112,6 +119,10 @@ async def get_async_pool() -> AsyncConnectionPool:
             conninfo=_build_dsn(),
             min_size=_MIN_CONN,
             max_size=_MAX_CONN,
+            timeout=_POOL_TIMEOUT,
+            max_waiting=_POOL_MAX_WAITING,
+            max_idle=_POOL_MAX_IDLE,
+            check=AsyncConnectionPool.check_connection,
             kwargs={"row_factory": dict_row},
             open=False,
         )

@@ -32,6 +32,7 @@ from app.db import (
     get_session_messages_async,
     update_pipeline_state_async,
 )
+from app.db.connection import AsyncPgSession
 from app.memory.embedder import embed_texts_async
 from app.memory.extractor import (
     build_adaptive_batches,
@@ -644,42 +645,33 @@ async def run_memory_pipeline_async(
                 "processed_messages": processed_count,
             }
 
-        # Embed, then persist episodes and claims to the graph
+        # Embed, then persist episodes and claims to the graph within an atomic transaction
         episode_embeddings, claim_embeddings = await _embed_extracted_async(
             extracted["episodes"], extracted["claims"], profile
         )
-        episode_ids, episode_count = await _persist_episodes_async(
-            user_id=user_id,
-            session_id=session_id,
-            episodes=extracted["episodes"],
-            unsegmented=unsegmented,
-            embeddings=episode_embeddings,
-        )
-        (
-            claim_count,
-            consolidation_candidates,
-            consolidation_archived,
-        ) = await _persist_claims_async(
-            user_id=user_id,
-            claims=extracted["claims"],
-            episodes=extracted["episodes"],
-            unsegmented=unsegmented,
-            embeddings=claim_embeddings,
-            episode_ids=episode_ids,
-        )
+        async with AsyncPgSession() as s:
+            episode_ids, episode_count = await _persist_episodes_async(
+                user_id=user_id,
+                session_id=session_id,
+                episodes=extracted["episodes"],
+                unsegmented=unsegmented,
+                embeddings=episode_embeddings,
+            )
+            (
+                claim_count,
+                consolidation_candidates,
+                consolidation_archived,
+            ) = await _persist_claims_async(
+                user_id=user_id,
+                claims=extracted["claims"],
+                episodes=extracted["episodes"],
+                unsegmented=unsegmented,
+                embeddings=claim_embeddings,
+                episode_ids=episode_ids,
+            )
 
-        logger.info(
-            "memory extraction complete episodes=%s claims=%s consolidation_candidates=%s consolidation_archived=%s llm_calls=%s elapsed_ms=%s",
-            episode_count,
-            claim_count,
-            consolidation_candidates,
-            consolidation_archived,
-            llm_calls,
-            int((time.monotonic() - started) * 1000),
-        )
-
-        # Mark done with the last processed message ID
-        await _mark_batch_done_async(session_id, user_id, unsegmented, processed_count)
+            # Mark done with the last processed message ID in the same atomic transaction
+            await _mark_batch_done_async(session_id, user_id, unsegmented, processed_count)
 
         # Log if there are remaining messages to process
         remaining = original_unsegmented_count - processed_count
