@@ -92,7 +92,9 @@ async def init_pg_tables_async() -> None:
             except Exception as e:
                 # Log and tolerate optional extension absence (e.g. pgvector on unsupported builds)
                 if "vector" in statement and "does not exist" in str(e).lower():
-                    log.warning("pgvector extension not installed in PostgreSQL cluster; semantic search will be disabled.")
+                    log.warning(
+                        "pgvector extension not installed in PostgreSQL cluster; semantic search will be disabled."
+                    )
                     continue
                 raise
     log.info("PostgreSQL tables initialized (async)")

@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.db.connection import _POOL_TIMEOUT, AsyncPgSession, get_async_pool
+from app.db.connection import _POOL_TIMEOUT, get_async_pool
 from app.db.models_async import (
-    create_session_async,
-    get_all_sessions_async,
     switch_session_async,
 )
 
@@ -36,9 +33,7 @@ async def test_switch_session_atomic_execution_path() -> None:
     with patch("app.db.models_async.AsyncPgSession") as MockSession:
         instance = MockSession.return_value
         instance.__aenter__.return_value.execute = mock_execute
-        instance.__aenter__.return_value.execute_returning = (
-            mock_execute_returning
-        )
+        instance.__aenter__.return_value.execute_returning = mock_execute_returning
 
         success = await switch_session_async(session_id, user_id)
         assert success is True

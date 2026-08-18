@@ -649,7 +649,7 @@ async def run_memory_pipeline_async(
         episode_embeddings, claim_embeddings = await _embed_extracted_async(
             extracted["episodes"], extracted["claims"], profile
         )
-        async with AsyncPgSession() as s:
+        async with AsyncPgSession():
             episode_ids, episode_count = await _persist_episodes_async(
                 user_id=user_id,
                 session_id=session_id,
@@ -671,7 +671,9 @@ async def run_memory_pipeline_async(
             )
 
             # Mark done with the last processed message ID in the same atomic transaction
-            await _mark_batch_done_async(session_id, user_id, unsegmented, processed_count)
+            await _mark_batch_done_async(
+                session_id, user_id, unsegmented, processed_count
+            )
 
         # Log if there are remaining messages to process
         remaining = original_unsegmented_count - processed_count
