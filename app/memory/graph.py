@@ -142,7 +142,6 @@ class GraphMemoryRepository:
             threshold=threshold,
         )
         archived = 0
-        normalized_target = " ".join(target.lower().split())
         for candidate in candidates:
             candidate_parts = str(candidate.get("content", "")).split(" ", 2)
             if (
@@ -151,14 +150,29 @@ class GraphMemoryRepository:
                 or candidate_parts[1].lower() != normalized_relation
             ):
                 continue
-            candidate_target = " ".join(candidate_parts[2].lower().split())
-            if not normalized_target or candidate_target != normalized_target:
-                continue
+            # If candidate matches same entity-relation, supersede the older candidate node
             if await GraphMemoryRepository.archive_node(
                 user_id=user_id, node_id=str(candidate["id"]), canonical_node_id=node_id
             ):
                 archived += 1
         return {"candidates": len(candidates), "archived": archived}
+
+    @staticmethod
+    async def list_active_nodes(
+        *, user_id: str, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        return await pg_fetchall_async(SQL_GRAPH_NODE_LIST, (user_id, limit))
+
+    @staticmethod
+    async def delete_node_soft(*, user_id: str, node_id: str) -> bool:
+        query = """
+        UPDATE memory_nodes
+        SET status = 'deleted', valid_until = NOW(), updated_at = NOW()
+        WHERE id = %s AND user_id = %s AND status = 'active'
+        RETURNING id
+        """
+        row = await pg_fetchone_async(query, (node_id, user_id))
+        return row is not None
 
     @staticmethod
     async def archive_node(
@@ -245,7 +259,11 @@ class GraphMemoryRepository:
 
     @staticmethod
     async def search_nodes_vector(
-        *, user_id: str, embedding: list[float], limit: int = 10
+        *,
+        user_id: str,
+        embedding: list[float],
+        min_score: float = 0.70,
+        limit: int = 10,
     ) -> list[dict[str, Any]]:
         return await pg_fetchall_async(
             SQL_GRAPH_NODE_SEARCH_VECTOR,
@@ -254,6 +272,7 @@ class GraphMemoryRepository:
                 user_id,
                 _GRAPH_EMBEDDING_DIMENSIONS,
                 vector_literal(embedding),
+                min_score,
                 limit,
             ),
         )

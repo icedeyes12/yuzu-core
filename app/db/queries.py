@@ -747,6 +747,7 @@ SELECT n.id, n.user_id, n.node_type, n.content, n.confidence, n.importance,
 FROM memory_nodes n
 WHERE n.user_id = %s AND n.status = 'active' AND n.valid_until IS NULL
   AND n.embedding IS NOT NULL AND n.embedding_dimensions = %s
+  AND (1 - (n.embedding <=> %s::vector)) >= %s
 ORDER BY n.embedding <=> %s::vector, n.importance DESC, n.created_at DESC
 LIMIT %s
 """

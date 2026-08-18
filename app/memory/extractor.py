@@ -79,7 +79,15 @@ _EXTRACTION_SCHEMA = {
 }
 
 _EXTRACTION_SYSTEM_PROMPT = """Extract durable inferred memory from one conversation batch.
-Return one JSON object only with keys episodes and claims. Episodes are concise summaries of meaningful interactions. Claims are objective, user-specific facts that may remain useful across sessions. Do not extract assistant behavior, temporary task state, instructions, roleplay, emotional performance, or facts about the assistant. Do not invent. Every claim needs a contiguous message-index evidence range directly supporting it. Global Knowledge and application configuration are never memory claims. Prefer no claim over a weak inference."""
+Return one JSON object only with keys episodes and claims. Episodes are concise summaries of meaningful interactions. Claims are objective, user-specific facts, identities, long-term preferences, and durable relationships that remain useful across future sessions.
+
+CRITICAL SALIENCE & NEGATIVE FILTERING DIRECTIVES:
+- DO NOT extract transient physical/emotional states (e.g. "User is sleepy today", "User is eating lunch", "User is feeling tired right now").
+- DO NOT extract temporary task context, ephemeral instructions, roleplay banter, or facts about the assistant.
+- DO NOT confuse immediate one-off actions with enduring habits (e.g. "User drank tea this morning" is NOT "User only drinks tea").
+- DO NOT invent or extrapolate beyond stated facts. Every claim MUST have a contiguous message-index evidence range.
+- Global Knowledge and application settings are never memory claims.
+- Prefer ZERO claims over weak, transient, or speculative inferences."""
 
 _CHARS_PER_TOKEN = 4
 

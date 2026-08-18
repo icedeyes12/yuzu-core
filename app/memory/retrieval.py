@@ -88,7 +88,7 @@ async def retrieve_memories_combined_async(
         vector = await _get_cached_embedding_async(query)
         if vector:
             nodes = await GraphMemoryRepository.search_nodes_vector(
-                user_id=user_id, embedding=vector, limit=static_limit
+                user_id=user_id, embedding=vector, min_score=0.70, limit=static_limit
             )
         if not nodes:
             nodes = await GraphMemoryRepository.search_nodes(
