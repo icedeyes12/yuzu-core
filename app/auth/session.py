@@ -15,6 +15,8 @@ _SESSION_MAX_AGE = SESSION_TTL_DAYS * 24 * 60 * 60
 
 _COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
 
+_COOKIE_DOMAIN = os.environ.get("COOKIE_DOMAIN") or None
+
 _SAMESITE_VALUES = {"lax", "strict", "none"}
 
 _COOKIE_SAMESITE = os.environ.get("COOKIE_SAMESITE", "lax").lower()
@@ -57,6 +59,7 @@ def set_session_cookie(response, token: str) -> None:
         httponly=True,
         secure=_COOKIE_SECURE,
         samesite=_COOKIE_SAMESITE,
+        domain=_COOKIE_DOMAIN,
         path="/",
     )
 
@@ -67,6 +70,7 @@ def clear_session_cookie(response) -> None:
     response.delete_cookie(
         key=SESSION_COOKIE_NAME,
         path="/",
+        domain=_COOKIE_DOMAIN,
         secure=_COOKIE_SECURE,
         samesite=_COOKIE_SAMESITE,
     )
