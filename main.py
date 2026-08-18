@@ -157,6 +157,17 @@ app.add_middleware(CORSMiddleware, **CORS_CONFIG)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add standard security headers to every response when not already set.
+
+    preview-shell.html is the one exception: the frontend embeds it in a
+    sandboxed same-origin iframe (HTML-preview fences), so it must stay
+    frameable by the app itself while everything else stays clickjacking-
+    hardened. A meta-tag CSP cannot express frame-ancestors, so the backend
+    enforces it via header on top of the pages' meta CSP (the two intersect).
+    """
+
+    _FRAMEABLE_PATH = "/preview-shell.html"
+
     async def dispatch(self, request: Request, call_next):
         """
         Add standard security headers to the response when they are not already set.
@@ -168,13 +179,22 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault(
             "Referrer-Policy", "strict-origin-when-cross-origin"
         )
         response.headers.setdefault(
             "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
         )
+        if request.url.path == self._FRAMEABLE_PATH:
+            response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+            response.headers.setdefault(
+                "Content-Security-Policy", "frame-ancestors 'self'"
+            )
+        else:
+            response.headers.setdefault("X-Frame-Options", "DENY")
+            response.headers.setdefault(
+                "Content-Security-Policy", "frame-ancestors 'none'"
+            )
         return response
 
 
@@ -536,6 +556,12 @@ if SERVE_WEB_UI and SERVE_SPA:
     @app.get("/about", response_class=HTMLResponse)
     async def spa_about():
         return _spa_entry("about.html")
+
+    @app.get("/preview-shell.html", response_class=HTMLResponse)
+    async def spa_preview_shell():
+        # Frameable by the app itself (see SecurityHeadersMiddleware); the
+        # frontend loads this in a sandboxed iframe for HTML-preview fences.
+        return _spa_entry("preview-shell.html")
 
 
 # ---------------------------------------------------------------------------

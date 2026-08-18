@@ -92,6 +92,50 @@ def test_security_headers_and_metrics_are_exposed(monkeypatch) -> None:
     assert "yuzu_http_request_duration_seconds" in metrics.text
 
 
+def test_frame_ancestors_csp_is_enforced_by_default(monkeypatch) -> None:
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def no_startup(_app):
+        yield
+
+    monkeypatch.setattr(app.router, "lifespan_context", no_startup)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.get("/health")
+
+    csp = response.headers.get("content-security-policy", "")
+    assert "frame-ancestors 'none'" in csp
+    assert response.headers["x-frame-options"] == "DENY"
+
+
+def test_preview_shell_stays_frameable_by_same_origin() -> None:
+    import asyncio
+
+    from starlette.responses import Response
+
+    from main import SecurityHeadersMiddleware
+
+    middleware = SecurityHeadersMiddleware(app)
+
+    async def call_next(_request):
+        return Response()
+
+    # The HTML-preview fence loads the shell in a sandboxed same-origin iframe:
+    # it must be frameable by the app itself.
+    shell = asyncio.run(
+        middleware.dispatch(_request(path="/preview-shell.html"), call_next)
+    )
+    assert shell.headers["x-frame-options"] == "SAMEORIGIN"
+    assert "frame-ancestors 'self'" in shell.headers["content-security-policy"]
+
+    # Everything else stays clickjacking-hardened.
+    page = asyncio.run(
+        middleware.dispatch(_request(path="/chat/some-session"), call_next)
+    )
+    assert page.headers["x-frame-options"] == "DENY"
+    assert "frame-ancestors 'none'" in page.headers["content-security-policy"]
+
+
 def test_versioned_api_and_openapi_are_available_without_legacy_prefix(
     monkeypatch,
 ) -> None:
