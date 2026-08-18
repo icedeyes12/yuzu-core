@@ -192,13 +192,19 @@ async def callback(request: Request):
     )
     token = await create_session(user_id)
 
-    # Determine redirection target: if login originated from somewhere else (e.g. localhost:5000), redirect back to it
-    redirect_target = "/chat"
+    # Determine redirection target: if login originated from somewhere else (e.g. localhost:5000 or chat.yuzuki.space), redirect back to it
+    redirect_target = "https://chat.yuzuki.space/chat.html"
     if origin:
         parsed_origin = urlsplit(origin)
         if parsed_origin.scheme in {"http", "https"} and parsed_origin.netloc:
+            # Map root or clean path to chat.html for Cloudflare Pages static MPA
+            path = (
+                "/chat.html"
+                if parsed_origin.path in {"", "/", "/login", "/login.html", "/chat"}
+                else parsed_origin.path
+            )
             redirect_target = urlunsplit(
-                (parsed_origin.scheme, parsed_origin.netloc, "/chat", "", "")
+                (parsed_origin.scheme, parsed_origin.netloc, path, "", "")
             )
 
     log.info(f"OAuth successful. Redirecting user to: {redirect_target}")
