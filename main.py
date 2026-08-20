@@ -3,28 +3,22 @@ from __future__ import annotations
 import os
 import time
 from contextlib import asynccontextmanager
-
-from fastapi import Depends, FastAPI, Request
-from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, Response
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from psycopg import OperationalError
-
-# Import psycopg errors for exception handling
-from psycopg_pool import PoolTimeout
-from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.middleware.base import BaseHTTPMiddleware
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+from dotenv import load_dotenv
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"), override=True)
 
-from dotenv import load_dotenv  # noqa: E402
-
-load_dotenv(os.path.join(BASE_DIR, ".env"))
-
-from fastapi import HTTPException  # noqa: E402
+from fastapi import Depends, FastAPI, HTTPException, Request  # noqa: E402
+from fastapi.exceptions import RequestValidationError  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import FileResponse, HTMLResponse, Response  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from fastapi.templating import Jinja2Templates  # noqa: E402
+from psycopg import OperationalError  # noqa: E402
+from psycopg_pool import PoolTimeout  # noqa: E402
+from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
+from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware  # noqa: E402
 
 from app.api import api_router  # noqa: E402
 from app.api.endpoints.health import router as health_router  # noqa: E402
