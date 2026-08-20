@@ -28,6 +28,7 @@ from app.auth.session import (
     set_session_cookie,
     validate_session,
 )
+from app.core.ids import EntityType, PublicId
 from app.core.logging_config import get_logger
 from app.db.facade import Database
 from app.db.queries import DEFAULT_PROFILE_PARAMS
@@ -266,14 +267,15 @@ async def me(request: Request):
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user_id = await validate_session(token)
-    if not user_id:
+    raw_user_id = await validate_session(token)
+    if not raw_user_id:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
-    row = await Database.lookup_auth_me(user_id)
+    row = await Database.lookup_auth_me(raw_user_id)
+    public_user_id = PublicId.encode(EntityType.USER, raw_user_id)
     if not row:
-        return {"user_id": user_id}
+        return {"user_id": public_user_id}
     return {
-        "user_id": user_id,
+        "user_id": public_user_id,
         "email": row.get("email"),
         "user_name": row.get("user_name") or "",
         "avatar_url": row.get("avatar_url"),

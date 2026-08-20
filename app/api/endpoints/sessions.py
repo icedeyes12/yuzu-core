@@ -12,7 +12,7 @@ from app.api.models import (
     SessionMutationResponse,
 )
 from app.api.utils import get_client_id, get_current_user
-from app.core.ids import typed_id_to_uuid
+from app.core.ids import EntityType, PublicId, resolve_session_id_boundary
 from app.core.logging_config import get_logger
 from app.db import (
     Database,
@@ -54,7 +54,7 @@ async def _delete_session(session_id: str, user_id: str):
     try:
         if not session_id:
             raise HTTPException(status_code=400, detail="session_id required")
-        raw_session_id = typed_id_to_uuid(session_id)
+        raw_session_id = resolve_session_id_boundary(session_id)
         success = await delete_session_async(raw_session_id, user_id)
         if not success:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -66,9 +66,16 @@ async def _delete_session(session_id: str, user_id: str):
             if active_session
             else []
         )
+        # Serialize active session to Public ID for response
+        serialized_active = None
+        if active_session:
+            serialized_active = {
+                **active_session,
+                "id": PublicId.encode(EntityType.SESSION, active_session.get("id")),
+            }
         return {
             "status": "success",
-            "active_session": active_session,
+            "active_session": serialized_active,
             "chat_history": chat_history,
         }
     except HTTPException:
@@ -107,7 +114,7 @@ async def api_get_chat_history(
         effective_limit = limit if limit and limit > 0 else None
         active_session = None
         if session_id:
-            raw_session_id = typed_id_to_uuid(session_id)
+            raw_session_id = resolve_session_id_boundary(session_id)
             chat_history = await get_chat_history_async(
                 session_id=raw_session_id,
                 limit=effective_limit,
@@ -157,7 +164,7 @@ async def api_get_chat_history_before(
     try:
         if limit <= 0 or limit > 200:
             limit = 50
-        raw_session_id = typed_id_to_uuid(session_id)
+        raw_session_id = resolve_session_id_boundary(session_id)
         chat_history = await get_chat_history_before_ts_async(
             session_id=raw_session_id,
             before_ts=before_ts,
@@ -179,8 +186,16 @@ async def api_get_chat_history_before(
 )
 async def api_list_sessions(user_id: str = Depends(get_current_user)):
     try:
-        sessions = await get_all_sessions_async(user_id)
-        return {"sessions": sessions}
+        raw_sessions = await get_all_sessions_async(user_id)
+        # Serialize canonical DB UUIDs into Public IDs at transport boundary
+        serialized = [
+            {
+                **s,
+                "id": PublicId.encode(EntityType.SESSION, s.get("id")),
+            }
+            for s in raw_sessions
+        ]
+        return {"sessions": serialized}
     except Exception as e:
         log.error("Error listing sessions: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -197,15 +212,18 @@ async def api_create_session(
     user_id: str = Depends(get_current_user),
 ):
     try:
-        session_id = await create_session_async(request.name, user_id=user_id)
-        if session_id is None:
+        raw_session_id = await create_session_async(request.name, user_id=user_id)
+        if raw_session_id is None:
             raise HTTPException(status_code=500, detail="Failed to create session")
-        _ = await switch_session_async(session_id, user_id=user_id)
+        _ = await switch_session_async(raw_session_id, user_id=user_id)
 
         client_id = get_client_id(http_request)
         SessionService.clear_client_session(client_id)
 
-        return {"status": "success", "session_id": session_id}
+        public_session_id = PublicId.encode(EntityType.SESSION, raw_session_id)
+        return {"status": "success", "session_id": public_session_id}
+    except HTTPException:
+        raise
     except Exception as e:
         log.error("Error creating session: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -225,7 +243,7 @@ async def api_switch_session(
         if not request.session_id:
             raise HTTPException(status_code=400, detail="session_id required")
 
-        raw_session_id = typed_id_to_uuid(request.session_id)
+        raw_session_id = resolve_session_id_boundary(request.session_id)
         switched = await switch_session_async(raw_session_id, user_id)
         if not switched:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -241,10 +259,11 @@ async def api_switch_session(
             session_id=raw_session_id, limit=50, recent=True, user_id=user_id
         )
 
+        public_session_id = PublicId.encode(EntityType.SESSION, raw_session_id)
         return {
             "status": "success",
-            "active_session_id": request.session_id,
-            "session_id": request.session_id,
+            "active_session_id": public_session_id,
+            "session_id": public_session_id,
             "chat_history": chat_history,
             "has_more": len(chat_history) == 50,
         }
@@ -267,7 +286,7 @@ async def api_rename_session(
         if not request.session_id or not request.name:
             raise HTTPException(status_code=400, detail="session_id and name required")
 
-        raw_session_id = typed_id_to_uuid(request.session_id)
+        raw_session_id = resolve_session_id_boundary(request.session_id)
         success = await rename_session_async(raw_session_id, request.name, user_id)
 
         if success:
@@ -294,7 +313,7 @@ async def api_clear_chat(
             active_session = await get_active_session_async(user_id)
             raw_session_id = str(active_session["id"])
         else:
-            raw_session_id = typed_id_to_uuid(session_id)
+            raw_session_id = resolve_session_id_boundary(session_id)
 
         _ = await clear_session_messages_async(raw_session_id, user_id=user_id)
 

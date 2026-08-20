@@ -6,6 +6,7 @@ from app.api.models import ERROR_RESPONSES, MemoryResponse
 from app.api.rate_limits import acquire_active_user, rate_limit_user, release_active
 from app.api.utils import extract_keyrings, get_current_user
 from app.core.context import keyring_scope
+from app.core.ids import EntityType, PublicId, resolve_memory_id_boundary
 from app.core.logging_config import get_logger
 from app.db import Database
 from app.memory.graph import GraphMemoryRepository
@@ -83,10 +84,22 @@ async def api_list_memory_nodes(
 ):
     """List active memory nodes for the authenticated user (Inspection API)."""
     try:
-        nodes = await GraphMemoryRepository.list_active_nodes(
+        raw_nodes = await GraphMemoryRepository.list_active_nodes(
             user_id=user_id, limit=min(max(limit, 1), 100)
         )
-        return {"status": "success", "nodes": nodes}
+        serialized_nodes = [
+            {
+                **n,
+                "id": PublicId.encode(EntityType.MEMORY_NODE, n.get("id")),
+                "supersedes_node_id": PublicId.encode(
+                    EntityType.MEMORY_NODE, n.get("supersedes_node_id")
+                )
+                if n.get("supersedes_node_id")
+                else None,
+            }
+            for n in raw_nodes
+        ]
+        return {"status": "success", "nodes": serialized_nodes}
     except Exception as e:
         log.error("Error listing memory nodes: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -102,8 +115,9 @@ async def api_delete_memory_node(
 ):
     """Soft delete/forget a specific memory node for privacy compliance."""
     try:
+        raw_node_id = resolve_memory_id_boundary(node_id)
         deleted = await GraphMemoryRepository.delete_node_soft(
-            user_id=user_id, node_id=node_id
+            user_id=user_id, node_id=raw_node_id
         )
         if not deleted:
             raise HTTPException(status_code=404, detail="Memory node not found")
@@ -112,4 +126,4 @@ async def api_delete_memory_node(
         raise
     except Exception as e:
         log.error("Error deleting memory node: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error") from e

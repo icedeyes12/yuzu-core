@@ -24,7 +24,7 @@ from app.api.utils import (
     validate_external_https_url,
 )
 from app.core.context import keyring_scope
-from app.core.ids import typed_id_to_uuid
+from app.core.ids import EntityType, PublicId, resolve_session_id_boundary
 from app.core.logging_config import get_logger
 from app.db import (
     Database,
@@ -114,9 +114,9 @@ async def api_get_profile(
         profile = await get_profile_async(user_id)
         if session_id is None:
             active_session = await Database.get_active_session(user_id)
-            raw_session_id = typed_id_to_uuid(str(active_session.get("id", "")))
+            raw_session_id = str(active_session.get("id", ""))
         else:
-            raw_session_id = typed_id_to_uuid(session_id)
+            raw_session_id = resolve_session_id_boundary(session_id)
             active_session = {"id": raw_session_id}
         chat_history = await get_chat_history_async(
             session_id=raw_session_id, limit=50, recent=True, user_id=user_id
@@ -126,10 +126,18 @@ async def api_get_profile(
         ai_providers_payload = await ConfigService.get_ai_providers_payload(
             user_id, profile
         )
+
+        serialized_active = None
+        if active_session and active_session.get("id"):
+            serialized_active = {
+                **active_session,
+                "id": PublicId.encode(EntityType.SESSION, active_session.get("id")),
+            }
+
         return {
             **profile_dict,
             "chat_history": chat_history,
-            "active_session": active_session,
+            "active_session": serialized_active,
             "ai_providers": ai_providers_payload,
         }
     except Exception as e:

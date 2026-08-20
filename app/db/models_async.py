@@ -4,7 +4,6 @@ import json
 from datetime import datetime
 from typing import Any
 
-from app.core.ids import typed_id_to_uuid, uuid_to_typed_id
 from app.core.logging_config import get_logger
 from app.db.connection import (
     AsyncPgSession,
@@ -216,10 +215,8 @@ async def create_session_async(name: str = "New Chat", *, user_id: str) -> str |
             row = await s.execute_returning(
                 SQL_SESSION_INSERT, (user_id, name, False, 0, now, now)
             )
-            # Encode to typed ID string so the client receives uniform ses_... representation
             if row and row.get("id"):
-                raw_id = str(row.get("id"))
-                return uuid_to_typed_id(raw_id, prefix="ses")
+                return str(row.get("id"))
             return None
     except Exception as e:  # noqa: BLE001
         log.error("create_session_async failed: %s", e)
@@ -567,15 +564,12 @@ async def get_recent_active_sessions_async(
     Returns sessions ordered by last activity, excluding the current session.
     Used by the LLM context system to show session-switching context.
     """
-    raw_current_id = typed_id_to_uuid(current_session_id)
     rows = await pg_fetchall_async(
-        SQL_SESSIONS_RECENT_ACTIVE, (raw_current_id, user_id, limit)
+        SQL_SESSIONS_RECENT_ACTIVE, (current_session_id, user_id, limit)
     )
     return [
         {
-            "id": uuid_to_typed_id(str(r.get("id")), prefix="ses")
-            if r.get("id")
-            else "",
+            "id": str(r.get("id")) if r.get("id") else "",
             "name": r.get("name", "Unnamed Session"),
             "updated_at": str(r.get("updated_at", "")),
             "message_count": r.get("message_count", 0),

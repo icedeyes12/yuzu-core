@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from app.core.ids import typed_id_to_uuid
 from app.core.logging_config import get_logger
 from app.db.models_async import (
     add_message_async as _pg_add_message_async,
@@ -157,7 +156,7 @@ async def _init_pg_tables_async_wrapper() -> None:
 async def _resolve_session_id_async(session_id: str | None, user_id: str) -> str:
     """Default a missing session_id to the currently active session (async)."""
     if session_id is not None:
-        return typed_id_to_uuid(session_id)
+        return str(session_id)
     active = await _pg_get_active_session_async(user_id)
     return str(active["id"])
 

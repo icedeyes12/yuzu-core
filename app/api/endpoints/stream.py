@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 
 from app.api.models import ERROR_RESPONSES, StreamStatusResponse, StreamSyncResponse
 from app.api.utils import get_current_user
-from app.core.ids import typed_id_to_uuid
+from app.core.ids import resolve_session_id_boundary
 from app.core.logging_config import get_logger
 from app.services.stream_manager import StreamManager
 
@@ -25,7 +25,7 @@ async def get_stream_status(
 ):
     """Get current stream status and buffer state for a session."""
     try:
-        raw_session_id = typed_id_to_uuid(session_id)
+        raw_session_id = resolve_session_id_boundary(session_id)
         stream = await StreamManager.get_stream(raw_session_id)
 
         if not stream:
@@ -61,7 +61,7 @@ async def sync_stream_buffer(
 ):
     """Sync frontend buffer with backend and return validation checksum."""
     try:
-        raw_session_id = typed_id_to_uuid(session_id)
+        raw_session_id = resolve_session_id_boundary(session_id)
         stream = await StreamManager.get_stream(raw_session_id)
 
         if not stream:

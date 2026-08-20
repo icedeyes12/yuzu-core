@@ -7,7 +7,6 @@ import re
 from datetime import datetime
 from typing import Any
 
-from app.core.ids import uuid_to_typed_id
 from app.providers.openai_protocol import normalize_tool_calls
 
 type DBRow = dict[str, Any]
@@ -1007,17 +1006,15 @@ RETURNING memory_pipeline_state
 
 
 def parse_session_row(row: DBRow | None) -> DBRow:
-    """(｡•̀ᴗ-)✧"""
+    """Parse session row into canonical DB dictionary representation."""
     if not row:
         return {}
     raw_id = str(row.get("id")) if row.get("id") is not None else ""
-    typed_id = uuid_to_typed_id(raw_id, prefix="ses") if raw_id else ""
     return {
-        "id": typed_id or raw_id,
-        "raw_id": raw_id,
-        "name": row.get("name", "New Chat"),
-        "is_active": row.get("is_active", False),
-        "message_count": row.get("message_count", 0),
+        "id": raw_id,
+        "name": str(row.get("name", "Unnamed Session")),
+        "is_active": bool(row.get("is_active", False)),
+        "message_count": int(row.get("message_count", 0)),
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
         "timestamp": row.get("timestamp"),
