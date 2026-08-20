@@ -28,13 +28,25 @@ jobs:
           python -m pip install -r requirements.txt ruff pytest pytest-asyncio
 
       - name: Check Python formatting
-        run: ruff format --check .
+        run: |
+          echo "::group::Ruff Format Details"
+          ruff format --check --diff . || (echo "::error::Ruff formatting check failed! Run 'ruff format .' to fix." && exit 1)
+          echo "::endgroup::"
 
       - name: Check Python lint
-        run: ruff check .
+        run: |
+          echo "::group::Ruff Lint Details"
+          ruff check --output-format=github . || (echo "::error::Ruff lint check failed! Run 'ruff check . --fix' to fix." && exit 1)
+          echo "::endgroup::"
 
       - name: Compile Python sources
-        run: python -m compileall -q .
+        run: |
+          echo "::group::Bytecode Compilation Details"
+          python -m compileall -e app/ -e cli/ -e tests/ -q . || (echo "::error::Python compilation failed due to syntax errors!" && exit 1)
+          echo "::endgroup::"
 
       - name: Run unit tests
-        run: pytest tests/ -k "not integration and not live" -q
+        run: |
+          echo "::group::Pytest Details"
+          pytest tests/ -k "not integration and not live" --tb=short || (echo "::error::Unit tests failed!" && exit 1)
+          echo "::endgroup::"

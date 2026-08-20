@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime
-from typing import Any, TypeAlias
+from typing import Any
 
 from app.core.ids import uuid_to_typed_id
 from app.providers.openai_protocol import normalize_tool_calls
 
-DBRow: TypeAlias = dict[str, Any]
+type DBRow = dict[str, Any]
 
 
 def encrypt_api_key(api_key: str) -> str:

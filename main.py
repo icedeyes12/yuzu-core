@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import time
 from contextlib import asynccontextmanager
+
 from dotenv import load_dotenv
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
