@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from typing import Any
 
+from app.core.ids import uuid_to_typed_id
 from app.core.logging_config import get_logger
 from app.db.connection import (
     AsyncPgSession,
@@ -215,9 +216,11 @@ async def create_session_async(name: str = "New Chat", *, user_id: str) -> str |
             row = await s.execute_returning(
                 SQL_SESSION_INSERT, (user_id, name, False, 0, now, now)
             )
-            # psycopg returns UUID objects; normalize to str to match the
-            # declared return type and API response models.
-            return str(row.get("id")) if row and row.get("id") else None
+            # Encode to typed ID string so the client receives uniform ses_... representation
+            if row and row.get("id"):
+                raw_id = str(row.get("id"))
+                return uuid_to_typed_id(raw_id, prefix="ses")
+            return None
     except Exception as e:  # noqa: BLE001
         log.error("create_session_async failed: %s", e)
         return None
