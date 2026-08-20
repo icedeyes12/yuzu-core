@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import Any
 
-from app.core.ids import uuid_to_typed_id
+from app.core.ids import typed_id_to_uuid, uuid_to_typed_id
 from app.core.logging_config import get_logger
 from app.db.connection import (
     AsyncPgSession,
@@ -567,12 +567,15 @@ async def get_recent_active_sessions_async(
     Returns sessions ordered by last activity, excluding the current session.
     Used by the LLM context system to show session-switching context.
     """
+    raw_current_id = typed_id_to_uuid(current_session_id)
     rows = await pg_fetchall_async(
-        SQL_SESSIONS_RECENT_ACTIVE, (current_session_id, user_id, limit)
+        SQL_SESSIONS_RECENT_ACTIVE, (raw_current_id, user_id, limit)
     )
     return [
         {
-            "id": r.get("id"),
+            "id": uuid_to_typed_id(str(r.get("id")), prefix="ses")
+            if r.get("id")
+            else "",
             "name": r.get("name", "Unnamed Session"),
             "updated_at": str(r.get("updated_at", "")),
             "message_count": r.get("message_count", 0),

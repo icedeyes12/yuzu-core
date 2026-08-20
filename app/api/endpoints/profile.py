@@ -114,12 +114,12 @@ async def api_get_profile(
         profile = await get_profile_async(user_id)
         if session_id is None:
             active_session = await Database.get_active_session(user_id)
+            raw_session_id = typed_id_to_uuid(str(active_session.get("id", "")))
         else:
             raw_session_id = typed_id_to_uuid(session_id)
             active_session = {"id": raw_session_id}
-        session_id = str(active_session["id"])
         chat_history = await get_chat_history_async(
-            session_id=session_id, limit=50, recent=True, user_id=user_id
+            session_id=raw_session_id, limit=50, recent=True, user_id=user_id
         )
 
         profile_dict = ConfigService.format_profile_dict(profile)
