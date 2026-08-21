@@ -92,7 +92,12 @@ async def login(request: Request, provider: str = "google"):
     code_verifier, code_challenge = generate_pkce()
 
     # Capture the origin (where the login request came from) to redirect back to it after callback
-    origin = request.headers.get("referer", "")
+    # Prefer explicit query parameter 'origin' over the referer header
+    origin = (
+        request.query_params.get("origin")
+        or request.headers.get("referer")
+        or ""
+    )
     state = sign_state(config.name, code_verifier, session_secret, origin)
     auth_url = build_auth_url(config, client_id, redirect_uri, code_challenge, state)
 
@@ -201,7 +206,7 @@ async def callback(request: Request):
             # Map root or clean path to chat.html for Cloudflare Pages static MPA
             path = (
                 "/chat.html"
-                if parsed_origin.path in {"", "/", "/login", "/login.html", "/chat"}
+                if parsed_origin.path in {"", "/", "/login", "/login.html", "/chat", "/chat/"}
                 else parsed_origin.path
             )
             redirect_target = urlunsplit(
