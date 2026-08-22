@@ -69,6 +69,33 @@ async def test_terminal_dispatches_to_owned_sandbox_and_never_legacy_shell(monke
 
 
 @pytest.mark.asyncio
+async def test_fs_tools_dispatch_to_sandbox(monkeypatch):
+    calls = []
+
+    class FakeDispatcher:
+        async def execute_command(
+            self, user_id, argv, cwd="/home/yuzu", timeout_seconds=30
+        ):
+            calls.append((user_id, argv, cwd))
+            return {"ok": True, "exit_code": 0, "stdout": "ok\n", "stderr": ""}
+
+    monkeypatch.setattr(registry, "SandboxToolDispatcher", FakeDispatcher)
+    monkeypatch.setattr(
+        registry, "PgSandboxInstanceRepository", lambda: FakeRepo("ready")
+    )
+
+    res_read = await registry.execute_tool(
+        "read", {"path": "test.txt"}, user_id="user-1"
+    )
+    assert res_read["ok"] is True
+    assert calls[-1][1] == ["cat", "--", "test.txt"]
+
+    res_ls = await registry.execute_tool("ls", {"path": "src"}, user_id="user-1")
+    assert res_ls["ok"] is True
+    assert calls[-1][1] == ["ls", "-la", "--", "src"]
+
+
+@pytest.mark.asyncio
 async def test_terminal_fails_closed_when_sandbox_unavailable(monkeypatch):
     monkeypatch.setattr(registry, "PgSandboxInstanceRepository", lambda: FakeRepo(None))
 

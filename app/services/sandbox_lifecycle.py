@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from app.core.ids import EntityType, PublicId
+from app.services import sandbox_session_registry
 from yuzu_sandbox.proot_wrapper import RestrictedPRootBuilder
 from yuzu_sandbox.rootfs_installer import PRootDistroInstaller
 
@@ -58,6 +59,12 @@ class SandboxLifecycleEngine:
         self.proot_builder = proot_builder
         self.containers_root = containers_root or proot_builder.containers_root
         self.installer = installer or PRootDistroInstaller(proot_builder)
+        self._tasks: dict[str, asyncio.Task[None]] = {}
+
+    def _cancel_owner_tasks(self, owner_id: str) -> None:
+        task = self._tasks.pop(owner_id, None)
+        if task and not task.done():
+            task.cancel()
 
     async def get_status(self, owner_id: str) -> dict[str, Any]:
         """Fetch current sandbox instance metadata and logical state."""
@@ -106,9 +113,14 @@ class SandboxLifecycleEngine:
             distribution_version=distribution_version,
         )
 
-        # Trigger background provisioning task
-        asyncio.create_task(
-            self._bootstrap_rootfs(owner_id, instance["runtime_name"], distribution)
+        self._cancel_owner_tasks(owner_id)
+        self._tasks[owner_id] = asyncio.create_task(
+            self._bootstrap_rootfs(
+                owner_id,
+                instance["runtime_name"],
+                distribution,
+                expected_generation=instance.get("generation", 1),
+            )
         )
         return await self.get_status(owner_id)
 
@@ -122,6 +134,8 @@ class SandboxLifecycleEngine:
             return False
 
         await self.repository.update_state(owner_id, "deleting")
+        self._cancel_owner_tasks(owner_id)
+        sandbox_session_registry.close_owner(owner_id)
         await self.installer.remove(instance["runtime_name"])
 
         await self.repository.delete(owner_id)
@@ -138,30 +152,52 @@ class SandboxLifecycleEngine:
 
         # Increment generation to invalidate all existing PTY tokens/sessions
         bumped = await self.repository.bump_generation(owner_id, next_state="resetting")
+        if not bumped:
+            raise ValueError("Failed to bump sandbox generation")
+        self._cancel_owner_tasks(owner_id)
+        sandbox_session_registry.close_owner(owner_id)
         await self.installer.remove(instance["runtime_name"])
 
-        asyncio.create_task(
+        self._tasks[owner_id] = asyncio.create_task(
             self._bootstrap_rootfs(
-                owner_id, instance["runtime_name"], bumped["distribution"]
+                owner_id,
+                instance["runtime_name"],
+                bumped["distribution"],
+                expected_generation=bumped["generation"],
             )
         )
         return await self.get_status(owner_id)
 
     async def _bootstrap_rootfs(
-        self, owner_id: str, runtime_name: str, distribution: str
+        self,
+        owner_id: str,
+        runtime_name: str,
+        distribution: str,
+        expected_generation: int = 1,
     ) -> None:
         """Mock/Real async rootfs extraction & initial user setup."""
         try:
             await self.installer.install(runtime_name, distribution)
+            current = await self.repository.get_by_owner(owner_id)
+            if not current or current.get("generation") != expected_generation:
+                return
             rootfs_path = self.proot_builder.get_rootfs_path(runtime_name)
             # Create user workspace scaffold
             user_home = rootfs_path / "home" / "yuzu"
             await asyncio.to_thread(
                 (user_home / ".yuzu" / "skills").mkdir, parents=True, exist_ok=True
             )
+            current = await self.repository.get_by_owner(owner_id)
+            if not current or current.get("generation") != expected_generation:
+                return
             await self.repository.update_state(owner_id, "ready")
+        except asyncio.CancelledError:
+            pass
         except Exception as e:
             await self.repository.update_state(owner_id, "failed", error=str(e))
+        finally:
+            if self._tasks.get(owner_id) is asyncio.current_task():
+                self._tasks.pop(owner_id, None)
 
     @staticmethod
     def _get_dir_size(path: Path) -> int:

@@ -284,6 +284,43 @@ async def execute_tool(
             if not code:
                 return {"ok": False, "error": "No code provided", "data": {}}
             return await dispatcher.execute_command(user_id, ["python3", "-c", code])
+        if tool_name == "read":
+            path = str(arguments.get("path", "")).strip()
+            if not path:
+                return {"ok": False, "error": "No path provided", "data": {}}
+            return await dispatcher.execute_command(user_id, ["cat", "--", path])
+        if tool_name == "write":
+            path = str(arguments.get("path", "")).strip()
+            content = str(arguments.get("content", ""))
+            if not path:
+                return {"ok": False, "error": "No path provided", "data": {}}
+            # Use printf base64 decode inside shell to safely avoid quoting issues
+            import base64
+
+            b64 = base64.b64encode(content.encode()).decode()
+            return await dispatcher.execute_command(
+                user_id,
+                [
+                    "/bin/bash",
+                    "-c",
+                    f"mkdir -p $(dirname {path}) && echo '{b64}' | base64 -d > {path}",
+                ],
+            )
+        if tool_name == "ls":
+            path = str(arguments.get("path", "")).strip() or "."
+            return await dispatcher.execute_command(user_id, ["ls", "-la", "--", path])
+        if tool_name == "mkdir":
+            path = str(arguments.get("path", "")).strip()
+            if not path:
+                return {"ok": False, "error": "No path provided", "data": {}}
+            return await dispatcher.execute_command(
+                user_id, ["mkdir", "-p", "--", path]
+            )
+        if tool_name == "rm":
+            path = str(arguments.get("path", "")).strip()
+            if not path:
+                return {"ok": False, "error": "No path provided", "data": {}}
+            return await dispatcher.execute_command(user_id, ["rm", "-rf", "--", path])
         return {
             "ok": False,
             "error": f"Sandbox tool routing unavailable: {tool_name}",

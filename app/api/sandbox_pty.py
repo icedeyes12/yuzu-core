@@ -18,9 +18,16 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.auth.session import SESSION_COOKIE_NAME, validate_session
 from app.db.sandbox_instance_repository import PgSandboxInstanceRepository
+from app.services import sandbox_session_registry
 from yuzu_sandbox.proot_wrapper import RestrictedPRootBuilder
 
 router = APIRouter(prefix="/sandbox/terminal", tags=["sandbox-pty"])
+_DEFAULT_ORIGINS = {
+    "https://chat.yuzuki.space",
+    "https://yuzuki.space",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+}
 
 
 class PTYSession:
@@ -40,9 +47,7 @@ class PTYSession:
     ) -> PTYSession:
         pid, master_fd = pty.fork()
         if pid == 0:
-            child_env = os.environ.copy()
-            child_env.update(env or {})
-            os.execvpe(argv[0], argv, child_env)
+            os.execvpe(argv[0], argv, env or {})
         return cls(master_fd, pid, generation)
 
     def resize(self, cols: int, rows: int) -> None:
@@ -76,6 +81,17 @@ class PTYSession:
 async def _authenticate(websocket: WebSocket) -> str | None:
     token = websocket.cookies.get(SESSION_COOKIE_NAME)
     return await validate_session(token) if token else None
+
+
+def _origin_allowed(websocket: WebSocket) -> bool:
+    configured = {
+        item.strip().rstrip("/")
+        for item in os.environ.get("CORS_ORIGINS", "").split(",")
+        if item.strip()
+    }
+    return websocket.headers.get("origin", "").rstrip("/") in (
+        configured or _DEFAULT_ORIGINS
+    )
 
 
 def _instance_command(instance: dict[str, Any]) -> list[str]:
@@ -117,6 +133,10 @@ async def _receive_input(websocket: WebSocket, session: PTYSession) -> None:
 
 @router.websocket("/ws")
 async def websocket_pty_endpoint(websocket: WebSocket) -> None:
+    if not _origin_allowed(websocket):
+        await websocket.close(code=4403, reason="Origin not allowed")
+        return
+
     user_id = await _authenticate(websocket)
     if not user_id:
         await websocket.close(code=4401, reason="Not authenticated")
@@ -149,6 +169,7 @@ async def websocket_pty_endpoint(websocket: WebSocket) -> None:
     await websocket.send_text(
         json.dumps({"type": "ready", "generation": session.generation})
     )
+    sandbox_session_registry.register(user_id, session)
     output_task = asyncio.create_task(_send_output(websocket, session))
     input_task = asyncio.create_task(_receive_input(websocket, session))
     try:
@@ -161,4 +182,5 @@ async def websocket_pty_endpoint(websocket: WebSocket) -> None:
     except (WebSocketDisconnect, json.JSONDecodeError, ValueError):
         pass
     finally:
+        sandbox_session_registry.unregister(user_id, session)
         session.close()
