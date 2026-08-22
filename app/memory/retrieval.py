@@ -154,20 +154,24 @@ def retrieve_memory(
 
 
 def _format_static_context(static: list[dict[str, Any]]) -> str:
+    valid_items = [item for item in static if item.get("confidence", 0) > 0.3]
+    if not valid_items:
+        return ""
     return "\n".join(
-        f"- [memory:{item['id']} score:{item['score']:.3f} category:{item['category']}] "
-        f"{item['entity']} {item['relation']} {item['target']}"
-        for item in static[:10]
+        f"- {item['entity']} {item['relation']} {item['target']}"
+        for item in valid_items[:10]
     )
 
 
 def _format_dynamic_context(dynamic: list[dict[str, Any]]) -> str:
-    if not dynamic:
+    valid_items = [
+        item
+        for item in dynamic
+        if item.get("score", 0) > 0.0 and item.get("confidence", 0) > 0.3
+    ]
+    if not valid_items:
         return ""
-    return "\n\nRecent related memories:\n" + "\n".join(
-        f"- [memory:{item['id']} score:{item['score']:.3f}] {item['content'][:150]}"
-        for item in dynamic[:5]
-    )
+    return "\n" + "\n".join(f"- {item['content'][:150]}" for item in valid_items[:5])
 
 
 def format_memory(memory_bundle: dict[str, Any]) -> str:
