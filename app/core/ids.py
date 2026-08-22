@@ -18,6 +18,7 @@ class EntityType(StrEnum):
     USER = "usr"
     MEMORY_NODE = "mem"
     FILE = "fil"
+    SANDBOX = "sbx"
 
 
 _BASE62_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"

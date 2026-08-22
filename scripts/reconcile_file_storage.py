@@ -31,9 +31,7 @@ async def build_report(storage_root: Path) -> dict[str, list[dict[str, object]]]
         }
         if row["deleted_at"] is not None and path.is_file() and not path.is_symlink():
             deleted_present.append(item)
-        elif row["deleted_at"] is None and (
-            not path.is_file() or path.is_symlink()
-        ):
+        elif row["deleted_at"] is None and (not path.is_file() or path.is_symlink()):
             missing.append(item)
         if row["deleted_at"] is None and row["status"] == "pending":
             pending.append(
