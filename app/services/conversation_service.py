@@ -4,13 +4,12 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
-from pathlib import Path
-from uuid import uuid4
 
 from fastapi import UploadFile
 
 from app.core.request_context import ClientContext
 from app.db import Database
+from app.services.files import get_file_service
 from app.services.orchestrator import handle_user_message
 from app.services.stream_manager import StreamManager
 from app.tools.schemas import StreamToolEvent
@@ -59,7 +58,9 @@ class ConversationService:
 
         attachments = []
         if images:
-            attachments = await ConversationService.process_image_uploads(images)
+            attachments = await ConversationService.process_image_uploads(
+                images, user_id
+            )
 
         active_session = await Database.get_active_session(user_id)
         session_id = str(active_session["id"])
@@ -119,26 +120,31 @@ class ConversationService:
             buffer.unsubscribe(q)
 
     @staticmethod
-    async def process_image_uploads(images: list[UploadFile]) -> list[str]:
-        """Save uploaded images and return their file paths."""
+    async def process_image_uploads(
+        images: list[UploadFile], user_id: str
+    ) -> list[str]:
+        """Persist uploaded images and return private logical URLs."""
         saved_paths = []
         if not images:
             return []
 
-        uploads_dir = (
-            Path(__file__).resolve().parent.parent.parent / "static" / "uploads"
-        )
-        uploads_dir.mkdir(parents=True, exist_ok=True)
+        service = get_file_service()
 
         for image_file in images:
             if image_file and image_file.filename:
                 try:
-                    extension = Path(image_file.filename).suffix.lower()
-                    filepath = uploads_dir / f"{uuid4().hex}{extension}"
-
                     content = await image_file.read()
-                    _ = filepath.write_bytes(content)
-                    saved_paths.append(str(filepath))
+                    row = await service.persist_bytes(
+                        owner_id=user_id,
+                        data=content,
+                        kind="upload",
+                        original_name=image_file.filename,
+                        mime_type=image_file.content_type or "application/octet-stream",
+                    )
+                    from app.core.ids import EntityType, PublicId
+
+                    file_id = PublicId.encode(EntityType.FILE, row["id"])
+                    saved_paths.append(f"/v1/files/{file_id}")
                 except Exception as e:
                     log.error("Error saving image %s: %s", image_file.filename, e)
                 finally:

@@ -203,6 +203,26 @@ SCHEMA_DDL: tuple[str, ...] = (
         FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS file_objects (
+        id UUID PRIMARY KEY,
+        owner_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+        storage_key TEXT NOT NULL UNIQUE,
+        original_name TEXT,
+        mime_type TEXT NOT NULL,
+        size_bytes BIGINT NOT NULL CHECK (size_bytes >= 0),
+        kind TEXT NOT NULL CHECK (kind IN (
+            'upload', 'attachment', 'generated_image', 'generated_file',
+            'sandbox_artifact', 'export'
+        )),
+        source TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'ready')),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        deleted_at TIMESTAMP NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_file_objects_owner_active ON file_objects (owner_id, status) WHERE deleted_at IS NULL",
     # ── graph memory: episodes, inferred nodes, relationships, evidence ──
     """
     CREATE TABLE IF NOT EXISTS episodes (
@@ -559,6 +579,33 @@ LIMIT 1
 """
 
 SQL_PROFILE_SELECT_BY_ID = "SELECT * FROM profiles WHERE id = %s"
+
+SQL_PROFILE_LOCK = "SELECT id FROM profiles WHERE id = %s FOR UPDATE"
+SQL_FILE_USAGE = """
+SELECT COALESCE(SUM(size_bytes), 0)
+FROM file_objects
+WHERE owner_id = %s
+  AND status IN ('pending', 'ready')
+  AND deleted_at IS NULL
+"""
+SQL_FILE_INSERT_PENDING = """
+INSERT INTO file_objects
+    (id, owner_id, storage_key, original_name, mime_type, size_bytes, kind, source, status)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending')
+RETURNING *
+"""
+SQL_FILE_MARK_READY = """
+UPDATE file_objects SET status = 'ready', updated_at = NOW()
+WHERE id = %s AND owner_id = %s AND status = 'pending' AND deleted_at IS NULL
+RETURNING *
+"""
+SQL_FILE_DELETE_PENDING = """
+DELETE FROM file_objects WHERE id = %s AND owner_id = %s AND status = 'pending'
+"""
+SQL_FILE_SELECT_OWNER = """
+SELECT * FROM file_objects
+WHERE id = %s AND owner_id = %s AND status = 'ready' AND deleted_at IS NULL
+"""
 
 SQL_GLOBAL_KNOWLEDGE_LIST = """
 SELECT id, user_id, category, content, sort_order, enabled, created_at, updated_at

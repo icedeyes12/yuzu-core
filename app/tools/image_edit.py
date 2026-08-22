@@ -1,13 +1,11 @@
-import asyncio
 import base64
 import logging
-import os
-from datetime import datetime
-from pathlib import Path
 from typing import Any
 
+from app.core.ids import EntityType, PublicId
 from app.db import Database
 from app.providers.image_provider import request_image
+from app.services.files import get_file_service, resolve_private_file
 from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
 
 logger = logging.getLogger(__name__)
@@ -26,7 +24,7 @@ TOOL_DEFINITION = ToolDefinition(
         ),
         ToolParam(
             name="image_path",
-            description="Path to the image to edit (e.g., 'static/generated_images/xxx.jpg' or 'static/uploads/xxx.jpg')",
+            description="Private file URL returned by upload or image generation",
             type="string",
             required=True,
         ),
@@ -34,47 +32,7 @@ TOOL_DEFINITION = ToolDefinition(
 )
 
 
-def _validate_image_path(image_path: str) -> Path | None:
-    filename = os.path.basename(image_path.replace("\\", "/"))
-    if not filename or filename.startswith(".") or ".." in filename:
-        return None
-
-    ext = Path(filename).suffix.lower()
-    if ext not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
-        return None
-
-    _BASE_DIR = Path(__file__).resolve().parent.parent.parent
-    _ALLOWED_DIRS = [
-        (_BASE_DIR / "static" / "uploads").resolve(),
-        (_BASE_DIR / "static" / "generated_images").resolve(),
-        (_BASE_DIR / "static").resolve(),
-    ]
-
-    for trusted_dir in _ALLOWED_DIRS:
-        candidate = trusted_dir / filename
-        try:
-            resolved = candidate.resolve()
-            if resolved.is_file():
-                try:
-                    rel = os.path.relpath(str(resolved), str(trusted_dir))
-                    if rel.startswith(".."):
-                        continue
-                except ValueError:
-                    continue
-                if resolved.is_symlink():
-                    continue
-                return resolved
-        except (OSError, ValueError):
-            continue
-
-    return None
-
-
-def _load_image_base64(image_path: str) -> tuple[str | None, str | None]:
-    validated_path = _validate_image_path(image_path)
-    if not validated_path:
-        return None, None
-
+def _load_image_base64(validated_path) -> tuple[str | None, str | None]:
     try:
         data = base64.b64encode(validated_path.read_bytes()).decode("utf-8")
     except OSError as e:
@@ -117,7 +75,10 @@ async def execute(arguments, **kwargs) -> dict[str, Any]:
     profile = await Database.get_profile(kwargs.get("user_id")) or {}
     partner_name = profile.get("partner_name") or ""
 
-    validated_path = _validate_image_path(image_path)
+    user_id = kwargs.get("user_id")
+    validated_path = (
+        await resolve_private_file(image_path, user_id) if user_id else None
+    )
     if not validated_path:
         return error_result(
             f"Invalid or inaccessible image path: {image_path}",
@@ -126,7 +87,7 @@ async def execute(arguments, **kwargs) -> dict[str, Any]:
             partner_name,
         )
 
-    image_base64, _mime = _load_image_base64(image_path)
+    image_base64, _mime = _load_image_base64(validated_path)
     if not image_base64:
         return error_result(
             f"Failed to load image: {image_path}",
@@ -137,7 +98,7 @@ async def execute(arguments, **kwargs) -> dict[str, Any]:
 
     try:
         image_model = profile.get("image_model")
-        image_bytes = await asyncio.to_thread(validated_path.read_bytes)
+        image_bytes = validated_path.read_bytes()
         output_bytes, provider, error = await request_image(
             image_model or "",
             prompt,
@@ -161,41 +122,26 @@ async def execute(arguments, **kwargs) -> dict[str, Any]:
         logger.debug(f"[IMAGE EDIT] Editing: {image_path}")
         logger.debug(f"[IMAGE EDIT] Prompt: {prompt}")
 
-        images_dir = (
-            Path(__file__).resolve().parent.parent.parent
-            / "static"
-            / "generated_images"
-        ).resolve()
-        images_dir.mkdir(parents=True, exist_ok=True)
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_prompt = (
-            "".join(
-                c
-                for c in prompt[:30]
-                if c.isascii() and (c.isalnum() or c in (" ", "-", "_"))
-            )
-            .strip()
-            .replace(" ", "_")
+        row = await get_file_service().persist_bytes(
+            owner_id=user_id,
+            data=output_bytes,
+            kind="generated_image",
+            mime_type="image/jpeg",
+            original_name="edited.jpg",
+            source="image_edit",
         )
-        if not safe_prompt:
-            safe_prompt = "edited"
-        filename = f"{timestamp}_{safe_prompt}.jpg"
-
-        filepath = (images_dir / filename).resolve()
-        _ = filepath.relative_to(images_dir)
-
-        _ = await asyncio.to_thread(filepath.write_bytes, output_bytes)
-
-        logger.debug(f"[IMAGE EDIT] Saved: {filepath}")
+        file_id = PublicId.encode(EntityType.FILE, row["id"])
+        output_path = f"/v1/files/{file_id}"
 
         full_command = f"/image_edit {prompt}"
         return ok_result(
             {
-                "image_path": f"/api/v1/static/generated_images/{filename}",
+                "file_id": file_id,
+                "image_path": output_path,
                 "prompt": prompt,
                 "original_path": image_path,
-                "image_html": f'<img src="/api/v1/static/generated_images/{filename}" alt="Edited Image">',
+                "mime_type": row["mime_type"],
+                "size": row["size_bytes"],
                 "model": image_model,
             },
             TOOL_DEFINITION,

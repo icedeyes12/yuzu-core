@@ -360,10 +360,16 @@ async def build_messages(
     images_kept = 0
     for msg in reversed(history):
         valid_paths: list[str] = []
-        for path in reversed(msg.get("attachments") or []):
+        for reference in reversed(msg.get("attachments") or []):
             if images_kept >= _MAX_EMBEDDED_IMAGES:
                 break
-            if os.path.exists(path):
+            path = reference
+            if isinstance(reference, str) and "/files/" in reference:
+                from app.services.files import resolve_private_file
+
+                resolved = await resolve_private_file(reference, user_id)
+                path = str(resolved) if resolved else ""
+            if path and os.path.exists(path):
                 valid_paths.insert(0, path)
                 images_kept += 1
         msg["_valid_paths"] = valid_paths
@@ -432,17 +438,20 @@ def _encode_image_safe(path: str) -> dict[str, Any] | None:
     """
     try:
         with Image.open(path) as img:
+            detected_format = (img.format or "").upper()
             if max(img.size) > 1024:
                 img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
 
-            if path.lower().endswith(".png"):
+            if detected_format == "PNG":
                 fmt, mime = "PNG", "image/png"
-            elif path.lower().endswith(".gif"):
+            elif detected_format == "GIF":
                 fmt, mime = "GIF", "image/gif"
-            elif path.lower().endswith(".webp"):
+            elif detected_format == "WEBP":
                 fmt, mime = "WEBP", "image/webp"
             else:
                 fmt, mime = "JPEG", "image/jpeg"
+                if img.mode not in ("RGB", "L"):
+                    img = img.convert("RGB")
 
             buf = io.BytesIO()
             img.save(buf, format=fmt, quality=85)

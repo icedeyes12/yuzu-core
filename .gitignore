@@ -82,6 +82,7 @@ htmlcov/
 mutants/
 
 # --- Runtime Generated Assets ---
+data/
 app/static/
 static/generated/
 static/generated_images/

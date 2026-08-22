@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -14,6 +15,12 @@ router = APIRouter(prefix="/static", tags=["static"])
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 FILENAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _legacy_private_files_enabled() -> bool:
+    return (
+        os.environ.get("YUZU_LEGACY_PRIVATE_FILES_ENABLED", "false").lower() == "true"
+    )
 
 
 def _safe_file_path(base_dir: Path, filename: str) -> Path:
@@ -34,6 +41,8 @@ def _safe_file_path(base_dir: Path, filename: str) -> Path:
 async def serve_uploaded_image(
     filename: str, _user_id: str = Depends(get_current_user)
 ):
+    if not _legacy_private_files_enabled():
+        raise HTTPException(status_code=404, detail="Image not found")
     try:
         uploads_dir = (BASE_DIR / "static" / "uploads").resolve()
         allowed_files = {p.name: p for p in uploads_dir.iterdir() if p.is_file()}
@@ -54,6 +63,8 @@ async def serve_uploaded_image(
 async def serve_generated_image(
     filename: str, _user_id: str = Depends(get_current_user)
 ):
+    if not _legacy_private_files_enabled():
+        raise HTTPException(status_code=404, detail="Image not found")
     try:
         generated_dir = (BASE_DIR / "static" / "generated_images").resolve()
         allowed_files = {p.name: p for p in generated_dir.iterdir() if p.is_file()}
