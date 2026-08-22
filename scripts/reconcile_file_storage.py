@@ -9,9 +9,8 @@ from pathlib import Path
 from app.db.connection import pg_fetchall_async
 
 SQL_FILE_ROWS_FOR_RECONCILIATION = """
-SELECT id, owner_id, storage_key, size_bytes, status
+SELECT id, owner_id, storage_key, size_bytes, status, created_at, deleted_at
 FROM file_objects
-WHERE deleted_at IS NULL
 ORDER BY owner_id, id
 """
 
@@ -21,6 +20,7 @@ async def build_report(storage_root: Path) -> dict[str, list[dict[str, object]]]
     referenced = {str(row["storage_key"]) for row in rows}
     missing = []
     pending = []
+    deleted_present = []
     for row in rows:
         path = storage_root / str(row["storage_key"])
         item = {
@@ -29,11 +29,19 @@ async def build_report(storage_root: Path) -> dict[str, list[dict[str, object]]]
             "storage_key": str(row["storage_key"]),
             "size_bytes": int(row["size_bytes"]),
         }
-        if not path.is_file() or path.is_symlink():
+        if row["deleted_at"] is not None and path.is_file() and not path.is_symlink():
+            deleted_present.append(item)
+        elif row["deleted_at"] is None and (
+            not path.is_file() or path.is_symlink()
+        ):
             missing.append(item)
-        if row["status"] == "pending":
+        if row["deleted_at"] is None and row["status"] == "pending":
             pending.append(
-                {**item, "physical_exists": path.is_file() and not path.is_symlink()}
+                {
+                    **item,
+                    "created_at": str(row["created_at"]),
+                    "physical_exists": path.is_file() and not path.is_symlink(),
+                }
             )
 
     orphan = []
@@ -46,7 +54,12 @@ async def build_report(storage_root: Path) -> dict[str, list[dict[str, object]]]
                     orphan.append(
                         {"storage_key": key, "size_bytes": path.stat().st_size}
                     )
-    return {"pending": pending, "missing": missing, "orphan": orphan}
+    return {
+        "pending": pending,
+        "missing": missing,
+        "deleted_present": deleted_present,
+        "orphan": orphan,
+    }
 
 
 async def async_main() -> None:
