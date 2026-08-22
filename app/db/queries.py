@@ -244,6 +244,25 @@ SCHEMA_DDL: tuple[str, ...] = (
     """,
     "CREATE INDEX IF NOT EXISTS idx_sandbox_jobs_owner_status ON sandbox_jobs (owner_id, status, created_at DESC)",
     """
+    CREATE TABLE IF NOT EXISTS sandbox_instances (
+        id UUID PRIMARY KEY,
+        owner_id UUID NOT NULL UNIQUE REFERENCES profiles(id) ON DELETE CASCADE,
+        runtime_name TEXT NOT NULL UNIQUE,
+        distribution TEXT NOT NULL CHECK (distribution IN ('debian', 'ubuntu')),
+        distribution_version TEXT NOT NULL,
+        generation INTEGER NOT NULL DEFAULT 1,
+        state TEXT NOT NULL CHECK (state IN (
+            'none', 'provisioning', 'ready', 'busy', 'resetting', 'rebuilding', 'deleting', 'failed'
+        )),
+        storage_limit_bytes BIGINT NOT NULL DEFAULT 10737418240,
+        last_error TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_started_at TIMESTAMPTZ
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_sandbox_instances_owner ON sandbox_instances(owner_id, state)",
+    """
     DO $$ BEGIN
       ALTER TABLE file_objects ADD COLUMN IF NOT EXISTS job_id UUID NULL;
     EXCEPTION WHEN undefined_table THEN NULL;
