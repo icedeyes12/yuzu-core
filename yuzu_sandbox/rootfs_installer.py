@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
+
+import httpx
 
 from yuzu_sandbox.proot_wrapper import RestrictedPRootBuilder
 
@@ -67,3 +70,36 @@ class PRootDistroInstaller:
         _, stderr = await process.communicate()
         if process.returncode != 0:
             raise RuntimeError(stderr.decode(errors="replace").strip())
+
+
+class NativeRootfsInstaller:
+    """Call the authenticated native Termux rootfs boundary. ฅ^•ﻌ•^ฅ"""
+
+    def __init__(
+        self,
+        base_url: str = "http://127.0.0.1:5002",
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.transport = transport
+
+    async def install(self, runtime_name: str, distribution: str) -> None:
+        await self._post(
+            "/rootfs/install",
+            {"runtime_name": runtime_name, "distribution": distribution},
+        )
+
+    async def remove(self, runtime_name: str) -> None:
+        await self._post("/rootfs/remove", {"runtime_name": runtime_name})
+
+    async def _post(self, path: str, payload: dict[str, str]) -> None:
+        token = os.environ.get("YUZU_ROOTFS_CONTROL_TOKEN", "")
+        if not token:
+            raise RuntimeError("YUZU_ROOTFS_CONTROL_TOKEN is required")
+        async with httpx.AsyncClient(transport=self.transport, timeout=310.0) as client:
+            response = await client.post(
+                f"{self.base_url}{path}",
+                headers={"Authorization": f"Bearer {token}"},
+                json=payload,
+            )
+        response.raise_for_status()

@@ -15,6 +15,7 @@ from app.api.utils import get_current_user
 from app.db.sandbox_instance_repository import PgSandboxInstanceRepository
 from app.services.sandbox_lifecycle import SandboxLifecycleEngine
 from yuzu_sandbox.proot_wrapper import RestrictedPRootBuilder
+from yuzu_sandbox.rootfs_installer import NativeRootfsInstaller
 
 router = APIRouter(prefix="/sandbox", tags=["sandbox"])
 
@@ -22,7 +23,7 @@ router = APIRouter(prefix="/sandbox", tags=["sandbox"])
 def get_lifecycle_engine() -> SandboxLifecycleEngine:
     repo = PgSandboxInstanceRepository()
     builder = RestrictedPRootBuilder()
-    return SandboxLifecycleEngine(repo, builder)
+    return SandboxLifecycleEngine(repo, builder, installer=NativeRootfsInstaller())
 
 
 class ProvisionRequest(BaseModel):

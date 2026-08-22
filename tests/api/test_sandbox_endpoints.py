@@ -7,6 +7,13 @@ from fastapi.testclient import TestClient
 from app.api.sandbox import get_lifecycle_engine
 from app.api.utils import get_current_user
 from main import app
+from yuzu_sandbox.rootfs_installer import NativeRootfsInstaller
+
+
+def test_lifecycle_engine_uses_native_rootfs_boundary():
+    engine = get_lifecycle_engine()
+
+    assert isinstance(engine.installer, NativeRootfsInstaller)
 
 
 class FakeEngine:
