@@ -21,7 +21,7 @@ from app.db import Database
 from app.providers import get_ai_manager
 from app.providers.openai_protocol import validate_chat_completion_response
 from app.services.prompt_service import build_messages
-from app.tools.registry import get_tool_schemas
+from app.tools.registry import get_tool_schemas_for_user
 from app.tools.schemas import StreamToolEvent
 
 log = get_logger(__name__)
@@ -42,21 +42,19 @@ def _apply_vision_routing(
     return messages, provider, model
 
 
-def _unique_tool_schemas(**kwargs) -> list[dict[str, Any]]:
-    """Get deduplicated tool schemas for LLM requests.
-
-    Delegates to the canonical registry function ``get_tool_schemas()``.
-    """
-    return get_tool_schemas(**kwargs)
+async def _unique_tool_schemas(user_id: str) -> list[dict[str, Any]]:
+    """Get tool schemas scoped to the authenticated user's sandbox."""
+    return await get_tool_schemas_for_user(user_id)
 
 
-def _resolve_request_payload(
+async def _resolve_request_payload(
     messages: list[dict[str, Any]],
     model_info,
     provider_allows_tools: bool,
+    user_id: str,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """(｡•̀ᴗ-)✧"""
-    tools = _unique_tool_schemas()
+    tools = await _unique_tool_schemas(user_id)
     requirements = RequestRequirements(
         needs_vision=request_needs_vision(messages),
         needs_function_call=bool(tools),
@@ -91,6 +89,7 @@ async def _send_to_provider(
     ctx: LLMContext,
     messages: list[dict[str, Any]],
     *,
+    user_id: str,
     source: str = "chat",
 ) -> tuple[str | None, dict[str, Any] | None]:
     """Single LLM dispatch with timing log. Returns (text, raw_response)."""
@@ -98,8 +97,8 @@ async def _send_to_provider(
     ai_manager = await get_ai_manager()
     model_info = ai_manager.get_model_info(ctx.provider or "", ctx.model or "")
     provider_allows_tools = ai_manager.provider_supports_tools(ctx.provider or "")
-    messages, schemas = _resolve_request_payload(
-        messages, model_info, provider_allows_tools
+    messages, schemas = await _resolve_request_payload(
+        messages, model_info, provider_allows_tools, user_id
     )
 
     # Phase 1: structured payload audit log (non-stream path)
@@ -193,6 +192,7 @@ async def generate_ai_response(
     text, raw = await _send_to_provider(
         ctx,
         messages,
+        user_id=user_id,
         source="chat",
     )
     return text, raw
@@ -202,6 +202,7 @@ async def _stream_from_provider(
     ctx: LLMContext,
     messages: list[dict[str, Any]],
     *,
+    user_id: str,
     source: str = "chat",
 ) -> AsyncGenerator[str | StreamToolEvent, None]:
     """Yield raw chunks from the provider's streaming API."""
@@ -211,8 +212,8 @@ async def _stream_from_provider(
     # Generate tool schemas
     model_info = ai_manager.get_model_info(ctx.provider or "", ctx.model or "")
     provider_allows_tools = ai_manager.provider_supports_tools(ctx.provider or "")
-    messages, tools = _resolve_request_payload(
-        messages, model_info, provider_allows_tools
+    messages, tools = await _resolve_request_payload(
+        messages, model_info, provider_allows_tools, user_id
     )
 
     # Phase 1: structured payload audit log (stream path)
@@ -286,6 +287,7 @@ async def generate_ai_response_streaming(
     async for chunk in _stream_from_provider(
         ctx,
         messages,
+        user_id=user_id,
         source="chat",
     ):
         yield chunk

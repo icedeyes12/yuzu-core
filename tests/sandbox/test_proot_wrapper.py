@@ -6,10 +6,10 @@ from yuzu_sandbox.proot_wrapper import RestrictedPRootBuilder
 
 
 def test_restricted_proot_builder_excludes_sensitive_mounts(tmp_path):
-    rootfs_dir = tmp_path / "installed-rootfs"
+    rootfs_dir = tmp_path / "containers"
     rootfs_dir.mkdir(parents=True)
-    sbx_rootfs = rootfs_dir / "sbx_test_instance"
-    sbx_rootfs.mkdir()
+    sbx_rootfs = rootfs_dir / "sbx_test_instance" / "rootfs"
+    sbx_rootfs.mkdir(parents=True)
     (sbx_rootfs / "tmp").mkdir()
 
     builder = RestrictedPRootBuilder(

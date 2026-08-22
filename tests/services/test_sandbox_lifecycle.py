@@ -9,6 +9,21 @@ from app.services.sandbox_lifecycle import SandboxLifecycleEngine
 from yuzu_sandbox.proot_wrapper import RestrictedPRootBuilder
 
 
+class FakeRootfsInstaller:
+    async def install(self, runtime_name: str, distribution: str) -> None:
+        rootfs = self.builder.get_rootfs_path(runtime_name)
+        (rootfs / "bin").mkdir(parents=True)
+        (rootfs / "bin" / "bash").write_text("shell")
+
+    async def remove(self, runtime_name: str) -> None:
+        import shutil
+
+        shutil.rmtree(self.builder.get_rootfs_path(runtime_name).parent, True)
+
+    def __init__(self, builder: RestrictedPRootBuilder) -> None:
+        self.builder = builder
+
+
 class FakeSandboxRepo:
     def __init__(self) -> None:
         self.instances: dict[str, dict] = {}
@@ -69,7 +84,9 @@ class FakeSandboxRepo:
 async def test_sandbox_lifecycle_flow(tmp_path):
     repo = FakeSandboxRepo()
     builder = RestrictedPRootBuilder(containers_root=str(tmp_path))
-    engine = SandboxLifecycleEngine(repo, builder)
+    engine = SandboxLifecycleEngine(
+        repo, builder, installer=FakeRootfsInstaller(builder)
+    )
 
     owner_id = str(uuid4())
 
@@ -88,7 +105,13 @@ async def test_sandbox_lifecycle_flow(tmp_path):
     assert ready_status["state"] == "ready"
     assert ready_status["generation"] == 1
     assert (
-        tmp_path / f"sbx_{owner_id[:8]}" / "home" / "yuzu" / ".yuzu" / "skills"
+        tmp_path
+        / f"sbx_{owner_id[:8]}"
+        / "rootfs"
+        / "home"
+        / "yuzu"
+        / ".yuzu"
+        / "skills"
     ).exists()
 
     # 3. Reset sandbox (generation increment)

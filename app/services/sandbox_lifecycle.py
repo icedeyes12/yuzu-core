@@ -8,12 +8,12 @@ and process dispatch for user sandboxes.
 from __future__ import annotations
 
 import asyncio
-import shutil
 from pathlib import Path
 from typing import Any, Protocol
 
 from app.core.ids import EntityType, PublicId
 from yuzu_sandbox.proot_wrapper import RestrictedPRootBuilder
+from yuzu_sandbox.rootfs_installer import PRootDistroInstaller
 
 
 class SandboxInstanceRepository(Protocol):
@@ -39,6 +39,11 @@ class SandboxInstanceRepository(Protocol):
     async def delete(self, owner_id: str) -> dict[str, Any] | None: ...
 
 
+class RootfsInstaller(Protocol):
+    async def install(self, runtime_name: str, distribution: str) -> None: ...
+    async def remove(self, runtime_name: str) -> None: ...
+
+
 class SandboxLifecycleEngine:
     """Manages the full lifecycle of persistent per-user sandbox instances."""
 
@@ -47,10 +52,12 @@ class SandboxLifecycleEngine:
         repository: SandboxInstanceRepository,
         proot_builder: RestrictedPRootBuilder,
         containers_root: Path | None = None,
+        installer: RootfsInstaller | None = None,
     ) -> None:
         self.repository = repository
         self.proot_builder = proot_builder
         self.containers_root = containers_root or proot_builder.containers_root
+        self.installer = installer or PRootDistroInstaller(proot_builder)
 
     async def get_status(self, owner_id: str) -> dict[str, Any]:
         """Fetch current sandbox instance metadata and logical state."""
@@ -115,10 +122,7 @@ class SandboxLifecycleEngine:
             return False
 
         await self.repository.update_state(owner_id, "deleting")
-        rootfs_path = self.proot_builder.get_rootfs_path(instance["runtime_name"])
-
-        if rootfs_path.exists():
-            await asyncio.to_thread(shutil.rmtree, rootfs_path, True)
+        await self.installer.remove(instance["runtime_name"])
 
         await self.repository.delete(owner_id)
         return True
@@ -134,10 +138,7 @@ class SandboxLifecycleEngine:
 
         # Increment generation to invalidate all existing PTY tokens/sessions
         bumped = await self.repository.bump_generation(owner_id, next_state="resetting")
-        rootfs_path = self.proot_builder.get_rootfs_path(instance["runtime_name"])
-
-        if rootfs_path.exists():
-            await asyncio.to_thread(shutil.rmtree, rootfs_path, True)
+        await self.installer.remove(instance["runtime_name"])
 
         asyncio.create_task(
             self._bootstrap_rootfs(
@@ -151,8 +152,8 @@ class SandboxLifecycleEngine:
     ) -> None:
         """Mock/Real async rootfs extraction & initial user setup."""
         try:
+            await self.installer.install(runtime_name, distribution)
             rootfs_path = self.proot_builder.get_rootfs_path(runtime_name)
-            await asyncio.to_thread(rootfs_path.mkdir, parents=True, exist_ok=True)
             # Create user workspace scaffold
             user_home = rootfs_path / "home" / "yuzu"
             await asyncio.to_thread(

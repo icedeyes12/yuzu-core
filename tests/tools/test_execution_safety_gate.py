@@ -6,8 +6,7 @@ from app.tools import registry
 
 
 @pytest.fixture(autouse=True)
-def reset_registry(monkeypatch):
-    monkeypatch.delenv("YUZU_USER_EXECUTION_ENABLED", raising=False)
+def reset_registry():
     registry._TOOL_DEFINITIONS.clear()
     registry._TOOL_MODULES.clear()
     registry._definitions_initialized = False
@@ -17,7 +16,7 @@ def reset_registry(monkeypatch):
     registry._definitions_initialized = False
 
 
-def test_direct_execution_tools_are_hidden_by_default():
+def test_direct_execution_tools_are_hidden_without_user_context():
     names = {definition.name for definition in registry.get_tool_definitions()}
 
     assert names.isdisjoint(
@@ -26,19 +25,15 @@ def test_direct_execution_tools_are_hidden_by_default():
 
 
 @pytest.mark.asyncio
-async def test_direct_execution_dispatch_is_blocked_by_default():
+async def test_direct_execution_dispatch_fails_without_ready_sandbox(monkeypatch):
+    async def not_ready(_user_id):
+        return False
+
+    monkeypatch.setattr(registry, "_sandbox_ready", not_ready)
     result = await registry.execute_tool("terminal", {"command": "id"}, user_id="user")
 
     assert result == {
         "ok": False,
-        "error": "User execution is disabled",
+        "error": "My Computer sandbox is not ready",
         "data": {},
     }
-
-
-def test_direct_execution_can_only_be_enabled_explicitly(monkeypatch):
-    monkeypatch.setenv("YUZU_USER_EXECUTION_ENABLED", "true")
-
-    names = {definition.name for definition in registry.get_tool_definitions()}
-
-    assert {"terminal", "python", "sql", "read", "write", "ls", "mkdir", "rm"} <= names

@@ -10,9 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 DEFAULT_PROOT_BIN = "/data/data/com.termux/files/usr/bin/proot"
-PROOT_CONTAINERS_DIR = (
-    "/data/data/com.termux/files/usr/var/lib/proot-distro/installed-rootfs"
-)
+PROOT_CONTAINERS_DIR = "/data/data/com.termux/files/usr/var/lib/proot-distro/containers"
 
 
 class RestrictedPRootBuilder:
@@ -30,7 +28,7 @@ class RestrictedPRootBuilder:
         """Resolve the rootfs path for a specific user sandbox instance."""
         if not runtime_name or "/" in runtime_name or ".." in runtime_name:
             raise ValueError(f"Invalid runtime name: {runtime_name}")
-        return self.containers_root / runtime_name
+        return self.containers_root / runtime_name / "rootfs"
 
     def build_exec_args(
         self,

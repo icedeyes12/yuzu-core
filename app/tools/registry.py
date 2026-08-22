@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import time
 from typing import Any
 
+from app.db.sandbox_instance_repository import PgSandboxInstanceRepository
+from app.services.sandbox_tool_dispatcher import SandboxToolDispatcher
 from app.tools.schemas import (
     ToolCallEvent,
     ToolResultEvent,
@@ -24,20 +25,15 @@ _TOOL_MODULES: dict[str, Any] = {}
 _TOOL_DEFINITIONS: dict[str, Any] = {}
 _definitions_initialized = False
 
-_DIRECT_EXECUTION_TOOLS = {
+_SANDBOX_EXECUTION_TOOLS = {
     "terminal",
     "python",
-    "sql",
     "read",
     "write",
     "ls",
     "mkdir",
     "rm",
 }
-
-
-def _user_execution_enabled() -> bool:
-    return os.environ.get("YUZU_USER_EXECUTION_ENABLED", "false").lower() == "true"
 
 
 def _load_tool_module(tool_name: str):
@@ -201,10 +197,6 @@ def _collect_definitions():
     except Exception as e:
         logger.info(f"[registry] Failed to load weather definition: {e}")
 
-    if not _user_execution_enabled():
-        for name in _DIRECT_EXECUTION_TOOLS:
-            _TOOL_DEFINITIONS.pop(name, None)
-
     _definitions_initialized = True
 
 
@@ -214,9 +206,31 @@ def _collect_definitions():
 
 
 def get_tool_definitions() -> list[Any]:
-    """Return all tool definitions for LLM tools[] array."""
+    """Return definitions that do not depend on user sandbox state."""
     _collect_definitions()
-    return list(_TOOL_DEFINITIONS.values())
+    return [
+        tool
+        for name, tool in _TOOL_DEFINITIONS.items()
+        if name not in _SANDBOX_EXECUTION_TOOLS and name != "sql"
+    ]
+
+
+async def _sandbox_ready(user_id: str | None) -> bool:
+    if not user_id:
+        return False
+    instance = await PgSandboxInstanceRepository().get_by_owner(user_id)
+    return bool(instance and instance["state"] == "ready")
+
+
+async def get_tool_schemas_for_user(user_id: str | None) -> list[dict[str, Any]]:
+    """Return schemas gated by authoritative sandbox state."""
+    ready = await _sandbox_ready(user_id)
+    return [
+        schema
+        for schema in get_tool_schemas()
+        if schema["function"]["name"] != "sql"
+        and (schema["function"]["name"] not in _SANDBOX_EXECUTION_TOOLS or ready)
+    ]
 
 
 def get_tool_definition(name: str):
@@ -246,8 +260,35 @@ async def execute_tool(
     or:
         {"ok": False, "error": "..."}
     """
-    if tool_name in _DIRECT_EXECUTION_TOOLS and not _user_execution_enabled():
-        return {"ok": False, "error": "User execution is disabled", "data": {}}
+    if tool_name == "sql":
+        return {"ok": False, "error": "SQL is not a My Computer tool", "data": {}}
+
+    if tool_name in _SANDBOX_EXECUTION_TOOLS:
+        if not await _sandbox_ready(user_id):
+            return {
+                "ok": False,
+                "error": "My Computer sandbox is not ready",
+                "data": {},
+            }
+        assert user_id is not None
+        dispatcher = SandboxToolDispatcher()
+        if tool_name == "terminal":
+            command = str(arguments.get("command", "")).strip()
+            if not command:
+                return {"ok": False, "error": "No command provided", "data": {}}
+            return await dispatcher.execute_command(
+                user_id, ["/bin/bash", "-lc", command]
+            )
+        if tool_name == "python":
+            code = str(arguments.get("code", ""))
+            if not code:
+                return {"ok": False, "error": "No code provided", "data": {}}
+            return await dispatcher.execute_command(user_id, ["python3", "-c", code])
+        return {
+            "ok": False,
+            "error": f"Sandbox tool routing unavailable: {tool_name}",
+            "data": {},
+        }
 
     _collect_definitions()
 
