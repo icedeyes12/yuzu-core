@@ -48,6 +48,14 @@ class FakeFiles:
             return None
         return row.copy()
 
+    async def mark_deleted(self, file_id, owner_id):
+        row = self.rows.get(file_id)
+        if not row or row["owner_id"] != owner_id or row["status"] != "ready":
+            return None
+        row["deleted_at"] = "now"
+        row["status"] = "deleted"
+        return row.copy()
+
 
 @pytest.mark.asyncio
 async def test_persist_uses_owner_namespace_and_random_object_id(tmp_path):
@@ -176,3 +184,37 @@ async def test_import_artifact_rejects_traversal_and_symlink(tmp_path):
                 workspace_root=workspace,
                 relative_path=path,
             )
+
+
+@pytest.mark.asyncio
+async def test_low_disk_gate_blocks_before_reservation(tmp_path, monkeypatch):
+    repo = FakeFiles()
+    service = FileService(tmp_path, repo, reserve_bytes=100)
+    monkeypatch.setattr(
+        "app.services.file_service.shutil.disk_usage",
+        lambda _path: type("Usage", (), {"free": 50})(),
+    )
+    from app.services.file_service import LowDiskSpace
+
+    with pytest.raises(LowDiskSpace):
+        await service.persist_bytes(
+            owner_id=str(uuid4()), data=b"x", kind="upload", mime_type="text/plain"
+        )
+    assert repo.rows == {}
+
+
+@pytest.mark.asyncio
+async def test_delete_releases_object_and_hides_file(tmp_path):
+    owner = str(uuid4())
+    repo = FakeFiles()
+    service = FileService(tmp_path, repo)
+    row = await service.persist_bytes(
+        owner_id=owner, data=b"x", kind="upload", mime_type="text/plain"
+    )
+    path = tmp_path / row["storage_key"]
+
+    await service.delete_for_owner(row["id"], owner)
+
+    assert not path.exists()
+    with pytest.raises(FileNotFound):
+        await service.open_for_owner(row["id"], owner)

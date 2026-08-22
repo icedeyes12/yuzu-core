@@ -16,7 +16,14 @@ def get_file_service() -> FileService:
             Path(__file__).resolve().parent.parent.parent / "data",
         )
     )
-    return FileService(root, PgFileRepository())
+    return FileService(
+        root,
+        PgFileRepository(),
+        reserve_bytes=int(os.environ.get("YUZU_STORAGE_RESERVE_BYTES", "0")),
+        max_file_bytes=int(
+            os.environ.get("YUZU_MAX_FILE_BYTES", str(512 * 1024 * 1024))
+        ),
+    )
 
 
 async def resolve_private_file(reference: str, owner_id: str) -> Path | None:

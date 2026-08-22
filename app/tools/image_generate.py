@@ -71,7 +71,7 @@ async def execute(arguments, **kwargs):
         source="image_generate",
     )
     file_id = PublicId.encode(EntityType.FILE, row["id"])
-    image_path = f"/v1/files/{file_id}"
+    image_path = f"/api/v1/files/{file_id}"
 
     return ok_result(
         {

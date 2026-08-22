@@ -9,6 +9,7 @@ from fastapi import UploadFile
 
 from app.core.request_context import ClientContext
 from app.db import Database
+from app.services.file_service import QuotaExceeded, StorageUnavailable
 from app.services.files import get_file_service
 from app.services.orchestrator import handle_user_message
 from app.services.stream_manager import StreamManager
@@ -144,7 +145,9 @@ class ConversationService:
                     from app.core.ids import EntityType, PublicId
 
                     file_id = PublicId.encode(EntityType.FILE, row["id"])
-                    saved_paths.append(f"/v1/files/{file_id}")
+                    saved_paths.append(f"/api/v1/files/{file_id}")
+                except (QuotaExceeded, StorageUnavailable):
+                    raise
                 except Exception as e:
                     log.error("Error saving image %s: %s", image_file.filename, e)
                 finally:

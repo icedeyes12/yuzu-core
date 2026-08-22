@@ -29,3 +29,16 @@ async def download_file(
         media_type=row["mime_type"],
         filename=row.get("original_name") or file_id,
     )
+
+
+@router.delete("/{file_id}", status_code=204, responses=ERROR_RESPONSES)
+async def delete_file(
+    file_id: str,
+    user_id: str = Depends(get_current_user),
+    service: FileService = Depends(get_file_service),
+):
+    try:
+        internal_id = PublicId.decode(EntityType.FILE, file_id, allow_raw_uuid=False)
+        await service.delete_for_owner(internal_id, user_id)
+    except (ValueError, FileNotFound):
+        raise HTTPException(status_code=404, detail="File not found") from None

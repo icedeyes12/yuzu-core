@@ -131,7 +131,7 @@ async def execute(arguments, **kwargs) -> dict[str, Any]:
             source="image_edit",
         )
         file_id = PublicId.encode(EntityType.FILE, row["id"])
-        output_path = f"/v1/files/{file_id}"
+        output_path = f"/api/v1/files/{file_id}"
 
         full_command = f"/image_edit {prompt}"
         return ok_result(

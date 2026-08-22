@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 from uuid import UUID, uuid4
@@ -18,40 +19,48 @@ _KIND_DIRS = {
 
 
 class FileNotFound(Exception):
-    """ฅ^•ﻌ•^ฅ"""
+    pass
 
 
 class QuotaExceeded(Exception):
-    """ฅ^•ﻌ•^ฅ"""
+    pass
+
+
+class StorageUnavailable(Exception):
+    pass
+
+
+class LowDiskSpace(StorageUnavailable):
+    pass
+
+
+class FileTooLarge(StorageUnavailable):
+    pass
 
 
 class FileRepository(Protocol):
-    async def reserve(
-        self,
-        *,
-        file_id: str,
-        owner_id: str,
-        storage_key: str,
-        original_name: str | None,
-        mime_type: str,
-        size_bytes: int,
-        kind: str,
-        source: str,
-    ) -> dict[str, Any] | None: ...
-
+    async def reserve(self, **values: Any) -> dict[str, Any] | None: ...
     async def mark_ready(self, file_id: str, owner_id: str) -> dict[str, Any]: ...
-
     async def release(self, file_id: str, owner_id: str) -> None: ...
-
     async def get(self, file_id: str, owner_id: str) -> dict[str, Any] | None: ...
+    async def mark_deleted(
+        self, file_id: str, owner_id: str
+    ) -> dict[str, Any] | None: ...
 
 
 class FileService:
-    """ฅ^•ﻌ•^ฅ"""
-
-    def __init__(self, storage_root: Path, repository: FileRepository) -> None:
+    def __init__(
+        self,
+        storage_root: Path,
+        repository: FileRepository,
+        *,
+        reserve_bytes: int = 0,
+        max_file_bytes: int = PERSISTENT_QUOTA_BYTES,
+    ) -> None:
         self.storage_root = storage_root.resolve()
         self.repository = repository
+        self.reserve_bytes = reserve_bytes
+        self.max_file_bytes = max_file_bytes
 
     async def persist_bytes(
         self,
@@ -62,15 +71,17 @@ class FileService:
         mime_type: str,
         original_name: str | None = None,
         source: str = "user",
+        job_id: str | None = None,
     ) -> dict[str, Any]:
         UUID(owner_id)
+        if len(data) > self.max_file_bytes:
+            raise FileTooLarge
+        self._require_free_space(len(data))
         directory = _KIND_DIRS.get(kind)
         if directory is None:
             raise ValueError(f"Unsupported file kind: {kind}")
-
         file_id = str(uuid4())
-        object_id = str(uuid4())
-        storage_key = f"users/{owner_id}/{directory}/{object_id}"
+        storage_key = f"users/{owner_id}/{directory}/{uuid4()}"
         row = await self.repository.reserve(
             file_id=file_id,
             owner_id=owner_id,
@@ -80,10 +91,10 @@ class FileService:
             size_bytes=len(data),
             kind=kind,
             source=source,
+            job_id=job_id,
         )
         if row is None:
             raise QuotaExceeded
-
         path = self._resolve_storage_key(storage_key)
         temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
         try:
@@ -95,11 +106,7 @@ class FileService:
             path.unlink(missing_ok=True)
             await self.repository.release(file_id, owner_id)
             raise
-        try:
-            return await self.repository.mark_ready(file_id, owner_id)
-        except BaseException:
-            # Leave pending metadata + bytes for deterministic reconciliation.
-            raise
+        return await self.repository.mark_ready(file_id, owner_id)
 
     async def open_for_owner(
         self, file_id: str, owner_id: str
@@ -122,6 +129,7 @@ class FileService:
         workspace_root: Path,
         relative_path: str,
         mime_type: str = "application/octet-stream",
+        job_id: str | None = None,
     ) -> dict[str, Any]:
         source = self._regular_workspace_file(workspace_root, relative_path)
         data = await asyncio.to_thread(source.read_bytes)
@@ -132,7 +140,22 @@ class FileService:
             mime_type=mime_type,
             original_name=source.name,
             source="sandbox",
+            job_id=job_id,
         )
+
+    async def delete_for_owner(self, file_id: str, owner_id: str) -> None:
+        row = await self.repository.mark_deleted(file_id, owner_id)
+        if row is None:
+            raise FileNotFound
+        await asyncio.to_thread(
+            self._resolve_storage_key(str(row["storage_key"])).unlink,
+            missing_ok=True,
+        )
+
+    def _require_free_space(self, requested: int) -> None:
+        self.storage_root.mkdir(parents=True, exist_ok=True)
+        if shutil.disk_usage(self.storage_root).free - requested < self.reserve_bytes:
+            raise LowDiskSpace
 
     @staticmethod
     def _regular_workspace_file(workspace_root: Path, relative_path: str) -> Path:

@@ -28,6 +28,7 @@ from app.core.request_context import (
     set_client_context,
 )
 from app.services.conversation_service import ConversationService
+from app.services.file_service import QuotaExceeded, StorageUnavailable
 from app.services.session_service import SessionService
 
 log = get_logger(__name__)
@@ -205,6 +206,10 @@ async def api_send_message_stream(
                         client_context=context,
                     ):
                         yield chunk
+            except QuotaExceeded:
+                yield 'data: {"type":"error","message":"Persistent storage quota exceeded"}\n\n'
+            except StorageUnavailable:
+                yield 'data: {"type":"error","message":"Persistent storage is unavailable"}\n\n'
             except MissingProviderKeyError as e:
                 log.warning("Missing provider key in stream: %s", e)
                 message = (
