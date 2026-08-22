@@ -18,12 +18,11 @@ class PgSandboxJobRepository:
     def __init__(self, session_factory: Callable[[], Any] = AsyncPgSession) -> None:
         self.session_factory = session_factory
 
-    async def create(self, *, job_id: str, owner_id: str, request: dict[str, Any]):
+    async def create(self, *, owner_id: str, request: dict[str, Any]):
         async with self.session_factory() as session:
             return await session.execute_returning(
                 SQL_SANDBOX_JOB_INSERT,
                 (
-                    job_id,
                     owner_id,
                     json.dumps(request["argv"]),
                     request["cwd"],

@@ -18,9 +18,7 @@ class FakeEngine:
         assert user_id == self.owner_id
         return {"has_sandbox": self.state != "none", "state": self.state}
 
-    async def provision_sandbox(
-        self, owner_id: str, distribution: str, distribution_version: str
-    ):
+    async def provision_sandbox(self, owner_id: str, distribution: str):
         assert owner_id == self.owner_id
         self.state = "ready"
         return {"has_sandbox": True, "state": "ready"}
@@ -57,10 +55,16 @@ def test_sandbox_api_endpoints():
         # 2. Provision
         res = client.post(
             "/api/v1/sandbox/provision",
-            json={"distribution": "debian", "distribution_version": "12"},
+            json={"distribution": "debian"},
         )
         assert res.status_code == 200
         assert res.json()["state"] == "ready"
+
+        stale = client.post(
+            "/api/v1/sandbox/provision",
+            json={"distribution": "debian", "distribution_version": "12"},
+        )
+        assert stale.status_code == 422
 
         # 3. Reset
         res = client.post("/api/v1/sandbox/reset", json={"confirmation": "RESET"})

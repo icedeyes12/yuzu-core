@@ -13,6 +13,7 @@ from typing import Any, Protocol
 
 from app.core.ids import EntityType, PublicId
 from app.services import sandbox_session_registry
+from app.services.sandbox_runtime_metadata import inspect_rootfs
 from yuzu_sandbox.proot_wrapper import RestrictedPRootBuilder
 from yuzu_sandbox.rootfs_installer import PRootDistroInstaller
 
@@ -29,6 +30,9 @@ class SandboxInstanceRepository(Protocol):
     ) -> dict[str, Any]: ...
     async def update_state(
         self, owner_id: str, state: str, error: str | None = None
+    ) -> dict[str, Any] | None: ...
+    async def update_runtime_metadata(
+        self, owner_id: str, metadata: dict[str, str]
     ) -> dict[str, Any] | None: ...
     async def bump_generation(
         self,
@@ -83,6 +87,8 @@ class SandboxLifecycleEngine:
             "id": PublicId.encode(EntityType.SANDBOX, instance["id"]),
             "distribution": instance["distribution"],
             "distribution_version": instance["distribution_version"],
+            "distribution_codename": instance.get("distribution_codename", ""),
+            "distribution_pretty_name": instance.get("distribution_pretty_name", ""),
             "generation": instance["generation"],
             "state": instance["state"],
             "storage_used_bytes": used_bytes,
@@ -97,7 +103,6 @@ class SandboxLifecycleEngine:
         self,
         owner_id: str,
         distribution: str = "debian",
-        distribution_version: str = "12",
     ) -> dict[str, Any]:
         """Create and asynchronously bootstrap a new persistent sandbox."""
         if distribution not in ("debian", "ubuntu"):
@@ -110,7 +115,7 @@ class SandboxLifecycleEngine:
         instance = await self.repository.create(
             owner_id=owner_id,
             distribution=distribution,
-            distribution_version=distribution_version,
+            distribution_version="pending",
         )
 
         self._cancel_owner_tasks(owner_id)
@@ -178,10 +183,16 @@ class SandboxLifecycleEngine:
         """Mock/Real async rootfs extraction & initial user setup."""
         try:
             await self.installer.install(runtime_name, distribution)
+            rootfs_path = self.proot_builder.get_rootfs_path(runtime_name)
+            metadata = await asyncio.to_thread(inspect_rootfs, rootfs_path)
+            if metadata["distribution"] != distribution:
+                raise ValueError(
+                    f"Provisioned {metadata['distribution']} for requested {distribution}"
+                )
             current = await self.repository.get_by_owner(owner_id)
             if not current or current.get("generation") != expected_generation:
                 return
-            rootfs_path = self.proot_builder.get_rootfs_path(runtime_name)
+            await self.repository.update_runtime_metadata(owner_id, metadata)
             # Create user workspace scaffold
             user_home = rootfs_path / "home" / "yuzu"
             await asyncio.to_thread(

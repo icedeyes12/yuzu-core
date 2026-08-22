@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.utils import get_current_user
 from app.db.sandbox_instance_repository import PgSandboxInstanceRepository
@@ -26,8 +26,9 @@ def get_lifecycle_engine() -> SandboxLifecycleEngine:
 
 
 class ProvisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     distribution: str = Field(default="debian", pattern="^(debian|ubuntu)$")
-    distribution_version: str = Field(default="12")
 
 
 class ActionConfirmation(BaseModel):
@@ -56,7 +57,6 @@ async def provision_sandbox(
         return await engine.provision_sandbox(
             owner_id=user_id,
             distribution=payload.distribution,
-            distribution_version=payload.distribution_version,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

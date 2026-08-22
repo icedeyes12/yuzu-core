@@ -17,6 +17,7 @@ from typing import Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.auth.session import SESSION_COOKIE_NAME, validate_session
+from app.core.ids import EntityType, PublicId
 from app.db.sandbox_instance_repository import PgSandboxInstanceRepository
 from app.services import sandbox_session_registry
 from yuzu_sandbox.proot_wrapper import RestrictedPRootBuilder
@@ -98,8 +99,21 @@ def _instance_command(instance: dict[str, Any]) -> list[str]:
     builder = RestrictedPRootBuilder()
     return builder.build_exec_args(
         runtime_name=instance["runtime_name"],
-        argv=["/bin/bash", "--login"],
+        argv=["/bin/bash", "--noprofile", "--norc"],
     )
+
+
+def _pty_env(owner_id: str) -> dict[str, str]:
+    display_identity = PublicId.encode(EntityType.USER, owner_id)
+    return {
+        "TERM": "xterm-256color",
+        "HOME": "/home/yuzu",
+        "USER": "yuzu",
+        "LOGNAME": "yuzu",
+        "SHELL": "/bin/bash",
+        "HOSTNAME": "yuzu-sandbox",
+        "PS1": f"{display_identity}@yuzu-sandbox:\\w$ ",
+    }
 
 
 async def _send_output(websocket: WebSocket, session: PTYSession) -> None:
@@ -151,13 +165,7 @@ async def websocket_pty_endpoint(websocket: WebSocket) -> None:
         session = PTYSession.spawn(
             _instance_command(instance),
             generation=instance["generation"],
-            env={
-                "TERM": "xterm-256color",
-                "HOME": "/home/yuzu",
-                "USER": "yuzu",
-                "LOGNAME": "yuzu",
-                "SHELL": "/bin/bash",
-            },
+            env=_pty_env(user_id),
         )
     except (OSError, ValueError) as error:
         await websocket.accept()

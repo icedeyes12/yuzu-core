@@ -47,9 +47,14 @@ async def test_sandbox_instance_repository_crud():
     assert res["owner_id"] == owner_id
     assert SQL_SANDBOX_INSTANCE_SELECT_BY_OWNER in session.executed[0][0]
 
-    # 2. Create
+    # 2. Create — PostgreSQL generates canonical UUIDv7.
     await repo.create(owner_id=owner_id, distribution="debian")
     assert SQL_SANDBOX_INSTANCE_INSERT in session.executed[1][0]
+    insert_params = session.executed[1][1]
+    assert len(insert_params) == 4
+    assert insert_params[0] == owner_id
+    assert "generate_uuidv7()" in SQL_SANDBOX_INSTANCE_INSERT
+    assert owner_id.replace("-", "")[:16] not in str(insert_params)
 
     # 3. Update state
     await repo.update_state(owner_id=owner_id, state="ready")

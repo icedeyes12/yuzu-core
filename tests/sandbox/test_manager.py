@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -13,7 +13,8 @@ class FakeJobs:
     def __init__(self) -> None:
         self.rows: dict[str, dict] = {}
 
-    async def create(self, *, job_id, owner_id, request):
+    async def create(self, *, owner_id, request):
+        job_id = "019d0000-0000-7000-8000-000000000001"
         row = {"id": job_id, "owner_id": owner_id, "status": "pending", **request}
         self.rows[job_id] = row
         return row.copy()
@@ -100,6 +101,7 @@ async def test_authenticated_owner_is_authoritative_for_job_and_artifacts(tmp_pa
     assert files.imports[0]["job_id"] == result["job_id"]
     assert "path" not in result["artifacts"][0]
     assert runner.cleaned == [(owner, result["job_id"])]
+    assert UUID(result["job_id"]).version == 7
 
 
 @pytest.mark.asyncio

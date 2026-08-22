@@ -8,34 +8,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
-from uuid import uuid4
 
 from app.db.connection import AsyncPgSession
 
-SQL_SANDBOX_INSTANCES_DDL = """
-CREATE TABLE IF NOT EXISTS sandbox_instances (
-    id UUID PRIMARY KEY,
-    owner_id UUID NOT NULL UNIQUE REFERENCES profiles(id) ON DELETE CASCADE,
-    runtime_name TEXT NOT NULL UNIQUE,
-    distribution TEXT NOT NULL CHECK (distribution IN ('debian', 'ubuntu')),
-    distribution_version TEXT NOT NULL,
-    generation INTEGER NOT NULL DEFAULT 1,
-    state TEXT NOT NULL CHECK (state IN (
-        'none', 'provisioning', 'ready', 'busy', 'resetting', 'rebuilding', 'deleting', 'failed'
-    )),
-    storage_limit_bytes BIGINT NOT NULL DEFAULT 10737418240,
-    last_error TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_started_at TIMESTAMPTZ
-);
-CREATE INDEX IF NOT EXISTS idx_sandbox_instances_owner ON sandbox_instances(owner_id, state);
-"""
-
 SQL_SANDBOX_INSTANCE_INSERT = """
+WITH generated AS (SELECT generate_uuidv7() AS id)
 INSERT INTO sandbox_instances
     (id, owner_id, runtime_name, distribution, distribution_version, generation, state, storage_limit_bytes)
-VALUES (%s, %s, %s, %s, %s, 1, 'provisioning', %s)
+SELECT id, %s, 'sbx_' || LEFT(REPLACE(id::text, '-', ''), 24), %s, %s, 1, 'provisioning', %s
+FROM generated
 RETURNING *
 """
 
@@ -49,6 +30,17 @@ SET state = %s,
     last_error = %s,
     updated_at = NOW(),
     last_started_at = CASE WHEN %s = 'ready' THEN NOW() ELSE last_started_at END
+WHERE owner_id = %s
+RETURNING *
+"""
+
+SQL_SANDBOX_INSTANCE_UPDATE_RUNTIME = """
+UPDATE sandbox_instances
+SET distribution = %s,
+    distribution_version = %s,
+    distribution_codename = %s,
+    distribution_pretty_name = %s,
+    updated_at = NOW()
 WHERE owner_id = %s
 RETURNING *
 """
@@ -87,21 +79,14 @@ class PgSandboxInstanceRepository:
         *,
         owner_id: str,
         distribution: str = "debian",
-        distribution_version: str = "12",
+        distribution_version: str = "pending",
         storage_limit_bytes: int = 10 * 1024 * 1024 * 1024,
     ) -> dict[str, Any]:
-        instance_id = str(uuid4())
-        # Generate safe, opaque runtime directory name
-        runtime_name = (
-            f"sbx_{owner_id.replace('-', '')[:16]}_{instance_id.replace('-', '')[:8]}"
-        )
         async with self.session_factory() as session:
             return await session.execute_returning(
                 SQL_SANDBOX_INSTANCE_INSERT,
                 (
-                    instance_id,
                     owner_id,
-                    runtime_name,
                     distribution,
                     distribution_version,
                     storage_limit_bytes,
@@ -115,6 +100,21 @@ class PgSandboxInstanceRepository:
             return await session.execute_returning(
                 SQL_SANDBOX_INSTANCE_UPDATE_STATE,
                 (state, error, state, owner_id),
+            )
+
+    async def update_runtime_metadata(
+        self, owner_id: str, metadata: dict[str, str]
+    ) -> dict[str, Any] | None:
+        async with self.session_factory() as session:
+            return await session.execute_returning(
+                SQL_SANDBOX_INSTANCE_UPDATE_RUNTIME,
+                (
+                    metadata["distribution"],
+                    metadata["version_id"],
+                    metadata["codename"],
+                    metadata["pretty_name"],
+                    owner_id,
+                ),
             )
 
     async def bump_generation(

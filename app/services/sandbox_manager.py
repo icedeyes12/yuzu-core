@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from app.core.ids import EntityType, PublicId
 from yuzu_sandbox.runner import JobRequest, JobResult, SandboxRunner
@@ -12,7 +12,7 @@ _TERMINAL = {"succeeded", "failed", "cancelled", "timed_out"}
 
 class JobRepository(Protocol):
     async def create(
-        self, *, job_id: str, owner_id: str, request: dict[str, Any]
+        self, *, owner_id: str, request: dict[str, Any]
     ) -> dict[str, Any]: ...
 
     async def get(self, job_id: str) -> dict[str, Any] | None: ...
@@ -53,7 +53,6 @@ class SandboxManager:
     ) -> dict[str, Any]:
         del claimed_owner_id
         UUID(authenticated_owner_id)
-        job_id = str(uuid4())
         contract = {
             "argv": argv,
             "cwd": cwd,
@@ -61,9 +60,10 @@ class SandboxManager:
             "workspace_bytes_limit": workspace_bytes,
             "output_bytes_limit": output_bytes,
         }
-        await self.jobs.create(
-            job_id=job_id, owner_id=authenticated_owner_id, request=contract
+        created = await self.jobs.create(
+            owner_id=authenticated_owner_id, request=contract
         )
+        job_id = str(created["id"])
         authoritative = await self._require_job(job_id)
         owner_id = str(authoritative["owner_id"])
         request = JobRequest(

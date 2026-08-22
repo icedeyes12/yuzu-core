@@ -14,6 +14,13 @@ class FakeRootfsInstaller:
         rootfs = self.builder.get_rootfs_path(runtime_name)
         (rootfs / "bin").mkdir(parents=True)
         (rootfs / "bin" / "bash").write_text("shell")
+        (rootfs / "etc").mkdir()
+        (rootfs / "etc" / "os-release").write_text(
+            'PRETTY_NAME="Debian GNU/Linux 13 (trixie)"\n'
+            "ID=debian\n"
+            'VERSION_ID="13"\n'
+            "VERSION_CODENAME=trixie\n"
+        )
 
     async def remove(self, runtime_name: str) -> None:
         import shutil
@@ -61,6 +68,16 @@ class FakeSandboxRepo:
             return self.instances[owner_id]
         return None
 
+    async def update_runtime_metadata(self, owner_id: str, metadata: dict[str, str]):
+        if owner_id not in self.instances:
+            return None
+        row = self.instances[owner_id]
+        row["distribution"] = metadata["distribution"]
+        row["distribution_version"] = metadata["version_id"]
+        row["distribution_codename"] = metadata["codename"]
+        row["distribution_pretty_name"] = metadata["pretty_name"]
+        return row
+
     async def bump_generation(
         self,
         owner_id: str,
@@ -103,6 +120,8 @@ async def test_sandbox_lifecycle_flow(tmp_path):
 
     ready_status = await engine.get_status(owner_id)
     assert ready_status["state"] == "ready"
+    assert ready_status["distribution_version"] == "13"
+    assert ready_status["distribution_codename"] == "trixie"
     assert ready_status["generation"] == 1
     assert (
         tmp_path

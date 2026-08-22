@@ -4,7 +4,8 @@ import json
 import os
 import time
 
-from app.api.sandbox_pty import PTYSession
+from app.api.sandbox_pty import PTYSession, _pty_env
+from app.core.ids import EntityType, PublicId
 
 
 def receive_until(session: PTYSession, marker: bytes, timeout: float = 3) -> bytes:
@@ -61,3 +62,17 @@ def test_websocket_protocol_uses_explicit_ready_and_json_frames():
     assert input_frame["data"].encode() == b"a\r\x7f"
     assert resize_frame == {"type": "resize", "cols": 80, "rows": 24}
     assert os.name == "posix"
+
+
+def test_shell_display_identity_uses_owner_public_id_and_generic_hostname():
+    owner_a = "019d0000-0000-7000-8000-000000000001"
+    owner_b = "019d0000-0000-7000-8000-000000000002"
+
+    env_a = _pty_env(owner_a)
+    env_b = _pty_env(owner_b)
+
+    assert PublicId.encode(EntityType.USER, owner_a) in env_a["PS1"]
+    assert PublicId.encode(EntityType.USER, owner_b) in env_b["PS1"]
+    assert env_a["PS1"] != env_b["PS1"]
+    assert env_a["HOSTNAME"] == "yuzu-sandbox"
+    assert "titit" not in str(env_a).lower()

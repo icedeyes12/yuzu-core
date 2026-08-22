@@ -226,7 +226,7 @@ SCHEMA_DDL: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_file_objects_owner_active ON file_objects (owner_id, status) WHERE deleted_at IS NULL",
     """
     CREATE TABLE IF NOT EXISTS sandbox_jobs (
-        id UUID PRIMARY KEY,
+        id UUID NOT NULL DEFAULT generate_uuidv7() PRIMARY KEY,
         owner_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
         status TEXT NOT NULL CHECK (status IN (
             'pending', 'running', 'succeeded', 'failed', 'cancelled', 'timed_out'
@@ -245,11 +245,13 @@ SCHEMA_DDL: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_sandbox_jobs_owner_status ON sandbox_jobs (owner_id, status, created_at DESC)",
     """
     CREATE TABLE IF NOT EXISTS sandbox_instances (
-        id UUID PRIMARY KEY,
+        id UUID NOT NULL DEFAULT generate_uuidv7() PRIMARY KEY,
         owner_id UUID NOT NULL UNIQUE REFERENCES profiles(id) ON DELETE CASCADE,
         runtime_name TEXT NOT NULL UNIQUE,
         distribution TEXT NOT NULL CHECK (distribution IN ('debian', 'ubuntu')),
         distribution_version TEXT NOT NULL,
+        distribution_codename TEXT NOT NULL DEFAULT '',
+        distribution_pretty_name TEXT NOT NULL DEFAULT '',
         generation INTEGER NOT NULL DEFAULT 1,
         state TEXT NOT NULL CHECK (state IN (
             'none', 'provisioning', 'ready', 'busy', 'resetting', 'rebuilding', 'deleting', 'failed'
@@ -262,6 +264,10 @@ SCHEMA_DDL: tuple[str, ...] = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_sandbox_instances_owner ON sandbox_instances(owner_id, state)",
+    "ALTER TABLE sandbox_instances ADD COLUMN IF NOT EXISTS distribution_codename TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE sandbox_instances ADD COLUMN IF NOT EXISTS distribution_pretty_name TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE sandbox_instances ALTER COLUMN id SET DEFAULT generate_uuidv7()",
+    "ALTER TABLE sandbox_jobs ALTER COLUMN id SET DEFAULT generate_uuidv7()",
     """
     DO $$ BEGIN
       ALTER TABLE file_objects ADD COLUMN IF NOT EXISTS job_id UUID NULL;
@@ -658,8 +664,8 @@ RETURNING *
 """
 SQL_SANDBOX_JOB_INSERT = """
 INSERT INTO sandbox_jobs
-    (id, owner_id, status, argv, cwd, timeout_ms, workspace_bytes_limit, output_bytes_limit)
-VALUES (%s, %s, 'pending', %s, %s, %s, %s, %s)
+    (owner_id, status, argv, cwd, timeout_ms, workspace_bytes_limit, output_bytes_limit)
+VALUES (%s, 'pending', %s, %s, %s, %s, %s)
 RETURNING *
 """
 SQL_SANDBOX_JOB_SELECT = "SELECT * FROM sandbox_jobs WHERE id = %s"
