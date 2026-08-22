@@ -1,0 +1,22 @@
+{
+  "name": "yuzu-sandbox",
+  "runtime": "proot/debian",
+  "port": 5001,
+  "display_port": "local:5001",
+  "pattern": "yuzu_sandbox.app:app",
+  "tag": "SANDBOX",
+  "depends_on": [],
+  "restart_policy": "on-failure",
+  "logs": {
+    "type": "stdio"
+  },
+  "start_cmd": [
+    "proot-distro",
+    "login",
+    "debian",
+    "--",
+    "bash",
+    "-c",
+    "cd /root/home/workspace/yuzu-core && exec .venv/bin/uvicorn yuzu_sandbox.app:app --host 127.0.0.1 --port 5001"
+  ]
+}

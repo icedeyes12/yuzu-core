@@ -70,7 +70,7 @@ Non-streaming `POST /api/v1/send_message` returns `MessageResponse` (`reply`, `s
 | Memory | `/api/v1/memory_stats`, `/api/v1/rebuild_structured_memory` | Graph-memory tenant stats and explicit rebuild; both hidden from OpenAPI. |
 | Presets | `/api/v1/presets/list`, `/api/v1/presets/upsert`, `/api/v1/presets/activate`, `/api/v1/presets/{name}` | Active preset resolution drives generation parameters. |
 | Stream recovery | `/api/v1/stream/{session_id}/status`, `/api/v1/stream/{session_id}/sync` | Reconcile client state with the server-side stream buffer. |
-| Private images | `/api/v1/static/uploads/{filename}`, `/api/v1/static/generated_images/{filename}` | Authenticated; never served by a public mount. Clients rewrite message image paths via `safeImagePath()`. |
+| Private files | `GET/DELETE /api/v1/files/{fil_id}` | Owner-scoped authenticated access. Cross-owner and deleted objects return indistinguishable 404. Legacy private-image routes are default-off migration compatibility only. |
 | Health/metrics | `GET/HEAD /health`, `GET /health/ready`, `/metrics` | Unversioned infrastructure probes; not SPA concerns. |
 
 Routes marked `include_in_schema=False` are excluded from OpenAPI but are live: the POST compatibility aliases for deletions, the `/proxy/models/*` discovery routes, `/providers/test_connection`, `/generate_image`, `/browser_unload`, the `/stream/*` recovery routes, `/memory_stats` + `/rebuild_structured_memory`, and the OAuth callback. `GET /openapi.json` lists only the schema-visible subset. There is no separate `/api/auth/*` mount — the callback lives only at `/api/v1/auth/callback`.

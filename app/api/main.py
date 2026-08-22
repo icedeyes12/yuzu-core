@@ -11,11 +11,17 @@ from app.api.endpoints import (
     sessions,
     stream,
 )
+from app.api.files import router as files_router
+from app.api.sandbox import router as sandbox_router
+from app.api.sandbox_pty import router as sandbox_pty_router
 from app.api.static import router as static_router
 
 router = APIRouter()
 
 router.include_router(static_router)
+router.include_router(files_router)
+router.include_router(sandbox_router)
+router.include_router(sandbox_pty_router)
 router.include_router(auth.router)
 router.include_router(chat.router)
 router.include_router(sessions.router)

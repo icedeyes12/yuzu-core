@@ -18,6 +18,8 @@ Yuzu Companion uses PostgreSQL through psycopg v3 pools. The schema enables `pgc
 | `profiles` | Tenant root and profile/configuration data |
 | `chat_sessions` | User-owned conversation sessions |
 | `messages` | Raw conversation, tool-call, attachment, timestamp, and encryption-state records |
+| `file_objects` | Owner-scoped private user files, logical quota, provenance, deletion state |
+| `sandbox_jobs` | Authoritative owner binding and controlled-job lifecycle |
 | `episodes` | Structured summaries of eligible conversation batches |
 | `memory_nodes` | Inferred claims/entities with confidence, importance, status, validity, and optional embeddings |
 | `memory_edges` | Typed relationships between graph nodes |

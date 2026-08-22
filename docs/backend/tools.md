@@ -13,10 +13,8 @@ The registry currently loads these names and aliases:
 - `http_request` and alias `request`
 - `memory_search`
 - `memory_store`
-- filesystem operations: `read`, `write`, `ls`, `mkdir`, `rm`
-- `terminal`
-- `python`
-- `sql`
+- filesystem operations: `read`, `write`, `ls`, `mkdir`, `rm` (default-off safety gate)
+- `terminal`, `python`, `sql` (default-off safety gate)
 - `ask_rei`
 - `weather`
 
@@ -33,3 +31,5 @@ The browser receives tool events over SSE or history payloads. `static/js/module
 ## Security boundary
 
 Filesystem, shell, Python, and SQL tools are privileged operations and must follow the authorization and confirmation behavior in their implementations. Do not add new execution paths outside the registry. Legacy XML-style markup is strip-only cleanup and is never a live protocol.
+
+`YUZU_USER_EXECUTION_ENABLED` defaults false. The inactive `yuzu-sandbox` controlled runner is not yet a user-facing tool path.

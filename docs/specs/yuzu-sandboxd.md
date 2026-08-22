@@ -1,4 +1,4 @@
-# Spec: yuzu-sandboxd
+# Spec: yuzu-sandbox
 
 Status: Draft (Active Development)
 Target: v4.3
@@ -6,7 +6,7 @@ Component: Sandbox Node Runtime
 
 ## Overview
 
-`yuzu-sandboxd` is a lightweight execution agent on each sandbox node. It isolates Yuzu Core from privileged or untrusted terminal, Python, file, and package operations.
+`yuzu-sandbox` is currently a localhost-only controlled execution service. `SandboxRunner` is not a hostile-code sandbox. `SandboxManager` in Core owns job state, authoritative ownership, dispatch, artifact persistence, and cleanup.
 
 Yuzu Core never connects directly to a user shell or executes Python on the orchestration host. It communicates with `yuzu-sandboxd` through the transport selected for the phase.
 
@@ -27,21 +27,22 @@ The daemon rejects requests for unknown, stopped, or differently owned sandboxes
 
 ## Execution model
 
-Both transports use the same canonical request model:
+The phase-one authenticated localhost HTTP transport uses an argv-only request model:
 
 ```json
 {
+  "job_id": "...",
+  "owner_id": "derived-owner-metadata",
   "argv": ["python3", "script.py"],
-  "shell": false,
   "env": {},
-  "timeout_seconds": 30,
-  "cwd": "/workspace"
+  "timeout_ms": 30000,
+  "cwd": "."
 }
 ```
 
-When `shell` is false: `argv` is required and must be non-empty; `command` must not be set. `argv` is executed without shell expansion. When `shell` is true: `command` (a single string executed via the sandbox shell) is required and must be non-empty; `argv` must not be set. The two fields are mutually exclusive based on the `shell` flag. Environment variables are an explicit map, `cwd` is confined beneath the sandbox workspace, and timeouts are enforced by the daemon. Both Phase 1 CLI (via `--argv-json` or an equivalent `--command` flag for shell mode) and Phase 2 HTTP payloads must validate and enforce this same mutual-exclusivity consistently, rather than defining separate semantics per phase.
+`argv` is required, non-empty, and executed without shell expansion. Shell strings are not a phase-one capability. `owner_id` is derived by Core from `sandbox_jobs`; it is not request authority. Environment variables are allowlisted, `cwd` is confined beneath the job workspace, and timeout/output/workspace/artifact limits are enforced for controlled workloads.
 
-### Phase 1: SSH / CLI
+### Deferred remote transport: SSH / CLI
 
 ```bash
 yuzu-sandboxd create <sandbox_id> --json
@@ -56,7 +57,7 @@ CLI output is valid JSON with quoted keys, for example:
 {"exit_code":0,"stdout":"","stderr":""}
 ```
 
-### Phase 2: HTTP / WebSocket
+### Phase 1: localhost HTTP
 
 ```http
 POST /sandbox/{id}/create

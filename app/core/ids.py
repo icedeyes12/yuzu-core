@@ -17,6 +17,8 @@ class EntityType(StrEnum):
     SESSION = "ses"
     USER = "usr"
     MEMORY_NODE = "mem"
+    FILE = "fil"
+    SANDBOX = "sbx"
 
 
 _BASE62_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -88,6 +90,8 @@ class PublicId:
 
         # 1. Passthrough standard 36-char canonical UUID
         if len(val) == 36 and val.count("-") == 4:
+            if not allow_raw_uuid:
+                raise ValueError("Raw UUID is not allowed at this boundary")
             try:
                 return str(uuid.UUID(val))
             except ValueError as err:

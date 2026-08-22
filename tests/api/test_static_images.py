@@ -9,6 +9,7 @@ from main import app
 
 @pytest.fixture
 def auth_client(tmp_path, monkeypatch):
+    monkeypatch.setenv("YUZU_LEGACY_PRIVATE_FILES_ENABLED", "true")
     # Setup a dummy generated image file
     static_gen_dir = (
         Path(__file__).resolve().parent.parent.parent / "static" / "generated_images"

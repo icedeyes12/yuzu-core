@@ -16,6 +16,10 @@ flowchart TB
     ORCH --> MEMORY[app/memory/]
     MEMORY --> DB[(PostgreSQL)]
     SVC --> DB
+    SVC --> FILES[FileService]
+    FILES --> STORE[(Private user storage)]
+    SVC --> JOBS[(sandbox_jobs)]
+    SVC --> RUNNER[yuzu-sandbox localhost service]
 ```
 
 ## Ownership boundaries
@@ -32,6 +36,8 @@ flowchart TB
 | Tool schemas and dispatch | `app/tools/` | Native function-calling definitions and structured results; no UI formatting |
 | SQL and DDL | `app/db/queries.py` | SQL source of truth; no alternate inline schema |
 | Graph memory | `app/memory/` | Extraction, graph persistence, retrieval, and provenance |
+| User files | `FileService` + `file_objects` | Owner-scoped persistence, quota, private serving, deletion |
+| Controlled jobs | `SandboxManager` + `sandbox_jobs` | Authoritative ownership, state, dispatch, artifact import, cleanup |
 | Browser state and DOM | `static/js/modules/` | `ConversationStore` owns state; `DOMRenderer` owns chat DOM |
 
 ## Message flow

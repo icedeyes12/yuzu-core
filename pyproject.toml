@@ -46,7 +46,7 @@ py-modules = ["main"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["app*", "cli*", "scripts*"]
+include = ["app*", "cli*", "scripts*", "yuzu_sandbox*"]
 exclude = ["tests*"]
 
 [tool.ruff]

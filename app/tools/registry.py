@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from typing import Any
 
@@ -22,6 +23,21 @@ _TOOL_MODULES: dict[str, Any] = {}
 # Lazily populated on first get_tool_definitions() call
 _TOOL_DEFINITIONS: dict[str, Any] = {}
 _definitions_initialized = False
+
+_DIRECT_EXECUTION_TOOLS = {
+    "terminal",
+    "python",
+    "sql",
+    "read",
+    "write",
+    "ls",
+    "mkdir",
+    "rm",
+}
+
+
+def _user_execution_enabled() -> bool:
+    return os.environ.get("YUZU_USER_EXECUTION_ENABLED", "false").lower() == "true"
 
 
 def _load_tool_module(tool_name: str):
@@ -185,6 +201,10 @@ def _collect_definitions():
     except Exception as e:
         logger.info(f"[registry] Failed to load weather definition: {e}")
 
+    if not _user_execution_enabled():
+        for name in _DIRECT_EXECUTION_TOOLS:
+            _TOOL_DEFINITIONS.pop(name, None)
+
     _definitions_initialized = True
 
 
@@ -226,6 +246,9 @@ async def execute_tool(
     or:
         {"ok": False, "error": "..."}
     """
+    if tool_name in _DIRECT_EXECUTION_TOOLS and not _user_execution_enabled():
+        return {"ok": False, "error": "User execution is disabled", "data": {}}
+
     _collect_definitions()
 
     tool_def = _TOOL_DEFINITIONS.get(tool_name)

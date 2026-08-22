@@ -4,12 +4,12 @@ import ipaddress
 import logging
 import re
 import socket
-from datetime import datetime
-from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
 
+from app.core.ids import EntityType, PublicId
+from app.services.files import get_file_service
 from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
 
 logger = logging.getLogger(__name__)
@@ -96,12 +96,6 @@ def _extract_url(args_str: str) -> tuple[str, str]:
     return "GET", args_str
 
 
-def get_media_dir() -> Path:
-    media_dir = Path(__file__).resolve().parent.parent / "static" / "media"
-    media_dir.mkdir(parents=True, exist_ok=True)
-    return media_dir
-
-
 async def execute(
     arguments: dict[str, str] | str, **kwargs: object
 ) -> dict[str, object]:
@@ -176,17 +170,24 @@ async def execute(
             size = len(content)
 
             if content_type.startswith("image/"):
-                media_dir = get_media_dir()
-
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                ext = content_type.split("/")[-1].split(";")[0]
-                filename = f"{timestamp}.{'jpg' if ext == 'jpeg' else ext}"
-                filepath = media_dir / filename
-
-                _ = filepath.write_bytes(content)
-
-                web_path = f"static/media/{filename}"
-
+                user_id = kwargs.get("user_id")
+                if not isinstance(user_id, str):
+                    return error_result(
+                        "Authenticated user is required to persist media",
+                        TOOL_DEFINITION,
+                        full_command,
+                        partner_name,
+                        category="authorization_error",
+                    )
+                mime_type = content_type.split(";", 1)[0].strip()
+                row = await get_file_service().persist_bytes(
+                    owner_id=user_id,
+                    data=content,
+                    kind="attachment",
+                    mime_type=mime_type,
+                    source="http_request",
+                )
+                file_id = PublicId.encode(EntityType.FILE, row["id"])
                 return ok_result(
                     {
                         "schema_kind": "http",
@@ -194,8 +195,9 @@ async def execute(
                         "method": method,
                         "status_code": resp.status_code,
                         "type": "image",
-                        "path": web_path,
-                        "content_type": content_type,
+                        "file_id": file_id,
+                        "path": f"/api/v1/files/{file_id}",
+                        "content_type": mime_type,
                         "size_bytes": size,
                     },
                     TOOL_DEFINITION,

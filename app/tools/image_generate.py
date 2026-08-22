@@ -1,12 +1,11 @@
-import asyncio
 import logging
-from datetime import datetime
-from pathlib import Path
 
 import httpx
 
+from app.core.ids import EntityType, PublicId
 from app.db import Database
 from app.providers.image_provider import request_image
+from app.services.files import get_file_service
 from app.tools.schemas import ToolDefinition, ToolParam, error_result, ok_result
 
 logger = logging.getLogger(__name__)
@@ -58,29 +57,28 @@ async def execute(arguments, **kwargs):
     except httpx.HTTPError as e:
         return error_result(str(e), TOOL_DEFINITION, f"/imagine {prompt}", partner_name)
 
-    images_dir = (
-        Path(__file__).resolve().parent.parent.parent / "static" / "generated_images"
-    ).resolve()
-    images_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_prompt = (
-        "".join(
-            c
-            for c in prompt[:30]
-            if c.isascii() and (c.isalnum() or c in (" ", "-", "_"))
+    user_id = kwargs.get("user_id")
+    if not user_id:
+        return error_result(
+            "Missing user context", TOOL_DEFINITION, "/imagine", partner_name
         )
-        .strip()
-        .replace(" ", "_")
-        or "image"
+    row = await get_file_service().persist_bytes(
+        owner_id=user_id,
+        data=image_bytes,
+        kind="generated_image",
+        mime_type="image/png",
+        original_name="generated.png",
+        source="image_generate",
     )
-    filename = f"{timestamp}_{safe_prompt}.png"
-    filepath = images_dir / filename
-    await asyncio.to_thread(filepath.write_bytes, image_bytes)
-    logger.debug("[IMAGE TOOL] Saved: %s", filepath)
+    file_id = PublicId.encode(EntityType.FILE, row["id"])
+    image_path = f"/api/v1/files/{file_id}"
 
     return ok_result(
         {
-            "image_path": f"/api/v1/static/generated_images/{filename}",
+            "file_id": file_id,
+            "image_path": image_path,
+            "mime_type": row["mime_type"],
+            "size": row["size_bytes"],
             "prompt": prompt,
             "model": model,
             "provider": provider,
