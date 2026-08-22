@@ -6,7 +6,7 @@
   "pattern": "yuzu_sandbox.app:app",
   "tag": "SANDBOX",
   "depends_on": [],
-  "restart_policy": "always",
+  "restart_policy": "on-failure",
   "logs": {
     "type": "stdio"
   },

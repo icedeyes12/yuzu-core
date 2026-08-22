@@ -1,25 +1,33 @@
-# File and execution boundaries
+# Controlled execution and user-file security
 
-## Verified current state
+Status: foundation implemented; service inactive and not user-facing.
 
-- `app/services/conversation_service.py` wrote uploads to `static/uploads`.
-- `app/tools/image_generate.py` and `image_edit.py` wrote generated files to `static/generated_images`.
-- `app/api/static.py` authenticated requests but authorized only by filename, not owner.
-- `app/tools/registry.py` exposed local `terminal`, Python, SQL, and filesystem execution.
-- `shell_exec.py` used `create_subprocess_shell` in the production process.
-- titit-3 is Android 5.15, native Termux control plane, Debian PRoot workloads.
-- Durable `/data/user/0` filesystem had 220,195,224 KiB available and 12,633,634 free inodes during audit.
-- `prlimit`, `timeout`, and `setsid` exist. Bubblewrap, firejail, Docker, and Podman were absent.
-- PRoot is not a hostile-code security boundary. `yuzu-sandbox` phase one permits controlled allowlisted executables only.
+## Boundary
+
+`yuzu-sandbox` is the service/domain name. `SandboxRunner` is a single-node controlled process runner. It is not a hostile-code sandbox. `SandboxManager` is the Core-side authority that creates `sandbox_jobs`, derives ownership, dispatches execution, imports artifacts, finalizes state, and cleans workspaces. Node registry, heartbeat, SSH, PTY, and distributed scheduling are deferred.
+
+Canonical flow:
+
+```text
+authenticated owner -> sandbox_jobs -> SandboxManager -> localhost HTTP runner
+-> bounded ephemeral workspace -> artifact manifest -> FileService
+-> owner-scoped file_objects -> /api/v1/files/{fil_id}
+```
+
+`sandbox_jobs.id -> owner_id` is authoritative. `owner_id` in a runner request is derived metadata only. Artifact ownership is resolved again from the job row before persistence.
 
 ## Storage
 
-Production setting:
+Production configuration targets:
 
 ```text
 YUZU_STORAGE_ROOT=/root/home/yuzu-data
 YUZU_SANDBOX_ROOT=/root/home/yuzu-sandbox-workspaces
+YUZU_STORAGE_RESERVE_BYTES=<operator-selected reserve>
+YUZU_SANDBOX_RESERVE_BYTES=<operator-selected reserve>
 ```
+
+Audit evidence: `/root/home` and `/tmp` resolve to `/dev/block/dm-61`; 20,130,296 KiB and 5,032,574 inodes were free during the latest check. Reserve defaults to `0` until the operator selects a value from current disk policy; no speculative threshold is hardcoded.
 
 Persistent layout:
 
@@ -27,17 +35,33 @@ Persistent layout:
 users/<owner UUID>/<uploads|attachments|generated|artifacts|exports>/<object UUID>
 ```
 
-`file_objects` is canonical metadata. Each reservation locks the owning `profiles` row, sums pending and ready bytes, then inserts a pending row in one transaction. Limit: 536870912 bytes. No preallocation. Failed writes remove pending metadata. A later reconciliation command must compare ready rows and physical objects before destructive cleanup.
+`file_objects` is canonical metadata. Persistent quota is 536,870,912 bytes per owner. Reservations lock the profile row and count pending plus ready objects. Uploads, generated images, image edits, HTTP-downloaded images, and imported sandbox artifacts use `FileService`.
 
-Sandbox workspaces are separate. Initial implementation has structured `argv`, timeout, output cap, clean environment, process-group kill, regular-file manifests. It has no hard filesystem or network isolation on this host. Do not run arbitrary hostile code.
+## Controlled-runner limits
 
-## Rollout
+- argv-only execution; no shell string contract;
+- exact executable allowlist;
+- clean environment allowlist;
+- default 30-second timeout;
+- default 256 MiB workspace allowance;
+- bounded stdout and stderr capture; crossing either cap kills the process group;
+- regular-file artifacts only, with count and per-file limits;
+- process-group kill on timeout/cancellation;
+- workspace cleanup is idempotent after every manager terminal path;
+- low-disk reserve checked before persistent writes and job start.
 
-1. Apply schema and set `YUZU_STORAGE_ROOT` on staging.
-2. Keep `YUZU_USER_EXECUTION_ENABLED=false`.
-3. Run legacy inventory. Migrate only owner-known files.
-4. Register the example sandbox manifest without public routing.
-5. Add SandboxManager dispatch and artifact import after review.
-6. Remove legacy static private-image routes after verified cutover.
+Workspace allowance is enforced by periodic size measurement. Android/PRoot provides no reliable per-directory filesystem quota or cgroup boundary here. A process can overshoot between polls. This is acceptable only for controlled workloads. PRoot is not accepted for hostile arbitrary code.
 
-No production deployment or migration was performed by this change.
+Path validation uses relative-path, realpath containment, symlink, and regular-file checks. Descriptor-relative no-follow primitives remain mandatory for a future hostile-workload backend; phase-one retains documented TOCTOU residual risk.
+
+## Lifecycle
+
+Job states: `pending`, `running`, `succeeded`, `failed`, `cancelled`, `timed_out`. Terminal workspaces are removed after artifact import or failure. `SandboxManager.reap()` removes only workspaces selected from terminal DB rows older than retention. Cleanup is idempotent.
+
+File deletion is owner-scoped: mark metadata deleted, then remove the physical object. Quota is released at logical deletion; reconciliation reports a deleted-row/file mismatch if physical removal failed. Existing legacy files with unknown ownership remain quarantine candidates, never automatic public compatibility data.
+
+## Deployment state
+
+`deploy/yuzu-sandbox.service.example.json` is preparation only. It binds localhost, uses authenticated requests, stdio logs, and `on-failure` restart semantics. It is not registered or started by this change. Direct user execution remains disabled by default.
+
+No production deployment, schema execution, asset migration, Cloudflare, DNS, Wrangler, or public port change was performed.

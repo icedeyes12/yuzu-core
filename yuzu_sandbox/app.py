@@ -25,7 +25,11 @@ def _runner() -> SandboxRunner:
         for item in os.environ.get("YUZU_SANDBOX_EXECUTABLES", "python3").split(",")
         if item.strip()
     }
-    return SandboxRunner(root, allowed_executables=allowed)
+    return SandboxRunner(
+        root,
+        allowed_executables=allowed,
+        disk_reserve_bytes=int(os.environ.get("YUZU_SANDBOX_RESERVE_BYTES", "0")),
+    )
 
 
 @app.get("/health")
