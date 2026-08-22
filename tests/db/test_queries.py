@@ -128,7 +128,7 @@ class TestSessionParsers:
 
     def test_parse_session_row_defaults(self):
         out = parse_session_row({"id": 3})
-        assert out["name"] == "New Chat"
+        assert out["name"] == "Unnamed Session"
         assert out["is_active"] is False
         assert out["message_count"] == 0
 

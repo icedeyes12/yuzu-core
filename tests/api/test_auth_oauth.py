@@ -34,7 +34,10 @@ def _request(
     return Request(scope)
 
 
-def test_rewrite_redirect_uri_uses_forwarded_public_origin() -> None:
+def test_rewrite_redirect_uri_uses_forwarded_public_origin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OAUTH_REDIRECT_ORIGINS", raising=False)
     request = _request(
         headers={
             "x-forwarded-host": "companion.yuzuki.space",
@@ -100,6 +103,7 @@ def test_login_sets_secure_state_cookie_and_public_redirect(
         "OAUTH_GOOGLE_REDIRECT_URI", "http://localhost:5000/v1/auth/callback"
     )
     monkeypatch.setenv("SESSION_SECRET", "test-secret")
+    monkeypatch.delenv("OAUTH_REDIRECT_ORIGINS", raising=False)
     monkeypatch.setattr(auth, "_COOKIE_SECURE", False)
 
     request = _request(

@@ -5,7 +5,7 @@ from yuzu_sandbox.proot_wrapper import RestrictedPRootBuilder
 
 
 def test_discover_user_sandbox_skills(tmp_path):
-    rootfs = tmp_path / "sbx_test"
+    rootfs = tmp_path / "sbx_test" / "rootfs"
     skills_dir = rootfs / "home" / "yuzu" / ".yuzu" / "skills"
     skills_dir.mkdir(parents=True)
 
