@@ -228,6 +228,31 @@ class TestExecuteToolEvent:
         assert result.tool_ms >= 0  # mocked execution may be instant
 
     @pytest.mark.asyncio
+    async def test_preserves_structured_exec_result_without_data_wrapper(self):
+        from unittest.mock import patch
+
+        async def _mock_execute(*args, **kwargs):
+            return {
+                "ok": False,
+                "exit_code": 7,
+                "stdout": "test\n",
+                "stderr": "err\n",
+            }
+
+        with patch("app.tools.registry.execute_tool", side_effect=_mock_execute):
+            event = make_tool_call_event(
+                name="terminal", arguments={"command": "echo test"}
+            )
+            result = await execute_tool_event(event)
+
+        assert result.ok is False
+        assert result.data == {
+            "exit_code": 7,
+            "stdout": "test\n",
+            "stderr": "err\n",
+        }
+
+    @pytest.mark.asyncio
     async def test_unknown_tool_returns_error(self):
         event = make_tool_call_event(name="nonexistent_tool_xyz", arguments={})
         result = await execute_tool_event(event)

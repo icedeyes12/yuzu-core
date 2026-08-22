@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -165,7 +166,12 @@ class TestPersistToolResultAsync:
                 {"id": "call_2", "name": "python", "arguments": {}},
             ]
             tool_results = [
-                ToolResultEvent(call_id="call_1", name="bash", ok=True, data={}),
+                ToolResultEvent(
+                    call_id="call_1",
+                    name="terminal",
+                    ok=False,
+                    data={"stdout": "test\n", "stderr": "err\n", "exit_code": 7},
+                ),
                 ToolResultEvent(call_id="call_2", name="python", ok=True, data={}),
             ]
             (
@@ -182,6 +188,12 @@ class TestPersistToolResultAsync:
             assert len(tool_jsons) == 2
             assert add_message.await_count == 2
         assert add_message.await_count == 2
+        persisted = json.loads(add_message.await_args_list[0].args[1])
+        assert persisted["data"] == {
+            "stdout": "test\n",
+            "stderr": "err\n",
+            "exit_code": 7,
+        }
         first_call = add_message.await_args_list[0]
         second_call = add_message.await_args_list[1]
         assert first_call.args[0] == "tool"

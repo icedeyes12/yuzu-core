@@ -464,12 +464,17 @@ async def execute_tool_event(
         user_id=user_id,
     )
     elapsed = int(time.time() * 1000) - started
+    data = result.get("data")
+    if not isinstance(data, dict):
+        data = {
+            key: value for key, value in result.items() if key not in {"ok", "error"}
+        }
 
     return make_tool_result_event(
         call_id=call_event.id,
         name=call_event.name,
         ok=result.get("ok", False),
-        data=result.get("data", {}),
+        data=data,
         error=result.get("error", ""),
         turn_id=call_event.turn_id,
         tool_ms=elapsed,
