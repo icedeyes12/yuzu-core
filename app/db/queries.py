@@ -216,6 +216,7 @@ SCHEMA_DDL: tuple[str, ...] = (
             'sandbox_artifact', 'export'
         )),
         source TEXT NOT NULL,
+        job_id UUID NULL,
         status TEXT NOT NULL CHECK (status IN ('pending', 'ready')),
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -223,6 +224,31 @@ SCHEMA_DDL: tuple[str, ...] = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_file_objects_owner_active ON file_objects (owner_id, status) WHERE deleted_at IS NULL",
+    """
+    CREATE TABLE IF NOT EXISTS sandbox_jobs (
+        id UUID PRIMARY KEY,
+        owner_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+        status TEXT NOT NULL CHECK (status IN (
+            'pending', 'running', 'succeeded', 'failed', 'cancelled', 'timed_out'
+        )),
+        argv JSONB NOT NULL,
+        cwd TEXT NOT NULL DEFAULT '.',
+        timeout_ms INTEGER NOT NULL CHECK (timeout_ms > 0),
+        workspace_bytes_limit BIGINT NOT NULL CHECK (workspace_bytes_limit > 0),
+        output_bytes_limit BIGINT NOT NULL CHECK (output_bytes_limit > 0),
+        error_code TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        started_at TIMESTAMPTZ,
+        finished_at TIMESTAMPTZ
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_sandbox_jobs_owner_status ON sandbox_jobs (owner_id, status, created_at DESC)",
+    """
+    DO $$ BEGIN
+      ALTER TABLE file_objects ADD COLUMN IF NOT EXISTS job_id UUID NULL;
+    EXCEPTION WHEN undefined_table THEN NULL;
+    END $$;
+    """,
     # ── graph memory: episodes, inferred nodes, relationships, evidence ──
     """
     CREATE TABLE IF NOT EXISTS episodes (
@@ -590,8 +616,8 @@ WHERE owner_id = %s
 """
 SQL_FILE_INSERT_PENDING = """
 INSERT INTO file_objects
-    (id, owner_id, storage_key, original_name, mime_type, size_bytes, kind, source, status)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending')
+    (id, owner_id, storage_key, original_name, mime_type, size_bytes, kind, source, job_id, status)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending')
 RETURNING *
 """
 SQL_FILE_MARK_READY = """
@@ -605,6 +631,33 @@ DELETE FROM file_objects WHERE id = %s AND owner_id = %s AND status = 'pending'
 SQL_FILE_SELECT_OWNER = """
 SELECT * FROM file_objects
 WHERE id = %s AND owner_id = %s AND status = 'ready' AND deleted_at IS NULL
+"""
+SQL_FILE_MARK_DELETED = """
+UPDATE file_objects SET deleted_at = NOW(), updated_at = NOW()
+WHERE id = %s AND owner_id = %s AND status = 'ready' AND deleted_at IS NULL
+RETURNING *
+"""
+SQL_SANDBOX_JOB_INSERT = """
+INSERT INTO sandbox_jobs
+    (id, owner_id, status, argv, cwd, timeout_ms, workspace_bytes_limit, output_bytes_limit)
+VALUES (%s, %s, 'pending', %s, %s, %s, %s, %s)
+RETURNING *
+"""
+SQL_SANDBOX_JOB_SELECT = "SELECT * FROM sandbox_jobs WHERE id = %s"
+SQL_SANDBOX_JOB_TRANSITION = """
+UPDATE sandbox_jobs
+SET status = %s,
+    error_code = %s,
+    started_at = CASE WHEN %s = 'running' THEN COALESCE(started_at, NOW()) ELSE started_at END,
+    finished_at = CASE WHEN %s IN ('succeeded', 'failed', 'cancelled', 'timed_out') THEN NOW() ELSE finished_at END
+WHERE id = %s AND status = ANY(%s)
+RETURNING *
+"""
+SQL_SANDBOX_JOBS_TERMINAL_BEFORE = """
+SELECT * FROM sandbox_jobs
+WHERE status IN ('succeeded', 'failed', 'cancelled', 'timed_out')
+  AND finished_at < %s
+ORDER BY finished_at
 """
 
 SQL_GLOBAL_KNOWLEDGE_LIST = """

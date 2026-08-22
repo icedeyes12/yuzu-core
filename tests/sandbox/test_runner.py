@@ -113,7 +113,8 @@ async def test_artifact_manifest_contains_regular_files_only(runner):
         )
     )
 
-    assert result.artifacts == [{"path": "report.txt", "size_bytes": 2}]
+    assert result.artifacts == []
+    assert result.error_code == "invalid_artifact"
 
 
 @pytest.mark.asyncio
